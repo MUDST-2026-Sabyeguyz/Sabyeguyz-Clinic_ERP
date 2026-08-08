@@ -1,0 +1,25 @@
+# User Stories
+
+เอกสารชุดนี้รอ BA จัดทำและยืนยันกับทีม
+
+## Template
+
+```text
+ID: US-000
+Title:
+As a:
+I want:
+So that:
+
+Acceptance Criteria:
+- Given
+- When
+- Then
+
+Priority:
+Status: Draft / Confirmed / In Progress / Done
+Related Figma:
+Open Questions:
+```
+
+ห้ามเพิ่ม Business Rule ที่ยังไม่ได้รับการยืนยันลงใน User Story จริง ให้เขียนไว้ใน `Open Questions` ก่อน
