@@ -4,6 +4,7 @@
 
 ## เอกสารหลัก
 
+- [Notion Project Plainning]([./context.md](https://app.notion.com/p/Project-Plan-SaByeGuyz-3b6376669d6580349e92e5d069995aba?source=copy_link))
 - [Context กลาง](./context.md)
 - [Architecture](./architecture/README.md)
 - [User Stories](./user-stories/README.md)
