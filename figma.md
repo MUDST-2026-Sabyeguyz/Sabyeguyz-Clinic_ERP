@@ -7,7 +7,7 @@
 ## Figma Link
 
 ```text
-[รอ PM เติม Link]
+https://www.figma.com/design/uL1XiVRdUzP10IIjh09G1T/Sabyeguyz?node-id=1-2&t=e9vfLsjzbTIxFRF4-1
 ```
 
 ## สิ่งที่ควรมีใน Figma
