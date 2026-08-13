@@ -2,6 +2,13 @@
 
 เอกสารชุดนี้รอ BA จัดทำและยืนยันกับทีม
 
+## User story map Link
+
+```text
+https://student-team-awld25tc.atlassian.net/wiki/x/qwAB
+```
+
+
 ## Template
 
 ```text
