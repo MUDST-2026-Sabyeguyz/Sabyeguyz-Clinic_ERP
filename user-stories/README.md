@@ -5,7 +5,7 @@
 ## User story map Link
 
 ```text
-https://student-team-awld25tc.atlassian.net/wiki/x/qwAB
+https://canva.link/d43i2b768wai8ha
 ```
 
 
