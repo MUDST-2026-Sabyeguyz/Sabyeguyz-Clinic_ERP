@@ -4,10 +4,7 @@
 
 ## User story map Link
 
-```text
-https://canva.link/d43i2b768wai8ha
-```
-
+[ User Stori - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
 
 ## Template
 
