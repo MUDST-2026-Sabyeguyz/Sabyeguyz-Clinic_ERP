@@ -1,35 +1,9 @@
 @import './base.css';
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
-}
+#app { min-height: 100vh; }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
-}
-
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
-}
-
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
-
-  #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
-  }
-}
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { width: 256px; flex: 0 0 256px; color: white; background: #125c59; }
+.sidebar-brand { display: flex; align-items: center; justify-content: space-between; height: 108px; padding: 5px 18px; background: #104f4d; }
+.sidebar-brand img { width: 190px; height: 94px; object-fit: contain; }.sidebar nav { padding: 20px 12px; }.nav-item { display: flex; align-items: center; gap: 12px; min-height: 46px; margin: 4px 0; padding: 8px 12px; color: #d8f0eb; border-radius: 8px; text-decoration: none; }.nav-item.router-link-active { color: white; background: #287d78; }.nav-item.disabled { color: #a5cbc4; }.nav-item small { margin-left: auto; font-size: 10px; opacity: .7; }.nav-icon { width: 20px; text-align: center; font-size: 18px; }.shell-body { min-width: 0; flex: 1; }.top-bar { display: flex; align-items: center; gap: 14px; height: 72px; padding: 0 28px; color: #174d4a; background: white; border-bottom: 1px solid var(--clinic-border); }.top-bar strong, .top-bar span { display: block; }.top-bar > div:nth-child(2) span { color: var(--clinic-muted); font-size: 12px; }.top-actions { margin-left: auto; color: #4e6c68; font-size: 13px; }.status-dot { display: inline-block !important; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #39a86b; }.menu-toggle, .close-sidebar { display: none; border: 0; color: inherit; background: transparent; font-size: 24px; }.content-area { min-height: calc(100vh - 72px); padding: 1px 0; }.placeholder-view { max-width: 720px; margin: 120px auto; padding: 48px 24px; text-align: center; }.placeholder-icon { color: var(--clinic-primary); font-size: 48px; }.placeholder-view h1 { margin: 16px 0 8px; }.placeholder-view p { color: var(--clinic-muted); }
+@media (max-width: 900px) { .sidebar { position: fixed; z-index: 10; inset: 0 auto 0 0; transform: translateX(-100%); transition: transform .2s ease; box-shadow: 4px 0 18px rgb(0 0 0 / 18%); }.sidebar.open { transform: translateX(0); }.sidebar-backdrop { position: fixed; z-index: 9; inset: 0; background: rgb(0 0 0 / 30%); }.menu-toggle, .close-sidebar { display: block; }.top-bar { padding: 0 18px; } }
