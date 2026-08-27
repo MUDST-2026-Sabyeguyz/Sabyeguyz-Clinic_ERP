@@ -2,6 +2,10 @@
 
 เอกสารชุดนี้รอ BA จัดทำและยืนยันกับทีม
 
+## User story map Link
+
+[ User Stori - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
+
 ## Template
 
 ```text
