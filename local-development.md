@@ -99,7 +99,7 @@ Integration:
 Frontend + Backend + PostgreSQL
 ```
 
-ดังนั้น Frontend Developer **ไม่จำเป็นต้อง Clone Backend** จนกว่าจะต้อง Integration
+Frontend  **ไม่ต้อง Clone Backend** จนกว่าจะต้อง Integration
 
 ## หยุดระบบ
 
@@ -115,4 +115,4 @@ PostgreSQL:
 docker compose down
 ```
 
-> หลีกเลี่ยง `docker compose down -v` หากต้องการเก็บข้อมูล Local Database
+> อย่าใช้ `docker compose down -v` ถ้าจะเก็บข้อมูล Local Database
