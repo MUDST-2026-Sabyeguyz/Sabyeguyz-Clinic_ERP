@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import logoUrl from '@/assets/sabyeguyz-logo.png'
 import { registerPatient, type PatientRegistrationPayload } from '@/api/patients'
 
 const step = ref(1)
@@ -47,7 +46,6 @@ async function submit() {
 
 <template>
   <main class="registration-page">
-    <header class="clinic-header"><img :src="logoUrl" alt="Sabyeguyz" /></header>
     <section v-if="!registeredHn" class="registration-shell">
       <div class="intro">
         <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
@@ -107,8 +105,6 @@ async function submit() {
 
 <style scoped>
 .registration-page { min-height: 100vh; background: var(--clinic-background); }
-.clinic-header { height: 108px; display: flex; align-items: center; padding: 4px 28px; background: linear-gradient(90deg, #166361, #1e807c); }
-.clinic-header img { width: 228px; height: 98px; object-fit: contain; }
 .registration-shell { width: min(920px, calc(100% - 32px)); margin: 72px auto; }
 .intro { text-align: center; }.intro h1 { margin: 0; font-size: 36px; }.intro p { margin: 4px 0 46px; color: #7c8581; font-size: 20px; font-weight: 600; }
 .stepper { display: grid; grid-template-columns: repeat(3, 1fr); list-style: none; padding: 0; margin: 0 auto 48px; }
@@ -125,5 +121,5 @@ fieldset { display: grid; gap: 8px; margin: 0 0 20px; padding: 0; border: 0; }.c
 .consent { display: block; margin-top: 22px; }.actions { display: flex; justify-content: space-between; margin-top: 32px; }.actions.end { justify-content: flex-end; }
 .primary, .secondary { min-height: 44px; padding: 8px 24px; border-radius: 11px; }.primary { color: white; border: 0; background: var(--clinic-primary); box-shadow: 0 3px 3px rgb(0 0 0 / 14%); }.secondary { color: #2c5662; border: 1px solid #2c5662; background: white; }.primary:disabled { opacity: .6; }
 .error { margin: 20px 0 0; color: #b42318; }.success-card { width: min(560px, calc(100% - 32px)); margin: 120px auto; text-align: center; }.success-icon { display: inline-grid; place-items: center; width: 64px; height: 64px; color: white; border-radius: 50%; background: var(--clinic-primary); font-size: 34px; }.success-card strong { display: block; color: var(--clinic-primary); font-size: 32px; }
-@media (max-width: 680px) { .registration-shell { margin-top: 36px; }.intro h1 { font-size: 28px; }.intro p { font-size: 16px; }.stepper small { max-width: 90px; text-align: center; }.form-card { padding: 28px 20px; }.form-grid { grid-template-columns: 1fr; }.wide { grid-column: auto; }.clinic-header { height: 84px; }.clinic-header img { width: 180px; height: 76px; } }
+@media (max-width: 680px) { .registration-shell { margin-top: 36px; }.intro h1 { font-size: 28px; }.intro p { font-size: 16px; }.stepper small { max-width: 90px; text-align: center; }.form-card { padding: 28px 20px; }.form-grid { grid-template-columns: 1fr; }.wide { grid-column: auto; } }
 </style>
