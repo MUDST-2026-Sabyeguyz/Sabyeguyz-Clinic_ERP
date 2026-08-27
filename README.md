@@ -1,17 +1,69 @@
 # Frontend Repository
 
-Repository สำหรับส่วน Frontend ของ Physiotherapy Clinic ERP
+Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz**
 
-## ขอบเขตของ Repo
+## Requirements
 
-- เก็บ Source Code, Test และเอกสารที่เกี่ยวข้องกับ Frontend
-- รายละเอียด Technology และ Implementation ให้ฝ่าย Frontend เป็นผู้ยืนยันและดูแล
-- ห้ามเพิ่ม Business Rule จากการคาดเดา ให้ยึด Context กลางและ User Story ที่ BA ยืนยัน
+* Git
+* Node.js `22.18+`
+* npm
 
-## การทำงานร่วมกัน
+## Setup
 
-ใช้ Branch `main`, `develop` และ `feature/<feature-name>` ตาม [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
+```bash
+git clone https://github.com/MUDST-2026-Sabyeguyz/frontend.git
+cd frontend/sabyeguyz
+npm install
+npm run dev
+```
 
-## Context กลาง
+เปิด:
 
-อ่าน [Context กลาง](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/context.md) ก่อนแก้ไขงาน
+```text
+http://localhost:5173
+```
+
+## การพัฒนา
+
+Frontend รับผิดชอบ:
+
+* UI ตาม Figma
+* Pages / Components / Routing
+* Form และ Client-side Validation
+* Loading / Error / Success State
+* API Client
+* Frontend Tests
+
+**ขณะพัฒนา UI ไม่จำเป็นต้องมี Backend หรือ PostgreSQL**
+
+หากต้องใช้ข้อมูล สามารถใช้ Mock Data ตาม API Contract ที่ทีมตกลงกัน
+
+## เชื่อม Backend
+
+สร้าง `.env.local`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+## Test
+
+```bash
+npm run type-check
+npm run test:unit -- --run
+npm run build
+```
+
+## Rules
+
+* ยึด Context, User Story/Acceptance Criteria และ Figma
+* API ต้องยึด API Contract ที่ตกลงกับ Backend
+* Requirement ไม่ชัดเจนให้ถาม BA
+
+## Git
+
+ใช้ `main`, `develop` และ `feature/<feature-name>`
+
+[Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
+
+[Context กลาง](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/context.md)

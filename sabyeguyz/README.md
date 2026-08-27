@@ -1,4 +1,14 @@
-# sabyeguyz
+# Sabyeguyz Frontend
+
+Vue frontend สำหรับ Physiotherapy Clinic ERP
+
+## Prototype: Patient Registration
+
+Branch `xan-prototype` มีหน้าลงทะเบียนผู้ป่วย 3 ขั้นตาม Figma ที่
+`/patients/register` และเรียก `POST /api/patients`
+
+API URL เริ่มต้นคือ `http://localhost:8080` และ override ได้ด้วย
+`VITE_API_BASE_URL`
 
 This template should help get you started developing with Vue 3 in Vite.
 
