@@ -2,13 +2,11 @@
 
 ## สถานะ
 
-รอ PM/UX ประสานงานและใส่ Figma Link ที่ได้รับการยืนยันจากทีม
+กำลังออกแบบ UX/UI บน Figma เบื้องต้น (ส่ง 15/8/2026)
 
 ## Figma Link
 
-```text
-[รอ PM เติม Link]
-```
+[ Figma - Sabyeguyz <<< Click to Open ](https://www.figma.com/design/uL1XiVRdUzP10IIjh09G1T/Sabyeguyz?node-id=1-2&t=e9vfLsjzbTIxFRF4-1)
 
 ## สิ่งที่ควรมีใน Figma
 
