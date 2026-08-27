@@ -38,3 +38,15 @@ mvn verify
 ```
 
 CI จะรัน `mvn verify` ใน GitHub Actions ทุกครั้งที่มีการ Push ไปยัง `main`/`develop` หรือเปิด Pull Request
+
+## Prototype: Patient Registration
+
+Branch `xan-prototype` เพิ่ม Vertical Slice แรกตาม Figma:
+
+- PostgreSQL schema versioned ด้วย Flyway
+- Branch เริ่มต้น `RP` (สาขาราชพฤกษ์)
+- `POST /api/patients` สำหรับลงทะเบียนผู้ป่วยและสร้าง HN รูปแบบ `RP-000001`
+- Validation, duplicate check และ BCrypt password hashing
+
+ค่าเชื่อมต่อ Local เริ่มต้นตรงกับ Compose ใน Deploy repository และ override ได้ด้วย
+`DATABASE_URL`, `DATABASE_USERNAME` และ `DATABASE_PASSWORD`
