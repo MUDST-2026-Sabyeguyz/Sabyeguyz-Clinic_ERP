@@ -88,7 +88,9 @@ public class Patient {
         this.updatedAt = this.createdAt;
     }
 
-    public void assignHn() { this.hn = "%s-%06d".formatted(branch.getCode(), id); }
+    public void assignHn(String generatedHn) {
+        if (this.hn == null) this.hn = generatedHn;
+    }
     public Long getId() { return id; }
     public String getHn() { return hn; }
     public String getFullName() { return fullName; }

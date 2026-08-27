@@ -20,12 +20,12 @@ class PatientControllerTest {
 
     @Test
     void registersPatient() throws Exception {
-        when(registrationService.register(any())).thenReturn(new PatientResponse(1L, "RP-000001", "สมชาย ใจดี", "0812345678", true));
+        when(registrationService.register(any())).thenReturn(new PatientResponse(1L, "2607120001", "สมชาย ใจดี", "0812345678", true));
         mockMvc.perform(post("/api/patients")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.hn").value("RP-000001"));
+                .andExpect(jsonPath("$.hn").value("2607120001"));
     }
 
     @Test

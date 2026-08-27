@@ -15,6 +15,8 @@ public class Branch {
     @SequenceGenerator(name = "branch_id_generator", sequenceName = "branch_id_seq", allocationSize = 1)
     private Long id;
     private String code;
+    @jakarta.persistence.Column(name = "numeric_code", length = 2, unique = true)
+    private String numericCode;
     private String name;
     private boolean active;
 
@@ -22,6 +24,7 @@ public class Branch {
 
     public Long getId() { return id; }
     public String getCode() { return code; }
+    public String getNumericCode() { return numericCode; }
     public String getName() { return name; }
     public boolean isActive() { return active; }
 }
