@@ -1,10 +1,15 @@
 # User Stories
 
-เอกสารชุดนี้รอ BA จัดทำและยืนยันกับทีม
+Status: ส่งเมล และ รอ comfirmed จากอาจารย์
 
 ## User story map Link
 
-[ User Stori - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
+[ User Story - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
+
+## User story map document 
+(update 22 Aug 2026)
+[Sabyeguyz User story map.pdf](https://github.com/user-attachments/files/31540407/Sabyeguyz.User.story.map.pdf)
+
 
 ## Template
 
