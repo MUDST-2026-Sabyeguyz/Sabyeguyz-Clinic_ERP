@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.sabyeguyz.clinic.appointment.AppointmentConflictException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -32,5 +33,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AppointmentConflictException.class)
     ResponseEntity<ApiErrorResponse> appointmentConflict(AppointmentConflictException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ApiErrorResponse> unreadable(HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest()
+                .body(new ApiErrorResponse("รูปแบบข้อมูลที่ส่งมาไม่ถูกต้อง เช่น วันที่ต้องอยู่ในรูปแบบ 2026-09-01T09:00:00+07:00"));
     }
 }
