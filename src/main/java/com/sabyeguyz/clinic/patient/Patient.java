@@ -96,4 +96,18 @@ public class Patient {
     public String getFullName() { return fullName; }
     public String getPhone() { return phone; }
     public boolean isActive() { return active; }
+    public Branch getBranch() { return branch; }
+    public String getTitle() { return title; }
+    public LocalDate getBirthDate() { return birthDate; }
+    public String getGender() { return gender; }
+    public String getIdentityDocumentType() { return identityDocumentType; }
+    public String getIdentityNumber() { return identityNumber; }
+    public String getAddress() { return address; }
+    public boolean isDrugAllergy() { return drugAllergy; }
+    public boolean isFoodAllergy() { return foodAllergy; }
+    public String getChronicDisease() { return chronicDisease; }
+    public String getEmergencyContactName() { return emergencyContactName; }
+    public String getEmergencyContactRelationship() { return emergencyContactRelationship; }
+    public String getEmergencyContactPhone() { return emergencyContactPhone; }
+    public boolean isPrivacyConsent() { return privacyConsent; }
 }
