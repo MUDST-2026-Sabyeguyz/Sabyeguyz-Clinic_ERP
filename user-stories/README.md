@@ -8,8 +8,8 @@ Status: ส่งเมล และ รอ comfirmed จากอาจาร�
 
 ## User story map document 
 (update 22 Aug 2026)
-[Sabyeguyz User story map.pdf]
-(https://github.com/user-attachments/files/31540407/Sabyeguyz.User.story.map.pdf)
+
+[Sabyeguyz User story map.pdf](https://github.com/user-attachments/files/31540407/Sabyeguyz.User.story.map.pdf)
 
 
 ## Template
