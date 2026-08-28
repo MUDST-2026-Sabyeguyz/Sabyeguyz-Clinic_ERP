@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.sabyeguyz.clinic.appointment.AppointmentConflictException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -26,5 +27,10 @@ public class ApiExceptionHandler {
     @ExceptionHandler(PatientNotFoundException.class)
     ResponseEntity<ApiErrorResponse> patientNotFound(PatientNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(AppointmentConflictException.class)
+    ResponseEntity<ApiErrorResponse> appointmentConflict(AppointmentConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
     }
 }
