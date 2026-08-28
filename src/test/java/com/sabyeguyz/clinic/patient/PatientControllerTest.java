@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class PatientControllerTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean PatientRegistrationService registrationService;
+    @MockitoBean PatientQueryService queryService;
 
     @Test
     void registersPatient() throws Exception {
