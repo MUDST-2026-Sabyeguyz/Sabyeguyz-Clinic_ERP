@@ -1,13 +1,14 @@
 # User Stories
 Status: ส่งเมล และ รอ comfirmed จากอาจารย์
-(update 22 Aug 2026)
 
 ## User story map document
-Canva: 
+### Canva: 
+
 [ User Story - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
 
-Pdf:
-[Sabyeguyz User story map.pdf](https://github.com/user-attachments/files/31540407/Sabyeguyz.User.story.map.pdf)
+### Pdf:
+
+[Sabyeguyz User story map.pdf <<< Click to Open ](https://github.com/user-attachments/files/31540407/Sabyeguyz.User.story.map.pdf)
 
 
 ## Template
