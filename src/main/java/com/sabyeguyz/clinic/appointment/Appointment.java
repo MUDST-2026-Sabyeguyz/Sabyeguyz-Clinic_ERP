@@ -79,6 +79,13 @@ public class Appointment {
         this.updatedAt = this.createdAt;
     }
 
+    //method for testing /api/appointments/{id}/cancel
+    public void cancel(String reason) {
+        this.status = AppointmentStatus.CANCELLED;
+        this.cancelReason = reason;
+        this.updatedAt = Instant.now();
+    }
+
     public Long getId() { return id; }
     public Branch getBranch() { return branch; }
     public Patient getPatient() { return patient; }
@@ -91,4 +98,5 @@ public class Appointment {
     public String getCancelReason() { return cancelReason; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
 }
