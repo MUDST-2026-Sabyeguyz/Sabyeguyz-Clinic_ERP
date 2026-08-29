@@ -6,11 +6,6 @@ Status: ส่งเมล และ รอ comfirmed จากอาจาร�
 
 [ User Story - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
 
-### Pdf:
-
-[Sabyeguyz User story map.pdf <<< Click to Open ](https://github.com/user-attachments/files/31540407/Sabyeguyz.User.story.map.pdf)
-
-
 ## Template
 
 ```text
