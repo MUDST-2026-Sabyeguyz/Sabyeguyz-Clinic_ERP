@@ -235,7 +235,7 @@ curl -s -X POST http://localhost:8080/api/patients -H "Content-Type: application
 Import ไฟล์
 
 ```text
-.\SabyeGuyz\SabyeGuyz-Appointment.postman_collection.json
+.\SabyeGuyz\docs\api\SabyeGuyz-Appointment.postman_collection.json
 ```
 
 Collection มี 13 requests พร้อม Test Script ตรวจ Status Code อัตโนมัติ import to postman, กด `Run collection` ได้เลย
