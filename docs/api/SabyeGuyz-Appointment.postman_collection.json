@@ -1,0 +1,330 @@
+{
+  "info": {
+    "name": "SabyeGuyz - APT-1 Create Appointment",
+    "description": "ชุดทดสอบ POST /api/appointments (APT-1) สำหรับ Physiotherapy Clinic ERP\n\nวิธีใช้:\n1. เปิด PostgreSQL: docker compose -f deploy/docker-compose.yml up -d postgres\n2. รัน backend: mvn spring-boot:run\n3. รันไล่จากบนลงล่าง หรือกด Run collection\n\nถ้าเจอ 409 ในข้อที่ควรได้ 201 แปลว่าเวลานั้นถูกจองไปแล้วจากการรันรอบก่อน ให้แก้ตัวแปร slotDate เป็นวันอื่น",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "patientId", "value": "1" },
+    { "key": "therapistId", "value": "1" },
+    { "key": "serviceId", "value": "2" },
+    { "key": "slotDate", "value": "2026-10-05" }
+  ],
+  "item": [
+    {
+      "name": "00 Health check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator", "health"] }
+      }
+    },
+    {
+      "name": "01 Register patient (เก็บ patientId อัตโนมัติ)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const unique = Date.now().toString().slice(-9);",
+              "pm.collectionVariables.set('uniqueSuffix', unique);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('patientId', body.id);",
+              "console.log('patientId =', body.id, 'HN =', body.hn);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"username\": \"postman-{{uniqueSuffix}}\",\n  \"email\": \"postman-{{uniqueSuffix}}@example.com\",\n  \"password\": \"password123\",\n  \"title\": \"นาย\",\n  \"fullName\": \"สมชาย ทดสอบ Postman\",\n  \"birthDate\": \"1990-01-01\",\n  \"gender\": \"ชาย\",\n  \"phone\": \"0812345678\",\n  \"identityDocumentType\": \"NATIONAL_ID\",\n  \"identityNumber\": \"{{uniqueSuffix}}\",\n  \"address\": \"กรุงเทพฯ\",\n  \"drugAllergy\": false,\n  \"foodAllergy\": false,\n  \"chronicDisease\": \"\",\n  \"emergencyContactName\": \"สมหญิง ทดสอบ\",\n  \"emergencyContactRelationship\": \"พี่สาว\",\n  \"emergencyContactPhone\": \"0899999999\",\n  \"privacyConsent\": true\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/patients", "host": ["{{baseUrl}}"], "path": ["api", "patients"] }
+      }
+    },
+    {
+      "name": "02 [201] Create appointment 09:00",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "pm.test('มี Location header', () => pm.expect(pm.response.headers.get('Location')).to.include('/api/appointments/'));",
+              "const body = pm.response.json();",
+              "pm.test('status = SCHEDULED', () => pm.expect(body.status).to.eql('SCHEDULED'));",
+              "pm.test('endAt ห่างจาก startAt เท่ากับ durationMinutes', () => {",
+              "  const diff = (new Date(body.endAt) - new Date(body.startAt)) / 60000;",
+              "  pm.expect(diff).to.eql(body.service.durationMinutes);",
+              "});",
+              "pm.collectionVariables.set('appointmentId', body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T09:00:00+07:00\",\n  \"note\": \"นัดแรกจาก Postman\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "03 [409] เวลาทับกัน 09:30",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 409', () => pm.response.to.have.status(409));",
+              "pm.test('มีข้อความอธิบาย', () => pm.expect(pm.response.json().message).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T09:30:00+07:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "04 [201] นัดติดกันพอดี 10:00",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201 (half-open interval)', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T10:00:00+07:00\",\n  \"note\": \"นัดต่อเนื่อง\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "05 [201] Therapist คนที่สอง เวลาเดียวกับ 09:00",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201 (คนละ therapist ไม่ชนกัน)', () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": 2,\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T09:00:00+07:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "06 [400] ไม่ส่ง patientId",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 400', () => pm.response.to.have.status(400));",
+              "pm.test('ระบุ field ที่ผิด', () => pm.expect(pm.response.json().fields).to.have.property('patientId'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T13:00:00+07:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "07 [400] therapistId ไม่มีอยู่จริง",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": 999999,\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T13:00:00+07:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "08 [400] serviceId ไม่มีอยู่จริง",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": 999999,\n  \"startAt\": \"{{slotDate}}T13:00:00+07:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "09 [400] branchCode ไม่มีอยู่จริง",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"ZZ\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T13:00:00+07:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "10 [400] จองย้อนหลัง",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"2020-01-01T09:00:00+07:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "11 [400] startAt รูปแบบผิด",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 400 ไม่ใช่ 500', () => pm.response.to.have.status(400));",
+              "pm.test('ไม่หลุดรายละเอียดภายในระบบ', () => {",
+              "  const message = pm.response.json().message || '';",
+              "  pm.expect(message).to.not.include('java.');",
+              "  pm.expect(message).to.not.include('org.springframework');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"5 ตุลาคม 2026 เวลา 9 โมง\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    },
+    {
+      "name": "12 [400] startAt ไม่มี timezone offset",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"branchCode\": \"RP\",\n  \"patientId\": {{patientId}},\n  \"therapistId\": {{therapistId}},\n  \"serviceId\": {{serviceId}},\n  \"startAt\": \"{{slotDate}}T13:00:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/appointments", "host": ["{{baseUrl}}"], "path": ["api", "appointments"] }
+      }
+    }
+  ]
+}
