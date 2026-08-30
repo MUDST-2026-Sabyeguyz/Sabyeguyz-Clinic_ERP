@@ -1,0 +1,10 @@
+# Local files and secrets
+.env
+.env.*
+!.env.example
+secret.yaml
+secrets/
+*.log
+.terraform/
+*.tfstate
+*.tfstate.*
