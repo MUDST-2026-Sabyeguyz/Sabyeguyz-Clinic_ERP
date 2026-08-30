@@ -2,6 +2,9 @@ package com.sabyeguyz.clinic.appointment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sabyeguyz.clinic.catalog.ServiceItemRepository;
 import com.sabyeguyz.clinic.patient.PatientRegistrationRequest;
@@ -13,10 +16,13 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @Transactional
 class AppointmentQueryServiceTest {
     @Autowired AppointmentQueryService queryService;
@@ -25,6 +31,7 @@ class AppointmentQueryServiceTest {
     @Autowired TherapistRepository therapistRepository;
     @Autowired ServiceItemRepository serviceItemRepository;
     @Autowired PatientRegistrationService registrationService;
+    @Autowired MockMvc mockMvc;
 
     private Long patientId;
     private Long therapistOneId;
@@ -124,6 +131,48 @@ class AppointmentQueryServiceTest {
                 .isInstanceOf(AppointmentNotFoundException.class)
                 .hasMessageContaining("999999");
     }
+
+    // AppointmentQueryApiTest
+    @Test
+    void returnsPagedAppointments() throws Exception {
+        mockMvc.perform(get("/api/appointments")
+                        .param("branchCode", "RP")
+                        .param("date", tomorrow.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.totalItems").value(3))
+                .andExpect(jsonPath("$.items[0].status").value("SCHEDULED"))
+                .andExpect(jsonPath("$.items[0].patient.hn").isNotEmpty());
+    }
+
+    @Test
+    void returnsEmptyPageWhenNothingMatches() throws Exception {
+        mockMvc.perform(get("/api/appointments").param("date", tomorrow.plusDays(30).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.totalItems").value(0));
+    }
+
+    @Test
+    void rejectsInvalidStatusValue() throws Exception {
+        mockMvc.perform(get("/api/appointments").param("status", "NOT_A_STATUS"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void rejectsInvalidPageSize() throws Exception {
+        mockMvc.perform(get("/api/appointments").param("size", "0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsNotFoundForMissingAppointment() throws Exception {
+        mockMvc.perform(get("/api/appointments/{id}", 999999L))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("ไม่พบการนัดหมาย id 999999"));
+    }
+    //
 
     private void book(Long therapistId, OffsetDateTime startAt) {
         bookingService.create(new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, startAt, null));
