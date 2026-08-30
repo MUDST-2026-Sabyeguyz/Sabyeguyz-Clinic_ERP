@@ -1,0 +1,8 @@
+# Local files
+.env
+.env.*
+!.env.example
+target/
+*.log
+.idea/
+.vscode/settings.json
