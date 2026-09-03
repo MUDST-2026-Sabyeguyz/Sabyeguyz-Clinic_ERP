@@ -17,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Arrays;
 
 @Entity
 @Table(name = "appointments")
@@ -79,11 +80,31 @@ public class Appointment {
         this.updatedAt = this.createdAt;
     }
 
+    public void checkIn() {
+        ensureCurrentStatusIsOneOf("เช็คอิน", AppointmentStatus.SCHEDULED);
+        this.status = AppointmentStatus.CHECKED_IN;
+        this.updatedAt = Instant.now();
+    }
+
+    public void complete() {
+        ensureCurrentStatusIsOneOf("ปิดงาน", AppointmentStatus.CHECKED_IN);
+        this.status = AppointmentStatus.COMPLETED;
+        this.updatedAt = Instant.now();
+    }
+
     //method for testing /api/appointments/{id}/cancel
     public void cancel(String reason) {
+        ensureCurrentStatusIsOneOf("ยกเลิก", AppointmentStatus.SCHEDULED, AppointmentStatus.CHECKED_IN);
         this.status = AppointmentStatus.CANCELLED;
         this.cancelReason = reason;
         this.updatedAt = Instant.now();
+    }
+
+    private void ensureCurrentStatusIsOneOf(String action, AppointmentStatus... allowed) {
+        if (Arrays.stream(allowed).noneMatch(allowedStatus -> allowedStatus == this.status)) {
+            throw new AppointmentConflictException(
+                    "ไม่สามารถ" + action + "นัดหมายที่มีสถานะ " + this.status + " ได้");
+        }
     }
 
     public Long getId() { return id; }
