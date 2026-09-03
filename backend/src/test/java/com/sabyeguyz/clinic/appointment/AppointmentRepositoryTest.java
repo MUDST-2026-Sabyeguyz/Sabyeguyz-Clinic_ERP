@@ -11,6 +11,7 @@ import com.sabyeguyz.clinic.catalog.ServiceItem;
 import com.sabyeguyz.clinic.catalog.ServiceItemRepository;
 import com.sabyeguyz.clinic.therapist.Therapist;
 import com.sabyeguyz.clinic.therapist.TherapistRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -35,6 +36,7 @@ class AppointmentRepositoryTest {
     private Therapist therapistOne;
     private Therapist therapistTwo;
     private ServiceItem service;
+    private Appointment existingAppointment;
 
     @BeforeEach
     void setUp() {
@@ -45,7 +47,7 @@ class AppointmentRepositoryTest {
         service = serviceByCode("PHYSIO_60");
 
         // นัดเดิมของ therapistOne: 09:00 - 10:00
-        book(therapistOne, "09:00", "10:00");
+        existingAppointment = book(therapistOne, "09:00", "10:00");
     }
 
     @Test
@@ -85,6 +87,29 @@ class AppointmentRepositoryTest {
         appointmentRepository.saveAndFlush(cancelled);
 
         assertThat(overlaps(therapistTwo, "13:00", "14:00")).isFalse();
+    }
+
+    @Test
+    void excludingAppointmentAllowsRescheduleOntoSameSlot() {
+        Appointment existing = existingAppointment;
+
+        boolean overlapsWithSelfExcluded = appointmentRepository.existsOverlappingExcludingAppointment(
+                existing.getTherapist().getId(), existing.getStartAt(), existing.getEndAt(),
+                AppointmentStatus.CANCELLED, existing.getId());
+
+        assertThat(overlapsWithSelfExcluded).isFalse();
+    }
+
+    @Test
+    void excludingAppointmentStillDetectsOtherOverlaps() {
+        Appointment a = existingAppointment;
+        Appointment b = book(therapistOne, "10:30", "11:30");
+
+        boolean overlaps = appointmentRepository.existsOverlappingExcludingAppointment(
+                a.getTherapist().getId(), b.getStartAt().minus(Duration.ofMinutes(15)),
+                b.getStartAt().plus(Duration.ofMinutes(15)), AppointmentStatus.CANCELLED, a.getId());
+
+        assertThat(overlaps).isTrue();
     }
 
     private boolean overlaps(Therapist therapist, String start, String end) {

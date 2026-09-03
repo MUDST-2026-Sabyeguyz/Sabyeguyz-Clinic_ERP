@@ -92,11 +92,18 @@ public class Appointment {
         this.updatedAt = Instant.now();
     }
 
-    //method for testing /api/appointments/{id}/cancel
     public void cancel(String reason) {
         ensureCurrentStatusIsOneOf("ยกเลิก", AppointmentStatus.SCHEDULED, AppointmentStatus.CHECKED_IN);
         this.status = AppointmentStatus.CANCELLED;
         this.cancelReason = reason;
+        this.updatedAt = Instant.now();
+    }
+
+    public void reschedule(Therapist therapist, Instant startAt, Instant endAt) {
+        ensureCurrentStatusIsOneOf("เลื่อนนัด", AppointmentStatus.SCHEDULED);
+        this.therapist = therapist;
+        this.startAt = startAt;
+        this.endAt = endAt;
         this.updatedAt = Instant.now();
     }
 
