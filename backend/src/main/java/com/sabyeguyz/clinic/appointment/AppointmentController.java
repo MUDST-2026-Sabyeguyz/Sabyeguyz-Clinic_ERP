@@ -27,10 +27,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AppointmentController {
     private final AppointmentBookingService bookingService;
     private final AppointmentQueryService queryService;
+    private final AppointmentLifecycleService lifecycleService;
 
-    public AppointmentController(AppointmentBookingService bookingService, AppointmentQueryService queryService) {
+    public AppointmentController(AppointmentBookingService bookingService, AppointmentQueryService queryService,
+                                 AppointmentLifecycleService lifecycleService) {
         this.bookingService = bookingService;
         this.queryService = queryService;
+        this.lifecycleService = lifecycleService;
     }
 
     @PostMapping
@@ -78,5 +81,50 @@ public class AppointmentController {
     public AppointmentResponse getById(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
         return queryService.getById(id);
+    }
+
+    @PostMapping("/{id}/check-in")
+    @Operation(summary = "Check in appointment", description = "Marks a SCHEDULED appointment as CHECKED_IN when the patient arrives.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment checked in"),
+            @ApiResponse(responseCode = "404", description = "Appointment not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Appointment is not in a state that allows check-in",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public AppointmentResponse checkIn(
+            @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
+        return lifecycleService.checkIn(id);
+    }
+
+    @PostMapping("/{id}/complete")
+    @Operation(summary = "Complete appointment", description = "Marks a CHECKED_IN appointment as COMPLETED.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment completed"),
+            @ApiResponse(responseCode = "404", description = "Appointment not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Appointment must be checked in first",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public AppointmentResponse complete(
+            @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
+        return lifecycleService.complete(id);
+    }
+
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "Cancel appointment", description = "Cancels a SCHEDULED or CHECKED_IN appointment and stores the reason. The time slot becomes available again.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment cancelled"),
+            @ApiResponse(responseCode = "400", description = "Cancellation reason is missing",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Appointment not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Completed or already cancelled appointments cannot be cancelled",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public AppointmentResponse cancel(
+            @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id,
+            @Valid @RequestBody AppointmentCancelRequest request) {
+        return lifecycleService.cancel(id, request);
     }
 }
