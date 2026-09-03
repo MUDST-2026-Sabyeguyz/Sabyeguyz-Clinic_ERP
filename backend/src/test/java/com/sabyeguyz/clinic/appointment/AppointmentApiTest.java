@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.appointment;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class AppointmentApiTest {
     @Autowired MockMvc mockMvc;
+    @Autowired AppointmentBookingService bookingService;
     @Autowired PatientRegistrationService registrationService;
     @Autowired TherapistRepository therapistRepository;
     @Autowired ServiceItemRepository serviceItemRepository;
@@ -121,6 +123,48 @@ class AppointmentApiTest {
                 .andExpect(jsonPath("$.components.schemas.AppointmentResponse").exists());
     }
 
+    @Test
+    void reschedulesAppointmentViaPatch() throws Exception {
+        long id = bookTomorrowNineAm();
+
+        mockMvc.perform(patch("/api/appointments/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"startAt\":\"" + tomorrowAt(14) + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.startAt").exists());
+    }
+
+    @Test
+    void rejectsRescheduleWithConflict() throws Exception {
+        long firstId = bookTomorrowNineAm();
+        mockMvc.perform(postAppointment(body(tomorrowAt(14))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(patch("/api/appointments/{id}", firstId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"startAt\":\"" + tomorrowAt(14) + "\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void rejectsRescheduleAfterCheckIn() throws Exception {
+        long id = bookTomorrowNineAm();
+        mockMvc.perform(post("/api/appointments/{id}/check-in", id));
+
+        mockMvc.perform(patch("/api/appointments/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"startAt\":\"" + tomorrowAt(14) + "\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void returnsNotFoundWhenReschedulingMissingAppointment() throws Exception {
+        mockMvc.perform(patch("/api/appointments/{id}", 999999L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"startAt\":\"" + tomorrowAt(14) + "\"}"))
+                .andExpect(status().isNotFound());
+    }
+
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder postAppointment(String body) {
         return post("/api/appointments").contentType(MediaType.APPLICATION_JSON).content(body);
     }
@@ -129,6 +173,16 @@ class AppointmentApiTest {
         return """
                 {"branchCode":"RP","patientId":%d,"therapistId":%d,"serviceId":%d,"startAt":"%s","note":"นัดทดสอบ"}
                 """.formatted(patientId, therapistId, serviceId, startAt);
+    }
+
+    private long bookTomorrowNineAm() {
+        return bookingService.create(
+                new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, nineAmTomorrow, null)).id();
+    }
+
+    private OffsetDateTime tomorrowAt(int hour) {
+        return OffsetDateTime.now(ZoneOffset.ofHours(7))
+                .plusDays(1).withHour(hour).withMinute(0).withSecond(0).withNano(0);
     }
 
     private Long registerPatient() {

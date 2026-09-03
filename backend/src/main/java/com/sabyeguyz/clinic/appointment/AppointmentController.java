@@ -20,6 +20,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 @RestController
 @RequestMapping("/api/appointments")
@@ -126,5 +127,23 @@ public class AppointmentController {
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id,
             @Valid @RequestBody AppointmentCancelRequest request) {
         return lifecycleService.cancel(id, request);
+    }
+
+    @PatchMapping("/{id}")
+    @Operation(summary = "Reschedule appointment",
+            description = "Changes the start time and/or therapist of a SCHEDULED appointment. Duration stays the same as originally booked.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment rescheduled"),
+            @ApiResponse(responseCode = "400", description = "Validation failed or referenced therapist is invalid",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Appointment not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Appointment is not SCHEDULED, or the new slot overlaps another appointment",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public AppointmentResponse reschedule(
+            @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id,
+            @Valid @RequestBody AppointmentRescheduleRequest request) {
+        return bookingService.reschedule(id, request);
     }
 }

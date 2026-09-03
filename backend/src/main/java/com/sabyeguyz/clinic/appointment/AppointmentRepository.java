@@ -21,6 +21,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
                               @Param("endAt") Instant endAt,
                               @Param("excludedStatus") AppointmentStatus excludedStatus);
 
+    @Query("""
+            select count(a) > 0 from Appointment a
+            where a.therapist.id = :therapistId
+              and a.id <> :excludeAppointmentId
+              and a.status <> :excludedStatus
+              and a.startAt < :endAt
+              and a.endAt > :startAt
+            """)
+    boolean existsOverlappingExcludingAppointment(@Param("therapistId") Long therapistId,
+                                                  @Param("startAt") Instant startAt,
+                                                  @Param("endAt") Instant endAt,
+                                                  @Param("excludedStatus") AppointmentStatus excludedStatus,
+                                                  @Param("excludeAppointmentId") Long excludeAppointmentId);
+
     @Query(value = """
             select a from Appointment a
               join fetch a.branch
