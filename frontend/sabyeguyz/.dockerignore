@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+test-results
+playwright-report
+.git
+.env
+.env.*
+*.local
+*.log
+*.tsbuildinfo
+.eslintcache
