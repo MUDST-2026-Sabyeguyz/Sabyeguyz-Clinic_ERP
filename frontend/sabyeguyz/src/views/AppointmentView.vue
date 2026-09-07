@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { createAppointment, searchAppointments, updateAppointmentStatus, type Appointment, type AppointmentStatus } from '@/api/appointments'
+import { createAppointment, rescheduleAppointment, searchAppointments, updateAppointmentStatus, type Appointment, type AppointmentStatus } from '@/api/appointments'
 const date = ref(new Date().toISOString().slice(0, 10)); const status = ref<AppointmentStatus | ''>('SCHEDULED'); const appointments = ref<Appointment[]>([]); const loading = ref(false); const saving = ref(false); const errorMessage = ref(''); const successMessage = ref('')
 const form = ref({ patientId: '', therapistId: '1', serviceId: '1', startAt: '09:00', note: '' })
 async function load() { loading.value = true; errorMessage.value = ''; try { appointments.value = (await searchAppointments(date.value, status.value || undefined)).items } catch (e) { errorMessage.value = e instanceof Error ? e.message : 'เกิดข้อผิดพลาด' } finally { loading.value = false } }
 async function submit() { successMessage.value = ''; errorMessage.value = ''; if (!form.value.patientId) { errorMessage.value = 'กรุณาระบุ Patient ID'; return }; saving.value = true; try { await createAppointment({ branchCode: 'RP', patientId: Number(form.value.patientId), therapistId: Number(form.value.therapistId), serviceId: Number(form.value.serviceId), startAt: `${date.value}T${form.value.startAt}:00+07:00`, note: form.value.note || undefined }); successMessage.value = 'สร้างนัดหมายสำเร็จ'; form.value.note = ''; await load() } catch (e) { errorMessage.value = e instanceof Error ? e.message : 'ไม่สามารถสร้างนัดหมายได้' } finally { saving.value = false } }
 function formatTime(value: string) { return new Date(value).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) }
 async function changeStatus(item: Appointment, action: 'check-in' | 'complete' | 'cancel') { const reason = action === 'cancel' ? window.prompt('เหตุผลการยกเลิก') : undefined; if (action === 'cancel' && !reason?.trim()) return; try { await updateAppointmentStatus(item.id, action, reason || undefined); successMessage.value = 'เปลี่ยนสถานะสำเร็จ'; await load() } catch (e) { errorMessage.value = e instanceof Error ? e.message : 'ไม่สามารถเปลี่ยนสถานะได้' } }
+async function reschedule(item: Appointment) { const value = window.prompt('วันเวลาใหม่ เช่น 2026-09-12T09:00:00+07:00', item.startAt); if (!value?.trim()) return; try { await rescheduleAppointment(item.id, value.trim(), item.therapist.id); successMessage.value = 'เลื่อนนัดหมายสำเร็จ'; await load() } catch (e) { errorMessage.value = e instanceof Error ? e.message : 'ไม่สามารถเลื่อนนัดหมายได้' } }
 onMounted(() => void load())
 </script>
 <template>
