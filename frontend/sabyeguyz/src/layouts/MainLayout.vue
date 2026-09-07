@@ -7,7 +7,7 @@ const navigation = [
   { label: 'Dashboard', to: '/', icon: '⌂', available: false },
   { label: 'Patients', to: '/patients', icon: '♙', available: true },
   { label: 'Appointments', to: '/appointments', icon: '▣', available: true },
-  { label: 'Treatment / Service', to: '/treatment', icon: '✚', available: false },
+  { label: 'Treatment / Service', to: '/treatment', icon: '✚', available: true },
   { label: 'Courses', to: '/courses', icon: '▤', available: false },
   { label: 'Payments', to: '/payments', icon: '฿', available: false },
   { label: 'Staff', to: '/staff', icon: '♟', available: false },
