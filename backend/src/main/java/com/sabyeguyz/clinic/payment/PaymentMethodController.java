@@ -1,0 +1,2 @@
+package com.sabyeguyz.clinic.payment; import java.util.List; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/payment-methods") public class PaymentMethodController { private final PaymentMethodRepository repo; public PaymentMethodController(PaymentMethodRepository repo){this.repo=repo;} @GetMapping List<PaymentMethod> list(){return repo.findByActiveTrueOrderByName();} }
