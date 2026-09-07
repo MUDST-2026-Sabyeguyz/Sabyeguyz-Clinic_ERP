@@ -1,0 +1,2 @@
+package com.sabyeguyz.clinic.catalog; import java.util.List; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/catalog") public class CatalogController { private final CourseRepository courses; public CatalogController(CourseRepository courses){this.courses=courses;} @GetMapping("/courses") List<Course> courses(){return courses.findByActiveTrueOrderByName();} }
