@@ -4,6 +4,7 @@ import PatientSearchView from '../views/PatientSearchView.vue'
 import PatientProfileView from '../views/PatientProfileView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
 import AppointmentView from '../views/AppointmentView.vue'
+import TreatmentView from '../views/TreatmentView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -33,7 +34,7 @@ const router = createRouter({
       (section) => ({
         path: `/${section}`,
         name: section,
-        component: section === 'appointments' ? AppointmentView : PlaceholderView,
+        component: section === 'appointments' ? AppointmentView : section === 'treatment' ? TreatmentView : PlaceholderView,
         props: { label: section.charAt(0).toUpperCase() + section.slice(1) },
       }),
     ),
