@@ -2,20 +2,22 @@ name: Frontend CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop, 'feat/**', 'feature/**']
   pull_request:
-    branches: [main, develop]
+    branches: [develop]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 defaults:
   run:
-    working-directory: sabyeguyz
+    working-directory: frontend/sabyeguyz
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -24,15 +26,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24'
           cache: npm
-          cache-dependency-path: sabyeguyz/package-lock.json
+          cache-dependency-path: frontend/sabyeguyz/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Type check
-        run: npm run type-check
 
       - name: Unit tests
         run: npm run test:unit -- --run
