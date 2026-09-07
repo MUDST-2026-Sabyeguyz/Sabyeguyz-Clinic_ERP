@@ -6,7 +6,7 @@ const isSidebarOpen = ref(false)
 const navigation = [
   { label: 'Dashboard', to: '/', icon: '⌂', available: false },
   { label: 'Patients', to: '/patients', icon: '♙', available: true },
-  { label: 'Appointments', to: '/appointments', icon: '▣', available: false },
+  { label: 'Appointments', to: '/appointments', icon: '▣', available: true },
   { label: 'Treatment / Service', to: '/treatment', icon: '✚', available: false },
   { label: 'Courses', to: '/courses', icon: '▤', available: false },
   { label: 'Payments', to: '/payments', icon: '฿', available: false },
