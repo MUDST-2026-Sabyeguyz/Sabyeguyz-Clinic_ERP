@@ -11,7 +11,8 @@ public record AppointmentResponse(
         Instant startAt,
         Instant endAt,
         AppointmentStatus status,
-        String note
+        String note,
+        String cancelReason
 ) {
     public record PatientSummary(Long id, String hn, String fullName) {}
     public record TherapistSummary(Long id, String fullName) {}
@@ -35,6 +36,7 @@ public record AppointmentResponse(
                 appointment.getStartAt(),
                 appointment.getEndAt(),
                 appointment.getStatus(),
-                appointment.getNote());
+                appointment.getNote(),
+                appointment.getCancelReason());
     }
 }
