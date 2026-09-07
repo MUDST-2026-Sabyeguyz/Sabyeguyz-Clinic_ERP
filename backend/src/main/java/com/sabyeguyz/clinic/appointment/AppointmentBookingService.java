@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Duration;
 
 @Service
 public class AppointmentBookingService {
@@ -70,6 +71,39 @@ public class AppointmentBookingService {
 
         Appointment appointment = appointmentRepository.save(
                 new Appointment(branch, patient, therapist, service, startAt, endAt, request.note()));
+        return AppointmentResponse.from(appointment);
+    }
+
+    @Transactional
+    public AppointmentResponse reschedule(long id, AppointmentRescheduleRequest request) {
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new AppointmentNotFoundException(id));
+
+        Therapist therapist = request.therapistId() != null
+                ? therapistRepository.findById(request.therapistId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบนักกายภาพบำบัด"))
+                : appointment.getTherapist();
+
+        if (!therapist.isActive()) {
+            throw new IllegalArgumentException("นักกายภาพบำบัดถูกปิดการใช้งาน");
+        }
+        if (!therapist.getBranch().getId().equals(appointment.getBranch().getId())) {
+            throw new IllegalArgumentException("นักกายภาพบำบัดไม่ได้สังกัดสาขานี้");
+        }
+
+        Instant startAt = request.startAt().toInstant();
+        if (startAt.isBefore(Instant.now())) {
+            throw new IllegalArgumentException("ไม่สามารถเลื่อนนัดไปเวลาย้อนหลังได้");
+        }
+        Duration duration = Duration.between(appointment.getStartAt(), appointment.getEndAt());
+        Instant endAt = startAt.plus(duration);
+
+        if (appointmentRepository.existsOverlappingExcludingAppointment(
+                therapist.getId(), startAt, endAt, AppointmentStatus.CANCELLED, appointment.getId())) {
+            throw new AppointmentConflictException("นักกายภาพบำบัดมีนัดหมายในช่วงเวลานี้แล้ว");
+        }
+
+        appointment.reschedule(therapist, startAt, endAt);
         return AppointmentResponse.from(appointment);
     }
 }
