@@ -1,0 +1,1 @@
+package com.sabyeguyz.clinic.treatment; import java.util.List; import org.springframework.data.jpa.repository.JpaRepository; public interface TreatmentRepository extends JpaRepository<Treatment,Long>{List<Treatment> findByPatientIdOrderByCreatedAtDesc(Long patientId);}
