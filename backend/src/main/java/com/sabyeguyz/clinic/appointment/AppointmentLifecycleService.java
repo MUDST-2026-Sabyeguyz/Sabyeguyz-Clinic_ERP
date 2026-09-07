@@ -33,7 +33,7 @@ public class AppointmentLifecycleService {
     }
 
     private Appointment require(long id) {
-        return appointmentRepository.findById(id)
+        return appointmentRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new AppointmentNotFoundException(id));
     }
 }

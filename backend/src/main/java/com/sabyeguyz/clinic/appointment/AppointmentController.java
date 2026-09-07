@@ -44,7 +44,8 @@ public class AppointmentController {
             @ApiResponse(responseCode = "201", description = "Appointment created with status SCHEDULED"),
             @ApiResponse(responseCode = "400", description = "Request validation failed or referenced data is invalid",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Therapist already has an appointment in the selected period",
+            @ApiResponse(responseCode = "409", description = "Therapist already has an appointment in the selected period. "
+                    + "Concurrent requests for the same slot are serialised, so exactly one of them is created and the rest get this status.",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ResponseEntity<AppointmentResponse> create(@Valid @RequestBody AppointmentCreateRequest request) {
@@ -138,7 +139,8 @@ public class AppointmentController {
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Appointment is not SCHEDULED, or the new slot overlaps another appointment",
+            @ApiResponse(responseCode = "409", description = "Appointment is not SCHEDULED, the new slot overlaps another appointment, "
+                    + "or the appointment was modified by another request in the meantime",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse reschedule(
