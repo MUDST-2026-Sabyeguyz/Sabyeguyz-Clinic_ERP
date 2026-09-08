@@ -59,11 +59,23 @@ public class CourseLedgerService {
         Branch branch = branchRepository.findByCodeAndActiveTrue(request.branchCode().toUpperCase())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
 
-        CoursePurchase purchase = purchaseRepository.save(
-                new CoursePurchase(patient, course, branch, Instant.now()));
-        movementRepository.save(CourseMovement.purchase(purchase));
-
+        CoursePurchase purchase = openPurchase(patient, course, branch, Instant.now());
         return describe(purchase, Instant.now());
+    }
+
+    /**
+     * เปิดใบซื้อคอร์สและเครดิตสิทธิ์เข้าบัญชีทันที ให้ซื้อแล้วใช้วันเดียวกันได้
+     * แยกออกมาเพื่อให้การขายผ่านใบเสร็จเรียกใช้ได้ โดยที่ผู้เรียกตรวจ patient/branch มาแล้ว
+     */
+    @Transactional
+    public CoursePurchase openPurchase(Patient patient, Course course, Branch branch, Instant purchasedAt) {
+        if (!course.isActive()) {
+            throw new IllegalArgumentException("คอร์สถูกปิดการใช้งาน");
+        }
+        CoursePurchase purchase = purchaseRepository.save(
+                new CoursePurchase(patient, course, branch, purchasedAt));
+        movementRepository.save(CourseMovement.purchase(purchase));
+        return purchase;
     }
 
     /**
