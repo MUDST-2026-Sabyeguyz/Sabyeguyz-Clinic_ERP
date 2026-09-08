@@ -25,6 +25,11 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SaleService {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final SaleRepository saleRepository;
     private final SaleItemRepository itemRepository;
@@ -160,12 +166,48 @@ public class SaleService {
                 .orElseThrow(() -> new SaleNotFoundException(saleId)));
     }
 
+    /**
+     * ลิสต์ใบเสร็จแบบแบ่งหน้า ไม่ระบุตัวกรองก็ได้ทั้งหมด เรียงใหม่ไปเก่า
+     * คืนแบบย่อ ไม่มีรายการสินค้าและรายการชำระเงิน ให้ไปดึงรายละเอียดจาก {@link #get(long)}
+     */
     @Transactional(readOnly = true)
-    public List<SaleResponse> listByPatient(long patientId) {
-        if (!patientRepository.existsById(patientId)) {
+    public SaleSearchResponse search(Long patientId, String branchCode, int page, int size) {
+        validatePagination(page, size);
+        if (patientId != null && !patientRepository.existsById(patientId)) {
             throw new PatientNotFoundException(patientId);
         }
-        return saleRepository.findByPatient(patientId).stream().map(this::describe).toList();
+        Long branchId = branchCode == null || branchCode.isBlank() ? null
+                : branchRepository.findByCodeAndActiveTrue(branchCode.trim().toUpperCase())
+                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน " + branchCode))
+                        .getId();
+
+        Page<Sale> sales = saleRepository.search(patientId, branchId, PageRequest.of(page, size,
+                Sort.by("soldAt").descending().and(Sort.by("id").descending())));
+        if (sales.isEmpty()) {
+            return new SaleSearchResponse(List.of(), sales.getNumber(), sales.getSize(),
+                    sales.getTotalElements(), sales.getTotalPages());
+        }
+
+        // ดึงยอดรับจริงของทั้งหน้าในคราวเดียว ไม่ยิง query ต่อหนึ่งใบ
+        Map<Long, BigDecimal> paid = paymentRepository
+                .paidAmountsOf(sales.getContent().stream().map(Sale::getId).toList()).stream()
+                .collect(Collectors.toMap(SalePaidAmount::saleId, SalePaidAmount::amount));
+
+        return new SaleSearchResponse(
+                sales.getContent().stream()
+                        .map(sale -> SaleSummaryResponse.from(sale,
+                                paid.getOrDefault(sale.getId(), BigDecimal.ZERO)))
+                        .toList(),
+                sales.getNumber(), sales.getSize(), sales.getTotalElements(), sales.getTotalPages());
+    }
+
+    private void validatePagination(int page, int size) {
+        if (page < 0) {
+            throw new IllegalArgumentException("page ต้องไม่น้อยกว่า 0");
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("size ต้องอยู่ระหว่าง 1 ถึง " + MAX_PAGE_SIZE);
+        }
     }
 
     private SaleResponse describe(Sale sale) {

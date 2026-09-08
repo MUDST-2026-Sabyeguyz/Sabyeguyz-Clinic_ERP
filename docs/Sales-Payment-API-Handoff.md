@@ -31,10 +31,13 @@ Request ไม่มีช่องให้ส่งราคาเข้าม
 
 ## 2. API Contract
 
+> **เส้นทางทั้งหมดตาม `docs/context.md` §8** — การขายอยู่ใต้ `/api/payments` และการอ่านใบเสร็จอยู่ที่
+> `/api/receipts/{id}` (รอบแรกผมตั้งชื่อเป็น `/api/sales` เอง ซึ่งไม่ตรง spec แก้แล้ว)
+
 ### 2.1 ขายและรับชำระเงิน
 
 ```
-POST /api/sales
+POST /api/payments
 Content-Type: application/json
 
 {
@@ -54,7 +57,7 @@ Content-Type: application/json
 }
 ```
 
-- `201 Created` + header `Location: /api/sales/{id}` + body เป็น `SaleResponse` (ดู 2.5)
+- `201 Created` + header `Location: /api/receipts/{id}` + body เป็น `SaleResponse` (ดู 2.5)
 - **ยอดใน `payments` ต้องรวมได้เท่ากับยอดรวมพอดี** จ่ายขาดหรือจ่ายเกินก็ `400` เท่ากัน
   (ยังไม่รองรับเงินทอน/ค้างชำระ — ดูข้อ 5)
 - แบ่งจ่ายหลายช่องทางในใบเดียวได้ ตามที่ส่งมาใน `payments`
@@ -73,23 +76,34 @@ Content-Type: application/json
 ### 2.2 ดูใบเสร็จ
 
 ```
-GET /api/sales/{id}
+GET /api/receipts/{id}
 ```
 
 `200` + `SaleResponse` พร้อม `items` และ `payments` ทั้งหมด เรียงเก่าไปใหม่ · `404` ถ้าไม่พบ
 
-### 2.3 ประวัติการขายของผู้ป่วย
+### 2.3 ลิสต์ใบเสร็จ
 
 ```
-GET /api/patients/{patientId}/sales
+GET /api/payments?patientId=1&branchCode=RP&page=0&size=20
 ```
 
-`200` + array ของ `SaleResponse` เรียงใหม่ไปเก่า **รวมใบที่ถูกยกเลิกด้วย** (ไม่ซ่อน) · `404` ถ้าไม่พบผู้ป่วย
+ทุก param เป็น optional (`page`/`size` default `0`/`20`, สูงสุด `size=100`) เรียงใหม่ไปเก่า
+**รวมใบที่ถูกยกเลิกด้วย** ไม่ซ่อน · `400` ถ้า page/size/สาขาไม่ถูกต้อง · `404` ถ้าไม่พบผู้ป่วย
+
+```jsonc
+{ "items": [ { "id": 1, "receiptNo": "RC2601090001", "patient": {…}, "branchCode": "RP",
+               "salesperson": null, "total": 15000.00, "paid": 0.00,
+               "status": "VOIDED", "soldAt": "…", "voidedAt": "…" } ],
+  "page": 0, "size": 20, "totalItems": 1, "totalPages": 1 }
+```
+
+หน้าลิสต์เป็น **แบบย่อ ไม่มี `items` และ `payments`** ถ้าต้องการรายละเอียดให้ยิง `/api/receipts/{id}`
+รูปแบบ paging เหมือนกับ `GET /api/appointments` ที่มีอยู่แล้ว
 
 ### 2.4 ยกเลิกใบเสร็จ
 
 ```
-POST /api/sales/{id}/void
+POST /api/payments/{id}/reverse
 { "reason": "ลูกค้าขอยกเลิก" }     // บังคับ ห้ามว่าง
 ```
 
