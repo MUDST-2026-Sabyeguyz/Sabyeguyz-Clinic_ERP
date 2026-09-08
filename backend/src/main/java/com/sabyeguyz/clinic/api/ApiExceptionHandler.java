@@ -2,6 +2,7 @@ package com.sabyeguyz.clinic.api;
 
 import com.sabyeguyz.clinic.patient.PatientNotFoundException;
 import com.sabyeguyz.clinic.branch.BranchNotFoundException;
+import com.sabyeguyz.clinic.staff.StaffNotFoundException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -35,6 +36,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(BranchNotFoundException.class)
     ResponseEntity<ApiErrorResponse> branchNotFound(BranchNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(StaffNotFoundException.class)
+    ResponseEntity<ApiErrorResponse> staffNotFound(StaffNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
     }
 
