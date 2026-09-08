@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { createTreatment } from '@/api/treatments'
 const patientId = ref(''); const appointmentId = ref(''); const note = ref(''); const service = ref(''); const saved = ref(false); const error = ref('')
 const canSave = computed(() => Boolean(patientId.value && appointmentId.value && service.value && note.value.trim()))
-function submit() { error.value = ''; if (!canSave.value) { error.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน'; return }; saved.value = true }
+async function submit() { error.value = ''; if (!canSave.value) { error.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน'; return }; try { await createTreatment({ patientId: Number(patientId.value), appointmentId: Number(appointmentId.value), serviceId: 1, note: note.value }); saved.value = true } catch (cause) { error.value = cause instanceof Error ? cause.message : 'ไม่สามารถบันทึกการรักษาได้' } }
 </script>
 <template>
   <section class="patient-page"><header class="patient-page-header"><div><p class="eyebrow">TREATMENT SESSION</p><h1>บันทึกการรักษา</h1><p class="page-subtitle">เตรียมบันทึกรายละเอียดการรักษาของผู้ป่วย</p></div></header>
