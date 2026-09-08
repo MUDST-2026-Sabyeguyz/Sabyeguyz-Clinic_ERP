@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sabyeguyz.clinic.appointment.Appointment;
 import com.sabyeguyz.clinic.appointment.AppointmentRepository;
+import com.sabyeguyz.clinic.appointment.AppointmentStatus;
 import com.sabyeguyz.clinic.auth.AppUser;
 import com.sabyeguyz.clinic.auth.AppUserRepository;
 import com.sabyeguyz.clinic.auth.Role;
@@ -280,6 +281,81 @@ class ReportServiceTest {
                 .mapToLong(DashboardResponse.GenderBreakdown::patients).sum())
                 .as("ยอดแยกเพศต้องบวกกันได้เท่าจำนวนผู้ป่วยไม่ซ้ำ")
                 .isEqualTo(dashboard.uniquePatients());
+    }
+
+    // ---------- รายงานนัดหมาย ----------
+
+    @Test
+    void countsAppointmentsByStatus() {
+        attendedVisit(patientId, 9);
+        attendedVisit(patientId, 11);
+        noShow(patientId, 13);
+        booked(patientId, 15);
+
+        AppointmentReportResponse report = service.appointments(PERIOD, "RP");
+
+        assertThat(report.appointments()).isEqualTo(4);
+        assertThat(report.visits()).as("นับเฉพาะที่มาถึงจริง").isEqualTo(2);
+        assertThat(report.byStatus())
+                .extracting(AppointmentReportResponse.StatusCount::status,
+                        AppointmentReportResponse.StatusCount::appointments)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.api.Assertions.tuple(AppointmentStatus.COMPLETED, 2L),
+                        org.assertj.core.api.Assertions.tuple(AppointmentStatus.NO_SHOW, 1L),
+                        org.assertj.core.api.Assertions.tuple(AppointmentStatus.CONFIRMED, 1L));
+    }
+
+    @Test
+    void measuresNoShowRateAgainstAppointmentsThatCameDueOnly() {
+        attendedVisit(patientId, 9);
+        attendedVisit(patientId, 11);
+        attendedVisit(patientId, 13);
+        noShow(patientId, 15);
+        // นัดที่ยังไม่ถึงเวลาไม่ควรทำให้อัตราการไม่มาดูดีเกินจริง
+        booked(patientId, 17);
+        booked(patientId, 19);
+
+        AppointmentReportResponse report = service.appointments(PERIOD, "RP");
+
+        assertThat(report.noShowRate()).as("1 ใน 4 ที่ถึงกำหนด ไม่ใช่ 1 ใน 6")
+                .isEqualByComparingTo("0.2500");
+    }
+
+    @Test
+    void reportsZeroNoShowRateWhenNothingHasComeDue() {
+        booked(patientId, 9);
+
+        assertThat(service.appointments(PERIOD, "RP").noShowRate()).isEqualByComparingTo("0.0000");
+    }
+
+    @Test
+    void breaksAppointmentsDownByTherapistWithTheirVisitCount() {
+        attendedVisit(patientId, 9);
+        noShow(patientId, 11);
+
+        AppointmentReportResponse report = service.appointments(PERIOD, "RP");
+
+        assertThat(report.byTherapist()).singleElement().satisfies(load -> {
+            assertThat(load.appointments()).isEqualTo(2);
+            assertThat(load.visits()).as("นักกายภาพคนนี้มีคนมาจริงคนเดียว").isEqualTo(1);
+            assertThat(load.code()).isNotBlank();
+        });
+    }
+
+    @Test
+    void fillsEveryDayOfTheAppointmentSeries() {
+        ReportPeriod week = new ReportPeriod(DAY, DAY.plusDays(3));
+        attendedVisit(patientId, 9);
+
+        AppointmentReportResponse report = service.appointments(week, "RP");
+
+        assertThat(report.daily()).hasSize(4);
+        assertThat(report.daily().get(0).appointments()).isEqualTo(1);
+        assertThat(report.daily().get(0).visits()).isEqualTo(1);
+        assertThat(report.daily().get(1).appointments()).isZero();
+        assertThat(report.daily().stream()
+                .mapToLong(AppointmentReportResponse.DailyCount::appointments).sum())
+                .as("ผลรวมรายวันต้องเท่ายอดรวม").isEqualTo(report.appointments());
     }
 
     // ---------- ยอดขายรายบุคคล ----------
