@@ -25,6 +25,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.util.List;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableMethodSecurity
@@ -40,7 +41,7 @@ public class SecurityConfig {
     }
     @Bean JwtDecoder jwtDecoder() { return NimbusJwtDecoder.withSecretKey(signingKey).macAlgorithm(MacAlgorithm.HS256).build(); }
     @Bean WebSecurityCustomizer publicAuthEndpoints() {
-        return web -> web.ignoring().requestMatchers("/api/auth/login", "/api/auth/register");
+        return web -> web.ignoring().requestMatchers(new AntPathRequestMatcher("/api/auth/login", "POST"), new AntPathRequestMatcher("/api/auth/register", "POST"));
     }
     @Bean JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
@@ -53,7 +54,7 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     SecurityFilterChain authEndpoints(HttpSecurity http) throws Exception {
-        return http.securityMatcher("/api/auth/**")
+        return http.securityMatcher(new AntPathRequestMatcher("/api/auth/**"))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .build();
