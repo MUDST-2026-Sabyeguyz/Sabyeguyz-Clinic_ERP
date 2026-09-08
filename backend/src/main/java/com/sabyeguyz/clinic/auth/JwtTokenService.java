@@ -4,6 +4,8 @@ import java.time.Instant;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.JwsHeader;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -13,7 +15,7 @@ public class JwtTokenService {
 
     public String issue(AppUser user) {
         Instant now = Instant.now();
-        return encoder.encode(JwtEncoderParameters.from(JwtClaimsSet.builder()
+        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), JwtClaimsSet.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim("username", user.getUsername())
                 .claim("role", user.getRole().name())
