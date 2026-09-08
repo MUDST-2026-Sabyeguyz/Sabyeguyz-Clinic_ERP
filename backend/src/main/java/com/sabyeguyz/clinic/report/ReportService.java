@@ -13,6 +13,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,47 @@ public class ReportService {
                 byCategory.getOrDefault(SaleItemType.ASSESSMENT, zero()),
                 queries.countReceipts(from, to, SaleStatus.PAID, branchId),
                 queries.countReceipts(from, to, SaleStatus.VOIDED, branchId));
+    }
+
+    public AppointmentReportResponse appointments(ReportPeriod period, String branchCode) {
+        Long branchId = resolveBranchId(branchCode);
+        Instant from = period.startInstant();
+        Instant to = period.endInstantExclusive();
+
+        List<ReportRows.StatusCount> statuses = queries.appointmentsByStatus(from, to, branchId);
+        long total = statuses.stream().mapToLong(ReportRows.StatusCount::appointments).sum();
+        long visits = statuses.stream()
+                .filter(row -> AppointmentStatus.attended().contains(row.status()))
+                .mapToLong(ReportRows.StatusCount::appointments).sum();
+        long noShows = statuses.stream()
+                .filter(row -> row.status() == AppointmentStatus.NO_SHOW)
+                .mapToLong(ReportRows.StatusCount::appointments).sum();
+
+        Map<Long, Long> visitsByTherapist = queries
+                .appointmentsByTherapist(from, to, AppointmentStatus.attended(), branchId).stream()
+                .collect(Collectors.toMap(ReportRows.TherapistCount::therapistId,
+                        ReportRows.TherapistCount::appointments));
+
+        List<AppointmentReportResponse.TherapistLoad> byTherapist = queries
+                .appointmentsByTherapist(from, to, EnumSet.allOf(AppointmentStatus.class), branchId).stream()
+                .map(row -> new AppointmentReportResponse.TherapistLoad(row.therapistId(), row.code(),
+                        row.fullName(), row.appointments(),
+                        visitsByTherapist.getOrDefault(row.therapistId(), 0L)))
+                .sorted((left, right) -> Long.compare(right.appointments(), left.appointments()))
+                .toList();
+
+        return new AppointmentReportResponse(
+                period.from(), period.to(), normalise(branchCode),
+                total,
+                visits,
+                // ตัวหารคือนัดที่ถึงกำหนดแล้วจริงๆ นัดที่ยังไม่ถึงเวลาหรือถูกเลื่อนไม่ควรทำให้อัตราดูดีเกินจริง
+                noShowRate(noShows, visits + noShows),
+                statuses.stream()
+                        .map(row -> new AppointmentReportResponse.StatusCount(row.status(), row.appointments()))
+                        .sorted((left, right) -> left.status().compareTo(right.status()))
+                        .toList(),
+                byTherapist,
+                dailyAppointments(period, queries.appointmentMoments(from, to, branchId)));
     }
 
     public RevenueReportResponse revenue(ReportPeriod period, String branchCode) {
@@ -190,6 +232,37 @@ public class ReportService {
         return buckets.entrySet().stream()
                 .map(entry -> new RevenueReportResponse.DailyRevenue(entry.getKey(), money(entry.getValue())))
                 .toList();
+    }
+
+    /** จำนวนนัดรายวันตามวันที่ของคลินิก เติมวันที่ไม่มีนัดให้เป็นศูนย์ เหมือนซีรีส์รายได้ */
+    private List<AppointmentReportResponse.DailyCount> dailyAppointments(
+            ReportPeriod period, List<ReportRows.AppointmentMoment> moments) {
+        Map<LocalDate, long[]> buckets = new LinkedHashMap<>();
+        for (LocalDate date = period.from(); !date.isAfter(period.to()); date = date.plusDays(1)) {
+            buckets.put(date, new long[2]);
+        }
+        for (ReportRows.AppointmentMoment moment : moments) {
+            long[] counts = buckets.get(period.clinicDateOf(moment.startAt()));
+            if (counts == null) {
+                continue;
+            }
+            counts[0]++;
+            if (AppointmentStatus.attended().contains(moment.status())) {
+                counts[1]++;
+            }
+        }
+        return buckets.entrySet().stream()
+                .map(entry -> new AppointmentReportResponse.DailyCount(
+                        entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+                .toList();
+    }
+
+    private static BigDecimal noShowRate(long noShows, long dueAppointments) {
+        if (dueAppointments == 0) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.valueOf(noShows)
+                .divide(BigDecimal.valueOf(dueAppointments), 4, RoundingMode.HALF_UP);
     }
 
     private Map<SaleItemType, BigDecimal> categoryTotals(Instant from, Instant to, Long branchId) {
