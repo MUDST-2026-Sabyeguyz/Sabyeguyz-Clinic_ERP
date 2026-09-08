@@ -12,7 +12,7 @@
 | หัวข้อ | รายละเอียด |
 |---|---|
 | Endpoint | `POST /api/appointments` |
-| ผลลัพธ์ | สร้างนัดหมายสถานะ `SCHEDULED` |
+| ผลลัพธ์ | สร้างนัดหมายสถานะ `CONFIRMED` |
 | Business Rule หลัก | Therapist คนเดียวกันห้ามมีนัดทับช่วงเวลากัน |
 | ยังไม่อยู่ในขอบเขต | `GET`, `PATCH`, check-in, complete, cancel (อยู่ใน APT-2 ถึง APT-6) |
 
@@ -141,7 +141,7 @@ mvn -f  pom.xml test -Dtest=AppointmentApiTest #rejectsOverlappingAppointmentWit
 
 | Test | พิสูจน์ |
 |---|---|
-| `createsScheduledAppointmentUsingServiceDuration` | สร้างสำเร็จ, `SCHEDULED`, `endAt` คำนวณจาก duration ของ Service |
+| `createsConfirmedAppointmentUsingServiceDuration` | สร้างสำเร็จ, `CONFIRMED`, `endAt` คำนวณจาก duration ของ Service |
 | `rejectsOverlappingAppointmentForSameTherapist` | ห้ามจองเวลาซ้ำ |
 | `allowsBackToBackAppointmentForSameTherapist` | นัดติดกันจองได้ทั้ง Pipeline |
 | `rejectsStartTimeInThePast` | ห้ามจองย้อนหลัง |
@@ -268,7 +268,7 @@ curl -i -X POST http://localhost:8080/api/appointments -H "Content-Type: applica
 
 | # | เปลี่ยนอะไรจาก Request มาตรฐาน | Status | ข้อความที่คาด |
 |---|---|---|---|
-| 1 | `09:00` (ครั้งแรก) | **201** | `status: SCHEDULED`, มี `Location` header |
+| 1 | `09:00` (ครั้งแรก) | **201** | `status: CONFIRMED`, มี `Location` header |
 | 2 | `09:30` | **409** | `นักกายภาพบำบัดมีนัดหมายในช่วงเวลานี้แล้ว` |
 | 3 | `10:00` | **201** | นัดติดกันพอดีจองได้ |
 | 4 | `therapistId: 2` เวลา `09:00` | **201** | คนละ Therapist ไม่ชนกัน |
@@ -294,8 +294,8 @@ docker exec deploy-postgres-1 psql -U clinic -d clinic_erp -c "SELECT id, therap
 ```text
  id | therapist_id |        start_at        |         end_at         |  status
 ----+--------------+------------------------+------------------------+-----------
-  1 |            1 | 2026-10-05 02:00:00+00 | 2026-10-05 03:00:00+00 | SCHEDULED
-  2 |            1 | 2026-10-05 03:00:00+00 | 2026-10-05 04:00:00+00 | SCHEDULED
+  1 |            1 | 2026-10-05 02:00:00+00 | 2026-10-05 03:00:00+00 | CONFIRMED
+  2 |            1 | 2026-10-05 03:00:00+00 | 2026-10-05 04:00:00+00 | CONFIRMED
 ```
 
 **สิ่งที่ต้องตรวจ 3 อย่าง**

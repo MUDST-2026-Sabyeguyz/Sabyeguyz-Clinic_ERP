@@ -90,12 +90,30 @@ class AppointmentRepositoryTest {
     }
 
     @Test
+    void ignoresNoShowAppointments() {
+        Appointment noShow = book(therapistTwo, "15:00", "16:00");
+        noShow.markNoShow();
+        appointmentRepository.saveAndFlush(noShow);
+
+        assertThat(overlaps(therapistTwo, "15:00", "16:00")).isFalse();
+    }
+
+    @Test
+    void stillDetectsRescheduledAppointments() {
+        Appointment rescheduled = book(therapistTwo, "17:00", "18:00");
+        rescheduled.reschedule(therapistTwo, at("18:00"), at("19:00"));
+        appointmentRepository.saveAndFlush(rescheduled);
+
+        assertThat(overlaps(therapistTwo, "18:00", "19:00")).isTrue();
+    }
+
+    @Test
     void excludingAppointmentAllowsRescheduleOntoSameSlot() {
         Appointment existing = existingAppointment;
 
         boolean overlapsWithSelfExcluded = appointmentRepository.existsOverlappingExcludingAppointment(
                 existing.getTherapist().getId(), existing.getStartAt(), existing.getEndAt(),
-                AppointmentStatus.CANCELLED, existing.getId());
+                AppointmentStatus.slotReleasing(), existing.getId());
 
         assertThat(overlapsWithSelfExcluded).isFalse();
     }
@@ -107,14 +125,14 @@ class AppointmentRepositoryTest {
 
         boolean overlaps = appointmentRepository.existsOverlappingExcludingAppointment(
                 a.getTherapist().getId(), b.getStartAt().minus(Duration.ofMinutes(15)),
-                b.getStartAt().plus(Duration.ofMinutes(15)), AppointmentStatus.CANCELLED, a.getId());
+                b.getStartAt().plus(Duration.ofMinutes(15)), AppointmentStatus.slotReleasing(), a.getId());
 
         assertThat(overlaps).isTrue();
     }
 
     private boolean overlaps(Therapist therapist, String start, String end) {
         return appointmentRepository.existsOverlapping(
-                therapist.getId(), at(start), at(end), AppointmentStatus.CANCELLED);
+                therapist.getId(), at(start), at(end), AppointmentStatus.slotReleasing());
     }
 
     private Appointment book(Therapist therapist, String start, String end) {

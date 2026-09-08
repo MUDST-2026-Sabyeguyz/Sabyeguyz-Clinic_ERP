@@ -41,7 +41,7 @@ public class AppointmentController {
     @Operation(summary = "Create appointment",
             description = "Books an appointment for the selected therapist and rejects overlapping time slots.")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Appointment created with status SCHEDULED"),
+            @ApiResponse(responseCode = "201", description = "Appointment created with status CONFIRMED"),
             @ApiResponse(responseCode = "400", description = "Request validation failed or referenced data is invalid",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Therapist already has an appointment in the selected period. "
@@ -66,7 +66,7 @@ public class AppointmentController {
             @Parameter(description = "Clinic-local date (Asia/Bangkok), format 2026-09-01")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @Parameter(description = "Therapist identifier") @RequestParam(required = false) Long therapistId,
-            @Parameter(description = "SCHEDULED, CHECKED_IN, COMPLETED, or CANCELLED")
+            @Parameter(description = "CONFIRMED, ARRIVED, IN_SERVICE, COMPLETED, CANCELLED, RESCHEDULED, or NO_SHOW")
             @RequestParam(required = false) AppointmentStatus status,
             @Parameter(description = "Zero-based page number") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size from 1 to 100") @RequestParam(defaultValue = "20") int size) {
@@ -86,9 +86,10 @@ public class AppointmentController {
     }
 
     @PostMapping("/{id}/check-in")
-    @Operation(summary = "Check in appointment", description = "Marks a SCHEDULED appointment as CHECKED_IN when the patient arrives.")
+    @Operation(summary = "Check in appointment",
+            description = "Marks a CONFIRMED or RESCHEDULED appointment as ARRIVED when the patient reaches the clinic.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Appointment checked in"),
+            @ApiResponse(responseCode = "200", description = "Appointment marked as ARRIVED"),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Appointment is not in a state that allows check-in",
@@ -99,13 +100,42 @@ public class AppointmentController {
         return lifecycleService.checkIn(id);
     }
 
+    @PostMapping("/{id}/start-service")
+    @Operation(summary = "Start service", description = "Marks an ARRIVED appointment as IN_SERVICE when treatment begins.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment moved to IN_SERVICE"),
+            @ApiResponse(responseCode = "404", description = "Appointment not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Patient must be checked in first",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public AppointmentResponse startService(
+            @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
+        return lifecycleService.startService(id);
+    }
+
+    @PostMapping("/{id}/no-show")
+    @Operation(summary = "Mark appointment as no show",
+            description = "Marks a CONFIRMED or RESCHEDULED appointment as NO_SHOW. The time slot becomes available again.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment marked as NO_SHOW"),
+            @ApiResponse(responseCode = "404", description = "Appointment not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Appointments the patient already arrived for cannot be marked as no show",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public AppointmentResponse markNoShow(
+            @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
+        return lifecycleService.markNoShow(id);
+    }
+
     @PostMapping("/{id}/complete")
-    @Operation(summary = "Complete appointment", description = "Marks a CHECKED_IN appointment as COMPLETED.")
+    @Operation(summary = "Complete appointment", description = "Marks an IN_SERVICE appointment as COMPLETED.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment completed"),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Appointment must be checked in first",
+            @ApiResponse(responseCode = "409", description = "Service must be started first",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse complete(
@@ -114,14 +144,14 @@ public class AppointmentController {
     }
 
     @PostMapping("/{id}/cancel")
-    @Operation(summary = "Cancel appointment", description = "Cancels a SCHEDULED or CHECKED_IN appointment and stores the reason. The time slot becomes available again.")
+    @Operation(summary = "Cancel appointment", description = "Cancels a CONFIRMED, RESCHEDULED, or ARRIVED appointment and stores the reason. The time slot becomes available again.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment cancelled"),
             @ApiResponse(responseCode = "400", description = "Cancellation reason is missing",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Completed or already cancelled appointments cannot be cancelled",
+            @ApiResponse(responseCode = "409", description = "Appointments that are already in service, completed, cancelled, or marked as no show cannot be cancelled",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse cancel(
@@ -132,14 +162,15 @@ public class AppointmentController {
 
     @PatchMapping("/{id}")
     @Operation(summary = "Reschedule appointment",
-            description = "Changes the start time and/or therapist of a SCHEDULED appointment. Duration stays the same as originally booked.")
+            description = "Changes the start time and/or therapist of a CONFIRMED or RESCHEDULED appointment and moves it to RESCHEDULED. "
+                    + "Duration stays the same as originally booked.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment rescheduled"),
             @ApiResponse(responseCode = "400", description = "Validation failed or referenced therapist is invalid",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Appointment is not SCHEDULED, the new slot overlaps another appointment, "
+            @ApiResponse(responseCode = "409", description = "Appointment is not CONFIRMED or RESCHEDULED, the new slot overlaps another appointment, "
                     + "or the appointment was modified by another request in the meantime",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
     })
