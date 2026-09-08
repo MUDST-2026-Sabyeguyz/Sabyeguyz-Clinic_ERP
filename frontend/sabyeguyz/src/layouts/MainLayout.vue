@@ -40,7 +40,7 @@ const navigation = [
         >
           <span class="nav-icon">{{ item.icon }}</span
           ><span>{{ item.label }}</span
-          ><small v-if="!item.available">เร็ว ๆ นี้</small>
+          >
         </RouterLink>
       </nav>
     </aside>
