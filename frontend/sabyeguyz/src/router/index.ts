@@ -5,6 +5,7 @@ import PatientProfileView from '../views/PatientProfileView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
 import AppointmentView from '../views/AppointmentView.vue'
 import TreatmentView from '../views/TreatmentView.vue'
+import BranchManagementView from '../views/BranchManagementView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -30,6 +31,7 @@ const router = createRouter({
       name: 'patient-profile',
       component: PatientProfileView,
     },
+    { path: '/branches', name: 'branches', component: BranchManagementView },
     ...['appointments', 'treatment', 'courses', 'payments', 'staff', 'reports', 'settings'].map(
       (section) => ({
         path: `/${section}`,
