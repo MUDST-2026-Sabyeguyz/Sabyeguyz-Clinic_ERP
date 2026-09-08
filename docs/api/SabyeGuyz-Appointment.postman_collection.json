@@ -79,7 +79,7 @@
               "pm.test('status 201', () => pm.response.to.have.status(201));",
               "pm.test('มี Location header', () => pm.expect(pm.response.headers.get('Location')).to.include('/api/appointments/'));",
               "const body = pm.response.json();",
-              "pm.test('status = SCHEDULED', () => pm.expect(body.status).to.eql('SCHEDULED'));",
+              "pm.test('status = CONFIRMED', () => pm.expect(body.status).to.eql('CONFIRMED'));",
               "pm.test('endAt ห่างจาก startAt เท่ากับ durationMinutes', () => {",
               "  const diff = (new Date(body.endAt) - new Date(body.startAt)) / 60000;",
               "  pm.expect(diff).to.eql(body.service.durationMinutes);",

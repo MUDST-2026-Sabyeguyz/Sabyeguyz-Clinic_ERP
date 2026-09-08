@@ -55,7 +55,7 @@ Staff ค้นหาผู้ป่วยจากชื่อ เบอร์�
 
 ### Appointment
 
-Staff เลือก Patient, Branch, Therapist, Service, วัน และเวลา ระบบต้องตรวจสอบเวลาซ้ำและเก็บสถานะ เช่น `SCHEDULED`, `CHECKED_IN`, `COMPLETED` และ `CANCELLED`
+Staff เลือก Patient, Branch, Therapist, Service, วัน และเวลา ระบบต้องตรวจสอบเวลาซ้ำและเก็บสถานะ 7 ค่าตาม Workflow Brief V1 §4 ได้แก่ `CONFIRMED`, `ARRIVED`, `IN_SERVICE`, `COMPLETED`, `CANCELLED`, `RESCHEDULED` และ `NO_SHOW` (Confirmed Requirement — ไม่ใช่ Assumption)
 
 ### Treatment
 
