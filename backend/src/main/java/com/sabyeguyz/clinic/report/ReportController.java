@@ -15,8 +15,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * เส้นทางตาม docs/context.md §8 — Dashboard อยู่ที่ {@code /api/dashboard/summary}
+ * ส่วนรายงานอยู่ใต้ {@code /api/reports/}
+ */
 @RestController
-@RequestMapping("/api/reports")
+@RequestMapping("/api")
 @Tag(name = "Dashboard & Reports", description = "Operational dashboard and revenue, course, and staff reports")
 public class ReportController {
     private final ReportService service;
@@ -25,7 +29,7 @@ public class ReportController {
         this.service = service;
     }
 
-    @GetMapping("/dashboard")
+    @GetMapping("/dashboard/summary")
     @Operation(summary = "Dashboard figures for a period",
             description = "Unique patients who actually attended, split by gender, plus visit count and revenue "
                     + "broken down into course, single visit, and assessment. Dates are clinic-local (Asia/Bangkok) "
@@ -46,7 +50,25 @@ public class ReportController {
         return service.dashboard(new ReportPeriod(from, to), branchCode);
     }
 
-    @GetMapping("/revenue")
+    @GetMapping("/reports/appointments")
+    @Operation(summary = "Appointment report",
+            description = "Appointment counts for the period broken down by status, by therapist, and by day, plus "
+                    + "the no-show rate. `visits` counts only appointments the patient actually attended, the same "
+                    + "definition the dashboard uses. The no-show rate is measured against appointments that had "
+                    + "already come due, so bookings still in the future do not flatter it.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Appointment report returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid date range or unknown branch",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    public AppointmentReportResponse appointments(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String branchCode) {
+        return service.appointments(new ReportPeriod(from, to), branchCode);
+    }
+
+    @GetMapping("/reports/revenue")
     @Operation(summary = "Revenue report",
             description = "Total revenue with a breakdown by product category, by branch, and a daily series with "
                     + "empty days filled in as zero. The category amounts add up to the total, so the two can be "
@@ -63,7 +85,7 @@ public class ReportController {
         return service.revenue(new ReportPeriod(from, to), branchCode);
     }
 
-    @GetMapping("/course-balances")
+    @GetMapping("/reports/course-balances")
     @Operation(summary = "Course balance report",
             description = "Every course sold in the period with purchased, used, and remaining sessions per patient. "
                     + "Filtered by the purchase date, not by when sessions were consumed. Transfers are not included "
@@ -83,7 +105,7 @@ public class ReportController {
         return service.courseBalances(new ReportPeriod(from, to), branchCode, patientId);
     }
 
-    @GetMapping("/staff-sales")
+    @GetMapping("/reports/staff-sales")
     @Operation(summary = "Staff sales report",
             description = "Sales totals per salesperson plus the branch total. Receipts issued without a salesperson "
                     + "are reported in a separate `unassigned` bucket rather than dropped, so the per-person rows "
