@@ -58,7 +58,7 @@ class ReportApiTest {
     void returnsTheDashboardForAPeriod() throws Exception {
         sell();
 
-        mockMvc.perform(get("/api/reports/dashboard")
+        mockMvc.perform(get("/api/dashboard/summary")
                         .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "RP"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.from").value(DAY.toString()))
@@ -113,8 +113,19 @@ class ReportApiTest {
     }
 
     @Test
+    void returnsTheAppointmentReport() throws Exception {
+        mockMvc.perform(get("/api/reports/appointments")
+                        .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "RP"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appointments").value(0))
+                .andExpect(jsonPath("$.visits").value(0))
+                .andExpect(jsonPath("$.noShowRate").value(0))
+                .andExpect(jsonPath("$.daily.length()").value(1));
+    }
+
+    @Test
     void rejectsAnInvertedRange() throws Exception {
-        mockMvc.perform(get("/api/reports/dashboard")
+        mockMvc.perform(get("/api/dashboard/summary")
                         .param("from", DAY.toString()).param("to", DAY.minusDays(1).toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").isNotEmpty());
@@ -122,21 +133,21 @@ class ReportApiTest {
 
     @Test
     void rejectsAnUnknownBranch() throws Exception {
-        mockMvc.perform(get("/api/reports/dashboard")
+        mockMvc.perform(get("/api/dashboard/summary")
                         .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "ZZ"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void rejectsAMalformedDate() throws Exception {
-        mockMvc.perform(get("/api/reports/dashboard")
+        mockMvc.perform(get("/api/dashboard/summary")
                         .param("from", "4 กรกฎาคม").param("to", DAY.toString()))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void rejectsAMissingDate() throws Exception {
-        mockMvc.perform(get("/api/reports/dashboard").param("to", DAY.toString()))
+        mockMvc.perform(get("/api/dashboard/summary").param("to", DAY.toString()))
                 .andExpect(status().isBadRequest());
     }
 

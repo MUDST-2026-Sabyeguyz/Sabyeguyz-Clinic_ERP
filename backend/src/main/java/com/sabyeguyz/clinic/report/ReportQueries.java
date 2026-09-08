@@ -45,6 +45,46 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
                      @Param("attended") Collection<AppointmentStatus> attended,
                      @Param("branchId") Long branchId);
 
+    @Query("""
+            select new com.sabyeguyz.clinic.report.ReportRows$StatusCount(a.status, count(a))
+            from Appointment a
+            where a.startAt >= :from and a.startAt < :to
+              and (:branchId is null or a.branch.id = :branchId)
+            group by a.status
+            """)
+    List<ReportRows.StatusCount> appointmentsByStatus(@Param("from") Instant from,
+                                                      @Param("to") Instant to,
+                                                      @Param("branchId") Long branchId);
+
+    /**
+     * จำนวนนัดต่อนักกายภาพ ส่ง statuses มาเพื่อนับเฉพาะบางสถานะ หรือส่งครบทุกค่าเพื่อนับทั้งหมด
+     */
+    @Query("""
+            select new com.sabyeguyz.clinic.report.ReportRows$TherapistCount(
+                t.id, t.code, t.fullName, count(a))
+            from Appointment a
+              join a.therapist t
+            where a.startAt >= :from and a.startAt < :to
+              and a.status in :statuses
+              and (:branchId is null or a.branch.id = :branchId)
+            group by t.id, t.code, t.fullName
+            """)
+    List<ReportRows.TherapistCount> appointmentsByTherapist(@Param("from") Instant from,
+                                                            @Param("to") Instant to,
+                                                            @Param("statuses") Collection<AppointmentStatus> statuses,
+                                                            @Param("branchId") Long branchId);
+
+    /** เวลาและสถานะของทุกนัด เอาไปจัดกลุ่มรายวันฝั่ง Java ด้วยเหตุผลเดียวกับ revenuePerSale */
+    @Query("""
+            select new com.sabyeguyz.clinic.report.ReportRows$AppointmentMoment(a.startAt, a.status)
+            from Appointment a
+            where a.startAt >= :from and a.startAt < :to
+              and (:branchId is null or a.branch.id = :branchId)
+            """)
+    List<ReportRows.AppointmentMoment> appointmentMoments(@Param("from") Instant from,
+                                                          @Param("to") Instant to,
+                                                          @Param("branchId") Long branchId);
+
     /**
      * รายได้จริง = ผลรวมของรายการรับเงินหักคืนเงิน ไม่ใช่ sales.total
      * ใบที่ถูกยกเลิกจะมีแถวคืนเงินหักล้างจนเหลือศูนย์เอง ไม่ต้องกรองสถานะ

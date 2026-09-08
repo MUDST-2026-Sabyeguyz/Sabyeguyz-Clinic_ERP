@@ -1,16 +1,17 @@
 # Dashboard & Reports — Handoff (Frontend + Data)
 
 API สำหรับหน้า Dashboard และ Reports ตาม Workflow Brief V1 §8
-ตรงกับซอร์สในบรานช์ `feature/dashboard-reports` (8 ก.ย. 2026)
+ตรงกับซอร์สบน `develop` หลัง PR #21 บวกบรานช์ `fix/api-paths-to-spec` (8 ก.ย. 2026)
 
 ## 0. สถานะปัจจุบัน
 
-- Branch: `feature/dashboard-reports` — **แตกจาก `feature/payment-receipt` ไม่ใช่จาก `develop`**
-  เพราะรายงานทั้งหมดอ่านจากตาราง `sales` / `sale_payments` ที่มาจากสไลซ์นั้น
-  → **ต้อง merge `feature/payment-receipt` (PR ก่อนหน้า) ก่อน** แล้วบรานช์นี้ถึงจะ merge ได้
-- Backend tests: **208 tests ผ่านทั้งหมด** (`mvn clean test`) เพิ่มจาก 175
-- ตรวจกับ PostgreSQL 16 จริงแล้ว **34/34 ผ่าน**
-- **สไลซ์นี้ไม่มี migration ใหม่** อ่านอย่างเดียว schema ยังอยู่ที่ `v14`
+- Dashboard/Reports merge เข้า `develop` แล้ว (PR #21) ต่อจาก Payment/Receipt (PR #20)
+- **บรานช์ `fix/api-paths-to-spec` ย้าย path ให้ตรง `docs/context.md` §8** — ยังไม่ merge
+  รอบแรกผมตั้งชื่อเองโดยไม่ได้เปิด §8 ดู เลยได้ `/api/reports/dashboard` แทน `/api/dashboard/summary`
+  และลืมทำ `/api/reports/appointments` ทั้งหมดนี้แก้ในบรานช์นั้นแล้ว
+- Backend tests: **219 tests ผ่านทั้งหมด** (`mvn clean test`)
+- ตรวจกับ PostgreSQL 16 จริงแล้ว **34/34** (รายงาน) + **28/28** (path ใหม่ + Appointment Report)
+- **ไม่มี migration ใหม่** อ่านอย่างเดียว schema ยังอยู่ที่ `v14`
 - ยังไม่มีหน้าจอ — backend + API เท่านั้น
   หน้า `ReportsView.vue` ปัจจุบันบนบรานช์ `feature/complete-v1-workflows` เขียนไว้ว่ารายงานพวกนี้
   "จะเปิดเมื่อ transactional schema ได้รับการยืนยัน" → ตอนนี้ยืนยันแล้ว ต่อ API ชุดนี้ได้เลย
@@ -42,10 +43,13 @@ API สำหรับหน้า Dashboard และ Reports ตาม Workflo
 
 ทุก endpoint รับ `from`, `to` (`YYYY-MM-DD`, บังคับ, นับรวมทั้งสองด้าน) และ `branchCode` (ไม่บังคับ — ไม่ส่ง = ทุกสาขา)
 
+> **เส้นทางตาม `docs/context.md` §8** — Dashboard อยู่ที่ `/api/dashboard/summary` (ไม่ใช่ `/api/reports/dashboard`)
+> ส่วนรายงานอยู่ใต้ `/api/reports/`
+
 ### 2.1 Dashboard
 
 ```
-GET /api/reports/dashboard?from=2026-09-01&to=2026-09-30&branchCode=RP
+GET /api/dashboard/summary?from=2026-09-01&to=2026-09-30&branchCode=RP
 ```
 
 ```jsonc
@@ -67,7 +71,32 @@ GET /api/reports/dashboard?from=2026-09-01&to=2026-09-30&branchCode=RP
 - ผลรวม `patientsByGender[].patients` = `uniquePatients` เสมอ
 - ผู้ป่วยที่ไม่ได้ระบุเพศจะมารวมกันในกลุ่ม `"ไม่ระบุ"`
 
-### 2.2 Revenue Report
+### 2.2 Appointment Report
+
+```
+GET /api/reports/appointments?from=…&to=…&branchCode=RP
+```
+
+```jsonc
+{
+  "appointments": 4,
+  "visits": 2,
+  "noShowRate": 0.3333,
+  "byStatus":    [ { "status": "COMPLETED", "appointments": 2 }, { "status": "NO_SHOW", "appointments": 1 },
+                   { "status": "CONFIRMED", "appointments": 1 } ],
+  "byTherapist": [ { "therapistId": 1, "code": "RP-T01", "fullName": "…", "appointments": 4, "visits": 2 } ],
+  "daily":       [ { "date": "2026-09-08", "appointments": 0, "visits": 0 },
+                   { "date": "2026-09-09", "appointments": 4, "visits": 2 } ]
+}
+```
+
+- `visits` ใช้นิยามเดียวกับ Dashboard คือนัดที่ผู้ป่วยมาถึงจริง
+- **`noShowRate` หารด้วยนัดที่ถึงกำหนดแล้วเท่านั้น** (มาจริง + ไม่มาตามนัด)
+  นัดที่ยังไม่ถึงเวลาและนัดที่เลื่อนไม่ถูกนับในตัวหาร ไม่งั้นจองล่วงหน้าเยอะๆ จะทำให้อัตราดูดีเกินจริง
+- `byStatus` และ `daily` รวมกันได้เท่า `appointments` เสมอ · `daily` เติมวันที่ไม่มีนัดเป็น 0
+- แทนที่วิธีเดิมใน `ReportsView.vue` ที่ไปเรียก `GET /api/appointments` แล้วอ่าน `totalItems`
+
+### 2.3 Revenue Report
 
 ```
 GET /api/reports/revenue?from=2026-09-01&to=2026-09-30&branchCode=RP
@@ -90,7 +119,7 @@ GET /api/reports/revenue?from=2026-09-01&to=2026-09-30&branchCode=RP
 - `daily` เติมวันที่ไม่มียอดเป็น 0 ให้แล้ว ยิงมาช่วงไหนก็ได้จำนวนวันเท่านั้นพอดี → เอาไปวาดกราฟได้ตรงๆ
 - ผลรวมของ `daily[].amount` = `totalRevenue` เสมอ
 
-### 2.3 Course Balance Report
+### 2.4 Course Balance Report
 
 ```
 GET /api/reports/course-balances?from=…&to=…&branchCode=RP&patientId=1
@@ -116,7 +145,7 @@ GET /api/reports/course-balances?from=…&to=…&branchCode=RP&patientId=1
 - คอร์สที่ถูกยกเลิกยังแสดงในตาราง (ครั้งที่ใช้ไปแล้วยังอยู่) แต่**ไม่ถูกนับใน `totalValue`**
 - ยังไม่มีคอลัมน์ "โอน" ที่ brief ขอ เพราะ Course Transfer ยังไม่เข้า `develop` (ดูข้อ 4)
 
-### 2.4 Staff Sales Report
+### 2.5 Staff Sales Report
 
 ```
 GET /api/reports/staff-sales?from=…&to=…&branchCode=RP
