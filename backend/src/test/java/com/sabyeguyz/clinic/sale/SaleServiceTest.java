@@ -292,7 +292,48 @@ class SaleServiceTest {
         service.create(request(List.of(assessmentLine(1)), List.of(payment("CASH", "1200.00"))));
         service.voidSale(first.id(), new SaleVoidRequest("ยกเลิกใบแรก"));
 
-        assertThat(service.listByPatient(patientId)).hasSize(2);
+        SaleSearchResponse page = service.search(patientId, null, 0, 20);
+
+        assertThat(page.items()).hasSize(2);
+        assertThat(page.totalItems()).isEqualTo(2);
+        assertThat(page.items()).extracting(SaleSummaryResponse::status)
+                .contains(SaleStatus.VOIDED, SaleStatus.PAID);
+    }
+
+    @Test
+    void listShowsMoneyActuallyKeptSoAVoidedReceiptReadsZero() {
+        SaleResponse sale = service.create(request(
+                List.of(courseLine()), List.of(payment("CASH", "15000.00"))));
+        service.voidSale(sale.id(), new SaleVoidRequest("ยกเลิก"));
+
+        SaleSummaryResponse summary = service.search(patientId, null, 0, 20).items().get(0);
+
+        assertThat(summary.total()).as("ยอดที่ต้องชำระเดิมยังอยู่").isEqualByComparingTo("15000.00");
+        assertThat(summary.paid()).as("แต่เงินที่เก็บไว้จริงเป็นศูนย์").isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void listsEveryPatientWhenNoFilterIsGiven() {
+        Long other = registerPatient();
+        service.create(request(List.of(assessmentLine(1)), List.of(payment("CASH", "1200.00"))));
+        service.create(new SaleRequest(other, "RP", null, null,
+                List.of(assessmentLine(1)), List.of(payment("CASH", "1200.00"))));
+
+        assertThat(service.search(null, null, 0, 20).totalItems()).isGreaterThanOrEqualTo(2);
+        assertThat(service.search(other, null, 0, 20).totalItems()).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsAnOversizedPage() {
+        assertThatThrownBy(() -> service.search(null, null, 0, 500))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("size");
+    }
+
+    @Test
+    void rejectsAnUnknownPatientFilter() {
+        assertThatThrownBy(() -> service.search(999999L, null, 0, 20))
+                .isInstanceOf(com.sabyeguyz.clinic.patient.PatientNotFoundException.class);
     }
 
     private SaleRequest request(List<SaleRequest.Item> items, List<SaleRequest.Payment> payments) {
