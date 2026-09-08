@@ -18,6 +18,7 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Arrays;
+import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "appointments")
@@ -63,6 +64,10 @@ public class Appointment {
 
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    @Version
+    @Column(name = "version")
+    private long version;
 
     protected Appointment() {}
 
@@ -126,5 +131,6 @@ public class Appointment {
     public String getCancelReason() { return cancelReason; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public long getVersion() { return version; }
 
 }
