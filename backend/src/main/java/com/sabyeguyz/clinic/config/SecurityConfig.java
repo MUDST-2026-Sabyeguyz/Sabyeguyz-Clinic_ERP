@@ -23,6 +23,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.util.List;
+import org.springframework.core.annotation.Order;
 
 @Configuration
 @EnableMethodSecurity
@@ -46,6 +47,15 @@ public class SecurityConfig {
         return converter;
     }
     @Bean
+    @Order(1)
+    SecurityFilterChain authEndpoints(HttpSecurity http) throws Exception {
+        return http.securityMatcher("/api/auth/**")
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .build();
+    }
+    @Bean
+    @Order(2)
     SecurityFilterChain security(HttpSecurity http, Environment environment) throws Exception {
         if (environment.acceptsProfiles(Profiles.of("test"))) {
             return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(auth -> auth.anyRequest().permitAll()).build();
