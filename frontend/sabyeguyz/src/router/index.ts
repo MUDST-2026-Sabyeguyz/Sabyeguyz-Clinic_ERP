@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import PatientRegistrationView from '../views/PatientRegistrationView.vue'
 import PatientSearchView from '../views/PatientSearchView.vue'
 import PatientProfileView from '../views/PatientProfileView.vue'
-import PlaceholderView from '../views/PlaceholderView.vue'
 import AppointmentView from '../views/AppointmentView.vue'
 import TreatmentView from '../views/TreatmentView.vue'
 import BranchManagementView from '../views/BranchManagementView.vue'
@@ -11,6 +10,9 @@ import CourseManagementView from '../views/CourseManagementView.vue'
 import LoginView from '../views/LoginView.vue'
 import { useAuthStore } from '@/stores/auth'
 import DashboardView from '../views/DashboardView.vue'
+import PaymentsView from '../views/PaymentsView.vue'
+import ReportsView from '../views/ReportsView.vue'
+import SettingsView from '../views/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -39,14 +41,16 @@ const router = createRouter({
     { path: '/branches', name: 'branches', component: BranchManagementView },
     { path: '/staff', name: 'staff-management', component: StaffManagementView },
     { path: '/courses', name: 'course-management', component: CourseManagementView },
-    ...['appointments', 'treatment', 'courses', 'payments', 'staff', 'reports', 'settings'].map(
+    ...['appointments', 'treatment', 'settings'].map(
       (section) => ({
         path: `/${section}`,
         name: section,
-        component: section === 'appointments' ? AppointmentView : section === 'treatment' ? TreatmentView : PlaceholderView,
+        component: section === 'appointments' ? AppointmentView : section === 'treatment' ? TreatmentView : SettingsView,
         props: { label: section.charAt(0).toUpperCase() + section.slice(1) },
       }),
     ),
+    { path: '/payments', name: 'payments', component: PaymentsView },
+    { path: '/reports', name: 'reports', component: ReportsView },
   ],
 })
 
