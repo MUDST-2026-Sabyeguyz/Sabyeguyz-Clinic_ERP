@@ -30,4 +30,11 @@ public final class ReportRows {
                               Instant purchasedAt, Instant expiresAt, CoursePurchaseStatus status) {}
 
     public record PurchaseTotal(Long purchaseId, long value) {}
+
+    public record StatusCount(com.sabyeguyz.clinic.appointment.AppointmentStatus status, long appointments) {}
+
+    public record TherapistCount(Long therapistId, String code, String fullName, long appointments) {}
+
+    /** นัดหนึ่งใบ ใช้จัดกลุ่มรายวันในโซนเวลาคลินิกฝั่ง Java */
+    public record AppointmentMoment(Instant startAt, com.sabyeguyz.clinic.appointment.AppointmentStatus status) {}
 }
