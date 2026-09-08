@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import logoUrl from '@/assets/sabyeguyz-logo.png'
 
 const isSidebarOpen = ref(false)
+const router = useRouter(); const auth = useAuthStore()
 const navigation = [
-  { label: 'Dashboard', to: '/', icon: '⌂', available: false },
+  { label: 'Dashboard', to: '/', icon: '⌂', available: true },
   { label: 'Patients', to: '/patients', icon: '♙', available: true },
   { label: 'Appointments', to: '/appointments', icon: '▣', available: true },
   { label: 'Treatment / Service', to: '/treatment', icon: '✚', available: true },
-  { label: 'Courses', to: '/courses', icon: '▤', available: false },
-  { label: 'Payments', to: '/payments', icon: '฿', available: false },
-  { label: 'Staff', to: '/staff', icon: '♟', available: false },
+  { label: 'Courses', to: '/courses', icon: '▤', available: true },
+  { label: 'Payments', to: '/payments', icon: '฿', available: true },
+  { label: 'Staff', to: '/staff', icon: '♟', available: true },
   { label: 'Reports', to: '/reports', icon: '▥', available: false },
   { label: 'Settings', to: '/settings', icon: '⚙', available: false },
 ]
@@ -48,7 +51,7 @@ const navigation = [
       <header class="top-bar">
         <button class="menu-toggle" aria-label="เปิดเมนู" @click="isSidebarOpen = true">☰</button>
         <div><strong>Clinic ERP</strong><span>ระบบจัดการคลินิก</span></div>
-        <div class="top-actions"><span class="status-dot" />พร้อมใช้งาน</div>
+        <div class="top-actions"><span class="status-dot" />พร้อมใช้งาน<span v-if="auth.username">{{ auth.username }}</span><button v-if="auth.isAuthenticated" type="button" @click="auth.logout(); router.push('/login')">ออกจากระบบ</button></div>
       </header>
       <main class="content-area"><slot /></main>
     </div>

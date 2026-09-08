@@ -86,6 +86,23 @@ public class CoursePurchase {
         this.createdAt = Instant.now();
     }
 
+    public static CoursePurchase transferredFrom(CoursePurchase source, Patient destination, int quantity) {
+        CoursePurchase transfer = new CoursePurchase();
+        transfer.patient = destination;
+        transfer.course = source.course;
+        transfer.branch = source.branch;
+        transfer.courseCode = source.courseCode;
+        transfer.courseName = source.courseName;
+        transfer.price = source.price;
+        transfer.sessions = quantity;
+        transfer.bonusSessions = 0;
+        transfer.purchasedAt = source.purchasedAt;
+        transfer.expiresAt = source.expiresAt;
+        transfer.status = CoursePurchaseStatus.ACTIVE;
+        transfer.createdAt = Instant.now();
+        return transfer;
+    }
+
     /** จำนวนครั้งทั้งหมดที่ซื้อ รวม Bonus */
     public int totalSessions() {
         return sessions + bonusSessions;

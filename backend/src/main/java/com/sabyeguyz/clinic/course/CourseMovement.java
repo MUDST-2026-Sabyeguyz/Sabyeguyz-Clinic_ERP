@@ -72,6 +72,12 @@ public class CourseMovement {
         return new CourseMovement(purchase, CourseMovementType.USAGE, -1, reason, appointment, null);
     }
 
+    public static CourseMovement transfer(CoursePurchase purchase, CourseMovementType type, int quantity, String reason) {
+        if (type != CourseMovementType.TRANSFER_IN && type != CourseMovementType.TRANSFER_OUT)
+            throw new IllegalArgumentException("Invalid transfer movement type");
+        return new CourseMovement(purchase, type, quantity, reason, null, null);
+    }
+
     public static CourseMovement reversalOf(CourseMovement original, String reason) {
         return new CourseMovement(original.getCoursePurchase(), CourseMovementType.REVERSAL,
                 -original.getQuantity(), reason, original.getAppointment(), original);

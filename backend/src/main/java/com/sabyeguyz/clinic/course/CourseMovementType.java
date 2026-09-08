@@ -10,5 +10,7 @@ public enum CourseMovementType {
     /** ใช้สิทธิ์ 1 ครั้ง: -1 */
     USAGE,
     /** กลับรายการเดิม: จำนวนตรงข้ามกับ movement ที่อ้างถึง */
-    REVERSAL
+    REVERSAL,
+    TRANSFER_IN,
+    TRANSFER_OUT
 }
