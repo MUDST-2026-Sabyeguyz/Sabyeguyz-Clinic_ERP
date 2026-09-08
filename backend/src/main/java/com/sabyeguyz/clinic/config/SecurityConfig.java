@@ -52,7 +52,7 @@ public class SecurityConfig {
         return converter;
     }
     @Bean
-    @Order(1)
+    @Order(0)
     SecurityFilterChain authEndpoints(HttpSecurity http) throws Exception {
         return http.securityMatcher(new AntPathRequestMatcher("/api/auth/**"))
                 .csrf(csrf -> csrf.disable())
