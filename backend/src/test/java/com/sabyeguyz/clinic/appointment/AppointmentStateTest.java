@@ -10,30 +10,77 @@ import org.junit.jupiter.api.Test;
 class AppointmentStateTest {
 
     @Test
-    void newAppointmentStartsAsScheduled() {
-        assertThat(scheduled().getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+    void newAppointmentStartsAsConfirmed() {
+        assertThat(confirmed().getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
     }
 
     @Test
-    void checkInMovesScheduledToCheckedIn() {
-        Appointment appointment = scheduled();
-        appointment.checkIn();
+    void checkInMovesConfirmedToArrived() {
+        Appointment appointment = confirmed();
+        appointment.markArrived();
 
-        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.ARRIVED);
     }
 
     @Test
-    void completeMovesCheckedInToCompleted() {
-        Appointment appointment = scheduled();
-        appointment.checkIn();
+    void startServiceMovesArrivedToInService() {
+        Appointment appointment = confirmed();
+        appointment.markArrived();
+        appointment.startService();
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_SERVICE);
+    }
+
+    @Test
+    void completeMovesInServiceToCompleted() {
+        Appointment appointment = inService();
+
         appointment.complete();
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
     }
 
     @Test
+    void rescheduleMovesConfirmedToRescheduled() {
+        Appointment appointment = confirmed();
+        Instant newStart = Instant.now().plus(Duration.ofDays(3));
+
+        appointment.reschedule(null, newStart, newStart.plus(Duration.ofHours(1)));
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+        assertThat(appointment.getStartAt()).isEqualTo(newStart);
+    }
+
+    @Test
+    void rescheduledAppointmentCanBeRescheduledAgain() {
+        Appointment appointment = rescheduled();
+        Instant newStart = Instant.now().plus(Duration.ofDays(5));
+
+        appointment.reschedule(null, newStart, newStart.plus(Duration.ofHours(1)));
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+    }
+
+    @Test
+    void rescheduledAppointmentCanCheckIn() {
+        Appointment appointment = rescheduled();
+
+        appointment.markArrived();
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.ARRIVED);
+    }
+
+    @Test
+    void noShowMovesConfirmedToNoShow() {
+        Appointment appointment = confirmed();
+        appointment.markNoShow();
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
+    }
+
+    @Test
     void cancelStoresReason() {
-        Appointment appointment = scheduled();
+        Appointment appointment = confirmed();
         appointment.cancel("ผู้ป่วยติดธุระ");
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
@@ -41,34 +88,43 @@ class AppointmentStateTest {
     }
 
     @Test
-    void cancelIsAllowedAfterCheckIn() {
-        Appointment appointment = scheduled();
-        appointment.checkIn();
+    void cancelIsAllowedAfterArrival() {
+        Appointment appointment = confirmed();
+        appointment.markArrived();
         appointment.cancel("ผู้ป่วยขอกลับก่อน");
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
     }
 
     @Test
-    void rejectsCompleteBeforeCheckIn() {
-        assertThatThrownBy(() -> scheduled().complete())
+    void rejectsStartServiceBeforeArrival() {
+        assertThatThrownBy(() -> confirmed().startService())
                 .isInstanceOf(AppointmentConflictException.class)
-                .hasMessageContaining("SCHEDULED");
+                .hasMessageContaining("CONFIRMED");
+    }
+
+    @Test
+    void rejectsCompleteBeforeServiceStarted() {
+        Appointment appointment = confirmed();
+        appointment.markArrived();
+
+        assertThatThrownBy(appointment::complete)
+                .isInstanceOf(AppointmentConflictException.class)
+                .hasMessageContaining("ARRIVED");
     }
 
     @Test
     void rejectsSecondCheckIn() {
-        Appointment appointment = scheduled();
-        appointment.checkIn();
+        Appointment appointment = confirmed();
+        appointment.markArrived();
 
-        assertThatThrownBy(appointment::checkIn)
+        assertThatThrownBy(appointment::markArrived)
                 .isInstanceOf(AppointmentConflictException.class);
     }
 
     @Test
     void rejectsCancelAfterCompleted() {
-        Appointment appointment = scheduled();
-        appointment.checkIn();
+        Appointment appointment = inService();
         appointment.complete();
 
         assertThatThrownBy(() -> appointment.cancel("เปลี่ยนใจ"))
@@ -77,27 +133,74 @@ class AppointmentStateTest {
     }
 
     @Test
+    void rejectsCancelAfterServiceStarted() {
+        assertThatThrownBy(() -> inService().cancel("เปลี่ยนใจ"))
+                .isInstanceOf(AppointmentConflictException.class)
+                .hasMessageContaining("IN_SERVICE");
+    }
+
+    @Test
     void rejectsCheckInAfterCancel() {
-        Appointment appointment = scheduled();
+        Appointment appointment = confirmed();
         appointment.cancel("ผู้ป่วยยกเลิก");
 
-        assertThatThrownBy(appointment::checkIn)
+        assertThatThrownBy(appointment::markArrived)
                 .isInstanceOf(AppointmentConflictException.class);
     }
 
     @Test
+    void rejectsNoShowAfterArrival() {
+        Appointment appointment = confirmed();
+        appointment.markArrived();
+
+        assertThatThrownBy(appointment::markNoShow)
+                .isInstanceOf(AppointmentConflictException.class)
+                .hasMessageContaining("ARRIVED");
+    }
+
+    @Test
+    void rejectsRescheduleAfterArrival() {
+        Appointment appointment = confirmed();
+        appointment.markArrived();
+        Instant newStart = Instant.now().plus(Duration.ofDays(2));
+
+        assertThatThrownBy(() -> appointment.reschedule(null, newStart, newStart.plus(Duration.ofHours(1))))
+                .isInstanceOf(AppointmentConflictException.class);
+    }
+
+    @Test
+    void cancelledAndNoShowReleaseTheTimeSlot() {
+        assertThat(AppointmentStatus.slotReleasing())
+                .containsExactlyInAnyOrder(AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW);
+    }
+
+    @Test
     void updatesTimestampOnTransition() throws Exception {
-        Appointment appointment = scheduled();
+        Appointment appointment = confirmed();
         Instant before = appointment.getUpdatedAt();
         Thread.sleep(5);
 
-        appointment.checkIn();
+        appointment.markArrived();
 
         assertThat(appointment.getUpdatedAt()).isAfter(before);
     }
 
-    private Appointment scheduled() {
+    private Appointment confirmed() {
         Instant startAt = Instant.now().plus(Duration.ofDays(1));
         return new Appointment(null, null, null, null, startAt, startAt.plus(Duration.ofHours(1)), null);
+    }
+
+    private Appointment rescheduled() {
+        Appointment appointment = confirmed();
+        Instant newStart = Instant.now().plus(Duration.ofDays(2));
+        appointment.reschedule(null, newStart, newStart.plus(Duration.ofHours(1)));
+        return appointment;
+    }
+
+    private Appointment inService() {
+        Appointment appointment = confirmed();
+        appointment.markArrived();
+        appointment.startService();
+        return appointment;
     }
 }

@@ -56,7 +56,7 @@ class AppointmentRescheduleServiceTest {
 
         assertThat(rescheduled.startAt()).isEqualTo(nineAmTomorrow.plusHours(3).toInstant());
         assertThat(rescheduled.endAt()).isEqualTo(rescheduled.startAt().plus(Duration.ofMinutes(60)));
-        assertThat(rescheduled.status()).isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(rescheduled.status()).isEqualTo(AppointmentStatus.RESCHEDULED);
     }
 
     @Test
@@ -90,14 +90,14 @@ class AppointmentRescheduleServiceTest {
     }
 
     @Test
-    void rejectsRescheduleOfCheckedInAppointment() {
+    void rejectsRescheduleOfArrivedAppointment() {
         AppointmentResponse original = bookingService.create(request(nineAmTomorrow));
         lifecycleService.checkIn(original.id());
 
         assertThatThrownBy(() -> bookingService.reschedule(
                 original.id(), new AppointmentRescheduleRequest(nineAmTomorrow.plusHours(3), null)))
                 .isInstanceOf(AppointmentConflictException.class)
-                .hasMessageContaining("CHECKED_IN");
+                .hasMessageContaining("ARRIVED");
     }
 
     @Test

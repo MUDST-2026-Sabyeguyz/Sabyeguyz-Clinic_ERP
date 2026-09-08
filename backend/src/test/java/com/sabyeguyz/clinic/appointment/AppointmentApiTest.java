@@ -55,7 +55,7 @@ class AppointmentApiTest {
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$.id").exists())
-                .andExpect(jsonPath("$.status").value("SCHEDULED"))
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.branchCode").value("RP"))
                 .andExpect(jsonPath("$.patient.hn").isNotEmpty())
                 .andExpect(jsonPath("$.service.durationMinutes").value(60));

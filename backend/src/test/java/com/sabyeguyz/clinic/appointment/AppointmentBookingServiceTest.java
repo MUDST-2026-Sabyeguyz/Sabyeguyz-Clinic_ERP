@@ -44,11 +44,11 @@ class AppointmentBookingServiceTest {
     }
 
     @Test
-    void createsScheduledAppointmentUsingServiceDuration() {
+    void createsConfirmedAppointmentUsingServiceDuration() {
         AppointmentResponse response = bookingService.create(request(nineAmTomorrow));
 
         assertThat(response.id()).isNotNull();
-        assertThat(response.status()).isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(response.status()).isEqualTo(AppointmentStatus.CONFIRMED);
         assertThat(response.branchCode()).isEqualTo("RP");
         assertThat(response.endAt()).isEqualTo(response.startAt().plus(Duration.ofMinutes(60)));
         assertThat(response.patient().hn()).isNotBlank();
