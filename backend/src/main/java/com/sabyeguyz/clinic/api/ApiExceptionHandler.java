@@ -6,6 +6,8 @@ import com.sabyeguyz.clinic.staff.StaffNotFoundException;
 import com.sabyeguyz.clinic.catalog.CourseNotFoundException;
 import com.sabyeguyz.clinic.course.CourseBalanceException;
 import com.sabyeguyz.clinic.course.CoursePurchaseNotFoundException;
+import com.sabyeguyz.clinic.sale.SaleException;
+import com.sabyeguyz.clinic.sale.SaleNotFoundException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -59,6 +61,16 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(CourseBalanceException.class)
     ResponseEntity<ApiErrorResponse> courseBalance(CourseBalanceException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(SaleNotFoundException.class)
+    ResponseEntity<ApiErrorResponse> saleNotFound(SaleNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(SaleException.class)
+    ResponseEntity<ApiErrorResponse> saleConflict(SaleException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
     }
 

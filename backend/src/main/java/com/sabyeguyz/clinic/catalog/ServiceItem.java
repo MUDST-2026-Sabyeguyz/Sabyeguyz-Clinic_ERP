@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -23,6 +24,9 @@ public class ServiceItem {
     @Column(name = "default_duration_minutes")
     private int defaultDurationMinutes;
 
+    /** ราคาต่อครั้ง ใช้ตอนขายแบบ Assessment หรือ Single Visit */
+    private BigDecimal price;
+
     private boolean active;
 
     @Column(name = "created_at")
@@ -34,6 +38,7 @@ public class ServiceItem {
     public String getCode() { return code; }
     public String getName() { return name; }
     public int getDefaultDurationMinutes() { return defaultDurationMinutes; }
+    public BigDecimal getPrice() { return price; }
     public boolean isActive() { return active; }
     public Instant getCreatedAt() { return createdAt; }
 }
