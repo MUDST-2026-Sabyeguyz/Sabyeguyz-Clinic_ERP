@@ -8,10 +8,14 @@ import TreatmentView from '../views/TreatmentView.vue'
 import BranchManagementView from '../views/BranchManagementView.vue'
 import StaffManagementView from '../views/StaffManagementView.vue'
 import CourseManagementView from '../views/CourseManagementView.vue'
+import LoginView from '../views/LoginView.vue'
+import PaymentMethodManagementView from '../views/PaymentMethodManagementView.vue'
+import { authToken } from '../api/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     {
       path: '/',
       name: 'dashboard',
@@ -36,15 +40,17 @@ const router = createRouter({
     { path: '/branches', name: 'branches', component: BranchManagementView },
     { path: '/staff', name: 'staff-management', component: StaffManagementView },
     { path: '/courses', name: 'course-management', component: CourseManagementView },
-    ...['appointments', 'treatment', 'courses', 'payments', 'staff', 'reports', 'settings'].map(
+    ...['appointments', 'treatment', 'payments', 'reports', 'settings'].map(
       (section) => ({
         path: `/${section}`,
         name: section,
-        component: section === 'appointments' ? AppointmentView : section === 'treatment' ? TreatmentView : PlaceholderView,
+        component: section === 'appointments' ? AppointmentView : section === 'treatment' ? TreatmentView : section === 'payments' ? PaymentMethodManagementView : PlaceholderView,
         props: { label: section.charAt(0).toUpperCase() + section.slice(1) },
       }),
     ),
   ],
 })
+
+router.beforeEach((to) => { if (!to.meta.public && !authToken()) return { name: 'login', query: { redirect: to.fullPath } } })
 
 export default router
