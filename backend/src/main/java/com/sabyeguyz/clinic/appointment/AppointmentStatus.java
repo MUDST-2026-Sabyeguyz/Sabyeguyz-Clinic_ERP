@@ -30,4 +30,12 @@ public enum AppointmentStatus {
     public static Set<AppointmentStatus> slotReleasing() {
         return EnumSet.of(CANCELLED, NO_SHOW);
     }
+
+    /**
+     * สถานะที่ถือว่าผู้ป่วยมาถึงคลินิกจริง ใช้นับ Visit ในรายงาน
+     * นัดที่ยังไม่ถึงเวลา ถูกยกเลิก เลื่อน หรือไม่มาตามนัด ไม่นับเป็น Visit
+     */
+    public static Set<AppointmentStatus> attended() {
+        return EnumSet.of(ARRIVED, IN_SERVICE, COMPLETED);
+    }
 }
