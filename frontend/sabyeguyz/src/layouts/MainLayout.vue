@@ -12,10 +12,11 @@ const navigation = [
   { label: 'Appointments', to: '/appointments', icon: '▣', available: true },
   { label: 'Treatment / Service', to: '/treatment', icon: '✚', available: true },
   { label: 'Courses', to: '/courses', icon: '▤', available: true },
+  { label: 'Course Ledger', to: '/course-ledger', icon: '↔', available: true },
   { label: 'Payments', to: '/payments', icon: '฿', available: true },
   { label: 'Staff', to: '/staff', icon: '♟', available: true },
-  { label: 'Reports', to: '/reports', icon: '▥', available: false },
-  { label: 'Settings', to: '/settings', icon: '⚙', available: false },
+  { label: 'Reports', to: '/reports', icon: '▥', available: true },
+  { label: 'Settings', to: '/settings', icon: '⚙', available: true },
 ]
 </script>
 
