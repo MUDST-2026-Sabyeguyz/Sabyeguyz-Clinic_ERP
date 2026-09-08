@@ -14,6 +14,7 @@ import com.sabyeguyz.clinic.appointment.AppointmentConflictException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import com.sabyeguyz.clinic.appointment.AppointmentNotFoundException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -64,5 +65,11 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiErrorResponse> typeMismatch(MethodArgumentTypeMismatchException exception) {
         return ResponseEntity.badRequest()
                 .body(new ApiErrorResponse("ค่าของพารามิเตอร์ " + exception.getName() + " ไม่ถูกต้อง"));
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ApiErrorResponse> concurrentUpdate(ObjectOptimisticLockingFailureException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse("ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นไปแล้ว กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง"));
     }
 }
