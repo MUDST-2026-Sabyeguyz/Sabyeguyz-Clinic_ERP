@@ -3,6 +3,8 @@ package com.sabyeguyz.clinic.sale;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -23,6 +25,23 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
             order by s.soldAt desc, s.id desc
             """)
     List<Sale> findByPatient(@Param("patientId") Long patientId);
+
+    /** ลิสต์ใบเสร็จแบบแบ่งหน้า ส่ง null เพื่อไม่กรองเงื่อนไขนั้น */
+    @Query(value = """
+            select s from Sale s
+              join fetch s.patient
+              join fetch s.branch
+            where (:patientId is null or s.patient.id = :patientId)
+              and (:branchId is null or s.branch.id = :branchId)
+            """,
+            countQuery = """
+            select count(s) from Sale s
+            where (:patientId is null or s.patient.id = :patientId)
+              and (:branchId is null or s.branch.id = :branchId)
+            """)
+    Page<Sale> search(@Param("patientId") Long patientId,
+                      @Param("branchId") Long branchId,
+                      Pageable pageable);
 
     Optional<Sale> findByReceiptNo(String receiptNo);
 }
