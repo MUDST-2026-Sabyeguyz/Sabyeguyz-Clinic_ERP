@@ -69,7 +69,7 @@ public class AppointmentBookingService {
         Instant endAt = startAt.plus(Duration.ofMinutes(service.getDefaultDurationMinutes()));
 
         if (appointmentRepository.existsOverlapping(
-                therapist.getId(), startAt, endAt, AppointmentStatus.CANCELLED)) {
+                therapist.getId(), startAt, endAt, AppointmentStatus.slotReleasing())) {
             throw new AppointmentConflictException(OVERLAP_MESSAGE);
         }
 
@@ -108,7 +108,7 @@ public class AppointmentBookingService {
         Instant endAt = startAt.plus(duration);
 
         if (appointmentRepository.existsOverlappingExcludingAppointment(
-                therapist.getId(), startAt, endAt, AppointmentStatus.CANCELLED, appointment.getId())) {
+                therapist.getId(), startAt, endAt, AppointmentStatus.slotReleasing(), appointment.getId())) {
             throw new AppointmentConflictException(OVERLAP_MESSAGE);
         }
 

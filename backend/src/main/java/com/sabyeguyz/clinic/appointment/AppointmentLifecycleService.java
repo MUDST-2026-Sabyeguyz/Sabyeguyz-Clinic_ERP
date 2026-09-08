@@ -14,7 +14,14 @@ public class AppointmentLifecycleService {
     @Transactional
     public AppointmentResponse checkIn(long id) {
         Appointment appointment = require(id);
-        appointment.checkIn();
+        appointment.markArrived();
+        return AppointmentResponse.from(appointment);
+    }
+
+    @Transactional
+    public AppointmentResponse startService(long id) {
+        Appointment appointment = require(id);
+        appointment.startService();
         return AppointmentResponse.from(appointment);
     }
 
@@ -29,6 +36,13 @@ public class AppointmentLifecycleService {
     public AppointmentResponse cancel(long id, AppointmentCancelRequest request) {
         Appointment appointment = require(id);
         appointment.cancel(request.reason());
+        return AppointmentResponse.from(appointment);
+    }
+
+    @Transactional
+    public AppointmentResponse markNoShow(long id) {
+        Appointment appointment = require(id);
+        appointment.markNoShow();
         return AppointmentResponse.from(appointment);
     }
 

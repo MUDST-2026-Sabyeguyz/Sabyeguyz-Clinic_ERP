@@ -80,7 +80,7 @@ class AppointmentQueryServiceTest {
 
         assertThat(queryService.search("RP", tomorrow, null, AppointmentStatus.CANCELLED, 0, 20).totalItems())
                 .isEqualTo(1);
-        assertThat(queryService.search("RP", tomorrow, null, AppointmentStatus.SCHEDULED, 0, 20).totalItems())
+        assertThat(queryService.search("RP", tomorrow, null, AppointmentStatus.CONFIRMED, 0, 20).totalItems())
                 .isEqualTo(2);
     }
 
@@ -141,7 +141,7 @@ class AppointmentQueryServiceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(3))
                 .andExpect(jsonPath("$.totalItems").value(3))
-                .andExpect(jsonPath("$.items[0].status").value("SCHEDULED"))
+                .andExpect(jsonPath("$.items[0].status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.items[0].patient.hn").isNotEmpty());
     }
 
