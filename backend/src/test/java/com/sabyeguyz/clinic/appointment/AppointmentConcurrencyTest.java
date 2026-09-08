@@ -121,7 +121,7 @@ class AppointmentConcurrencyTest {
         assertThat(countOf(outcomes, AppointmentConflictException.class))
                 .as("request ที่สองต้องเห็นสถานะล่าสุดแล้วถูกปฏิเสธ").isEqualTo(1);
         assertThat(appointmentRepository.findById(id).orElseThrow().getStatus())
-                .isEqualTo(AppointmentStatus.CHECKED_IN);
+                .isEqualTo(AppointmentStatus.ARRIVED);
     }
 
     @Test

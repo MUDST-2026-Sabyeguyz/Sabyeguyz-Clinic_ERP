@@ -47,18 +47,38 @@ class AppointmentLifecycleApiTest {
     }
 
     @Test
-    void checksInScheduledAppointment() throws Exception {
+    void checksInConfirmedAppointment() throws Exception {
         long id = bookTomorrowNineAm();
 
         mockMvc.perform(post("/api/appointments/{id}/check-in", id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CHECKED_IN"));
+                .andExpect(jsonPath("$.status").value("ARRIVED"));
     }
 
     @Test
-    void completesAppointmentAfterCheckIn() throws Exception {
+    void startsServiceAfterCheckIn() throws Exception {
         long id = bookTomorrowNineAm();
         mockMvc.perform(post("/api/appointments/{id}/check-in", id)).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/appointments/{id}/start-service", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_SERVICE"));
+    }
+
+    @Test
+    void rejectsStartServiceBeforeCheckInWithConflict() throws Exception {
+        long id = bookTomorrowNineAm();
+
+        mockMvc.perform(post("/api/appointments/{id}/start-service", id))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void completesAppointmentAfterServiceStarted() throws Exception {
+        long id = bookTomorrowNineAm();
+        mockMvc.perform(post("/api/appointments/{id}/check-in", id)).andExpect(status().isOk());
+        mockMvc.perform(post("/api/appointments/{id}/start-service", id)).andExpect(status().isOk());
 
         mockMvc.perform(post("/api/appointments/{id}/complete", id))
                 .andExpect(status().isOk())
@@ -66,12 +86,42 @@ class AppointmentLifecycleApiTest {
     }
 
     @Test
-    void rejectsCompleteBeforeCheckInWithConflict() throws Exception {
+    void rejectsCompleteBeforeServiceStartedWithConflict() throws Exception {
         long id = bookTomorrowNineAm();
+        mockMvc.perform(post("/api/appointments/{id}/check-in", id)).andExpect(status().isOk());
 
         mockMvc.perform(post("/api/appointments/{id}/complete", id))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void marksAppointmentAsNoShow() throws Exception {
+        long id = bookTomorrowNineAm();
+
+        mockMvc.perform(post("/api/appointments/{id}/no-show", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("NO_SHOW"));
+    }
+
+    @Test
+    void rejectsNoShowAfterPatientArrivedWithConflict() throws Exception {
+        long id = bookTomorrowNineAm();
+        mockMvc.perform(post("/api/appointments/{id}/check-in", id)).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/appointments/{id}/no-show", id))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void releasesTimeSlotAfterNoShow() throws Exception {
+        long id = bookTomorrowNineAm();
+        mockMvc.perform(post("/api/appointments/{id}/no-show", id)).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/appointments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(nineAmTomorrow)))
+                .andExpect(status().isCreated());
     }
 
     @Test
@@ -110,6 +160,7 @@ class AppointmentLifecycleApiTest {
     void rejectsCancelOfCompletedAppointmentWithConflict() throws Exception {
         long id = bookTomorrowNineAm();
         mockMvc.perform(post("/api/appointments/{id}/check-in", id)).andExpect(status().isOk());
+        mockMvc.perform(post("/api/appointments/{id}/start-service", id)).andExpect(status().isOk());
         mockMvc.perform(post("/api/appointments/{id}/complete", id)).andExpect(status().isOk());
 
         mockMvc.perform(post("/api/appointments/{id}/cancel", id)

@@ -80,35 +80,53 @@ public class Appointment {
         this.startAt = startAt;
         this.endAt = endAt;
         this.note = note;
-        this.status = AppointmentStatus.SCHEDULED;
+        this.status = AppointmentStatus.CONFIRMED;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
 
-    public void checkIn() {
-        ensureCurrentStatusIsOneOf("เช็คอิน", AppointmentStatus.SCHEDULED);
-        this.status = AppointmentStatus.CHECKED_IN;
+    /** ผู้ป่วยมาถึงคลินิก: CONFIRMED หรือ RESCHEDULED -> ARRIVED */
+    public void markArrived() {
+        ensureCurrentStatusIsOneOf("เช็คอิน", AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED);
+        this.status = AppointmentStatus.ARRIVED;
         this.updatedAt = Instant.now();
     }
 
+    /** เริ่มให้บริการ: ARRIVED -> IN_SERVICE */
+    public void startService() {
+        ensureCurrentStatusIsOneOf("เริ่มให้บริการ", AppointmentStatus.ARRIVED);
+        this.status = AppointmentStatus.IN_SERVICE;
+        this.updatedAt = Instant.now();
+    }
+
+    /** จบบริการ: IN_SERVICE -> COMPLETED */
     public void complete() {
-        ensureCurrentStatusIsOneOf("ปิดงาน", AppointmentStatus.CHECKED_IN);
+        ensureCurrentStatusIsOneOf("ปิดงาน", AppointmentStatus.IN_SERVICE);
         this.status = AppointmentStatus.COMPLETED;
         this.updatedAt = Instant.now();
     }
 
     public void cancel(String reason) {
-        ensureCurrentStatusIsOneOf("ยกเลิก", AppointmentStatus.SCHEDULED, AppointmentStatus.CHECKED_IN);
+        ensureCurrentStatusIsOneOf("ยกเลิก", AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED,
+                AppointmentStatus.ARRIVED);
         this.status = AppointmentStatus.CANCELLED;
         this.cancelReason = reason;
         this.updatedAt = Instant.now();
     }
 
+    /** ไม่มาตามนัด: ทำได้เฉพาะนัดที่ผู้ป่วยยังไม่เคยมาถึง */
+    public void markNoShow() {
+        ensureCurrentStatusIsOneOf("บันทึกไม่มาตามนัด", AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED);
+        this.status = AppointmentStatus.NO_SHOW;
+        this.updatedAt = Instant.now();
+    }
+
     public void reschedule(Therapist therapist, Instant startAt, Instant endAt) {
-        ensureCurrentStatusIsOneOf("เลื่อนนัด", AppointmentStatus.SCHEDULED);
+        ensureCurrentStatusIsOneOf("เลื่อนนัด", AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED);
         this.therapist = therapist;
         this.startAt = startAt;
         this.endAt = endAt;
+        this.status = AppointmentStatus.RESCHEDULED;
         this.updatedAt = Instant.now();
     }
 
