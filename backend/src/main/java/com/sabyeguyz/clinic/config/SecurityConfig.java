@@ -19,8 +19,13 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import java.util.List;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
     private final SecretKeySpec signingKey;
     public SecurityConfig(@Value("${app.jwt.secret:clinic-erp-local-secret-change-me-32chars}") String secret) {
@@ -32,6 +37,14 @@ public class SecurityConfig {
         return new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(jwk)));
     }
     @Bean JwtDecoder jwtDecoder() { return NimbusJwtDecoder.withSecretKey(signingKey).macAlgorithm(MacAlgorithm.HS256).build(); }
+    @Bean JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            String role = jwt.getClaimAsString("role");
+            return role == null ? List.of() : List.of(new SimpleGrantedAuthority("ROLE_" + role));
+        });
+        return converter;
+    }
     @Bean
     SecurityFilterChain security(HttpSecurity http, Environment environment) throws Exception {
         if (environment.acceptsProfiles(Profiles.of("test"))) {
@@ -39,6 +52,6 @@ public class SecurityConfig {
         }
         return http.csrf(csrf -> csrf.disable()).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll().anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.jwt()).build();
+                .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))).build();
     }
 }
