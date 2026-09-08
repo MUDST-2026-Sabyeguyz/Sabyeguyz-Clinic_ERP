@@ -10,6 +10,10 @@ import StaffManagementView from '../views/StaffManagementView.vue'
 import CourseManagementView from '../views/CourseManagementView.vue'
 import LoginView from '../views/LoginView.vue'
 import PaymentMethodManagementView from '../views/PaymentMethodManagementView.vue'
+import DashboardView from '../views/DashboardView.vue'
+import ReportsView from '../views/ReportsView.vue'
+import SettingsView from '../views/SettingsView.vue'
+import PatientCoursesView from '../views/PatientCoursesView.vue'
 import { authToken } from '../api/auth'
 
 const router = createRouter({
@@ -19,7 +23,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'dashboard',
-      component: PlaceholderView,
+      component: DashboardView,
       props: { label: 'Dashboard' },
     },
     {
@@ -40,11 +44,12 @@ const router = createRouter({
     { path: '/branches', name: 'branches', component: BranchManagementView },
     { path: '/staff', name: 'staff-management', component: StaffManagementView },
     { path: '/courses', name: 'course-management', component: CourseManagementView },
+    { path: '/course-ledger', name: 'course-ledger', component: PatientCoursesView },
     ...['appointments', 'treatment', 'payments', 'reports', 'settings'].map(
       (section) => ({
         path: `/${section}`,
         name: section,
-        component: section === 'appointments' ? AppointmentView : section === 'treatment' ? TreatmentView : section === 'payments' ? PaymentMethodManagementView : PlaceholderView,
+        component: section === 'appointments' ? AppointmentView : section === 'treatment' ? TreatmentView : section === 'payments' ? PaymentMethodManagementView : section === 'reports' ? ReportsView : section === 'settings' ? SettingsView : PlaceholderView,
         props: { label: section.charAt(0).toUpperCase() + section.slice(1) },
       }),
     ),
