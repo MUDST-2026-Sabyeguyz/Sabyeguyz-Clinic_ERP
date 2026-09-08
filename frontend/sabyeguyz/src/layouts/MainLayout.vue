@@ -4,7 +4,7 @@ import logoUrl from '@/assets/sabyeguyz-logo.png'
 
 const isSidebarOpen = ref(false)
 const navigation = [
-  { label: 'Dashboard', to: '/', icon: '⌂', available: false },
+  { label: 'Dashboard', to: '/', icon: '⌂', available: true },
   { label: 'Patients', to: '/patients', icon: '♙', available: true },
   { label: 'Appointments', to: '/appointments', icon: '▣', available: true },
   { label: 'Treatment / Service', to: '/treatment', icon: '✚', available: true },
