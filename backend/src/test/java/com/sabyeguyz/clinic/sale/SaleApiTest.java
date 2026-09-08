@@ -52,7 +52,7 @@ class SaleApiTest {
 
     @Test
     void issuesAReceiptAndReturnsLocation() throws Exception {
-        mockMvc.perform(post("/api/sales")
+        mockMvc.perform(post("/api/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(courseSaleBody("9000.00")))
                 .andExpect(status().isCreated())
@@ -67,7 +67,7 @@ class SaleApiTest {
 
     @Test
     void rejectsAReceiptWithNoItems() throws Exception {
-        mockMvc.perform(post("/api/sales")
+        mockMvc.perform(post("/api/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"patientId":%d,"branchCode":"RP","items":[],
@@ -79,7 +79,7 @@ class SaleApiTest {
 
     @Test
     void rejectsPaymentsThatDoNotMatchTheTotal() throws Exception {
-        mockMvc.perform(post("/api/sales")
+        mockMvc.perform(post("/api/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(courseSaleBody("8000.00")))
                 .andExpect(status().isBadRequest())
@@ -88,7 +88,7 @@ class SaleApiTest {
 
     @Test
     void returnsNotFoundForAnUnknownPatient() throws Exception {
-        mockMvc.perform(post("/api/sales")
+        mockMvc.perform(post("/api/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"patientId":999999,"branchCode":"RP",
@@ -102,7 +102,7 @@ class SaleApiTest {
     void returnsTheReceiptWithItemsAndPayments() throws Exception {
         long saleId = createSale(courseSaleBody("9000.00"));
 
-        mockMvc.perform(get("/api/sales/{id}", saleId))
+        mockMvc.perform(get("/api/receipts/{id}", saleId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].type").value("COURSE"))
@@ -115,7 +115,7 @@ class SaleApiTest {
     void voidsAReceiptAndNetsTheRevenueToZero() throws Exception {
         long saleId = createSale(courseSaleBody("9000.00"));
 
-        mockMvc.perform(post("/api/sales/{id}/void", saleId)
+        mockMvc.perform(post("/api/payments/{id}/reverse", saleId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"ลูกค้าขอยกเลิก\"}"))
                 .andExpect(status().isOk())
@@ -131,7 +131,7 @@ class SaleApiTest {
     void rejectsVoidWithoutAReason() throws Exception {
         long saleId = createSale(courseSaleBody("9000.00"));
 
-        mockMvc.perform(post("/api/sales/{id}/void", saleId)
+        mockMvc.perform(post("/api/payments/{id}/reverse", saleId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"   \"}"))
                 .andExpect(status().isBadRequest())
@@ -141,12 +141,12 @@ class SaleApiTest {
     @Test
     void returnsConflictWhenVoidingTwice() throws Exception {
         long saleId = createSale(courseSaleBody("9000.00"));
-        mockMvc.perform(post("/api/sales/{id}/void", saleId)
+        mockMvc.perform(post("/api/payments/{id}/reverse", saleId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"ครั้งแรก\"}"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/api/sales/{id}/void", saleId)
+        mockMvc.perform(post("/api/payments/{id}/reverse", saleId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"ครั้งที่สอง\"}"))
                 .andExpect(status().isConflict())
@@ -155,7 +155,7 @@ class SaleApiTest {
 
     @Test
     void returnsNotFoundForAnUnknownReceipt() throws Exception {
-        mockMvc.perform(get("/api/sales/{id}", 999999L))
+        mockMvc.perform(get("/api/receipts/{id}", 999999L))
                 .andExpect(status().isNotFound());
     }
 
@@ -163,10 +163,21 @@ class SaleApiTest {
     void listsTheReceiptsOfAPatient() throws Exception {
         createSale(courseSaleBody("9000.00"));
 
-        mockMvc.perform(get("/api/patients/{id}/sales", patientId))
+        mockMvc.perform(get("/api/payments").param("patientId", String.valueOf(patientId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].items[0].description").value("คอร์สทดสอบใบเสร็จ"));
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].receiptNo").value(org.hamcrest.Matchers.matchesPattern("RC\\d{10}")))
+                .andExpect(jsonPath("$.items[0].paid").value(9000.00))
+                // หน้าลิสต์เป็นแบบย่อ รายการสินค้าอยู่ที่ /api/receipts/{id} เท่านั้น
+                .andExpect(jsonPath("$.items[0].items").doesNotExist());
+    }
+
+    @Test
+    void rejectsAnOversizedPageOnTheReceiptList() throws Exception {
+        mockMvc.perform(get("/api/payments").param("size", "500"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -181,7 +192,7 @@ class SaleApiTest {
     }
 
     private long createSale(String body) throws Exception {
-        String response = mockMvc.perform(post("/api/sales")
+        String response = mockMvc.perform(post("/api/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
