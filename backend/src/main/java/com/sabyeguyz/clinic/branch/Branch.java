@@ -22,6 +22,21 @@ public class Branch {
 
     protected Branch() {}
 
+    public Branch(String code, String numericCode, String name) {
+        this.code = code;
+        this.numericCode = numericCode;
+        this.name = name;
+        this.active = true;
+    }
+
+    public void update(String code, String numericCode, String name) {
+        this.code = code;
+        this.numericCode = numericCode;
+        this.name = name;
+    }
+
+    public void deactivate() { this.active = false; }
+
     public Long getId() { return id; }
     public String getCode() { return code; }
     public String getNumericCode() { return numericCode; }
