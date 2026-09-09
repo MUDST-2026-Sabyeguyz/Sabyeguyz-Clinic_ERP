@@ -4,53 +4,21 @@ import logoUrl from '@/assets/sabyeguyz-logo.png'
 
 const isSidebarOpen = ref(false)
 const navigation = [
-  { label: 'Dashboard', to: '/', icon: '⌂', available: true },
-  { label: 'Patients', to: '/patients', icon: '♙', available: true },
-  { label: 'Appointments', to: '/appointments', icon: '▣', available: true },
-  { label: 'Treatment / Service', to: '/treatment', icon: '✚', available: true },
-  { label: 'Courses', to: '/courses', icon: '▤', available: true },
-  { label: 'Payments', to: '/payments', icon: '฿', available: true },
-  { label: 'Staff', to: '/staff', icon: '♟', available: true },
-  { label: 'Reports', to: '/reports', icon: '▥', available: true },
-  { label: 'Settings', to: '/settings', icon: '⚙', available: true },
+  { label: 'ผู้ป่วย', to: '/patients' }, { label: 'นัดหมาย', to: '/appointments' },
+  { label: 'บริการ', to: '/treatment' }, { label: 'รายการธุรกรรม', to: '/payments' },
+  { label: 'บุคลากร', to: '/staff' }, { label: 'รายงาน', to: '/reports' }, { label: 'ตั้งค่า', to: '/settings' },
 ]
 </script>
 
 <template>
   <div class="app-shell">
     <div v-if="isSidebarOpen" class="sidebar-backdrop" @click="isSidebarOpen = false" />
-    <aside class="sidebar" :class="{ open: isSidebarOpen }">
-      <div class="sidebar-brand">
-        <img :src="logoUrl" alt="Sabyeguyz" /><button
-          class="close-sidebar"
-          aria-label="ปิดเมนู"
-          @click="isSidebarOpen = false"
-        >
-          ×
-        </button>
-      </div>
-      <nav aria-label="เมนูหลัก">
-        <RouterLink
-          v-for="item in navigation"
-          :key="item.label"
-          :to="item.to"
-          class="nav-item"
-          :class="{ disabled: !item.available }"
-          @click="isSidebarOpen = false"
-        >
-          <span class="nav-icon">{{ item.icon }}</span
-          ><span>{{ item.label }}</span
-          >
-        </RouterLink>
-      </nav>
-    </aside>
-    <div class="shell-body">
-      <header class="top-bar">
-        <button class="menu-toggle" aria-label="เปิดเมนู" @click="isSidebarOpen = true">☰</button>
-        <div><strong>Clinic ERP</strong><span>ระบบจัดการคลินิก</span></div>
-        <div class="top-actions"><span class="status-dot" />พร้อมใช้งาน</div>
-      </header>
-      <main class="content-area"><slot /></main>
-    </div>
+    <header class="top-bar"><button class="menu-toggle" aria-label="เปิดเมนู" @click="isSidebarOpen = true">☰</button>
+      <RouterLink class="brand" to="/" aria-label="กลับหน้า Dashboard"><img :src="logoUrl" alt="Sabyeguyz" /></RouterLink>
+      <nav class="main-nav" aria-label="เมนูหลัก"><RouterLink v-for="item in navigation" :key="item.label" :to="item.to" class="nav-item" @click="isSidebarOpen = false">{{ item.label }}</RouterLink></nav>
+      <button class="profile-button" aria-label="โปรไฟล์ผู้ใช้">●</button>
+    </header>
+    <aside v-if="isSidebarOpen" class="mobile-nav"><RouterLink v-for="item in navigation" :key="item.label" :to="item.to" class="nav-item" @click="isSidebarOpen = false">{{ item.label }}</RouterLink></aside>
+    <main class="content-area"><slot /></main>
   </div>
 </template>
