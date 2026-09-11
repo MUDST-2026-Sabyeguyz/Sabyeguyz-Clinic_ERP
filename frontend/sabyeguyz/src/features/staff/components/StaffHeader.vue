@@ -7,9 +7,11 @@ const route = useRoute()
 const navRef = ref<HTMLElement | null>(null)
 const pillReady = ref(false)
 const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0' })
-const role = ref(localStorage.getItem('mockStaffRole') ?? 'manager')
+const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string; branchName?: string } | null
+const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
+const branchLabel = computed(() => storedUser?.branchName || 'ไม่ระบุสาขา')
 const navItems = computed(() =>
   isManager.value
     ? [
@@ -80,10 +82,9 @@ onMounted(positionPillWithoutAnimation)
 watch(() => route.fullPath, positionPillWithoutAnimation)
 function signOut() {
   localStorage.removeItem('authToken')
+  localStorage.removeItem('authUser')
   localStorage.removeItem('staffRole')
   localStorage.removeItem('staffUsername')
-  localStorage.removeItem('mockStaffRole')
-  localStorage.removeItem('mockStaffEmail')
 }
 </script>
 
@@ -130,7 +131,7 @@ function signOut() {
       <div v-if="profileOpen" class="profile-menu">
         <div>
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
-          ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : 'สาขาราชพฤกษ์' }}</span>
+          ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : branchLabel }}</span>
         </div>
         <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>
