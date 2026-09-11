@@ -1,0 +1,230 @@
+.course-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #fcf8f3;
+}
+.course-page::before {
+  position: absolute;
+  z-index: 0;
+  top: min(14.24vw, 205px);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 1200px;
+  background-color: #fcf8f3;
+  background-image:
+    url('@/assets/header.png'),
+    linear-gradient(
+      to bottom,
+      transparent 0 calc(61.74vw - 12px),
+      #92e5ca calc(61.74vw - 12px)
+    );
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size:
+    100% auto,
+    100% 100%;
+  content: '';
+  pointer-events: none;
+}
+.course-page-main {
+  position: relative;
+  z-index: 1;
+  width: min(90.84%, 1308px);
+  padding: 25px 0 100px;
+}
+.page-back {
+  display: inline-block;
+  color: #234b52;
+  font-size: 18px;
+}
+.course-page-title {
+  margin: 101px 0 43px;
+  font-size: 44px;
+  line-height: 1;
+  text-align: center;
+}
+.course-browser {
+  width: min(76vw, 1080px);
+  margin: 0 auto;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.course-summary {
+  overflow: hidden;
+  border: 1px solid #9f927e;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 10px #594c3e25;
+}
+.course-page .course-summary .patient-context {
+  min-height: 98px;
+  padding: 20px 58px;
+  border-color: #a79277;
+  color: #fff;
+  background: #a79277;
+}
+.course-page .patient-context small {
+  display: none;
+}
+.course-page .patient-context b {
+  display: block;
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+}
+.course-page .patient-context p {
+  margin-top: 5px;
+  color: #fff;
+  font-size: 16px;
+}
+.avatar {
+  width: 56px;
+  height: 53px;
+  margin-left: -38px;
+  color: #fff;
+  background: #cecece;
+}
+.course-list {
+  padding: 0 21px;
+}
+.course-list article {
+  grid-template-columns: minmax(300px, 1.3fr) minmax(260px, 0.85fr) auto;
+  gap: 16px;
+  min-height: 92px;
+  padding: 14px 20px;
+}
+.course-icon {
+  display: none;
+}
+.course-main h3 {
+  font-size: 24px;
+  line-height: 1;
+}
+.course-main p {
+  margin-top: 8px;
+  font-size: 16px;
+}
+.course-actions {
+  flex-wrap: nowrap;
+}
+.course-action-button {
+  min-width: 92px;
+  height: 40px;
+  padding: 7px 14px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+.course-action-button.transfer {
+  min-width: 98px;
+  border: 0;
+  color: #fff;
+  background: #7da36d;
+}
+.course-action-button.history {
+  border: 1px solid #168b86;
+  color: #176d68;
+  background: #fff;
+  box-shadow: 0 3px 2.2px rgb(0 0 0 / 14%);
+}
+.balance small {
+  font-size: 14px;
+}
+.balance b {
+  font-size: 18px;
+}
+.course-page .inline-workspace {
+  width: 100%;
+  margin: 50px 0 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.course-page .form-title {
+  padding: 0 2px 20px;
+  color: #183f48;
+  background: transparent;
+}
+.course-page .form-title h2 {
+  margin: 0;
+  color: #183f48;
+  font-size: 35px;
+}
+.course-page .course-form {
+  gap: 20px 26px;
+  padding: 30px 30px 24px;
+  border: 1px solid #9f927e;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: #fff;
+  box-shadow: 0 5px 10px #594c3e25;
+}
+.course-form input {
+  height: 52px;
+}
+.course-page .course-footer {
+  margin: 0;
+  padding: 0 30px 30px;
+  border: 1px solid #9f927e;
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background: #fff;
+}
+.course-footer .result {
+  display: none;
+}
+.course-footer .primary {
+  padding: 14px 30px;
+  border: 0;
+  border-radius: 10px;
+  background: #7da36d;
+}
+.success {
+  border-radius: 10px;
+}
+.course-page .transfer-history {
+  overflow: hidden;
+  border: 1px solid #cdded9;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 10px #594c3e20;
+}
+.course-page .transfer-history .staff-table th,
+.course-page .transfer-history .staff-table td {
+  padding: 18px 20px;
+}
+@media (max-width: 850px) {
+  .course-page-title {
+    margin-top: 90px;
+    margin-left: 0;
+  }
+  .course-browser {
+    width: 100%;
+    margin-inline: auto;
+  }
+  .course-list article {
+    grid-template-columns: 1fr;
+  }
+  .course-page .course-footer {
+    margin-top: 0;
+    padding: 0 20px 20px;
+  }
+  .course-page .course-form {
+    grid-template-columns: 1fr;
+    padding: 20px 20px 16px;
+  }
+}
+@media (max-width: 620px) {
+  .course-page-main {
+    width: calc(100% - 32px);
+  }
+  .course-page-title {
+    font-size: 32px;
+  }
+}
