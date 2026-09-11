@@ -72,14 +72,13 @@ export interface PatientProfile {
 }
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
-import { authHeaders, authToken } from './auth'
 
 export async function registerPatient(
   payload: PatientRegistrationPayload,
 ): Promise<PatientRegistrationResult> {
-  const response = await fetch(`${apiBaseUrl}/api/patients`, {
+  const response = await authFetch(`${apiBaseUrl}/api/patients`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
   const body = await response.json()
@@ -102,15 +101,14 @@ export async function searchPatients(
   size = 20,
 ): Promise<PatientSearchResult> {
   const params = new URLSearchParams({ query, page: String(page), size: String(size) })
-  const url = `${apiBaseUrl}/api/patients?${params.toString()}`
-  const response = authToken() ? await fetch(url, { headers: authHeaders() }) : await fetch(url)
+  const response = await authFetch(`${apiBaseUrl}/api/patients?${params.toString()}`)
   if (!response.ok) throw new Error(await readError(response, 'ไม่สามารถค้นหาผู้ป่วยได้'))
   return response.json()
 }
 
 export async function getPatientProfile(id: number): Promise<PatientProfile> {
-  const url = `${apiBaseUrl}/api/patients/${id}`
-  const response = authToken() ? await fetch(url, { headers: authHeaders() }) : await fetch(url)
+  const response = await authFetch(`${apiBaseUrl}/api/patients/${id}`)
   if (!response.ok) throw new Error(await readError(response, 'ไม่สามารถโหลดข้อมูลผู้ป่วยได้'))
   return response.json()
 }
+import { authFetch } from './http'

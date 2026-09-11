@@ -560,7 +560,7 @@ class ReportServiceTest {
 
     private Long registerSalesperson() {
         int unique = UNIQUE.incrementAndGet();
-        AppUser user = userRepository.save(new AppUser("report-sp-" + unique, "hash", Role.STAFF));
+        AppUser user = userRepository.save(new AppUser("report-sp-" + unique, "hash", Role.THERAPIST));
         return staffRepository.save(new Staff(user, "RSP" + unique, "ผู้ขาย ทดสอบ", "0800000030")).getId();
     }
 
