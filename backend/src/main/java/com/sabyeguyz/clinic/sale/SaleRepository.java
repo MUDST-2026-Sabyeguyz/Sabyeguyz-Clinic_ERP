@@ -3,6 +3,7 @@ package com.sabyeguyz.clinic.sale;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -44,4 +45,7 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
                       Pageable pageable);
 
     Optional<Sale> findByReceiptNo(String receiptNo);
+
+    @Query("select s from Sale s join fetch s.branch left join fetch s.salesperson where s.status = com.sabyeguyz.clinic.sale.SaleStatus.PAID and s.soldAt >= :from and s.soldAt < :to order by s.soldAt")
+    List<Sale> findPaidForCommission(@Param("from") Instant from, @Param("to") Instant to);
 }
