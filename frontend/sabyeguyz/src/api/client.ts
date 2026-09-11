@@ -59,7 +59,7 @@ export const api = {
   delete: (path: string) => request<void>(path, { method: 'DELETE' }),
 }
 
-export type AuthResponse = { id: number; username: string; role: 'MANAGER' | 'THERAPIST'; token: string }
+export type AuthResponse = { id: number; username: string; email?: string; role: 'MANAGER' | 'THERAPIST'; token: string }
 export type Patient = { id: number; hn: string; fullName: string; phone: string; active: boolean }
 export type PatientProfile = Patient & {
   branch: { id: number; code: string; name: string; active: boolean }
@@ -93,8 +93,8 @@ export type StaffSalesReport = { rows: Array<{ fullName: string; receipts: numbe
 export type TransferRecord = { id: number; sourcePatientId: number; destinationPatientId: number; branchCode: string; courseId: number; quantity: number; reason: string; createdAt: string }
 
 export const authApi = {
-  login: (username: string, password: string) => api.post<AuthResponse>('/api/auth/login', { username, password }),
-  register: (username: string, password: string, role: 'MANAGER' | 'THERAPIST') => api.post<AuthResponse>('/api/auth/register', { username, password, role }),
+  login: (identifier: string, password: string) => api.post<AuthResponse>('/api/auth/login', { username: identifier, password }),
+  register: (username: string, password: string, role: 'MANAGER' | 'THERAPIST', email?: string) => api.post<AuthResponse>('/api/auth/register', { username, email, password, role }),
 }
 
 export const patientApi = {
