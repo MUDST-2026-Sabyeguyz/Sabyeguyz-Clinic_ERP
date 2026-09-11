@@ -1,13 +1,13 @@
 body.therapist-ui .staff-header {
-  width: calc(100% - 32px);
+  width: 100%;
   position: relative;
   top: auto;
   height: 92px;
-  margin: 16px;
+  margin: 0;
   padding-inline: 34px;
   grid-template-columns: 220px minmax(0, 1fr) 220px;
   border: 0;
-  border-radius: 20px;
+  border-radius: 0;
   color: #fff;
   background: var(--therapist-header);
   box-shadow: 0 7px 14px #5a493d35;
