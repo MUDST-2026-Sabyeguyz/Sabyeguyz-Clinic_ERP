@@ -68,6 +68,11 @@ body.therapist-ui .transaction-page .transaction-list > .panel-head {
 body.therapist-ui .transaction-page .transaction-list .staff-table th {
   color: #fff;
   background: var(--therapist-table-header);
+  font-size: 27px;
+}
+
+body.therapist-ui .transaction-page .transaction-list .staff-table td {
+  font-size: 20px;
 }
 
 body.therapist-ui .transaction-page .status:not(.void) {

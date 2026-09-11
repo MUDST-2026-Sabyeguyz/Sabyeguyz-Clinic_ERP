@@ -1,0 +1,196 @@
+@import '../../staff/styles/staff.css';
+.settings-layout {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 22px;
+  margin-top: -38px;
+  position: relative;
+  padding-bottom: 40px;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid var(--physio-line);
+  border-radius: 16px;
+  background: #fffdfa;
+  box-shadow: 0 14px 34px #2f31580f;
+}
+.settings-nav p {
+  padding: 5px 10px;
+  color: var(--physio-muted);
+  font-weight: 700;
+}
+.settings-nav button {
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--physio-text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-nav button.active {
+  color: #fff;
+  background: var(--physio-blue);
+  font-weight: 700;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--physio-line);
+}
+.settings-head h2 {
+  margin: 2px 0;
+}
+.settings-head small {
+  color: var(--physio-blue);
+  font-weight: 700;
+}
+.form-error {
+  margin: 4px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #9a3f36;
+  background: #fff0ec;
+  font-weight: 700;
+}
+.setup-cards,
+.master-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  padding: 24px;
+}
+.setup-cards article,
+.master-grid article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px;
+  border: 1px solid var(--physio-line);
+  border-radius: 12px;
+  background: #faf9f6;
+}
+.setup-cards div {
+  display: flex;
+  flex-direction: column;
+}
+.setup-cards small,
+.master-grid small {
+  color: var(--physio-muted);
+}
+.master-grid article {
+  display: block;
+}
+.master-grid h3,
+.master-grid p {
+  margin: 3px 0;
+}
+.master-grid button {
+  margin-top: 12px;
+}
+.busy {
+  color: #756735;
+  background: #f4ecd2;
+}
+.saved {
+  padding: 12px 24px;
+  color: #5f765d;
+  background: #eaf0e5;
+}
+.drawer-backdrop {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: #30334f55;
+}
+.drawer {
+  width: min(430px, 100%);
+  padding: 24px;
+  background: #fffdfa;
+  box-shadow: -20px 0 60px #30334f22;
+}
+.drawer header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.drawer header button {
+  border: 0;
+  background: transparent;
+  font-size: 28px;
+}
+.drawer label {
+  display: block;
+  margin: 14px 0;
+  font-weight: 700;
+}
+.drawer input,
+.drawer textarea,
+.drawer select {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 11px;
+  border: 1px solid var(--physio-line);
+  border-radius: 9px;
+  font: inherit;
+}
+.drawer textarea {
+  min-height: 110px;
+}
+.permission-picker {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--physio-line);
+  border-radius: 10px;
+}
+.permission-picker legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+.permission-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 50%;
+  margin: 6px 0;
+  font-weight: 500;
+}
+.drawer .permission-picker input {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+.drawer footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+@media (max-width: 850px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+    margin-top: 20px;
+  }
+  .settings-nav {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .settings-panel {
+    overflow: auto;
+  }
+  .setup-cards,
+  .master-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -125,8 +125,8 @@ body.therapist-ui .appointment-page .appointment-panel .staff-table th {
   padding: 20px;
   color: #fff;
   background: var(--therapist-table-header);
-  font-size: 15px;
-  font-weight: 400;
+  font-size: var(--therapist-table-heading-size);
+  font-weight: 500;
 }
 
 body.therapist-ui .appointment-page .appointment-panel .staff-table {
@@ -142,7 +142,7 @@ body.therapist-ui .appointment-page .appointment-panel .staff-table {
 body.therapist-ui .appointment-page .appointment-panel .staff-table td {
   padding: 20px;
   background: #fff;
-  font-size: 17px;
+  font-size: var(--therapist-table-body-size);
 }
 
 body.therapist-ui .appointment-page .appointment-panel .secondary {
