@@ -4,6 +4,7 @@ coverage
 test-results
 playwright-report
 .git
+.gitignore
 .env
 .env.*
 *.local
