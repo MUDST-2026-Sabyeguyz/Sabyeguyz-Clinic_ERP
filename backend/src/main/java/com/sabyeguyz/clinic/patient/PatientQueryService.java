@@ -29,6 +29,15 @@ public class PatientQueryService {
                 .orElseThrow(() -> new PatientNotFoundException(id));
     }
 
+    @Transactional
+    public PatientProfileResponse update(long id, PatientUpdateRequest request) {
+        Patient patient = patientRepository.findById(id).orElseThrow(() -> new PatientNotFoundException(id));
+        if (patientRepository.existsByIdentityNumberAndIdNot(request.identityNumber().trim(), id))
+            throw new IllegalArgumentException("เลขเอกสารยืนยันตัวตนซ้ำ");
+        patient.update(request);
+        return PatientProfileResponse.from(patientRepository.save(patient));
+    }
+
     private void validatePagination(int page, int size) {
         if (page < 0) throw new IllegalArgumentException("page ต้องไม่น้อยกว่า 0");
         if (size < 1 || size > MAX_PAGE_SIZE) {
