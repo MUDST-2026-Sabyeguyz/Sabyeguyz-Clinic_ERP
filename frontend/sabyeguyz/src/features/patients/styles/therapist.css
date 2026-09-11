@@ -193,11 +193,14 @@ body.therapist-ui .patient-workspace table th {
   padding-block: 20px;
   color: #fff;
   background: var(--therapist-table-header);
+  font-size: var(--therapist-table-heading-size);
+  font-weight: 500;
 }
 
 body.therapist-ui .patient-workspace table td {
   padding-block: 20px;
   background: #fff;
+  font-size: var(--therapist-table-body-size);
 }
 
 body.therapist-ui .patient-workspace .patient-id {
