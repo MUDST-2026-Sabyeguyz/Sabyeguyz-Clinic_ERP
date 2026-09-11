@@ -1,16 +1,22 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import { reportApi } from '@/api/client'
 
-const patients = 328
-const visits = 186
-const revenue = 296900
-const courses = 74
-const statuses = [
-  { status: 'Completed', value: 172 },
-  { status: 'In Service', value: 4 },
-  { status: 'No Show', value: 6 },
-  { status: 'Cancelled', value: 4 },
-]
+const today = new Date()
+const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+const to = today.toISOString().slice(0, 10)
+const patients = ref(0), visits = ref(0), revenue = ref(0), courses = ref(0)
+const statuses = ref<Array<{ status: string; value: number }>>([])
+const loading = ref(true), errorMessage = ref('')
+onMounted(async () => {
+  try {
+    const [dashboard, appointments, balances] = await Promise.all([reportApi.dashboard(from, to), reportApi.appointments(from, to), reportApi.balances(from, to)])
+    patients.value = dashboard.uniquePatients; visits.value = dashboard.visits; revenue.value = Number(dashboard.totalRevenue); courses.value = balances.purchases
+    statuses.value = appointments.byStatus.map((item) => ({ status: item.status, value: item.appointments }))
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลด dashboard ไม่สำเร็จ' }
+  finally { loading.value = false }
+})
 </script>
 
 <template>
@@ -22,6 +28,8 @@ const statuses = [
         <h1>ภาพรวมแดชบอร์ด</h1>
         <p>ติดตามตัวเลขสำคัญและสถานะการดำเนินงานของคลินิก</p>
       </section>
+      <p v-if="loading" class="status-feedback">กำลังโหลดข้อมูลจาก backend...</p>
+      <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       <section class="metrics">
         <article>
           <small>ผู้ป่วยทั้งหมด</small><b>{{ patients.toLocaleString() }}</b

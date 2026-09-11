@@ -1,23 +1,23 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { patients } from '../data/mockPatients'
+import { patientApi, type Patient } from '@/api/client'
 
 const query = ref('')
-const branch = ref('ทั้งหมด')
-const branches = [...new Set(patients.map((patient) => patient.branch))]
-const filteredPatients = computed(() => {
-  const value = query.value.trim().toLowerCase()
-  return patients.filter((patient) => {
-    const matchesQuery =
-      !value ||
-      [patient.hn, patient.fullName, patient.phone].some((field) =>
-        field.toLowerCase().includes(value),
-      )
-    const matchesBranch = branch.value === 'ทั้งหมด' || patient.branch === branch.value
-    return matchesQuery && matchesBranch
-  })
-})
+const patients = ref<Patient[]>([])
+const loading = ref(false)
+const errorMessage = ref('')
+const filteredPatients = computed(() => patients.value)
+async function loadPatients() {
+  loading.value = true
+  errorMessage.value = ''
+  try { patients.value = (await patientApi.search(query.value)).items }
+  catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ' }
+  finally { loading.value = false }
+}
+onMounted(loadPatients)
+let searchTimer: number | undefined
+watch(query, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(loadPatients, 250) })
 </script>
 
 <template>
@@ -45,10 +45,6 @@ const filteredPatients = computed(() => {
               placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
             />
           </div>
-          <select v-model="branch" class="branch-filter" aria-label="กรองตามสาขา">
-            <option value="ทั้งหมด">สาขาทั้งหมด</option>
-            <option v-for="item in branches" :key="item" :value="item">{{ item }}</option>
-          </select>
           <span class="result-count">พบผู้ป่วยทั้งหมด {{ filteredPatients.length }} ราย</span>
         </header>
         <div class="table-scroll">
@@ -58,8 +54,7 @@ const filteredPatients = computed(() => {
                 <th>เลขประจำตัวผู้ป่วย</th>
                 <th>ชื่อผู้ป่วย</th>
                 <th>เบอร์โทรศัพท์</th>
-                <th>วันเกิด</th>
-                <th>สาขา</th>
+                <th>สถานะ</th>
                 <th>การดำเนินการ</th>
               </tr>
             </thead>
@@ -71,16 +66,16 @@ const filteredPatients = computed(() => {
                 </td>
                 <td>{{ patient.fullName }}</td>
                 <td>{{ patient.phone }}</td>
-                <td>{{ patient.birthDate }}</td>
-                <td>{{ patient.branch }}</td>
+                <td>{{ patient.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</td>
                 <td>
-                  <RouterLink class="row-action" :to="`/staff/patients/${patient.hn}`"
+                  <RouterLink class="row-action" :to="`/staff/patients/${patient.id}`"
                     >ดูข้อมูล</RouterLink
                   >
                 </td>
               </tr>
-              <tr v-if="filteredPatients.length === 0">
-                <td class="empty" colspan="6">ไม่พบผู้ป่วย</td>
+              <tr v-if="loading"><td class="empty" colspan="6">กำลังโหลดข้อมูล...</td></tr>
+              <tr v-if="!loading && filteredPatients.length === 0">
+                <td class="empty" colspan="6">{{ errorMessage || 'ไม่พบผู้ป่วย' }}</td>
               </tr>
             </tbody>
           </table>
