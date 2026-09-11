@@ -9,7 +9,7 @@ import router from './router'
 
 document.body.classList.toggle(
   'therapist-ui',
-  localStorage.getItem('mockStaffRole') === 'therapist',
+  (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role === 'THERAPIST',
 )
 
 const app = createApp(App)

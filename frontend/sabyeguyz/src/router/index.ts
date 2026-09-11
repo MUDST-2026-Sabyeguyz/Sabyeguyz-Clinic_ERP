@@ -110,14 +110,12 @@ router.beforeEach((to) => {
   if (role !== 'manager' && role !== 'therapist') {
     localStorage.removeItem('authToken')
     localStorage.removeItem('authUser')
-    localStorage.removeItem('mockStaffRole')
     return { name: 'staff-login' }
   }
   const allowedRoles = to.meta.roles as string[] | undefined
   if (allowedRoles && !allowedRoles.includes(role)) return { name: 'staff-appointments' }
   const requiredPermission = to.meta.permission as string | undefined
-  const permissions =
-    localStorage.getItem('mockStaffPermissions') ?? 'Patient, Visit, Treatment, Course, Transaction'
+  const permissions = role === 'manager' ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup' : 'Patient, Visit, Treatment, Course, Transaction'
   if (role !== 'manager' && requiredPermission && !permissions.includes(requiredPermission)) {
     const destinations: Array<[string, string]> = [
       ['Patient', '/staff/patients'],
@@ -136,7 +134,7 @@ router.beforeEach((to) => {
 router.afterEach(() => {
   document.body.classList.toggle(
     'therapist-ui',
-    localStorage.getItem('mockStaffRole') === 'therapist',
+    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role === 'THERAPIST',
   )
 })
 
