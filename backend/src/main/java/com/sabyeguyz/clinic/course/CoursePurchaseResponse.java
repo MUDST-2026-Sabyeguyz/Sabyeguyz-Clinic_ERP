@@ -20,7 +20,8 @@ public record CoursePurchaseResponse(
         boolean expired,
         /** ตัดสิทธิ์ได้หรือไม่ ณ ตอนนี้ */
         boolean usable,
-        CoursePurchaseStatus status
+        CoursePurchaseStatus status, String commissionStatus, BigDecimal lockedCommissionRate,
+        BigDecimal totalCourseCommissionPool, BigDecimal commissionAllocationPerVisit
 ) {
     public record PatientSummary(Long id, String hn, String fullName) {}
 
@@ -47,6 +48,7 @@ public record CoursePurchaseResponse(
                 purchase.getExpiresAt(),
                 expired,
                 usable,
-                purchase.getStatus());
+                purchase.getStatus(), purchase.getCommissionStatus(), purchase.getLockedCommissionRate(),
+                purchase.getTotalCourseCommissionPool(), purchase.getCommissionAllocationPerVisit());
     }
 }

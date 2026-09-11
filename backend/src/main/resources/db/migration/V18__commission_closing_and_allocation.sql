@@ -1,0 +1,14 @@
+ALTER TABLE course_purchases ADD COLUMN sale_month DATE;
+ALTER TABLE course_purchases ADD COLUMN seller_employee_id BIGINT REFERENCES staff(id);
+ALTER TABLE course_purchases ADD COLUMN case_owner_employee_id BIGINT REFERENCES staff(id);
+ALTER TABLE course_purchases ADD COLUMN commission_status VARCHAR(20) NOT NULL DEFAULT 'PROVISIONAL';
+ALTER TABLE course_purchases ADD COLUMN commission_scheme_id BIGINT REFERENCES commission_schemes(id);
+ALTER TABLE course_purchases ADD COLUMN commission_scheme_version VARCHAR(40);
+ALTER TABLE course_purchases ADD COLUMN provisional_commission_rate NUMERIC(7,6);
+ALTER TABLE course_purchases ADD COLUMN locked_commission_rate NUMERIC(7,6);
+ALTER TABLE course_purchases ADD COLUMN total_course_commission_pool NUMERIC(12,2);
+ALTER TABLE course_purchases ADD COLUMN commission_allocation_per_visit NUMERIC(12,2);
+ALTER TABLE course_purchases ADD COLUMN commission_generated_date TIMESTAMP WITH TIME ZONE;
+CREATE TABLE commission_closings (id BIGSERIAL PRIMARY KEY, closing_month DATE NOT NULL, employee_id BIGINT NOT NULL REFERENCES staff(id), monthly_course_sales NUMERIC(14,2) NOT NULL, commission_scheme_id BIGINT REFERENCES commission_schemes(id), commission_scheme_version VARCHAR(40), calculated_commission_rate NUMERIC(7,6) NOT NULL, locked_commission_rate NUMERIC(7,6) NOT NULL, closing_status VARCHAR(20) NOT NULL DEFAULT 'OPEN', closed_at TIMESTAMP WITH TIME ZONE, closed_by BIGINT REFERENCES staff(id), UNIQUE(closing_month,employee_id));
+CREATE TABLE treatment_fee_rules (id BIGSERIAL PRIMARY KEY, employee_id BIGINT REFERENCES staff(id), fee_type VARCHAR(20) NOT NULL, fee_value NUMERIC(12,2) NOT NULL, percentage_base VARCHAR(40), effective_from DATE NOT NULL, effective_to DATE, active BOOLEAN NOT NULL DEFAULT TRUE, UNIQUE(employee_id,effective_from));
+CREATE TABLE commission_allocation_ledger (id BIGSERIAL PRIMARY KEY, course_purchase_id BIGINT NOT NULL REFERENCES course_purchases(id), course_movement_id BIGINT REFERENCES course_movements(id), visit_date DATE NOT NULL, case_owner_employee_id BIGINT REFERENCES staff(id), treating_employee_id BIGINT REFERENCES staff(id), gross_commission_allocation NUMERIC(12,2) NOT NULL, treatment_fee_rule_id BIGINT REFERENCES treatment_fee_rules(id), treatment_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0, owner_net_commission NUMERIC(12,2) NOT NULL, created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP);

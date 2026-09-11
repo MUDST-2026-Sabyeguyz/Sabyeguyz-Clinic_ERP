@@ -1,16 +1,27 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { authApi, ApiError } from '@/api/client'
 import logo from '@/assets/sabyeguyz-logo.png'
 const router = useRouter()
 const submitting = ref(false)
-const form = reactive({ username: '', password: '', role: 'manager' })
+const errorMessage = ref('')
+const form = reactive({ username: '', password: '' })
 async function signIn() {
   if (!form.username || !form.password) return
   submitting.value = true
-  localStorage.setItem('mockStaffRole', form.role)
-  await router.push(form.role === 'manager' ? '/staff/dashboard' : '/staff/appointments')
-  submitting.value = false
+  errorMessage.value = ''
+  try {
+    const result = await authApi.login(form.username, form.password)
+    localStorage.setItem('authToken', result.token)
+    localStorage.setItem('authUser', JSON.stringify(result))
+    localStorage.setItem('mockStaffRole', result.role === 'MANAGER' ? 'manager' : 'therapist')
+    await router.push(result.role === 'MANAGER' ? '/staff/dashboard' : '/staff/appointments')
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : 'เข้าสู่ระบบไม่สำเร็จ'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 <template>
@@ -27,9 +38,9 @@ async function signIn() {
           <h1>เข้าสู่ระบบ</h1>
         </div>
         <label
-          >อีเมล<input
+          >Username หรือ Email<input
             v-model.trim="form.username"
-            type="email"
+            type="text"
             autocomplete="username"
             required /></label
         ><label
@@ -39,22 +50,11 @@ async function signIn() {
             autocomplete="current-password"
             required
           /><a href="#">ลืมรหัสผ่าน</a></label
-        ><label
-          >เลือกบทบาทสำหรับทดลองระบบ<select v-model="form.role">
-            <option value="manager">Manager</option>
-            <option value="therapist">นักกายภาพบำบัด</option>
-          </select></label
-        >
-        <p class="role-note">
-          {{
-            form.role === 'manager'
-              ? 'เข้าถึง Dashboard, Reports, Commission และ Back Office ได้'
-              : 'เข้าถึงผู้ป่วย นัดหมาย การรักษา คอร์ส ธุรกรรม และค่าตอบแทนของตนเอง'
-          }}
-        </p>
+        ><p class="role-note">ระบบจะใช้บทบาทจริงจากบัญชีผู้ใช้ที่ backend ส่งกลับ</p>
         <button type="submit" :disabled="submitting || !form.username || !form.password">
           {{ submitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ' }}
         </button>
+        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       </form>
     </section>
   </main>

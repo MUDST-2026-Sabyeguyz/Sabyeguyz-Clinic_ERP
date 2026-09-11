@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import { salesApi } from '@/api/client'
 type Transaction = {
   id: string
   date: string
@@ -18,56 +19,15 @@ type Transaction = {
 const search = ref(''),
   selected = ref<Transaction | null>(null),
   voiding = ref(false),
-  reason = ref('')
-const rows = ref<Transaction[]>([
-  {
-    id: 'PAY-260822-0021',
-    date: '22 ส.ค. 2026 09:05',
-    patient: 'สมชาย ใจดี',
-    hn: 'HN2601080022',
-    branch: 'สาขาราชพฤกษ์',
-    performedBy: 'เจ้าหน้าที่คลินิก',
-    type: 'Course Sale',
-    amount: '฿8,500',
-    status: 'สำเร็จ',
-  },
-  {
-    id: 'TRT-260822-0018',
-    date: '22 ส.ค. 2026 10:42',
-    patient: 'วรรณา มั่นคง',
-    hn: 'HN2601080012',
-    branch: 'สาขาราชพฤกษ์',
-    performedBy: 'กฤษดา น. นักกายภาพบำบัด',
-    type: 'Course Usage',
-    amount: '−1 ครั้ง',
-    status: 'สำเร็จ',
-  },
-  {
-    id: 'TRF-260821-0004',
-    date: '21 ส.ค. 2026 14:32',
-    patient: 'นรินทร์ สุขใจ',
-    hn: 'HN2601080031',
-    branch: 'สาขาราชพฤกษ์',
-    performedBy: 'เจ้าหน้าที่คลินิก',
-    type: 'Course Transfer',
-    amount: '2 ครั้ง',
-    status: 'สำเร็จ',
-  },
-  {
-    id: 'VOID-260820-0002',
-    date: '20 ส.ค. 2026 16:20',
-    patient: 'กนกวรรณ พูนใจ',
-    hn: 'HN2601080007',
-    branch: 'สาขาราชพฤกษ์',
-    performedBy: 'เจ้าหน้าที่คลินิก',
-    type: 'Single Visit Sale',
-    amount: '฿1,000',
-    status: 'Void',
-    voidReason: 'บันทึกรายการผิด ต้องยกเลิกเพื่อออก Transaction ใหม่ให้ถูกต้อง',
-    voidedAt: '20 ส.ค. 2026 16:28',
-    voidedBy: 'Manager สาขาราชพฤกษ์',
-  },
-])
+  reason = ref(''), loading = ref(false), errorMessage = ref('')
+const rows = ref<Transaction[]>([])
+async function load() {
+  try {
+    const result = await salesApi.list()
+    rows.value = result.items.map((sale) => ({ id: sale.id.toString(), date: new Date(sale.soldAt).toLocaleString('th-TH'), patient: sale.patient.fullName, hn: sale.patient.hn, branch: sale.branchCode, performedBy: sale.salesperson?.fullName ?? 'ไม่ระบุ', type: 'Receipt', amount: `฿${Number(sale.paid).toLocaleString()}`, status: sale.status === 'VOIDED' ? 'Void' : 'สำเร็จ' }))
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการชำระเงินไม่สำเร็จ' }
+}
+void load()
 const visibleRows = computed(() => {
   const term = search.value.trim().toLowerCase()
   return rows.value.filter((row) => {
@@ -88,16 +48,12 @@ function open(row: Transaction) {
     document.querySelector('.detail-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
   )
 }
-function confirmVoid() {
+async function confirmVoid() {
   if (!selected.value || !reason.value.trim()) return
-  selected.value.status = 'Void'
-  selected.value.voidReason = reason.value.trim()
-  selected.value.voidedAt = new Intl.DateTimeFormat('th-TH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date())
-  selected.value.voidedBy = 'Manager สาขาราชพฤกษ์'
-  voiding.value = false
+  loading.value = true
+  try { await salesApi.reverse(Number(selected.value.id), reason.value.trim()); await load(); voiding.value = false }
+  catch (error) { errorMessage.value = error instanceof Error ? error.message : 'ยกเลิกรายการไม่สำเร็จ' }
+  finally { loading.value = false }
 }
 </script>
 <template>
