@@ -6,11 +6,11 @@ Status: Update user story map และเพิ่มไฟล์ User story
 [ User Story Map - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
 
 ### PDF:
-([Sabyeguyz User story map ver4.pdf](https://github.com/user-attachments/files/32116818/Sabyeguyz.User.story.map.ver4.pdf))
+[Sabyeguyz User story map ver4.pdf](https://github.com/user-attachments/files/32116818/Sabyeguyz.User.story.map.ver4.pdf)
 
 ## User Story
 ### PDF:
-([clinic_erp_user_stories.pdf](https://github.com/user-attachments/files/32116891/clinic_erp_user_stories.pdf))
+[clinic_erp_user_stories.pdf](https://github.com/user-attachments/files/32116891/clinic_erp_user_stories.pdf)
 
 ## Template
 
