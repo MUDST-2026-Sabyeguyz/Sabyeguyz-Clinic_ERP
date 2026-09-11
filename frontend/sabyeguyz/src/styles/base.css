@@ -1,0 +1,61 @@
+@font-face {
+  font-family: 'DB Lim X';
+  src: url('../assets/fonts/DB-Lim-X-v3.2.ttf') format('truetype');
+  font-style: normal;
+  font-weight: normal;
+  font-display: swap;
+}
+
+:root {
+  --clinic-ink: #013d5a;
+  --clinic-green: #789c69;
+  --clinic-green-dark: #5f8152;
+  --clinic-line: #bdd8ce;
+  --clinic-white: #ffffff;
+  --clinic-muted: #647b7e;
+  --clinic-accent: #f4a158;
+  --clinic-primary: #789c69;
+  --clinic-background: #fcf8f3;
+  --clinic-border: #bdd8ce;
+  --clinic-input: #ffffff;
+  --physio-blue: #013d5a;
+  --physio-canvas: #fcf8f3;
+  --physio-line: #d6e4df;
+  --physio-muted: #647b7e;
+  --physio-text: #013d5a;
+  --ui-danger: #b85c4b;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--clinic-ink);
+  background: var(--clinic-white);
+  font-family: 'DB Lim X', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, Arial, sans-serif;
+  font-synthesis: none;
+  line-height: 1.45;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea,
+a {
+  font-family: 'DB Lim X', sans-serif;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
