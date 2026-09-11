@@ -1,8 +1,9 @@
 export interface Branch { id: number; code: string; numericCode: string; name: string; active: boolean }
 export interface BranchPayload { code: string; numericCode: string; name: string }
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+import { authHeaders } from './auth'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${url}`, { headers: { 'Content-Type': 'application/json' }, ...options })
+  const response = await fetch(`${apiBaseUrl}${url}`, { headers: { 'Content-Type': 'application/json', ...authHeaders() }, ...options })
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'ไม่สามารถดำเนินการกับข้อมูลสาขาได้')
   return response.status === 204 ? undefined as T : response.json()
 }
