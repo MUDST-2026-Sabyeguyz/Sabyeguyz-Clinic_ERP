@@ -33,10 +33,8 @@ function movePill(target: HTMLElement | null) {
   if (!target || !navRef.value) return
   navRef.value.querySelectorAll<HTMLElement>('a').forEach((link) => {
     link.classList.remove('pill-target')
-    link.style.removeProperty('color')
   })
   target.classList.add('pill-target')
-  target.style.setProperty('color', '#181818', 'important')
   pillStyle.value = {
     width: `${target.offsetWidth}px`,
     transform: `translateX(${target.offsetLeft}px)`,
@@ -81,13 +79,17 @@ function positionPillWithoutAnimation() {
 onMounted(positionPillWithoutAnimation)
 watch(() => route.fullPath, positionPillWithoutAnimation)
 function signOut() {
+  localStorage.removeItem('authToken')
+  localStorage.removeItem('staffRole')
+  localStorage.removeItem('staffUsername')
   localStorage.removeItem('mockStaffRole')
+  localStorage.removeItem('mockStaffEmail')
 }
 </script>
 
 <template>
   <header class="staff-header">
-    <RouterLink class="brand" to="/staff/appointments"
+    <RouterLink class="brand" to="/staff/patients"
       ><img :src="logo" alt="SaByeGuyz"
     /></RouterLink>
     <nav
