@@ -38,9 +38,9 @@ async function signIn() {
           <h1>เข้าสู่ระบบ</h1>
         </div>
         <label
-          >อีเมล<input
+          >Username หรือ Email<input
             v-model.trim="form.username"
-            type="email"
+            type="text"
             autocomplete="username"
             required /></label
         ><label
