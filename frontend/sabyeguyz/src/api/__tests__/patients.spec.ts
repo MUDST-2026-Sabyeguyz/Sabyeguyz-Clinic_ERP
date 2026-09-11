@@ -6,7 +6,7 @@ import {
   type PatientRegistrationPayload,
 } from '../patients'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); localStorage.removeItem('clinic-erp-token') })
 
 describe('registerPatient', () => {
   it('returns the generated HN', async () => {
