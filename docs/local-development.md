@@ -1,118 +1,88 @@
-# Local Development — Full System
+# Local Development — Monorepo
 
-คู่มือสำหรับรัน **Frontend + Backend + PostgreSQL** ร่วมกัน
+คู่มือสำหรับรัน Frontend, Backend และ PostgreSQL จาก repository เดียว
 
-> ใช้เมื่อเริ่ม Integration ระหว่าง Frontend และ Backend
+## Clone และโครงสร้าง
 
-## โครงสร้าง
+```bash
+git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+cd Sabyeguyz-Clinic_ERP
+```
 
 ```text
-project/
+Sabyeguyz-Clinic_ERP/
 ├── backend/
-├── frontend/
-│   └── sabyeguyz/
-├── deploy/
+├── frontend/sabyeguyz/
+├── deploy/docker-compose.yml
 └── docs/
 ```
 
-## Clone
+## วิธีที่แนะนำ: Docker Compose
+
+ต้องเปิด Docker Desktop และใช้ Linux containers:
 
 ```bash
-mkdir project
-cd project
-
-git clone https://github.com/MUDST-2026-Sabyeguyz/backend.git
-git clone https://github.com/MUDST-2026-Sabyeguyz/frontend.git
-git clone https://github.com/MUDST-2026-Sabyeguyz/deploy.git
+docker compose -f deploy/docker-compose.yml up --build -d
+docker compose -f deploy/docker-compose.yml ps
 ```
 
-## 1. PostgreSQL
+รอให้ `postgres` healthy และ Backend health เป็น `UP` ก่อนใช้งาน:
 
-เปิด Docker Desktop
+- Frontend: http://localhost:5173
+- Patients: http://localhost:5173/patients
+- Appointments: http://localhost:5173/appointments
+- Backend health: http://localhost:8080/actuator/health
 
-จาก `deploy`:
+หยุดระบบโดยเก็บข้อมูลไว้:
 
 ```bash
-docker compose up postgres
+docker compose -f deploy/docker-compose.yml down
 ```
 
-## 2. Backend
+อย่าใช้ `down -v` หากต้องการเก็บฐานข้อมูลใน local volume
 
-เปิด Terminal ใหม่:
+## วิธีพัฒนาแยกบริการ
 
 ```bash
+docker compose -f deploy/docker-compose.yml up -d postgres
 cd backend
 mvn spring-boot:run
 ```
 
-ตรวจสอบ:
-
-```text
-http://localhost:8080/actuator/health
-```
-
-## 3. Frontend
-
-เปิด Terminal ใหม่:
+เปิด Terminal ใหม่เพื่อรัน Frontend:
 
 ```bash
 cd frontend/sabyeguyz
-npm install
+npm ci
 npm run dev
 ```
 
-เปิด:
+Frontend ใช้ `http://localhost:5173` และเรียก Backend ที่ `http://localhost:8080` ผ่าน `VITE_API_BASE_URL`
 
-```text
-http://localhost:5173
+## ตรวจสอบคุณภาพ
+
+```bash
+cd backend
+mvn test
+cd ../frontend/sabyeguyz
+npm run test:unit -- --run
+npm run build
+npm run test:e2e -- --project=chromium
+```
+
+## Port อื่น
+
+```powershell
+$env:FRONTEND_PORT = '15173'
+$env:BACKEND_PORT = '18080'
+$env:POSTGRES_PORT = '15432'
+docker compose -p clinic-check -f deploy/docker-compose.yml up --build -d
 ```
 
 ## Architecture
 
 ```text
-Browser
-   ↓
-Frontend :5173
-   ↓ REST API
-Backend :8080
-   ↓
-PostgreSQL :5432
+Browser :5173 → Frontend nginx :80 → backend:8080 → postgres:5432
 ```
 
-## การพัฒนาแยกกัน
-
-Frontend Development:
-
-```text
-Frontend + Mock Data
-```
-
-Backend Development:
-
-```text
-Backend + PostgreSQL
-```
-
-Integration:
-
-```text
-Frontend + Backend + PostgreSQL
-```
-
-Frontend  **ไม่ต้อง Clone Backend** จนกว่าจะต้อง Integration
-
-## หยุดระบบ
-
-Frontend / Backend:
-
-```text
-Ctrl + C
-```
-
-PostgreSQL:
-
-```bash
-docker compose down
-```
-
-> อย่าใช้ `docker compose down -v` ถ้าจะเก็บข้อมูล Local Database
+nginx รองรับ Vue history fallback และส่ง `/api/` ไป Backend ใน Compose network

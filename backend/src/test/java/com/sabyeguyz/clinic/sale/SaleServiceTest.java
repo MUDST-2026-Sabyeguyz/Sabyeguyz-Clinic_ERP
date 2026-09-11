@@ -370,7 +370,7 @@ class SaleServiceTest {
     private Long registerSalesperson() {
         int unique = UNIQUE.incrementAndGet();
         AppUser user = userRepository.save(
-                new AppUser("sale-person-" + unique, "hash", Role.STAFF));
+                new AppUser("sale-person-" + unique, "hash", Role.THERAPIST));
         return staffRepository.save(
                 new Staff(user, "SP" + unique, "พนักงานขาย ทดสอบ", "0800000013")).getId();
     }
