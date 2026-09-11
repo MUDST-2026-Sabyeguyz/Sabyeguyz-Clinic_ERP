@@ -1,20 +1,15 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import { commissionApi } from '@/api/client'
 
 const month = ref('2026-08')
-const rows = reactive([
-  { staff: 'กฤษดา น.', sales: 75000, tier: 7, courses: 8, status: 'Open', closedAt: '' },
-  { staff: 'ศิริพร ว.', sales: 96500, tier: 10, courses: 11, status: 'Open', closedAt: '' },
-])
-const openCount = computed(() => rows.filter((row) => row.status === 'Open').length)
-function closeRow(row: (typeof rows)[number]) {
-  row.status = 'Closed'
-  row.closedAt = '31 ส.ค. 2569 Manager'
-}
-function closeAll() {
-  rows.filter((row) => row.status === 'Open').forEach(closeRow)
-}
+const rows = ref<Array<{id:number;staff:string;sales:number;tier:number;courses:number;status:string;closedAt:string}>>([])
+const error = ref('')
+const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)
+async function load(){try{const data=await commissionApi.closings(month.value);rows.value=data.map(r=>({id:r.id,staff:r.employeeName,sales:r.sales,tier:r.rate*100,courses:0,status:r.status==='CLOSED'?'Closed':'Open',closedAt:''}))}catch(e){error.value=e instanceof Error?e.message:'โหลดรอบคอมมิชชันไม่สำเร็จ'}}
+async function closeAll(){try{await commissionApi.closeMonth(month.value);await load()}catch(e){error.value=e instanceof Error?e.message:'ปิดรอบไม่สำเร็จ'}}
+onMounted(load)
 </script>
 
 <template>
@@ -46,6 +41,7 @@ function closeAll() {
         </article>
       </section>
       <section class="staff-panel commission-page-panel">
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
         <header>
           <div>
             <small>MONTHLY CLOSING</small>
@@ -92,7 +88,7 @@ function closeAll() {
                 <button
                   class="secondary"
                   :disabled="row.status === 'Closed'"
-                  @click="closeRow(row)"
+                  @click="closeAll"
                 >
                   {{ row.status === 'Closed' ? 'ล็อกแล้ว' : 'ปิดรอบ' }}
                 </button>

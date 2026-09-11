@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import { branchApi, catalogApi, courseApi, paymentMethodApi, staffApi, resourceApi, masterDataApi } from '@/api/client'
 
 const section = ref('branches')
 const editing = ref(false)
@@ -9,9 +10,9 @@ const saved = ref(false)
 const formError = ref('')
 const permissionOptions = ['Patient', 'Visit', 'Treatment', 'Course', 'Transaction']
 const selectedPermissions = ref<string[]>(['Patient', 'Visit', 'Treatment'])
-const branches = reactive([
-  { code: 'RP01', name: 'สาขาราชพฤกษ์', detail: '02-123-4567', status: 'Active' },
-  { code: 'SK02', name: 'สาขาสุขุมวิท', detail: '02-987-6543', status: 'Active' },
+const branches = reactive<Array<{ id?: number; code: string; numericCode: string; name: string; detail: string; status: string }>>([
+  { code: 'RP', numericCode: '01', name: 'สาขาราชพฤกษ์', detail: '01', status: 'Active' },
+  { code: 'SK', numericCode: '02', name: 'สาขาสุขุมวิท', detail: '02', status: 'Active' },
 ])
 const users = reactive([
   { name: 'อรทัย ก.', role: 'Manager', branch: 'ทุกสาขา', permission: 'All', status: 'Active' },
@@ -41,11 +42,8 @@ const services = reactive([
     status: 'Active',
   },
 ])
-const paymentMethods = reactive([
-  { name: 'Cash', active: true },
-  { name: 'Transfer', active: true },
-  { name: 'QR', active: true },
-  { name: 'Card', active: false },
+const paymentMethods = reactive<Array<{ id?: number; code?: string; name: string; active: boolean }>>([
+  { name: 'Cash', active: true }, { name: 'Transfer', active: true }, { name: 'QR', active: true }, { name: 'Card', active: false },
 ])
 const storedPayments = JSON.parse(localStorage.getItem('enabledPaymentMethods') || 'null') as
   string[] | null
@@ -56,7 +54,7 @@ else
     'enabledPaymentMethods',
     JSON.stringify(paymentMethods.filter((item) => item.active).map((item) => item.name)),
   )
-const rooms = reactive([
+const rooms = reactive<Array<{id?:number;code?:string;branchCode?:string;name:string;branch:string;type:string;status:string;active?:boolean}>>([
   { name: 'ห้องรักษา 1', branch: 'ราชพฤกษ์', type: 'ห้องรักษา', status: 'ว่าง' },
   { name: 'Shockwave Unit 1', branch: 'ราชพฤกษ์', type: 'ทรัพยากร', status: 'ไม่ว่าง' },
   { name: 'ห้องรักษา 3', branch: 'สุขุมวิท', type: 'ห้องรักษา', status: 'ซ่อม' },
@@ -83,11 +81,23 @@ const commissionRules = reactive([
     status: 'Active',
   },
 ])
-const masterData = reactive([
+const masterData = reactive<Array<{id?:number;code?:string;category:string;name:string;status:string}>>([
   { category: 'กลุ่มลูกค้า', name: 'ลูกค้าทั่วไป', status: 'Active' },
   { category: 'ช่องทางที่รู้จักคลินิก', name: 'Facebook', status: 'Active' },
   { category: 'บริษัทประกัน', name: 'AIA', status: 'Active' },
 ])
+async function loadBackendSettings() {
+  const [branchList, staffList, serviceList, courseList, paymentList, resourceList, masterList] = await Promise.all([
+    branchApi.list(), staffApi.list(), catalogApi.services(), courseApi.list(), paymentMethodApi.list(), resourceApi.list(), masterDataApi.list(),
+  ])
+  branches.splice(0, branches.length, ...branchList.map((item) => ({ code: item.code, numericCode: item.numericCode, name: item.name, detail: item.numericCode, status: item.active ? 'Active' : 'Inactive' })))
+  users.splice(0, users.length, ...staffList.map((item) => ({ name: item.fullName, role: item.role === 'MANAGER' ? 'Manager' : 'นักกายภาพบำบัด', branch: 'ทุกสาขา', permission: item.role === 'MANAGER' ? 'All' : 'Patient, Visit, Treatment', status: item.active ? 'Active' : 'Inactive' })))
+  services.splice(0, services.length, ...serviceList.map((item) => ({ name: item.name, type: 'Service', price: String(item.price), detail: `${item.durationMinutes} นาที`, expiry: '', status: 'Active' })), ...courseList.map((item) => ({ name: item.name, type: 'Course', price: String(item.price), detail: `${item.sessions} + ${item.bonusSessions} Bonus`, expiry: `${item.validityDays} วัน`, status: item.active ? 'Active' : 'Inactive' })))
+  paymentMethods.splice(0, paymentMethods.length, ...paymentList.map((item) => ({ id: item.id, code: item.code, name: item.name, active: item.active })))
+  rooms.splice(0,rooms.length,...resourceList.map(item=>({id:item.id,code:item.code,branchCode:item.branchCode,name:item.name,branch:item.branchName,type:item.type==='ROOM'?'ห้องรักษา':'ทรัพยากร',status:item.status,active:item.active})))
+  masterData.splice(0,masterData.length,...masterList.map(item=>({id:item.id,code:item.code,category:item.category,name:item.name,status:item.active?'Active':'Inactive'})))
+}
+onMounted(async () => { try { await loadBackendSettings() } catch { formError.value = 'โหลดข้อมูลตั้งค่าจาก backend ไม่สำเร็จ' } })
 function restoreList<T>(key: string, target: T[]) {
   const stored = localStorage.getItem(key)
   if (stored) target.splice(0, target.length, ...(JSON.parse(stored) as T[]))
@@ -129,6 +139,7 @@ function persistAll() {
 }
 const form = reactive({
   code: '',
+  numericCode: '',
   name: '',
   detail: '',
   role: 'นักกายภาพบำบัด',
@@ -156,7 +167,7 @@ const sections: Array<[string, string]> = [
   ['master', 'ข้อมูลพื้นฐาน'],
 ]
 const title = computed(() => sections.find(([key]) => key === section.value)?.[1] ?? '')
-function save() {
+async function save() {
   formError.value = ''
   if (
     ['branches', 'users', 'services', 'rooms', 'commission', 'master'].includes(section.value) &&
@@ -187,6 +198,29 @@ function save() {
   if (section.value === 'commission') {
     const unit = form.calculationType === 'เปอร์เซ็นต์' ? '%' : ' บาท'
     form.calculation = `${form.value || '0'}${unit}${form.basis === 'ยอดขาย' ? ' ของยอดขาย' : ` ${form.basis}`}`
+  }
+  if (section.value === 'branches') {
+    try {
+      const body = { code: form.code, numericCode: form.numericCode || form.detail, name: form.name }
+      const existing = editingIndex.value >= 0 ? branches[editingIndex.value] : undefined
+      const result = existing?.id
+        ? await branchApi.update(existing.id, body)
+        : await branchApi.create(body)
+      const record = { ...result, detail: result.numericCode, status: result.active ? 'Active' : 'Inactive' }
+      if (editingIndex.value >= 0) Object.assign(branches[editingIndex.value]!, record)
+      else branches.push(record)
+      editing.value = false; saved.value = true; return
+    } catch (error) { formError.value = error instanceof Error ? error.message : 'บันทึกสาขาไม่สำเร็จ'; return }
+  }
+  if (section.value === 'rooms') {
+    try { const old=editingIndex.value>=0?rooms[editingIndex.value]:undefined; const body={branchCode:old?.branchCode||branches.find(b=>b.name.includes(form.branch))?.code||branches[0]?.code||'RP',code:form.code||old?.code||`RES-${Date.now()}`,name:form.name,type:form.type==='ห้องรักษา'?'ROOM':'EQUIPMENT',status:form.status==='Active'?'AVAILABLE':form.status}; const result=old?.id?await resourceApi.update(old.id,body):await resourceApi.create(body); const record={id:result.id,code:result.code,branchCode:result.branchCode,name:result.name,branch:result.branchName,type:result.type==='ROOM'?'ห้องรักษา':'ทรัพยากร',status:result.status,active:result.active}; if(editingIndex.value>=0)Object.assign(rooms[editingIndex.value]!,record);else rooms.push(record);editing.value=false;saved.value=true;return } catch(error){formError.value=error instanceof Error?error.message:'บันทึกทรัพยากรไม่สำเร็จ';return}
+  }
+  if (section.value === 'master') {
+    try { const old=editingIndex.value>=0?masterData[editingIndex.value]:undefined; const body={category:form.category,code:form.code||old?.code||`ITEM-${Date.now()}`,name:form.name}; const result=old?.id?await masterDataApi.update(old.id,body):await masterDataApi.create(body); const record={id:result.id,code:result.code,category:result.category,name:result.name,status:result.active?'Active':'Inactive'};if(editingIndex.value>=0)Object.assign(masterData[editingIndex.value]!,record);else masterData.push(record);editing.value=false;saved.value=true;return } catch(error){formError.value=error instanceof Error?error.message:'บันทึกข้อมูลพื้นฐานไม่สำเร็จ';return}
+  }
+  if (['users', 'services', 'commission'].includes(section.value)) {
+    formError.value = 'backend ยังไม่มี endpoint สำหรับบันทึกข้อมูลหมวดนี้ จึงยังไม่บันทึกลง localStorage'
+    return
   }
   if (section.value === 'users')
     form.permission = form.role === 'Manager' ? 'All' : selectedPermissions.value.join(', ')
@@ -232,6 +266,7 @@ function openEditor(index = -1) {
   formError.value = ''
   Object.assign(form, {
     code: '',
+    numericCode: '',
     name: '',
     detail: '',
     role: 'นักกายภาพบำบัด',
@@ -267,11 +302,11 @@ function persistPayments() {
     JSON.stringify(paymentMethods.filter((item) => item.active).map((item) => item.name)),
   )
 }
-function togglePayment(method: (typeof paymentMethods)[number]) {
+async function togglePayment(method: (typeof paymentMethods)[number]) {
   if (method.active && !window.confirm(`ยืนยันการปิดใช้งาน ${method.name} หรือไม่?`)) return
-  method.active = !method.active
-  persistPayments()
-  saved.value = true
+  if (!method.id) { formError.value = 'รายการช่องทางชำระเงินนี้ยังไม่มี id จาก backend'; return }
+  try { if(method.active){await paymentMethodApi.deactivate(method.id);method.active=false}else{await paymentMethodApi.activate(method.id);method.active=true} saved.value = true }
+  catch (error) { formError.value = error instanceof Error ? error.message : 'ปิดใช้งานช่องทางชำระเงินไม่สำเร็จ' }
 }
 </script>
 
@@ -501,6 +536,7 @@ function togglePayment(method: (typeof paymentMethods)[number]) {
         </header>
         <template v-if="section === 'branches'">
           <label>รหัสสาขา<input v-model="form.code" placeholder="เช่น RP01" /></label>
+          <label>รหัสตัวเลข 2 หลัก<input v-model="form.numericCode" maxlength="2" placeholder="เช่น 01" /></label>
           <label>ชื่อสาขา<input v-model="form.name" placeholder="ชื่อสาขา" /></label>
           <label
             >ข้อมูลติดต่อ<input v-model="form.detail" placeholder="เบอร์โทรศัพท์หรือที่อยู่"
