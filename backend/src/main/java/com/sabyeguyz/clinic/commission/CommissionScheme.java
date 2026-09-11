@@ -27,4 +27,6 @@ public class CommissionScheme {
     public LocalDate getEffectiveTo() { return effectiveTo; }
     public boolean isActive() { return active; }
     public void deactivate() { active = false; }
+    public void activate() { active = true; }
+    public void update(String name, String version, LocalDate from, LocalDate to) { this.name=name; this.version=version; this.effectiveFrom=from; this.effectiveTo=to; }
 }
