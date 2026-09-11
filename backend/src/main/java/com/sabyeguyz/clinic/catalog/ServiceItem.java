@@ -34,6 +34,23 @@ public class ServiceItem {
 
     protected ServiceItem() {}
 
+    public ServiceItem(String code, String name, int defaultDurationMinutes, BigDecimal price) {
+        this.code = code;
+        this.name = name;
+        this.defaultDurationMinutes = defaultDurationMinutes;
+        this.price = price;
+        this.active = true;
+        this.createdAt = Instant.now();
+    }
+
+    public void update(String code, String name, int defaultDurationMinutes, BigDecimal price) {
+        this.code = code;
+        this.name = name;
+        this.defaultDurationMinutes = defaultDurationMinutes;
+        this.price = price;
+    }
+    public void deactivate() { this.active = false; }
+
     public Long getId() { return id; }
     public String getCode() { return code; }
     public String getName() { return name; }
