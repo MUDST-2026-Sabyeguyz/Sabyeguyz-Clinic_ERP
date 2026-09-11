@@ -1,31 +1,39 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { patients, type PatientProfile } from '@/features/patients/data/mockPatients'
-import { patientCourses, type PatientCourse } from '../data/mockCourses'
+import { courseApi, patientApi, type CoursePurchase, type Patient } from '@/api/client'
 
 type CourseAction = 'transfer' | 'history'
 const action = ref<CourseAction | null>(null)
 const done = ref(false)
 const recipientSearch = ref('')
-const selectedRecipient = ref<PatientProfile | null>(null)
+const selectedRecipient = ref<Patient | null>(null)
 const transferAmount = ref(1)
-const selectedCourse = ref<PatientCourse>(patientCourses[0]!)
-const recipientResults = computed(() => {
-  const term = recipientSearch.value.trim().toLowerCase()
-  if (!term) return []
-  return patients.filter(
-    (patient) =>
-      patient.fullName !== 'สมชาย ใจดี' &&
-      `${patient.hn} ${patient.fullName} ${patient.phone}`.toLowerCase().includes(term),
-  )
-})
+type UiCourse = CoursePurchase & { name: string; expiry: string; balance: number; total: number }
+const owner = ref<Patient | null>(null)
+const patientCourses = ref<UiCourse[]>([])
+const recipientResults = ref<Patient[]>([])
+const transferHistory = ref<Array<{ createdAt: string; sourcePatientId: number; destinationPatientId: number; quantity: number; reason: string }>>([])
+const errorMessage = ref('')
+const selectedCourse = ref<UiCourse>({} as UiCourse)
+async function loadOwner() {
+  const patients = (await patientApi.search('', 0, 100)).items
+  owner.value = patients[0] ?? null
+  if (owner.value) await loadCourses(owner.value.id)
+}
+async function loadCourses(patientId: number) {
+  patientCourses.value = (await courseApi.patientCourses(patientId)).map((course) => ({ ...course, name: course.course.name, expiry: new Date(course.expiresAt).toLocaleDateString('th-TH'), balance: course.remaining, total: course.purchased }))
+  transferHistory.value = await courseApi.transferHistory(patientId) as typeof transferHistory.value
+}
+onMounted(async () => { try { await loadOwner() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ' } })
+let searchTimer: number | undefined
+watch(recipientSearch, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(async () => { if (recipientSearch.value.trim()) recipientResults.value = (await patientApi.search(recipientSearch.value, 0, 20)).items }, 250) })
 const title = computed(() => {
   if (action.value === 'transfer') return 'โอนสิทธิ์คอร์ส'
   if (action.value === 'history') return 'ประวัติการโอนคอร์ส'
   return 'จัดการคอร์ส'
 })
-function start(nextAction: CourseAction, course: PatientCourse) {
+function start(nextAction: CourseAction, course: UiCourse) {
   action.value = nextAction
   selectedCourse.value = course
   done.value = false
@@ -39,10 +47,14 @@ function goBack() {
   recipientSearch.value = ''
   selectedRecipient.value = null
 }
-function confirm() {
-  done.value = true
+async function confirm() {
+  if (!owner.value || !selectedRecipient.value || !selectedCourse.value.id) return
+  try {
+    await courseApi.transfer({ sourcePurchaseId: selectedCourse.value.id, destinationPatientId: selectedRecipient.value.id, quantity: transferAmount.value, reason: 'โอนสิทธิ์ตามคำขอผู้ป่วย' })
+    await loadCourses(owner.value.id); done.value = true
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โอนสิทธิ์ไม่สำเร็จ' }
 }
-function selectRecipient(patient: PatientProfile) {
+function selectRecipient(patient: Patient) {
   selectedRecipient.value = patient
   recipientSearch.value = `${patient.fullName} HN ${patient.hn}`
 }
@@ -60,10 +72,10 @@ function handleRecipientInput() {
       <section class="course-browser">
         <div class="course-summary">
           <div class="patient-context">
-            <span class="avatar">ส</span>
+            <span class="avatar">{{ owner?.fullName?.slice(0, 1) }}</span>
             <div>
-              <small>เจ้าของคอร์สที่เลือก</small><b>สมชาย ใจดี</b>
-              <p>2601080001 สาขาราชพฤกษ์</p>
+              <small>เจ้าของคอร์สที่เลือก</small><b>{{ owner?.fullName || 'กำลังโหลด...' }}</b>
+              <p>{{ owner?.hn }} สถานะ {{ owner?.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</p>
             </div>
           </div>
           <div class="course-list">
@@ -95,7 +107,7 @@ function handleRecipientInput() {
             <button class="back" @click="goBack">× ปิดแบบฟอร์ม</button>
           </header>
           <div v-if="action === 'transfer'" class="course-form">
-            <label>เจ้าของคอร์ส<input value="สมชาย ใจดี HN 2601080001" readonly /></label
+            <label>เจ้าของคอร์ส<input :value="`${owner?.fullName ?? ''} HN ${owner?.hn ?? ''}`" readonly /></label
             ><label>คอร์ส<input :value="selectedCourse.name" readonly /></label
             ><label
               >สิทธิ์คงเหลือ<input :value="`${selectedCourse.balance} ครั้ง`" readonly
@@ -153,6 +165,7 @@ function handleRecipientInput() {
           <p v-if="action === 'transfer' && done" class="success">
             บันทึกรายการโอนและประวัติตรวจสอบเรียบร้อยแล้ว
           </p>
+          <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
           <div v-if="action === 'history'" class="transfer-history">
             <table class="staff-table">
               <thead>
@@ -166,14 +179,15 @@ function handleRecipientInput() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>21 ส.ค. 2026 14:32</td>
-                  <td>สมชาย ใจดี</td>
-                  <td>วรรณา มั่นคง</td>
-                  <td>Manual Therapy 10 ครั้ง</td>
-                  <td><b>2 ครั้ง</b></td>
-                  <td>เจ้าหน้าที่คลินิก</td>
+                <tr v-for="entry in transferHistory" :key="entry.createdAt + entry.quantity">
+                  <td>{{ new Date(entry.createdAt).toLocaleString('th-TH') }}</td>
+                  <td>{{ entry.sourcePatientId }}</td>
+                  <td>{{ entry.destinationPatientId }}</td>
+                  <td>{{ selectedCourse?.name }}</td>
+                  <td><b>{{ entry.quantity }} ครั้ง</b></td>
+                  <td>{{ entry.reason }}</td>
                 </tr>
+                <tr v-if="!transferHistory.length"><td colspan="6">ไม่พบประวัติการโอน</td></tr>
               </tbody>
             </table>
           </div>

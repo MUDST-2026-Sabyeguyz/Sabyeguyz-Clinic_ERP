@@ -4,6 +4,14 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.time.ZoneId;
+import com.sabyeguyz.clinic.sale.Sale;
+import com.sabyeguyz.clinic.sale.SaleRepository;
+import com.sabyeguyz.clinic.course.CoursePurchaseRepository;
+import com.sabyeguyz.clinic.course.CoursePurchase;
+import java.util.HashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,9 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class CommissionService {
     private final CommissionSchemeRepository schemes;
     private final CommissionTierRepository tiers;
+    private final SaleRepository sales;
+    private final CoursePurchaseRepository purchases;
+    private final CommissionClosingRepository closings;
 
-    public CommissionService(CommissionSchemeRepository schemes, CommissionTierRepository tiers) {
-        this.schemes = schemes; this.tiers = tiers;
+    public CommissionService(CommissionSchemeRepository schemes, CommissionTierRepository tiers, SaleRepository sales, CoursePurchaseRepository purchases, CommissionClosingRepository closings) {
+        this.schemes = schemes; this.tiers = tiers; this.sales = sales; this.purchases=purchases; this.closings=closings;
     }
 
     @Transactional(readOnly = true)
@@ -32,6 +43,34 @@ public class CommissionService {
         inputs.stream().sorted(Comparator.comparingInt(TierInput::order)).map(i -> new CommissionTier(scheme, i.minimum(), i.maximum(), i.rate(), i.order())).forEach(tiers::save);
         return scheme;
     }
+
+    @Transactional
+    public CommissionScheme update(long id, String name, String version, LocalDate from, LocalDate to, List<TierInput> inputs) {
+        validateMetadata(name, version, from, to, inputs); validateTiers(inputs);
+        CommissionScheme scheme=schemes.findById(id).orElseThrow(()->new IllegalArgumentException("commission scheme not found"));
+        scheme.update(name.trim(),version.trim(),from,to); tiers.deleteBySchemeId(id); tiers.flush();
+        inputs.stream().sorted(Comparator.comparingInt(TierInput::order)).map(i->new CommissionTier(scheme,i.minimum(),i.maximum(),i.rate(),i.order())).forEach(tiers::save);
+        return schemes.save(scheme);
+    }
+    @Transactional
+    public List<CommissionClosing> closeMonth(LocalDate month) {
+        List<CoursePurchase> all = purchases.findBySaleMonthBetween(month.withDayOfMonth(1), month.withDayOfMonth(1).plusMonths(1).minusDays(1));
+        Map<Long,List<com.sabyeguyz.clinic.course.CoursePurchase>> grouped=new HashMap<>(); all.stream().filter(p->p.getSeller()!=null).forEach(p->grouped.computeIfAbsent(p.getSeller().getId(),k->new java.util.ArrayList<>()).add(p));
+        List<CommissionClosing> result=new java.util.ArrayList<>(); for(var group:grouped.values()){var seller=group.get(0).getSeller();var total=group.stream().map(com.sabyeguyz.clinic.course.CoursePurchase::getPrice).reduce(BigDecimal.ZERO,BigDecimal::add);var tier=resolve(month.withDayOfMonth(1),total);var scheme=schemes.findByOrderByEffectiveFromDesc().stream().filter(CommissionScheme::isActive).filter(s->!s.getEffectiveFrom().isAfter(month.withDayOfMonth(1))).findFirst().orElseThrow();var closing=closings.findByMonthAndEmployeeId(month.withDayOfMonth(1),seller.getId()).orElseGet(()->new CommissionClosing(month.withDayOfMonth(1),seller,total,scheme,tier.getCommissionRate()));closing.close();result.add(closings.save(closing));group.forEach(p->{p.lockCommission(scheme.getId(),scheme.getVersion(),tier.getCommissionRate());purchases.save(p);});} return result;
+    }
+    @Transactional public CommissionScheme activate(long id){CommissionScheme s=find(id);s.activate();return schemes.save(s);}
+    @Transactional public void deactivate(long id){CommissionScheme s=find(id);s.deactivate();schemes.save(s);}
+
+    @Transactional(readOnly=true)
+    public List<ReportRow> report(LocalDate from, LocalDate to) {
+        if(from==null||to==null||to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
+        ZoneId zone=ZoneId.of("Asia/Bangkok"); List<Sale> rows=sales.findPaidForCommission(from.atStartOfDay(zone).toInstant(),to.plusDays(1).atStartOfDay(zone).toInstant());
+        Map<String,List<Sale>> groups=new LinkedHashMap<>();
+        for(Sale s:rows){String key=(s.getSalesperson()==null?"-":s.getSalesperson().getId())+"|"+s.getBranch().getCode();groups.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(s);}
+        return groups.values().stream().map(g->{Sale first=g.get(0);BigDecimal base=g.stream().map(Sale::getTotal).reduce(BigDecimal.ZERO,BigDecimal::add);CommissionTier tier=resolve(to,base);return new ReportRow(first.getSalesperson()==null?null:first.getSalesperson().getId(),first.getSalesperson()==null?"ไม่ระบุ":first.getSalesperson().getFullName(),first.getBranch().getCode(),first.getBranch().getName(),g.size(),base,tier.getCommissionRate(),base.multiply(tier.getCommissionRate()));}).toList();
+    }
+    private CommissionScheme find(long id){return schemes.findById(id).orElseThrow(()->new IllegalArgumentException("commission scheme not found"));}
+    private void validateMetadata(String name,String version,LocalDate from,LocalDate to,List<TierInput> inputs){if(name==null||name.isBlank()||version==null||version.isBlank()||from==null)throw new IllegalArgumentException("scheme metadata is required");if(to!=null&&!to.isAfter(from))throw new IllegalArgumentException("effective_to must be after effective_from");if(inputs==null||inputs.isEmpty())throw new IllegalArgumentException("at least one commission tier is required");}
 
     @Transactional(readOnly = true)
     public CommissionTier resolve(LocalDate date, BigDecimal monthlySales) {
@@ -59,4 +98,5 @@ public class CommissionService {
     }
 
     public record TierInput(BigDecimal minimum, BigDecimal maximum, BigDecimal rate, int order) {}
+    public record ReportRow(Long staffId,String staffName,String branchCode,String branchName,int saleCount,BigDecimal base,BigDecimal rate,BigDecimal commission) {}
 }
