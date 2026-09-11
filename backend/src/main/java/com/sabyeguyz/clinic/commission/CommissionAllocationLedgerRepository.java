@@ -1,0 +1,1 @@
+package com.sabyeguyz.clinic.commission; import java.util.*; import org.springframework.data.jpa.repository.JpaRepository; public interface CommissionAllocationLedgerRepository extends JpaRepository<CommissionAllocationLedger,Long>{List<CommissionAllocationLedger> findByCoursePurchaseIdOrderByVisitDateAsc(Long purchaseId);}

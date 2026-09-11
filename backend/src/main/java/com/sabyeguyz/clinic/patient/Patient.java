@@ -91,6 +91,16 @@ public class Patient {
     public void assignHn(String generatedHn) {
         if (this.hn == null) this.hn = generatedHn;
     }
+    public void update(PatientUpdateRequest request) {
+        this.title = request.title(); this.fullName = request.fullName().trim(); this.birthDate = request.birthDate();
+        this.gender = request.gender(); this.phone = request.phone().trim();
+        this.identityDocumentType = request.identityDocumentType().trim(); this.identityNumber = request.identityNumber().trim();
+        this.address = request.address().trim(); this.drugAllergy = request.drugAllergy(); this.foodAllergy = request.foodAllergy();
+        this.chronicDisease = request.chronicDisease(); this.emergencyContactName = request.emergencyContactName().trim();
+        this.emergencyContactRelationship = request.emergencyContactRelationship().trim();
+        this.emergencyContactPhone = request.emergencyContactPhone().trim(); this.privacyConsent = request.privacyConsent();
+        this.active = request.active(); this.updatedAt = Instant.now();
+    }
     public Long getId() { return id; }
     public String getHn() { return hn; }
     public String getFullName() { return fullName; }

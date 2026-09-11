@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CoursePurchaseRepository extends JpaRepository<CoursePurchase, Long> {
+    List<CoursePurchase> findBySaleMonthAndSellerId(java.time.LocalDate month, Long sellerId);
+    List<CoursePurchase> findBySaleMonthBetween(java.time.LocalDate from, java.time.LocalDate to);
 
     /**
      * ล็อกใบซื้อไว้ก่อนอ่านยอดคงเหลือ เพื่อไม่ให้สอง request ตัดสิทธิ์ครั้งสุดท้ายพร้อมกัน

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { clearSession } from '@/api/client'
 import logo from '@/assets/sabyeguyz-logo.png'
 const profileOpen = ref(false)
 const route = useRoute()
 const navRef = ref<HTMLElement | null>(null)
 const pillReady = ref(false)
 const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0' })
-const role = ref(localStorage.getItem('mockStaffRole') ?? 'manager')
+const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
+const role = ref(authUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
 const navItems = computed(() =>
@@ -81,7 +83,7 @@ function positionPillWithoutAnimation() {
 onMounted(positionPillWithoutAnimation)
 watch(() => route.fullPath, positionPillWithoutAnimation)
 function signOut() {
-  localStorage.removeItem('mockStaffRole')
+  clearSession()
 }
 </script>
 
