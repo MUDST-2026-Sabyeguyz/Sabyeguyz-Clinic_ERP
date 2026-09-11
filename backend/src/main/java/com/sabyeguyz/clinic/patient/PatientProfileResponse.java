@@ -21,7 +21,14 @@ public record PatientProfileResponse(
         String emergencyContactRelationship,
         String emergencyContactPhone,
         boolean privacyConsent,
-        boolean active
+        boolean active,
+        String nickname,
+        String email,
+        String bloodGroup,
+        String nationality,
+        String customerType,
+        String customerSource,
+        String insuranceCompany
 ) {
     public record BranchSummary(Long id, String code, String name, boolean active) {}
 
@@ -33,6 +40,7 @@ public record PatientProfileResponse(
                 patient.getIdentityDocumentType(), patient.getIdentityNumber(), patient.getAddress(), patient.isDrugAllergy(),
                 patient.isFoodAllergy(), patient.getChronicDisease(), patient.getEmergencyContactName(),
                 patient.getEmergencyContactRelationship(), patient.getEmergencyContactPhone(), patient.isPrivacyConsent(),
-                patient.isActive());
+                patient.isActive(), patient.getNickname(), patient.getEmail(), patient.getBloodGroup(), patient.getNationality(),
+                patient.getCustomerType(), patient.getCustomerSource(), patient.getInsuranceCompany());
     }
 }

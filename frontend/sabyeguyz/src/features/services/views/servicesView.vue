@@ -18,8 +18,8 @@ const staff = ref<Staff[]>([])
 const selectedServiceId = ref(0), selectedCourseId = ref(0), selectedStaffId = ref<number | undefined>()
 const paymentCode = ref(''), note = ref('')
 async function loadMaster() {
-  const [s, c, p, methods, staffList] = await Promise.all([catalogApi.services(), catalogApi.courses(), patientApi.search('', 0, 100), paymentMethodApi.list(), staffApi.list()])
-  services.value = s; courses.value = c; results.value = p.items; paymentMethods.value = methods; staff.value = staffList
+  const [s, c, p, methods, staffList] = await Promise.all([catalogApi.services(), catalogApi.courses(), patientApi.searchAll(), paymentMethodApi.list(), staffApi.list()])
+  services.value = s; courses.value = c; results.value = p; paymentMethods.value = methods; staff.value = staffList
   selectedServiceId.value = s[0]?.id ?? 0; selectedCourseId.value = c[0]?.id ?? 0; paymentCode.value = methods[0]?.code ?? ''; selectedStaffId.value = staffList[0]?.id
 }
 onMounted(async () => { try { await loadMaster() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ' } })
