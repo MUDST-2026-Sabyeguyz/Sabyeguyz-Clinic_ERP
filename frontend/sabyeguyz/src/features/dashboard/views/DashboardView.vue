@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { reportApi } from '@/api/client'
+import { patientApi, reportApi } from '@/api/client'
 
 const today = new Date()
 const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
@@ -11,8 +11,8 @@ const statuses = ref<Array<{ status: string; value: number }>>([])
 const loading = ref(true), errorMessage = ref('')
 onMounted(async () => {
   try {
-    const [dashboard, appointments, balances] = await Promise.all([reportApi.dashboard(from, to), reportApi.appointments(from, to), reportApi.balances(from, to)])
-    patients.value = dashboard.uniquePatients; visits.value = dashboard.visits; revenue.value = Number(dashboard.totalRevenue); courses.value = balances.purchases
+    const [dashboard, appointments, balances, patientList] = await Promise.all([reportApi.dashboard(from, to), reportApi.appointments(from, to), reportApi.balances(from, to), patientApi.searchAll()])
+    patients.value = patientList.length; visits.value = dashboard.visits; revenue.value = Number(dashboard.totalRevenue); courses.value = balances.purchases
     statuses.value = appointments.byStatus.map((item) => ({ status: item.status, value: item.appointments }))
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลด dashboard ไม่สำเร็จ' }
   finally { loading.value = false }
@@ -37,15 +37,15 @@ onMounted(async () => {
         </article>
         <article>
           <small>จำนวนการเข้ารับบริการ</small><b>{{ visits.toLocaleString() }}</b
-          ><span>ทุกสถานะ</span>
+          ><span>ที่มารับบริการแล้ว</span>
         </article>
         <article>
           <small>รายได้รวม</small><b>฿{{ revenue.toLocaleString() }}</b
           ><span>ทุกสาขา</span>
         </article>
         <article>
-          <small>คอร์สที่ใช้งาน</small><b>{{ courses.toLocaleString() }}</b
-          ><span>คอร์สที่ยังใช้งานอยู่</span>
+          <small>คอร์สที่ขายในช่วงเวลา</small><b>{{ courses.toLocaleString() }}</b
+          ><span>ตามช่วงวันที่ของ Dashboard</span>
         </article>
       </section>
       <section class="dashboard-panels">

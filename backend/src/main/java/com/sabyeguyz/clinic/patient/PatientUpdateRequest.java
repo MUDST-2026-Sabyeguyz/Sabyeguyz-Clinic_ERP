@@ -8,4 +8,6 @@ public record PatientUpdateRequest(String title, @NotBlank String fullName, @Not
         String gender, @NotBlank String phone, @NotBlank String identityDocumentType, @NotBlank String identityNumber,
         @NotBlank String address, boolean drugAllergy, boolean foodAllergy, String chronicDisease,
         @NotBlank String emergencyContactName, @NotBlank String emergencyContactRelationship,
-        @NotBlank String emergencyContactPhone, boolean privacyConsent, boolean active) {}
+        @NotBlank String emergencyContactPhone, boolean privacyConsent, boolean active,
+        String nickname, String email, String bloodGroup, String nationality, String customerType,
+        String customerSource, String insuranceCompany) {}

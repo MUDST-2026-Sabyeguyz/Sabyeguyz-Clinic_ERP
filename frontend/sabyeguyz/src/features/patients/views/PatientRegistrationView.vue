@@ -1,26 +1,24 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { savePatientProfile } from '../data/mockPatients'
-import { createMockHn, formatPhoneNumber, formatThaiDate, type PatientRegistrationForm } from '../data/patientRegistration'
+import { registerPatient } from '@/api/patients'
+import { branchApi, masterDataApi } from '@/api/client'
+import { type PatientRegistrationForm } from '../data/patientRegistration'
 
 const submitting = ref(false)
 const router = useRouter()
 const submitted = ref(false)
 const errorMessage = ref('')
 const registeredHn = ref('')
-const masterData = JSON.parse(localStorage.getItem('clinicMasterData') || '[]') as Array<{ category: string; name: string; status: string }>
-const valuesFor = (category: string, fallback: string[]) => {
-  const values = masterData.filter((item) => item.category === category && item.status === 'Active').map((item) => item.name)
-  return values.length ? values : fallback
-}
-const customerGroups = valuesFor('Customer Group', ['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
-const referralChannels = valuesFor('Referral Channel', ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
-const insuranceCompanies = valuesFor('Insurance Company', ['AIA'])
+const registeredPatientId = ref<number | null>(null)
+const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
+const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
+const insuranceCompanies = ref(['AIA'])
+const branches = ref<Array<{ code: string; name: string }>>([])
 const form = reactive<PatientRegistrationForm>({
-  branchCode: 'RP', email: '', title: 'นาย', customerType: customerGroups[0]!, firstName: '', lastName: '', nickname: '', fullNameEnglish: '', birthDate: '', gender: 'ชาย', phone: '', identityDocumentType: '', identityNumber: '', address: '', bloodGroup: 'ไม่ทราบ', nationality: 'ไทย', customerSource: referralChannels[0]!, insuranceCompany: '', salesChannel: 'หน้าสาขา', paymentType: 'ชำระด้วยตนเอง', drugAllergy: false, foodAllergy: false, chronicDisease: '', privacyConsent: false,
+  branchCode: 'RP', email: '', title: 'นาย', customerType: customerGroups.value[0]!, firstName: '', lastName: '', nickname: '', fullNameEnglish: '', birthDate: '', gender: 'ชาย', phone: '', identityDocumentType: '', identityNumber: '', address: '', bloodGroup: 'ไม่ทราบ', nationality: 'ไทย', customerSource: referralChannels.value[0]!, insuranceCompany: '', salesChannel: 'หน้าสาขา', paymentType: 'ชำระด้วยตนเอง', drugAllergy: false, foodAllergy: false, chronicDisease: '', privacyConsent: false,
 })
 const identityIsValid = computed(() => {
   if (form.identityDocumentType === 'NATIONAL_ID') return /^\d{13}$/.test(form.identityNumber)
@@ -34,9 +32,26 @@ const thaiOnly = (value: string) => value.replace(/[^\u0E00-\u0E7F\s]/g, '')
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
 const thaiNameIsValid = (value: string) => /^[\u0E00-\u0E7F\s]+$/.test(value.trim())
 const phoneIsValid = computed(() => /^\d{10}$/.test(form.phone))
-const canSubmit = computed(() => Boolean(thaiNameIsValid(form.firstName) && thaiNameIsValid(form.lastName) && thaiNameIsValid(form.nickname) && emailIsValid.value && form.birthDate && phoneIsValid.value && form.identityDocumentType && identityIsValid.value && form.address))
+const canSubmit = computed(() => Boolean(form.branchCode && branches.value.length && thaiNameIsValid(form.firstName) && thaiNameIsValid(form.lastName) && thaiNameIsValid(form.nickname) && emailIsValid.value && form.birthDate && phoneIsValid.value && form.identityDocumentType && identityIsValid.value && form.address))
 watch(() => form.title, (title) => { if (title === 'นาย') form.gender = 'ชาย'; if (title === 'นาง' || title === 'นางสาว') form.gender = 'หญิง' })
 watch(() => form.identityDocumentType, () => { form.identityNumber = '' })
+onMounted(async () => {
+  try {
+    const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.list()])
+    branches.value = branchList.filter((item) => item.active).map((item) => ({ code: item.code, name: item.name }))
+    if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode)) form.branchCode = branches.value[0]!.code
+    const active = items.filter((item) => item.active)
+    const valuesFor = (category: string, fallback: string[]) => {
+      const values = active.filter((item) => item.category === category).map((item) => item.name)
+      return values.length ? values : fallback
+    }
+    customerGroups.value = valuesFor('Customer Group', customerGroups.value)
+    referralChannels.value = valuesFor('Referral Channel', referralChannels.value)
+    insuranceCompanies.value = valuesFor('Insurance Company', insuranceCompanies.value)
+    if (!form.customerType) form.customerType = customerGroups.value[0]!
+    if (!form.customerSource) form.customerSource = referralChannels.value[0]!
+  } catch { errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ' }
+})
 async function submit() {
   submitted.value = true
   if (!canSubmit.value) { errorMessage.value = ''; return }
@@ -44,10 +59,37 @@ async function submit() {
   submitting.value = true
   errorMessage.value = ''
   try {
-    const hn = createMockHn()
-    registeredHn.value = hn
-    savePatientProfile({ hn, title: form.title, nickname: form.nickname, fullNameEnglish: form.fullNameEnglish, fullName: `${form.firstName} ${form.lastName}`.trim(), phone: formatPhoneNumber(form.phone), email: form.email, nationality: form.nationality, bloodGroup: form.bloodGroup, customerType: form.customerType, customerSource: form.customerSource, insuranceCompany: form.insuranceCompany || 'ไม่มีประกัน', birthDate: formatThaiDate(form.birthDate), gender: form.gender, identityDocumentType: form.identityDocumentType === 'PASSPORT' ? 'หนังสือเดินทาง' : 'บัตรประจำตัวประชาชน', identityNumber: form.identityNumber, address: form.address, branch: form.branchCode === 'RP' ? 'สาขาราชพฤกษ์' : form.branchCode, status: 'เปิดใช้งาน' })
-    localStorage.setItem('patientCreationHn', hn)
+    const fullName = `${form.firstName} ${form.lastName}`.trim()
+    const result = await registerPatient({
+      branchCode: form.branchCode,
+      username: `patient-${Date.now()}`,
+      password: `Temp${form.identityNumber.slice(-6)}!`,
+      email: form.email,
+      title: form.title,
+      fullName,
+      birthDate: form.birthDate,
+      gender: form.gender,
+      phone: form.phone,
+      identityDocumentType: form.identityDocumentType,
+      identityNumber: form.identityNumber,
+      address: form.address,
+      drugAllergy: form.drugAllergy,
+      foodAllergy: form.foodAllergy,
+      chronicDisease: form.chronicDisease,
+      emergencyContactName: fullName,
+      emergencyContactRelationship: 'ญาติ',
+      emergencyContactPhone: form.phone,
+      privacyConsent: true,
+      nickname: form.nickname,
+      bloodGroup: form.bloodGroup,
+      nationality: form.nationality,
+      customerType: form.customerType,
+      customerSource: form.customerSource,
+      insuranceCompany: form.insuranceCompany,
+    })
+    registeredHn.value = result.hn
+    registeredPatientId.value = result.id
+    localStorage.setItem('patientCreationHn', result.hn)
     await router.push('/staff/patients')
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'เกิดข้อผิดพลาด' } finally { submitting.value = false }
 }
@@ -61,6 +103,7 @@ async function submit() {
       <div class="intro"><h1>ลงทะเบียนผู้ป่วยใหม่</h1><p>เจ้าหน้าที่กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p></div>
       <form class="form-card" novalidate @submit.prevent="submit">
         <div class="form-grid">
+          <label>สาขาที่ลงทะเบียน <select v-model="form.branchCode" :disabled="!branches.length"><option v-for="branch in branches" :key="branch.code" :value="branch.code">{{ branch.name }}</option></select></label>
           <label :class="{ 'invalid-field': submitted && !emailIsValid }">อีเมล <em>*</em><input v-model.trim="form.email" type="text" inputmode="email" placeholder="example@gmail.com" /><small v-if="submitted && !form.email" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !emailIsValid" class="required-error">รูปแบบอีเมลไม่ถูกต้อง ต้องใช้อีเมลที่ลงท้ายด้วย @gmail.com</small></label>
           <label>คำนำหน้า <em>*</em><select v-model="form.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>ไม่ระบุ</option></select></label>
           <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.firstName) }">ชื่อ <em>*</em><input v-model.trim="form.firstName" placeholder="ชื่อ" @input="form.firstName = thaiOnly(form.firstName)" /><small v-if="submitted && !form.firstName" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.firstName)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
@@ -82,7 +125,7 @@ async function submit() {
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       </form>
     </section>
-    <section v-else class="success-card"><span class="success-icon">✓</span><h1>ลงทะเบียนสำเร็จ</h1><p>เลขประจำตัวผู้ป่วย (HN)</p><strong>{{ registeredHn }}</strong><div class="success-actions"><RouterLink class="secondary" to="/staff/patients">กลับไปรายชื่อผู้ป่วย</RouterLink><RouterLink class="primary" :to="`/staff/patients/${registeredHn}`">เปิดข้อมูลผู้ป่วย</RouterLink></div></section>
+    <section v-else class="success-card"><span class="success-icon">✓</span><h1>ลงทะเบียนสำเร็จ</h1><p>เลขประจำตัวผู้ป่วย (HN)</p><strong>{{ registeredHn }}</strong><div class="success-actions"><RouterLink class="secondary" to="/staff/patients">กลับไปรายชื่อผู้ป่วย</RouterLink><RouterLink v-if="registeredPatientId" class="primary" :to="`/staff/patients/${registeredPatientId}`">เปิดข้อมูลผู้ป่วย</RouterLink></div></section>
   </main>
 </template>
 <style scoped src="../styles/patient-registration.css"></style>
