@@ -125,6 +125,8 @@ Therapist ถูกผูกกับ Staff:
 
 บัญชีเหล่านี้ใช้สำหรับ Development/Test เท่านั้น ต้องเปลี่ยนก่อนใช้งานจริง
 
+บัญชีและ Staff ของ Therapist ถูกเก็บเป็น Flyway seed migration ใน `V20__seed_dev_test_accounts.sql` จึงถูกสร้างอัตโนมัติเมื่อเริ่มฐานข้อมูลใหม่จาก code
+
 ### Pipeline as Code
 
 มี GitHub Actions workflow ดังนี้:
@@ -176,4 +178,3 @@ docker compose -p sabyeguyz-clinic_erp -f deploy/docker-compose.yml ps
 ```
 
 ไม่ควรใช้ `docker compose down -v` หากต้องการเก็บข้อมูล PostgreSQL เดิมไว้
-
