@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { patients } from '../data/mockPatients'
 
 const query = ref('')
 const branch = ref('ทั้งหมด')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+const newPatientHn = ref('')
+const showCreationNotice = ref(false)
 const branches = [...new Set(patients.map((patient) => patient.branch))]
 const filteredPatients = computed(() => {
   const value = query.value.trim().toLowerCase()
-  return patients.filter((patient) => {
+  const matchingPatients = patients.filter((patient) => {
     const matchesQuery =
       !value ||
       [patient.hn, patient.fullName, patient.phone].some((field) =>
@@ -16,7 +19,24 @@ const filteredPatients = computed(() => {
       )
     const matchesBranch = branch.value === 'ทั้งหมด' || patient.branch === branch.value
     return matchesQuery && matchesBranch
+  }).sort((left, right) => {
+    const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
+    return sortOrder.value === 'asc' ? comparison : -comparison
   })
+  if (!newPatientHn.value) return matchingPatients
+  return matchingPatients.sort((left, right) => {
+    if (left.hn === newPatientHn.value) return -1
+    if (right.hn === newPatientHn.value) return 1
+    return 0
+  })
+})
+onMounted(() => {
+  const createdHn = localStorage.getItem('patientCreationHn')
+  if (!createdHn) return
+  newPatientHn.value = createdHn
+  localStorage.removeItem('patientCreationHn')
+  showCreationNotice.value = true
+  window.setTimeout(() => { showCreationNotice.value = false }, 3000)
 })
 </script>
 
@@ -49,6 +69,10 @@ const filteredPatients = computed(() => {
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
             <option v-for="item in branches" :key="item" :value="item">{{ item }}</option>
           </select>
+          <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับผู้ป่วย">
+            <option value="asc">ชื่อ ก-ฮ</option>
+            <option value="desc">ชื่อ ฮ-ก</option>
+          </select>
           <span class="result-count">พบผู้ป่วยทั้งหมด {{ filteredPatients.length }} ราย</span>
         </header>
         <div class="table-scroll">
@@ -60,7 +84,7 @@ const filteredPatients = computed(() => {
                 <th>เบอร์โทรศัพท์</th>
                 <th>วันเกิด</th>
                 <th>สาขา</th>
-                <th>การดำเนินการ</th>
+                <th aria-label="การดำเนินการ"></th>
               </tr>
             </thead>
             <tbody>
@@ -74,9 +98,7 @@ const filteredPatients = computed(() => {
                 <td>{{ patient.birthDate }}</td>
                 <td>{{ patient.branch }}</td>
                 <td>
-                  <RouterLink class="row-action" :to="`/staff/patients/${patient.hn}`"
-                    >ดูข้อมูล</RouterLink
-                  >
+                  <RouterLink class="row-action" :to="`/staff/patients/${patient.hn}`">ดูข้อมูล</RouterLink>
                 </td>
               </tr>
               <tr v-if="filteredPatients.length === 0">
@@ -87,6 +109,11 @@ const filteredPatients = computed(() => {
         </div>
       </section>
     </main>
+    <Transition name="snackbar">
+      <div v-if="showCreationNotice" class="creation-snackbar" role="status">
+        เพิ่มผู้ป่วยใหม่แล้ว
+      </div>
+    </Transition>
   </div>
 </template>
 
