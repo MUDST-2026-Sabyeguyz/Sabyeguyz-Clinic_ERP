@@ -122,6 +122,11 @@ fieldset {
   padding: 0;
   border: 0;
 }
+input:disabled {
+  color: #7d8987;
+  background: #edf1f0;
+  cursor: not-allowed;
+}
 .check {
   padding: 11px;
   border: 1px solid #8f8f8f;
@@ -169,6 +174,21 @@ fieldset {
 .error {
   margin: 20px 0 0;
   color: #b42318;
+}
+
+.required-error {
+  display: block;
+  margin-top: 5px;
+  color: #c62828;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.registration-page .invalid-field input,
+.registration-page .invalid-field select,
+.registration-page .invalid-field textarea {
+  border-color: #c62828;
+  box-shadow: 0 0 0 2px rgb(198 40 40 / 10%);
 }
 .success-card {
   width: min(560px, calc(100% - 32px));
@@ -234,7 +254,7 @@ fieldset {
   transform: translateX(-2px);
 }
 .registration-shell {
-  width: min(920px, calc(100% - 40px));
+  width: min(850px, calc(100% - 40px));
   margin: 32px auto 72px;
 }
 .intro h1 {
