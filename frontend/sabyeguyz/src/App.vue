@@ -1,7 +1,7 @@
-<template>
-  <RouterView v-if="$route.meta.public" />
-  <MainLayout v-else><RouterView /></MainLayout>
-</template>
 <script setup lang="ts">
-import MainLayout from './layouts/MainLayout.vue'
+import { RouterView } from 'vue-router'
 </script>
+
+<template>
+  <RouterView />
+</template>
