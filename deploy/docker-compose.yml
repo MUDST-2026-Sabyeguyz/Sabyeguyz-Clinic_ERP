@@ -33,7 +33,7 @@ services:
       - "127.0.0.1:${FRONTEND_PORT:-5173}:80"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres-data:
