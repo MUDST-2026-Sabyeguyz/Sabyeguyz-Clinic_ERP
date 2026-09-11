@@ -20,7 +20,6 @@ export function getToken() {
 export function clearSession() {
   localStorage.removeItem('authToken')
   localStorage.removeItem('authUser')
-  localStorage.removeItem('mockStaffRole')
   localStorage.removeItem('mockStaffPermissions')
 }
 
@@ -60,14 +59,14 @@ export const api = {
 }
 
 export type AuthResponse = { id: number; username: string; email?: string; role: 'MANAGER' | 'THERAPIST'; token: string }
-export type Patient = { id: number; hn: string; fullName: string; phone: string; active: boolean }
+export type Patient = { id: number; hn: string; fullName: string; phone: string; active: boolean; branchId?: number; branchCode?: string; branchName?: string }
 export type PatientProfile = Patient & {
   branch: { id: number; code: string; name: string; active: boolean }
   title: string; birthDate: string; gender: string; identityDocumentType: string; identityNumber: string
   address: string; drugAllergy: boolean; foodAllergy: boolean; chronicDisease: string
   emergencyContactName: string; emergencyContactRelationship: string; emergencyContactPhone: string
   privacyConsent: boolean
-  nickname?: string; bloodGroup?: string; nationality?: string; customerType?: string; customerSource?: string; insuranceCompany?: string
+  nickname?: string; email?: string; bloodGroup?: string; nationality?: string; customerType?: string; customerSource?: string; insuranceCompany?: string
 }
 export type Page<T> = { items: T[]; page: number; size: number; totalItems: number; totalPages: number }
 export type Branch = { id: number; code: string; numericCode: string; name: string; active: boolean }
@@ -90,7 +89,7 @@ export type AppointmentReport = { byStatus: Array<{ status: string; appointments
 export type RevenueReport = { totalRevenue: number; byCategory: Array<{ type: string; amount: number; share: number }> }
 export type CourseBalanceReport = { purchases: number; rows: Array<{ hn: string; patientFullName: string; branchCode: string; courseName: string; purchased: number; used: number; remaining: number; expired: boolean }> }
 export type StaffSalesReport = { rows: Array<{ fullName: string; receipts: number; amount: number }>; unassigned?: { fullName?: string; receipts: number; amount: number } }
-export type TransferRecord = { id: number; sourcePatientId: number; destinationPatientId: number; branchCode: string; courseId: number; quantity: number; reason: string; createdAt: string }
+export type TransferRecord = { id: number; sourcePatientId: number; sourcePatientHn: string; sourcePatientName: string; destinationPatientId: number; destinationPatientHn: string; destinationPatientName: string; branchCode: string; courseId: number; quantity: number; reason: string; createdAt: string }
 
 export const authApi = {
   login: (identifier: string, password: string) => api.post<AuthResponse>('/api/auth/login', { username: identifier, password }),
@@ -98,7 +97,12 @@ export const authApi = {
 }
 
 export const patientApi = {
-  search: (query = '', page = 0, size = 20) => api.get<Page<Patient>>(`/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size) })}`),
+  search: (query = '', page = 0, size = 20, branchCode = '') => api.get<Page<Patient>>(`/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), ...(branchCode ? { branchCode } : {}) })}`),
+  searchAll: async (query = '') => {
+    const first = await patientApi.search(query, 0, 100)
+    const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => patientApi.search(query, index + 1, 100)))
+    return [first, ...rest].flatMap((page) => page.items)
+  },
   get: (id: number) => api.get<PatientProfile>(`/api/patients/${id}`),
   register: (payload: object) => api.post<Patient>('/api/patients', payload),
   update: (id: number, payload: object) => api.put<PatientProfile>(`/api/patients/${id}`, payload),
@@ -120,10 +124,18 @@ export const catalogApi = {
   lookupTherapists: (branchCode?: string) => api.get<Array<{ id: number; code: string; fullName: string; branchCode: string; active: boolean }>>(`/api/lookups/therapists${branchCode ? `?branchCode=${encodeURIComponent(branchCode)}` : ''}`),
 }
 
+export type ManagedService = { id: number; code: string; name: string; defaultDurationMinutes: number; price: number; active: boolean }
+export const serviceManagementApi = {
+  list: () => api.get<ManagedService[]>('/api/services'),
+  create: (body: Omit<ManagedService, 'id' | 'active'>) => api.post<ManagedService>('/api/services', body),
+  update: (id: number, body: Omit<ManagedService, 'id' | 'active'>) => api.put<ManagedService>(`/api/services/${id}`, body),
+  deactivate: (id: number) => api.delete(`/api/services/${id}`),
+}
+
 export const appointmentApi = {
   search: (params: { branchCode?: string; date?: string; therapistId?: number; status?: AppointmentStatus; page?: number; size?: number } = {}) => {
     const query = new URLSearchParams()
-    Object.entries({ page: 0, size: 100, ...params }).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) })
+    Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) })
     return api.get<AppointmentPage>(`/api/appointments?${query}`)
   },
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
@@ -161,7 +173,7 @@ export const courseApi = {
 export const salesApi = {
   list: (params: { patientId?: number; branchCode?: string; page?: number; size?: number } = {}) => {
     const query = new URLSearchParams()
-    Object.entries({ page: 0, size: 100, ...params }).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) })
+    Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) })
     return api.get<Page<SaleSummary>>(`/api/payments?${query}`)
   },
   get: (id: number) => api.get('/api/receipts/' + id),
@@ -185,6 +197,15 @@ export const staffApi = {
   deactivate: (id: number) => api.delete(`/api/staff/${id}`),
 }
 
+export type ManagedUser = { id: number; username: string; email?: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string; branchName?: string; active: boolean }
+export const userManagementApi = {
+  list: () => api.get<ManagedUser[]>('/api/users'),
+  create: (body: { username: string; email?: string; password: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string }) => api.post<ManagedUser>('/api/users', body),
+  update: (id: number, body: { username: string; email?: string; password?: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string }) => api.put<ManagedUser>(`/api/users/${id}`, body),
+  deactivate: (id: number) => api.delete(`/api/users/${id}`),
+  activate: (id: number) => api.patch<ManagedUser>(`/api/users/${id}/activate`, {}),
+}
+
 export const reportApi = {
   dashboard: (from: string, to: string, branchCode?: string) => api.get<DashboardResponse>(`/api/dashboard/summary?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`),
   appointments: (from: string, to: string, branchCode?: string) => api.get<AppointmentReport>(`/api/reports/appointments?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`),
@@ -201,6 +222,7 @@ export const commissionApi = {
   activateScheme: (id: number) => api.patch(`/api/commission/schemes/${id}/activate`, {}),
   deactivateScheme: (id: number) => api.delete(`/api/commission/schemes/${id}`),
   report: (from: string, to: string) => api.get<Array<{ staffId: number | null; staffName: string; branchCode: string; branchName: string; saleCount: number; base: number; rate: number; commission: number }>>(`/api/commission/report?${new URLSearchParams({ from, to })}`),
+  treatmentReport: (from: string, to: string) => api.get<Array<{ id: number; visitDate: string; coursePurchaseId: number; courseCode: string; patientId: number; patientHn: string; patientName: string; branchCode: string; branchName: string; treatingStaffId: number | null; treatingStaffName: string; ownerStaffId: number | null; ownerStaffName: string; gross: number; treatmentFee: number; ownerNet: number }>>(`/api/commission/treatment-report?${new URLSearchParams({ from, to })}`),
   closings: (month: string) => api.get<Array<{id:number;month:string;employeeId:number;employeeName:string;sales:number;version:string;rate:number;status:string}>>(`/api/commission/closings?month=${month}-01`),
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
