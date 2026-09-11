@@ -1,10 +1,17 @@
 # User Stories
-Status: ส่งเมล และ รอ comfirmed จากอาจารย์
+Status: Update user story map และเพิ่มไฟล์ User story
 
-## User story map document
+## User Story Mapping
 ### Canva: 
+[ User Story Map - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
 
-[ User Story - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
+### PDF:
+[ User Story Map - Sabyeguyz <<< Click to Open ]([Sabyeguyz User story map ver4.pdf](https://github.com/user-attachments/files/32116818/Sabyeguyz.User.story.map.ver4.pdf))
+
+## User Story
+### PDF:
+[ User Story - Sabyeguyz <<< Click to Open ]([clinic_erp_user_stories.pdf](https://github.com/user-attachments/files/32116681/clinic_erp_user_stories.pdf)
+)
 
 ## Template
 
