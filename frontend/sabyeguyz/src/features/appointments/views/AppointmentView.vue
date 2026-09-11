@@ -1,213 +1,50 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-
-type Appointment = {
-  id: number
-  date: string
-  time: string
-  name: string
-  service: string
-  therapist: string
-  branch: string
-  room: string
-  status: string
-}
-
-type ClinicBranch = {
-  name: string
-  status: string
-}
-
-type ClinicRoom = ClinicBranch & {
-  branch: string
-}
-
-const DEFAULT_APPOINTMENT: Appointment = {
-  id: 0,
-  date: '2026-08-20',
-  time: '14:00',
-  name: 'สมชาย ใจดี',
-  service: 'Manual Therapy',
-  therapist: 'กฤษดา น.',
-  branch: 'สาขาราชพฤกษ์',
-  room: 'ห้องรักษา 2',
-  status: 'ยืนยันแล้ว (Confirmed)',
-}
-
-const PATIENT_OPTIONS = [
-  { hn: '2601080001', name: 'สมชาย ใจดี' },
-  { hn: '2601080012', name: 'กนกวรรณ พูนใจ' },
-  { hn: '2601080007', name: 'วรรณา มั่นคง' },
-]
-const SERVICE_OPTIONS = ['Manual Therapy', 'Exercise Therapy', 'Shockwave Therapy']
-const THERAPIST_OPTIONS = ['กฤษดา น.', 'ศิริพร ว.']
-const TIME_OPTIONS = [
-  { value: '09:00', label: '09:00 – 10:00' },
-  { value: '10:00', label: '10:00 – 11:00' },
-  { value: '11:00', label: '11:00 – 12:00' },
-  { value: '14:00', label: '14:00 – 15:00' },
-]
-const STATUS_OPTIONS = [
-  'ยืนยันแล้ว (Confirmed)',
-  'มาถึงคลินิก (Arrived)',
-  'กำลังรับบริการ (In Service)',
-  'เสร็จสิ้น (Completed)',
-  'ยกเลิก (Cancelled)',
-  'เลื่อนนัด (Rescheduled)',
-  'ไม่มาตามนัด (No Show)',
-]
-
-const configuredBranches = JSON.parse(
-  localStorage.getItem('clinicBranches') || '[]',
-) as ClinicBranch[]
-const activeBranches = configuredBranches.filter((item) => item.status === 'Active')
-const branchOptions = activeBranches.length
-  ? activeBranches.map((item) => item.name)
-  : ['สาขาราชพฤกษ์', 'สาขาสุขุมวิท']
-const configuredRooms = JSON.parse(localStorage.getItem('clinicRooms') || '[]') as ClinicRoom[]
+import { appointmentApi, branchApi, catalogApi, patientApi, type Appointment, type AppointmentStatus, type Branch, type Patient, type ServiceOption, type Therapist } from '@/api/client'
 
 const viewMode = ref<'list' | 'create' | 'edit'>('list')
 const query = ref('')
 const selectedBranch = ref('ทั้งหมด')
+const appointments = ref<Appointment[]>([])
+const branches = ref<Branch[]>([])
+const patients = ref<Patient[]>([])
+const services = ref<ServiceOption[]>([])
+const therapists = ref<Therapist[]>([])
 const editingId = ref<number | null>(null)
-const defaultAppointments: Appointment[] = [
-  {
-    id: 1,
-    date: '2026-08-20',
-    time: '09:00',
-    name: 'สมชาย ใจดี',
-    service: 'Manual Therapy',
-    therapist: 'กฤษดา น.',
-    branch: 'สาขาราชพฤกษ์',
-    room: 'ห้องรักษา 1',
-    status: 'ยืนยันแล้ว (Confirmed)',
-  },
-  {
-    id: 2,
-    date: '2026-08-20',
-    time: '10:00',
-    name: 'กนกวรรณ พูนใจ',
-    service: 'Exercise Therapy',
-    therapist: 'กฤษดา น.',
-    branch: 'สาขาราชพฤกษ์',
-    room: 'ห้องรักษา 2',
-    status: 'กำลังรับบริการ (In Service)',
-  },
-  {
-    id: 3,
-    date: '2026-08-20',
-    time: '11:00',
-    name: 'วรรณา มั่นคง',
-    service: 'Shockwave Therapy',
-    therapist: 'ศิริพร ว.',
-    branch: 'สาขาสุขุมวิท',
-    room: 'ห้องรักษา 3',
-    status: 'เสร็จสิ้น (Completed)',
-  },
-]
-const appointments = ref<Appointment[]>(
-  JSON.parse(localStorage.getItem('clinicAppointments') || 'null') ?? defaultAppointments,
-)
 const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
-const pendingCancellation = ref<{ item: Appointment; status: string } | null>(null)
+const errorMessage = ref('')
+const pendingCancellation = ref<{ item: Appointment } | null>(null)
 const cancellationReason = ref('')
-
-const form = ref<Appointment>({ ...DEFAULT_APPOINTMENT })
-
+const form = ref({ patientId: 0, therapistId: 0, serviceId: 0, branchCode: 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' })
+const branchOptions = computed(() => branches.value.filter((item) => item.active))
 const isEditing = computed(() => viewMode.value === 'edit')
 const filteredAppointments = computed(() => {
   const keyword = query.value.trim().toLowerCase()
-  return appointments.value.filter((item) => {
-    const matchesKeyword =
-      !keyword ||
-      [item.name, item.service, item.therapist].some((value) =>
-        value.toLowerCase().includes(keyword),
-      )
-    const matchesBranch = selectedBranch.value === 'ทั้งหมด' || item.branch === selectedBranch.value
-    return matchesKeyword && matchesBranch
-  })
+  return appointments.value.filter((item) => (!keyword || `${item.patient.hn} ${item.patient.fullName} ${item.service.name} ${item.therapist.fullName}`.toLowerCase().includes(keyword)) && (selectedBranch.value === 'ทั้งหมด' || item.branchCode === selectedBranch.value))
 })
-function formatThaiDate(value: string) {
-  return new Intl.DateTimeFormat('th-TH', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(`${value}T00:00:00`))
-}
-const roomOptions = computed(() => {
-  const branchName = form.value.branch.replace('สาขา', '')
-  const rooms = configuredRooms.filter(
-    (item) => item.branch === branchName && item.status !== 'ซ่อม',
-  )
-  return rooms.length ? rooms : [{ name: 'ห้องรักษา 1', branch: branchName, status: 'ว่าง' }]
-})
-
-function openCreate() {
-  editingId.value = null
-  form.value = { ...DEFAULT_APPOINTMENT }
-  viewMode.value = 'create'
-}
-
-function openEdit(item: Appointment) {
-  editingId.value = item.id
-  form.value = { ...item }
-  viewMode.value = 'edit'
-}
-
-function save() {
-  if (isEditing.value && editingId.value !== null) {
-    const index = appointments.value.findIndex((item) => item.id === editingId.value)
-    if (index !== -1) appointments.value[index] = { ...form.value, id: editingId.value }
-  } else {
-    appointments.value.push({ ...form.value, id: Date.now() })
-  }
-  localStorage.setItem('clinicAppointments', JSON.stringify(appointments.value))
-  viewMode.value = 'list'
-}
-
-async function saveStatus(item: Appointment, status: string, reason = '') {
-  const previousStatus = item.status
-  savingStatusId.value = item.id
-  statusNotice.value = 'กำลังบันทึก...'
+const statusOptions: AppointmentStatus[] = ['CONFIRMED', 'ARRIVED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'RESCHEDULED', 'NO_SHOW']
+const timeOptions = ['09:00', '10:00', '11:00', '14:00']
+const statusLabels: Record<AppointmentStatus, string> = { CONFIRMED: 'ยืนยันแล้ว (Confirmed)', ARRIVED: 'มาถึงคลินิก (Arrived)', IN_SERVICE: 'กำลังรับบริการ (In Service)', COMPLETED: 'เสร็จสิ้น (Completed)', CANCELLED: 'ยกเลิก (Cancelled)', RESCHEDULED: 'เลื่อนนัด (Rescheduled)', NO_SHOW: 'ไม่มาตามนัด (No Show)' }
+const formatStatus = (status: AppointmentStatus) => statusLabels[status]
+const formatThaiDate = (value: string) => new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
+const formatTime = (value: string) => new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
+const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
+async function load() {
   try {
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    item.status = status
-    localStorage.setItem('clinicAppointments', JSON.stringify(appointments.value))
-    if (reason) {
-      const reasons = JSON.parse(
-        localStorage.getItem('appointmentCancellationReasons') || '{}',
-      ) as Record<number, string>
-      reasons[item.id] = reason
-      localStorage.setItem('appointmentCancellationReasons', JSON.stringify(reasons))
-    }
-    statusNotice.value = 'บันทึกแล้ว'
-  } catch {
-    item.status = previousStatus
-    statusNotice.value = 'บันทึกไม่สำเร็จ ระบบคืนค่าเดิมแล้ว'
-  } finally {
-    savingStatusId.value = null
-    window.setTimeout(() => (statusNotice.value = ''), 1800)
-  }
+    const [a, b, p, s, t] = await Promise.all([appointmentApi.search(), branchApi.list(), patientApi.search('', 0, 100), catalogApi.services(), catalogApi.therapists()])
+    appointments.value = a.items; branches.value = b; patients.value = p.items; services.value = s; therapists.value = t
+    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ' }
 }
-
-function changeStatus(event: Event, item: Appointment) {
-  const status = (event.target as HTMLSelectElement).value
-  if (status === 'ยกเลิก (Cancelled)') {
-    pendingCancellation.value = { item, status }
-    cancellationReason.value = ''
-    return
-  }
-  void saveStatus(item, status)
-}
-
-function confirmCancellation() {
-  if (!pendingCancellation.value || !cancellationReason.value.trim()) return
-  const { item, status } = pendingCancellation.value
-  pendingCancellation.value = null
-  void saveStatus(item, status, cancellationReason.value.trim())
-}
+onMounted(load)
+function openCreate() { editingId.value = null; const branch = branchOptions.value[0]; form.value = { patientId: patients.value[0]?.id ?? 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, branchCode: branch?.code ?? 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
+function openEdit(item: Appointment) { editingId.value = item.id; form.value = { patientId: item.patient.id, therapistId: item.therapist.id, serviceId: item.service.id, branchCode: item.branchCode, date: item.startAt.slice(0, 10), time: new Date(item.startAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }), note: item.note ?? '' }; viewMode.value = 'edit' }
+async function save() { errorMessage.value = ''; try { if (editingId.value) { const result = await appointmentApi.reschedule(editingId.value, { startAt: toStartAt(), therapistId: form.value.therapistId }); const index = appointments.value.findIndex((item) => item.id === result.id); if (index >= 0) appointments.value[index] = result } else { appointments.value.unshift(await appointmentApi.create({ branchCode: form.value.branchCode, patientId: form.value.patientId, therapistId: form.value.therapistId, serviceId: form.value.serviceId, startAt: toStartAt(), note: form.value.note })) }; viewMode.value = 'list' } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ' } }
+async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') { savingStatusId.value = item.id; statusNotice.value = 'กำลังบันทึก...'; try { const result = status === 'ARRIVED' ? await appointmentApi.checkIn(item.id) : status === 'IN_SERVICE' ? await appointmentApi.startService(item.id) : status === 'COMPLETED' ? await appointmentApi.complete(item.id) : status === 'NO_SHOW' ? await appointmentApi.noShow(item.id) : status === 'CANCELLED' ? await appointmentApi.cancel(item.id, reason) : null; if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น'); Object.assign(item, result); statusNotice.value = 'บันทึกแล้ว' } catch (error) { statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' } finally { savingStatusId.value = null; window.setTimeout(() => (statusNotice.value = ''), 2200) } }
+function changeStatus(event: Event, item: Appointment) { const status = (event.target as HTMLSelectElement).value as AppointmentStatus; if (status === 'CANCELLED') { pendingCancellation.value = { item }; cancellationReason.value = ''; return } void saveStatus(item, status) }
+function confirmCancellation() { if (!pendingCancellation.value || !cancellationReason.value.trim()) return; const { item } = pendingCancellation.value; pendingCancellation.value = null; void saveStatus(item, 'CANCELLED', cancellationReason.value.trim()) }
 </script>
 <template>
   <div
@@ -231,23 +68,23 @@ function confirmCancellation() {
           <div class="form-grid">
             <label>
               ผู้ป่วย
-              <select v-model="form.name">
-                <option v-for="patient in PATIENT_OPTIONS" :key="patient.hn" :value="patient.name">
-                  {{ patient.name }} HN {{ patient.hn }}
+              <select v-model="form.patientId" :disabled="isEditing">
+                <option v-for="patient in patients" :key="patient.id" :value="patient.id">
+                  {{ patient.fullName }} HN {{ patient.hn }}
                 </option>
               </select>
             </label>
             <label>
               ประเภทบริการ
-              <select v-model="form.service">
-                <option v-for="service in SERVICE_OPTIONS" :key="service">{{ service }}</option>
+              <select v-model="form.serviceId" :disabled="isEditing">
+                <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }}</option>
               </select>
             </label>
             <label>
               นักกายภาพ
-              <select v-model="form.therapist">
-                <option v-for="therapist in THERAPIST_OPTIONS" :key="therapist">
-                  {{ therapist }}
+              <select v-model="form.therapistId">
+                <option v-for="therapist in therapists" :key="therapist.id" :value="therapist.id">
+                  {{ therapist.fullName }}
                 </option>
               </select>
             </label>
@@ -255,25 +92,18 @@ function confirmCancellation() {
             <label>
               เวลา
               <select v-model="form.time">
-                <option v-for="time in TIME_OPTIONS" :key="time.value" :value="time.value">
-                  {{ time.label }}
+                <option v-for="time in timeOptions" :key="time" :value="time">
+                  {{ time }}
                 </option>
               </select>
             </label>
             <label>
               สาขา
-              <select v-model="form.branch">
-                <option v-for="item in branchOptions" :key="item">{{ item }}</option>
+              <select v-model="form.branchCode" :disabled="isEditing">
+                <option v-for="item in branchOptions" :key="item.code" :value="item.code">{{ item.name }} ({{ item.code }})</option>
               </select>
             </label>
-            <label>
-              ห้อง
-              <select v-model="form.room">
-                <option v-for="item in roomOptions" :key="item.name" :value="item.name">
-                  {{ item.name }} {{ item.status }}
-                </option>
-              </select>
-            </label>
+            <label class="wide">หมายเหตุ<textarea v-model.trim="form.note" maxlength="500" /></label>
           </div>
           <div class="appointment-save">
             <button class="primary" @click="save">บันทึก</button>
@@ -281,6 +111,7 @@ function confirmCancellation() {
         </section>
       </div>
       <section v-else class="staff-panel appointment-panel">
+        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
         <header class="panel-head">
           <div class="search-box">
             <span class="search-icon" aria-hidden="true"
@@ -291,7 +122,7 @@ function confirmCancellation() {
           </div>
           <select v-model="selectedBranch" class="branch-filter" aria-label="กรองตามสาขา">
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
-            <option v-for="item in branchOptions" :key="item">{{ item }}</option>
+            <option v-for="item in branchOptions" :key="item.code" :value="item.code">{{ item.name }}</option>
           </select>
         </header>
         <table class="staff-table">
@@ -314,19 +145,19 @@ function confirmCancellation() {
           </thead>
           <tbody>
             <tr v-for="item in filteredAppointments" :key="item.id">
-              <td>{{ formatThaiDate(item.date) }}</td>
+              <td>{{ formatThaiDate(item.startAt) }}</td>
               <td>
-                <b>{{ item.time }}</b>
+                <b>{{ formatTime(item.startAt) }}</b>
               </td>
               <td>
-                <b>{{ item.name }}</b>
+                <b>{{ item.patient.fullName }}</b>
               </td>
-              <td>{{ item.service }}</td>
-              <td>{{ item.therapist }}</td>
+              <td>{{ item.service.name }}</td>
+              <td>{{ item.therapist.fullName }}</td>
               <td>
-                <span class="branch-label">{{ item.branch }}</span>
+                <span class="branch-label">{{ item.branchCode }}</span>
               </td>
-              <td>{{ item.room }}</td>
+              <td>—</td>
               <td>
                 <select
                   :value="item.status"
@@ -334,7 +165,7 @@ function confirmCancellation() {
                   :disabled="savingStatusId !== null"
                   @change="changeStatus($event, item)"
                 >
-                  <option v-for="status in STATUS_OPTIONS" :key="status">{{ status }}</option>
+                  <option v-for="status in statusOptions" :key="status" :value="status">{{ formatStatus(status) }}</option>
                 </select>
               </td>
               <td><button class="secondary" @click="openEdit(item)">แก้ไข</button></td>
@@ -353,7 +184,7 @@ function confirmCancellation() {
     >
       <form class="status-modal" @submit.prevent="confirmCancellation">
         <h2>ยืนยันการยกเลิกนัดหมาย</h2>
-        <p>{{ pendingCancellation.item.name }} เวลา {{ pendingCancellation.item.time }}</p>
+        <p>{{ pendingCancellation.item.patient.fullName }} เวลา {{ formatTime(pendingCancellation.item.startAt) }}</p>
         <label
           >เหตุผลที่ยกเลิก <em>*</em>
           <textarea v-model.trim="cancellationReason" rows="3" required></textarea>
