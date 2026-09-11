@@ -4,7 +4,7 @@ body.therapist-ui .registration-page {
   background-image: url('../../../assets/header.png');
   background-position: center 220px;
   background-repeat: no-repeat;
-  background-size: 100% calc(100% - 220px);
+  background-size: 115% max(1500px, calc(100vh - 220px));
 }
 
 body.therapist-ui .registration-page .back-row {
@@ -21,7 +21,7 @@ body.therapist-ui .registration-page .back-link {
 }
 
 body.therapist-ui .registration-page .registration-shell {
-  width: min(1320px, calc(100% - 80px));
+  width: min(1180px, calc(100% - 80px));
   margin: 82px auto 52px;
   border: 0;
   background: transparent;
@@ -46,7 +46,7 @@ body.therapist-ui .registration-page .form-card {
 }
 
 body.therapist-ui .registration-page .form-grid {
-  gap: 18px 56px;
+  gap: 18px 36px;
 }
 
 body.therapist-ui .registration-page label,
@@ -142,14 +142,16 @@ body.therapist-ui .patient-workspace .page-heading p {
 }
 
 body.therapist-ui .patient-workspace .page-heading .primary {
-  padding: 11px 24px;
+  min-height: 48px;
+  padding: 12px 28px;
   border: 0;
   border-radius: 10px;
-  background: var(--therapist-action);
+  background: #4f7044;
+  font-size: 17px;
 }
 
 body.therapist-ui .patient-workspace .directory {
-  margin-top: 32px;
+  margin-top: 52px;
   overflow: visible;
   border: 0;
   background: transparent;
@@ -162,14 +164,23 @@ body.therapist-ui .patient-workspace .directory > header {
 }
 
 body.therapist-ui .patient-workspace .search,
-body.therapist-ui .patient-workspace .branch-filter {
+body.therapist-ui .patient-workspace .branch-filter,
+body.therapist-ui .patient-workspace .sort-filter {
   height: 48px;
+  min-height: 48px;
   border: 1px solid #80979b;
   border-radius: 10px;
   background: #fff;
 }
 
 body.therapist-ui .patient-workspace .branch-filter {
+  width: 180px;
+  padding: 0 16px;
+  color: var(--therapist-ink);
+  font: inherit;
+}
+
+body.therapist-ui .patient-workspace .sort-filter {
   width: 180px;
   padding: 0 16px;
   color: var(--therapist-ink);
@@ -193,19 +204,22 @@ body.therapist-ui .patient-workspace table th {
   padding-block: 20px;
   color: #fff;
   background: var(--therapist-table-header);
-  font-size: var(--therapist-table-heading-size);
+  font-size: 21px;
   font-weight: 500;
+  text-align: center;
 }
 
 body.therapist-ui .patient-workspace table td {
   padding-block: 20px;
   background: #fff;
   font-size: var(--therapist-table-body-size);
+  text-align: center;
 }
 
 body.therapist-ui .patient-workspace .patient-id {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 18px;
 }
 
