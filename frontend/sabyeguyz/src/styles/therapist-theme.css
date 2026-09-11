@@ -1,12 +1,14 @@
 /* Therapist UI follows the approved visual references in Documents/Therapist design. */
 body.therapist-ui {
-  --therapist-header: #7c6555;
+  --therapist-header: #1a746f;
   --therapist-table-header: #a79277;
   --therapist-action: #769a67;
   --therapist-cancel: #c12b2b;
   --therapist-success: #5fc58e;
   --therapist-ink: #173f44;
   --therapist-muted: #768b88;
+  --therapist-table-heading-size: 25px;
+  --therapist-table-body-size: 19px;
   --therapist-cream: #fbf7f1;
   --therapist-hero-green: #ddffc9;
   color: var(--therapist-ink);
@@ -79,14 +81,14 @@ body.therapist-ui .selected-summary > header {
 
 body.therapist-ui .staff-table th {
   padding-block: 18px;
-  font-size: 25px;
+  font-size: var(--therapist-table-heading-size);
   font-weight: 500;
 }
 
 body.therapist-ui .staff-table td {
   padding-block: 18px;
   color: var(--therapist-ink);
-  font-size: 18px;
+  font-size: var(--therapist-table-body-size);
 }
 
 body.therapist-ui .staff-table tbody tr:hover {
