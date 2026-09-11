@@ -84,3 +84,6 @@ E2E ต้องตรวจอย่างน้อย Success Case, Validation
 - Deploy มี Backend Dockerfile และ Docker Compose สำหรับ PostgreSQL/Backend แล้ว แต่ยังไม่มี Kubernetes manifest
 - Database ยังไม่ได้เชื่อมกับ Business Entity จึงยังไม่ถือว่าเป็น Database Integration Test
 - เมื่อมี API Contract ที่ BA/Backend ยืนยันแล้ว ให้เพิ่ม Contract Test ก่อนเชื่อม Frontend กับ Backend
+
+## Manual Validation
+[Validation Check list](https://docs.google.com/spreadsheets/d/1tJqQv1AxWR1F_JMyo8AcWGv3zZDmyAlNlDNmukJJO2I/edit?usp=sharing)
