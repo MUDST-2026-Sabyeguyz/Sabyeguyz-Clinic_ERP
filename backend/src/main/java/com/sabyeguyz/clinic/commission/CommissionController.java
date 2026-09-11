@@ -29,5 +29,9 @@ public class CommissionController {
     @PostMapping("/schemes") @PreAuthorize("hasRole('MANAGER')") @ResponseStatus(HttpStatus.CREATED) SchemeResponse create(@Valid @RequestBody SchemeRequest request) {
         return scheme(service.create(request.name(), request.version(), request.effectiveFrom(), request.effectiveTo(), request.tiers().stream().map(t -> new CommissionService.TierInput(t.minimum(), t.maximum(), t.rate(), t.order())).toList()));
     }
+    @PutMapping("/schemes/{id}") @PreAuthorize("hasRole('MANAGER')") SchemeResponse update(@PathVariable long id,@Valid @RequestBody SchemeRequest r){return scheme(service.update(id,r.name(),r.version(),r.effectiveFrom(),r.effectiveTo(),r.tiers().stream().map(t->new CommissionService.TierInput(t.minimum(),t.maximum(),t.rate(),t.order())).toList()));}
+    @PatchMapping("/schemes/{id}/activate") @PreAuthorize("hasRole('MANAGER')") SchemeResponse activate(@PathVariable long id){return scheme(service.activate(id));}
+    @DeleteMapping("/schemes/{id}") @PreAuthorize("hasRole('MANAGER')") @ResponseStatus(HttpStatus.NO_CONTENT) void deactivate(@PathVariable long id){service.deactivate(id);}
+    @GetMapping("/report") List<CommissionService.ReportRow> report(@RequestParam LocalDate from,@RequestParam LocalDate to){return service.report(from,to);}
     private SchemeResponse scheme(CommissionScheme s) { return new SchemeResponse(s.getId(), s.getName(), s.getVersion(), s.getEffectiveFrom(), s.getEffectiveTo(), s.isActive()); }
 }

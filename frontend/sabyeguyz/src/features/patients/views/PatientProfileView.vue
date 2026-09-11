@@ -1,24 +1,27 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { findPatient, patients, savePatientProfile } from '../data/mockPatients'
+import { patientApi, type PatientProfile } from '@/api/client'
 
 const route = useRoute()
-const patient = computed(() => findPatient(String(route.params.hn)) ?? patients[0]!)
+const patient = ref<PatientProfile | null>(null)
+const loading = ref(true)
+const errorMessage = ref('')
 const editing = ref(false)
-const saved = ref(false)
-const draft = reactive({ ...patient.value })
-function openEdit() {
-  Object.assign(draft, patient.value)
-  editing.value = true
+const saved = ref('')
+async function save() {
+  if (!patient.value) return
+  try {
+    patient.value = await patientApi.update(patient.value.id, patient.value)
+    editing.value = false; saved.value = 'บันทึกข้อมูลแล้ว'; errorMessage.value = ''
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' }
 }
-function saveEdit() {
-  Object.assign(patient.value, draft)
-  savePatientProfile({ ...patient.value })
-  editing.value = false
-  saved.value = true
-}
+onMounted(async () => {
+  try { patient.value = await patientApi.get(Number(route.params.id)) }
+  catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ' }
+  finally { loading.value = false }
+})
 </script>
 
 <template>
@@ -26,6 +29,9 @@ function saveEdit() {
     <StaffHeader />
     <main>
       <RouterLink class="back-link" to="/staff/patients">← กลับไปค้นหาผู้ป่วย</RouterLink>
+      <p v-if="loading">กำลังโหลดข้อมูลผู้ป่วย...</p>
+      <p v-else-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+      <template v-if="patient">
       <section class="profile-heading">
         <div class="avatar">{{ patient.fullName.slice(0, 1) }}</div>
         <div>
@@ -33,37 +39,23 @@ function saveEdit() {
           <h1>{{ patient.title }}{{ patient.fullName }}</h1>
           <p>HN {{ patient.hn }}</p>
         </div>
-        <button class="primary" @click="openEdit">แก้ไขข้อมูล</button>
+        <button class="primary" @click="editing = !editing">{{ editing ? 'ยกเลิก' : 'แก้ไขข้อมูล' }}</button>
       </section>
-
-      <form v-if="editing" class="patient-edit" @submit.prevent="saveEdit">
-        <header>
-          <h2>แก้ไขข้อมูลผู้ป่วย</h2>
-          <button type="button" aria-label="ปิดแบบฟอร์ม" @click="editing = false">×</button>
-        </header>
-        <div class="edit-fields">
-          <h3>ข้อมูลส่วนตัว</h3>
-          <label>คำนำหน้า<select v-model="draft.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>ไม่ระบุ</option></select></label>
-          <label>ชื่อ–นามสกุล ภาษาไทย <em>*</em><input v-model="draft.fullName" required /></label>
-          <label>ชื่อเล่น<input v-model="draft.nickname" /></label>
-          <label>เพศ<select v-model="draft.gender"><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></label>
-          <label>วันเกิด<input v-model="draft.birthDate" /></label>
-          <label>เบอร์โทรศัพท์ <em>*</em><input v-model="draft.phone" type="tel" required /></label>
-          <label>กรุ๊ปเลือด<select v-model="draft.bloodGroup"><option>ไม่ทราบ</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></label>
-          <label>สัญชาติ<select v-model="draft.nationality"><option>ไทย</option><option>ต่างชาติ</option></select></label>
-          <label>เลขบัตรประชาชน/หนังสือเดินทาง <em>*</em><input v-model="draft.identityNumber" required /></label>
-          <label>กลุ่มลูกค้า<select v-model="draft.customerType"><option>ลูกค้าทั่วไป</option><option>ชาวต่างชาติ</option></select></label>
-          <label>ช่องทางแนะนำ<select v-model="draft.customerSource"><option>ลูกค้าแนะนำ</option><option>Facebook</option><option>หน้าสาขา</option></select></label>
-          <label>บริษัทประกัน<select v-model="draft.insuranceCompany"><option>ไม่มีประกัน</option><option>AIA</option></select></label>
-          <label class="wide">ที่อยู่ <em>*</em><textarea v-model="draft.address" rows="3" required></textarea></label>
-
+      <section v-if="editing" class="profile-sheet">
+        <h2>แก้ไขข้อมูลผู้ป่วย</h2>
+        <div class="details four-columns">
+          <label>คำนำหน้า<input v-model="patient.title" /></label><label>ชื่อ–นามสกุล<input v-model="patient.fullName" required /></label>
+          <label>วันเกิด<input v-model="patient.birthDate" type="date" required /></label><label>เพศ<input v-model="patient.gender" /></label>
+          <label>โทรศัพท์<input v-model="patient.phone" required /></label><label>ประเภทเอกสาร<input v-model="patient.identityDocumentType" required /></label>
+          <label>เลขเอกสาร<input v-model="patient.identityNumber" required /></label><label>ผู้ติดต่อฉุกเฉิน<input v-model="patient.emergencyContactName" required /></label>
+          <label>ความสัมพันธ์<input v-model="patient.emergencyContactRelationship" required /></label><label>โทรฉุกเฉิน<input v-model="patient.emergencyContactPhone" required /></label>
+          <label class="span-all">ที่อยู่<input v-model="patient.address" required /></label><label class="span-all">โรคประจำตัว<input v-model="patient.chronicDisease" /></label>
+          <label><input v-model="patient.drugAllergy" type="checkbox" /> แพ้ยา</label><label><input v-model="patient.foodAllergy" type="checkbox" /> แพ้อาหาร</label>
+          <label><input v-model="patient.privacyConsent" type="checkbox" /> ยินยอมข้อมูลส่วนบุคคล</label><label><input v-model="patient.active" type="checkbox" /> ใช้งาน</label>
         </div>
-        <footer>
-          <button type="button" class="outline" @click="editing = false">ยกเลิก</button
-          ><button class="primary">บันทึกข้อมูล</button>
-        </footer>
-      </form>
-      <section v-else class="profile-sheet">
+        <button class="primary" @click="save">บันทึก</button>
+      </section>
+      <section class="profile-sheet">
         <div class="section-title">
           <div>
             <h2>ข้อมูลส่วนตัว</h2>
@@ -120,7 +112,8 @@ function saveEdit() {
           </div>
         </dl>
       </section>
-      <p v-if="saved && !editing" class="edit-success">บันทึกข้อมูลผู้ป่วยแล้ว</p>
+      <p class="edit-success">{{ saved || 'ข้อมูลนี้อ่านจาก backend โดยตรง' }}</p>
+      </template>
     </main>
   </div>
 </template>

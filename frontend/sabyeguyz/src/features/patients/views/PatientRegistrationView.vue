@@ -2,11 +2,11 @@
 import { computed, reactive, ref } from 'vue'
 import { registerPatient, type PatientRegistrationPayload } from '@/api/patients'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { savePatientProfile } from '../data/mockPatients'
 
 const submitting = ref(false)
 const errorMessage = ref('')
 const registeredHn = ref('')
+const registeredId = ref<number | null>(null)
 const configuredMasterData = JSON.parse(localStorage.getItem('clinicMasterData') || '[]') as Array<{
   category: string
   name: string
@@ -23,6 +23,8 @@ const referralChannels = activeMaster('Referral Channel', ['ลูกค้า�
 const insuranceCompanies = activeMaster('Insurance Company', ['AIA'])
 const form = reactive<PatientRegistrationPayload>({
   branchCode: 'RP',
+  username: '',
+  password: '',
   email: '',
   title: 'นาย',
   customerType: customerGroups[0]!,
@@ -49,9 +51,11 @@ const form = reactive<PatientRegistrationPayload>({
   emergencyContactPhone: '',
   privacyConsent: false,
 })
-const canSubmit = computed(() =>
-  Boolean(form.fullName && form.birthDate && form.phone && form.identityNumber && form.address),
-)
+const canSubmit = computed(() => Boolean(
+  form.username && form.password.length >= 8 && form.email && form.fullName && form.birthDate &&
+  form.phone && form.identityNumber && form.address && form.emergencyContactName &&
+  form.emergencyContactRelationship && form.emergencyContactPhone,
+))
 
 async function submit() {
   if (!canSubmit.value) {
@@ -64,28 +68,7 @@ async function submit() {
   try {
     const result = await registerPatient(form)
     registeredHn.value = result.hn
-    savePatientProfile({
-      hn: result.hn,
-      title: form.title,
-      nickname: form.nickname,
-      fullNameEnglish: form.fullNameEnglish,
-      fullName: form.fullName,
-      phone: form.phone,
-      email: form.email,
-      nationality: form.nationality,
-      bloodGroup: form.bloodGroup,
-      customerType: form.customerType,
-      customerSource: form.customerSource,
-      insuranceCompany: form.insuranceCompany || 'ไม่มีประกัน',
-      birthDate: form.birthDate,
-      gender: form.gender,
-      identityDocumentType:
-        form.identityDocumentType === 'PASSPORT' ? 'หนังสือเดินทาง' : 'บัตรประจำตัวประชาชน',
-      identityNumber: form.identityNumber,
-      address: form.address,
-      branch: form.branchCode === 'RP' ? 'สาขาราชพฤกษ์' : form.branchCode,
-      status: result.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน',
-    })
+    registeredId.value = result.id
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'เกิดข้อผิดพลาด'
   } finally {
@@ -107,6 +90,9 @@ async function submit() {
       </div>
       <form class="form-card" @submit.prevent="submit">
         <div class="form-grid">
+          <label>ชื่อผู้ใช้ <em>*</em><input v-model.trim="form.username" autocomplete="username" required /></label>
+          <label>รหัสผ่าน <em>*</em><input v-model="form.password" type="password" minlength="8" autocomplete="new-password" required /></label>
+          <label>อีเมล <em>*</em><input v-model.trim="form.email" type="email" required /></label>
           <label
             >คำนำหน้า <em>*</em>
             <select v-model="form.title">
@@ -177,6 +163,9 @@ async function submit() {
           <label class="wide"
             >ที่อยู่ <em>*</em><textarea v-model.trim="form.address" rows="4" required />
           </label>
+          <label>ชื่อผู้ติดต่อฉุกเฉิน <em>*</em><input v-model.trim="form.emergencyContactName" required /></label>
+          <label>ความสัมพันธ์ <em>*</em><input v-model.trim="form.emergencyContactRelationship" required /></label>
+          <label>เบอร์ผู้ติดต่อฉุกเฉิน <em>*</em><input v-model.trim="form.emergencyContactPhone" type="tel" required /></label>
         </div>
         <div class="actions end">
           <button type="submit" class="primary" :disabled="submitting">
@@ -193,7 +182,7 @@ async function submit() {
       <strong>{{ registeredHn }}</strong>
       <div class="success-actions">
         <RouterLink class="secondary" to="/staff/patients">กลับไปรายชื่อผู้ป่วย</RouterLink
-        ><RouterLink class="primary" :to="`/staff/patients/${registeredHn}`"
+        ><RouterLink class="primary" :to="`/staff/patients/${registeredId}`"
           >เปิดข้อมูลผู้ป่วย</RouterLink
         >
       </div>
