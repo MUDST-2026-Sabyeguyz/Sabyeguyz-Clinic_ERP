@@ -1,27 +1,47 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { patientApi, type PatientProfile } from '@/api/client'
+import { findPatient, patients, savePatientProfile } from '../data/mockPatients'
+import { formatThaiDate } from '../data/patientRegistration'
+import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 
 const route = useRoute()
-const patient = ref<PatientProfile | null>(null)
-const loading = ref(true)
-const errorMessage = ref('')
+const patient = computed(() => findPatient(String(route.params.hn)) ?? patients[0]!)
 const editing = ref(false)
-const saved = ref('')
-async function save() {
-  if (!patient.value) return
-  try {
-    patient.value = await patientApi.update(patient.value.id, patient.value)
-    editing.value = false; saved.value = 'บันทึกข้อมูลแล้ว'; errorMessage.value = ''
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' }
+const saved = ref(false)
+function splitFullName(fullName: string) {
+  const [firstName = '', ...lastName] = fullName.trim().split(/\s+/)
+  return { firstName, lastName: lastName.join(' ') }
 }
-onMounted(async () => {
-  try { patient.value = await patientApi.get(Number(route.params.id)) }
-  catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ' }
-  finally { loading.value = false }
-})
+function toDateInput(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+  const match = value.match(/^(\d{1,2})\s+(.+)\s+(\d{4})$/)
+  const month = match ? thaiMonths.indexOf(match[2]!) : -1
+  if (!match || month < 0) return ''
+  return `${Number(match[3]) - 543}-${String(month + 1).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`
+}
+const draft = reactive({ ...patient.value, ...splitFullName(patient.value.fullName), birthDateInput: toDateInput(patient.value.birthDate) })
+const isPassportDocument = computed(() => draft.identityDocumentType === 'หนังสือเดินทาง')
+const digitsOnly = (value: string) => value.replace(/\D/g, '')
+function assignDraft(profile = patient.value) {
+  Object.assign(draft, profile, splitFullName(profile.fullName), { birthDateInput: toDateInput(profile.birthDate) })
+}
+function openEdit() {
+  assignDraft()
+  editing.value = true
+}
+function saveEdit() {
+  const { firstName, lastName, birthDateInput, ...profile } = draft
+  profile.fullName = `${firstName} ${lastName}`.trim()
+  profile.birthDate = formatThaiDate(birthDateInput)
+  Object.assign(patient.value, profile)
+  savePatientProfile({ ...patient.value })
+  editing.value = false
+  saved.value = true
+  window.setTimeout(() => { saved.value = false }, 3000)
+}
 </script>
 
 <template>
@@ -29,9 +49,6 @@ onMounted(async () => {
     <StaffHeader />
     <main>
       <RouterLink class="back-link" to="/staff/patients">← กลับไปค้นหาผู้ป่วย</RouterLink>
-      <p v-if="loading">กำลังโหลดข้อมูลผู้ป่วย...</p>
-      <p v-else-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-      <template v-if="patient">
       <section class="profile-heading">
         <div class="avatar">{{ patient.fullName.slice(0, 1) }}</div>
         <div>
@@ -39,23 +56,39 @@ onMounted(async () => {
           <h1>{{ patient.title }}{{ patient.fullName }}</h1>
           <p>HN {{ patient.hn }}</p>
         </div>
-        <button class="primary" @click="editing = !editing">{{ editing ? 'ยกเลิก' : 'แก้ไขข้อมูล' }}</button>
+        <button class="primary" @click="openEdit">แก้ไขข้อมูล</button>
       </section>
-      <section v-if="editing" class="profile-sheet">
-        <h2>แก้ไขข้อมูลผู้ป่วย</h2>
-        <div class="details four-columns">
-          <label>คำนำหน้า<input v-model="patient.title" /></label><label>ชื่อ–นามสกุล<input v-model="patient.fullName" required /></label>
-          <label>วันเกิด<input v-model="patient.birthDate" type="date" required /></label><label>เพศ<input v-model="patient.gender" /></label>
-          <label>โทรศัพท์<input v-model="patient.phone" required /></label><label>ประเภทเอกสาร<input v-model="patient.identityDocumentType" required /></label>
-          <label>เลขเอกสาร<input v-model="patient.identityNumber" required /></label><label>ผู้ติดต่อฉุกเฉิน<input v-model="patient.emergencyContactName" required /></label>
-          <label>ความสัมพันธ์<input v-model="patient.emergencyContactRelationship" required /></label><label>โทรฉุกเฉิน<input v-model="patient.emergencyContactPhone" required /></label>
-          <label class="span-all">ที่อยู่<input v-model="patient.address" required /></label><label class="span-all">โรคประจำตัว<input v-model="patient.chronicDisease" /></label>
-          <label><input v-model="patient.drugAllergy" type="checkbox" /> แพ้ยา</label><label><input v-model="patient.foodAllergy" type="checkbox" /> แพ้อาหาร</label>
-          <label><input v-model="patient.privacyConsent" type="checkbox" /> ยินยอมข้อมูลส่วนบุคคล</label><label><input v-model="patient.active" type="checkbox" /> ใช้งาน</label>
+
+      <form v-if="editing" class="patient-edit" @submit.prevent="saveEdit">
+        <header>
+          <h2>แก้ไขข้อมูลผู้ป่วย</h2>
+        </header>
+        <div class="edit-fields">
+          <h3>ข้อมูลส่วนตัว</h3>
+          <label>คำนำหน้า<select v-model="draft.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>ไม่ระบุ</option></select></label>
+          <label>อีเมล <em>*</em><input v-model="draft.email" type="text" inputmode="email" required /></label>
+          <label>ชื่อ <em>*</em><input v-model="draft.firstName" required /></label>
+          <label>นามสกุล <em>*</em><input v-model="draft.lastName" required /></label>
+          <label>ชื่อเล่น <em>*</em><input v-model="draft.nickname" required /></label>
+          <label>เพศ<select v-model="draft.gender"><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></label>
+          <label>วันเกิด <em>*</em><ThaiDatePicker v-model="draft.birthDateInput" /></label>
+          <label>เบอร์โทรศัพท์ <em>*</em><input v-model="draft.phone" type="tel" required /></label>
+          <label>กรุ๊ปเลือด<select v-model="draft.bloodGroup"><option>ไม่ทราบ</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></label>
+          <label>สัญชาติ<select v-model="draft.nationality"><option>ไทย</option><option>ต่างชาติ</option></select></label>
+          <label>ประเภทเอกสารยืนยันตัวตน <em>*</em><select v-model="draft.identityDocumentType" @change="draft.identityNumber = ''"><option>บัตรประจำตัวประชาชน</option><option>หนังสือเดินทาง</option></select></label>
+          <label>{{ isPassportDocument ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }} <em>*</em><input v-model.trim="draft.identityNumber" inputmode="numeric" :maxlength="isPassportDocument ? 20 : 13" :placeholder="isPassportDocument ? 'กรอกเลขหนังสือเดินทางเป็นตัวเลข' : 'กรอกเลขบัตรประชาชน 13 หลัก'" required @input="draft.identityNumber = digitsOnly(draft.identityNumber)" /></label>
+          <label>กลุ่มลูกค้า<select v-model="draft.customerType"><option>ลูกค้าทั่วไป</option><option>ชาวต่างชาติ</option></select></label>
+          <label>ช่องทางแนะนำ<select v-model="draft.customerSource"><option>ลูกค้าแนะนำ</option><option>Facebook</option><option>หน้าสาขา</option></select></label>
+          <label>บริษัทประกัน<select v-model="draft.insuranceCompany"><option>ไม่มีประกัน</option><option>AIA</option></select></label>
+          <label class="wide">ที่อยู่ <em>*</em><textarea v-model="draft.address" rows="3" required></textarea></label>
+
         </div>
-        <button class="primary" @click="save">บันทึก</button>
-      </section>
-      <section class="profile-sheet">
+        <footer>
+          <button type="button" class="outline" @click="editing = false">ยกเลิก</button
+          ><button class="primary">บันทึกข้อมูล</button>
+        </footer>
+      </form>
+      <section v-else class="profile-sheet">
         <div class="section-title">
           <div>
             <h2>ข้อมูลส่วนตัว</h2>
@@ -69,6 +102,10 @@ onMounted(async () => {
           <div>
             <dt>ชื่อเล่น</dt>
             <dd>{{ patient.nickname || '-' }}</dd>
+          </div>
+          <div>
+            <dt>อีเมล</dt>
+            <dd>{{ patient.email || '-' }}</dd>
           </div>
           <div>
             <dt>เพศ</dt>
@@ -87,7 +124,11 @@ onMounted(async () => {
             <dd>{{ patient.bloodGroup }}</dd>
           </div>
           <div>
-            <dt>เลขเอกสาร</dt>
+            <dt>ประเภทเอกสารยืนยันตัวตน</dt>
+            <dd>{{ patient.identityDocumentType }}</dd>
+          </div>
+          <div>
+            <dt>{{ patient.identityDocumentType === 'หนังสือเดินทาง' ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }}</dt>
             <dd>{{ patient.identityNumber }}</dd>
           </div>
           <div>
@@ -112,8 +153,9 @@ onMounted(async () => {
           </div>
         </dl>
       </section>
-      <p class="edit-success">{{ saved || 'ข้อมูลนี้อ่านจาก backend โดยตรง' }}</p>
-      </template>
+      <Transition name="snackbar">
+        <div v-if="saved && !editing" class="profile-snackbar" role="status">บันทึกข้อมูลผู้ป่วยแล้ว</div>
+      </Transition>
     </main>
   </div>
 </template>
