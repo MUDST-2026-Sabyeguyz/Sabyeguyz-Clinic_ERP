@@ -1,0 +1,147 @@
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  color: #153f45;
+  background: #eaf7f3;
+}
+.login-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  overflow: hidden;
+  color: #d9f4ea;
+  background: linear-gradient(145deg, #176d68, #238d88);
+}
+.login-brand img {
+  width: min(520px, 76%);
+  filter: drop-shadow(0 12px 22px #0d4c4830);
+}
+.login-brand h2 {
+  margin-top: -20px;
+  font-size: 28px;
+  font-weight: 400;
+}
+.plus {
+  position: absolute;
+  color: #68c8c2;
+  font-size: 180px;
+  font-family: 'DB Lim X', sans-serif;
+  opacity: 0.45;
+}
+.plus.one {
+  top: -80px;
+  right: 50px;
+}
+.plus.two {
+  bottom: -60px;
+  left: 20px;
+}
+.login-content {
+  display: grid;
+  place-items: center;
+  padding: 30px;
+}
+.login-shell {
+  width: min(470px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 44px;
+  border: 1px solid #bfd2ce;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 45px #1f5b5617;
+}
+.intro small {
+  color: #278883;
+  font-size: 20px;
+  font-weight: 700;
+}
+.intro h1 {
+  margin: 6px 0 8px;
+  font-size: 40px;
+}
+label {
+  position: relative;
+  font-size: 18px;
+}
+label a {
+  display: block;
+  color: #177c75;
+  text-align: right;
+  font-size: 15px;
+}
+input {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 10px 14px;
+  border: 1px solid #aebebb;
+  border-radius: 8px;
+  color: #153f45;
+  background: #fff;
+  font: inherit;
+  outline: 0;
+}
+input:focus {
+  border-color: #1d7c78;
+  box-shadow: 0 0 0 3px #1d7c781f;
+}
+select {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 10px 14px;
+  border: 1px solid #aebebb;
+  border-radius: 8px;
+  color: #153f45;
+  background: #fff;
+  font: inherit;
+}
+.role-note {
+  margin-top: -10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #697184;
+  background: #f0f3f5;
+}
+button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: #1d7c78;
+  font: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 7px 18px #1664602e;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+@media (max-width: 760px) {
+  .login-page {
+    grid-template-columns: 1fr;
+  }
+  .login-brand {
+    min-height: 240px;
+  }
+  .login-brand img {
+    width: 300px;
+  }
+  .login-brand h2 {
+    font-size: 20px;
+  }
+  .login-content {
+    padding: 24px;
+  }
+  .login-shell {
+    padding: 30px 24px;
+  }
+  .intro h1 {
+    font-size: 34px;
+  }
+}
