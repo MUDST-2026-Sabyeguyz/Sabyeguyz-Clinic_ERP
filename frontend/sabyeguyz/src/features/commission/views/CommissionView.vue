@@ -1,68 +1,18 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-const type = ref('Treatment')
+import { commissionApi } from '@/api/client'
+const type = ref('Sales')
 const branch = ref('ทุกสาขา')
 const month = ref('2026-08')
 const isManager = localStorage.getItem('mockStaffRole') === 'manager'
-const configuredRules = JSON.parse(localStorage.getItem('clinicCommissionRules') || '[]') as Array<{
-  name: string
-  type: string
-  status: string
-}>
-const treatmentRule =
-  configuredRules.find(
-    (item) =>
-      ['Treating Staff', 'ผู้ให้บริการ', 'นักกายภาพบำบัด'].includes(item.type) &&
-      item.status === 'Active',
-  )?.name ?? 'ค่าคอมมิชชันการให้บริการ'
-const salesRule =
-  configuredRules.find(
-    (item) => ['Salesperson', 'ผู้ขาย'].includes(item.type) && item.status === 'Active',
-  )?.name ?? 'ค่าคอมมิชชันการขายคอร์ส 5%'
-const rows = [
-  {
-    id: 'TRT-260822-0018',
-    courseId: 'RE-2206315-01',
-    date: '22 ส.ค. 2026',
-    type: 'Treatment',
-    patient: 'สมชาย ใจดี',
-    branch: 'ราชพฤกษ์',
-    staff: 'กฤษดา น.',
-    rule: treatmentRule,
-    base: '฿1,000',
-    commission: '฿300',
-    month: '2026-08',
-  },
-  {
-    id: 'TRT-260822-0022',
-    courseId: 'RE-2206315-02',
-    date: '22 ส.ค. 2026',
-    type: 'Treatment',
-    patient: 'วรรณา มั่นคง',
-    branch: 'สุขุมวิท',
-    staff: 'ศิริพร ว.',
-    rule: treatmentRule,
-    base: '฿1,200',
-    commission: '฿300',
-    month: '2026-08',
-  },
-  {
-    id: 'PAY-260822-0021',
-    courseId: 'RE-2206315-01',
-    date: '22 ส.ค. 2026',
-    type: 'Sales',
-    patient: 'สมชาย ใจดี',
-    branch: 'ราชพฤกษ์',
-    staff: 'พิมพ์นารา ว.',
-    rule: salesRule,
-    base: '฿8,500',
-    commission: '฿425',
-    month: '2026-08',
-  },
-]
+const rows = ref<Array<{ id: string; courseId: string; date: string; type: string; patient: string; branch: string; staff: string; rule: string; base: string; commission: string; month: string }>>([])
+const errorMessage = ref('')
+async function loadReport() { try { const [year, number] = month.value.split('-').map(Number); if(!year||!number)return; const from=`${year}-${String(number).padStart(2,'0')}-01`; const to=new Date(year,number,0).toISOString().slice(0,10); const data=await commissionApi.report(from,to); rows.value=data.map((r,i)=>({id:String(i+1),courseId:'-',date:`${from} - ${to}`,type:'Sales',patient:`${r.saleCount} ใบเสร็จ`,branch:r.branchName,staff:r.staffName,rule:`${r.rate*100}%`,base:`฿${Number(r.base).toLocaleString()}`,commission:`฿${Number(r.commission).toLocaleString()}`,month:month.value})); errorMessage.value='' } catch(error){errorMessage.value=error instanceof Error?error.message:'โหลดค่าคอมมิชชันไม่สำเร็จ'} }
+onMounted(loadReport)
+watch(month,loadReport)
 const visible = computed(() =>
-  rows.filter(
+  rows.value.filter(
     (row) =>
       row.type === type.value &&
       row.month === month.value &&
@@ -109,10 +59,10 @@ const periodLabel = computed(() => {
         </article>
       </section>
       <section class="staff-panel commission-panel">
+        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
         <header class="commission-head">
           <div class="tabs">
-            <button :class="{ active: type === 'Treatment' }" @click="type = 'Treatment'">
-              Treatment Transaction</button
+            <button disabled title="backend ยังไม่มีสูตรค่ามือ Treatment">Treatment Transaction</button
             ><button :class="{ active: type === 'Sales' }" @click="type = 'Sales'">
               Sales Transaction
             </button>
