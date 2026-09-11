@@ -22,9 +22,10 @@ public class CommissionService {
     private final SaleRepository sales;
     private final CoursePurchaseRepository purchases;
     private final CommissionClosingRepository closings;
+    private final CommissionAllocationLedgerRepository allocationLedger;
 
-    public CommissionService(CommissionSchemeRepository schemes, CommissionTierRepository tiers, SaleRepository sales, CoursePurchaseRepository purchases, CommissionClosingRepository closings) {
-        this.schemes = schemes; this.tiers = tiers; this.sales = sales; this.purchases=purchases; this.closings=closings;
+    public CommissionService(CommissionSchemeRepository schemes, CommissionTierRepository tiers, SaleRepository sales, CoursePurchaseRepository purchases, CommissionClosingRepository closings, CommissionAllocationLedgerRepository allocationLedger) {
+        this.schemes = schemes; this.tiers = tiers; this.sales = sales; this.purchases=purchases; this.closings=closings; this.allocationLedger = allocationLedger;
     }
 
     @Transactional(readOnly = true)
@@ -99,4 +100,24 @@ public class CommissionService {
 
     public record TierInput(BigDecimal minimum, BigDecimal maximum, BigDecimal rate, int order) {}
     public record ReportRow(Long staffId,String staffName,String branchCode,String branchName,int saleCount,BigDecimal base,BigDecimal rate,BigDecimal commission) {}
+    @Transactional(readOnly = true)
+    public List<TreatmentReportRow> treatmentReport(LocalDate from, LocalDate to) {
+        if (from == null || to == null || to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
+        return allocationLedger.findByVisitDateBetweenOrderByVisitDateDescIdDesc(from, to).stream().map(row -> {
+            var purchase = row.getCoursePurchase();
+            var patient = purchase.getPatient();
+            var branch = purchase.getBranch();
+            var treating = row.getTreating();
+            var owner = row.getOwner();
+            return new TreatmentReportRow(row.getId(), row.getVisitDate(), purchase.getId(), purchase.getCourseCode(),
+                    patient.getId(), patient.getHn(), patient.getFullName(), branch.getCode(), branch.getName(),
+                    treating == null ? null : treating.getId(), treating == null ? "ไม่ระบุ" : treating.getFullName(),
+                    owner == null ? null : owner.getId(), owner == null ? "ไม่ระบุ" : owner.getFullName(),
+                    row.getGross(), row.getFee(), row.getOwnerNet());
+        }).toList();
+    }
+    public record TreatmentReportRow(Long id, LocalDate visitDate, Long coursePurchaseId, String courseCode,
+            Long patientId, String patientHn, String patientName, String branchCode, String branchName,
+            Long treatingStaffId, String treatingStaffName, Long ownerStaffId, String ownerStaffName,
+            BigDecimal gross, BigDecimal treatmentFee, BigDecimal ownerNet) {}
 }

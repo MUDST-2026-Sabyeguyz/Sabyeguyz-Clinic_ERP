@@ -11,18 +11,22 @@ const selectedRecipient = ref<Patient | null>(null)
 const transferAmount = ref(1)
 type UiCourse = CoursePurchase & { name: string; expiry: string; balance: number; total: number }
 const owner = ref<Patient | null>(null)
+const owners = ref<Patient[]>([])
 const patientCourses = ref<UiCourse[]>([])
 const recipientResults = ref<Patient[]>([])
 const transferHistory = ref<Array<{ createdAt: string; sourcePatientId: number; destinationPatientId: number; quantity: number; reason: string }>>([])
 const errorMessage = ref('')
 const selectedCourse = ref<UiCourse>({} as UiCourse)
+const selectedCourseId = ref(0)
 async function loadOwner() {
-  const patients = (await patientApi.search('', 0, 100)).items
-  owner.value = patients[0] ?? null
+  owners.value = await patientApi.searchAll()
+  owner.value = owners.value[0] ?? null
   if (owner.value) await loadCourses(owner.value.id)
 }
+async function changeOwner() { if (owner.value) await loadCourses(owner.value.id) }
 async function loadCourses(patientId: number) {
   patientCourses.value = (await courseApi.patientCourses(patientId)).map((course) => ({ ...course, name: course.course.name, expiry: new Date(course.expiresAt).toLocaleDateString('th-TH'), balance: course.remaining, total: course.purchased }))
+  selectedCourseId.value = patientCourses.value[0]?.id ?? 0
   transferHistory.value = await courseApi.transferHistory(patientId) as typeof transferHistory.value
 }
 onMounted(async () => { try { await loadOwner() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ' } })
@@ -77,6 +81,9 @@ function handleRecipientInput() {
               <small>เจ้าของคอร์สที่เลือก</small><b>{{ owner?.fullName || 'กำลังโหลด...' }}</b>
               <p>{{ owner?.hn }} สถานะ {{ owner?.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</p>
             </div>
+            <select v-model="selectedCourseId" class="owner-selector">
+              <option v-for="course in patientCourses" :key="course.id" :value="course.id">{{ course.name }} · {{ course.course.code }}</option>
+            </select>
           </div>
           <div class="course-list">
             <article v-for="course in patientCourses" :key="course.name">
