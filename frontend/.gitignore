@@ -1,0 +1,10 @@
+# Local files
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+*.log
+.idea/
+.vscode/settings.json
