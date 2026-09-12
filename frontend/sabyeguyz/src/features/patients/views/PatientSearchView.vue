@@ -15,6 +15,9 @@ const totalPages = ref(0)
 const totalItems = ref(0)
 const loading = ref(true)
 const errorMessage = ref('')
+function patientNumber(hn: string) {
+  return hn.replace(/\D/g, '')
+}
 const filteredPatients = computed(() => {
   return [...patients.value].sort((left, right) => {
     const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
@@ -46,7 +49,15 @@ onMounted(() => {
   showCreationNotice.value = true
   window.setTimeout(() => { showCreationNotice.value = false }, 3000)
 })
-onMounted(async () => { branches.value = await branchApi.list(); await loadPatients() })
+onMounted(async () => {
+  try {
+    const [branchList] = await Promise.all([branchApi.list(), loadPatients()])
+    branches.value = branchList
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ'
+    loading.value = false
+  }
+})
 watch(branch, () => { page.value = 0; void loadPatients() })
 </script>
 
@@ -89,7 +100,7 @@ watch(branch, () => { page.value = 0; void loadPatients() })
         <div class="table-scroll">
           <div v-if="loading" class="empty">กำลังโหลดข้อมูลผู้ป่วย...</div>
           <div v-else-if="errorMessage" class="empty">{{ errorMessage }}</div>
-          <table>
+          <table v-else>
             <thead>
               <tr>
                 <th>เลขประจำตัวผู้ป่วย</th>
@@ -103,8 +114,7 @@ watch(branch, () => { page.value = 0; void loadPatients() })
             <tbody>
               <tr v-for="patient in filteredPatients" :key="patient.id">
                 <td class="patient-id">
-                  <span class="patient-avatar">{{ patient.fullName.slice(0, 1) }}</span>
-                  <b>{{ patient.hn }}</b>
+                  <b>{{ patientNumber(patient.hn) }}</b>
                 </td>
                 <td>{{ patient.fullName }}</td>
                 <td>{{ patient.phone }}</td>

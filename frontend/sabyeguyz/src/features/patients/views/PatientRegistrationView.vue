@@ -10,6 +10,7 @@ import { type PatientRegistrationForm } from '../data/patientRegistration'
 const submitting = ref(false)
 const router = useRouter()
 const submitted = ref(false)
+const emailTouched = ref(false)
 const errorMessage = ref('')
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
@@ -33,7 +34,16 @@ const digitsOnly = (value: string) => value.replace(/\D/g, '')
 const thaiNameIsValid = (value: string) => /^[\u0E00-\u0E7F\s]+$/.test(value.trim())
 const phoneIsValid = computed(() => /^\d{10}$/.test(form.phone))
 const canSubmit = computed(() => Boolean(form.branchCode && branches.value.length && thaiNameIsValid(form.firstName) && thaiNameIsValid(form.lastName) && thaiNameIsValid(form.nickname) && emailIsValid.value && form.birthDate && phoneIsValid.value && form.identityDocumentType && identityIsValid.value && form.address))
-watch(() => form.title, (title) => { if (title === 'นาย') form.gender = 'ชาย'; if (title === 'นาง' || title === 'นางสาว') form.gender = 'หญิง' })
+const maleTitles = ['นาย', 'เด็กชาย']
+const femaleTitles = ['นาง', 'นางสาว', 'เด็กหญิง']
+watch(() => form.title, (title) => {
+  if (maleTitles.includes(title)) form.gender = 'ชาย'
+  if (femaleTitles.includes(title)) form.gender = 'หญิง'
+})
+watch(() => form.gender, (gender) => {
+  if (gender === 'ชาย' && !maleTitles.includes(form.title)) form.title = 'นาย'
+  if (gender === 'หญิง' && !femaleTitles.includes(form.title)) form.title = 'นางสาว'
+})
 watch(() => form.identityDocumentType, () => { form.identityNumber = '' })
 onMounted(async () => {
   try {
@@ -99,13 +109,13 @@ async function submit() {
   <main class="registration-page">
     <StaffHeader />
     <div class="back-row"><RouterLink to="/staff/patients" class="back-link">← กลับไปค้นหาผู้ป่วย</RouterLink></div>
-    <section v-if="!registeredHn" class="registration-shell">
+    <section v-if="!registeredHn" class="registration-shell !bg-white/85 p-4">
       <div class="intro"><h1>ลงทะเบียนผู้ป่วยใหม่</h1><p>เจ้าหน้าที่กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p></div>
       <form class="form-card" novalidate @submit.prevent="submit">
         <div class="form-grid">
           <label>สาขาที่ลงทะเบียน <select v-model="form.branchCode" :disabled="!branches.length"><option v-for="branch in branches" :key="branch.code" :value="branch.code">{{ branch.name }}</option></select></label>
-          <label :class="{ 'invalid-field': submitted && !emailIsValid }">อีเมล <em>*</em><input v-model.trim="form.email" type="text" inputmode="email" placeholder="example@gmail.com" /><small v-if="submitted && !form.email" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !emailIsValid" class="required-error">รูปแบบอีเมลไม่ถูกต้อง ต้องใช้อีเมลที่ลงท้ายด้วย @gmail.com</small></label>
-          <label>คำนำหน้า <em>*</em><select v-model="form.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>ไม่ระบุ</option></select></label>
+          <label :class="{ 'invalid-field': (submitted || emailTouched) && !emailIsValid }">อีเมล <em>*</em><input v-model.trim="form.email" type="text" inputmode="email" placeholder="example@gmail.com" @blur="emailTouched = true" /><small v-if="(submitted || emailTouched) && !form.email" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="(submitted || emailTouched) && !emailIsValid" class="required-error">รูปแบบอีเมลไม่ถูกต้อง ต้องใช้อีเมลที่ลงท้ายด้วย @gmail.com</small></label>
+          <label>คำนำหน้า <em>*</em><select v-model="form.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>เด็กชาย</option><option>เด็กหญิง</option><option>ไม่ระบุ</option></select></label>
           <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.firstName) }">ชื่อ <em>*</em><input v-model.trim="form.firstName" placeholder="ชื่อ" @input="form.firstName = thaiOnly(form.firstName)" /><small v-if="submitted && !form.firstName" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.firstName)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
           <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.lastName) }">นามสกุล <em>*</em><input v-model.trim="form.lastName" placeholder="นามสกุล" @input="form.lastName = thaiOnly(form.lastName)" /><small v-if="submitted && !form.lastName" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.lastName)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
           <label>เพศ <em>*</em><select v-model="form.gender"><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></label>
