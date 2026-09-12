@@ -7,6 +7,30 @@
 .appointment-panel {
   margin-bottom: 36px;
 }
+.appointment-panel .panel-head {
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 18px 24px;
+}
+.appointment-panel .branch-filter,
+.appointment-panel .appointment-sort {
+  height: 46px;
+  padding: 0 12px;
+  border: 1px solid #9ab9b3;
+  border-radius: 9px;
+  color: #173f44;
+  background: #fff;
+  font: inherit;
+}
+.appointment-panel .branch-filter { min-width: 150px; }
+.appointment-panel .appointment-date-filter { min-width: 154px; }
+.appointment-panel :deep(.appointment-date-filter) { margin-top: 0; }
+.appointment-panel :deep(.appointment-date-filter .date-trigger) {
+  min-height: 46px;
+  border-color: #9ab9b3;
+  border-radius: 9px;
+}
+.appointment-panel .appointment-sort { min-width: 112px; }
 .create-card {
   width: min(1120px, 100%);
   margin: 20px auto 0;
@@ -59,13 +83,13 @@
   grid-area: 2 / 2;
 }
 .create-card .form-grid label:nth-child(7) {
-  grid-area: 3 / 1;
+  grid-area: 4 / 1 / span 1 / span 2;
 }
 .create-card .form-grid label:nth-child(2) {
   grid-area: 3 / 2;
 }
 .create-card .form-grid label:nth-child(6) {
-  grid-area: 4 / 1;
+  grid-area: 3 / 1;
 }
 .create-card .form-grid input,
 .create-card .form-grid select {
@@ -77,6 +101,110 @@
   background-color: #fff;
   font: inherit;
   font-weight: 400;
+}
+.create-card .form-grid input.is-invalid,
+.create-card .form-grid select.is-invalid {
+  border-color: #d84b4b;
+  box-shadow: 0 0 0 3px rgb(216 75 75 / 14%);
+}
+.create-card .appointment-input-error {
+  margin: 6px 0 0;
+  color: #c63b3b;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.create-card .appointment-patient-picker {
+  position: relative;
+  width: 100%;
+}
+.create-card .appointment-patient-picker input.is-invalid {
+  border-color: #d84b4b;
+  box-shadow: 0 0 0 3px rgb(216 75 75 / 14%);
+}
+.create-card .patient-input-error {
+  margin: 6px 0 0;
+  color: #c63b3b;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.create-card .patient-search-results {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #d7ded8;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgb(34 67 59 / 18%);
+  scrollbar-color: #789c69 #e8efeb;
+  scrollbar-width: thin;
+}
+.create-card .patient-search-results::-webkit-scrollbar {
+  width: 9px;
+}
+.create-card .patient-search-results::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e8efeb;
+}
+.create-card .patient-search-results::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #789c69;
+}
+.create-card .patient-search-results button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 18px;
+  border: 0;
+  border-bottom: 1px solid #e7ece8;
+  color: #173f44;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.create-card .patient-search-results button:last-child {
+  border-bottom: 0;
+}
+.create-card .patient-search-results button:hover {
+  background: #f0fbf4;
+}
+.create-card .patient-search-results button b {
+  font-size: 16px;
+}
+.create-card .patient-search-results button span {
+  color: #526d6a;
+  font-size: 13px;
+}
+.create-card .patient-search-results p {
+  margin: 0;
+  padding: 15px 18px;
+  color: #6c807d;
+  font-weight: 400;
+}
+.create-card .form-grid .appointment-note-field textarea {
+  width: 100%;
+  max-width: none;
+  min-height: 88px;
+  padding: 12px 14px;
+  border: 1px solid #9a9a9a;
+  border-radius: 7px;
+  background: #fff;
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.45;
+  resize: none;
+}
+.create-card .form-grid .appointment-note-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 .appointment-save {
   display: flex;
@@ -179,10 +307,25 @@
   min-width: 0;
   table-layout: fixed;
 }
+.appointment-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-color: #789c69 #e8efeb;
+  scrollbar-width: thin;
+}
+.appointment-table-scroll::-webkit-scrollbar { height: 9px; }
+.appointment-table-scroll::-webkit-scrollbar-track { background: #e8efeb; border-radius: 999px; }
+.appointment-table-scroll::-webkit-scrollbar-thumb { background: #789c69; border-radius: 999px; }
 .appointment-panel .staff-table th,
 .appointment-panel .staff-table td {
   white-space: nowrap;
 }
+.appointment-panel .staff-table th:nth-child(8),
+.appointment-panel .staff-table td:nth-child(8) { width: 180px; }
+.appointment-panel .staff-table th:nth-child(9),
+.appointment-panel .staff-table td:nth-child(9) { width: 110px; }
 .staff-table .appointment-empty {
   height: 150px;
   color: #71817e;
@@ -195,32 +338,30 @@
 .appointment-pagination {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
-  color: #173f44;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 18px 0 4px;
+  color: #496762;
   background: transparent;
-  font-size: 16px;
-}
-.appointment-pagination > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  font-size: 15px;
 }
 .appointment-pagination button {
-  min-width: 86px;
-  padding: 8px 14px;
-  border: 1px solid #9ab9b3;
+  min-width: 104px;
+  padding: 9px 14px;
+  border: 1px solid #71955f;
   border-radius: 8px;
-  color: #315f5b;
-  background: #fff;
+  color: #fff;
+  background: #7da36d;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
 }
 .appointment-pagination button:disabled {
+  border-color: #9bb58f;
+  color: #fff;
+  background: #9bb58f;
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 1;
 }
 .appointment-snackbar {
   position: fixed;
@@ -251,6 +392,17 @@
   transform: translate(-50%, -12px);
 }
 @media (max-width: 760px) {
+  .appointment-panel .panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .appointment-panel .search-box,
+  .appointment-panel .branch-filter,
+  .appointment-panel .appointment-sort {
+    width: 100%;
+    max-width: none;
+  }
+  .appointment-panel .appointment-date-filter { width: 100%; }
   .create-card {
     padding: 36px 24px 24px;
   }
@@ -264,19 +416,13 @@
     width: 100%;
   }
   .appointment-pagination {
-    align-items: flex-start;
-    flex-direction: column;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 }
 
 @media (max-width: 1180px) {
-  .appointment-panel {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
-
   .appointment-panel .staff-table {
-    min-width: 980px;
+    min-width: 1220px;
   }
 }
