@@ -18,43 +18,45 @@
     100% 100%;
 }
 main {
-  width: min(1180px, calc(100% - 48px));
+  width: min(1240px, calc(100% - 48px));
   margin: auto;
-  padding: 112px 0 90px;
+  padding: 64px 0 90px;
 }
 main > h1 {
   margin: 0;
   text-align: center;
-  font-size: 40px;
+  font-size: 44px;
   letter-spacing: -0.03em;
 }
 .search-wrap {
   position: relative;
-  width: min(677px, 100%);
-  margin: 48px auto 0;
+  width: min(550px, 100%);
+  margin: 30px auto 0;
 }
 .search {
   display: flex;
-  height: 72px;
+  height: 48px;
+  min-height: 48px;
   align-items: center;
-  gap: 14px;
-  padding: 0 20px;
-  border: 1px solid #315661;
-  border-radius: 22px;
+  gap: 0;
+  padding: 0 14px;
+  border: 1px solid #80979b;
+  border-radius: 10px;
   background: #fff;
   box-shadow: 0 4px 8px #4b453522;
 }
 .search-icon {
   display: grid;
-  width: 33px;
-  height: 33px;
-  flex: 0 0 33px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  margin-right: 9px;
   place-items: center;
-  color: #188883;
+  color: #789c69;
 }
 .search-icon svg {
-  width: 100%;
-  height: 100%;
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -72,7 +74,7 @@ main > h1 {
 .results {
   position: absolute;
   z-index: 5;
-  top: 78px;
+  top: 54px;
   width: 100%;
   overflow: hidden;
   border: 1px solid #ccc;
@@ -84,25 +86,31 @@ main > h1 {
   display: flex;
   width: 100%;
   flex-direction: column;
-  padding: 12px 18px;
+  padding: 16px 18px;
   border: 0;
   border-bottom: 1px solid #eee;
   background: #fff;
   text-align: left;
   font: inherit;
+  font-size: 17px;
 }
 .results button:hover {
   background: #edf7e7;
 }
 .hint {
-  margin: 46px auto 0;
-  color: rgb(23 61 71 / 50%);
-  font-size: 25px;
+  width: min(550px, 100%);
+  margin: 18px auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: rgb(23 61 71 / 68%);
+  background: transparent;
+  font-size: 18px;
   text-align: center;
 }
 .card {
-  width: min(1040px, 100%);
-  margin: 72px auto 0;
+  width: min(1120px, 100%);
+  margin: 48px auto 0;
   overflow: hidden;
   border: 1px solid #8f8f8f;
   border-radius: 15px;
@@ -273,6 +281,11 @@ footer button {
   color: #234a50;
   font: inherit;
   font-weight: 700;
+  cursor: pointer;
+}
+
+footer button:disabled {
+  cursor: not-allowed;
 }
 .success {
   margin: 0;
