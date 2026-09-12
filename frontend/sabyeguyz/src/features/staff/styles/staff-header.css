@@ -13,7 +13,7 @@
 .brand {
   width: 176px;
   height: 68px;
-  overflow: hidden;
+  overflow: visible;
   transition: transform 0.22s ease;
 }
 .brand:hover {
@@ -21,10 +21,10 @@
 }
 .brand img {
   width: 176px;
-  height: 101px;
-  object-fit: cover;
-  object-position: center 61%;
-  transform: translateY(-16px);
+  height: 68px;
+  object-fit: contain;
+  object-position: center;
+  transform: none;
 }
 nav {
   position: relative;
@@ -34,6 +34,13 @@ nav {
   gap: 6px;
 }
 .nav-pill {
+  display: none;
+}
+.menu-toggle {
+  display: none;
+}
+.mobile-menu-head,
+.menu-backdrop {
   display: none;
 }
 nav a {
