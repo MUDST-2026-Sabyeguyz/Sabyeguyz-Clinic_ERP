@@ -33,5 +33,6 @@ public class CommissionController {
     @PatchMapping("/schemes/{id}/activate") @PreAuthorize("hasRole('MANAGER')") SchemeResponse activate(@PathVariable long id){return scheme(service.activate(id));}
     @DeleteMapping("/schemes/{id}") @PreAuthorize("hasRole('MANAGER')") @ResponseStatus(HttpStatus.NO_CONTENT) void deactivate(@PathVariable long id){service.deactivate(id);}
     @GetMapping("/report") List<CommissionService.ReportRow> report(@RequestParam LocalDate from,@RequestParam LocalDate to){return service.report(from,to);}
+    @GetMapping("/treatment-report") List<CommissionService.TreatmentReportRow> treatmentReport(@RequestParam LocalDate from,@RequestParam LocalDate to){return service.treatmentReport(from,to);}
     private SchemeResponse scheme(CommissionScheme s) { return new SchemeResponse(s.getId(), s.getName(), s.getVersion(), s.getEffectiveFrom(), s.getEffectiveTo(), s.isActive()); }
 }
