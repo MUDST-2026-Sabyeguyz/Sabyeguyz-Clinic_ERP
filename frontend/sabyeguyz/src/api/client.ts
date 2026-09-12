@@ -1,4 +1,5 @@
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+// Vite forwards local /api requests to the backend, so the backend needs no browser CORS changes.
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export type ApiErrorBody = { message?: string; fields?: Record<string, string> }
 
