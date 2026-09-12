@@ -28,7 +28,7 @@ class PatientOpenApiTest {
                 .andExpect(jsonPath("$.paths['/api/patients'].post.tags[0]").value("Patients"))
                 .andExpect(jsonPath("$.paths['/api/patients'].get.tags[0]").value("Patients"))
                 .andExpect(jsonPath("$.paths['/api/patients/{id}'].get.tags[0]").value("Patients"))
-                .andExpect(jsonPath("$.paths['/api/patients'].get.parameters.length()").value(3))
+                .andExpect(jsonPath("$.paths['/api/patients'].get.parameters.length()").value(4))
                 .andExpect(jsonPath("$.paths['/api/patients'].get.responses['400'].content['application/json'].schema").exists())
                 .andExpect(jsonPath("$.paths['/api/patients/{id}'].get.responses['404'].content['application/json'].schema").exists())
                 .andExpect(jsonPath("$.components.schemas.PatientRegistrationRequest").exists())
