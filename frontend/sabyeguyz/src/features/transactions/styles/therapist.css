@@ -58,21 +58,28 @@ body.therapist-ui .transaction-page .transaction-list > .panel-head {
 }
 
 body.therapist-ui .transaction-page .transaction-list {
-  margin-top: 32px;
+  margin-top: 52px;
 }
 
 body.therapist-ui .transaction-page .transaction-list > .panel-head {
-  padding-bottom: 22px;
+  padding-bottom: 34px;
 }
 
 body.therapist-ui .transaction-page .transaction-list .staff-table th {
   color: #fff;
   background: var(--therapist-table-header);
-  font-size: 27px;
+  font-size: 21px;
 }
 
 body.therapist-ui .transaction-page .transaction-list .staff-table td {
   font-size: 20px;
+}
+
+body.therapist-ui .transaction-page .detail-row > td,
+body.therapist-ui .transaction-page .inline-transaction-detail,
+body.therapist-ui .transaction-page .inline-transaction-detail dl,
+body.therapist-ui .transaction-page .inline-transaction-detail dl div {
+  text-align: left;
 }
 
 body.therapist-ui .transaction-page .status:not(.void) {
@@ -83,4 +90,59 @@ body.therapist-ui .transaction-page .status:not(.void) {
 body.therapist-ui .transaction-page .status.void {
   color: #fff;
   background: var(--therapist-cancel);
+}
+
+@media (max-width: 760px) {
+  body.therapist-ui .transaction-page .transaction-list {
+    margin-top: 52px;
+  }
+
+  body.therapist-ui .transaction-page .transaction-list > .panel-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding-bottom: 26px;
+  }
+
+  body.therapist-ui .transaction-page .transaction-list .search-box,
+  body.therapist-ui .transaction-page .transaction-list .sort-filter {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.therapist-ui .transaction-page .transaction-list {
+    overflow-x: scroll;
+    overflow-y: hidden;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-color: #789c69 #e8efeb;
+    scrollbar-width: thin;
+  }
+
+  body.therapist-ui .transaction-page .transaction-list::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  body.therapist-ui .transaction-page .transaction-list::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: #e8efeb;
+  }
+
+  body.therapist-ui .transaction-page .transaction-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #789c69;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.therapist-ui .staff-page.transaction-page {
+    background-size:
+      100% 100%,
+      100% 380px;
+    background-position:
+      top center,
+      center top;
+  }
 }
