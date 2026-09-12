@@ -15,7 +15,7 @@ async function signIn() {
     const result = await authApi.login(form.username, form.password)
     localStorage.setItem('authToken', result.token)
     localStorage.setItem('authUser', JSON.stringify(result))
-    await router.push(result.role === 'MANAGER' ? '/staff/dashboard' : '/staff/appointments')
+    await router.push(result.role === 'MANAGER' ? '/staff/dashboard' : '/staff/patients')
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'เข้าสู่ระบบไม่สำเร็จ'
   } finally {
