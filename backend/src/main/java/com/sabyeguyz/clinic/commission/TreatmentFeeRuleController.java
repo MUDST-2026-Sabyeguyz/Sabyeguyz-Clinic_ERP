@@ -1,2 +1,86 @@
-package com.sabyeguyz.clinic.commission; import com.sabyeguyz.clinic.staff.StaffRepository; import jakarta.validation.Valid; import jakarta.validation.constraints.*; import java.math.BigDecimal; import java.time.LocalDate; import java.util.*; import org.springframework.security.access.prepost.PreAuthorize; import org.springframework.web.bind.annotation.*;
-@RestController @RequestMapping("/api/commission/treatment-fees") public class TreatmentFeeRuleController { private final TreatmentFeeRuleRepository repo; private final StaffRepository staff; public TreatmentFeeRuleController(TreatmentFeeRuleRepository r,StaffRepository s){repo=r;staff=s;} public record Request(@NotNull Long employeeId,@NotBlank String feeType,@NotNull @DecimalMin("0") BigDecimal feeValue,String percentageBase,@NotNull LocalDate effectiveFrom,LocalDate effectiveTo){} public record Response(Long id,Long employeeId,String feeType,BigDecimal feeValue,String percentageBase,LocalDate effectiveFrom,LocalDate effectiveTo,boolean active){} @GetMapping List<Response> list(){return repo.findAll().stream().map(this::out).toList();} @PostMapping @PreAuthorize("hasRole('MANAGER')") Response create(@Valid @RequestBody Request r){if(r.effectiveTo()!=null&&!r.effectiveTo().isAfter(r.effectiveFrom()))throw new IllegalArgumentException("effective_to must be after effective_from");return out(repo.save(new TreatmentFeeRule(staff.findById(r.employeeId()).orElseThrow(()->new IllegalArgumentException("ไม่พบพนักงาน")),r.feeType().trim().toUpperCase(),r.feeValue(),r.percentageBase(),r.effectiveFrom(),r.effectiveTo())));} @DeleteMapping("/{id}") @PreAuthorize("hasRole('MANAGER')") void deactivate(@PathVariable long id){TreatmentFeeRule x=repo.findById(id).orElseThrow();x.deactivate();repo.save(x);} private Response out(TreatmentFeeRule x){return new Response(x.getId(),x.getEmployee().getId(),x.getFeeType(),x.getFeeValue(),x.getPercentageBase(),x.getEffectiveFrom(),x.getEffectiveTo(),x.isActive());}}
+package com.sabyeguyz.clinic.commission;
+
+import com.sabyeguyz.clinic.staff.StaffRepository;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+
+@RestController
+@RequestMapping("/api/commission/treatment-fees")
+public class TreatmentFeeRuleController {
+    private final TreatmentFeeRuleRepository repo;
+    private final StaffRepository staff;
+
+    public TreatmentFeeRuleController(TreatmentFeeRuleRepository r, StaffRepository s) {
+        repo = r;
+        staff = s;
+    }
+
+    public record Request(
+            @NotNull Long employeeId,
+            @NotBlank String feeType,
+            @NotNull @DecimalMin("0") BigDecimal feeValue,
+            String percentageBase,
+            @NotNull LocalDate effectiveFrom,
+            LocalDate effectiveTo) {}
+
+    public record Response(
+            Long id,
+            Long employeeId,
+            String feeType,
+            BigDecimal feeValue,
+            String percentageBase,
+            LocalDate effectiveFrom,
+            LocalDate effectiveTo,
+            boolean active) {}
+
+    @GetMapping
+    List<Response> list() {
+        return repo.findAll().stream().map(this::out).toList();
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('MANAGER')")
+    Response create(@Valid @RequestBody Request r) {
+        if (r.effectiveTo() != null && !r.effectiveTo().isAfter(r.effectiveFrom()))
+            throw new IllegalArgumentException("effective_to must be after effective_from");
+        return out(
+                repo.save(
+                        new TreatmentFeeRule(
+                                staff.findById(r.employeeId())
+                                        .orElseThrow(
+                                                () -> new IllegalArgumentException("ไม่พบพนักงาน")),
+                                r.feeType().trim().toUpperCase(),
+                                r.feeValue(),
+                                r.percentageBase(),
+                                r.effectiveFrom(),
+                                r.effectiveTo())));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
+    void deactivate(@PathVariable long id) {
+        TreatmentFeeRule x = repo.findById(id).orElseThrow();
+        x.deactivate();
+        repo.save(x);
+    }
+
+    private Response out(TreatmentFeeRule x) {
+        return new Response(
+                x.getId(),
+                x.getEmployee().getId(),
+                x.getFeeType(),
+                x.getFeeValue(),
+                x.getPercentageBase(),
+                x.getEffectiveFrom(),
+                x.getEffectiveTo(),
+                x.isActive());
+    }
+}
