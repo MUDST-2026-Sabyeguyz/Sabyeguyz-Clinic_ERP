@@ -48,7 +48,7 @@ class AppointmentQueryServiceTest {
         serviceId = serviceItemRepository.findAll().stream()
                 .filter(s -> "PHYSIO_60".equals(s.getCode())).findFirst().orElseThrow().getId();
         nineAmTomorrow = OffsetDateTime.now(ZoneOffset.ofHours(7))
-                .plusDays(1).withHour(9).withMinute(0).withSecond(0).withNano(0);
+                .plusDays(365).withHour(9).withMinute(0).withSecond(0).withNano(0);
         tomorrow = nineAmTomorrow.toLocalDate();
 
         book(therapistOneId, nineAmTomorrow);
@@ -74,7 +74,10 @@ class AppointmentQueryServiceTest {
 
     @Test
     void filtersByStatus() {
-        Appointment cancelled = appointmentRepository.findAll().get(0);
+        Appointment cancelled = appointmentRepository.findAll().stream()
+                .filter(appointment -> tomorrow.equals(appointment.getStartAt().atZone(ZoneOffset.ofHours(7)).toLocalDate()))
+                .findFirst()
+                .orElseThrow();
         cancelled.cancel("ผู้ป่วยแจ้งยกเลิก");
         appointmentRepository.saveAndFlush(cancelled);
 
@@ -86,7 +89,7 @@ class AppointmentQueryServiceTest {
 
     @Test
     void returnsEmptyPageForDayWithoutAppointments() {
-        AppointmentSearchResponse response = queryService.search("RP", tomorrow.plusDays(30), null, null, 0, 20);
+        AppointmentSearchResponse response = queryService.search("RP", tomorrow.plusDays(31), null, null, 0, 20);
 
         assertThat(response.items()).isEmpty();
         assertThat(response.totalItems()).isZero();
@@ -147,7 +150,7 @@ class AppointmentQueryServiceTest {
 
     @Test
     void returnsEmptyPageWhenNothingMatches() throws Exception {
-        mockMvc.perform(get("/api/appointments").param("date", tomorrow.plusDays(30).toString()))
+        mockMvc.perform(get("/api/appointments").param("date", tomorrow.plusDays(31).toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isEmpty())
                 .andExpect(jsonPath("$.totalItems").value(0));
