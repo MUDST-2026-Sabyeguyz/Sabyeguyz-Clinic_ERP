@@ -67,6 +67,7 @@ body.therapist-ui .appointment-page .staff-main {
 
 body.therapist-ui .appointment-page .staff-hero {
   display: flex;
+  flex-direction: column;
   min-height: 220px;
   align-items: flex-start;
   margin: 0;
@@ -214,6 +215,7 @@ body.therapist-ui .appointment-page .appointment-panel .secondary {
 @media (max-width: 1180px) {
   body.therapist-ui .appointment-page .appointment-panel {
     overflow: visible;
+    padding-top: 24px;
   }
 
   body.therapist-ui .appointment-page .appointment-table-scroll {
@@ -248,6 +250,7 @@ body.therapist-ui .appointment-page .appointment-panel .secondary {
 @media (max-width: 760px) {
   body.therapist-ui .appointment-page .appointment-panel {
     margin-top: 52px;
+    padding-top: 24px;
   }
 
   body.therapist-ui .appointment-page .appointment-panel > .panel-head {
