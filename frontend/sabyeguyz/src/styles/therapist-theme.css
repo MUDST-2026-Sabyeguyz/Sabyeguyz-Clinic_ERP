@@ -7,7 +7,7 @@ body.therapist-ui {
   --therapist-success: #5fc58e;
   --therapist-ink: #173f44;
   --therapist-muted: #768b88;
-  --therapist-table-heading-size: 25px;
+  --therapist-table-heading-size: 21px;
   --therapist-table-body-size: 19px;
   --therapist-cream: #fbf7f1;
   --therapist-hero-green: #ddffc9;
@@ -21,8 +21,7 @@ body.therapist-ui .registration-page {
   background-color: var(--therapist-cream);
 }
 
-body.therapist-ui
-  .staff-page:not(.course-page):not(.transaction-page):not(.appointment-page) {
+body.therapist-ui .staff-page:not(.course-page):not(.transaction-page):not(.appointment-page) {
   display: flow-root;
   background-color: var(--therapist-hero-green);
   background-image:
@@ -36,7 +35,6 @@ body.therapist-ui
     100% 100%,
     100% auto;
 }
-
 
 body.therapist-ui .staff-main:not(.course-page-main):not(.transaction-main) {
   width: min(1360px, calc(100% - 64px));
@@ -83,12 +81,14 @@ body.therapist-ui .staff-table th {
   padding-block: 18px;
   font-size: var(--therapist-table-heading-size);
   font-weight: 500;
+  text-align: center;
 }
 
 body.therapist-ui .staff-table td {
   padding-block: 18px;
   color: var(--therapist-ink);
   font-size: var(--therapist-table-body-size);
+  text-align: center;
 }
 
 body.therapist-ui .staff-table tbody tr:hover {

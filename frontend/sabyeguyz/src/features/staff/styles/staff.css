@@ -198,3 +198,15 @@
     min-width: 850px;
   }
 }
+
+@media (max-width: 1180px) {
+  .staff-panel:has(.staff-table) {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .staff-panel .staff-table {
+    min-width: 850px;
+  }
+}
