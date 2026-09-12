@@ -1,53 +1,136 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { salesApi } from '@/api/client'
+import { courseApi, salesApi } from '@/api/client'
+
 type Transaction = {
   id: string
   date: string
+  sortAt: number
   patient: string
   hn: string
   branch: string
   performedBy: string
-  type: string
+  type: 'Receipt' | 'Course Transfer'
   amount: string
-  status: string
+  status: 'สำเร็จ' | 'Void'
+  detail?: string
+  transferFrom?: string
+  transferTo?: string
   voidReason?: string
   voidedAt?: string
   voidedBy?: string
+  paymentId?: number
 }
-const search = ref(''),
-  selected = ref<Transaction | null>(null),
-  voiding = ref(false),
-  reason = ref(''), loading = ref(false), errorMessage = ref('')
-const rows = ref<Transaction[]>([])
-const page = ref(0)
-const totalPages = ref(0)
+
+const search = ref('')
+const sortOrder = ref<'date-desc' | 'date-asc' | 'id-desc' | 'id-asc'>('date-desc')
 const typeFilter = ref('ทั้งหมด')
 const statusFilter = ref('ทั้งหมด')
-const sortOrder = ref<'date-desc' | 'date-asc' | 'id-desc' | 'id-asc'>('date-desc')
-async function load() {
+const selected = ref<Transaction | null>(null)
+const voiding = ref(false)
+const voidConfirmationOpen = ref(false)
+const reason = ref('')
+const snackbarMessage = ref('')
+const errorMessage = ref('')
+const loading = ref(false)
+const rows = ref<Transaction[]>([])
+const page = ref(0)
+const pageSize = 20
+
+const formatDate = (value: string) => new Date(value).toLocaleString('th-TH')
+
+async function loadTransactions() {
+  loading.value = true
+  errorMessage.value = ''
   try {
-    const result = await salesApi.list({ page: page.value, size: 20 })
-    totalPages.value = result.totalPages
-    rows.value = result.items.map((sale) => ({ id: sale.id.toString(), date: new Date(sale.soldAt).toLocaleString('th-TH'), patient: sale.patient.fullName, hn: sale.patient.hn, branch: sale.branchCode, performedBy: sale.salesperson?.fullName ?? 'ไม่ระบุ', type: 'Receipt', amount: `฿${Number(sale.paid).toLocaleString()}`, status: sale.status === 'VOIDED' ? 'Void' : 'สำเร็จ' }))
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการชำระเงินไม่สำเร็จ' }
+    const [payments, transfers] = await Promise.all([
+      salesApi.list({ page: 0, size: 100 }),
+      courseApi.transferHistory(),
+    ])
+    rows.value = [
+      ...payments.items.map((payment): Transaction => ({
+        id: payment.receiptNo,
+        date: formatDate(payment.soldAt),
+        sortAt: new Date(payment.soldAt).getTime(),
+        patient: payment.patient.fullName,
+        hn: payment.patient.hn,
+        branch: payment.branchCode,
+        performedBy: payment.salesperson?.fullName ?? 'ไม่ระบุ',
+        type: 'Receipt',
+        detail: 'รายการชำระเงิน',
+        amount: `฿${Number(payment.paid).toLocaleString()}`,
+        status: payment.status === 'VOIDED' ? 'Void' : 'สำเร็จ',
+        voidedAt: payment.voidedAt ? formatDate(payment.voidedAt) : undefined,
+        paymentId: payment.id,
+      })),
+      ...transfers.map((transfer): Transaction => ({
+        id: `TRF-${transfer.id}`,
+        date: formatDate(transfer.createdAt),
+        sortAt: new Date(transfer.createdAt).getTime(),
+        patient: transfer.destinationPatientName,
+        hn: transfer.destinationPatientHn,
+        branch: transfer.branchCode,
+        performedBy: 'ไม่ระบุ',
+        type: 'Course Transfer',
+        detail: `คอร์ส #${transfer.courseId}`,
+        transferFrom: transfer.sourcePatientName,
+        transferTo: transfer.destinationPatientName,
+        amount: `${transfer.quantity} ครั้ง`,
+        status: 'สำเร็จ',
+      })),
+    ]
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการธุรกรรมไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
 }
-void load()
-const visibleRows = computed(() => {
+
+onMounted(loadTransactions)
+
+function splitDateTime(value: string) {
+  const separator = value.lastIndexOf(' ')
+  return separator < 0
+    ? { date: value, time: '-' }
+    : { date: value.slice(0, separator), time: value.slice(separator + 1) }
+}
+
+const filteredRows = computed(() => {
   const term = search.value.trim().toLowerCase()
   return rows.value.filter((row) => {
-    const matchesSearch =
-      !term || `${row.id} ${row.hn} ${row.patient} ${row.type}`.toLowerCase().includes(term)
-    return matchesSearch && (typeFilter.value === 'ทั้งหมด' || row.type === typeFilter.value) &&
-      (statusFilter.value === 'ทั้งหมด' || row.status === statusFilter.value)
+    const matchesSearch = !term || `${row.id} ${row.hn} ${row.patient} ${row.type}`.toLowerCase().includes(term)
+    const matchesType = typeFilter.value === 'ทั้งหมด' || row.type === typeFilter.value
+    const matchesStatus = statusFilter.value === 'ทั้งหมด' || row.status === statusFilter.value
+    return matchesSearch && matchesType && matchesStatus
   }).sort((left, right) => {
-    if (sortOrder.value.startsWith('id')) return sortOrder.value === 'id-asc' ? Number(left.id) - Number(right.id) : Number(right.id) - Number(left.id)
-    const comparison = left.date.localeCompare(right.date)
-    return sortOrder.value === 'date-asc' ? comparison : -comparison
+    if (sortOrder.value.startsWith('id')) {
+      return sortOrder.value === 'id-asc' ? left.id.localeCompare(right.id) : right.id.localeCompare(left.id)
+    }
+    return sortOrder.value === 'date-asc' ? left.sortAt - right.sortAt : right.sortAt - left.sortAt
   })
 })
-async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; selected.value = null; await load() } }
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)))
+const visibleRows = computed(() => {
+  const start = page.value * pageSize
+  return filteredRows.value.slice(start, start + pageSize)
+})
+
+watch([search, typeFilter, statusFilter, sortOrder], () => {
+  page.value = 0
+  selected.value = null
+})
+watch(totalPages, (nextTotal) => {
+  if (page.value >= nextTotal) page.value = nextTotal - 1
+})
+
+function changePage(nextPage: number) {
+  if (nextPage < 0 || nextPage >= totalPages.value) return
+  page.value = nextPage
+  selected.value = null
+}
+
 function open(row: Transaction) {
   if (selected.value?.id === row.id) {
     selected.value = null
@@ -55,17 +138,33 @@ function open(row: Transaction) {
   }
   selected.value = row
   voiding.value = false
+  voidConfirmationOpen.value = false
   reason.value = ''
-  nextTick(() =>
-    document.querySelector('.detail-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
-  )
+  nextTick(() => document.querySelector('.detail-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
 }
-async function confirmVoid() {
-  if (!selected.value || !reason.value.trim()) return
+
+function confirmVoid() {
+  if (!selected.value?.paymentId || !reason.value.trim()) return
+  voidConfirmationOpen.value = true
+}
+
+async function applyVoid() {
+  if (!selected.value?.paymentId || !reason.value.trim()) return
   loading.value = true
-  try { await salesApi.reverse(Number(selected.value.id), reason.value.trim()); await load(); voiding.value = false }
-  catch (error) { errorMessage.value = error instanceof Error ? error.message : 'ยกเลิกรายการไม่สำเร็จ' }
-  finally { loading.value = false }
+  try {
+    await salesApi.reverse(selected.value.paymentId, reason.value.trim())
+    snackbarMessage.value = 'ยกเลิกรายการเรียบร้อยแล้ว'
+    window.setTimeout(() => { snackbarMessage.value = '' }, 3500)
+    voiding.value = false
+    voidConfirmationOpen.value = false
+    reason.value = ''
+    selected.value = null
+    await loadTransactions()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'ยกเลิกรายการไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 <template>
@@ -89,22 +188,30 @@ async function confirmVoid() {
               placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
             />
           </div>
-          <select v-model="typeFilter" aria-label="กรองประเภทธุรกรรม">
-            <option>ทั้งหมด</option><option>Receipt</option>
+          <select v-model="typeFilter" class="transaction-filter" aria-label="กรองประเภทธุรกรรม">
+            <option>ทั้งหมด</option>
+            <option>Receipt</option>
+            <option>Course Transfer</option>
           </select>
-          <select v-model="statusFilter" aria-label="กรองสถานะธุรกรรม">
-            <option>ทั้งหมด</option><option>สำเร็จ</option><option>Void</option>
+          <select v-model="statusFilter" class="transaction-filter" aria-label="กรองสถานะธุรกรรม">
+            <option>ทั้งหมด</option>
+            <option>สำเร็จ</option>
+            <option>Void</option>
           </select>
-          <select v-model="sortOrder" aria-label="เรียงรายการธุรกรรม">
-            <option value="date-desc">วันที่ล่าสุด</option><option value="date-asc">วันที่เก่าสุด</option>
-            <option value="id-desc">เลขรายการมากไปน้อย</option><option value="id-asc">เลขรายการน้อยไปมาก</option>
+          <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับธุรกรรม">
+            <option value="date-desc">วันที่ล่าสุด</option>
+            <option value="date-asc">วันที่เก่าสุด</option>
+            <option value="id-desc">เลขรายการมากไปน้อย</option>
+            <option value="id-asc">เลขรายการน้อยไปมาก</option>
           </select>
         </header>
-        <table class="staff-table">
+        <div class="transaction-table-scroll">
+          <table class="staff-table">
           <thead>
             <tr>
               <th>เลขที่รายการ</th>
-              <th>วันที่และเวลา</th>
+              <th>วันที่</th>
+              <th>เวลา</th>
               <th>ผู้ป่วย</th>
               <th>ประเภทรายการ</th>
               <th>จำนวน</th>
@@ -114,7 +221,7 @@ async function confirmVoid() {
           </thead>
           <tbody>
             <tr v-if="!visibleRows.length">
-              <td colspan="7" class="empty-result">ไม่พบรายการที่ตรงกับคำค้น</td>
+              <td colspan="8" class="empty-result">ไม่พบรายการที่ตรงกับคำค้น</td>
             </tr>
             <template v-for="row in visibleRows" :key="row.id">
               <tr
@@ -128,7 +235,8 @@ async function confirmVoid() {
                 <td>
                   <b>{{ row.id }}</b>
                 </td>
-                <td>{{ row.date }}</td>
+                <td>{{ splitDateTime(row.date).date }}</td>
+                <td>{{ splitDateTime(row.date).time }}</td>
                 <td>
                   <b>{{ row.patient }}</b>
                 </td>
@@ -154,7 +262,7 @@ async function confirmVoid() {
                 </td>
               </tr>
               <tr v-if="selected?.id === row.id" class="detail-row">
-                <td colspan="7">
+                <td colspan="8">
                   <section class="inline-transaction-detail">
                     <header class="detail-header">
                       <div class="detail-title">
@@ -180,13 +288,33 @@ async function confirmVoid() {
                         <dt>ประเภทรายการ</dt>
                         <dd>{{ row.type }}</dd>
                       </div>
-                      <div>
-                        <dt>วันที่และเวลา</dt>
-                        <dd>{{ row.date }}</dd>
+                      <div v-if="row.detail">
+                        <dt>รายการที่ซื้อ</dt>
+                        <dd>{{ row.detail }}</dd>
+                      </div>
+                      <div v-if="row.transferFrom">
+                        <dt>เจ้าของคอร์ส</dt>
+                        <dd>{{ row.transferFrom }}</dd>
+                      </div>
+                      <div v-if="row.transferTo">
+                        <dt>ผู้รับสิทธิ์</dt>
+                        <dd>{{ row.transferTo }}</dd>
                       </div>
                       <div>
+                        <dt>วันที่</dt>
+                        <dd>{{ splitDateTime(row.date).date }}</dd>
+                      </div>
+                      <div>
+                        <dt>เวลา</dt>
+                        <dd>{{ splitDateTime(row.date).time }}</dd>
+                      </div>
+                      <div v-if="!row.transferFrom">
                         <dt>ผู้ป่วย</dt>
-                        <dd>{{ row.patient }} {{ row.hn }}</dd>
+                        <dd>{{ row.patient }}</dd>
+                      </div>
+                      <div v-if="!row.transferFrom">
+                        <dt>รหัสผู้ป่วย</dt>
+                        <dd>{{ row.hn }}</dd>
                       </div>
                       <div>
                         <dt>ผู้ทำรายการ</dt>
@@ -201,9 +329,7 @@ async function confirmVoid() {
                     <section v-if="row.status === 'Void' && row.voidReason" class="void-history">
                       <h3>ข้อมูลการยกเลิกรายการ</h3>
                       <p><b>เหตุผล:</b> {{ row.voidReason }}</p>
-                      <p>
-                        {{ row.voidedAt }} {{ row.voidedBy }}
-                      </p>
+                      <p>{{ row.voidedAt }} {{ row.voidedBy }}</p>
                     </section>
 
                     <section v-if="voiding" class="void-form">
@@ -211,7 +337,7 @@ async function confirmVoid() {
                         เหตุผลการยกเลิกรายการ <span>*</span>
                         <div class="void-form-controls">
                           <textarea
-                          v-model.trim="reason"
+                            v-model.trim="reason"
                             rows="1"
                             placeholder="ระบุเหตุผลการยกเลิกรายการ"
                           ></textarea>
@@ -228,7 +354,7 @@ async function confirmVoid() {
 
                     <footer v-if="!voiding">
                       <button
-                        v-if="row.status !== 'Void'"
+                        v-if="row.status !== 'Void' && row.paymentId"
                         class="danger"
                         @click="voiding = true"
                       >
@@ -240,17 +366,49 @@ async function confirmVoid() {
               </tr>
             </template>
           </tbody>
-        </table>
-        <footer v-if="totalPages > 1" class="pagination">
-          <button class="secondary" :disabled="page === 0" @click="changePage(page - 1)">ก่อนหน้า</button>
-          <span>หน้า {{ page + 1 }} / {{ totalPages }}</span>
-          <button class="secondary" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป</button>
-        </footer>
+          </table>
+        </div>
+        <nav v-if="totalPages > 1" class="transaction-pagination" aria-label="เปลี่ยนหน้ารายการธุรกรรม">
+          <button type="button" :disabled="page === 0" @click="changePage(page - 1)">← ก่อนหน้า</button>
+          <span>หน้า {{ page + 1 }} จาก {{ totalPages }}</span>
+          <button type="button" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป →</button>
+        </nav>
+        <p v-if="loading" class="empty-result">กำลังโหลดรายการธุรกรรม...</p>
+        <p v-if="errorMessage" class="empty-result" role="alert">{{ errorMessage }}</p>
         <p class="audit-note">
           รายการจะถูกเก็บเป็นประวัติตรวจสอบย้อนหลังและไม่สามารถลบออกจากระบบได้
         </p>
       </section>
     </main>
+    <Teleport to="body">
+      <div
+        v-if="voidConfirmationOpen"
+        class="confirmation-backdrop"
+        @click.self="voidConfirmationOpen = false"
+      >
+        <section
+          class="confirmation-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-describedby="void-confirmation-description"
+        >
+          <p id="void-confirmation-description">
+            ต้องการยกเลิกรายการ <strong>{{ selected?.id }}</strong> หรือไม่?
+          </p>
+          <div class="confirmation-actions">
+            <button type="button" class="secondary" @click="voidConfirmationOpen = false">
+              ยกเลิก
+            </button>
+            <button type="button" class="danger solid" :disabled="loading" @click="applyVoid">ยืนยัน</button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+    <Transition name="snackbar">
+      <p v-if="snackbarMessage" class="transaction-snackbar" role="status" aria-live="polite">
+        {{ snackbarMessage }}
+      </p>
+    </Transition>
   </div>
 </template>
 <style scoped src="../styles/transactions.css"></style>
