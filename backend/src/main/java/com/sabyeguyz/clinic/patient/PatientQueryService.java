@@ -15,11 +15,12 @@ public class PatientQueryService {
     }
 
     @Transactional(readOnly = true)
-    public PatientSearchResponse search(String query, int page, int size) {
+    public PatientSearchResponse search(String query, String branchCode, int page, int size) {
         validatePagination(page, size);
         String normalizedQuery = query == null ? "" : query.trim();
         return PatientSearchResponse.from(patientRepository.search(
-                normalizedQuery, PageRequest.of(page, size, Sort.by("id").ascending())));
+                normalizedQuery, branchCode == null || branchCode.isBlank() ? null : branchCode.trim().toUpperCase(),
+                PageRequest.of(page, size, Sort.by("id").ascending())));
     }
 
     @Transactional(readOnly = true)
@@ -34,6 +35,8 @@ public class PatientQueryService {
         Patient patient = patientRepository.findById(id).orElseThrow(() -> new PatientNotFoundException(id));
         if (patientRepository.existsByIdentityNumberAndIdNot(request.identityNumber().trim(), id))
             throw new IllegalArgumentException("เลขเอกสารยืนยันตัวตนซ้ำ");
+        if (request.email() != null && patientRepository.existsByEmailAndIdNot(request.email().trim(), id))
+            throw new IllegalArgumentException("อีเมลซ้ำ");
         patient.update(request);
         return PatientProfileResponse.from(patientRepository.save(patient));
     }
