@@ -21,9 +21,15 @@ const search = ref(''),
   voiding = ref(false),
   reason = ref(''), loading = ref(false), errorMessage = ref('')
 const rows = ref<Transaction[]>([])
+const page = ref(0)
+const totalPages = ref(0)
+const typeFilter = ref('ทั้งหมด')
+const statusFilter = ref('ทั้งหมด')
+const sortOrder = ref<'date-desc' | 'date-asc' | 'id-desc' | 'id-asc'>('date-desc')
 async function load() {
   try {
-    const result = await salesApi.list()
+    const result = await salesApi.list({ page: page.value, size: 20 })
+    totalPages.value = result.totalPages
     rows.value = result.items.map((sale) => ({ id: sale.id.toString(), date: new Date(sale.soldAt).toLocaleString('th-TH'), patient: sale.patient.fullName, hn: sale.patient.hn, branch: sale.branchCode, performedBy: sale.salesperson?.fullName ?? 'ไม่ระบุ', type: 'Receipt', amount: `฿${Number(sale.paid).toLocaleString()}`, status: sale.status === 'VOIDED' ? 'Void' : 'สำเร็จ' }))
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการชำระเงินไม่สำเร็จ' }
 }
@@ -33,9 +39,15 @@ const visibleRows = computed(() => {
   return rows.value.filter((row) => {
     const matchesSearch =
       !term || `${row.id} ${row.hn} ${row.patient} ${row.type}`.toLowerCase().includes(term)
-    return matchesSearch
+    return matchesSearch && (typeFilter.value === 'ทั้งหมด' || row.type === typeFilter.value) &&
+      (statusFilter.value === 'ทั้งหมด' || row.status === statusFilter.value)
+  }).sort((left, right) => {
+    if (sortOrder.value.startsWith('id')) return sortOrder.value === 'id-asc' ? Number(left.id) - Number(right.id) : Number(right.id) - Number(left.id)
+    const comparison = left.date.localeCompare(right.date)
+    return sortOrder.value === 'date-asc' ? comparison : -comparison
   })
 })
+async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; selected.value = null; await load() } }
 function open(row: Transaction) {
   if (selected.value?.id === row.id) {
     selected.value = null
@@ -77,6 +89,16 @@ async function confirmVoid() {
               placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
             />
           </div>
+          <select v-model="typeFilter" aria-label="กรองประเภทธุรกรรม">
+            <option>ทั้งหมด</option><option>Receipt</option>
+          </select>
+          <select v-model="statusFilter" aria-label="กรองสถานะธุรกรรม">
+            <option>ทั้งหมด</option><option>สำเร็จ</option><option>Void</option>
+          </select>
+          <select v-model="sortOrder" aria-label="เรียงรายการธุรกรรม">
+            <option value="date-desc">วันที่ล่าสุด</option><option value="date-asc">วันที่เก่าสุด</option>
+            <option value="id-desc">เลขรายการมากไปน้อย</option><option value="id-asc">เลขรายการน้อยไปมาก</option>
+          </select>
         </header>
         <table class="staff-table">
           <thead>
@@ -219,6 +241,11 @@ async function confirmVoid() {
             </template>
           </tbody>
         </table>
+        <footer v-if="totalPages > 1" class="pagination">
+          <button class="secondary" :disabled="page === 0" @click="changePage(page - 1)">ก่อนหน้า</button>
+          <span>หน้า {{ page + 1 }} / {{ totalPages }}</span>
+          <button class="secondary" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป</button>
+        </footer>
         <p class="audit-note">
           รายการจะถูกเก็บเป็นประวัติตรวจสอบย้อนหลังและไม่สามารถลบออกจากระบบได้
         </p>
