@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './base.css';
+@import './responsive.css';
 
 #app {
   min-height: 100vh;

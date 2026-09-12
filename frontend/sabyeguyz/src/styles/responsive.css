@@ -1,0 +1,177 @@
+/* Shared responsive safeguards for every staff workspace. */
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+@media (max-width: 900px) {
+  .staff-main {
+    width: min(100% - 32px, 760px);
+  }
+
+  .staff-hero {
+    margin-right: calc((100vw - min(100vw - 32px, 760px)) / -2);
+    margin-left: calc((100vw - min(100vw - 32px, 760px)) / -2);
+    padding-right: max(16px, calc((100vw - 760px) / 2));
+    padding-left: max(16px, calc((100vw - 760px) / 2));
+  }
+
+  .summary-strip,
+  .metric-grid,
+  .dashboard-panels,
+  .detail-grid,
+  .inline-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form-grid,
+  .edit-fields,
+  .report-filters,
+  .settings-form,
+  .course-form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  .staff-main {
+    width: calc(100% - 28px);
+    padding-bottom: 40px;
+  }
+
+  .staff-hero {
+    min-height: 200px;
+    margin-right: -14px;
+    margin-left: -14px;
+    padding: 34px 20px;
+  }
+
+  .staff-hero h1,
+  .page-heading h1,
+  .course-page-title {
+    font-size: clamp(28px, 8vw, 34px);
+    line-height: 1.15;
+  }
+
+  .staff-hero p,
+  .page-heading p {
+    font-size: 16px;
+  }
+
+  .panel-head,
+  .directory > header,
+  .transaction-list > .panel-head,
+  .report-toolbar {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .panel-head > *,
+  .directory > header > *,
+  .report-toolbar > * {
+    max-width: 100%;
+  }
+
+  .staff-panel:has(.staff-table),
+  .directory .table-scroll,
+  .course-workspace:has(.staff-table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .staff-panel .staff-table,
+  .course-workspace .staff-table {
+    min-width: 680px;
+  }
+
+  .appointment-pagination,
+  .patient-pagination,
+  .transaction-pagination,
+  .pagination {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .appointment-pagination > div,
+  .patient-pagination > div,
+  .transaction-pagination > div {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .profile-heading,
+  .page-heading,
+  .course-browser,
+  .filters,
+  .report-filters {
+    gap: 14px;
+  }
+
+  .profile-heading,
+  .page-heading {
+    align-items: flex-start;
+  }
+
+  .profile-heading .primary,
+  .page-heading .primary,
+  .hero-action,
+  .actions .primary,
+  .actions .secondary {
+    min-height: 44px;
+  }
+
+  .registration-page .back-row {
+    width: calc(100% - 32px) !important;
+  }
+
+  .registration-page .registration-shell {
+    width: calc(100% - 28px) !important;
+    margin-top: 36px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .summary-strip,
+  .metric-grid,
+  .dashboard-panels,
+  .detail-grid,
+  .inline-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summary-strip article {
+    border-right: 0;
+    border-bottom: 1px solid #dce9e5;
+  }
+
+  .summary-strip article:last-child {
+    border-bottom: 0;
+  }
+
+  .staff-header {
+    padding-inline: 12px;
+  }
+
+  .staff-header .brand {
+    max-width: 150px;
+  }
+
+  .staff-header nav a {
+    padding-inline: 12px;
+    font-size: 16px;
+  }
+
+  .primary,
+  .secondary,
+  .outline {
+    min-height: 44px;
+  }
+}

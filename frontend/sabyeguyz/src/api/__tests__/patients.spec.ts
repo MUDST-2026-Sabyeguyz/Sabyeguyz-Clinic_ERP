@@ -20,7 +20,7 @@ describe('registerPatient', () => {
     )
     const result = await registerPatient({} as PatientRegistrationPayload)
     expect(result.hn).toBe('RP-000001')
-    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8080/api/patients', expect.objectContaining({ method: 'POST' }))
+    expect(fetch).toHaveBeenCalledWith('/api/patients', expect.objectContaining({ method: 'POST' }))
   })
 
   it('exposes the API error message', async () => {

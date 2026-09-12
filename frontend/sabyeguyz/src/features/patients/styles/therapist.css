@@ -39,10 +39,11 @@ body.therapist-ui .registration-page .intro p {
 }
 
 body.therapist-ui .registration-page .form-card {
-  padding: 10px 20px 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  padding: 28px;
+  border: 1px solid #dce7e4;
+  border-radius: 20px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 10px 28px rgb(50 70 64 / 12%);
 }
 
 body.therapist-ui .registration-page .form-grid {
@@ -83,8 +84,80 @@ body.therapist-ui .registration-page .actions .primary {
   background: var(--therapist-action);
 }
 
+@media (max-width: 680px) {
+  body.therapist-ui .registration-page {
+    /* Keep the original rounded green artwork rather than turning the whole
+       screen green.  It is raised and enlarged to sit behind the intro/card. */
+    background-color: var(--therapist-cream);
+    background-image: url('../../../assets/header.png');
+    background-position: center -54px;
+    background-repeat: no-repeat;
+    background-size: 118% auto;
+  }
 
-body.therapist-ui .patient-workspace {
+  body.therapist-ui .registration-page .back-row {
+    width: calc(100% - 28px);
+    margin-top: 18px;
+  }
+
+  body.therapist-ui .registration-page .registration-shell {
+    width: calc(100% - 28px);
+    margin: 38px auto 32px;
+  }
+
+  body.therapist-ui .registration-page .intro h1 {
+    font-size: 30px;
+  }
+
+  body.therapist-ui .registration-page .intro p {
+    margin: 6px auto 24px;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  body.therapist-ui .registration-page .form-card {
+    padding: 22px 16px 18px;
+    border: 1px solid #dce7e4;
+    border-radius: 18px;
+    background: rgb(255 255 255 / 94%);
+    box-shadow: 0 8px 22px rgb(50 70 64 / 10%);
+  }
+
+  body.therapist-ui .registration-page .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+
+  body.therapist-ui .registration-page .form-grid > label:first-child,
+  body.therapist-ui .registration-page .form-grid > .wide {
+    grid-column: 1 / -1;
+  }
+
+  body.therapist-ui .registration-page .actions {
+    margin-top: 20px;
+  }
+
+  body.therapist-ui .registration-page .actions .primary {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  body.therapist-ui .registration-page .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.therapist-ui .registration-page .form-grid > label {
+    grid-column: auto;
+  }
+
+  body.therapist-ui .registration-page .form-grid > label:first-child,
+  body.therapist-ui .registration-page .form-grid > .wide {
+    grid-column: auto;
+  }
+}
+
+body.therapist-ui .patient-workspace:not(.patient-profile-page) {
   position: relative;
   display: flow-root;
   min-height: 100vh;
@@ -117,7 +190,7 @@ body.therapist-ui .patient-workspace > .staff-header {
   z-index: 20;
 }
 
-body.therapist-ui .patient-workspace > main {
+body.therapist-ui .patient-workspace:not(.patient-profile-page) > main {
   width: min(1440px, calc(100% - 64px));
   padding-top: 36px;
 }
@@ -127,6 +200,7 @@ body.therapist-ui .patient-workspace .staff-hero {
   margin: 0;
   padding: 30px 14px;
   border: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -155,11 +229,58 @@ body.therapist-ui .patient-workspace .staff-hero .hero-action {
 }
 
 body.therapist-ui .patient-workspace .directory {
+  width: min(1440px, calc(100% - 64px));
   margin-top: 52px;
+  margin-right: auto;
+  margin-left: auto;
   overflow: visible;
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  body.therapist-ui .patient-workspace:not(.patient-profile-page) > main {
+    width: min(1440px, calc(100% - 64px));
+    padding-top: 36px;
+  }
+
+  body.therapist-ui .patient-workspace .page-heading {
+    min-height: 220px;
+    padding: 30px 14px;
+  }
+
+  body.therapist-ui .patient-workspace .page-heading .primary {
+    width: auto;
+    margin-top: 0;
+  }
+
+  body.therapist-ui .patient-workspace .directory {
+    width: calc(100% - 28px);
+    margin: 36px auto 0;
+  }
+
+  body.therapist-ui .patient-workspace .directory > header {
+    padding-bottom: 22px;
+  }
+}
+
+/* On compact headers, anchor the artwork to the page instead of using the desktop offset. */
+@media (max-width: 1180px) {
+  body.therapist-ui .patient-workspace:not(.patient-profile-page) {
+    background-position:
+      top center,
+      center top;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.therapist-ui .patient-workspace:not(.patient-profile-page) {
+    /* Keep the decorative layer as tall as the compact hero instead of scaling only by width. */
+    background-size:
+      100% 100%,
+      100% 380px;
+  }
 }
 
 body.therapist-ui .patient-workspace .directory > header {
@@ -247,4 +368,58 @@ body.therapist-ui .patient-workspace .row-action {
   color: #fff;
   background: var(--therapist-action);
   font-weight: 700;
+}
+
+@media (max-width: 1180px) {
+  body.therapist-ui .patient-workspace .table-scroll {
+    overflow-x: scroll;
+    overflow-y: hidden;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-color: #789c69 #e8efeb;
+    scrollbar-width: thin;
+  }
+
+  body.therapist-ui .patient-workspace .table-scroll::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  body.therapist-ui .patient-workspace .table-scroll::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: #e8efeb;
+  }
+
+  body.therapist-ui .patient-workspace .table-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #789c69;
+  }
+}
+
+@media (max-width: 760px) {
+  body.therapist-ui .patient-workspace .directory {
+    margin-top: 52px;
+  }
+
+  body.therapist-ui .patient-workspace .directory > header {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    padding-bottom: 26px;
+  }
+
+  body.therapist-ui .patient-workspace .directory > header .search {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  body.therapist-ui .patient-workspace .directory > header .branch-filter,
+  body.therapist-ui .patient-workspace .directory > header .sort-filter {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body.therapist-ui .patient-workspace .directory > header .result-count {
+    grid-column: 1 / -1;
+    padding-top: 2px;
+  }
 }
