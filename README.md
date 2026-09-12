@@ -47,7 +47,7 @@ docker compose --env-file .env logs --tail=100 backend frontend
 docker compose --env-file .env down
 ```
 
-Database data remains in the Compose volume after `down`. See [deployment instructions](deploy/README.md) for port overrides, test steps, and database details.
+Database data remains in the Compose volume after `down`. Configure ports and credentials through `.env`.
 
 ## Development workflow
 
