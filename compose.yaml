@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-clinic_erp}
-      POSTGRES_USER: ${POSTGRES_USER:-clinic}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinic_local_only}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clinic} -d ${POSTGRES_DB:-clinic_erp}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -21,9 +21,10 @@ services:
       context: ./backend
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-clinic_erp}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-clinic}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-clinic_local_only}
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DATABASE_USERNAME: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -38,11 +39,11 @@ services:
 
   frontend:
     build:
-      context: ./frontend/sabyeguyz
+      context: ./frontend
       args:
-        VITE_API_BASE_URL: ""
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
-      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_PORT}:80"
     depends_on:
       backend:
         condition: service_healthy

@@ -1,1 +1,0 @@
--- H2 does not support PostgreSQL EXCLUDE constraints; application locking covers tests.
