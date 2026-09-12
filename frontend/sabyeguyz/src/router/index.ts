@@ -113,7 +113,7 @@ router.beforeEach((to) => {
     return { name: 'staff-login' }
   }
   const allowedRoles = to.meta.roles as string[] | undefined
-  if (allowedRoles && !allowedRoles.includes(role)) return { name: 'staff-appointments' }
+  if (allowedRoles && !allowedRoles.includes(role)) return { name: 'patient-search' }
   const requiredPermission = to.meta.permission as string | undefined
   const permissions = role === 'manager' ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup' : 'Patient, Visit, Treatment, Course, Transaction'
   if (role !== 'manager' && requiredPermission && !permissions.includes(requiredPermission)) {
