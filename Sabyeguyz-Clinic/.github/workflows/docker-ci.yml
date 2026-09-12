@@ -1,0 +1,30 @@
+name: Docker compose build
+
+on:
+  push:
+    branches: [develop, 'feat/**', 'feature/**']
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compose-build:
+    name: Validate Compose and build images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Build application images
+        run: docker compose --env-file .env.example build --pull
