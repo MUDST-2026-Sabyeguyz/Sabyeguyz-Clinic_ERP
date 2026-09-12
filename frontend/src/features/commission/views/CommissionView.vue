@@ -5,12 +5,69 @@ import { commissionApi } from '@/api/client'
 const type = ref<'Sales' | 'Treatment'>('Sales')
 const branch = ref('ทุกสาขา')
 const month = ref('2026-08')
-const isManager = (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role === 'MANAGER'
-const rows = ref<Array<{ id: string; courseId: string; date: string; type: string; patient: string; branch: string; staff: string; rule: string; base: string; commission: string; month: string }>>([])
+const isManager =
+  (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role ===
+  'MANAGER'
+const rows = ref<
+  Array<{
+    id: string
+    courseId: string
+    date: string
+    type: string
+    patient: string
+    branch: string
+    staff: string
+    rule: string
+    base: string
+    commission: string
+    month: string
+  }>
+>([])
 const errorMessage = ref('')
-async function loadReport() { try { const [year, number] = month.value.split('-').map(Number); if(!year||!number)return; const from=`${year}-${String(number).padStart(2,'0')}-01`; const to=new Date(year,number,0).toISOString().slice(0,10); if (type.value === 'Treatment') { const data=await commissionApi.treatmentReport(from,to); rows.value=data.map((r)=>({id:String(r.id),courseId:String(r.coursePurchaseId),date:r.visitDate,type:'Treatment',patient:`${r.patientName} (${r.patientHn})`,branch:r.branchName,staff:r.treatingStaffName,rule:'Treatment Fee',base:`฿${Number(r.gross).toLocaleString()}`,commission:`฿${Number(r.treatmentFee).toLocaleString()}`,month:month.value})) } else { const data=await commissionApi.report(from,to); rows.value=data.map((r,i)=>({id:String(i+1),courseId:'-',date:`${from} - ${to}`,type:'Sales',patient:`${r.saleCount} ใบเสร็จ`,branch:r.branchName,staff:r.staffName,rule:`${r.rate*100}%`,base:`฿${Number(r.base).toLocaleString()}`,commission:`฿${Number(r.commission).toLocaleString()}`,month:month.value})) } errorMessage.value='' } catch(error){errorMessage.value=error instanceof Error?error.message:'โหลดค่าคอมมิชชันไม่สำเร็จ'} }
+async function loadReport() {
+  try {
+    const [year, number] = month.value.split('-').map(Number)
+    if (!year || !number) return
+    const from = `${year}-${String(number).padStart(2, '0')}-01`
+    const to = new Date(year, number, 0).toISOString().slice(0, 10)
+    if (type.value === 'Treatment') {
+      const data = await commissionApi.treatmentReport(from, to)
+      rows.value = data.map((r) => ({
+        id: String(r.id),
+        courseId: String(r.coursePurchaseId),
+        date: r.visitDate,
+        type: 'Treatment',
+        patient: `${r.patientName} (${r.patientHn})`,
+        branch: r.branchName,
+        staff: r.treatingStaffName,
+        rule: 'Treatment Fee',
+        base: `฿${Number(r.gross).toLocaleString()}`,
+        commission: `฿${Number(r.treatmentFee).toLocaleString()}`,
+        month: month.value,
+      }))
+    } else {
+      const data = await commissionApi.report(from, to)
+      rows.value = data.map((r, i) => ({
+        id: String(i + 1),
+        courseId: '-',
+        date: `${from} - ${to}`,
+        type: 'Sales',
+        patient: `${r.saleCount} ใบเสร็จ`,
+        branch: r.branchName,
+        staff: r.staffName,
+        rule: `${r.rate * 100}%`,
+        base: `฿${Number(r.base).toLocaleString()}`,
+        commission: `฿${Number(r.commission).toLocaleString()}`,
+        month: month.value,
+      }))
+    }
+    errorMessage.value = ''
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดค่าคอมมิชชันไม่สำเร็จ'
+  }
+}
 onMounted(loadReport)
-watch([month,type],loadReport)
+watch([month, type], loadReport)
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
@@ -19,7 +76,10 @@ const visible = computed(() =>
       (branch.value === 'ทุกสาขา' || row.branch === branch.value),
   ),
 )
-const branchOptions = computed(() => ['ทุกสาขา', ...Array.from(new Set(rows.value.map((row) => row.branch).filter(Boolean))).sort()])
+const branchOptions = computed(() => [
+  'ทุกสาขา',
+  ...Array.from(new Set(rows.value.map((row) => row.branch).filter(Boolean))).sort(),
+])
 const total = computed(() =>
   visible.value.reduce((sum, row) => sum + Number(row.commission.replace(/[^0-9]/g, '')), 0),
 )
@@ -63,14 +123,17 @@ const periodLabel = computed(() => {
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
         <header class="commission-head">
           <div class="tabs">
-            <button :class="{ active: type === 'Treatment' }" @click="type = 'Treatment'">Treatment Transaction</button
+            <button :class="{ active: type === 'Treatment' }" @click="type = 'Treatment'">
+              Treatment Transaction</button
             ><button :class="{ active: type === 'Sales' }" @click="type = 'Sales'">
               Sales Transaction
             </button>
           </div>
           <div class="filters">
             <select v-model="branch">
-              <option v-for="item in branchOptions" :key="item" :value="item">{{ item }}</option></select
+              <option v-for="item in branchOptions" :key="item" :value="item">
+                {{ item }}
+              </option></select
             ><input v-model="month" type="month" />
           </div>
         </header>
@@ -95,9 +158,12 @@ const periodLabel = computed(() => {
               </td>
               <td>{{ row.date }}</td>
               <td>
-                <RouterLink v-if="row.courseId !== '-'" :to="`/staff/commission/courses/${row.courseId}`">
-                  {{ row.courseId }}
-                </RouterLink><span v-else>{{ row.courseId }}</span>
+                <RouterLink
+                  v-if="row.courseId !== '-'"
+                  :to="`/staff/commission/courses/${row.courseId}`"
+                >
+                  {{ row.courseId }} </RouterLink
+                ><span v-else>{{ row.courseId }}</span>
               </td>
               <td>{{ row.patient }}</td>
               <td>{{ row.branch }}</td>

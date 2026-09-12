@@ -43,8 +43,18 @@ export function formatPhoneNumber(value: string) {
 export function formatThaiDate(value: string) {
   const date = new Date(`${value}T00:00:00`)
   const months = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+    'มกราคม',
+    'กุมภาพันธ์',
+    'มีนาคม',
+    'เมษายน',
+    'พฤษภาคม',
+    'มิถุนายน',
+    'กรกฎาคม',
+    'สิงหาคม',
+    'กันยายน',
+    'ตุลาคม',
+    'พฤศจิกายน',
+    'ธันวาคม',
   ]
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`
 }

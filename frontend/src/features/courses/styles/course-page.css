@@ -15,11 +15,7 @@
   background-color: #fcf8f3;
   background-image:
     url('@/assets/header.png'),
-    linear-gradient(
-      to bottom,
-      transparent 0 calc(61.74vw - 12px),
-      #92e5ca calc(61.74vw - 12px)
-    );
+    linear-gradient(to bottom, transparent 0 calc(61.74vw - 12px), #92e5ca calc(61.74vw - 12px));
   background-position: center top;
   background-repeat: no-repeat;
   background-size:

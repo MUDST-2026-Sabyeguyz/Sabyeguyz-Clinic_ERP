@@ -4,11 +4,7 @@
   background-color: #f9f4ee;
   background-image:
     url('@/assets/header.png'),
-    linear-gradient(
-      to bottom,
-      transparent 0 calc(133px + 61.74vw),
-      #92e5ca calc(133px + 61.74vw)
-    );
+    linear-gradient(to bottom, transparent 0 calc(133px + 61.74vw), #92e5ca calc(133px + 61.74vw));
   background-position:
     center 145px,
     center top;

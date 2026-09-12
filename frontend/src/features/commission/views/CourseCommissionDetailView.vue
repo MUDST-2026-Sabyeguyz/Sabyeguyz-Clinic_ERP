@@ -5,9 +5,44 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { courseApi } from '@/api/client'
 const route = useRoute()
 const courseId = computed(() => String(route.params.courseId || 'RE-2206315-01'))
-const ledger = ref<Array<{date:string;patient:string;owner:string;treating:string;gross:number;fee:number;net:number}>>([])
-const purchase = ref<{ patient: { fullName: string }; commissionStatus?: string; lockedCommissionRate?: number; totalCourseCommissionPool?: number; commissionAllocationPerVisit?: number } | null>(null)
-onMounted(async () => { const id=Number(courseId.value); if(!Number.isNaN(id)){ try { const data=await courseApi.ledger(id); purchase.value=data.purchase; ledger.value=(data.allocations||[]).map(item=>({date:item.visitDate,patient:data.purchase.patient.fullName,owner:'Case Owner',treating:'Treating PT',gross:item.gross,fee:item.fee,net:item.ownerNet})) } catch { /* invalid legacy display id */ } } })
+const ledger = ref<
+  Array<{
+    date: string
+    patient: string
+    owner: string
+    treating: string
+    gross: number
+    fee: number
+    net: number
+  }>
+>([])
+const purchase = ref<{
+  patient: { fullName: string }
+  commissionStatus?: string
+  lockedCommissionRate?: number
+  totalCourseCommissionPool?: number
+  commissionAllocationPerVisit?: number
+} | null>(null)
+onMounted(async () => {
+  const id = Number(courseId.value)
+  if (!Number.isNaN(id)) {
+    try {
+      const data = await courseApi.ledger(id)
+      purchase.value = data.purchase
+      ledger.value = (data.allocations || []).map((item) => ({
+        date: item.visitDate,
+        patient: data.purchase.patient.fullName,
+        owner: 'Case Owner',
+        treating: 'Treating PT',
+        gross: item.gross,
+        fee: item.fee,
+        net: item.ownerNet,
+      }))
+    } catch {
+      /* invalid legacy display id */
+    }
+  }
+})
 const fallbackLedger = [
   {
     date: '5 ก.ย. 2569',

@@ -105,8 +105,11 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (!to.path.startsWith('/staff/')) return true
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
-  const role = authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
+  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+    role?: string
+  } | null
+  const role =
+    authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
   if (role !== 'manager' && role !== 'therapist') {
     localStorage.removeItem('authToken')
     localStorage.removeItem('authUser')
@@ -115,7 +118,10 @@ router.beforeEach((to) => {
   const allowedRoles = to.meta.roles as string[] | undefined
   if (allowedRoles && !allowedRoles.includes(role)) return { name: 'patient-search' }
   const requiredPermission = to.meta.permission as string | undefined
-  const permissions = role === 'manager' ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup' : 'Patient, Visit, Treatment, Course, Transaction'
+  const permissions =
+    role === 'manager'
+      ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup'
+      : 'Patient, Visit, Treatment, Course, Transaction'
   if (role !== 'manager' && requiredPermission && !permissions.includes(requiredPermission)) {
     const destinations: Array<[string, string]> = [
       ['Patient', '/staff/patients'],
@@ -134,7 +140,8 @@ router.beforeEach((to) => {
 router.afterEach(() => {
   document.body.classList.toggle(
     'therapist-ui',
-    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role === 'THERAPIST',
+    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role ===
+      'THERAPIST',
   )
 })
 

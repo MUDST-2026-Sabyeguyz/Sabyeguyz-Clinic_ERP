@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { catalogApi, courseApi, patientApi, paymentMethodApi, salesApi, staffApi, type Course, type Patient, type PaymentMethod, type ServiceOption, type Staff } from '@/api/client'
+import {
+  catalogApi,
+  courseApi,
+  patientApi,
+  paymentMethodApi,
+  salesApi,
+  staffApi,
+  type Course,
+  type Patient,
+  type PaymentMethod,
+  type ServiceOption,
+  type Staff,
+} from '@/api/client'
 type Mode = 'assessment' | 'single' | 'course'
 const query = ref(''),
   patient = ref<Patient | null>(null),
@@ -15,22 +27,53 @@ const services = ref<ServiceOption[]>([])
 const courses = ref<Course[]>([])
 const paymentMethods = ref<PaymentMethod[]>([])
 const staff = ref<Staff[]>([])
-const selectedServiceId = ref(0), selectedCourseId = ref(0), selectedStaffId = ref<number | undefined>()
-const paymentCode = ref(''), note = ref('')
+const selectedServiceId = ref(0),
+  selectedCourseId = ref(0),
+  selectedStaffId = ref<number | undefined>()
+const paymentCode = ref(''),
+  note = ref('')
 async function loadMaster() {
-  const [s, c, p, methods, staffList] = await Promise.all([catalogApi.services(), catalogApi.courses(), patientApi.searchAll(), paymentMethodApi.list(), staffApi.list()])
-  services.value = s; courses.value = c; results.value = p; paymentMethods.value = methods; staff.value = staffList
-  selectedServiceId.value = s[0]?.id ?? 0; selectedCourseId.value = c[0]?.id ?? 0; paymentCode.value = methods[0]?.code ?? ''; selectedStaffId.value = staffList[0]?.id
+  const [s, c, p, methods, staffList] = await Promise.all([
+    catalogApi.services(),
+    catalogApi.courses(),
+    patientApi.searchAll(),
+    paymentMethodApi.list(),
+    staffApi.list(),
+  ])
+  services.value = s
+  courses.value = c
+  results.value = p
+  paymentMethods.value = methods
+  staff.value = staffList
+  selectedServiceId.value = s[0]?.id ?? 0
+  selectedCourseId.value = c[0]?.id ?? 0
+  paymentCode.value = methods[0]?.code ?? ''
+  selectedStaffId.value = staffList[0]?.id
 }
-onMounted(async () => { try { await loadMaster() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ' } })
+onMounted(async () => {
+  try {
+    await loadMaster()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ'
+  }
+})
 let searchTimer: number | undefined
-watch(query, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(async () => { if (query.value.trim()) results.value = (await patientApi.search(query.value, 0, 20)).items }, 250) })
+watch(query, () => {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(async () => {
+    if (query.value.trim()) results.value = (await patientApi.search(query.value, 0, 20)).items
+  }, 250)
+})
 const item = computed(() =>
   mode.value === 'assessment'
-    ? services.value.find((s) => s.code.includes('ASSESS') || s.name.toLowerCase().includes('assessment'))?.name ?? services.value[0]?.name ?? 'Assessment'
+    ? (services.value.find(
+        (s) => s.code.includes('ASSESS') || s.name.toLowerCase().includes('assessment'),
+      )?.name ??
+      services.value[0]?.name ??
+      'Assessment')
     : mode.value === 'single'
-      ? services.value.find((s) => s.id === selectedServiceId.value)?.name ?? 'บริการรายครั้ง'
-      : courses.value.find((c) => c.id === selectedCourseId.value)?.name ?? 'คอร์ส',
+      ? (services.value.find((s) => s.id === selectedServiceId.value)?.name ?? 'บริการรายครั้ง')
+      : (courses.value.find((c) => c.id === selectedCourseId.value)?.name ?? 'คอร์ส'),
 )
 const amount = computed(() =>
   mode.value === 'assessment'
@@ -47,21 +90,42 @@ function choose(p: Patient) {
 }
 async function submit() {
   if (!patient.value) return
-  loading.value = true; errorMessage.value = ''; confirmed.value = false
+  loading.value = true
+  errorMessage.value = ''
+  confirmed.value = false
   try {
     if (mode.value === 'course' && action.value === 'use') {
-      const owned = await courseApi.patientCourses(patient.value.id); const usable = owned.find((course) => course.usable)
+      const owned = await courseApi.patientCourses(patient.value.id)
+      const usable = owned.find((course) => course.usable)
       if (!usable) throw new Error('ผู้ป่วยไม่มีคอร์สที่ใช้ได้')
       await courseApi.use({ coursePurchaseId: usable.id, note: note.value })
     } else {
-      const type = mode.value === 'assessment' ? 'ASSESSMENT' : mode.value === 'single' ? 'SINGLE_VISIT' : 'COURSE'
+      const type =
+        mode.value === 'assessment'
+          ? 'ASSESSMENT'
+          : mode.value === 'single'
+            ? 'SINGLE_VISIT'
+            : 'COURSE'
       const referenceId = mode.value === 'course' ? selectedCourseId.value : selectedServiceId.value
-      const price = mode.value === 'course' ? courses.value.find((c) => c.id === referenceId)?.price ?? 0 : services.value.find((s) => s.id === referenceId)?.price ?? 0
-      await salesApi.create({ patientId: patient.value.id, branchCode: 'RP', salespersonStaffId: selectedStaffId.value, note: note.value, items: [{ type, referenceId, quantity: 1 }], payments: [{ paymentMethodCode: paymentCode.value, amount: price }] })
+      const price =
+        mode.value === 'course'
+          ? (courses.value.find((c) => c.id === referenceId)?.price ?? 0)
+          : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
+      await salesApi.create({
+        patientId: patient.value.id,
+        branchCode: 'RP',
+        salespersonStaffId: selectedStaffId.value,
+        note: note.value,
+        items: [{ type, referenceId, quantity: 1 }],
+        payments: [{ paymentMethodCode: paymentCode.value, amount: price }],
+      })
     }
     confirmed.value = true
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการไม่สำเร็จ' }
-  finally { loading.value = false }
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 <template>
@@ -139,17 +203,25 @@ async function submit() {
                     ? 'บริการรายครั้ง'
                     : 'รายการคอร์ส'
               }}<select v-if="mode !== 'course'" v-model="selectedServiceId">
-                <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }} ฿{{ service.price.toLocaleString() }}</option>
-              </select><select v-else v-model="selectedCourseId">
-                <option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }} ฿{{ course.price.toLocaleString() }}</option>
+                <option v-for="service in services" :key="service.id" :value="service.id">
+                  {{ service.name }} ฿{{ service.price.toLocaleString() }}
+                </option></select
+              ><select v-else v-model="selectedCourseId">
+                <option v-for="course in courses" :key="course.id" :value="course.id">
+                  {{ course.name }} ฿{{ course.price.toLocaleString() }}
+                </option>
               </select></label
             ><label
               >ผู้ทำรายการ<select v-model="selectedStaffId">
-                <option v-for="person in staff" :key="person.id" :value="person.id">{{ person.fullName }}</option>
+                <option v-for="person in staff" :key="person.id" :value="person.id">
+                  {{ person.fullName }}
+                </option>
               </select></label
             ><label v-if="mode !== 'course' || action === 'buy'"
               >ช่องทางชำระเงิน<select v-model="paymentCode">
-                <option v-for="method in paymentMethods" :key="method.code" :value="method.code">{{ method.name }}</option>
+                <option v-for="method in paymentMethods" :key="method.code" :value="method.code">
+                  {{ method.name }}
+                </option>
               </select></label
             ><label class="note">หมายเหตุ<textarea v-model.trim="note" /></label>
           </div>
@@ -159,7 +231,9 @@ async function submit() {
           <div>
             <strong>{{ item }}</strong
             ><b>{{ amount }}</b
-            ><button :disabled="loading" @click="submit">{{ loading ? 'กำลังบันทึก...' : 'ยืนยันรายการ' }}</button>
+            ><button :disabled="loading" @click="submit">
+              {{ loading ? 'กำลังบันทึก...' : 'ยืนยันรายการ' }}
+            </button>
           </div>
         </footer>
         <p v-if="confirmed" class="success">บันทึกรายการเรียบร้อยแล้ว</p>

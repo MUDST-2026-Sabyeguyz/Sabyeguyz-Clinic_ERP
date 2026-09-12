@@ -1,22 +1,226 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-const props = withDefaults(defineProps<{ modelValue: string; disabled?: boolean }>(), { disabled: false })
+const props = withDefaults(defineProps<{ modelValue: string; disabled?: boolean }>(), {
+  disabled: false,
+})
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const open = ref(false)
 const viewDate = ref(props.modelValue ? new Date(`${props.modelValue}T00:00:00`) : new Date())
-const months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+const months = [
+  'มกราคม',
+  'กุมภาพันธ์',
+  'มีนาคม',
+  'เมษายน',
+  'พฤษภาคม',
+  'มิถุนายน',
+  'กรกฎาคม',
+  'สิงหาคม',
+  'กันยายน',
+  'ตุลาคม',
+  'พฤศจิกายน',
+  'ธันวาคม',
+]
 const weekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
-const years = Array.from({ length: new Date().getFullYear() - 1900 + 2 }, (_, index) => 1900 + index)
-const monthLabel = computed(() => `${months[viewDate.value.getMonth()]} ${viewDate.value.getFullYear() + 543}`)
-const displayValue = computed(() => { if (!props.modelValue) return 'เลือกวันที่'; const date = new Date(`${props.modelValue}T00:00:00`); return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}` })
-const days = computed(() => { const year = viewDate.value.getFullYear(); const month = viewDate.value.getMonth(); const start = new Date(year, month, 1).getDay(); const count = new Date(year, month + 1, 0).getDate(); return Array.from({ length: start + count }, (_, index) => index < start ? null : index - start + 1) })
-function changeMonth(amount: number) { viewDate.value = new Date(viewDate.value.getFullYear(), viewDate.value.getMonth() + amount, 1) }
-function setMonth(event: Event) { viewDate.value = new Date(viewDate.value.getFullYear(), Number((event.target as HTMLSelectElement).value), 1) }
-function setYear(event: Event) { viewDate.value = new Date(Number((event.target as HTMLSelectElement).value), viewDate.value.getMonth(), 1) }
-function choose(day: number) { const year = viewDate.value.getFullYear(); const month = String(viewDate.value.getMonth() + 1).padStart(2, '0'); emit('update:modelValue', `${year}-${month}-${String(day).padStart(2, '0')}`); open.value = false }
-function isSelected(day: number) { return props.modelValue === `${viewDate.value.getFullYear()}-${String(viewDate.value.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` }
+const years = Array.from(
+  { length: new Date().getFullYear() - 1900 + 2 },
+  (_, index) => 1900 + index,
+)
+const monthLabel = computed(
+  () => `${months[viewDate.value.getMonth()]} ${viewDate.value.getFullYear() + 543}`,
+)
+const displayValue = computed(() => {
+  if (!props.modelValue) return 'เลือกวันที่'
+  const date = new Date(`${props.modelValue}T00:00:00`)
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`
+})
+const days = computed(() => {
+  const year = viewDate.value.getFullYear()
+  const month = viewDate.value.getMonth()
+  const start = new Date(year, month, 1).getDay()
+  const count = new Date(year, month + 1, 0).getDate()
+  return Array.from({ length: start + count }, (_, index) =>
+    index < start ? null : index - start + 1,
+  )
+})
+function changeMonth(amount: number) {
+  viewDate.value = new Date(viewDate.value.getFullYear(), viewDate.value.getMonth() + amount, 1)
+}
+function setMonth(event: Event) {
+  viewDate.value = new Date(
+    viewDate.value.getFullYear(),
+    Number((event.target as HTMLSelectElement).value),
+    1,
+  )
+}
+function setYear(event: Event) {
+  viewDate.value = new Date(
+    Number((event.target as HTMLSelectElement).value),
+    viewDate.value.getMonth(),
+    1,
+  )
+}
+function choose(day: number) {
+  const year = viewDate.value.getFullYear()
+  const month = String(viewDate.value.getMonth() + 1).padStart(2, '0')
+  emit('update:modelValue', `${year}-${month}-${String(day).padStart(2, '0')}`)
+  open.value = false
+}
+function isSelected(day: number) {
+  return (
+    props.modelValue ===
+    `${viewDate.value.getFullYear()}-${String(viewDate.value.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  )
+}
 </script>
-<template><div class="thai-date-picker"><button type="button" class="date-trigger" :disabled="disabled" @click="open = !open"><span>{{ displayValue }}</span><span aria-hidden="true">▾</span></button><div v-if="open" class="calendar" role="dialog" aria-label="เลือกวันที่"><div class="calendar-head"><button type="button" aria-label="เดือนก่อน" @click="changeMonth(-1)">‹</button><div class="period-select"><select :value="viewDate.getMonth()" aria-label="เลือกเดือน" @change="setMonth"><option v-for="(month, index) in months" :key="month" :value="index">{{ month }}</option></select><select :value="viewDate.getFullYear()" aria-label="เลือกปี" @change="setYear"><option v-for="year in years" :key="year" :value="year">{{ year + 543 }}</option></select></div><button type="button" aria-label="เดือนถัดไป" @click="changeMonth(1)">›</button></div><div class="weekdays"><span v-for="day in weekdays" :key="day">{{ day }}</span></div><div class="days"><span v-for="(day, index) in days" :key="index" class="blank"><button v-if="day" type="button" :class="{ selected: isSelected(day) }" @click="choose(day)">{{ day }}</button></span></div></div></div></template>
+<template>
+  <div class="thai-date-picker">
+    <button type="button" class="date-trigger" :disabled="disabled" @click="open = !open">
+      <span>{{ displayValue }}</span
+      ><span aria-hidden="true">▾</span>
+    </button>
+    <div v-if="open" class="calendar" role="dialog" aria-label="เลือกวันที่">
+      <div class="calendar-head">
+        <button type="button" aria-label="เดือนก่อน" @click="changeMonth(-1)">‹</button>
+        <div class="period-select">
+          <select :value="viewDate.getMonth()" aria-label="เลือกเดือน" @change="setMonth">
+            <option v-for="(month, index) in months" :key="month" :value="index">
+              {{ month }}
+            </option></select
+          ><select :value="viewDate.getFullYear()" aria-label="เลือกปี" @change="setYear">
+            <option v-for="year in years" :key="year" :value="year">{{ year + 543 }}</option>
+          </select>
+        </div>
+        <button type="button" aria-label="เดือนถัดไป" @click="changeMonth(1)">›</button>
+      </div>
+      <div class="weekdays">
+        <span v-for="day in weekdays" :key="day">{{ day }}</span>
+      </div>
+      <div class="days">
+        <span v-for="(day, index) in days" :key="index" class="blank"
+          ><button
+            v-if="day"
+            type="button"
+            :class="{ selected: isSelected(day) }"
+            @click="choose(day)"
+          >
+            {{ day }}
+          </button></span
+        >
+      </div>
+    </div>
+  </div>
+</template>
 <style scoped>
-.thai-date-picker { position:relative; margin-top:5px; }.date-trigger { display:flex; width:100%; min-height:44px; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid #8fa19e; border-radius:7px; color:#173f44; background:#fff; font:inherit; text-align:left; cursor:pointer; }.calendar { position:absolute; z-index:30; top:calc(100% + 7px); left:0; width:330px; padding:14px; border:1px solid #c7d7d0; border-radius:12px; background:#fff; box-shadow:0 12px 28px #173f4430; }.calendar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; color:#173f44; }.calendar-head button { width:30px; height:30px; border:0; border-radius:50%; color:#315d59; background:#e9f4ef; font-size:24px; cursor:pointer; }.period-select { display:flex; flex:1; gap:6px; }.period-select select { min-width:0; flex:1; padding:5px; border:1px solid #c7d7d0; border-radius:6px; color:#173f44; background:#fff; font:inherit; }.weekdays,.days { display:grid; grid-template-columns:repeat(7,1fr); text-align:center; }.weekdays { margin-bottom:5px; color:#718582; font-size:12px; }.days { gap:3px; }.blank { min-height:34px; }.days button { width:34px; height:34px; border:0; border-radius:50%; color:#173f44; background:transparent; font:inherit; cursor:pointer; }.days button:hover,.days button.selected { color:#fff; background:#4f7044; }@media (max-width:600px) { .calendar { position:fixed; top:auto; right:16px; bottom:16px; left:16px; width:auto; padding:18px; }.days button,.blank { width:100%; height:38px; } }
+.thai-date-picker {
+  position: relative;
+  margin-top: 5px;
+}
+.date-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid #8fa19e;
+  border-radius: 7px;
+  color: #173f44;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.calendar {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 7px);
+  left: 0;
+  width: 330px;
+  padding: 14px;
+  border: 1px solid #c7d7d0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 28px #173f4430;
+}
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #173f44;
+}
+.calendar-head button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  color: #315d59;
+  background: #e9f4ef;
+  font-size: 24px;
+  cursor: pointer;
+}
+.period-select {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+}
+.period-select select {
+  min-width: 0;
+  flex: 1;
+  padding: 5px;
+  border: 1px solid #c7d7d0;
+  border-radius: 6px;
+  color: #173f44;
+  background: #fff;
+  font: inherit;
+}
+.weekdays,
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+}
+.weekdays {
+  margin-bottom: 5px;
+  color: #718582;
+  font-size: 12px;
+}
+.days {
+  gap: 3px;
+}
+.blank {
+  min-height: 34px;
+}
+.days button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  color: #173f44;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.days button:hover,
+.days button.selected {
+  color: #fff;
+  background: #4f7044;
+}
+@media (max-width: 600px) {
+  .calendar {
+    position: fixed;
+    top: auto;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    width: auto;
+    padding: 18px;
+  }
+  .days button,
+  .blank {
+    width: 100%;
+    height: 38px;
+  }
+}
 </style>
