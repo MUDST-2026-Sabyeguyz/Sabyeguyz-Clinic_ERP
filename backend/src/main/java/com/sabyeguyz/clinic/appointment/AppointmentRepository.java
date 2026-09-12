@@ -57,11 +57,11 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
             """,
             countQuery = """
             select count(a) from Appointment a
-            where (:branchId is null or a.branch.id = :branchId)
-              and (:therapistId is null or a.therapist.id = :therapistId)
-              and (:status is null or a.status = :status)
-              and (:from is null or a.startAt >= :from)
-              and (:to is null or a.startAt < :to)
+            where (cast(:branchId as Long) is null or a.branch.id = :branchId)
+              and (cast(:therapistId as Long) is null or a.therapist.id = :therapistId)
+              and (cast(:status as String) is null or a.status = :status)
+              and (cast(:from as Instant) is null or a.startAt >= :from)
+              and (cast(:to as Instant) is null or a.startAt < :to)
             """)
     Page<Appointment> search(@Param("branchId") Long branchId,
                              @Param("therapistId") Long therapistId,
