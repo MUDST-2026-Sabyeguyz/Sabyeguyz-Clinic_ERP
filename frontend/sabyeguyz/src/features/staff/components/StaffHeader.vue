@@ -13,7 +13,11 @@ let readyFrame: number | undefined
 let routeFrame: number | undefined
 let hoverFrame: number | undefined
 let hoveredLink: HTMLAnchorElement | null = null
-const role = ref(localStorage.getItem('mockStaffRole') ?? 'manager')
+const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+  role?: string
+  branchName?: string
+} | null
+const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
 const navItems = computed(() =>
