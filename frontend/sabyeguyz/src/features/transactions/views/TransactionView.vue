@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { salesApi } from '@/api/client'
 type Transaction = {
   id: string
   date: string
@@ -12,29 +11,110 @@ type Transaction = {
   type: string
   amount: string
   status: string
+  detail?: string
+  transferFrom?: string
+  transferTo?: string
   voidReason?: string
   voidedAt?: string
   voidedBy?: string
 }
 const search = ref(''),
+  sortOrder = ref<'asc' | 'desc'>('desc'),
   selected = ref<Transaction | null>(null),
   voiding = ref(false),
-  reason = ref(''), loading = ref(false), errorMessage = ref('')
-const rows = ref<Transaction[]>([])
-async function load() {
-  try {
-    const result = await salesApi.list()
-    rows.value = result.items.map((sale) => ({ id: sale.id.toString(), date: new Date(sale.soldAt).toLocaleString('th-TH'), patient: sale.patient.fullName, hn: sale.patient.hn, branch: sale.branchCode, performedBy: sale.salesperson?.fullName ?? 'ไม่ระบุ', type: 'Receipt', amount: `฿${Number(sale.paid).toLocaleString()}`, status: sale.status === 'VOIDED' ? 'Void' : 'สำเร็จ' }))
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการชำระเงินไม่สำเร็จ' }
+  voidConfirmationOpen = ref(false),
+  reason = ref(''),
+  snackbarMessage = ref('')
+const rows = ref<Transaction[]>([
+  {
+    id: 'PAY-260822-0021',
+    date: '22 ส.ค. 2026 09:05',
+    patient: 'สมชาย ใจดี',
+    hn: 'HN2601080022',
+    branch: 'สาขาราชพฤกษ์',
+    performedBy: 'เจ้าหน้าที่คลินิก',
+    type: 'Course Purchase',
+    detail: 'Manual Therapy 10 Sessions',
+    amount: '฿8,500',
+    status: 'สำเร็จ',
+  },
+  {
+    id: 'TRT-260822-0018',
+    date: '22 ส.ค. 2026 10:42',
+    patient: 'วรรณา มั่นคง',
+    hn: 'HN2601080012',
+    branch: 'สาขาราชพฤกษ์',
+    performedBy: 'กฤษดา น. นักกายภาพบำบัด',
+    type: 'Course Usage',
+    detail: 'Manual Therapy 10 Sessions',
+    amount: 'ใช้สิทธิ์ 1 ครั้ง',
+    status: 'สำเร็จ',
+  },
+  {
+    id: 'TRF-260821-0004',
+    date: '21 ส.ค. 2026 14:32',
+    patient: 'นรินทร์ สุขใจ',
+    hn: 'HN2601080031',
+    branch: 'สาขาราชพฤกษ์',
+    performedBy: 'เจ้าหน้าที่คลินิก',
+    type: 'Course Transfer',
+    detail: 'Manual Therapy 10 Sessions',
+    transferFrom: 'สมชาย ใจดี',
+    transferTo: 'นรินทร์ สุขใจ',
+    amount: '2 ครั้ง',
+    status: 'สำเร็จ',
+  },
+  {
+    id: 'VOID-260820-0002',
+    date: '20 ส.ค. 2026 16:20',
+    patient: 'กนกวรรณ พูนใจ',
+    hn: 'HN2601080007',
+    branch: 'สาขาราชพฤกษ์',
+    performedBy: 'เจ้าหน้าที่คลินิก',
+    type: 'Single Visit',
+    detail: 'Manual Therapy',
+    amount: '฿1,000',
+    status: 'Void',
+    voidReason: 'บันทึกรายการผิด ต้องยกเลิกเพื่อออก Transaction ใหม่ให้ถูกต้อง',
+    voidedAt: '20 ส.ค. 2026 16:28',
+    voidedBy: 'Manager สาขาราชพฤกษ์',
+  },
+])
+function transactionSuccessMessage(type: string) {
+  const messages: Record<string, string> = {
+    Assessment: 'บันทึกการประเมินเรียบร้อยแล้ว',
+    'Single Visit': 'บันทึกการรับบริการเรียบร้อยแล้ว',
+    'Course Purchase': 'ซื้อคอร์สเรียบร้อยแล้ว',
+    'Course Usage': 'ใช้สิทธิ์คอร์สเรียบร้อยแล้ว',
+    'Course Transfer': 'โอนสิทธิ์คอร์สเรียบร้อยแล้ว',
+  }
+  return messages[type] ?? 'บันทึกรายการเรียบร้อยแล้ว'
 }
-void load()
+const newServiceTransaction = JSON.parse(
+  localStorage.getItem('newServiceTransaction') || 'null',
+) as Transaction | null
+if (newServiceTransaction) {
+  rows.value.unshift(newServiceTransaction)
+  localStorage.removeItem('newServiceTransaction')
+  snackbarMessage.value = transactionSuccessMessage(newServiceTransaction.type)
+  window.setTimeout(() => {
+    snackbarMessage.value = ''
+  }, 3500)
+}
+function splitDateTime(value: string) {
+  const separator = value.lastIndexOf(' ')
+  return separator < 0
+    ? { date: value, time: '-' }
+    : { date: value.slice(0, separator), time: value.slice(separator + 1) }
+}
 const visibleRows = computed(() => {
   const term = search.value.trim().toLowerCase()
-  return rows.value.filter((row) => {
+  const filtered = rows.value.filter((row) => {
     const matchesSearch =
       !term || `${row.id} ${row.hn} ${row.patient} ${row.type}`.toLowerCase().includes(term)
     return matchesSearch
   })
+  return sortOrder.value === 'asc' ? [...filtered].reverse() : filtered
 })
 function open(row: Transaction) {
   if (selected.value?.id === row.id) {
@@ -43,17 +123,28 @@ function open(row: Transaction) {
   }
   selected.value = row
   voiding.value = false
+  voidConfirmationOpen.value = false
   reason.value = ''
   nextTick(() =>
     document.querySelector('.detail-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
   )
 }
-async function confirmVoid() {
+function confirmVoid() {
   if (!selected.value || !reason.value.trim()) return
-  loading.value = true
-  try { await salesApi.reverse(Number(selected.value.id), reason.value.trim()); await load(); voiding.value = false }
-  catch (error) { errorMessage.value = error instanceof Error ? error.message : 'ยกเลิกรายการไม่สำเร็จ' }
-  finally { loading.value = false }
+  voidConfirmationOpen.value = true
+}
+function applyVoid() {
+  if (!selected.value || !reason.value.trim()) return
+  selected.value.status = 'Void'
+  selected.value.voidReason = reason.value.trim()
+  selected.value.voidedAt = new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date())
+  selected.value.voidedBy = 'Manager สาขาราชพฤกษ์'
+  voiding.value = false
+  voidConfirmationOpen.value = false
+  reason.value = ''
 }
 </script>
 <template>
@@ -77,12 +168,17 @@ async function confirmVoid() {
               placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
             />
           </div>
+          <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับธุรกรรม">
+            <option value="desc">ใหม่ - เก่า</option>
+            <option value="asc">เก่า - ใหม่</option>
+          </select>
         </header>
         <table class="staff-table">
           <thead>
             <tr>
               <th>เลขที่รายการ</th>
-              <th>วันที่และเวลา</th>
+              <th>วันที่</th>
+              <th>เวลา</th>
               <th>ผู้ป่วย</th>
               <th>ประเภทรายการ</th>
               <th>จำนวน</th>
@@ -92,7 +188,7 @@ async function confirmVoid() {
           </thead>
           <tbody>
             <tr v-if="!visibleRows.length">
-              <td colspan="7" class="empty-result">ไม่พบรายการที่ตรงกับคำค้น</td>
+              <td colspan="8" class="empty-result">ไม่พบรายการที่ตรงกับคำค้น</td>
             </tr>
             <template v-for="row in visibleRows" :key="row.id">
               <tr
@@ -106,7 +202,8 @@ async function confirmVoid() {
                 <td>
                   <b>{{ row.id }}</b>
                 </td>
-                <td>{{ row.date }}</td>
+                <td>{{ splitDateTime(row.date).date }}</td>
+                <td>{{ splitDateTime(row.date).time }}</td>
                 <td>
                   <b>{{ row.patient }}</b>
                 </td>
@@ -132,7 +229,7 @@ async function confirmVoid() {
                 </td>
               </tr>
               <tr v-if="selected?.id === row.id" class="detail-row">
-                <td colspan="7">
+                <td colspan="8">
                   <section class="inline-transaction-detail">
                     <header class="detail-header">
                       <div class="detail-title">
@@ -158,13 +255,33 @@ async function confirmVoid() {
                         <dt>ประเภทรายการ</dt>
                         <dd>{{ row.type }}</dd>
                       </div>
-                      <div>
-                        <dt>วันที่และเวลา</dt>
-                        <dd>{{ row.date }}</dd>
+                      <div v-if="row.detail">
+                        <dt>รายการที่ซื้อ</dt>
+                        <dd>{{ row.detail }}</dd>
+                      </div>
+                      <div v-if="row.transferFrom">
+                        <dt>เจ้าของคอร์ส</dt>
+                        <dd>{{ row.transferFrom }}</dd>
+                      </div>
+                      <div v-if="row.transferTo">
+                        <dt>ผู้รับสิทธิ์</dt>
+                        <dd>{{ row.transferTo }}</dd>
                       </div>
                       <div>
+                        <dt>วันที่</dt>
+                        <dd>{{ splitDateTime(row.date).date }}</dd>
+                      </div>
+                      <div>
+                        <dt>เวลา</dt>
+                        <dd>{{ splitDateTime(row.date).time }}</dd>
+                      </div>
+                      <div v-if="!row.transferFrom">
                         <dt>ผู้ป่วย</dt>
-                        <dd>{{ row.patient }} {{ row.hn }}</dd>
+                        <dd>{{ row.patient }}</dd>
+                      </div>
+                      <div v-if="!row.transferFrom">
+                        <dt>รหัสผู้ป่วย</dt>
+                        <dd>{{ row.hn }}</dd>
                       </div>
                       <div>
                         <dt>ผู้ทำรายการ</dt>
@@ -179,9 +296,7 @@ async function confirmVoid() {
                     <section v-if="row.status === 'Void' && row.voidReason" class="void-history">
                       <h3>ข้อมูลการยกเลิกรายการ</h3>
                       <p><b>เหตุผล:</b> {{ row.voidReason }}</p>
-                      <p>
-                        {{ row.voidedAt }} {{ row.voidedBy }}
-                      </p>
+                      <p>{{ row.voidedAt }} {{ row.voidedBy }}</p>
                     </section>
 
                     <section v-if="voiding" class="void-form">
@@ -189,7 +304,7 @@ async function confirmVoid() {
                         เหตุผลการยกเลิกรายการ <span>*</span>
                         <div class="void-form-controls">
                           <textarea
-                          v-model.trim="reason"
+                            v-model.trim="reason"
                             rows="1"
                             placeholder="ระบุเหตุผลการยกเลิกรายการ"
                           ></textarea>
@@ -205,11 +320,7 @@ async function confirmVoid() {
                     </section>
 
                     <footer v-if="!voiding">
-                      <button
-                        v-if="row.status !== 'Void'"
-                        class="danger"
-                        @click="voiding = true"
-                      >
+                      <button v-if="row.status !== 'Void'" class="danger" @click="voiding = true">
                         ยกเลิกรายการ
                       </button>
                     </footer>
@@ -224,6 +335,35 @@ async function confirmVoid() {
         </p>
       </section>
     </main>
+    <Teleport to="body">
+      <div
+        v-if="voidConfirmationOpen"
+        class="confirmation-backdrop"
+        @click.self="voidConfirmationOpen = false"
+      >
+        <section
+          class="confirmation-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-describedby="void-confirmation-description"
+        >
+          <p id="void-confirmation-description">
+            ต้องการยกเลิกรายการ <strong>{{ selected?.id }}</strong> หรือไม่?
+          </p>
+          <div class="confirmation-actions">
+            <button type="button" class="secondary" @click="voidConfirmationOpen = false">
+              ยกเลิก
+            </button>
+            <button type="button" class="danger solid" @click="applyVoid">ยืนยัน</button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+    <Transition name="snackbar">
+      <p v-if="snackbarMessage" class="transaction-snackbar" role="status" aria-live="polite">
+        {{ snackbarMessage }}
+      </p>
+    </Transition>
   </div>
 </template>
 <style scoped src="../styles/transactions.css"></style>
