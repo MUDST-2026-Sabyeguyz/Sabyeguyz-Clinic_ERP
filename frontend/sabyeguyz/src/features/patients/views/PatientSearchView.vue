@@ -65,12 +65,11 @@ watch(branch, () => { page.value = 0; void loadPatients() })
   <div class="patient-workspace">
     <StaffHeader />
     <main>
-      <section class="page-heading">
-        <div>
-          <h1>ค้นหาผู้ป่วย</h1>
-          <p>ค้นหาด้วยชื่อหรือเลขประจำตัวผู้ป่วย</p>
-          <RouterLink class="primary" to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
-        </div>
+      <section class="staff-hero">
+        <small>PATIENT MANAGEMENT</small>
+        <h1>ค้นหาผู้ป่วย</h1>
+        <p>ค้นหาด้วยชื่อหรือเลขประจำตัวผู้ป่วย</p>
+        <RouterLink class="primary hero-action" to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
       </section>
 
       <section class="directory">
@@ -146,4 +145,5 @@ watch(branch, () => { page.value = 0; void loadPatients() })
 </template>
 
 <style scoped src="../styles/patients.css"></style>
+<style src="../../staff/styles/staff.css"></style>
 <style src="../styles/therapist.css"></style>

@@ -196,3 +196,52 @@
     width: 100%;
   }
 }
+.patient-picker {
+  position: relative;
+}
+
+.patient-picker-trigger {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 13px 16px;
+  border: 1px solid #8f8f8f;
+  border-radius: 7px;
+  background: var(--clinic-input);
+  color: inherit;
+  text-align: left;
+}
+
+.patient-picker-menu {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #8f8f8f;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 15%);
+}
+
+.patient-picker-menu input {
+  margin-top: 0;
+}
+
+.patient-picker-option {
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.patient-picker-option:hover {
+  background: #e8f4f0;
+}

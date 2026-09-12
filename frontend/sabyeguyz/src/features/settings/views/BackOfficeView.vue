@@ -13,6 +13,7 @@ const selectedPermissions = ref<string[]>(['Patient', 'Visit', 'Treatment'])
 const branches = reactive<Array<{ id?: number; code: string; numericCode: string; name: string; detail: string; status: string }>>([])
 const users = reactive<Array<{ id?: number; username: string; email: string; employeeCode: string; phone: string; name: string; role: string; branch: string; permission: string; status: string }>>([])
 const services = reactive<Array<{ id?: number; code: string; name: string; type: string; price: string; detail: string; expiry: string; status: string }>>([])
+const serviceTypeOptions = computed(() => [...new Set(services.map((item) => item.type))])
 const paymentMethods = reactive<Array<{ id?: number; code?: string; name: string; active: boolean }>>([])
 const rooms = reactive<Array<{id?:number;code?:string;branchCode?:string;name:string;branch:string;type:string;status:string;active?:boolean}>>([])
 const commissionRules = reactive<Array<{name:string;type:string;calculation:string;calculationType:string;value:string;basis:string;effectiveFrom:string;status:string}>>([])
@@ -373,7 +374,7 @@ async function toggleUser(user: (typeof users)[number]) {
               </tr>
             </tbody>
           </table>
-          <table v-else-if="section === 'services'" class="staff-table">
+          <table v-else-if="section === 'services'" class="staff-table services-table">
             <thead>
               <tr>
                 <th>รายการ</th>
@@ -548,9 +549,7 @@ async function toggleUser(user: (typeof users)[number]) {
           <label>ชื่อบริการหรือคอร์ส<input v-model="form.name" /></label>
           <label
             >ประเภท<select v-model="form.type">
-              <option>Assessment</option>
-              <option>Single Visit</option>
-              <option>Course</option>
+              <option v-for="type in serviceTypeOptions" :key="type" :value="type">{{ type }}</option>
             </select></label
           >
           <label>ราคา<input v-model="form.price" type="number" min="0" /></label>

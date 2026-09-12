@@ -18,11 +18,18 @@ const editingId = ref<number | null>(null)
 const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
 const errorMessage = ref('')
+const patientSearch = ref('')
+const patientDropdownOpen = ref(false)
 const pendingCancellation = ref<{ item: Appointment } | null>(null)
 const cancellationReason = ref('')
 const form = ref({ patientId: 0, therapistId: 0, serviceId: 0, branchCode: 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' })
 const branchOptions = computed(() => branches.value.filter((item) => item.active))
 const isEditing = computed(() => viewMode.value === 'edit')
+const patientOptions = computed(() => {
+  const keyword = patientSearch.value.trim().toLowerCase()
+  return patients.value.filter((patient) => !keyword || `${patient.hn} ${patient.fullName}`.toLowerCase().includes(keyword))
+})
+const therapistOptions = computed(() => therapists.value.filter((therapist) => !form.value.branchCode || therapist.branchCode === form.value.branchCode))
 const filteredAppointments = computed(() => {
   const keyword = query.value.trim().toLowerCase()
   return appointments.value.filter((item) => (!keyword || `${item.patient.hn} ${item.patient.fullName} ${item.service.name} ${item.therapist.fullName}`.toLowerCase().includes(keyword)) && (selectedBranch.value === 'ทั้งหมด' || item.branchCode === selectedBranch.value))
@@ -43,9 +50,10 @@ async function load() {
 }
 onMounted(load)
 async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; await load() } }
-function openCreate() { editingId.value = null; patientQuery.value = ''; const branch = branchOptions.value[0]; form.value = { patientId: 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, branchCode: branch?.code ?? 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
+function openCreate() { editingId.value = null; patientQuery.value = ''; patientSearch.value = ''; const branch = branchOptions.value[0]; form.value = { patientId: 0, therapistId: therapistOptions.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, branchCode: branch?.code ?? 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
+function choosePatient(patient: Patient) { form.value.patientId = patient.id; patientQuery.value = `${patient.fullName} HN ${patient.hn}`; patientDropdownOpen.value = false }
 function openEdit(item: Appointment) { editingId.value = item.id; patientQuery.value = `${item.patient.fullName} HN ${item.patient.hn}`; form.value = { patientId: item.patient.id, therapistId: item.therapist.id, serviceId: item.service.id, branchCode: item.branchCode, date: item.startAt.slice(0, 10), time: new Date(item.startAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }), note: item.note ?? '' }; viewMode.value = 'edit' }
-async function save() { errorMessage.value = ''; try { const normalized = patientQuery.value.trim().toLowerCase(); const patient = patients.value.find((item) => item.hn.toLowerCase() === normalized || item.fullName.toLowerCase() === normalized || String(item.id) === normalized || `${item.fullName} hn ${item.hn}`.toLowerCase() === normalized); if (!editingId.value && !patient) throw new Error('กรุณากรอก HN หรือชื่อผู้ป่วยให้ตรงกับรายการในระบบ'); form.value.patientId = patient?.id ?? form.value.patientId; if (!form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ'); if (editingId.value) { const result = await appointmentApi.reschedule(editingId.value, { startAt: toStartAt(), therapistId: form.value.therapistId }); const index = appointments.value.findIndex((item) => item.id === result.id); if (index >= 0) appointments.value[index] = result } else { appointments.value.unshift(await appointmentApi.create({ branchCode: form.value.branchCode, patientId: form.value.patientId, therapistId: form.value.therapistId, serviceId: form.value.serviceId, startAt: toStartAt(), note: form.value.note })) }; viewMode.value = 'list' } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ' } }
+async function save() { errorMessage.value = ''; try { const patient = patients.value.find((item) => item.id === form.value.patientId); if (!editingId.value && !patient) throw new Error('กรุณาเลือกผู้ป่วยจากรายการ'); if (!form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ'); if (editingId.value) { const result = await appointmentApi.reschedule(editingId.value, { startAt: toStartAt(), therapistId: form.value.therapistId }); const index = appointments.value.findIndex((item) => item.id === result.id); if (index >= 0) appointments.value[index] = result } else { appointments.value.unshift(await appointmentApi.create({ branchCode: form.value.branchCode, patientId: form.value.patientId, therapistId: form.value.therapistId, serviceId: form.value.serviceId, startAt: toStartAt(), note: form.value.note })) }; viewMode.value = 'list' } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ' } }
 async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') { savingStatusId.value = item.id; statusNotice.value = 'กำลังบันทึก...'; try { const result = status === 'ARRIVED' ? await appointmentApi.checkIn(item.id) : status === 'IN_SERVICE' ? await appointmentApi.startService(item.id) : status === 'COMPLETED' ? await appointmentApi.complete(item.id) : status === 'NO_SHOW' ? await appointmentApi.noShow(item.id) : status === 'CANCELLED' ? await appointmentApi.cancel(item.id, reason) : null; if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น'); Object.assign(item, result); statusNotice.value = 'บันทึกแล้ว' } catch (error) { statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' } finally { savingStatusId.value = null; window.setTimeout(() => (statusNotice.value = ''), 2200) } }
 function changeStatus(event: Event, item: Appointment) { const status = (event.target as HTMLSelectElement).value as AppointmentStatus; if (status === 'CANCELLED') { pendingCancellation.value = { item }; cancellationReason.value = ''; return } void saveStatus(item, status) }
 function confirmCancellation() { if (!pendingCancellation.value || !cancellationReason.value.trim()) return; const { item } = pendingCancellation.value; pendingCancellation.value = null; void saveStatus(item, 'CANCELLED', cancellationReason.value.trim()) }
@@ -70,12 +78,19 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
         <section class="staff-panel create-card">
           <h1>{{ isEditing ? 'แก้ไขนัดหมาย' : 'สร้างนัดหมายใหม่' }}</h1>
           <div class="form-grid">
-            <label>
+            <label class="patient-picker">
               ผู้ป่วย
-              <input v-model.trim="patientQuery" :readonly="isEditing" list="appointment-patients" placeholder="กรอก HN หรือชื่อผู้ป่วย" required />
-              <datalist id="appointment-patients">
-                <option v-for="patient in patients" :key="patient.id" :value="`${patient.fullName} HN ${patient.hn}`" />
-              </datalist>
+              <button type="button" class="patient-picker-trigger" :disabled="isEditing" @click="patientDropdownOpen = !patientDropdownOpen">
+                {{ patients.find((patient) => patient.id === form.patientId)?.fullName ?? 'เลือกผู้ป่วย' }}
+                <span>⌄</span>
+              </button>
+              <div v-if="patientDropdownOpen && !isEditing" class="patient-picker-menu">
+                <input v-model.trim="patientSearch" placeholder="ค้นหาชื่อหรือ HN" aria-label="ค้นหาผู้ป่วย" />
+                <button v-for="patient in patientOptions" :key="patient.id" type="button" class="patient-picker-option" @click="choosePatient(patient)">
+                  {{ patient.fullName }} (HN {{ patient.hn }})
+                </button>
+                <small v-if="patientOptions.length === 0">ไม่พบผู้ป่วย</small>
+              </div>
             </label>
             <label>
               ประเภทบริการ
@@ -86,7 +101,7 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
             <label>
               นักกายภาพ
               <select v-model="form.therapistId">
-                <option v-for="therapist in therapists" :key="therapist.id" :value="therapist.id">
+                <option v-for="therapist in therapistOptions" :key="therapist.id" :value="therapist.id">
                   {{ therapist.fullName }}
                 </option>
               </select>
