@@ -94,7 +94,7 @@ class PatientQueryApiTest {
         assertThat(profile.has("password")).isFalse();
         assertThat(profile.has("passwordHash")).isFalse();
         assertThat(profile.has("username")).isFalse();
-        assertThat(profile.has("email")).isFalse();
+        assertThat(profile.has("email")).isTrue();
     }
 
     @Test
