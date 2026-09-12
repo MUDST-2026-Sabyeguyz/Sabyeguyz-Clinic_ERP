@@ -1,36 +1,56 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { branchApi, commissionApi, courseApi, paymentMethodApi, resourceApi, masterDataApi, serviceManagementApi, userManagementApi } from '@/api/client'
+import { branchApi, commissionApi, courseApi, paymentMethodApi, resourceApi, masterDataApi, serviceManagementApi, therapistManagementApi, userManagementApi } from '@/api/client'
 
 const section = ref('branches')
 const editing = ref(false)
 const editingIndex = ref(-1)
 const saved = ref(false)
 const formError = ref('')
+const confirmDialog = reactive({ open: false, message: '' })
+let confirmResolver: ((confirmed: boolean) => void) | undefined
+let savedTimer: number | undefined
+function showSaved() {
+  saved.value = true
+  window.clearTimeout(savedTimer)
+  savedTimer = window.setTimeout(() => { saved.value = false }, 2500)
+}
+function askConfirmation(message: string) {
+  confirmDialog.message = message
+  confirmDialog.open = true
+  return new Promise<boolean>((resolve) => { confirmResolver = resolve })
+}
+function resolveConfirmation(confirmed: boolean) {
+  confirmDialog.open = false
+  confirmResolver?.(confirmed)
+  confirmResolver = undefined
+}
 const permissionOptions = ['Patient', 'Visit', 'Treatment', 'Course', 'Transaction']
 const selectedPermissions = ref<string[]>(['Patient', 'Visit', 'Treatment'])
-const branches = reactive<Array<{ id?: number; code: string; numericCode: string; name: string; detail: string; status: string }>>([])
-const users = reactive<Array<{ id?: number; username: string; email: string; employeeCode: string; phone: string; name: string; role: string; branch: string; permission: string; status: string }>>([])
-const services = reactive<Array<{ id?: number; code: string; name: string; type: string; price: string; detail: string; expiry: string; status: string }>>([])
+const branches = reactive<Array<{ id?: number; code: string; numericCode: string; name: string; detail: string; active: boolean; status: string }>>([])
+const users = reactive<Array<{ id?: number; username: string; email: string; employeeCode: string; phone: string; name: string; role: string; branch: string; branchCode?: string; permission: string; active: boolean; status: string }>>([])
+const therapists = reactive<Array<{ id?: number; code: string; name: string; branch: string; active: boolean; status: string }>>([])
+const services = reactive<Array<{ id?: number; code: string; name: string; type: string; price: string; detail: string; expiry: string; active: boolean; status: string }>>([])
 const serviceTypeOptions = computed(() => [...new Set(services.map((item) => item.type))])
 const paymentMethods = reactive<Array<{ id?: number; code?: string; name: string; active: boolean }>>([])
-const rooms = reactive<Array<{id?:number;code?:string;branchCode?:string;name:string;branch:string;type:string;status:string;active?:boolean}>>([])
-const commissionRules = reactive<Array<{name:string;type:string;calculation:string;calculationType:string;value:string;basis:string;effectiveFrom:string;status:string}>>([])
-const masterData = reactive<Array<{id?:number;code?:string;category:string;name:string;status:string}>>([])
+const rooms = reactive<Array<{id?:number;code?:string;branchCode?:string;name:string;branch:string;type:string;status:string;active:boolean}>>([])
+const commissionRules = reactive<Array<{id?:number;schemeId?:number;schemeName?:string;version?:string;effectiveTo?:string;tiers?:Array<{minimum:number;maximum:number|null;rate:number;order:number}>;name:string;type:string;calculation:string;calculationType:string;value:string;basis:string;effectiveFrom:string;active:boolean;status:string}>>([])
+const masterData = reactive<Array<{id?:number;code?:string;category:string;name:string;active:boolean;status:string}>>([])
 const resourceStatusToUi: Record<string, string> = { AVAILABLE: 'ว่าง', IN_USE: 'ไม่ว่าง', MAINTENANCE: 'ซ่อม' }
 const resourceStatusToApi: Record<string, string> = { ว่าง: 'AVAILABLE', 'ไม่ว่าง': 'IN_USE', ซ่อม: 'MAINTENANCE' }
 async function loadBackendSettings() {
-  const [branchList, userList, serviceList, courseList, paymentList, resourceList, masterList] = await Promise.all([
-    branchApi.list(), userManagementApi.list(), serviceManagementApi.list(), courseApi.list(), paymentMethodApi.list(), resourceApi.list(), masterDataApi.list(),
+  const [branchList, userList, therapistList, serviceList, courseList, paymentList, resourceList, masterList] = await Promise.all([
+    branchApi.list(), userManagementApi.list(), therapistManagementApi.list(), serviceManagementApi.list(), courseApi.list(), paymentMethodApi.list(), resourceApi.list(), masterDataApi.list(),
   ])
-  branches.splice(0, branches.length, ...branchList.map((item) => ({ id: item.id, code: item.code, numericCode: item.numericCode, name: item.name, detail: item.numericCode, status: item.active ? 'Active' : 'Inactive' })))
-  users.splice(0, users.length, ...userList.map((item) => ({ id: item.id, username: item.username, email: item.email ?? '', employeeCode: item.employeeCode, phone: item.phone ?? '', name: item.fullName, role: item.role === 'MANAGER' ? 'Manager' : 'นักกายภาพบำบัด', branch: item.branchName ?? 'ทุกสาขา', permission: item.role === 'MANAGER' ? 'All' : 'Patient, Visit, Treatment', status: item.active ? 'Active' : 'Inactive' })))
-  services.splice(0, services.length, ...serviceList.map((item) => ({ id: item.id, code: item.code, name: item.name, type: 'Service', price: String(item.price), detail: `${item.defaultDurationMinutes} นาที`, expiry: '', status: item.active ? 'Active' : 'Inactive' })), ...courseList.map((item) => ({ id: item.id, code: item.code, name: item.name, type: 'Course', price: String(item.price), detail: `${item.sessions} + ${item.bonusSessions} Bonus`, expiry: `${item.validityDays} วัน`, status: item.active ? 'Active' : 'Inactive' })))
+  branches.splice(0, branches.length, ...branchList.map((item) => ({ id: item.id, code: item.code, numericCode: item.numericCode, name: item.name, detail: item.numericCode, active: item.active, status: item.active ? 'Active' : 'Inactive' })))
+  users.splice(0, users.length, ...userList.map((item) => ({ id: item.id, username: item.username, email: item.email ?? '', employeeCode: item.employeeCode, phone: item.phone ?? '', name: item.fullName, role: item.role === 'MANAGER' ? 'Manager' : 'นักกายภาพบำบัด', branch: item.branchName ?? 'ทุกสาขา', branchCode: item.branchCode, permission: item.role === 'MANAGER' ? 'All' : 'Patient, Visit, Treatment', active: item.active, status: item.active ? 'Active' : 'Inactive' })))
+  therapists.splice(0, therapists.length, ...therapistList.map((item) => ({ id: item.id, code: item.code, name: item.fullName, branch: item.branchName, active: item.active, status: item.active ? 'Active' : 'Inactive' })))
+  services.splice(0, services.length, ...serviceList.map((item) => ({ id: item.id, code: item.code, name: item.name, type: 'Service', price: String(item.price), detail: `${item.defaultDurationMinutes} นาที`, expiry: '', active: item.active, status: item.active ? 'Active' : 'Inactive' })), ...courseList.map((item) => ({ id: item.id, code: item.code, name: item.name, type: 'Course', price: String(item.price), detail: `${item.sessions} + ${item.bonusSessions} Bonus`, expiry: `${item.validityDays} วัน`, active: item.active, status: item.active ? 'Active' : 'Inactive' })))
   paymentMethods.splice(0, paymentMethods.length, ...paymentList.map((item) => ({ id: item.id, code: item.code, name: item.name, active: item.active })))
   rooms.splice(0,rooms.length,...resourceList.map(item=>({id:item.id,code:item.code,branchCode:item.branchCode,name:item.name,branch:item.branchName,type:item.type==='ROOM'?'ห้องรักษา':'ทรัพยากร',status:resourceStatusToUi[item.status] ?? item.status,active:item.active})))
-  masterData.splice(0,masterData.length,...masterList.map(item=>({id:item.id,code:item.code,category:item.category,name:item.name,status:item.active?'Active':'Inactive'})))
-  const schemes = await commissionApi.schemes() as Array<{ id: number; name: string; version: string; effectiveFrom: string; active: boolean }>
+  masterData.splice(0,masterData.length,...masterList.map(item=>({id:item.id,code:item.code,category:item.category,name:item.name,active:item.active,status:item.active?'Active':'Inactive'})))
+  const schemes = await commissionApi.schemes() as Array<{ id: number; name: string; version: string; effectiveFrom: string; effectiveTo?: string; active: boolean }>
   const currentScheme = schemes[0]
   if (currentScheme) {
     const tierList = await commissionApi.tiers(currentScheme.id) as Array<{ minimum: number; maximum: number | null; rate: number; order: number }>
@@ -42,6 +62,13 @@ async function loadBackendSettings() {
       value: String(tier.rate * 100),
       basis: 'ยอดขาย',
       effectiveFrom: currentScheme.effectiveFrom,
+      id: currentScheme.id,
+      schemeId: currentScheme.id,
+      schemeName: currentScheme.name,
+      version: currentScheme.version,
+      effectiveTo: currentScheme.effectiveTo,
+      tiers: tierList,
+      active: currentScheme.active,
       status: currentScheme.active ? 'Active' : 'Inactive',
     })))
   }
@@ -94,6 +121,7 @@ type EditableRecord = Partial<Record<keyof typeof form, string>>
 const sections: Array<[string, string]> = [
   ['branches', 'สาขา'],
   ['users', 'ผู้ใช้และสิทธิ์'],
+  ['therapists', 'นักกายภาพบำบัด'],
   ['services', 'บริการและคอร์ส'],
   ['payments', 'การชำระเงิน'],
   ['rooms', 'ห้อง / ทรัพยากร'],
@@ -104,7 +132,7 @@ const title = computed(() => sections.find(([key]) => key === section.value)?.[1
 async function save() {
   formError.value = ''
   if (
-    ['branches', 'users', 'services', 'rooms', 'commission', 'master'].includes(section.value) &&
+    ['branches', 'users', 'therapists', 'services', 'rooms', 'commission', 'master'].includes(section.value) &&
     !form.name.trim()
   ) {
     formError.value = 'กรุณากรอกชื่อก่อนบันทึก'
@@ -135,19 +163,19 @@ async function save() {
   }
   if (section.value === 'branches') {
     try {
-      const body = { code: form.code, numericCode: form.numericCode || form.detail, name: form.name }
       const existing = editingIndex.value >= 0 ? branches[editingIndex.value] : undefined
+      const body = { code: form.code, numericCode: form.numericCode || form.detail, name: form.name, active: form.status === 'Active' }
       const result = existing?.id
         ? await branchApi.update(existing.id, body)
         : await branchApi.create(body)
       const record = { ...result, detail: result.numericCode, status: result.active ? 'Active' : 'Inactive' }
       if (editingIndex.value >= 0) Object.assign(branches[editingIndex.value]!, record)
       else branches.push(record)
-      editing.value = false; saved.value = true; return
+      editing.value = false; showSaved(); return
     } catch (error) { formError.value = error instanceof Error ? error.message : 'บันทึกสาขาไม่สำเร็จ'; return }
   }
   if (section.value === 'rooms') {
-    try { const old=editingIndex.value>=0?rooms[editingIndex.value]:undefined; const body={branchCode:old?.branchCode||branches.find(b=>b.name.includes(form.branch))?.code||branches[0]?.code||'RP',code:form.code||old?.code||`RES-${Date.now()}`,name:form.name,type:form.type==='ห้องรักษา'?'ROOM':'EQUIPMENT',status:resourceStatusToApi[form.status] ?? 'AVAILABLE'}; const result=old?.id?await resourceApi.update(old.id,body):await resourceApi.create(body); const record={id:result.id,code:result.code,branchCode:result.branchCode,name:result.name,branch:result.branchName,type:result.type==='ROOM'?'ห้องรักษา':'ทรัพยากร',status:resourceStatusToUi[result.status] ?? result.status,active:result.active}; if(editingIndex.value>=0)Object.assign(rooms[editingIndex.value]!,record);else rooms.push(record);editing.value=false;saved.value=true;return } catch(error){formError.value=error instanceof Error?error.message:'บันทึกทรัพยากรไม่สำเร็จ';return}
+    try { const old=editingIndex.value>=0?rooms[editingIndex.value]:undefined; const body={branchCode:old?.branchCode||branches.find(b=>b.name.includes(form.branch))?.code||branches[0]?.code||'RP',code:form.code||old?.code||`RES-${Date.now()}`,name:form.name,type:form.type==='ห้องรักษา'?'ROOM':'EQUIPMENT',status:resourceStatusToApi[form.status] ?? 'AVAILABLE',active:old?.active}; const result=old?.id?await resourceApi.update(old.id,body):await resourceApi.create(body); const record={id:result.id,code:result.code,branchCode:result.branchCode,name:result.name,branch:result.branchName,type:result.type==='ROOM'?'ห้องรักษา':'ทรัพยากร',status:resourceStatusToUi[result.status] ?? result.status,active:result.active}; if(editingIndex.value>=0)Object.assign(rooms[editingIndex.value]!,record);else rooms.push(record);editing.value=false;showSaved();return } catch(error){formError.value=error instanceof Error?error.message:'บันทึกทรัพยากรไม่สำเร็จ';return}
   }
   if (section.value === 'services') {
     try {
@@ -155,15 +183,15 @@ async function save() {
       const code = form.code || existing?.code || `SERVICE-${Date.now()}`
       const numbers = (form.detail.match(/\d+/g) ?? []).map(Number)
       if (form.type === 'Course') {
-        const result = existing?.id ? await courseApi.update(existing.id, { code, name: form.name, price: Number(form.price), sessions: numbers[0] || 1, bonusSessions: numbers[1] || 0, validityDays: Number(form.expiry.match(/\d+/)?.[0] || 1) }) : await courseApi.create({ code, name: form.name, price: Number(form.price), sessions: numbers[0] || 1, bonusSessions: numbers[1] || 0, validityDays: Number(form.expiry.match(/\d+/)?.[0] || 1) })
-        const record = { id: result.id, code: result.code, name: result.name, type: 'Course', price: String(result.price), detail: `${result.sessions} + ${result.bonusSessions} Bonus`, expiry: `${result.validityDays} วัน`, status: result.active ? 'Active' : 'Inactive' }
+        const result = existing?.id ? await courseApi.update(existing.id, { code, name: form.name, price: Number(form.price), sessions: numbers[0] || 1, bonusSessions: numbers[1] || 0, validityDays: Number(form.expiry.match(/\d+/)?.[0] || 1), active: existing.active }) : await courseApi.create({ code, name: form.name, price: Number(form.price), sessions: numbers[0] || 1, bonusSessions: numbers[1] || 0, validityDays: Number(form.expiry.match(/\d+/)?.[0] || 1) })
+        const record = { id: result.id, code: result.code, name: result.name, type: 'Course', price: String(result.price), detail: `${result.sessions} + ${result.bonusSessions} Bonus`, expiry: `${result.validityDays} วัน`, active: result.active, status: result.active ? 'Active' : 'Inactive' }
         if (editingIndex.value >= 0) Object.assign(services[editingIndex.value]!, record); else services.push(record)
       } else {
-        const result = existing?.id ? await serviceManagementApi.update(existing.id, { code, name: form.name, defaultDurationMinutes: numbers[0] || 30, price: Number(form.price) }) : await serviceManagementApi.create({ code, name: form.name, defaultDurationMinutes: numbers[0] || 30, price: Number(form.price) })
-        const record = { id: result.id, code: result.code, name: result.name, type: 'Service', price: String(result.price), detail: `${result.defaultDurationMinutes} นาที`, expiry: '', status: result.active ? 'Active' : 'Inactive' }
+        const result = existing?.id ? await serviceManagementApi.update(existing.id, { code, name: form.name, defaultDurationMinutes: numbers[0] || 30, price: Number(form.price), active: existing.active }) : await serviceManagementApi.create({ code, name: form.name, defaultDurationMinutes: numbers[0] || 30, price: Number(form.price) })
+        const record = { id: result.id, code: result.code, name: result.name, type: 'Service', price: String(result.price), detail: `${result.defaultDurationMinutes} นาที`, expiry: '', active: result.active, status: result.active ? 'Active' : 'Inactive' }
         if (editingIndex.value >= 0) Object.assign(services[editingIndex.value]!, record); else services.push(record)
       }
-      editing.value = false; saved.value = true; return
+      editing.value = false; showSaved(); return
     } catch (error) { formError.value = error instanceof Error ? error.message : 'บันทึกบริการไม่สำเร็จ'; return }
   }
   if (section.value === 'users') {
@@ -172,39 +200,55 @@ async function save() {
       if (!existing && form.password.length < 8) { formError.value = 'ผู้ใช้ใหม่ต้องมีรหัสผ่านอย่างน้อย 8 ตัวอักษร'; return }
       if (!form.code.trim() || !form.username.trim()) { formError.value = 'กรุณากรอก Username และรหัสพนักงาน'; return }
       const branchCode = branches.find((item) => item.name === form.branch)?.code
-      const body = { username: form.username, email: form.email || undefined, ...(form.password ? { password: form.password } : {}), role: form.role === 'Manager' ? 'MANAGER' as const : 'THERAPIST' as const, employeeCode: form.code, fullName: form.name, phone: form.detail || undefined, branchCode }
+      const body = { username: form.username, email: form.email || undefined, ...(form.password ? { password: form.password } : {}), role: form.role === 'Manager' ? 'MANAGER' as const : 'THERAPIST' as const, employeeCode: form.code, fullName: form.name, phone: form.detail || undefined, branchCode, active: form.status === 'Active' }
       const result = existing?.id ? await userManagementApi.update(existing.id, body) : await userManagementApi.create({ ...body, password: form.password })
-      const record = { id: result.id, username: result.username, email: result.email ?? '', employeeCode: result.employeeCode, phone: result.phone ?? '', name: result.fullName, role: result.role === 'MANAGER' ? 'Manager' : 'นักกายภาพบำบัด', branch: result.branchName ?? 'ทุกสาขา', permission: result.role === 'MANAGER' ? 'All' : selectedPermissions.value.join(', '), status: result.active ? 'Active' : 'Inactive' }
+      const record = { id: result.id, username: result.username, email: result.email ?? '', employeeCode: result.employeeCode, phone: result.phone ?? '', name: result.fullName, role: result.role === 'MANAGER' ? 'Manager' : 'นักกายภาพบำบัด', branch: result.branchName ?? 'ทุกสาขา', branchCode: result.branchCode, permission: result.role === 'MANAGER' ? 'All' : selectedPermissions.value.join(', '), active: result.active, status: result.active ? 'Active' : 'Inactive' }
       if (editingIndex.value >= 0) Object.assign(users[editingIndex.value]!, record); else users.push(record)
-      editing.value = false; saved.value = true; return
+      editing.value = false; showSaved(); return
     } catch (error) { formError.value = error instanceof Error ? error.message : 'บันทึกผู้ใช้ไม่สำเร็จ'; return }
   }
+  if (section.value === 'therapists') {
+    try {
+      const existing = editingIndex.value >= 0 ? therapists[editingIndex.value] : undefined
+      const branchCode = branches.find((item) => item.name === form.branch)?.code
+      if (existing?.id) {
+        const result = await therapistManagementApi.update(existing.id, { fullName: form.name, active: existing.active })
+        Object.assign(existing, { code: result.code, name: result.fullName, branch: result.branchName, active: result.active, status: result.active ? 'Active' : 'Inactive' })
+      } else {
+        if (!branchCode) { formError.value = 'กรุณาเลือกสาขา'; return }
+        const result = await therapistManagementApi.create({ fullName: form.name, branchCode, code: form.code || undefined, active: true })
+        therapists.push({ id: result.id, code: result.code, name: result.fullName, branch: result.branchName, active: result.active, status: result.active ? 'Active' : 'Inactive' })
+      }
+      editing.value = false; showSaved(); return
+    } catch (error) { formError.value = error instanceof Error ? error.message : 'บันทึกชื่อนักกายภาพบำบัดไม่สำเร็จ'; return }
+  }
   if (section.value === 'master') {
-    try { const old=editingIndex.value>=0?masterData[editingIndex.value]:undefined; const body={category:form.category,code:form.code||old?.code||`ITEM-${Date.now()}`,name:form.name}; const result=old?.id?await masterDataApi.update(old.id,body):await masterDataApi.create(body); const record={id:result.id,code:result.code,category:result.category,name:result.name,status:result.active?'Active':'Inactive'};if(editingIndex.value>=0)Object.assign(masterData[editingIndex.value]!,record);else masterData.push(record);editing.value=false;saved.value=true;return } catch(error){formError.value=error instanceof Error?error.message:'บันทึกข้อมูลพื้นฐานไม่สำเร็จ';return}
+    try { const old=editingIndex.value>=0?masterData[editingIndex.value]:undefined; const body={category:form.category,code:form.code||old?.code||`ITEM-${Date.now()}`,name:form.name,active:form.status==='Active'}; const result=old?.id?await masterDataApi.update(old.id,body):await masterDataApi.create(body); const record={id:result.id,code:result.code,category:result.category,name:result.name,active:result.active,status:result.active?'Active':'Inactive'};if(editingIndex.value>=0)Object.assign(masterData[editingIndex.value]!,record);else masterData.push(record);editing.value=false;showSaved();return } catch(error){formError.value=error instanceof Error?error.message:'บันทึกข้อมูลพื้นฐานไม่สำเร็จ';return}
   }
   if (section.value === 'payments') {
     try {
       const existing = editingIndex.value >= 0 ? paymentMethods[editingIndex.value] : undefined
-      const body = { code: form.code.trim() || form.type.trim().toUpperCase(), name: form.name.trim() || form.type.trim() }
+      const body = { code: form.code.trim() || form.type.trim().toUpperCase(), name: form.name.trim() || form.type.trim(), active: form.status === 'Active' }
       if (!body.code || !body.name) { formError.value = 'กรุณาระบุรหัสและชื่อช่องทางชำระเงิน'; return }
       const result = existing?.id ? await paymentMethodApi.update(existing.id, body) : await paymentMethodApi.create(body)
       const record = { id: result.id, code: result.code, name: result.name, active: result.active }
       if (editingIndex.value >= 0) Object.assign(paymentMethods[editingIndex.value]!, record)
       else paymentMethods.push(record)
-      editing.value = false; saved.value = true; return
+      editing.value = false; showSaved(); return
     } catch (error) { formError.value = error instanceof Error ? error.message : 'บันทึกช่องทางชำระเงินไม่สำเร็จ'; return }
   }
   const record = { ...form }
   const collections: Record<string, EditableRecord[]> = {
     branches,
     users,
+    therapists,
     services,
     rooms,
     commission: commissionRules,
     master: masterData,
   }
   if (section.value === 'payments') {
-    saved.value = true
+    showSaved()
   } else {
     const collection = collections[section.value]
     if (collection) {
@@ -213,7 +257,7 @@ async function save() {
         if (
           current?.status === 'Active' &&
           record.status === 'Inactive' &&
-          !window.confirm('ข้อมูลนี้อาจถูกใช้งานอยู่ ยืนยันการปิดใช้งานหรือไม่?')
+          !(await askConfirmation('ข้อมูลนี้อาจถูกใช้งานอยู่ ยืนยันการปิดใช้งานหรือไม่?'))
         )
           return
         Object.assign(current!, record)
@@ -221,7 +265,7 @@ async function save() {
     }
   }
   editing.value = false
-  saved.value = true
+  showSaved()
 }
 function openEditor(index = -1) {
   editingIndex.value = index
@@ -237,7 +281,7 @@ function openEditor(index = -1) {
     detail: '',
     role: 'นักกายภาพบำบัด',
     permission: 'Patient, Visit, Treatment',
-    branch: 'ราชพฤกษ์',
+    branch: branches[0]?.name ?? 'ราชพฤกษ์',
     type: '',
     price: '',
     expiry: '',
@@ -252,6 +296,7 @@ function openEditor(index = -1) {
   const collections: Record<string, EditableRecord[]> = {
     branches,
     users,
+    therapists,
     services,
     rooms,
     commission: commissionRules,
@@ -266,21 +311,45 @@ function openEditor(index = -1) {
     form.permission === 'All' ? [...permissionOptions] : form.permission.split(', ').filter(Boolean)
   editing.value = true
 }
-async function togglePayment(method: (typeof paymentMethods)[number]) {
-  if (method.active && !window.confirm(`ยืนยันการปิดใช้งาน ${method.name} หรือไม่?`)) return
-  if (!method.id) { formError.value = 'รายการช่องทางชำระเงินนี้ยังไม่มี id จาก backend'; return }
-  try { if(method.active){await paymentMethodApi.deactivate(method.id);method.active=false}else{await paymentMethodApi.activate(method.id);method.active=true} saved.value = true }
-  catch (error) { formError.value = error instanceof Error ? error.message : 'ปิดใช้งานช่องทางชำระเงินไม่สำเร็จ' }
-}
-async function toggleUser(user: (typeof users)[number]) {
-  if (!user.id) { formError.value = 'รายการผู้ใช้นี้ยังไม่มี id จาก backend'; return }
-  if (user.status === 'Active' && !window.confirm(`ยืนยันการปิดใช้งาน ${user.username} หรือไม่?`)) return
+type ActiveRecord = { id?: number; active: boolean; status?: string }
+async function toggleRecord<T extends ActiveRecord>(record: T, update: (active: boolean) => Promise<{ active: boolean }>, label: string) {
+  if (!record.id) { formError.value = `รายการ${label}ยังไม่มี id จาก backend`; return }
+  const nextActive = !record.active
+  if (!nextActive && !(await askConfirmation(`ยืนยันการปิดใช้งาน${label}หรือไม่?`))) return
   try {
-    const result = user.status === 'Active' ? await userManagementApi.deactivate(user.id) : await userManagementApi.activate(user.id)
-    if (result) Object.assign(user, { status: result.active ? 'Active' : 'Inactive' })
-    else user.status = 'Inactive'
-    saved.value = true
-  } catch (error) { formError.value = error instanceof Error ? error.message : 'เปลี่ยนสถานะผู้ใช้ไม่สำเร็จ' }
+    const result = await update(nextActive)
+    record.active = result.active
+    if (record.status !== undefined) record.status = result.active ? 'Active' : 'Inactive'
+    showSaved()
+  } catch (error) { formError.value = error instanceof Error ? error.message : `เปลี่ยนสถานะ${label}ไม่สำเร็จ` }
+}
+async function toggleBranch(item: (typeof branches)[number]) {
+  await toggleRecord(item, (active) => branchApi.update(item.id!, { code: item.code, numericCode: item.numericCode, name: item.name, active }), 'สาขา')
+}
+async function toggleUser(item: (typeof users)[number]) {
+  await toggleRecord(item, (active) => userManagementApi.update(item.id!, { username: item.username, email: item.email || undefined, role: item.role === 'Manager' ? 'MANAGER' : 'THERAPIST', employeeCode: item.employeeCode, fullName: item.name, phone: item.phone || undefined, branchCode: item.branchCode, active }), 'ผู้ใช้')
+}
+async function toggleTherapist(item: (typeof therapists)[number]) {
+  await toggleRecord(item, (active) => therapistManagementApi.update(item.id!, { fullName: item.name, active }), 'นักกายภาพบำบัด')
+}
+async function toggleService(item: (typeof services)[number]) {
+  const numbers = (item.detail.match(/\d+/g) ?? []).map(Number)
+  await toggleRecord(item, (active) => item.type === 'Course'
+    ? courseApi.update(item.id!, { code: item.code!, name: item.name, price: Number(item.price), sessions: numbers[0] || 1, bonusSessions: numbers[1] || 0, validityDays: Number(item.expiry.match(/\d+/)?.[0] || 1), active })
+    : serviceManagementApi.update(item.id!, { code: item.code!, name: item.name, defaultDurationMinutes: numbers[0] || 30, price: Number(item.price), active }), 'บริการหรือคอร์ส')
+}
+async function togglePayment(method: (typeof paymentMethods)[number]) {
+  await toggleRecord(method, (active) => paymentMethodApi.update(method.id!, { code: method.code!, name: method.name, active }), 'ช่องทางชำระเงิน')
+}
+async function toggleRoom(item: (typeof rooms)[number]) {
+  await toggleRecord(item, (active) => resourceApi.update(item.id!, { branchCode: item.branchCode!, code: item.code!, name: item.name, type: item.type === 'ห้องรักษา' ? 'ROOM' : 'EQUIPMENT', status: resourceStatusToApi[item.status] ?? 'AVAILABLE', active }), 'ห้องหรือทรัพยากร')
+}
+async function toggleCommission(item: (typeof commissionRules)[number]) {
+  await toggleRecord(item, async (active) => commissionApi.updateScheme(item.schemeId!, { name: item.schemeName ?? item.name, version: item.version ?? '1', effectiveFrom: item.effectiveFrom, effectiveTo: item.effectiveTo || null, tiers: item.tiers ?? [], active }) as Promise<{ active: boolean }>, 'เกณฑ์คอมมิชชัน')
+  commissionRules.filter((rule) => rule.schemeId === item.schemeId).forEach((rule) => { rule.active = item.active; rule.status = item.active ? 'Active' : 'Inactive' })
+}
+async function toggleMaster(item: (typeof masterData)[number]) {
+  await toggleRecord(item, (active) => masterDataApi.update(item.id!, { category: item.category, code: item.code!, name: item.name, active }), 'ข้อมูลพื้นฐาน')
 }
 </script>
 
@@ -300,6 +369,7 @@ async function toggleUser(user: (typeof users)[number]) {
           <button
             v-for="item in sections"
             :key="item[0]"
+            :data-test="`settings-section-${item[0]}`"
             :class="{ active: section === item[0] }"
             @click="section = item[0]"
           >
@@ -314,8 +384,8 @@ async function toggleUser(user: (typeof users)[number]) {
               <h2>{{ title }}</h2>
             </div>
             <RouterLink v-if="section === 'commission'" class="primary" to="/staff/commission/tiers">จัดการ Commission Tier</RouterLink>
-            <button v-else-if="section !== 'payments'" class="primary" @click="openEditor()">
-              {{ section === 'commission' ? '+ เพิ่มเกณฑ์' : '+ เพิ่มข้อมูล' }}
+            <button v-else-if="section !== 'payments'" class="primary" data-test="open-settings-editor" @click="openEditor()">
+              {{ section === 'commission' ? '+ เพิ่มเกณฑ์' : section === 'therapists' ? '+ เพิ่มนักกายภาพบำบัด' : '+ เพิ่มข้อมูล' }}
             </button>
           </header>
 
@@ -325,7 +395,7 @@ async function toggleUser(user: (typeof users)[number]) {
                 <th>รหัสสาขา</th>
                 <th>ชื่อสาขา</th>
                 <th>ข้อมูลติดต่อ</th>
-                <th>สถานะ</th>
+                <th>สถานะการใช้งาน</th>
                 <th></th>
               </tr>
             </thead>
@@ -337,11 +407,11 @@ async function toggleUser(user: (typeof users)[number]) {
                 <td>{{ item.name }}</td>
                 <td>{{ item.detail }}</td>
                 <td>
-                  <span class="status" :class="{ void: item.status === 'Inactive' }">{{
-                    item.status === 'Active' ? 'ใช้งาน' : 'ปิดใช้งาน'
+                  <span class="status" :class="{ void: !item.active }">{{
+                    item.active ? 'ใช้งาน' : 'ปิดใช้งาน'
                   }}</span>
                 </td>
-                <td><button class="secondary" @click="openEditor(index)">แก้ไข</button></td>
+                <td class="row-actions"><button class="secondary" @click="openEditor(index)">แก้ไข</button><button class="payment-toggle status-toggle" :class="{ 'is-active': item.active, 'is-inactive': !item.active }" role="switch" :aria-checked="item.active" :aria-label="`${item.name} ${item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`" @click="toggleBranch(item)"><span class="toggle-thumb" aria-hidden="true"></span><span class="sr-only">{{ item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span></button></td>
               </tr>
             </tbody>
           </table>
@@ -366,11 +436,35 @@ async function toggleUser(user: (typeof users)[number]) {
                 <td>{{ item.branch }}</td>
                 <td>{{ item.permission }}</td>
                 <td>
-                  <span class="status" :class="{ void: item.status === 'Inactive' }">{{
-                    item.status === 'Active' ? 'ใช้งาน' : 'ปิดใช้งาน'
+                  <span class="status" :class="{ void: !item.active }">{{
+                    item.active ? 'ใช้งาน' : 'ปิดใช้งาน'
                   }}</span>
                 </td>
-                <td><button class="secondary" @click="openEditor(index)">แก้ไข</button><button class="secondary" @click="toggleUser(item)">{{ item.status === 'Active' ? 'ปิดใช้งาน' : 'เปิดใช้งาน' }}</button></td>
+                <td class="row-actions"><button class="secondary" @click="openEditor(index)">แก้ไข</button><button class="payment-toggle status-toggle" :class="{ 'is-active': item.active, 'is-inactive': !item.active }" role="switch" :aria-checked="item.active" :aria-label="`${item.name} ${item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`" @click="toggleUser(item)"><span class="toggle-thumb" aria-hidden="true"></span><span class="sr-only">{{ item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span></button></td>
+              </tr>
+            </tbody>
+          </table>
+          <table v-else-if="section === 'therapists'" class="staff-table therapists-table">
+            <thead>
+              <tr>
+                <th>รหัส</th>
+                <th>ชื่อนักกายภาพบำบัด</th>
+                <th>สาขา</th>
+                <th>สถานะ</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, index) in therapists" :key="item.id ?? item.code">
+                <td><b>{{ item.code }}</b></td>
+                <td>{{ item.name }}</td>
+                <td>{{ item.branch }}</td>
+                <td>
+                  <span class="status" :class="{ void: !item.active }">
+                    {{ item.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}
+                  </span>
+                </td>
+                <td class="row-actions"><button class="secondary" @click="openEditor(index)">แก้ไข</button><button class="payment-toggle status-toggle" :class="{ 'is-active': item.active, 'is-inactive': !item.active }" role="switch" :aria-checked="item.active" :aria-label="`${item.name} ${item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`" @click="toggleTherapist(item)"><span class="toggle-thumb" aria-hidden="true"></span><span class="sr-only">{{ item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span></button></td>
               </tr>
             </tbody>
           </table>
@@ -396,11 +490,11 @@ async function toggleUser(user: (typeof users)[number]) {
                 <td>{{ item.detail || '—' }}</td>
                 <td>{{ item.expiry || '—' }}</td>
                 <td>
-                  <span class="status" :class="{ void: item.status === 'Inactive' }">{{
-                    item.status === 'Active' ? 'ใช้งาน' : 'ปิดใช้งาน'
+                  <span class="status" :class="{ void: !item.active }">{{
+                    item.active ? 'ใช้งาน' : 'ปิดใช้งาน'
                   }}</span>
                 </td>
-                <td><button class="secondary" @click="openEditor(index)">แก้ไข</button></td>
+                <td class="row-actions"><button class="secondary" @click="openEditor(index)">แก้ไข</button><button class="payment-toggle status-toggle" :class="{ 'is-active': item.active, 'is-inactive': !item.active }" role="switch" :aria-checked="item.active" :aria-label="`${item.name} ${item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`" @click="toggleService(item)"><span class="toggle-thumb" aria-hidden="true"></span><span class="sr-only">{{ item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span></button></td>
               </tr>
             </tbody>
           </table>
@@ -410,8 +504,16 @@ async function toggleUser(user: (typeof users)[number]) {
                 <b>{{ method.name }}</b
                 ><small>ช่องทางรับชำระเงิน</small>
               </div>
-              <button class="secondary" @click="togglePayment(method)">
-                {{ method.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน' }}
+              <button
+                class="payment-toggle"
+                :class="{ 'is-active': method.active, 'is-inactive': !method.active }"
+                role="switch"
+                :aria-checked="method.active"
+                :aria-label="`${method.name} ${method.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`"
+                @click="togglePayment(method)"
+              >
+                <span class="toggle-thumb" aria-hidden="true"></span>
+                <span class="sr-only">{{ method.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span>
               </button>
             </article>
           </div>
@@ -421,7 +523,7 @@ async function toggleUser(user: (typeof users)[number]) {
                 <th>ห้อง / ทรัพยากร</th>
                 <th>สาขา</th>
                 <th>ประเภท</th>
-                <th>สถานะ</th>
+                <th>สถานะการใช้งาน</th>
                 <th></th>
               </tr>
             </thead>
@@ -433,13 +535,10 @@ async function toggleUser(user: (typeof users)[number]) {
                 <td>{{ item.branch }}</td>
                 <td>{{ item.type }}</td>
                 <td>
-                  <span
-                    class="status"
-                    :class="{ busy: item.status === 'ไม่ว่าง', void: item.status === 'ซ่อม' }"
-                    >{{ item.status }}</span
-                  >
+                  <span class="status" :class="{ void: !item.active }">{{ item.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</span>
+                  <small class="operational-status">{{ item.status }}</small>
                 </td>
-                <td><button class="secondary" @click="openEditor(index)">แก้ไข</button></td>
+                <td class="row-actions"><button class="secondary" @click="openEditor(index)">แก้ไข</button><button class="payment-toggle status-toggle" :class="{ 'is-active': item.active, 'is-inactive': !item.active }" role="switch" :aria-checked="item.active" :aria-label="`${item.name} ${item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`" @click="toggleRoom(item)"><span class="toggle-thumb" aria-hidden="true"></span><span class="sr-only">{{ item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span></button></td>
               </tr>
             </tbody>
           </table>
@@ -463,11 +562,11 @@ async function toggleUser(user: (typeof users)[number]) {
                 <td>{{ item.calculation }}</td>
                 <td>{{ item.effectiveFrom || '1 ส.ค. 2569' }}</td>
                 <td>
-                  <span class="status" :class="{ void: item.status === 'Inactive' }">{{
-                    item.status === 'Active' ? 'ใช้งาน' : 'ปิดใช้งาน'
+                  <span class="status" :class="{ void: !item.active }">{{
+                    item.active ? 'ใช้งาน' : 'ปิดใช้งาน'
                   }}</span>
                 </td>
-                <td><RouterLink class="secondary" to="/staff/commission/tiers">แก้ไขใน Commission Tier</RouterLink></td>
+                <td class="row-actions"><RouterLink class="secondary" to="/staff/commission/tiers">แก้ไขใน Commission Tier</RouterLink><button class="payment-toggle status-toggle" :class="{ 'is-active': item.active, 'is-inactive': !item.active }" role="switch" :aria-checked="item.active" :aria-label="`${item.name} ${item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`" @click="toggleCommission(item)"><span class="toggle-thumb" aria-hidden="true"></span><span class="sr-only">{{ item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span></button></td>
               </tr>
             </tbody>
           </table>
@@ -487,11 +586,11 @@ async function toggleUser(user: (typeof users)[number]) {
                   <b>{{ item.name }}</b>
                 </td>
                 <td>
-                  <span class="status" :class="{ void: item.status === 'Inactive' }">{{
-                    item.status === 'Active' ? 'ใช้งาน' : 'ปิดใช้งาน'
+                  <span class="status" :class="{ void: !item.active }">{{
+                    item.active ? 'ใช้งาน' : 'ปิดใช้งาน'
                   }}</span>
                 </td>
-                <td><button class="secondary" @click="openEditor(index)">แก้ไข</button></td>
+                <td class="row-actions"><button class="secondary" @click="openEditor(index)">แก้ไข</button><button class="payment-toggle status-toggle" :class="{ 'is-active': item.active, 'is-inactive': !item.active }" role="switch" :aria-checked="item.active" :aria-label="`${item.name} ${item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}`" @click="toggleMaster(item)"><span class="toggle-thumb" aria-hidden="true"></span><span class="sr-only">{{ item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}</span></button></td>
               </tr>
             </tbody>
           </table>
@@ -501,13 +600,13 @@ async function toggleUser(user: (typeof users)[number]) {
     </main>
 
     <div v-if="editing" class="drawer-backdrop" @click.self="editing = false">
-      <aside class="drawer">
+      <aside class="drawer" data-test="settings-editor">
         <header>
           <div>
             <small>BACK OFFICE</small>
             <h2>เพิ่มหรือแก้ไข {{ title }}</h2>
           </div>
-          <button @click="editing = false">×</button>
+          <button data-test="close-settings-editor" @click="editing = false">×</button>
         </header>
         <template v-if="section === 'branches'">
           <label>รหัสสาขา<input v-model="form.code" maxlength="2" placeholder="เช่น RP" /></label>
@@ -544,6 +643,13 @@ async function toggleUser(user: (typeof users)[number]) {
               }}</label
             >
           </fieldset>
+        </template>
+        <template v-else-if="section === 'therapists'">
+          <label>รหัสนักกายภาพบำบัด<input v-model="form.code" placeholder="เว้นว่างเพื่อสร้างอัตโนมัติ" :disabled="editingIndex >= 0" /></label>
+          <label>ชื่อนักกายภาพบำบัด<input v-model="form.name" placeholder="ชื่อ-นามสกุล" /></label>
+          <label>สาขา<select v-model="form.branch">
+            <option v-for="branch in branches" :key="branch.code" :value="branch.name">{{ branch.name }}</option>
+          </select></label>
         </template>
         <template v-else-if="section === 'services'">
           <label>ชื่อบริการหรือคอร์ส<input v-model="form.name" /></label>
@@ -627,7 +733,7 @@ async function toggleUser(user: (typeof users)[number]) {
           >
           <label>ชื่อรายการ<input v-model="form.name" /></label>
         </template>
-        <label v-if="section !== 'rooms'"
+        <label v-if="section !== 'rooms' && section !== 'therapists' && section !== 'services'"
           >สถานะ<select v-model="form.status">
             <option value="Active">ใช้งาน</option>
             <option value="Inactive">ปิดใช้งาน</option>
@@ -635,10 +741,20 @@ async function toggleUser(user: (typeof users)[number]) {
         >
         <p v-if="formError" class="form-error">{{ formError }}</p>
         <footer>
-          <button class="secondary" @click="editing = false">ยกเลิก</button
-          ><button class="primary" @click="save">บันทึก</button>
+          <button class="secondary" data-test="cancel-settings-edit" @click="editing = false">ยกเลิก</button
+          ><button class="primary" data-test="save-settings" @click="save">บันทึก</button>
         </footer>
       </aside>
+    </div>
+    <div v-if="confirmDialog.open" class="confirm-backdrop" @click.self="resolveConfirmation(false)">
+      <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <h2 id="confirm-title " class="!text-xl">ยืนยันการดำเนินการ</h2>
+        <p>{{ confirmDialog.message }}</p>
+        <footer>
+          <button class="secondary" @click="resolveConfirmation(false)">ยกเลิก</button>
+          <button class="secondary !bg-red-500 !text-white" @click="resolveConfirmation(true)">ยืนยัน</button>
+        </footer>
+      </section>
     </div>
   </div>
 </template>

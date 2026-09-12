@@ -84,19 +84,19 @@ onMounted(async () => {
           <h1>{{ patient.title }}{{ patient.fullName }}</h1>
           <p class="!text-lg">HN {{ patient.hn }}</p>
         </div>
-        <button class="primary" @click="openEdit">แก้ไขข้อมูล</button>
+       <button class="primary" data-test="edit-patient-button" @click="openEdit">แก้ไขข้อมูล</button>
       </section>
 
-      <form v-if="patient && editing" class="patient-edit" @submit.prevent="saveEdit">
+      <form v-if="patient && editing" class="patient-edit" data-test="patient-edit-form" @submit.prevent="saveEdit">
         <header>
           <h2>แก้ไขข้อมูลผู้ป่วย</h2>
         </header>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-6 p-6">
           <h3 class="md:col-span-6">ข้อมูลส่วนตัว</h3>
           <label class="md:col-span-2">คำนำหน้า<select v-model="draft.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>เด็กชาย</option><option>เด็กหญิง</option><option>ไม่ระบุ</option></select></label>
-          <label class="md:col-span-4">อีเมล <input class="w-full" v-model="draft.email" type="text" inputmode="email" /></label>
-          <label class="md:col-span-2">ชื่อ <em>*</em><input v-model="draft.firstName" required /></label>
-          <label class="md:col-span-2">นามสกุล <em>*</em><input v-model="draft.lastName" required /></label>
+           <label class="md:col-span-4">อีเมล <input data-test="profile-email" class="w-full" v-model="draft.email" type="text" inputmode="email" /></label>
+           <label class="md:col-span-2">ชื่อ <em>*</em><input data-test="profile-first-name" v-model="draft.firstName" required /></label>
+           <label class="md:col-span-2">นามสกุล <em>*</em><input data-test="profile-last-name" v-model="draft.lastName" required /></label>
           <label class="md:col-span-2">ชื่อเล่น <input v-model="draft.nickname" /></label>
           <label class="md:col-span-2">เพศ<select v-model="draft.gender"><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></label>
           <label class="md:col-span-2">วันเกิด <em>*</em><ThaiDatePicker v-model="draft.birthDateInput" /></label>
@@ -113,7 +113,7 @@ onMounted(async () => {
         </div>
         <footer>
           <button type="button" class="outline" @click="editing = false">ยกเลิก</button
-          ><button class="primary">บันทึกข้อมูล</button>
+           ><button class="primary" data-test="save-patient-button">บันทึกข้อมูล</button>
         </footer>
       </form>
       <section v-else-if="patient" class="profile-sheet">

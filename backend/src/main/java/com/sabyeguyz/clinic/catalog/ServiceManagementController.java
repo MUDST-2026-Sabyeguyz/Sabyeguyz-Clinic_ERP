@@ -18,7 +18,7 @@ public class ServiceManagementController {
     public ServiceManagementController(ServiceItemRepository repository) { this.repository = repository; }
 
     public record Request(@NotBlank String code, @NotBlank String name, @Min(1) int defaultDurationMinutes,
-                          @NotNull @DecimalMin("0.0") BigDecimal price) {}
+                          @NotNull @DecimalMin("0.0") BigDecimal price, Boolean active) {}
     public record Response(Long id, String code, String name, int defaultDurationMinutes, BigDecimal price, boolean active) {}
 
     @GetMapping
@@ -30,7 +30,11 @@ public class ServiceManagementController {
     Response create(@Valid @RequestBody Request request) {
         String code = request.code().trim().toUpperCase();
         if (repository.findByCode(code).isPresent()) throw new IllegalArgumentException("รหัสบริการซ้ำ");
-        return out(repository.save(new ServiceItem(code, request.name().trim(), request.defaultDurationMinutes(), request.price())));
+        ServiceItem item = new ServiceItem(code, request.name().trim(), request.defaultDurationMinutes(), request.price());
+        if (request.active() != null) {
+            if (request.active()) item.activate(); else item.deactivate();
+        }
+        return out(repository.save(item));
     }
 
     @PutMapping("/{id}")
@@ -40,6 +44,9 @@ public class ServiceManagementController {
         String code = request.code().trim().toUpperCase();
         if (repository.findByCode(code).filter(found -> !found.getId().equals(id)).isPresent()) throw new IllegalArgumentException("รหัสบริการซ้ำ");
         item.update(code, request.name().trim(), request.defaultDurationMinutes(), request.price());
+        if (request.active() != null) {
+            if (request.active()) item.activate(); else item.deactivate();
+        }
         return out(repository.save(item));
     }
 

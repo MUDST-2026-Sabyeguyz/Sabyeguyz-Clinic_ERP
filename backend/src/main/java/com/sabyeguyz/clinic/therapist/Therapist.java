@@ -37,10 +37,21 @@ public class Therapist {
 
     protected Therapist() {}
 
+    public Therapist(Branch branch, String code, String fullName) {
+        this.branch = branch;
+        this.code = code;
+        this.fullName = fullName;
+        this.active = true;
+        this.createdAt = Instant.now();
+    }
+
     public Long getId() { return id; }
     public Branch getBranch() { return branch; }
     public String getCode() { return code; }
     public String getFullName() { return fullName; }
     public boolean isActive() { return active; }
     public Instant getCreatedAt() { return createdAt; }
+    public void rename(String value) { fullName = value; }
+    public void activate() { active = true; }
+    public void deactivate() { active = false; }
 }

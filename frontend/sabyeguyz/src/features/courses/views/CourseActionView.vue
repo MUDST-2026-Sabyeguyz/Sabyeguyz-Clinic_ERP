@@ -81,12 +81,12 @@ function handleRecipientInput() {
               <small>เจ้าของคอร์สที่เลือก</small><b>{{ owner?.fullName || 'กำลังโหลด...' }}</b>
               <p>{{ owner?.hn }} สถานะ {{ owner?.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</p>
             </div>
-            <select v-model="selectedCourseId" class="owner-selector">
+            <select v-model="selectedCourseId" class="owner-selector" data-test="course-selector">
               <option v-for="course in patientCourses" :key="course.id" :value="course.id">{{ course.name }} · {{ course.course.code }}</option>
             </select>
           </div>
           <div class="course-list">
-            <article v-for="course in patientCourses" :key="course.name">
+            <article v-for="course in patientCourses" :key="course.name" :data-test="`course-card-${course.id}`">
               <div class="course-main">
                 <span class="course-icon">▱</span>
                 <div>
@@ -99,9 +99,9 @@ function handleRecipientInput() {
                 ><span><i :style="{ width: `${(course.balance / course.total) * 100}%` }" /></span>
               </div>
               <div class="course-actions">
-                <button class="course-action-button transfer" @click="start('transfer', course)">
+                <button class="course-action-button transfer" data-test="start-course-transfer" @click="start('transfer', course)">
                   โอนสิทธิ์</button
-                ><button class="course-action-button history" @click="start('history', course)">
+                ><button class="course-action-button history" data-test="view-course-history" @click="start('history', course)">
                   ดูประวัติ
                 </button>
               </div>
@@ -111,7 +111,7 @@ function handleRecipientInput() {
         <div v-if="action" class="course-workspace inline-workspace">
           <header class="form-title">
             <h2>{{ title }}</h2>
-            <button class="back" @click="goBack">× ปิดแบบฟอร์ม</button>
+            <button class="back" data-test="close-course-workspace" @click="goBack">× ปิดแบบฟอร์ม</button>
           </header>
           <div v-if="action === 'transfer'" class="course-form">
             <label>เจ้าของคอร์ส<input :value="`${owner?.fullName ?? ''} HN ${owner?.hn ?? ''}`" readonly /></label
@@ -122,6 +122,7 @@ function handleRecipientInput() {
             <div class="recipient-field">
               <label
                 >ผู้รับสิทธิ์<input
+                  data-test="course-recipient-search"
                   v-model.trim="recipientSearch"
                   placeholder="ค้นหา HN ชื่อ หรือเบอร์โทรศัพท์"
                   @input="handleRecipientInput"
@@ -130,6 +131,7 @@ function handleRecipientInput() {
                 <button
                   v-for="patient in recipientResults"
                   :key="patient.hn"
+                  :data-test="`course-recipient-option-${patient.id}`"
                   type="button"
                   @click="selectRecipient(patient)"
                 >
@@ -141,6 +143,7 @@ function handleRecipientInput() {
             </div>
             <label
               >จำนวนที่ต้องการโอน<input
+                data-test="course-transfer-amount"
                 v-model.number="transferAmount"
                 type="number"
                 min="1"
@@ -164,12 +167,13 @@ function handleRecipientInput() {
               :disabled="
                 !selectedRecipient || transferAmount < 1 || transferAmount > selectedCourse.balance
               "
+              data-test="confirm-course-transfer"
               @click="confirm"
             >
               ยืนยันการโอนสิทธิ์
             </button>
           </footer>
-          <p v-if="action === 'transfer' && done" class="success">
+          <p v-if="action === 'transfer' && done" class="success" data-test="course-transfer-success">
             บันทึกรายการโอนและประวัติตรวจสอบเรียบร้อยแล้ว
           </p>
           <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>

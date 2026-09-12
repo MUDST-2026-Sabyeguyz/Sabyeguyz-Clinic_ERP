@@ -31,19 +31,19 @@ onMounted(async () => {
       <p v-if="loading" class="status-feedback">กำลังโหลดข้อมูลจาก backend...</p>
       <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       <section class="metrics">
-        <article>
+        <article data-test="dashboard-patients-metric">
           <small>ผู้ป่วยทั้งหมด</small><b>{{ patients.toLocaleString() }}</b
           ><span>ข้อมูลรวมของคลินิก</span>
         </article>
-        <article>
+        <article data-test="dashboard-visits-metric">
           <small>จำนวนการเข้ารับบริการ</small><b>{{ visits.toLocaleString() }}</b
           ><span>ที่มารับบริการแล้ว</span>
         </article>
-        <article>
+        <article data-test="dashboard-revenue-metric">
           <small>รายได้รวม</small><b>฿{{ revenue.toLocaleString() }}</b
           ><span>ทุกสาขา</span>
         </article>
-        <article>
+        <article data-test="dashboard-courses-metric">
           <small>คอร์สที่ขายในช่วงเวลา</small><b>{{ courses.toLocaleString() }}</b
           ><span>ตามช่วงวันที่ของ Dashboard</span>
         </article>

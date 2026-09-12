@@ -69,24 +69,30 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
         <small>Appointment & Patient Visit</small>
         <h1>นัดหมาย</h1>
         <p>ตรวจสอบตารางนัด สร้าง แก้ไข และอัปเดตสถานะการเข้ารับบริการ</p>
-        <button class="primary hero-action" @click="openCreate">+ สร้างนัดหมาย</button>
+        <button class="primary hero-action" data-test="create-appointment-button" @click="openCreate">+ สร้างนัดหมาย</button>
       </section>
       <div v-if="viewMode !== 'list'" class="appointment-form-page">
-        <button class="appointment-back" type="button" @click="viewMode = 'list'">
+        <button class="appointment-back" data-test="appointment-back-button" type="button" @click="viewMode = 'list'">
           ← กลับไปหน้านัดหมาย
         </button>
         <section class="staff-panel create-card">
           <h1>{{ isEditing ? 'แก้ไขนัดหมาย' : 'สร้างนัดหมายใหม่' }}</h1>
           <div class="form-grid">
+               <label>
+              สาขา
+              <select data-test="appointment-branch-select" v-model="form.branchCode" :disabled="isEditing">
+                <option v-for="item in branchOptions" :key="item.code" :value="item.code">{{ item.name }} ({{ item.code }})</option>
+              </select>
+            </label>
             <label class="patient-picker">
               ผู้ป่วย
-              <button type="button" class="patient-picker-trigger" :disabled="isEditing" @click="patientDropdownOpen = !patientDropdownOpen">
+              <button type="button" class="patient-picker-trigger" data-test="appointment-patient-picker" :disabled="isEditing" @click="patientDropdownOpen = !patientDropdownOpen">
                 {{ patients.find((patient) => patient.id === form.patientId)?.fullName ?? 'เลือกผู้ป่วย' }}
                 <span>⌄</span>
               </button>
               <div v-if="patientDropdownOpen && !isEditing" class="patient-picker-menu">
-                <input v-model.trim="patientSearch" placeholder="ค้นหาชื่อหรือ HN" aria-label="ค้นหาผู้ป่วย" />
-                <button v-for="patient in patientOptions" :key="patient.id" type="button" class="patient-picker-option" @click="choosePatient(patient)">
+                <input data-test="appointment-patient-search" v-model.trim="patientSearch" placeholder="ค้นหาชื่อหรือ HN" aria-label="ค้นหาผู้ป่วย" />
+                <button v-for="patient in patientOptions" :key="patient.id" type="button" class="patient-picker-option" :data-test="`appointment-patient-option-${patient.id}`" @click="choosePatient(patient)">
                   {{ patient.fullName }} (HN {{ patient.hn }})
                 </button>
                 <small v-if="patientOptions.length === 0">ไม่พบผู้ป่วย</small>
@@ -94,37 +100,32 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
             </label>
             <label>
               ประเภทบริการ
-              <select v-model="form.serviceId" :disabled="isEditing">
+              <select data-test="appointment-service-select" v-model="form.serviceId" :disabled="isEditing">
                 <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }}</option>
               </select>
             </label>
             <label>
               นักกายภาพ
-              <select v-model="form.therapistId">
+              <select data-test="appointment-therapist-select" v-model="form.therapistId">
                 <option v-for="therapist in therapistOptions" :key="therapist.id" :value="therapist.id">
                   {{ therapist.fullName }}
                 </option>
               </select>
             </label>
-            <label>วันที่<input v-model="form.date" type="date" /></label>
+            <label>วันที่<input data-test="appointment-date-input" v-model="form.date" type="date" /></label>
             <label>
               เวลา
-              <select v-model="form.time">
+              <select data-test="appointment-time-select" v-model="form.time">
                 <option v-for="time in timeOptions" :key="time" :value="time">
                   {{ time }}
                 </option>
               </select>
             </label>
-            <label>
-              สาขา
-              <select v-model="form.branchCode" :disabled="isEditing">
-                <option v-for="item in branchOptions" :key="item.code" :value="item.code">{{ item.name }} ({{ item.code }})</option>
-              </select>
-            </label>
-            <label class="wide">หมายเหตุ<textarea v-model.trim="form.note" maxlength="500" /></label>
+            
+            <label class="wide !grid-cols-3">หมายเหตุ<textarea data-test="appointment-note" v-model.trim="form.note" maxlength="500" /></label>
           </div>
           <div class="appointment-save">
-            <button class="primary" @click="save">บันทึก</button>
+            <button class="primary" data-test="save-appointment-button" @click="save">บันทึก</button>
           </div>
         </section>
       </div>
@@ -136,9 +137,9 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
               ><svg viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="6" />
                 <path d="m16 16 4 4" /></svg></span
-            ><input v-model="query" placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย" />
+            ><input data-test="appointment-search-input" v-model="query" placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย" />
           </div>
-          <select v-model="selectedBranch" class="branch-filter" aria-label="กรองตามสาขา">
+          <select data-test="appointment-branch-filter" v-model="selectedBranch" class="branch-filter" aria-label="กรองตามสาขา">
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
             <option v-for="item in branchOptions" :key="item.code" :value="item.code">{{ item.name }}</option>
           </select>
@@ -162,7 +163,7 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredAppointments" :key="item.id">
+            <tr v-for="item in filteredAppointments" :key="item.id" :data-test="`appointment-row-${item.id}`">
               <td>{{ formatThaiDate(item.startAt) }}</td>
               <td>
                 <b>{{ formatTime(item.startAt) }}</b>
@@ -180,13 +181,14 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
                 <select
                   :value="item.status"
                   class="status-select"
+                  data-test="appointment-status-select"
                   :disabled="savingStatusId !== null"
                   @change="changeStatus($event, item)"
                 >
                   <option v-for="status in statusOptions" :key="status" :value="status">{{ formatStatus(status) }}</option>
                 </select>
               </td>
-              <td><button class="secondary" @click="openEdit(item)">แก้ไข</button></td>
+              <td><button class="secondary" data-test="edit-appointment-button" @click="openEdit(item)">แก้ไข</button></td>
             </tr>
             <tr v-if="filteredAppointments.length === 0">
               <td class="appointment-empty" colspan="9">ไม่พบข้อมูลนัดหมาย</td>
@@ -205,18 +207,18 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
       class="status-modal-backdrop"
       @click.self="pendingCancellation = null"
     >
-      <form class="status-modal" @submit.prevent="confirmCancellation">
+       <form class="status-modal" data-test="cancellation-form" @submit.prevent="confirmCancellation">
         <h2>ยืนยันการยกเลิกนัดหมาย</h2>
         <p>{{ pendingCancellation.item.patient.fullName }} เวลา {{ formatTime(pendingCancellation.item.startAt) }}</p>
         <label
           >เหตุผลที่ยกเลิก <em>*</em>
-          <textarea v-model.trim="cancellationReason" rows="3" required></textarea>
+           <textarea data-test="cancellation-reason" v-model.trim="cancellationReason" rows="3" required></textarea>
         </label>
         <div>
           <button type="button" class="secondary" @click="pendingCancellation = null">
             กลับ
           </button>
-          <button type="submit" class="danger">ยืนยันการยกเลิก</button>
+           <button type="submit" class="danger" data-test="confirm-cancellation-button">ยืนยันการยกเลิก</button>
         </div>
       </form>
     </div>

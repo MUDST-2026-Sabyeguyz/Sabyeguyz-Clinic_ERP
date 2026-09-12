@@ -78,6 +78,7 @@ async function submit() {
             </svg>
           </span>
           <input
+            data-test="service-patient-search"
             v-model="query"
             aria-label="ค้นหาผู้ป่วย"
             placeholder="ค้นหาชื่อผู้ป่วยหรือเลขประจำตัวผู้ป่วย"
@@ -85,7 +86,7 @@ async function submit() {
           />
         </label>
         <div v-if="query && results.length && !patient" class="results">
-          <button v-for="p in results" :key="p.hn" @click="choose(p)">
+          <button v-for="p in results" :key="p.hn" :data-test="`service-patient-option-${p.id}`" @click="choose(p)">
             <b>{{ p.fullName }}</b
             ><small>{{ p.hn }} {{ p.phone }}</small>
           </button>
@@ -116,16 +117,16 @@ async function submit() {
           </div>
           <div class="category">
             <label
-              >เลือกประเภทรายการ<select v-model="mode">
+              >เลือกประเภทรายการ<select data-test="service-mode-select" v-model="mode">
                 <option value="assessment">Assessment</option>
                 <option value="single">Single Visit</option>
                 <option value="course">Course</option>
               </select></label
             >
             <div v-if="mode === 'course'" class="toggle">
-              <button :class="{ active: action === 'use' }" @click="action = 'use'">
+                <button data-test="use-course-button" :class="{ active: action === 'use' }" @click="action = 'use'">
                 ใช้สิทธิ์</button
-              ><button :class="{ active: action === 'buy' }" @click="action = 'buy'">
+              ><button data-test="buy-course-button" :class="{ active: action === 'buy' }" @click="action = 'buy'">
                 ซื้อคอร์ส
               </button>
             </div>
@@ -138,20 +139,20 @@ async function submit() {
                   : mode === 'single'
                     ? 'บริการรายครั้ง'
                     : 'รายการคอร์ส'
-              }}<select v-if="mode !== 'course'" v-model="selectedServiceId">
+              }}<select v-if="mode !== 'course'" data-test="service-item-select" v-model="selectedServiceId">
                 <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }} ฿{{ service.price.toLocaleString() }}</option>
-              </select><select v-else v-model="selectedCourseId">
+              </select><select v-else data-test="course-item-select" v-model="selectedCourseId">
                 <option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }} ฿{{ course.price.toLocaleString() }}</option>
               </select></label
             ><label
-              >ผู้ทำรายการ<select v-model="selectedStaffId">
+              >ผู้ทำรายการ<select data-test="service-staff-select" v-model="selectedStaffId">
                 <option v-for="person in staff" :key="person.id" :value="person.id">{{ person.fullName }}</option>
               </select></label
             ><label v-if="mode !== 'course' || action === 'buy'"
-              >ช่องทางชำระเงิน<select v-model="paymentCode">
+              >ช่องทางชำระเงิน<select data-test="payment-method-select" v-model="paymentCode">
                 <option v-for="method in paymentMethods" :key="method.code" :value="method.code">{{ method.name }}</option>
               </select></label
-            ><label class="note">หมายเหตุ<textarea v-model.trim="note" /></label>
+             ><label class="note">หมายเหตุ<textarea data-test="service-note" v-model.trim="note" /></label>
           </div>
         </div>
         <footer>
@@ -159,10 +160,10 @@ async function submit() {
           <div>
             <strong>{{ item }}</strong
             ><b>{{ amount }}</b
-            ><button :disabled="loading" @click="submit">{{ loading ? 'กำลังบันทึก...' : 'ยืนยันรายการ' }}</button>
+            ><button data-test="confirm-service-button" :disabled="loading" @click="submit">{{ loading ? 'กำลังบันทึก...' : 'ยืนยันรายการ' }}</button>
           </div>
         </footer>
-        <p v-if="confirmed" class="success">บันทึกรายการเรียบร้อยแล้ว</p>
+        <p v-if="confirmed" class="success" data-test="service-success">บันทึกรายการเรียบร้อยแล้ว</p>
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       </section>
     </main>
