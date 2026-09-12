@@ -25,7 +25,7 @@ const router = createRouter({
       meta: { permission: 'Patient' },
     },
     {
-      path: '/staff/patients/:id',
+      path: '/staff/patients/:hn',
       name: 'patient-profile',
       component: () => import('@/features/patients/views/PatientProfileView.vue'),
       meta: { permission: 'Patient' },
@@ -105,16 +105,15 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (!to.path.startsWith('/staff/')) return true
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
-  const role = authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
-  if (role !== 'manager' && role !== 'therapist') {
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('authUser')
+  const role = localStorage.getItem('mockStaffRole')
+  const token = localStorage.getItem('authToken')
+  if (!token || (role !== 'manager' && role !== 'therapist')) {
     localStorage.removeItem('mockStaffRole')
+    localStorage.removeItem('mockStaffEmail')
     return { name: 'staff-login' }
   }
   const allowedRoles = to.meta.roles as string[] | undefined
-  if (allowedRoles && !allowedRoles.includes(role)) return { name: 'staff-appointments' }
+  if (allowedRoles && !allowedRoles.includes(role)) return { name: 'patient-search' }
   const requiredPermission = to.meta.permission as string | undefined
   const permissions =
     localStorage.getItem('mockStaffPermissions') ?? 'Patient, Visit, Treatment, Course, Transaction'

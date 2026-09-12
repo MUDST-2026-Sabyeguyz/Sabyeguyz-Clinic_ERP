@@ -89,6 +89,25 @@ input:focus {
   border-color: #1d7c78;
   box-shadow: 0 0 0 3px #1d7c781f;
 }
+.email-field input[aria-invalid='true'] {
+  border-color: #c12b2b;
+  box-shadow: 0 0 0 3px #c12b2b1f;
+}
+.field-error,
+.login-error {
+  display: block;
+  margin: 5px 0 0;
+  color: #c12b2b;
+  font-size: 15px;
+  line-height: 1.25;
+}
+.field-hint {
+  display: block;
+  margin-top: 5px;
+  color: #697184;
+  font-size: 15px;
+  line-height: 1.25;
+}
 select {
   width: 100%;
   min-height: 48px;
