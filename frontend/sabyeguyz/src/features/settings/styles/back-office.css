@@ -194,3 +194,18 @@
     grid-template-columns: 1fr;
   }
 }
+.services-table {
+  table-layout: fixed;
+}
+
+.services-table th:first-child,
+.services-table td:first-child {
+  width: 34%;
+  overflow-wrap: anywhere;
+}
+
+.services-table th:last-child,
+.services-table td:last-child {
+  width: 96px;
+  white-space: nowrap;
+}

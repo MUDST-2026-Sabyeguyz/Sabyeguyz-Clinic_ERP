@@ -32,15 +32,16 @@ async function submit() { submitted.value = true; if (!canSubmit.value) { errorM
 <template>
      <main class="registration-page">
           <StaffHeader />
-          <div class="back-row">
-               <RouterLink to="/staff/patients" class="back-link">← กลับไปค้นหาผู้ป่วย</RouterLink>
+          
+          <section v-if="!registeredHn" class="registration-shell form-card  !bg-white/85 p-4">
+               <div class="back-row !m-0">
+               <RouterLink to="/staff/patients" class="back-link ">← กลับไปค้นหาผู้ป่วย</RouterLink>
           </div>
-          <section v-if="!registeredHn" class="registration-shell !bg-white/85 p-4">
                <div class="intro">
                     <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
                     <p>เจ้าหน้าที่กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p>
                </div>
-               <form class="form-card" novalidate @submit.prevent="submit">
+               <form class="" novalidate @submit.prevent="submit">
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-6">
                          <label class="md:col-span-3">สาขาที่ลงทะเบียน<select v-model="form.branchCode"
                                    :disabled="!branches.length">
@@ -126,7 +127,7 @@ async function submit() { submitted.value = true; if (!canSubmit.value) { errorM
                          <label class="md:col-span-6" :class="{ 'invalid-field': submitted && !form.address }">ที่อยู่
                               <em>*</em><textarea v-model.trim="form.address" rows="4" /></label>
                     </div>
-                    <div class="actions end"><button type="submit" class="primary" :disabled="submitting">{{ submitting
+                    <div class="actions end "><button type="submit" class="primary" :disabled="submitting">{{ submitting
                          ? 'กำลังบันทึก...' : 'บันทึก' }}</button></div>
                     <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
                </form>
