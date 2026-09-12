@@ -82,6 +82,42 @@
   color: #fff;
   font-size: 16px;
 }
+.course-page .course-selector-field {
+  display: grid;
+  flex: 0 1 360px;
+  gap: 5px;
+  margin-left: auto;
+  margin-right: -30px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+.course-page .owner-selector {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 38px 0 14px;
+  appearance: none;
+  border: 1px solid #e2d7c8;
+  border-radius: 10px;
+  outline: none;
+  color: #254d50;
+  background: #fffdf9
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23254d50' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 13px center;
+  box-shadow: 0 2px 3px rgb(64 45 25 / 14%);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.course-page .owner-selector:hover {
+  border-color: #fff;
+  background-color: #fff;
+}
+.course-page .owner-selector:focus-visible {
+  border-color: #1a817c;
+  box-shadow: 0 0 0 3px rgb(214 246 229 / 70%);
+}
 .avatar {
   width: 56px;
   height: 53px;
@@ -91,6 +127,18 @@
 }
 .course-list {
   padding: 0 21px;
+}
+@media (max-width: 700px) {
+  .course-page .course-summary .patient-context {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 18px 24px;
+  }
+  .course-page .course-selector-field {
+    flex-basis: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
 .course-list article {
   grid-template-columns: minmax(300px, 1.3fr) minmax(260px, 0.85fr) auto;
