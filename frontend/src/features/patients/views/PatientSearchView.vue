@@ -25,7 +25,12 @@ async function loadPatients() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const result = await patientApi.search(query.value.trim(), page.value, 20, branch.value === 'ทั้งหมด' ? '' : branch.value)
+    const result = await patientApi.search(
+      query.value.trim(),
+      page.value,
+      20,
+      branch.value === 'ทั้งหมด' ? '' : branch.value,
+    )
     patients.value = result.items
     totalPages.value = result.totalPages
     totalItems.value = result.totalItems
@@ -35,19 +40,38 @@ async function loadPatients() {
     loading.value = false
   }
 }
-async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; await loadPatients() } }
+async function changePage(nextPage: number) {
+  if (nextPage >= 0 && nextPage < totalPages.value) {
+    page.value = nextPage
+    await loadPatients()
+  }
+}
 let searchTimer: number | undefined
-function refreshSearch() { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => { page.value = 0; void loadPatients() }, 250) }
+function refreshSearch() {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => {
+    page.value = 0
+    void loadPatients()
+  }, 250)
+}
 onMounted(() => {
   const createdHn = localStorage.getItem('patientCreationHn')
   if (!createdHn) return
   newPatientHn.value = createdHn
   localStorage.removeItem('patientCreationHn')
   showCreationNotice.value = true
-  window.setTimeout(() => { showCreationNotice.value = false }, 3000)
+  window.setTimeout(() => {
+    showCreationNotice.value = false
+  }, 3000)
 })
-onMounted(async () => { branches.value = await branchApi.list(); await loadPatients() })
-watch(branch, () => { page.value = 0; void loadPatients() })
+onMounted(async () => {
+  branches.value = await branchApi.list()
+  await loadPatients()
+})
+watch(branch, () => {
+  page.value = 0
+  void loadPatients()
+})
 </script>
 
 <template>
@@ -78,7 +102,9 @@ watch(branch, () => { page.value = 0; void loadPatients() })
           </div>
           <select v-model="branch" class="branch-filter" aria-label="กรองตามสาขา">
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
-            <option v-for="item in branches" :key="item.code" :value="item.code">{{ item.name }}</option>
+            <option v-for="item in branches" :key="item.code" :value="item.code">
+              {{ item.name }}
+            </option>
           </select>
           <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับผู้ป่วย">
             <option value="asc">ชื่อ ก-ฮ</option>
@@ -111,7 +137,9 @@ watch(branch, () => { page.value = 0; void loadPatients() })
                 <td>-</td>
                 <td>{{ patient.branchName ?? patient.branchCode ?? '-' }}</td>
                 <td>
-                  <RouterLink class="row-action" :to="`/staff/patients/${patient.id}`">ดูข้อมูล</RouterLink>
+                  <RouterLink class="row-action" :to="`/staff/patients/${patient.id}`"
+                    >ดูข้อมูล</RouterLink
+                  >
                 </td>
               </tr>
               <tr v-if="filteredPatients.length === 0">
@@ -121,9 +149,17 @@ watch(branch, () => { page.value = 0; void loadPatients() })
           </table>
         </div>
         <footer v-if="totalPages > 1" class="pagination">
-          <button class="secondary" :disabled="page === 0" @click="changePage(page - 1)">ก่อนหน้า</button>
+          <button class="secondary" :disabled="page === 0" @click="changePage(page - 1)">
+            ก่อนหน้า
+          </button>
           <span>หน้า {{ page + 1 }} / {{ totalPages }}</span>
-          <button class="secondary" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป</button>
+          <button
+            class="secondary"
+            :disabled="page + 1 >= totalPages"
+            @click="changePage(page + 1)"
+          >
+            ถัดไป
+          </button>
         </footer>
       </section>
     </main>

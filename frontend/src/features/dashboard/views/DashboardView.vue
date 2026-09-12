@@ -6,16 +6,34 @@ import { patientApi, reportApi } from '@/api/client'
 const today = new Date()
 const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
 const to = today.toISOString().slice(0, 10)
-const patients = ref(0), visits = ref(0), revenue = ref(0), courses = ref(0)
+const patients = ref(0),
+  visits = ref(0),
+  revenue = ref(0),
+  courses = ref(0)
 const statuses = ref<Array<{ status: string; value: number }>>([])
-const loading = ref(true), errorMessage = ref('')
+const loading = ref(true),
+  errorMessage = ref('')
 onMounted(async () => {
   try {
-    const [dashboard, appointments, balances, patientList] = await Promise.all([reportApi.dashboard(from, to), reportApi.appointments(from, to), reportApi.balances(from, to), patientApi.searchAll()])
-    patients.value = patientList.length; visits.value = dashboard.visits; revenue.value = Number(dashboard.totalRevenue); courses.value = balances.purchases
-    statuses.value = appointments.byStatus.map((item) => ({ status: item.status, value: item.appointments }))
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลด dashboard ไม่สำเร็จ' }
-  finally { loading.value = false }
+    const [dashboard, appointments, balances, patientList] = await Promise.all([
+      reportApi.dashboard(from, to),
+      reportApi.appointments(from, to),
+      reportApi.balances(from, to),
+      patientApi.searchAll(),
+    ])
+    patients.value = patientList.length
+    visits.value = dashboard.visits
+    revenue.value = Number(dashboard.totalRevenue)
+    courses.value = balances.purchases
+    statuses.value = appointments.byStatus.map((item) => ({
+      status: item.status,
+      value: item.appointments,
+    }))
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลด dashboard ไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 

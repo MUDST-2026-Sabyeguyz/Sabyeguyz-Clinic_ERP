@@ -14,7 +14,13 @@ const tiers = reactive<Tier[]>([
 const editingIndex = ref(-1)
 const editorOpen = ref(false)
 const error = ref('')
-const scheme = reactive({ id: 0, name: 'Commission Scheme V1', version: '1', effectiveFrom: '2026-01-01', effectiveTo: null as string|null })
+const scheme = reactive({
+  id: 0,
+  name: 'Commission Scheme V1',
+  version: '1',
+  effectiveFrom: '2026-01-01',
+  effectiveTo: null as string | null,
+})
 const form = reactive({ min: 0, max: '' as number | '', rate: 5, active: true })
 const loading = ref(false)
 
@@ -56,21 +62,63 @@ async function saveTier() {
   }
   if (editingIndex.value >= 0) tiers[editingIndex.value] = record
   else tiers.push(record)
-  try { await commissionApi.updateScheme(scheme.id,{name:scheme.name,version:scheme.version,effectiveFrom:scheme.effectiveFrom,effectiveTo:scheme.effectiveTo,tiers:tiers.filter(t=>t.active).sort((a,b)=>a.min-b.min).map((t,index)=>({minimum:t.min,maximum:t.max,rate:t.rate/100,order:index+1}))}); editorOpen.value = false }
-  catch(caught){error.value=caught instanceof Error?caught.message:'บันทึก Tier ไม่สำเร็จ'}
+  try {
+    await commissionApi.updateScheme(scheme.id, {
+      name: scheme.name,
+      version: scheme.version,
+      effectiveFrom: scheme.effectiveFrom,
+      effectiveTo: scheme.effectiveTo,
+      tiers: tiers
+        .filter((t) => t.active)
+        .sort((a, b) => a.min - b.min)
+        .map((t, index) => ({
+          minimum: t.min,
+          maximum: t.max,
+          rate: t.rate / 100,
+          order: index + 1,
+        })),
+    })
+    editorOpen.value = false
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : 'บันทึก Tier ไม่สำเร็จ'
+  }
 }
 onMounted(async () => {
   loading.value = true
   try {
-    const schemes = await commissionApi.schemes() as Array<{ id: number; name: string; version:string; effectiveFrom: string; effectiveTo:string|null }>
+    const schemes = (await commissionApi.schemes()) as Array<{
+      id: number
+      name: string
+      version: string
+      effectiveFrom: string
+      effectiveTo: string | null
+    }>
     const current = schemes[0]
     if (current) {
-      Object.assign(scheme,current)
-      const backendTiers = await commissionApi.tiers(current.id) as Array<{ minimum: number; maximum: number | null; rate: number; order: number }>
-      tiers.splice(0, tiers.length, ...backendTiers.map((tier) => ({ order: tier.order, min: tier.minimum, max: tier.maximum, rate: tier.rate * 100, active: true })))
+      Object.assign(scheme, current)
+      const backendTiers = (await commissionApi.tiers(current.id)) as Array<{
+        minimum: number
+        maximum: number | null
+        rate: number
+        order: number
+      }>
+      tiers.splice(
+        0,
+        tiers.length,
+        ...backendTiers.map((tier) => ({
+          order: tier.order,
+          min: tier.minimum,
+          max: tier.maximum,
+          rate: tier.rate * 100,
+          active: true,
+        })),
+      )
     }
-  } catch (caught) { error.value = caught instanceof Error ? caught.message : 'โหลดเกณฑ์คอมมิชชันไม่สำเร็จ' }
-  finally { loading.value = false }
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : 'โหลดเกณฑ์คอมมิชชันไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 

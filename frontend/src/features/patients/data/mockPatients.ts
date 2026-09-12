@@ -96,7 +96,9 @@ export function savePatientProfile(patient: PatientProfile) {
   if (index >= 0) patients[index] = patient
   else patients.unshift(patient)
 
-  const storedPatients = JSON.parse(localStorage.getItem(storedPatientsKey) || '[]') as PatientProfile[]
+  const storedPatients = JSON.parse(
+    localStorage.getItem(storedPatientsKey) || '[]',
+  ) as PatientProfile[]
   const storedIndex = storedPatients.findIndex((item) => item.hn === patient.hn)
   if (storedIndex >= 0) storedPatients[storedIndex] = patient
   else storedPatients.unshift(patient)
@@ -104,6 +106,8 @@ export function savePatientProfile(patient: PatientProfile) {
 }
 
 export function findPatient(hn: string) {
-  const storedPatients = JSON.parse(localStorage.getItem(storedPatientsKey) || '[]') as PatientProfile[]
+  const storedPatients = JSON.parse(
+    localStorage.getItem(storedPatientsKey) || '[]',
+  ) as PatientProfile[]
   return storedPatients.find((item) => item.hn === hn) ?? patients.find((item) => item.hn === hn)
 }

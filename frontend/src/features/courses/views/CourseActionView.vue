@@ -14,7 +14,15 @@ const owner = ref<Patient | null>(null)
 const owners = ref<Patient[]>([])
 const patientCourses = ref<UiCourse[]>([])
 const recipientResults = ref<Patient[]>([])
-const transferHistory = ref<Array<{ createdAt: string; sourcePatientId: number; destinationPatientId: number; quantity: number; reason: string }>>([])
+const transferHistory = ref<
+  Array<{
+    createdAt: string
+    sourcePatientId: number
+    destinationPatientId: number
+    quantity: number
+    reason: string
+  }>
+>([])
 const errorMessage = ref('')
 const selectedCourse = ref<UiCourse>({} as UiCourse)
 const selectedCourseId = ref(0)
@@ -23,15 +31,37 @@ async function loadOwner() {
   owner.value = owners.value[0] ?? null
   if (owner.value) await loadCourses(owner.value.id)
 }
-async function changeOwner() { if (owner.value) await loadCourses(owner.value.id) }
-async function loadCourses(patientId: number) {
-  patientCourses.value = (await courseApi.patientCourses(patientId)).map((course) => ({ ...course, name: course.course.name, expiry: new Date(course.expiresAt).toLocaleDateString('th-TH'), balance: course.remaining, total: course.purchased }))
-  selectedCourseId.value = patientCourses.value[0]?.id ?? 0
-  transferHistory.value = await courseApi.transferHistory(patientId) as typeof transferHistory.value
+async function changeOwner() {
+  if (owner.value) await loadCourses(owner.value.id)
 }
-onMounted(async () => { try { await loadOwner() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ' } })
+async function loadCourses(patientId: number) {
+  patientCourses.value = (await courseApi.patientCourses(patientId)).map((course) => ({
+    ...course,
+    name: course.course.name,
+    expiry: new Date(course.expiresAt).toLocaleDateString('th-TH'),
+    balance: course.remaining,
+    total: course.purchased,
+  }))
+  selectedCourseId.value = patientCourses.value[0]?.id ?? 0
+  transferHistory.value = (await courseApi.transferHistory(
+    patientId,
+  )) as typeof transferHistory.value
+}
+onMounted(async () => {
+  try {
+    await loadOwner()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ'
+  }
+})
 let searchTimer: number | undefined
-watch(recipientSearch, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(async () => { if (recipientSearch.value.trim()) recipientResults.value = (await patientApi.search(recipientSearch.value, 0, 20)).items }, 250) })
+watch(recipientSearch, () => {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(async () => {
+    if (recipientSearch.value.trim())
+      recipientResults.value = (await patientApi.search(recipientSearch.value, 0, 20)).items
+  }, 250)
+})
 const title = computed(() => {
   if (action.value === 'transfer') return 'โอนสิทธิ์คอร์ส'
   if (action.value === 'history') return 'ประวัติการโอนคอร์ส'
@@ -54,9 +84,17 @@ function goBack() {
 async function confirm() {
   if (!owner.value || !selectedRecipient.value || !selectedCourse.value.id) return
   try {
-    await courseApi.transfer({ sourcePurchaseId: selectedCourse.value.id, destinationPatientId: selectedRecipient.value.id, quantity: transferAmount.value, reason: 'โอนสิทธิ์ตามคำขอผู้ป่วย' })
-    await loadCourses(owner.value.id); done.value = true
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โอนสิทธิ์ไม่สำเร็จ' }
+    await courseApi.transfer({
+      sourcePurchaseId: selectedCourse.value.id,
+      destinationPatientId: selectedRecipient.value.id,
+      quantity: transferAmount.value,
+      reason: 'โอนสิทธิ์ตามคำขอผู้ป่วย',
+    })
+    await loadCourses(owner.value.id)
+    done.value = true
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โอนสิทธิ์ไม่สำเร็จ'
+  }
 }
 function selectRecipient(patient: Patient) {
   selectedRecipient.value = patient
@@ -84,7 +122,9 @@ function handleRecipientInput() {
             <label class="course-selector-field">
               <span>เลือกคอร์ส</span>
               <select v-model="selectedCourseId" class="owner-selector" data-test="course-selector">
-                <option v-for="course in patientCourses" :key="course.id" :value="course.id">{{ course.name }} · {{ course.course.code }}</option>
+                <option v-for="course in patientCourses" :key="course.id" :value="course.id">
+                  {{ course.name }} · {{ course.course.code }}
+                </option>
               </select>
             </label>
           </div>
@@ -117,7 +157,10 @@ function handleRecipientInput() {
             <button class="back" @click="goBack">× ปิดแบบฟอร์ม</button>
           </header>
           <div v-if="action === 'transfer'" class="course-form">
-            <label>เจ้าของคอร์ส<input :value="`${owner?.fullName ?? ''} HN ${owner?.hn ?? ''}`" readonly /></label
+            <label
+              >เจ้าของคอร์ส<input
+                :value="`${owner?.fullName ?? ''} HN ${owner?.hn ?? ''}`"
+                readonly /></label
             ><label>คอร์ส<input :value="selectedCourse.name" readonly /></label
             ><label
               >สิทธิ์คงเหลือ<input :value="`${selectedCourse.balance} ครั้ง`" readonly
@@ -194,10 +237,14 @@ function handleRecipientInput() {
                   <td>{{ entry.sourcePatientId }}</td>
                   <td>{{ entry.destinationPatientId }}</td>
                   <td>{{ selectedCourse?.name }}</td>
-                  <td><b>{{ entry.quantity }} ครั้ง</b></td>
+                  <td>
+                    <b>{{ entry.quantity }} ครั้ง</b>
+                  </td>
                   <td>{{ entry.reason }}</td>
                 </tr>
-                <tr v-if="!transferHistory.length"><td colspan="6">ไม่พบประวัติการโอน</td></tr>
+                <tr v-if="!transferHistory.length">
+                  <td colspan="6">ไม่พบประวัติการโอน</td>
+                </tr>
               </tbody>
             </table>
           </div>
