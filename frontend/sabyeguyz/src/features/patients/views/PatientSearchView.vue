@@ -1,28 +1,32 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { patients } from '../data/mockPatients'
 
 const query = ref('')
 const branch = ref('ทั้งหมด')
 const sortOrder = ref<'asc' | 'desc'>('asc')
+const currentPage = ref(1)
+const perPage = 10
 const newPatientHn = ref('')
 const showCreationNotice = ref(false)
 const branches = [...new Set(patients.map((patient) => patient.branch))]
 const filteredPatients = computed(() => {
   const value = query.value.trim().toLowerCase()
-  const matchingPatients = patients.filter((patient) => {
-    const matchesQuery =
-      !value ||
-      [patient.hn, patient.fullName, patient.phone].some((field) =>
-        field.toLowerCase().includes(value),
-      )
-    const matchesBranch = branch.value === 'ทั้งหมด' || patient.branch === branch.value
-    return matchesQuery && matchesBranch
-  }).sort((left, right) => {
-    const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
-    return sortOrder.value === 'asc' ? comparison : -comparison
-  })
+  const matchingPatients = patients
+    .filter((patient) => {
+      const matchesQuery =
+        !value ||
+        [patient.hn, patient.fullName, patient.phone].some((field) =>
+          field.toLowerCase().includes(value),
+        )
+      const matchesBranch = branch.value === 'ทั้งหมด' || patient.branch === branch.value
+      return matchesQuery && matchesBranch
+    })
+    .sort((left, right) => {
+      const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
+      return sortOrder.value === 'asc' ? comparison : -comparison
+    })
   if (!newPatientHn.value) return matchingPatients
   return matchingPatients.sort((left, right) => {
     if (left.hn === newPatientHn.value) return -1
@@ -30,13 +34,29 @@ const filteredPatients = computed(() => {
     return 0
   })
 })
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredPatients.value.length / perPage)))
+const paginatedPatients = computed(() => {
+  const start = (currentPage.value - 1) * perPage
+  return filteredPatients.value.slice(start, start + perPage)
+})
+const paginationStart = computed(() =>
+  filteredPatients.value.length ? (currentPage.value - 1) * perPage + 1 : 0,
+)
+const paginationEnd = computed(() =>
+  Math.min(currentPage.value * perPage, filteredPatients.value.length),
+)
+watch([query, branch, sortOrder], () => {
+  currentPage.value = 1
+})
 onMounted(() => {
   const createdHn = localStorage.getItem('patientCreationHn')
   if (!createdHn) return
   newPatientHn.value = createdHn
   localStorage.removeItem('patientCreationHn')
   showCreationNotice.value = true
-  window.setTimeout(() => { showCreationNotice.value = false }, 3000)
+  window.setTimeout(() => {
+    showCreationNotice.value = false
+  }, 3000)
 })
 </script>
 
@@ -88,7 +108,7 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="patient in filteredPatients" :key="patient.hn">
+              <tr v-for="patient in paginatedPatients" :key="patient.hn">
                 <td class="patient-id">
                   <span class="patient-avatar">{{ patient.fullName.slice(0, 1) }}</span>
                   <b>{{ patient.hn }}</b>
@@ -98,7 +118,9 @@ onMounted(() => {
                 <td>{{ patient.birthDate }}</td>
                 <td>{{ patient.branch }}</td>
                 <td>
-                  <RouterLink class="row-action" :to="`/staff/patients/${patient.hn}`">ดูข้อมูล</RouterLink>
+                  <RouterLink class="row-action" :to="`/staff/patients/${patient.hn}`"
+                    >ดูข้อมูล</RouterLink
+                  >
                 </td>
               </tr>
               <tr v-if="filteredPatients.length === 0">
@@ -107,6 +129,17 @@ onMounted(() => {
             </tbody>
           </table>
         </div>
+        <footer v-if="filteredPatients.length" class="patient-pagination">
+          <span
+            >แสดง {{ paginationStart }}–{{ paginationEnd }} จาก
+            {{ filteredPatients.length }} รายการ</span
+          >
+          <div>
+            <button :disabled="currentPage === 1" @click="currentPage -= 1">ก่อนหน้า</button>
+            <b>หน้า {{ currentPage }} / {{ totalPages }}</b>
+            <button :disabled="currentPage === totalPages" @click="currentPage += 1">ถัดไป</button>
+          </div>
+        </footer>
       </section>
     </main>
     <Transition name="snackbar">
