@@ -1,63 +1,53 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { patients } from '../data/mockPatients'
+import { branchApi, patientApi, type Branch, type Patient } from '@/api/client'
 
 const query = ref('')
 const branch = ref('ทั้งหมด')
 const sortOrder = ref<'asc' | 'desc'>('asc')
-const currentPage = ref(1)
-const perPage = 10
 const newPatientHn = ref('')
 const showCreationNotice = ref(false)
-const branches = [...new Set(patients.map((patient) => patient.branch))]
+const patients = ref<Patient[]>([])
+const branches = ref<Branch[]>([])
+const page = ref(0)
+const totalPages = ref(0)
+const totalItems = ref(0)
+const loading = ref(true)
+const errorMessage = ref('')
 const filteredPatients = computed(() => {
-  const value = query.value.trim().toLowerCase()
-  const matchingPatients = patients
-    .filter((patient) => {
-      const matchesQuery =
-        !value ||
-        [patient.hn, patient.fullName, patient.phone].some((field) =>
-          field.toLowerCase().includes(value),
-        )
-      const matchesBranch = branch.value === 'ทั้งหมด' || patient.branch === branch.value
-      return matchesQuery && matchesBranch
-    })
-    .sort((left, right) => {
-      const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
-      return sortOrder.value === 'asc' ? comparison : -comparison
-    })
-  if (!newPatientHn.value) return matchingPatients
-  return matchingPatients.sort((left, right) => {
-    if (left.hn === newPatientHn.value) return -1
-    if (right.hn === newPatientHn.value) return 1
-    return 0
+  return [...patients.value].sort((left, right) => {
+    const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
+    return sortOrder.value === 'asc' ? comparison : -comparison
   })
 })
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredPatients.value.length / perPage)))
-const paginatedPatients = computed(() => {
-  const start = (currentPage.value - 1) * perPage
-  return filteredPatients.value.slice(start, start + perPage)
-})
-const paginationStart = computed(() =>
-  filteredPatients.value.length ? (currentPage.value - 1) * perPage + 1 : 0,
-)
-const paginationEnd = computed(() =>
-  Math.min(currentPage.value * perPage, filteredPatients.value.length),
-)
-watch([query, branch, sortOrder], () => {
-  currentPage.value = 1
-})
+async function loadPatients() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const result = await patientApi.search(query.value.trim(), page.value, 20, branch.value === 'ทั้งหมด' ? '' : branch.value)
+    patients.value = result.items
+    totalPages.value = result.totalPages
+    totalItems.value = result.totalItems
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
+}
+async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; await loadPatients() } }
+let searchTimer: number | undefined
+function refreshSearch() { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => { page.value = 0; void loadPatients() }, 250) }
 onMounted(() => {
   const createdHn = localStorage.getItem('patientCreationHn')
   if (!createdHn) return
   newPatientHn.value = createdHn
   localStorage.removeItem('patientCreationHn')
   showCreationNotice.value = true
-  window.setTimeout(() => {
-    showCreationNotice.value = false
-  }, 3000)
+  window.setTimeout(() => { showCreationNotice.value = false }, 3000)
 })
+onMounted(async () => { branches.value = await branchApi.list(); await loadPatients() })
+watch(branch, () => { page.value = 0; void loadPatients() })
 </script>
 
 <template>
@@ -81,21 +71,24 @@ onMounted(() => {
                 <path d="m16 16 4 4" /></svg></span
             ><input
               v-model="query"
+              @input="refreshSearch"
               aria-label="ค้นหาผู้ป่วย"
               placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
             />
           </div>
           <select v-model="branch" class="branch-filter" aria-label="กรองตามสาขา">
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
-            <option v-for="item in branches" :key="item" :value="item">{{ item }}</option>
+            <option v-for="item in branches" :key="item.code" :value="item.code">{{ item.name }}</option>
           </select>
           <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับผู้ป่วย">
             <option value="asc">ชื่อ ก-ฮ</option>
             <option value="desc">ชื่อ ฮ-ก</option>
           </select>
-          <span class="result-count">พบผู้ป่วยทั้งหมด {{ filteredPatients.length }} ราย</span>
+          <span class="result-count">พบผู้ป่วยทั้งหมด {{ totalItems }} ราย</span>
         </header>
         <div class="table-scroll">
+          <div v-if="loading" class="empty">กำลังโหลดข้อมูลผู้ป่วย...</div>
+          <div v-else-if="errorMessage" class="empty">{{ errorMessage }}</div>
           <table>
             <thead>
               <tr>
@@ -108,19 +101,17 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="patient in paginatedPatients" :key="patient.hn">
+              <tr v-for="patient in filteredPatients" :key="patient.id">
                 <td class="patient-id">
                   <span class="patient-avatar">{{ patient.fullName.slice(0, 1) }}</span>
                   <b>{{ patient.hn }}</b>
                 </td>
                 <td>{{ patient.fullName }}</td>
                 <td>{{ patient.phone }}</td>
-                <td>{{ patient.birthDate }}</td>
-                <td>{{ patient.branch }}</td>
+                <td>-</td>
+                <td>{{ patient.branchName ?? patient.branchCode ?? '-' }}</td>
                 <td>
-                  <RouterLink class="row-action" :to="`/staff/patients/${patient.hn}`"
-                    >ดูข้อมูล</RouterLink
-                  >
+                  <RouterLink class="row-action" :to="`/staff/patients/${patient.id}`">ดูข้อมูล</RouterLink>
                 </td>
               </tr>
               <tr v-if="filteredPatients.length === 0">
@@ -129,16 +120,10 @@ onMounted(() => {
             </tbody>
           </table>
         </div>
-        <footer v-if="filteredPatients.length" class="patient-pagination">
-          <span
-            >แสดง {{ paginationStart }}–{{ paginationEnd }} จาก
-            {{ filteredPatients.length }} รายการ</span
-          >
-          <div>
-            <button :disabled="currentPage === 1" @click="currentPage -= 1">ก่อนหน้า</button>
-            <b>หน้า {{ currentPage }} / {{ totalPages }}</b>
-            <button :disabled="currentPage === totalPages" @click="currentPage += 1">ถัดไป</button>
-          </div>
+        <footer v-if="totalPages > 1" class="pagination">
+          <button class="secondary" :disabled="page === 0" @click="changePage(page - 1)">ก่อนหน้า</button>
+          <span>หน้า {{ page + 1 }} / {{ totalPages }}</span>
+          <button class="secondary" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป</button>
         </footer>
       </section>
     </main>
