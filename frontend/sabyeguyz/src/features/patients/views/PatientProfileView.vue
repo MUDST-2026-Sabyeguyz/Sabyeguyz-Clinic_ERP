@@ -91,24 +91,24 @@ onMounted(async () => {
         <header>
           <h2>แก้ไขข้อมูลผู้ป่วย</h2>
         </header>
-        <div class="edit-fields">
-          <h3>ข้อมูลส่วนตัว</h3>
-          <label>คำนำหน้า<select v-model="draft.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>ไม่ระบุ</option></select></label>
-          <label>อีเมล <input v-model="draft.email" type="text" inputmode="email" /></label>
-          <label>ชื่อ <em>*</em><input v-model="draft.firstName" required /></label>
-          <label>นามสกุล <em>*</em><input v-model="draft.lastName" required /></label>
-          <label>ชื่อเล่น <input v-model="draft.nickname" /></label>
-          <label>เพศ<select v-model="draft.gender"><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></label>
-          <label>วันเกิด <em>*</em><ThaiDatePicker v-model="draft.birthDateInput" /></label>
-          <label>เบอร์โทรศัพท์ <em>*</em><input v-model="draft.phone" type="tel" required /></label>
-          <label>กรุ๊ปเลือด<select v-model="draft.bloodGroup"><option>ไม่ทราบ</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></label>
-          <label>สัญชาติ<select v-model="draft.nationality"><option>ไทย</option><option>ต่างชาติ</option></select></label>
-          <label>ประเภทเอกสารยืนยันตัวตน <em>*</em><select v-model="draft.identityDocumentType" @change="draft.identityNumber = ''"><option>บัตรประจำตัวประชาชน</option><option>หนังสือเดินทาง</option></select></label>
-          <label>{{ isPassportDocument ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }} <em>*</em><input v-model.trim="draft.identityNumber" inputmode="numeric" :maxlength="isPassportDocument ? 20 : 13" :placeholder="isPassportDocument ? 'กรอกเลขหนังสือเดินทางเป็นตัวเลข' : 'กรอกเลขบัตรประชาชน 13 หลัก'" required @input="draft.identityNumber = digitsOnly(draft.identityNumber)" /></label>
-          <label>กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true" /></label>
-          <label>ช่องทางแนะนำ<select v-model="draft.customerSource"><option>ลูกค้าแนะนำ</option><option>Facebook</option><option>หน้าสาขา</option></select></label>
-          <label>บริษัทประกัน<select v-model="draft.insuranceCompany"><option>ไม่มีประกัน</option><option>AIA</option></select></label>
-          <label class="wide">ที่อยู่ <em>*</em><textarea v-model="draft.address" rows="3" required></textarea></label>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-6 p-6">
+          <h3 class="md:col-span-6">ข้อมูลส่วนตัว</h3>
+          <label class="md:col-span-2">คำนำหน้า<select v-model="draft.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>เด็กชาย</option><option>เด็กหญิง</option><option>ไม่ระบุ</option></select></label>
+          <label class="md:col-span-4">อีเมล <input class="w-full" v-model="draft.email" type="text" inputmode="email" /></label>
+          <label class="md:col-span-2">ชื่อ <em>*</em><input v-model="draft.firstName" required /></label>
+          <label class="md:col-span-2">นามสกุล <em>*</em><input v-model="draft.lastName" required /></label>
+          <label class="md:col-span-2">ชื่อเล่น <input v-model="draft.nickname" /></label>
+          <label class="md:col-span-2">เพศ<select v-model="draft.gender"><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></label>
+          <label class="md:col-span-2">วันเกิด <em>*</em><ThaiDatePicker v-model="draft.birthDateInput" /></label>
+          <label class="md:col-span-2">เบอร์โทรศัพท์ <em>*</em><input v-model="draft.phone" type="tel" required /></label>
+          <label class="md:col-span-2">กรุ๊ปเลือด<select v-model="draft.bloodGroup"><option>ไม่ทราบ</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></label>
+          <label class="md:col-span-2">สัญชาติ<select v-model="draft.nationality"><option>ไทย</option><option>ต่างชาติ</option></select></label>
+          <label class="md:col-span-2">ประเภทเอกสารยืนยันตัวตน <em>*</em><select v-model="draft.identityDocumentType" @change="draft.identityNumber = ''"><option>บัตรประจำตัวประชาชน</option><option>หนังสือเดินทาง</option></select></label>
+          <label class="md:col-span-2">{{ isPassportDocument ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }} <em>*</em><input v-model.trim="draft.identityNumber" inputmode="numeric" :maxlength="isPassportDocument ? 20 : 13" :placeholder="isPassportDocument ? 'กรอกเลขหนังสือเดินทางเป็นตัวเลข' : 'กรอกเลขบัตรประชาชน 13 หลัก'" required @input="draft.identityNumber = digitsOnly(draft.identityNumber)" /></label>
+          <label class="md:col-span-2">กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true" /></label>
+          <label class="md:col-span-2">ช่องทางแนะนำ<select v-model="draft.customerSource"><option>ลูกค้าแนะนำ</option><option>Facebook</option><option>หน้าสาขา</option></select></label>
+          <label class="md:col-span-2">บริษัทประกัน<select v-model="draft.insuranceCompany"><option>ไม่มีประกัน</option><option>AIA</option></select></label>
+          <label class="md:col-span-6">ที่อยู่ <em>*</em><textarea v-model="draft.address" rows="3" required></textarea></label>
 
         </div>
         <footer>
