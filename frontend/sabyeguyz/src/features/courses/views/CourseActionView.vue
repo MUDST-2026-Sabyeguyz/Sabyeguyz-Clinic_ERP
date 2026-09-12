@@ -81,9 +81,12 @@ function handleRecipientInput() {
               <small>เจ้าของคอร์สที่เลือก</small><b>{{ owner?.fullName || 'กำลังโหลด...' }}</b>
               <p>{{ owner?.hn }} สถานะ {{ owner?.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</p>
             </div>
-            <select v-model="selectedCourseId" class="owner-selector">
-              <option v-for="course in patientCourses" :key="course.id" :value="course.id">{{ course.name }} · {{ course.course.code }}</option>
-            </select>
+            <label class="course-selector-field">
+              <span>เลือกคอร์ส</span>
+              <select v-model="selectedCourseId" class="owner-selector" data-test="course-selector">
+                <option v-for="course in patientCourses" :key="course.id" :value="course.id">{{ course.name }} · {{ course.course.code }}</option>
+              </select>
+            </label>
           </div>
           <div class="course-list">
             <article v-for="course in patientCourses" :key="course.name">
