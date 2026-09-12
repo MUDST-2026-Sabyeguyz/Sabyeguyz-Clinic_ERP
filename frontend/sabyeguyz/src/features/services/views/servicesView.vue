@@ -1,67 +1,67 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { catalogApi, courseApi, patientApi, paymentMethodApi, salesApi, staffApi, type Course, type Patient, type PaymentMethod, type ServiceOption, type Staff } from '@/api/client'
+import { patients, type PatientProfile } from '@/features/patients/data/mockPatients'
 type Mode = 'assessment' | 'single' | 'course'
 const query = ref(''),
-  patient = ref<Patient | null>(null),
+  patient = ref<PatientProfile | null>(null),
   mode = ref<Mode>('assessment'),
   action = ref<'use' | 'buy'>('use'),
-  confirmed = ref(false),
-  loading = ref(false),
-  errorMessage = ref('')
-const results = ref<Patient[]>([])
-const services = ref<ServiceOption[]>([])
-const courses = ref<Course[]>([])
-const paymentMethods = ref<PaymentMethod[]>([])
-const staff = ref<Staff[]>([])
-const selectedServiceId = ref(0), selectedCourseId = ref(0), selectedStaffId = ref<number | undefined>()
-const paymentCode = ref(''), note = ref('')
-async function loadMaster() {
-  const [s, c, p, methods, staffList] = await Promise.all([catalogApi.services(), catalogApi.courses(), patientApi.search('', 0, 100), paymentMethodApi.list(), staffApi.list()])
-  services.value = s; courses.value = c; results.value = p.items; paymentMethods.value = methods; staff.value = staffList
-  selectedServiceId.value = s[0]?.id ?? 0; selectedCourseId.value = c[0]?.id ?? 0; paymentCode.value = methods[0]?.code ?? ''; selectedStaffId.value = staffList[0]?.id
-}
-onMounted(async () => { try { await loadMaster() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ' } })
-let searchTimer: number | undefined
-watch(query, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(async () => { if (query.value.trim()) results.value = (await patientApi.search(query.value, 0, 20)).items }, 250) })
+  confirmed = ref(false)
+const router = useRouter()
+const results = computed(() => {
+  const q = query.value.toLowerCase().trim()
+  return q ? patients.filter((p) => `${p.fullName} ${p.hn}`.toLowerCase().includes(q)) : []
+})
 const item = computed(() =>
   mode.value === 'assessment'
-    ? services.value.find((s) => s.code.includes('ASSESS') || s.name.toLowerCase().includes('assessment'))?.name ?? services.value[0]?.name ?? 'Assessment'
+    ? 'Initial Assessment'
     : mode.value === 'single'
-      ? services.value.find((s) => s.id === selectedServiceId.value)?.name ?? 'บริการรายครั้ง'
-      : courses.value.find((c) => c.id === selectedCourseId.value)?.name ?? 'คอร์ส',
+      ? 'Manual Therapy'
+      : 'Manual Therapy 10 Sessions',
+)
+const transactionType = computed(() =>
+  mode.value === 'assessment'
+    ? 'Assessment'
+    : mode.value === 'single'
+      ? 'Single Visit'
+      : action.value === 'buy'
+         ? 'Course Purchase'
+         : 'Course Usage',
+)
+const transactionIdPrefix = computed(() =>
+  mode.value === 'course' && action.value === 'use' ? 'TRT' : 'PAY',
 )
 const amount = computed(() =>
   mode.value === 'assessment'
-    ? `฿${(services.value.find((s) => s.name === item.value)?.price ?? 0).toLocaleString()}`
+    ? '฿1,200'
     : mode.value === 'single'
-      ? `฿${(services.value.find((s) => s.id === selectedServiceId.value)?.price ?? 0).toLocaleString()}`
+      ? '฿1,000'
       : action.value === 'buy'
-        ? `฿${(courses.value.find((c) => c.id === selectedCourseId.value)?.price ?? 0).toLocaleString()}`
+        ? '฿8,500'
         : 'ใช้สิทธิ์ 1 ครั้ง',
 )
-function choose(p: Patient) {
+const serviceOptionLabel = computed(() => {
+  if (mode.value === 'assessment') return `${item.value} ${amount.value}`
+  if (mode.value === 'single') return `${item.value} ${amount.value}`
+  return item.value
+})
+function choose(p: PatientProfile) {
   patient.value = p
-  query.value = `${p.fullName} ${p.hn}`
+  query.value = p.fullName
 }
-async function submit() {
+function confirmTransaction() {
   if (!patient.value) return
-  loading.value = true; errorMessage.value = ''; confirmed.value = false
-  try {
-    if (mode.value === 'course' && action.value === 'use') {
-      const owned = await courseApi.patientCourses(patient.value.id); const usable = owned.find((course) => course.usable)
-      if (!usable) throw new Error('ผู้ป่วยไม่มีคอร์สที่ใช้ได้')
-      await courseApi.use({ coursePurchaseId: usable.id, note: note.value })
-    } else {
-      const type = mode.value === 'assessment' ? 'ASSESSMENT' : mode.value === 'single' ? 'SINGLE_VISIT' : 'COURSE'
-      const referenceId = mode.value === 'course' ? selectedCourseId.value : selectedServiceId.value
-      const price = mode.value === 'course' ? courses.value.find((c) => c.id === referenceId)?.price ?? 0 : services.value.find((s) => s.id === referenceId)?.price ?? 0
-      await salesApi.create({ patientId: patient.value.id, branchCode: 'RP', salespersonStaffId: selectedStaffId.value, note: note.value, items: [{ type, referenceId, quantity: 1 }], payments: [{ paymentMethodCode: paymentCode.value, amount: price }] })
-    }
-    confirmed.value = true
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการไม่สำเร็จ' }
-  finally { loading.value = false }
+  const now = new Date()
+  const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
+  const date = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  localStorage.setItem('newServiceTransaction', JSON.stringify({
+    id: `${transactionIdPrefix.value}-${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getTime()).slice(-4)}`,
+    date, patient: patient.value.fullName, hn: patient.value.hn, branch: patient.value.branch,
+    performedBy: 'เจ้าหน้าที่คลินิก', type: transactionType.value, detail: item.value, amount: amount.value, status: 'สำเร็จ',
+  }))
+  router.push('/staff/transactions')
 }
 </script>
 <template>
@@ -87,15 +87,15 @@ async function submit() {
         <div v-if="query && results.length && !patient" class="results">
           <button v-for="p in results" :key="p.hn" @click="choose(p)">
             <b>{{ p.fullName }}</b
-            ><small>{{ p.hn }} {{ p.phone }}</small>
+            ><small>{{ p.hn }}</small>
           </button>
         </div>
       </div>
       <p v-if="!patient" class="hint">
         {{
           query && !results.length
-            ? 'ไม่พบผู้ป่วยที่ตรงกับคำค้น'
-            : 'พิมพ์ชื่อหรือเลข HN แล้วเลือกผู้ป่วยจากรายการ'
+            ? 'ไม่พบผู้ป่วย'
+            : 'พิมพ์ชื่อหรือหมายเลขประจำตัวในช่องค้นหา'
         }}
       </p>
       <section v-else class="card">
@@ -103,8 +103,8 @@ async function submit() {
           <div class="identity">
             <i>{{ patient.fullName[0] }}</i>
             <div>
-              <h2>{{ patient.fullName }}</h2>
-              <p>{{ patient.hn }} · สาขา {{ patient.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</p>
+              <h2>{{ patient.title }}{{ patient.fullName }}</h2>
+              <p>{{ patient.hn }} {{ patient.branch }}</p>
             </div>
           </div>
           <b>คอร์สที่ใช้งาน 1 คอร์ส</b>
@@ -138,20 +138,21 @@ async function submit() {
                   : mode === 'single'
                     ? 'บริการรายครั้ง'
                     : 'รายการคอร์ส'
-              }}<select v-if="mode !== 'course'" v-model="selectedServiceId">
-                <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }} ฿{{ service.price.toLocaleString() }}</option>
-              </select><select v-else v-model="selectedCourseId">
-                <option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }} ฿{{ course.price.toLocaleString() }}</option>
+              }}<select>
+                <option>{{ serviceOptionLabel }}</option>
               </select></label
             ><label
-              >ผู้ทำรายการ<select v-model="selectedStaffId">
-                <option v-for="person in staff" :key="person.id" :value="person.id">{{ person.fullName }}</option>
+              >ผู้ให้บริการ<select>
+                <option>ศิริพร</option>
+                <option>กฤษดา</option>
               </select></label
             ><label v-if="mode !== 'course' || action === 'buy'"
-              >ช่องทางชำระเงิน<select v-model="paymentCode">
-                <option v-for="method in paymentMethods" :key="method.code" :value="method.code">{{ method.name }}</option>
+              >ช่องทางชำระเงิน<select>
+                <option>QR</option>
+                <option>เงินสด</option>
+                <option>โอนเงิน</option>
               </select></label
-            ><label class="note">หมายเหตุ<textarea v-model.trim="note" /></label>
+            ><label class="note">หมายเหตุ<textarea /></label>
           </div>
         </div>
         <footer>
@@ -159,11 +160,10 @@ async function submit() {
           <div>
             <strong>{{ item }}</strong
             ><b>{{ amount }}</b
-            ><button :disabled="loading" @click="submit">{{ loading ? 'กำลังบันทึก...' : 'ยืนยันรายการ' }}</button>
+            ><button @click="confirmTransaction">ยืนยันรายการ</button>
           </div>
         </footer>
         <p v-if="confirmed" class="success">บันทึกรายการเรียบร้อยแล้ว</p>
-        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       </section>
     </main>
   </div>
