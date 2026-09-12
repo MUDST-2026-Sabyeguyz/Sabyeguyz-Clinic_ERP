@@ -30,7 +30,7 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 @EnableMethodSecurity
 public class SecurityConfig {
     private final SecretKeySpec signingKey;
-    public SecurityConfig(@Value("${app.jwt.secret:clinic-erp-local-secret-change-me-32chars}") String secret) {
+    public SecurityConfig(@Value("${app.jwt.secret}") String secret) {
         if (secret.length() < 32) throw new IllegalArgumentException("JWT secret must be at least 32 characters");
         signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     }
