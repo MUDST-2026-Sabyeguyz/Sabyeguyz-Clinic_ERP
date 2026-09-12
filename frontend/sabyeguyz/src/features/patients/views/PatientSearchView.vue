@@ -69,7 +69,7 @@ watch(branch, () => { page.value = 0; void loadPatients() })
         <small>PATIENT MANAGEMENT</small>
         <h1>ค้นหาผู้ป่วย</h1>
         <p>ค้นหาด้วยชื่อหรือเลขประจำตัวผู้ป่วย</p>
-        <RouterLink class="primary hero-action" to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
+        <RouterLink class="primary hero-action" data-test="register-patient-link" to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
       </section>
 
       <section class="directory">
@@ -80,17 +80,18 @@ watch(branch, () => { page.value = 0; void loadPatients() })
                 <circle cx="11" cy="11" r="6" />
                 <path d="m16 16 4 4" /></svg></span
             ><input
+              data-test="patient-search-input"
               v-model="query"
               @input="refreshSearch"
               aria-label="ค้นหาผู้ป่วย"
               placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
             />
           </div>
-          <select v-model="branch" class="branch-filter" aria-label="กรองตามสาขา">
+          <select data-test="patient-branch-filter" v-model="branch" class="branch-filter" aria-label="กรองตามสาขา">
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
             <option v-for="item in branches" :key="item.code" :value="item.code">{{ item.name }}</option>
           </select>
-          <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับผู้ป่วย">
+          <select data-test="patient-sort-filter" v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับผู้ป่วย">
             <option value="asc">ชื่อ ก-ฮ</option>
             <option value="desc">ชื่อ ฮ-ก</option>
           </select>
@@ -111,7 +112,7 @@ watch(branch, () => { page.value = 0; void loadPatients() })
               </tr>
             </thead>
             <tbody>
-              <tr v-for="patient in filteredPatients" :key="patient.id">
+              <tr v-for="patient in filteredPatients" :key="patient.id" :data-test="`patient-row-${patient.id}`">
                 <td class="patient-id">
                   <b>{{ patientNumber(patient.hn) }}</b>
                 </td>
@@ -120,7 +121,7 @@ watch(branch, () => { page.value = 0; void loadPatients() })
                 <td>-</td>
                 <td>{{ patient.branchName ?? patient.branchCode ?? '-' }}</td>
                 <td>
-                  <RouterLink class="row-action" :to="`/staff/patients/${patient.id}`">ดูข้อมูล</RouterLink>
+                  <RouterLink class="row-action" data-test="patient-profile-link" :to="`/staff/patients/${patient.id}`">ดูข้อมูล</RouterLink>
                 </td>
               </tr>
               <tr v-if="filteredPatients.length === 0">

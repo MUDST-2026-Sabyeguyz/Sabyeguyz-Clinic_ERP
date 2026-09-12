@@ -31,7 +31,7 @@ async function signIn() {
       <h2>ฟื้นฟูการเคลื่อนไหว เพื่อคุณภาพชีวิตที่ดีขึ้น</h2>
     </section>
     <section class="login-content">
-      <form class="login-shell" @submit.prevent="signIn">
+      <form class="login-shell" data-test="login-form" @submit.prevent="signIn">
         <div class="intro">
           <small>ยินดีต้อนรับกลับมา!</small>
           <h1>เข้าสู่ระบบ</h1>
@@ -40,20 +40,22 @@ async function signIn() {
           >Username หรือ Email<input
             v-model.trim="form.username"
             type="text"
+            data-test="username-input"
             autocomplete="username"
             required /></label
         ><label
           >รหัสผ่าน<input
             v-model="form.password"
+            data-test="password-input"
             type="password"
             autocomplete="current-password"
             required
           /><a href="#">ลืมรหัสผ่าน</a></label
         >
-        <button type="submit" :disabled="submitting || !form.username || !form.password">
+        <button data-test="login-button" type="submit" :disabled="submitting || !form.username || !form.password">
           {{ submitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ' }}
         </button>
-        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="error" role="alert" data-test="login-error">{{ errorMessage }}</p>
       </form>
     </section>
   </main>

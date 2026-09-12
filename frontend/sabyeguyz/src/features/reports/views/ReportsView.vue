@@ -121,23 +121,23 @@ function exportCsv() {
             <h2>{{ title }}</h2>
             <p>{{ reportDescription }}</p>
           </div>
-          <label
-            >เลือกรายงาน<select v-model="report">
-              <option v-for="item in reports" :key="item[0]" :value="item[0]">{{ item[1] }}</option>
+          <label  class="text-black" 
+            >เลือกรายงาน<select data-test="report-select" v-model="report">
+              <option class="text-black" v-for="item in reports" :key="item[0]" :value="item[0]">{{ item[1] }}</option>
             </select></label
           >
         </header>
         <div class="filter-panel">
           <div class="filter-title">
             <div><b>ตัวกรองข้อมูล</b><small>แสดงเฉพาะตัวกรองที่ใช้กับรายงานนี้</small></div>
-            <button @click="resetFilters">ล้างตัวกรอง</button>
+             <button data-test="reset-report-filters" @click="resetFilters">ล้างตัวกรอง</button>
           </div>
           <div class="report-filters">
             <label v-if="['revenue', 'balance', 'transfer'].includes(report)"
-              >ผู้ป่วย<input v-model="filters.patient" placeholder="ชื่อหรือ HN"
+               >ผู้ป่วย<input data-test="report-patient-filter" v-model="filters.patient" placeholder="ชื่อหรือ HN"
             /></label>
             <label
-              >สาขา<select v-model="filters.branch">
+               >สาขา<select data-test="report-branch-filter" v-model="filters.branch">
                 <option>ทุกสาขา</option>
                 <option v-for="item in branches" :key="item.code" :value="item.code">{{ item.name }} ({{ item.code }})</option>
               </select></label
@@ -164,8 +164,8 @@ function exportCsv() {
                 <option>การขายคอร์ส</option>
               </select></label
             >
-            <label>ตั้งแต่<input v-model="filters.from" type="date" /></label>
-            <label>ถึง<input v-model="filters.to" type="date" /></label>
+           <label>ตั้งแต่<input data-test="report-from-date" v-model="filters.from" type="date" /></label>
+           <label>ถึง<input data-test="report-to-date" v-model="filters.to" type="date" /></label>
           </div>
         </div>
       </section>
@@ -178,7 +178,7 @@ function exportCsv() {
             <h2>{{ title }}</h2>
             <p class="report-period">{{ reportPeriodLabel }} {{ filters.branch }}</p>
           </div>
-          <button class="secondary" :disabled="loading || !activeRows.length" @click="exportCsv">ส่งออก CSV</button>
+           <button class="secondary" data-test="export-report-button" :disabled="loading || !activeRows.length" @click="exportCsv">ส่งออก CSV</button>
         </header>
         <table class="staff-table">
           <thead>

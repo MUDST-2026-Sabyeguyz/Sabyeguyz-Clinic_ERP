@@ -84,18 +84,19 @@ async function confirmVoid() {
                 <circle cx="11" cy="11" r="6" />
                 <path d="m16 16 4 4" /></svg></span
             ><input
+              data-test="transaction-search-input"
               v-model="search"
               aria-label="ค้นหารายการธุรกรรม"
               placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
             />
           </div>
-          <select v-model="typeFilter" aria-label="กรองประเภทธุรกรรม">
+          <select data-test="transaction-type-filter" v-model="typeFilter" aria-label="กรองประเภทธุรกรรม">
             <option>ทั้งหมด</option><option>Receipt</option>
           </select>
-          <select v-model="statusFilter" aria-label="กรองสถานะธุรกรรม">
+          <select data-test="transaction-status-filter" v-model="statusFilter" aria-label="กรองสถานะธุรกรรม">
             <option>ทั้งหมด</option><option>สำเร็จ</option><option>Void</option>
           </select>
-          <select v-model="sortOrder" aria-label="เรียงรายการธุรกรรม">
+          <select data-test="transaction-sort-filter" v-model="sortOrder" aria-label="เรียงรายการธุรกรรม">
             <option value="date-desc">วันที่ล่าสุด</option><option value="date-asc">วันที่เก่าสุด</option>
             <option value="id-desc">เลขรายการมากไปน้อย</option><option value="id-asc">เลขรายการน้อยไปมาก</option>
           </select>
@@ -118,6 +119,7 @@ async function confirmVoid() {
             </tr>
             <template v-for="row in visibleRows" :key="row.id">
               <tr
+                :data-test="`transaction-row-${row.id}`"
                 class="transaction-row"
                 :class="{ 'is-expanded': selected?.id === row.id }"
                 tabindex="0"
@@ -142,6 +144,7 @@ async function confirmVoid() {
                 <td>
                   <button
                     class="detail-toggle"
+                    data-test="transaction-detail-toggle"
                     :class="{ open: selected?.id === row.id }"
                     :aria-expanded="selected?.id === row.id"
                     :aria-label="selected?.id === row.id ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'"
@@ -211,12 +214,14 @@ async function confirmVoid() {
                         เหตุผลการยกเลิกรายการ <span>*</span>
                         <div class="void-form-controls">
                           <textarea
+                          data-test="void-reason-input"
                           v-model.trim="reason"
                             rows="1"
                             placeholder="ระบุเหตุผลการยกเลิกรายการ"
                           ></textarea>
                           <button
                             class="danger solid"
+                            data-test="confirm-void-button"
                             :disabled="!reason.trim()"
                             @click="confirmVoid"
                           >
@@ -230,6 +235,7 @@ async function confirmVoid() {
                       <button
                         v-if="row.status !== 'Void'"
                         class="danger"
+                        data-test="void-transaction-button"
                         @click="voiding = true"
                       >
                         ยกเลิกรายการ

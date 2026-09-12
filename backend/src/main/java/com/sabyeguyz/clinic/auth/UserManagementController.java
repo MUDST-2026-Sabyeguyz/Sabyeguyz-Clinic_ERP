@@ -37,7 +37,7 @@ public class UserManagementController {
             @NotNull Role role,
             @NotBlank @Size(max = 40) String employeeCode,
             @NotBlank @Size(max = 160) String fullName,
-            @Size(max = 40) String phone, String branchCode) {}
+            @Size(max = 40) String phone, String branchCode, Boolean active) {}
 
     public record Response(Long id, String username, String email, Role role,
                            String employeeCode, String fullName, String phone, String branchCode, String branchName, boolean active) {}
@@ -67,6 +67,10 @@ public class UserManagementController {
         AppUser user = users.save(new AppUser(username, email, encoder.encode(request.password()), request.role()));
         Staff value = new Staff(user, employeeCode, request.fullName().trim(), normalize(request.phone()));
         value.assignBranch(resolveBranch(request.branchCode()));
+        if (Boolean.FALSE.equals(request.active())) {
+            user.deactivate();
+            value.deactivate();
+        }
         return out(staff.save(value));
     }
 
@@ -90,6 +94,15 @@ public class UserManagementController {
         }
         current.update(request.employeeCode().trim(), request.fullName().trim(), normalize(request.phone()));
         current.assignBranch(resolveBranch(request.branchCode()));
+        if (request.active() != null) {
+            if (request.active()) {
+                user.activate();
+                current.activate();
+            } else {
+                user.deactivate();
+                current.deactivate();
+            }
+        }
         return out(staff.save(current));
     }
 

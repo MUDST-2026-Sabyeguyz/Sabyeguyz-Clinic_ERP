@@ -90,7 +90,7 @@ function signOut() {
 
 <template>
   <header class="staff-header">
-    <RouterLink class="brand" to="/staff/patients"
+    <RouterLink class="brand" data-test="brand-link" to="/staff/patients"
       ><img :src="logo" alt="SaByeGuyz"
     /></RouterLink>
     <nav
@@ -109,6 +109,7 @@ function signOut() {
       <RouterLink
         v-for="item in navItems"
         :key="item.to"
+        :data-test="`nav-${item.to.slice(1).replaceAll('/', '-')}`"
         :to="item.to"
         @mouseenter="hoverPill"
         @focus="hoverPill"
@@ -119,6 +120,7 @@ function signOut() {
     <div class="profile-wrap">
       <button
         class="profile-trigger"
+        data-test="profile-trigger"
         aria-label="เปิดเมนูโปรไฟล์"
         :aria-expanded="profileOpen"
         @click="profileOpen = !profileOpen"
@@ -128,12 +130,12 @@ function signOut() {
         >
         <span class="profile-avatar">{{ isManager ? 'MG' : 'PT' }}</span>
       </button>
-      <div v-if="profileOpen" class="profile-menu">
+      <div v-if="profileOpen" class="profile-menu" data-test="profile-menu">
         <div>
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
           ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : branchLabel }}</span>
         </div>
-        <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
+        <RouterLink data-test="logout-link" to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>
     </div>
   </header>

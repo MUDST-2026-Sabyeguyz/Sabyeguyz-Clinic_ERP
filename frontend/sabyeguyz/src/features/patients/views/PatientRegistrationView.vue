@@ -41,17 +41,17 @@ async function submit() { submitted.value = true; if (!canSubmit.value) { errorM
                     <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
                     <p>เจ้าหน้าที่กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p>
                </div>
-               <form class="" novalidate @submit.prevent="submit">
+               <form class="" data-test="patient-registration-form" novalidate @submit.prevent="submit">
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-6">
-                         <label class="md:col-span-3">สาขาที่ลงทะเบียน<select v-model="form.branchCode"
+                              <label class="md:col-span-3">สาขาที่ลงทะเบียน<select data-test="registration-branch" v-model="form.branchCode"
                                    :disabled="!branches.length">
                                    <option v-for="b in branches" :key="b.code" :value="b.code">{{ b.name }}</option>
                               </select></label>
-                         <label class="md:col-span-3">กลุ่มลูกค้า<select v-model="form.customerType">
+                          <label class="md:col-span-3">กลุ่มลูกค้า<select data-test="registration-customer-type" v-model="form.customerType">
                                    <option v-for="i in customerGroups" :key="i">{{ i }}</option>
                               </select>
                          </label>
-                         <label class="md:col-span-1 md:col-start-1">คำนำหน้า <em>*</em><select v-model="form.title">
+                          <label class="md:col-span-1 md:col-start-1">คำนำหน้า <em>*</em><select data-test="registration-title" v-model="form.title">
                                    <option>นาย</option>
                                    <option>นาง</option>
                                    <option>นางสาว</option>
@@ -62,55 +62,55 @@ async function submit() { submitted.value = true; if (!canSubmit.value) { errorM
                               </select></label>
                          <label class="md:col-span-2"
                               :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.firstName) }">ชื่อ
-                              <em>*</em><input v-model.trim="form.firstName"
+                               <em>*</em><input data-test="registration-first-name" v-model.trim="form.firstName"
                                    @input="form.firstName = thaiOnly(form.firstName)" /><small
                                    v-if="submitted && !form.firstName"
                                    class="required-error">กรุณากรอกข้อมูล</small></label>
                          <label class="md:col-span-2"
                               :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.lastName) }">นามสกุล
-                              <em>*</em><input v-model.trim="form.lastName"
+                               <em>*</em><input data-test="registration-last-name" v-model.trim="form.lastName"
                                    @input="form.lastName = thaiOnly(form.lastName)" /><small
                                    v-if="submitted && !form.lastName"
                                    class="required-error">กรุณากรอกข้อมูล</small></label>
                          <label class="md:col-span-1"
                               :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.nickname) }">ชื่อเล่น
-                              <em>*</em><input v-model.trim="form.nickname"
+                               <em>*</em><input data-test="registration-nickname" v-model.trim="form.nickname"
                                    @input="form.nickname = thaiOnly(form.nickname)" /></label>
                          <label class="md:col-span-2">วันเกิด <em>*</em>
                               <ThaiDatePicker v-model="form.birthDate" />
-                         </label><label class="md:col-span-2">กรุ๊ปเลือด<select v-model="form.bloodGroup">
+                          </label><label class="md:col-span-2">กรุ๊ปเลือด<select data-test="registration-blood-group" v-model="form.bloodGroup">
                                    <option>ไม่ทราบ</option>
                                    <option>A</option>
                                    <option>B</option>
                                    <option>AB</option>
                                    <option>O</option>
                               </select></label>
-                         <label class="md:col-span-2">เพศ <em>*</em><select v-model="form.gender">
+                          <label class="md:col-span-2">เพศ <em>*</em><select data-test="registration-gender" v-model="form.gender">
                                    <option>ชาย</option>
                                    <option>หญิง</option>
                                    <option>ไม่ระบุ</option>
                               </select></label>
                          <label class="md:col-span-2" :class="{ 'invalid-field': submitted && !phoneIsValid }">เบอร์โทร
-                              <em>*</em><input v-model.trim="form.phone" maxlength="10"
+                               <em>*</em><input data-test="registration-phone" v-model.trim="form.phone" maxlength="10"
                                    @input="form.phone = digitsOnly(form.phone)" /></label>
 
                          <label class="md:col-span-4"
                               :class="{ 'invalid-field': (submitted || emailTouched) && !emailIsValid }">อีเมล
                               <em>*</em>
                               <input v-model.trim="form.email" class="w-full" type="text" inputmode="email"
-                                   placeholder="example@email.com" @blur="emailTouched = true" /><small
+                                    data-test="registration-email" placeholder="example@email.com" @blur="emailTouched = true" /><small
                                    v-if="(submitted || emailTouched) && !form.email"
                                    class="required-error">กรุณากรอกข้อมูล</small><small
                                    v-else-if="(submitted || emailTouched) && !emailIsValid"
                                    class="required-error">รูปแบบอีเมลไม่ถูกต้อง ต้องใช้อีเมลที่ลงท้ายด้วย
                                    กรุณากรอกอีเมลให้ถูกต้อง เช่น example@email.com</small></label>
-                         <label class="md:col-span-3 md:col-start-1">ประเภทเอกสารยืนยันตัวตน <em>*</em><select
+                          <label class="md:col-span-3 md:col-start-1">ประเภทเอกสารยืนยันตัวตน <em>*</em><select data-test="registration-identity-type"
                                    v-model="form.identityDocumentType">
                                    <option value="" disabled>เลือกประเภทเอกสาร</option>
                                    <option value="NATIONAL_ID">บัตรประจำตัวประชาชน</option>
                                    <option value="PASSPORT">หนังสือเดินทาง (Passport)</option>
                               </select></label>
-                         <label class="md:col-span-3">เลขบัตร/Passport <em>*</em><input
+                          <label class="md:col-span-3">เลขบัตร/Passport <em>*</em><input data-test="registration-identity-number"
                                    v-model.trim="form.identityNumber" :disabled="!form.identityDocumentType"
                                    @input="form.identityNumber = digitsOnly(form.identityNumber)" /></label>
                          <label class="md:col-span-2">สัญชาติ<select v-model="form.nationality">
@@ -120,21 +120,21 @@ async function submit() { submitted.value = true; if (!canSubmit.value) { errorM
                          <label class="md:col-span-2">ช่องทางแนะนำ<select v-model="form.customerSource">
                                    <option v-for="i in referralChannels" :key="i">{{ i }}</option>
                               </select></label><label class="md:col-span-2">บริษัทประกัน<select
-                                   v-model="form.insuranceCompany">
+                                    data-test="registration-insurance" v-model="form.insuranceCompany">
                                    <option value="">ไม่มีประกัน</option>
                                    <option v-for="i in insuranceCompanies" :key="i">{{ i }}</option>
                               </select></label>
                          <label class="md:col-span-6" :class="{ 'invalid-field': submitted && !form.address }">ที่อยู่
-                              <em>*</em><textarea v-model.trim="form.address" rows="4" /></label>
+                               <em>*</em><textarea data-test="registration-address" v-model.trim="form.address" rows="4" /></label>
                     </div>
-                    <div class="actions end "><button type="submit" class="primary" :disabled="submitting">{{ submitting
+                    <div class="actions end "><button data-test="registration-submit" type="submit" class="primary" :disabled="submitting">{{ submitting
                          ? 'กำลังบันทึก...' : 'บันทึก' }}</button></div>
-                    <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+                    <p v-if="errorMessage" class="error" role="alert" data-test="registration-error">{{ errorMessage }}</p>
                </form>
           </section>
-          <section v-else class="success-card"><span class="success-icon">✓</span>
+          <section v-else class="success-card" data-test="registration-success"><span class="success-icon">✓</span>
                <h1>ลงทะเบียนสำเร็จ</h1>
-               <p>เลขประจำตัวผู้ป่วย (HN)</p><strong>{{ registeredHn }}</strong>
+               <p>เลขประจำตัวผู้ป่วย (HN)</p><strong data-test="registered-hn">{{ registeredHn }}</strong>
                <div class="success-actions">
                     <RouterLink class="secondary" to="/staff/patients">กลับไปรายชื่อผู้ป่วย</RouterLink>
                     <RouterLink v-if="registeredPatientId" class="primary"

@@ -74,6 +74,7 @@ export type Staff = { id: number; userId: number; username: string; role: 'MANAG
 export type ServiceOption = { id: number; code: string; name: string; durationMinutes: number; price: number }
 export type Course = { id: number; code: string; name: string; price: number; sessions: number; bonusSessions: number; validityDays: number; active: boolean }
 export type Therapist = { id: number; code: string; fullName: string; branchCode: string }
+export type ManagedTherapist = Therapist & { branchName: string; active: boolean }
 export type PaymentMethod = { id: number; code: string; name: string; active: boolean }
 export type AppointmentStatus = 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
 export type Appointment = {
@@ -111,8 +112,8 @@ export const patientApi = {
 export const branchApi = {
   list: () => api.get<Branch[]>('/api/branches'),
   get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
-  create: (body: { code: string; numericCode: string; name: string }) => api.post<Branch>('/api/branches', body),
-  update: (id: number, body: { code: string; numericCode: string; name: string }) => api.put<Branch>(`/api/branches/${id}`, body),
+  create: (body: { code: string; numericCode: string; name: string; active?: boolean }) => api.post<Branch>('/api/branches', body),
+  update: (id: number, body: { code: string; numericCode: string; name: string; active?: boolean }) => api.put<Branch>(`/api/branches/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }
 
@@ -127,9 +128,15 @@ export const catalogApi = {
 export type ManagedService = { id: number; code: string; name: string; defaultDurationMinutes: number; price: number; active: boolean }
 export const serviceManagementApi = {
   list: () => api.get<ManagedService[]>('/api/services'),
-  create: (body: Omit<ManagedService, 'id' | 'active'>) => api.post<ManagedService>('/api/services', body),
-  update: (id: number, body: Omit<ManagedService, 'id' | 'active'>) => api.put<ManagedService>(`/api/services/${id}`, body),
+  create: (body: Omit<ManagedService, 'id' | 'active'> & { active?: boolean }) => api.post<ManagedService>('/api/services', body),
+  update: (id: number, body: Omit<ManagedService, 'id'>) => api.put<ManagedService>(`/api/services/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
+}
+
+export const therapistManagementApi = {
+  list: () => api.get<ManagedTherapist[]>('/api/therapists'),
+  create: (body: { fullName: string; branchCode: string; code?: string; active?: boolean }) => api.post<ManagedTherapist>('/api/therapists', body),
+  update: (id: number, body: { fullName: string; active?: boolean }) => api.put<ManagedTherapist>(`/api/therapists/${id}`, body),
 }
 
 export const appointmentApi = {
@@ -157,8 +164,8 @@ export const treatmentApi = {
 export const courseApi = {
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
   get: (id: number) => api.get<Course>(`/api/courses/${id}`),
-  create: (body: Omit<Course, 'id' | 'active'>) => api.post<Course>('/api/courses', body),
-  update: (id: number, body: Omit<Course, 'id' | 'active'>) => api.put<Course>(`/api/courses/${id}`, body),
+  create: (body: Omit<Course, 'id' | 'active'> & { active?: boolean }) => api.post<Course>('/api/courses', body),
+  update: (id: number, body: Omit<Course, 'id'>) => api.put<Course>(`/api/courses/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/courses/${id}`),
   patientCourses: (patientId: number) => api.get<CoursePurchase[]>(`/api/patients/${patientId}/courses`),
   purchase: (body: { patientId: number; courseId: number; branchCode: string }) => api.post<CoursePurchase>('/api/course-purchases', body),
@@ -183,8 +190,8 @@ export const salesApi = {
 
 export const paymentMethodApi = {
   list: () => api.get<PaymentMethod[]>('/api/payment-methods'),
-  create: (body: { code: string; name: string }) => api.post<PaymentMethod>('/api/payment-methods', body),
-  update: (id: number, body: { code: string; name: string }) => api.put<PaymentMethod>(`/api/payment-methods/${id}`, body),
+  create: (body: { code: string; name: string; active?: boolean }) => api.post<PaymentMethod>('/api/payment-methods', body),
+  update: (id: number, body: { code: string; name: string; active?: boolean }) => api.put<PaymentMethod>(`/api/payment-methods/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/payment-methods/${id}`),
   activate: (id: number) => api.patch<PaymentMethod>(`/api/payment-methods/${id}/activate`, {}),
 }
@@ -200,8 +207,8 @@ export const staffApi = {
 export type ManagedUser = { id: number; username: string; email?: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string; branchName?: string; active: boolean }
 export const userManagementApi = {
   list: () => api.get<ManagedUser[]>('/api/users'),
-  create: (body: { username: string; email?: string; password: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string }) => api.post<ManagedUser>('/api/users', body),
-  update: (id: number, body: { username: string; email?: string; password?: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string }) => api.put<ManagedUser>(`/api/users/${id}`, body),
+  create: (body: { username: string; email?: string; password: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string; active?: boolean }) => api.post<ManagedUser>('/api/users', body),
+  update: (id: number, body: { username: string; email?: string; password?: string; role: 'MANAGER' | 'THERAPIST'; employeeCode: string; fullName: string; phone?: string; branchCode?: string; active?: boolean }) => api.put<ManagedUser>(`/api/users/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/users/${id}`),
   activate: (id: number) => api.patch<ManagedUser>(`/api/users/${id}/activate`, {}),
 }
