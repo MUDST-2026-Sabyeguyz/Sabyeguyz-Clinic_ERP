@@ -7,10 +7,13 @@ const viewMode = ref<'list' | 'create' | 'edit'>('list')
 const query = ref('')
 const selectedBranch = ref('ทั้งหมด')
 const appointments = ref<Appointment[]>([])
+const page = ref(0)
+const totalPages = ref(0)
 const branches = ref<Branch[]>([])
 const patients = ref<Patient[]>([])
 const services = ref<ServiceOption[]>([])
 const therapists = ref<Therapist[]>([])
+const patientQuery = ref('')
 const editingId = ref<number | null>(null)
 const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
@@ -33,15 +36,16 @@ const formatTime = (value: string) => new Date(value).toLocaleTimeString('en-GB'
 const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
 async function load() {
   try {
-    const [a, b, p, s, t] = await Promise.all([appointmentApi.search(), branchApi.list(), patientApi.search('', 0, 100), catalogApi.services(), catalogApi.therapists()])
-    appointments.value = a.items; branches.value = b; patients.value = p.items; services.value = s; therapists.value = t
+    const [a, b, p, s, t] = await Promise.all([appointmentApi.search({ page: page.value, size: 20 }), branchApi.list(), patientApi.searchAll(), catalogApi.services(), catalogApi.therapists()])
+    appointments.value = a.items; totalPages.value = a.totalPages; branches.value = b; patients.value = p; services.value = s; therapists.value = t
     if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ' }
 }
 onMounted(load)
-function openCreate() { editingId.value = null; const branch = branchOptions.value[0]; form.value = { patientId: patients.value[0]?.id ?? 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, branchCode: branch?.code ?? 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
-function openEdit(item: Appointment) { editingId.value = item.id; form.value = { patientId: item.patient.id, therapistId: item.therapist.id, serviceId: item.service.id, branchCode: item.branchCode, date: item.startAt.slice(0, 10), time: new Date(item.startAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }), note: item.note ?? '' }; viewMode.value = 'edit' }
-async function save() { errorMessage.value = ''; try { if (editingId.value) { const result = await appointmentApi.reschedule(editingId.value, { startAt: toStartAt(), therapistId: form.value.therapistId }); const index = appointments.value.findIndex((item) => item.id === result.id); if (index >= 0) appointments.value[index] = result } else { appointments.value.unshift(await appointmentApi.create({ branchCode: form.value.branchCode, patientId: form.value.patientId, therapistId: form.value.therapistId, serviceId: form.value.serviceId, startAt: toStartAt(), note: form.value.note })) }; viewMode.value = 'list' } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ' } }
+async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; await load() } }
+function openCreate() { editingId.value = null; patientQuery.value = ''; const branch = branchOptions.value[0]; form.value = { patientId: 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, branchCode: branch?.code ?? 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
+function openEdit(item: Appointment) { editingId.value = item.id; patientQuery.value = `${item.patient.fullName} HN ${item.patient.hn}`; form.value = { patientId: item.patient.id, therapistId: item.therapist.id, serviceId: item.service.id, branchCode: item.branchCode, date: item.startAt.slice(0, 10), time: new Date(item.startAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }), note: item.note ?? '' }; viewMode.value = 'edit' }
+async function save() { errorMessage.value = ''; try { const normalized = patientQuery.value.trim().toLowerCase(); const patient = patients.value.find((item) => item.hn.toLowerCase() === normalized || item.fullName.toLowerCase() === normalized || String(item.id) === normalized || `${item.fullName} hn ${item.hn}`.toLowerCase() === normalized); if (!editingId.value && !patient) throw new Error('กรุณากรอก HN หรือชื่อผู้ป่วยให้ตรงกับรายการในระบบ'); form.value.patientId = patient?.id ?? form.value.patientId; if (!form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ'); if (editingId.value) { const result = await appointmentApi.reschedule(editingId.value, { startAt: toStartAt(), therapistId: form.value.therapistId }); const index = appointments.value.findIndex((item) => item.id === result.id); if (index >= 0) appointments.value[index] = result } else { appointments.value.unshift(await appointmentApi.create({ branchCode: form.value.branchCode, patientId: form.value.patientId, therapistId: form.value.therapistId, serviceId: form.value.serviceId, startAt: toStartAt(), note: form.value.note })) }; viewMode.value = 'list' } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ' } }
 async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') { savingStatusId.value = item.id; statusNotice.value = 'กำลังบันทึก...'; try { const result = status === 'ARRIVED' ? await appointmentApi.checkIn(item.id) : status === 'IN_SERVICE' ? await appointmentApi.startService(item.id) : status === 'COMPLETED' ? await appointmentApi.complete(item.id) : status === 'NO_SHOW' ? await appointmentApi.noShow(item.id) : status === 'CANCELLED' ? await appointmentApi.cancel(item.id, reason) : null; if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น'); Object.assign(item, result); statusNotice.value = 'บันทึกแล้ว' } catch (error) { statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' } finally { savingStatusId.value = null; window.setTimeout(() => (statusNotice.value = ''), 2200) } }
 function changeStatus(event: Event, item: Appointment) { const status = (event.target as HTMLSelectElement).value as AppointmentStatus; if (status === 'CANCELLED') { pendingCancellation.value = { item }; cancellationReason.value = ''; return } void saveStatus(item, status) }
 function confirmCancellation() { if (!pendingCancellation.value || !cancellationReason.value.trim()) return; const { item } = pendingCancellation.value; pendingCancellation.value = null; void saveStatus(item, 'CANCELLED', cancellationReason.value.trim()) }
@@ -68,11 +72,10 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
           <div class="form-grid">
             <label>
               ผู้ป่วย
-              <select v-model="form.patientId" :disabled="isEditing">
-                <option v-for="patient in patients" :key="patient.id" :value="patient.id">
-                  {{ patient.fullName }} HN {{ patient.hn }}
-                </option>
-              </select>
+              <input v-model.trim="patientQuery" :readonly="isEditing" list="appointment-patients" placeholder="กรอก HN หรือชื่อผู้ป่วย" required />
+              <datalist id="appointment-patients">
+                <option v-for="patient in patients" :key="patient.id" :value="`${patient.fullName} HN ${patient.hn}`" />
+              </datalist>
             </label>
             <label>
               ประเภทบริการ
@@ -175,6 +178,11 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
             </tr>
           </tbody>
         </table>
+        <footer v-if="totalPages > 1" class="pagination">
+          <button class="secondary" :disabled="page === 0" @click="changePage(page - 1)">ก่อนหน้า</button>
+          <span>หน้า {{ page + 1 }} / {{ totalPages }}</span>
+          <button class="secondary" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป</button>
+        </footer>
       </section>
     </main>
     <div
