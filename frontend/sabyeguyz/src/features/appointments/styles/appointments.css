@@ -103,7 +103,7 @@
 }
 .status-feedback {
   color: #fff;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 400;
   opacity: 0.72;
   white-space: nowrap;
@@ -174,6 +174,15 @@
   font-weight: 650;
   white-space: nowrap;
 }
+.appointment-panel .staff-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.appointment-panel .staff-table th,
+.appointment-panel .staff-table td {
+  white-space: nowrap;
+}
 .staff-table .appointment-empty {
   height: 150px;
   color: #71817e;
@@ -181,6 +190,65 @@
   font-size: 18px;
   font-weight: 600;
   text-align: center;
+  vertical-align: middle;
+}
+.appointment-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  color: #173f44;
+  background: transparent;
+  font-size: 16px;
+}
+.appointment-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.appointment-pagination button {
+  min-width: 86px;
+  padding: 8px 14px;
+  border: 1px solid #9ab9b3;
+  border-radius: 8px;
+  color: #315f5b;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.appointment-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.appointment-snackbar {
+  position: fixed;
+  z-index: 1000;
+  top: 84px;
+  left: 50%;
+  width: min(390px, calc(100vw - 40px));
+  margin: 0;
+  padding: 17px 28px;
+  border-radius: 12px;
+  color: #fff;
+  background: #a9b96a;
+  box-shadow: 0 12px 30px rgb(93 111 46 / 26%);
+  font-size: 19px;
+  font-weight: 700;
+  text-align: center;
+  transform: translateX(-50%);
+}
+.snackbar-enter-active,
+.snackbar-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.snackbar-enter-from,
+.snackbar-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -12px);
 }
 @media (max-width: 760px) {
   .create-card {
@@ -194,6 +262,22 @@
   }
   .appointment-save .primary {
     width: 100%;
+  }
+  .appointment-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 1180px) {
+  .appointment-panel {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .appointment-panel .staff-table {
+    min-width: 980px;
   }
 }
 .patient-picker {
