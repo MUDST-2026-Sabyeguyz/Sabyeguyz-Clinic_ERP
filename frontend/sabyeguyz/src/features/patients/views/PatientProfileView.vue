@@ -80,9 +80,9 @@ onMounted(async () => {
       <section v-if="patient" class="profile-heading">
         <div class="avatar">{{ patient.fullName.slice(0, 1) }}</div>
         <div>
-          <small>PATIENT PROFILE</small>
+          <small class="!text-xs !font-bold">PATIENT PROFILE</small>
           <h1>{{ patient.title }}{{ patient.fullName }}</h1>
-          <p>HN {{ patient.hn }}</p>
+          <p class="!text-lg">HN {{ patient.hn }}</p>
         </div>
         <button class="primary" @click="openEdit">แก้ไขข้อมูล</button>
       </section>
