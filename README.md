@@ -29,8 +29,8 @@ Configuration defaults are documented in `.env.example`. Copy it to `.env` to ov
 Install Docker Desktop with Linux containers and Docker Compose, then run from this repository root:
 
 ```bash
-docker compose -f deploy/docker-compose.yml up --build -d
-docker compose -f deploy/docker-compose.yml ps
+docker compose --env-file .env up --build -d
+docker compose --env-file .env ps
 ```
 
 Wait for the backend health endpoint to return `{"status":"UP"}` before using the application:
@@ -43,8 +43,8 @@ Wait for the backend health endpoint to return `{"status":"UP"}` before using th
 The frontend serves a production build through nginx. Browser requests to `/api/` are forwarded to the backend on the Compose network. No local Node.js, Java, or Maven installation is required.
 
 ```bash
-docker compose -f deploy/docker-compose.yml logs --tail=100 backend frontend
-docker compose -f deploy/docker-compose.yml down
+docker compose --env-file .env logs --tail=100 backend frontend
+docker compose --env-file .env down
 ```
 
 Database data remains in the Compose volume after `down`. See [deployment instructions](deploy/README.md) for port overrides, test steps, and database details.
