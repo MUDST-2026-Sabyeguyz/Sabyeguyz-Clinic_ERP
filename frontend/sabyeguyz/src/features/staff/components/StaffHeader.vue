@@ -12,6 +12,7 @@ const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0'
 let readyFrame: number | undefined
 let routeFrame: number | undefined
 let hoverFrame: number | undefined
+let settleFrame: number | undefined
 let hoveredLink: HTMLAnchorElement | null = null
 const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   role?: string
@@ -19,6 +20,7 @@ const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
 } | null
 const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
+const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
 const navItems = computed(() =>
   isManager.value
@@ -41,7 +43,6 @@ const navItems = computed(() =>
 )
 function movePill(target: HTMLElement | null) {
   if (!target || !navRef.value) return
-  const navBox = navRef.value.getBoundingClientRect()
   const targetBox = target.getBoundingClientRect()
   navRef.value.querySelectorAll<HTMLElement>('a').forEach((link) => {
     link.classList.remove('pill-target')
@@ -49,7 +50,10 @@ function movePill(target: HTMLElement | null) {
   target.classList.add('pill-target')
   pillStyle.value = {
     width: `${targetBox.width}px`,
-    transform: `translateX(${targetBox.left - navBox.left}px)`,
+    // The pill is an absolutely positioned child of the scrollable nav. Its
+    // offset is already in that same coordinate space, unlike viewport rects
+    // which can be stale while the centered menu is settling after a refresh.
+    transform: `translateX(${target.offsetLeft}px)`,
     opacity: '1',
   }
 }
@@ -97,6 +101,13 @@ function positionPillWithoutAnimation() {
 }
 onMounted(() => {
   positionPillWithoutAnimation()
+  // Centered Manager tabs move slightly after the browser applies loaded fonts.
+  // Measure again after layout settles so the pill never remains at its
+  // pre-refresh position.
+  requestAnimationFrame(() => {
+    settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
+  })
+  document.fonts?.ready.then(positionPillWithoutAnimation)
   window.addEventListener('resize', positionPillWithoutAnimation)
   navRef.value?.addEventListener('mouseover', handleNavHover)
   navRef.value?.addEventListener('pointerover', handleNavHover)
@@ -112,6 +123,7 @@ onBeforeUnmount(() => {
   if (readyFrame) cancelAnimationFrame(readyFrame)
   if (routeFrame) cancelAnimationFrame(routeFrame)
   if (hoverFrame) cancelAnimationFrame(hoverFrame)
+  if (settleFrame) cancelAnimationFrame(settleFrame)
 })
 watch(
   () => route.fullPath,
@@ -134,8 +146,8 @@ function signOut() {
 </script>
 
 <template>
-  <header class="staff-header">
-    <RouterLink class="brand" to="/staff/patients"><img :src="logo" alt="SaByeGuyz" /></RouterLink>
+  <header class="staff-header" :class="{ 'manager-header': isManager }">
+    <RouterLink class="brand" :to="homePath"><img :src="logo" alt="SaByeGuyz" /></RouterLink>
     <button
       class="menu-toggle"
       type="button"

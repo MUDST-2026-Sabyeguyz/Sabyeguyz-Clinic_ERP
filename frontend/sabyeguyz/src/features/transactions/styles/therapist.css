@@ -112,9 +112,10 @@ body.therapist-ui .transaction-page .status.void {
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1400px) {
   body.therapist-ui .transaction-page .transaction-list {
     overflow: visible;
+    margin-top: 72px;
     padding-bottom: 0;
   }
 
@@ -142,7 +143,7 @@ body.therapist-ui .transaction-page .status.void {
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1400px) {
   body.therapist-ui .staff-page.transaction-page {
     background-size:
       100% 100%,
