@@ -167,6 +167,29 @@ nav a.router-link-active:after {
 .profile-menu a:hover {
   background: #fff0ec;
 }
+
+/* Manager has more top-level areas than the therapist view. Keep the original
+   visual scale and let the tab strip scroll instead of compressing its labels. */
+.staff-header.manager-header nav {
+  justify-content: flex-start;
+  gap: 10px;
+  overflow-x: auto;
+  padding-right: 24px;
+  scroll-padding-inline: 16px;
+  scrollbar-width: none;
+}
+.staff-header.manager-header nav::-webkit-scrollbar {
+  display: none;
+}
+.staff-header.manager-header nav a {
+  padding-inline: 8px;
+  font-size: 17px;
+}
+@media (min-width: 1280px) {
+  .staff-header.manager-header nav {
+    justify-content: center;
+  }
+}
 @media (max-width: 1120px) {
   .staff-header {
     grid-template-columns: 170px minmax(0, 1fr) auto;
