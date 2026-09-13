@@ -1,10 +1,10 @@
 body.therapist-ui .registration-page {
   display: flow-root;
-  background-color: var(--therapist-cream);
+  background-color: #91e1ca;
   background-image: url('../../../assets/header.png');
-  background-position: center 220px;
+  background-position: center top;
   background-repeat: no-repeat;
-  background-size: 115% max(1500px, calc(100vh - 220px));
+  background-size: cover;
 }
 
 body.therapist-ui .registration-page .back-row {
@@ -50,6 +50,19 @@ body.therapist-ui .registration-page .form-grid {
   gap: 18px 36px;
 }
 
+body.therapist-ui .registration-page .registration-section + .registration-section {
+  margin-top: 34px;
+  padding-top: 30px;
+  border-top: 1px solid #dce7e4;
+}
+
+body.therapist-ui .registration-page .registration-section h2 {
+  margin: 0 0 18px;
+  color: var(--therapist-ink);
+  font-size: 26px;
+  font-weight: 800;
+}
+
 body.therapist-ui .registration-page label,
 body.therapist-ui .registration-page legend {
   font-size: 16px;
@@ -72,6 +85,10 @@ body.therapist-ui .registration-page textarea {
   font-size: 16px;
 }
 
+body.therapist-ui .registration-page select:disabled {
+  cursor: not-allowed;
+}
+
 body.therapist-ui .registration-page .actions {
   margin-top: 26px;
   padding-top: 0;
@@ -88,11 +105,11 @@ body.therapist-ui .registration-page .actions .primary {
   body.therapist-ui .registration-page {
     /* Keep the original rounded green artwork rather than turning the whole
        screen green.  It is raised and enlarged to sit behind the intro/card. */
-    background-color: var(--therapist-cream);
+    background-color: #91e1ca;
     background-image: url('../../../assets/header.png');
-    background-position: center -54px;
+    background-position: center top;
     background-repeat: no-repeat;
-    background-size: 118% auto;
+    background-size: cover;
   }
 
   body.therapist-ui .registration-page .back-row {
@@ -130,6 +147,14 @@ body.therapist-ui .registration-page .actions .primary {
 
   body.therapist-ui .registration-page .form-grid > label:first-child,
   body.therapist-ui .registration-page .form-grid > .wide {
+    grid-column: 1 / -1;
+  }
+
+  body.therapist-ui .registration-page .registration-section .form-grid > label:first-child {
+    grid-column: auto;
+  }
+
+  body.therapist-ui .registration-page .registration-section .form-grid > .wide {
     grid-column: 1 / -1;
   }
 
@@ -277,6 +302,7 @@ body.therapist-ui .patient-workspace .directory {
       100% 100%,
       100% 380px;
   }
+
 }
 
 body.therapist-ui .patient-workspace .directory > header {
@@ -417,5 +443,11 @@ body.therapist-ui .patient-workspace .row-action {
   body.therapist-ui .patient-workspace .directory > header .result-count {
     grid-column: 1 / -1;
     padding-top: 2px;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.therapist-ui .patient-workspace .directory > header {
+    padding-top: 20px;
   }
 }
