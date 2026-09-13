@@ -5,7 +5,7 @@ import { branchApi, patientApi, type Branch, type Patient } from '@/api/client'
 
 const query = ref('')
 const branch = ref('ทั้งหมด')
-const sortOrder = ref<'asc' | 'desc'>('asc')
+const sortOrder = ref<'asc' | 'desc' | 'newest'>('asc')
 const newPatientHn = ref('')
 const showCreationNotice = ref(false)
 const patients = ref<Patient[]>([])
@@ -17,6 +17,7 @@ const loading = ref(true)
 const errorMessage = ref('')
 const filteredPatients = computed(() => {
   return [...patients.value].sort((left, right) => {
+    if (sortOrder.value === 'newest') return right.id - left.id
     const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
     return sortOrder.value === 'asc' ? comparison : -comparison
   })
@@ -25,7 +26,8 @@ async function loadPatients() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const result = await patientApi.search(query.value.trim(), page.value, 20, branch.value === 'ทั้งหมด' ? '' : branch.value)
+    const sort = sortOrder.value === 'asc' ? 'nameAsc' : sortOrder.value === 'desc' ? 'nameDesc' : 'newest'
+    const result = await patientApi.search(query.value.trim(), page.value, 20, branch.value === 'ทั้งหมด' ? '' : branch.value, sort)
     patients.value = result.items
     totalPages.value = result.totalPages
     totalItems.value = result.totalItems
@@ -48,6 +50,7 @@ onMounted(() => {
 })
 onMounted(async () => { branches.value = await branchApi.list(); await loadPatients() })
 watch(branch, () => { page.value = 0; void loadPatients() })
+watch(sortOrder, () => { page.value = 0; void loadPatients() })
 </script>
 
 <template>
@@ -83,6 +86,7 @@ watch(branch, () => { page.value = 0; void loadPatients() })
           <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับผู้ป่วย">
             <option value="asc">ชื่อ ก-ฮ</option>
             <option value="desc">ชื่อ ฮ-ก</option>
+            <option value="newest">เพิ่มล่าสุด</option>
           </select>
           <span class="result-count">พบผู้ป่วยทั้งหมด {{ totalItems }} ราย</span>
         </header>
@@ -120,11 +124,11 @@ watch(branch, () => { page.value = 0; void loadPatients() })
             </tbody>
           </table>
         </div>
-        <footer v-if="totalPages > 1" class="pagination">
-          <button class="secondary" :disabled="page === 0" @click="changePage(page - 1)">ก่อนหน้า</button>
-          <span>หน้า {{ page + 1 }} / {{ totalPages }}</span>
-          <button class="secondary" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป</button>
-        </footer>
+        <nav v-if="totalPages > 1" class="patient-pagination" aria-label="เปลี่ยนหน้ารายชื่อผู้ป่วย">
+          <button type="button" :disabled="page === 0" @click="changePage(page - 1)">← ก่อนหน้า</button>
+          <span>หน้า {{ page + 1 }} จาก {{ totalPages }}</span>
+          <button type="button" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป →</button>
+        </nav>
       </section>
     </main>
     <Transition name="snackbar">
