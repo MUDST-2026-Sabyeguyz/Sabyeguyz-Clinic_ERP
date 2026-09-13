@@ -132,9 +132,11 @@ router.beforeEach((to) => {
 })
 
 router.afterEach(() => {
+  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
+  const usesSharedStaffUi = authUser?.role === 'THERAPIST' || authUser?.role === 'MANAGER'
   document.body.classList.toggle(
     'therapist-ui',
-    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role === 'THERAPIST',
+    usesSharedStaffUi,
   )
 })
 

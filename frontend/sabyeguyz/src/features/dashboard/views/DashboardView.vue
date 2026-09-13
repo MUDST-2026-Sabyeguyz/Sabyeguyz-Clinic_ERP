@@ -20,7 +20,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="staff-page">
+  <div class="staff-page dashboard-page">
     <StaffHeader />
     <main class="staff-main">
       <section class="staff-hero">
