@@ -76,11 +76,27 @@ main > h1 {
   z-index: 5;
   top: 54px;
   width: 100%;
-  overflow: hidden;
+  max-height: min(300px, calc(100vh - 180px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #789c69 #edf4ef;
+  scrollbar-width: thin;
   border: 1px solid #ccc;
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 10px 24px #3c34252b;
+}
+.results::-webkit-scrollbar {
+  width: 9px;
+}
+.results::-webkit-scrollbar-track {
+  background: #edf4ef;
+}
+.results::-webkit-scrollbar-thumb {
+  border: 2px solid #edf4ef;
+  border-radius: 999px;
+  background: #789c69;
 }
 .results button {
   display: flex;
