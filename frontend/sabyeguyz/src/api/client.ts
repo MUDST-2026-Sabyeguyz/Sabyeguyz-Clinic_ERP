@@ -98,7 +98,7 @@ export const authApi = {
 }
 
 export const patientApi = {
-  search: (query = '', page = 0, size = 20, branchCode = '') => api.get<Page<Patient>>(`/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), ...(branchCode ? { branchCode } : {}) })}`),
+  search: (query = '', page = 0, size = 20, branchCode = '', sort = 'nameAsc') => api.get<Page<Patient>>(`/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), sort, ...(branchCode ? { branchCode } : {}) })}`),
   searchAll: async (query = '') => {
     const first = await patientApi.search(query, 0, 100)
     const rest = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) => patientApi.search(query, index + 1, 100)))

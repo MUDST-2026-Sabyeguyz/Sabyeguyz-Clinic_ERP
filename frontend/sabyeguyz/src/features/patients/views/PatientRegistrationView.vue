@@ -10,6 +10,8 @@ import { type PatientRegistrationForm } from '../data/patientRegistration'
 const submitting = ref(false)
 const router = useRouter()
 const submitted = ref(false)
+const emailFocused = ref(false)
+const identityFocused = ref(false)
 const errorMessage = ref('')
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
@@ -22,19 +24,24 @@ const form = reactive<PatientRegistrationForm>({
 })
 const identityIsValid = computed(() => {
   if (form.identityDocumentType === 'NATIONAL_ID') return /^\d{13}$/.test(form.identityNumber)
-  if (form.identityDocumentType === 'PASSPORT') return /^\d{6,20}$/.test(form.identityNumber)
+  if (form.identityDocumentType === 'PASSPORT') return /^\d{10}$/.test(form.identityNumber)
   return false
 })
 const emailIsValid = computed(() =>
   /^[a-z0-9](?:[a-z0-9._%+-]*[a-z0-9])?@gmail\.com$/i.test(form.email.trim()),
 )
+const emailErrorVisible = computed(() => submitted.value && !emailFocused.value && !emailIsValid.value)
+const identityErrorVisible = computed(() => submitted.value && !identityFocused.value && !identityIsValid.value)
 const thaiOnly = (value: string) => value.replace(/[^\u0E00-\u0E7F\s]/g, '')
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
 const thaiNameIsValid = (value: string) => /^[\u0E00-\u0E7F\s]+$/.test(value.trim())
 const phoneIsValid = computed(() => /^\d{10}$/.test(form.phone))
-const canSubmit = computed(() => Boolean(form.branchCode && branches.value.length && thaiNameIsValid(form.firstName) && thaiNameIsValid(form.lastName) && thaiNameIsValid(form.nickname) && emailIsValid.value && form.birthDate && phoneIsValid.value && form.identityDocumentType && identityIsValid.value && form.address))
-watch(() => form.title, (title) => { if (title === 'นาย') form.gender = 'ชาย'; if (title === 'นาง' || title === 'นางสาว') form.gender = 'หญิง' })
+const birthDateIsValid = computed(() => Boolean(form.birthDate && form.birthDate < new Date().toISOString().slice(0, 10)))
+const canSubmit = computed(() => Boolean(form.branchCode && branches.value.length && thaiNameIsValid(form.firstName) && thaiNameIsValid(form.lastName) && thaiNameIsValid(form.nickname) && emailIsValid.value && birthDateIsValid.value && phoneIsValid.value && form.identityDocumentType && identityIsValid.value && form.address))
+watch(() => form.title, (title) => { if (title === 'นาย') form.gender = 'ชาย'; else if (title === 'นาง' || title === 'นางสาว') form.gender = 'หญิง' })
+watch(() => form.gender, (gender) => { if (gender === 'ชาย') form.title = 'นาย'; else if (gender === 'หญิง') form.title = 'นางสาว' })
 watch(() => form.identityDocumentType, () => { form.identityNumber = '' })
+watch(() => form.nationality, (nationality) => { form.identityDocumentType = nationality === 'ต่างชาติ' ? 'PASSPORT' : 'NATIONAL_ID' })
 onMounted(async () => {
   try {
     const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.list()])
@@ -102,25 +109,43 @@ async function submit() {
     <section v-if="!registeredHn" class="registration-shell">
       <div class="intro"><h1>ลงทะเบียนผู้ป่วยใหม่</h1><p>เจ้าหน้าที่กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p></div>
       <form class="form-card" novalidate @submit.prevent="submit">
-        <div class="form-grid">
-          <label>สาขาที่ลงทะเบียน <select v-model="form.branchCode" :disabled="!branches.length"><option v-for="branch in branches" :key="branch.code" :value="branch.code">{{ branch.name }}</option></select></label>
-          <label :class="{ 'invalid-field': submitted && !emailIsValid }">อีเมล <em>*</em><input v-model.trim="form.email" type="text" inputmode="email" placeholder="example@gmail.com" /><small v-if="submitted && !form.email" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !emailIsValid" class="required-error">รูปแบบอีเมลไม่ถูกต้อง ต้องใช้อีเมลที่ลงท้ายด้วย @gmail.com</small></label>
-          <label>คำนำหน้า <em>*</em><select v-model="form.title"><option>นาย</option><option>นาง</option><option>นางสาว</option><option>ไม่ระบุ</option></select></label>
-          <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.firstName) }">ชื่อ <em>*</em><input v-model.trim="form.firstName" placeholder="ชื่อ" @input="form.firstName = thaiOnly(form.firstName)" /><small v-if="submitted && !form.firstName" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.firstName)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
-          <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.lastName) }">นามสกุล <em>*</em><input v-model.trim="form.lastName" placeholder="นามสกุล" @input="form.lastName = thaiOnly(form.lastName)" /><small v-if="submitted && !form.lastName" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.lastName)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
-          <label>เพศ <em>*</em><select v-model="form.gender"><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></label>
-          <label :class="{ 'invalid-field': submitted && !phoneIsValid }">เบอร์โทร <em>*</em><input v-model.trim="form.phone" inputmode="numeric" maxlength="10" placeholder="xxx-xxx-xxxx" @input="form.phone = digitsOnly(form.phone)" /><small v-if="submitted && !form.phone" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !phoneIsValid" class="required-error">กรุณากรอกตัวเลข 10 หลัก</small></label>
-          <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.nickname) }">ชื่อเล่น <em>*</em><input v-model.trim="form.nickname" placeholder="ชื่อเล่น" @input="form.nickname = thaiOnly(form.nickname)" /><small v-if="submitted && !form.nickname" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.nickname)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
-          <label :class="{ 'invalid-field': submitted && !form.identityDocumentType }">ประเภทเอกสารยืนยันตัวตน <em>*</em><select v-model="form.identityDocumentType"><option value="" disabled>เลือกประเภทเอกสาร</option><option value="NATIONAL_ID">บัตรประจำตัวประชาชน</option><option value="PASSPORT">หนังสือเดินทาง (Passport)</option></select><small v-if="submitted && !form.identityDocumentType" class="required-error">กรุณากรอกข้อมูล</small></label>
-          <label :class="{ 'invalid-field': submitted && !identityIsValid }">{{ form.identityDocumentType === 'PASSPORT' ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }} <em>*</em><input v-model.trim="form.identityNumber" :disabled="!form.identityDocumentType" inputmode="numeric" :maxlength="form.identityDocumentType === 'NATIONAL_ID' ? 13 : 20" :placeholder="!form.identityDocumentType ? 'กรุณาเลือกประเภทเอกสารก่อน' : form.identityDocumentType === 'NATIONAL_ID' ? 'กรอกเลขบัตรประชาชน 13 หลัก' : 'กรอกเลขหนังสือเดินทางเป็นตัวเลข'" @input="form.identityNumber = digitsOnly(form.identityNumber)" /><small v-if="submitted && !form.identityNumber" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !identityIsValid" class="required-error">{{ form.identityDocumentType === 'NATIONAL_ID' ? 'กรุณากรอกตัวเลข 13 หลัก' : 'กรุณากรอกตัวเลข 6–20 หลัก' }}</small></label>
-          <label :class="{ 'invalid-field': submitted && !form.birthDate }">วันเกิด <em>*</em><ThaiDatePicker v-model="form.birthDate" /><small v-if="submitted && !form.birthDate" class="required-error">กรุณากรอกข้อมูล</small></label>
-          <label>กรุ๊ปเลือด<select v-model="form.bloodGroup"><option>ไม่ทราบ</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></label>
-          <label>สัญชาติ<select v-model="form.nationality"><option>ไทย</option><option>ต่างชาติ</option></select></label>
-          <label>กลุ่มลูกค้า<select v-model="form.customerType"><option v-for="item in customerGroups" :key="item">{{ item }}</option></select></label>
-          <label>ช่องทางแนะนำ<select v-model="form.customerSource"><option v-for="item in referralChannels" :key="item">{{ item }}</option></select></label>
-          <label>บริษัทประกัน<select v-model="form.insuranceCompany"><option value="">ไม่มีประกัน</option><option v-for="item in insuranceCompanies" :key="item">{{ item }}</option></select></label>
-          <label class="wide" :class="{ 'invalid-field': submitted && !form.address }">ที่อยู่ <em>*</em><textarea v-model.trim="form.address" rows="4" /><small v-if="submitted && !form.address" class="required-error">กรุณากรอกข้อมูล</small></label>
-        </div>
+        <section class="registration-section">
+          <h2>ข้อมูลส่วนตัว</h2>
+          <div class="form-grid">
+            <label>คำนำหน้า <em>*</em><select v-model="form.title"><option>นาย</option><option>นาง</option><option>นางสาว</option></select></label>
+            <label>เพศ <em>*</em><select v-model="form.gender"><option>ชาย</option><option>หญิง</option></select></label>
+            <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.firstName) }">ชื่อ <em>*</em><input v-model.trim="form.firstName" placeholder="ชื่อ" @input="form.firstName = thaiOnly(form.firstName)" /><small v-if="submitted && !form.firstName" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.firstName)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
+            <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.lastName) }">นามสกุล <em>*</em><input v-model.trim="form.lastName" placeholder="นามสกุล" @input="form.lastName = thaiOnly(form.lastName)" /><small v-if="submitted && !form.lastName" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.lastName)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
+            <label :class="{ 'invalid-field': submitted && !thaiNameIsValid(form.nickname) }">ชื่อเล่น <em>*</em><input v-model.trim="form.nickname" placeholder="ชื่อเล่น" @input="form.nickname = thaiOnly(form.nickname)" /><small v-if="submitted && !form.nickname" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !thaiNameIsValid(form.nickname)" class="required-error">กรุณากรอกเป็นภาษาไทย</small></label>
+            <label :class="{ 'invalid-field': submitted && !birthDateIsValid }">วันเกิด <em>*</em><ThaiDatePicker v-model="form.birthDate" :invalid="submitted && !birthDateIsValid" show-calendar-icon numeric-month hide-caret /><small v-if="submitted && !form.birthDate" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !birthDateIsValid" class="required-error">วันเกิดต้องเป็นวันในอดีต</small></label>
+            <label>กรุ๊ปเลือด<select v-model="form.bloodGroup"><option>ไม่ทราบ</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></label>
+            <label>สัญชาติ<select v-model="form.nationality"><option>ไทย</option><option>ต่างชาติ</option></select></label>
+          </div>
+        </section>
+        <section class="registration-section">
+          <h2>ข้อมูลติดต่อ</h2>
+          <div class="form-grid">
+            <label :class="{ 'invalid-field': emailErrorVisible }">อีเมล <em>*</em><input v-model.trim="form.email" type="text" inputmode="email" placeholder="example@gmail.com" @focus="emailFocused = true" @blur="emailFocused = false" /><small v-if="emailErrorVisible && !form.email" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="emailErrorVisible" class="required-error">รูปแบบอีเมลไม่ถูกต้อง</small></label>
+            <label :class="{ 'invalid-field': submitted && !phoneIsValid }">เบอร์โทร <em>*</em><input v-model.trim="form.phone" inputmode="numeric" maxlength="10" placeholder="xxx-xxx-xxxx" @input="form.phone = digitsOnly(form.phone)" /><small v-if="submitted && !form.phone" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="submitted && !phoneIsValid" class="required-error">กรุณากรอกตัวเลข 10 หลัก</small></label>
+            <label class="wide" :class="{ 'invalid-field': submitted && !form.address }">ที่อยู่ <em>*</em><textarea v-model.trim="form.address" rows="4" /><small v-if="submitted && !form.address" class="required-error">กรุณากรอกข้อมูล</small></label>
+          </div>
+        </section>
+        <section class="registration-section">
+          <h2>เอกสารยืนยันตัวตน</h2>
+          <div class="form-grid">
+            <label :class="{ 'invalid-field': submitted && !form.identityDocumentType }">ประเภทเอกสารยืนยันตัวตน <em>*</em><select v-model="form.identityDocumentType" :disabled="form.nationality === 'ต่างชาติ'"><option value="" disabled>เลือกประเภทเอกสาร</option><option value="NATIONAL_ID">บัตรประจำตัวประชาชน</option><option value="PASSPORT">หนังสือเดินทาง (Passport)</option></select><small v-if="submitted && !form.identityDocumentType" class="required-error">กรุณากรอกข้อมูล</small></label>
+            <label :class="{ 'invalid-field': identityErrorVisible }">{{ form.identityDocumentType === 'PASSPORT' ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }} <em>*</em><input v-model.trim="form.identityNumber" :disabled="!form.identityDocumentType" inputmode="numeric" :maxlength="form.identityDocumentType === 'NATIONAL_ID' ? 13 : 10" :placeholder="!form.identityDocumentType ? 'กรุณาเลือกประเภทเอกสารก่อน' : form.identityDocumentType === 'NATIONAL_ID' ? 'กรอกเลขบัตรประชาชน 13 หลัก' : 'กรอกเลขหนังสือเดินทาง 10 หลัก'" @focus="identityFocused = true" @blur="identityFocused = false" @input="form.identityNumber = digitsOnly(form.identityNumber)" /><small v-if="identityErrorVisible && !form.identityNumber" class="required-error">กรุณากรอกข้อมูล</small><small v-else-if="identityErrorVisible" class="required-error">กรุณากรอกตัวเลข {{ form.identityDocumentType === 'NATIONAL_ID' ? '13' : '10' }} หลัก</small></label>
+          </div>
+        </section>
+        <section class="registration-section">
+          <h2>ข้อมูลการลงทะเบียนและสิทธิ์การรักษา</h2>
+          <div class="form-grid">
+            <label>สาขาที่ลงทะเบียน <select v-model="form.branchCode" :disabled="!branches.length"><option v-for="branch in branches" :key="branch.code" :value="branch.code">{{ branch.name }}</option></select></label>
+            <label>กลุ่มลูกค้า<select v-model="form.customerType"><option v-for="item in customerGroups" :key="item">{{ item }}</option></select></label>
+            <label>ช่องทางแนะนำ<select v-model="form.customerSource"><option v-for="item in referralChannels" :key="item">{{ item }}</option></select></label>
+            <label>บริษัทประกัน<select v-model="form.insuranceCompany"><option value="">ไม่มีประกัน</option><option v-for="item in insuranceCompanies" :key="item">{{ item }}</option></select></label>
+          </div>
+        </section>
         <div class="actions end"><button type="submit" class="primary" :disabled="submitting">{{ submitting ? 'กำลังบันทึก...' : 'บันทึก' }}</button></div>
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       </form>
