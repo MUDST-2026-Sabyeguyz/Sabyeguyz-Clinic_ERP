@@ -32,7 +32,7 @@ body.therapist-ui .appointment-page > .staff-header {
 }
 
 /* Keep the decorative background aligned when the compact header is used. */
-@media (max-width: 1180px) {
+@media (max-width: 1400px) {
   body.therapist-ui .appointment-page {
     background-position:
       top center,
@@ -40,7 +40,7 @@ body.therapist-ui .appointment-page > .staff-header {
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1400px) {
   body.therapist-ui .appointment-page {
     background-size:
       100% 100%,
@@ -212,7 +212,7 @@ body.therapist-ui .appointment-page .appointment-panel .secondary {
   background: var(--therapist-action);
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1400px) {
   body.therapist-ui .appointment-page .appointment-panel {
     overflow: visible;
     padding-top: 24px;
