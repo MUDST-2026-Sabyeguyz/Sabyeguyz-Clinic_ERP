@@ -15,12 +15,17 @@ public class PatientQueryService {
     }
 
     @Transactional(readOnly = true)
-    public PatientSearchResponse search(String query, String branchCode, int page, int size) {
+    public PatientSearchResponse search(String query, String branchCode, String sort, int page, int size) {
         validatePagination(page, size);
         String normalizedQuery = query == null ? "" : query.trim();
+        Sort sorting = switch (sort) {
+            case "nameDesc" -> Sort.by("fullName").descending().and(Sort.by("id").descending());
+            case "newest" -> Sort.by("id").descending();
+            default -> Sort.by("fullName").ascending().and(Sort.by("id").ascending());
+        };
         return PatientSearchResponse.from(patientRepository.search(
                 normalizedQuery, branchCode == null || branchCode.isBlank() ? null : branchCode.trim().toUpperCase(),
-                PageRequest.of(page, size, Sort.by("id").ascending())));
+                PageRequest.of(page, size, sorting)));
     }
 
     @Transactional(readOnly = true)
