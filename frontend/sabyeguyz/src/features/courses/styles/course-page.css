@@ -128,16 +128,49 @@
 .course-list {
   padding: 0 21px;
 }
+.course-empty {
+  display: grid;
+  min-height: 132px;
+  place-items: center;
+  color: #647b7e;
+  font-size: 20px;
+}
 @media (max-width: 700px) {
   .course-page .course-summary .patient-context {
     align-items: flex-start;
     flex-wrap: wrap;
     padding: 18px 24px;
   }
+  .course-page .course-summary .avatar {
+    margin-left: 0;
+  }
   .course-page .course-selector-field {
     flex-basis: 100%;
     margin-left: 0;
     margin-right: 0;
+  }
+}
+@media (min-width: 501px) and (max-width: 700px) {
+  .course-page .course-summary .patient-context {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+  .course-page .patient-context > div {
+    min-width: 0;
+  }
+  .course-page .patient-context b,
+  .course-page .patient-context p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .course-page .patient-context b {
+    font-size: 19px;
+  }
+  .course-page .course-selector-field {
+    min-width: 158px;
+    flex: 0 1 190px;
   }
 }
 .course-list article {
