@@ -1,12 +1,29 @@
 @font-face {
-  font-family: 'DB Lim X';
-  src: url('../assets/fonts/DB-Lim-X-v3.2.ttf') format('truetype');
+  font-family: 'Sarabun';
+  src: url('../assets/fonts/Sarabun-Regular.ttf') format('truetype');
   font-style: normal;
-  font-weight: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sarabun';
+  src: url('../assets/fonts/Sarabun-SemiBold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sarabun';
+  src: url('../assets/fonts/Sarabun-Bold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 700;
   font-display: swap;
 }
 
 :root {
+  --app-font: 'Sarabun', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, Arial, sans-serif;
   --clinic-ink: #013d5a;
   --clinic-green: #789c69;
   --clinic-green-dark: #5f8152;
@@ -40,7 +57,7 @@ body {
   min-height: 100vh;
   color: var(--clinic-ink);
   background: var(--clinic-white);
-  font-family: 'DB Lim X', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, Arial, sans-serif;
+  font-family: var(--app-font);
   font-synthesis: none;
   line-height: 1.45;
   text-rendering: geometricPrecision;
@@ -53,7 +70,7 @@ input,
 select,
 textarea,
 a {
-  font-family: 'DB Lim X', sans-serif;
+  font-family: var(--app-font);
 }
 a {
   color: inherit;

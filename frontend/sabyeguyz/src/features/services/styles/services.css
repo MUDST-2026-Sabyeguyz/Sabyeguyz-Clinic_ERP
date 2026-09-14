@@ -20,7 +20,7 @@
 main {
   width: min(1240px, calc(100% - 48px));
   margin: auto;
-  padding: 64px 0 90px;
+  padding: 88px 0 90px;
 }
 main > h1 {
   margin: 0;
