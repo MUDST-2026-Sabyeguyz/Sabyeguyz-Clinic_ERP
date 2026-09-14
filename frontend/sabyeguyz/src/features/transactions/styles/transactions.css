@@ -185,6 +185,12 @@
   font-size: 15px;
 }
 
+.transaction-list .staff-table th:nth-child(4),
+.transaction-list .staff-table td:nth-child(4) {
+  min-width: 180px;
+  white-space: nowrap;
+}
+
 .transaction-list .staff-table th:nth-child(6),
 .transaction-list .staff-table td:nth-child(6) {
   width: 130px;
