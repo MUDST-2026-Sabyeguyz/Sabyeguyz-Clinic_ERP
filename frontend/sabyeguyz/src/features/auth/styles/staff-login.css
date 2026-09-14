@@ -28,7 +28,7 @@
   position: absolute;
   color: #68c8c2;
   font-size: 180px;
-  font-family: 'DB Lim X', sans-serif;
+  font-family: var(--app-font);
   opacity: 0.45;
 }
 .plus.one {

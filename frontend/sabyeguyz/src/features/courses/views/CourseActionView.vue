@@ -84,11 +84,13 @@ function handleRecipientInput() {
             <label class="course-selector-field">
               <span>เลือกคอร์ส</span>
               <select v-model="selectedCourseId" class="owner-selector" data-test="course-selector">
+                <option v-if="!patientCourses.length" :value="0" disabled>ไม่มีคอร์ส</option>
                 <option v-for="course in patientCourses" :key="course.id" :value="course.id">{{ course.name }} · {{ course.course.code }}</option>
               </select>
             </label>
           </div>
           <div class="course-list">
+            <p v-if="!patientCourses.length" class="course-empty">ไม่มีคอร์ส</p>
             <article v-for="course in patientCourses" :key="course.name">
               <div class="course-main">
                 <span class="course-icon">▱</span>
