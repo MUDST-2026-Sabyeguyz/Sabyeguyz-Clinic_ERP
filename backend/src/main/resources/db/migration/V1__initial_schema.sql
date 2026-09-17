@@ -13,9 +13,18 @@ CREATE TYPE appointment_status_enum AS ENUM (
     'Confirmed', 'Arrived', 'InService', 'Completed', 'Cancelled', 'Rescheduled', 'NoShow'
 );
 CREATE TYPE visit_status_enum AS ENUM ('Arrived', 'InService', 'Completed', 'Cancelled');
+-- course_status_enum
+-- commission_status_enum
+-- commission_fee_type_enum
+-- percentage_base_enum
+-- course_member_role_enum
+-- course_ledger_entry_type_enum
+-- fee_type_enum
+-- payment_method_type_enum
+-- audit_action_enum
 
 
--- Master tables
+-- no Reference tables
 CREATE TABLE branch (
     branch_id BIGSERIAL PRIMARY KEY,        -- auto-increment
     branch_code CHAR(2) NOT NULL UNIQUE,    -- NN ; 0-99
@@ -23,10 +32,16 @@ CREATE TABLE branch (
     address VARCHAR(255) NOT NULL,
     phone VARCHAR(20) NOT NULL,
     branch_status BOOLEAN NOT NULL DEFAULT TRUE,
+    branch_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    branch_create_by BIGINT NOT NULL,
+    branch_update_at TIMESTAMP,
+    branch_update_by BIGINT,
 
     -- NN ; Two-digit branch code: 00-99
     CONSTRAINT chk_branch_code
         CHECK (branch_code ~ '^[0-9]{2}$')
+
+    -- Circular Foreign Key : branch_create_by, branch_update_by
 );
 
 CREATE TABLE role (
@@ -34,7 +49,7 @@ CREATE TABLE role (
     role_code CHAR(2) NOT NULL UNIQUE,      -- NN ; 0-99
     role_name VARCHAR(50) NOT NULL,
 
-    -- NN ; Two-digit branch code: 00-99
+    -- NN ; Two-digit role code: 00-99
     CONSTRAINT chk_role_code
         CHECK (role_code ~ '^[0-9]{2}$')
 );
@@ -50,30 +65,24 @@ CREATE TABLE service (
         CHECK (service_price >= 0)
 );
 
-CREATE TABLE course_package (
-    package_id BIGSERIAL PRIMARY KEY,                   -- auto-increment
-    package_name VARCHAR(100) NOT NULL,
-    package_price NUMERIC(12, 2) NOT NULL DEFAULT 0,    -- >=0
-    sessions INT NOT NULL,                              -- >=1 ; each package is different
-    bonus_sessions INT NOT NULL DEFAULT 0,              -- >=0
-    expiry_days INT NOT NULL,                           -- >0  ; each package is different
-    package_status BOOLEAN NOT NULL DEFAULT TRUE,
+CREATE TABLE permission(
 
-    CONSTRAINT chk_package_price
-        CHECK (package_price >= 0),
+);
 
-    CONSTRAINT chk_package_sessions
-        CHECK (sessions >= 1),
+CREATE TABLE payment_method(
 
-    CONSTRAINT chk_package_bonus
-        CHECK (bonus_sessions >= 0),
+);
 
-    CONSTRAINT chk_package_expiry_days
-        CHECK (expiry_days > 0)
+CREATE TABLE room(
+
+);
+
+CREATE TABLE master_data_type(
+
 );
 
 
--- User tables
+-- Staff
 CREATE TABLE staff (
     staff_id BIGSERIAL PRIMARY KEY,          -- auto-increment
     staff_code VARCHAR(20) NOT NULL UNIQUE,
@@ -85,10 +94,12 @@ CREATE TABLE staff (
     termination_date DATE,
 
     CONSTRAINT fk_staff_branch
-        FOREIGN KEY (branch_id)
-            REFERENCES branch(branch_id)
+       FOREIGN KEY (branch_id)
+           REFERENCES branch(branch_id)
 );
 
+
+-- User and Permission tables
 CREATE TABLE app_user (
     user_id BIGSERIAL PRIMARY KEY,                -- auto-increment
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -97,24 +108,58 @@ CREATE TABLE app_user (
     user_status BOOLEAN NOT NULL DEFAULT TRUE,    -- active = Account can be use
 
     CONSTRAINT fk_user_staff
-        FOREIGN KEY (staff_id)
-            REFERENCES staff(staff_id)
+      FOREIGN KEY (staff_id)
+          REFERENCES staff(staff_id)
 );
 
 CREATE TABLE user_role (
-    user_id BIGINT NOT NULL,
-    role_id BIGINT NOT NULL,
+   user_id BIGINT NOT NULL,
+   role_id BIGINT NOT NULL,
 
-    CONSTRAINT pk_user_role
-        PRIMARY KEY (user_id, role_id),
+   CONSTRAINT pk_user_role
+       PRIMARY KEY (user_id, role_id),
 
-    CONSTRAINT fk_user_role_user
-        FOREIGN KEY (user_id)
-            REFERENCES app_user(user_id),
+   CONSTRAINT fk_user_role_user
+       FOREIGN KEY (user_id)
+           REFERENCES app_user(user_id),
 
-    CONSTRAINT fk_user_role_role
-        FOREIGN KEY (role_id)
-            REFERENCES role(role_id)
+   CONSTRAINT fk_user_role_role
+       FOREIGN KEY (role_id)
+           REFERENCES role(role_id)
+);
+
+CREATE TABLE role_permission(
+
+);
+
+CREATE TABLE user_branch_access(
+
+);
+
+
+-- Master Data and Groups
+CREATE TABLE master_data_value(
+
+);
+
+CREATE TABLE service_group(
+
+);
+
+CREATE TABLE service_group_member(
+
+);
+
+CREATE TABLE staff_group(
+
+);
+
+CREATE TABLE staff_group_member(
+
+);
+
+CREATE TABLE system_setting(
+
 );
 
 
@@ -147,18 +192,18 @@ CREATE TABLE hn_sequence (
     last_running_no INT NOT NULL DEFAULT 0, -- >=0
 
     CONSTRAINT pk_hn_sequence
-     PRIMARY KEY (branch_id, year_month),
+        PRIMARY KEY (branch_id, year_month),
 
     CONSTRAINT fk_hn_sequence_branch
         FOREIGN KEY (branch_id)
-         REFERENCES branch(branch_id),
+            REFERENCES branch(branch_id),
 
     -- YYMM
     CONSTRAINT chk_hn_sequence_year_month
         CHECK (year_month ~ '^[0-9]{4}$'),
 
     CONSTRAINT chk_hn_sequence_running_no
-     CHECK (last_running_no >= 0)
+        CHECK (last_running_no >= 0)
 );
 
 
@@ -207,7 +252,7 @@ CREATE TABLE appointment_status_history (
         FOREIGN KEY (appointment_id)
             REFERENCES appointment(appointment_id),
 
-    CONSTRAINT fk_fk_appointment_status_history_changed_by
+    CONSTRAINT fk_appointment_status_history_changed_by
         FOREIGN KEY (changed_by)
             REFERENCES app_user(user_id)
 );
@@ -261,3 +306,99 @@ CREATE TABLE treatment (
         FOREIGN KEY (created_by)
             REFERENCES app_user(user_id)
 );
+
+
+-- Commission before course Tables
+CREATE TABLE commission_scheme(
+
+);
+CREATE TABLE commission_tier(
+
+);
+CREATE TABLE treatment_fee_rule(
+
+);
+
+
+-- Course and Sales Tables
+CREATE TABLE sales_transaction(
+
+);
+CREATE TABLE course(
+
+);
+CREATE TABLE course_shared_member(
+
+);
+CREATE TABLE course_ledger(
+
+);
+CREATE TABLE course_transfer(
+
+);
+CREATE TABLE course_visit_usage(
+
+);
+
+
+-- Transaction Tables
+CREATE TABLE payment_transaction(
+
+);
+CREATE TABLE transaction_cancellation(
+
+);
+
+
+-- Commission after course Tables
+CREATE TABLE monthly_commission_closing(
+
+);
+CREATE TABLE commission_allocation_ledger(
+
+);
+CREATE TABLE commission_rate_override_audit(
+
+);
+
+
+-- Audit Tables
+CREATE TABLE audit_log(
+
+);
+
+
+-- Circular Foreign Key
+ALTER TABLE branch
+    ADD CONSTRAINT fk_branch_create_by
+        FOREIGN KEY (branch_create_by)
+            REFERENCES app_user(user_id);
+
+ALTER TABLE branch
+    ADD CONSTRAINT fk_branch_update_by
+        FOREIGN KEY (branch_update_by)
+            REFERENCES app_user(user_id);
+
+
+
+-- CREATE TABLE course_package (
+--     package_id BIGSERIAL PRIMARY KEY,                   -- auto-increment
+--     package_name VARCHAR(100) NOT NULL,
+--     package_price NUMERIC(12, 2) NOT NULL DEFAULT 0,    -- >=0
+--     sessions INT NOT NULL,                              -- >=1 ; each package is different
+--     bonus_sessions INT NOT NULL DEFAULT 0,              -- >=0
+--     expiry_days INT NOT NULL,                           -- >0  ; each package is different
+--     package_status BOOLEAN NOT NULL DEFAULT TRUE,
+--
+--     CONSTRAINT chk_package_price
+--         CHECK (package_price >= 0),
+--
+--     CONSTRAINT chk_package_sessions
+--         CHECK (sessions >= 1),
+--
+--     CONSTRAINT chk_package_bonus
+--         CHECK (bonus_sessions >= 0),
+--
+--     CONSTRAINT chk_package_expiry_days
+--         CHECK (expiry_days > 0)
+-- );
