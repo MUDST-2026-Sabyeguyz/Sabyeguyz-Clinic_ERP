@@ -1,4 +1,4 @@
-name: Docker compose build
+name: Clinic ERP - Validate Compose and Build Images
 
 on:
   push:

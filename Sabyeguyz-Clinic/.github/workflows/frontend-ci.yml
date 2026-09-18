@@ -1,4 +1,4 @@
-name: Frontend build and tests
+name: Clinic ERP - Frontend Build and Tests
 
 on:
   push:
