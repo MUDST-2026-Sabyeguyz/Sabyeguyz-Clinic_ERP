@@ -214,7 +214,7 @@ INDEX idx_appointments_branch_start    (branch_id, start_at)
 | State machine | `backend/src/main/java/com/sabyeguyz/clinic/appointment/Appointment.java` |
 | Response DTO | `backend/src/main/java/com/sabyeguyz/clinic/appointment/AppointmentResponse.java` |
 | Error handling | `backend/src/main/java/com/sabyeguyz/clinic/api/ApiExceptionHandler.java` |
-| Schema | `../backend/src/main/resources/db/migration_old` |
+| Schema | `../backend/src/main/resources/db/migration_new` |
 | ตัวอย่าง fetch client pattern | `frontend/sabyeguyz/src/api/patients.ts` |
 
 (path ทั้งหมดอยู่ใต้ `Sabyeguyz-Clinic_ERP/` — repo monorepo ปัจจุบัน)
