@@ -79,7 +79,7 @@ E2E ต้องตรวจอย่างน้อย Success Case, Validation
 
 ## Current Baseline
 
-- Frontend มี type-check, Unit Test, Build และ Playwright configuration แล้ว
+- Frontend มี type-check, Unit Test, Build และ Cypress integration test แล้ว
 - Backend มี Spring Boot baseline, `/api/hello`, `/actuator/health` และ Controller Test แล้ว
 - Deploy มี Backend Dockerfile และ Docker Compose สำหรับ PostgreSQL/Backend แล้ว แต่ยังไม่มี Kubernetes manifest
 - Database ยังไม่ได้เชื่อมกับ Business Entity จึงยังไม่ถือว่าเป็น Database Integration Test

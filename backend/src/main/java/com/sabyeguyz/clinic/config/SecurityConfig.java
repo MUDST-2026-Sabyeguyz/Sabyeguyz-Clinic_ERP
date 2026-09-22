@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.config;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import javax.crypto.spec.SecretKeySpec;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -30,9 +31,15 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 @EnableMethodSecurity
 public class SecurityConfig {
     private final SecretKeySpec signingKey;
-    public SecurityConfig(@Value("${app.jwt.secret:clinic-erp-local-secret-change-me-32chars}") String secret) {
-        if (secret.length() < 32) throw new IllegalArgumentException("JWT secret must be at least 32 characters");
-        signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+    public SecurityConfig(@Value("${app.jwt.secret:}") String secret, Environment environment) {
+        if (secret.isBlank() && environment.acceptsProfiles(Profiles.of("test"))) {
+            byte[] testKey = new byte[32];
+            new SecureRandom().nextBytes(testKey);
+            signingKey = new SecretKeySpec(testKey, "HmacSHA256");
+        } else {
+            if (secret.length() < 32) throw new IllegalArgumentException("JWT_SECRET must be at least 32 characters");
+            signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        }
     }
     @Bean JwtEncoder jwtEncoder() {
         OctetSequenceKey jwk = new OctetSequenceKey.Builder(signingKey).algorithm(JWSAlgorithm.HS256).build();

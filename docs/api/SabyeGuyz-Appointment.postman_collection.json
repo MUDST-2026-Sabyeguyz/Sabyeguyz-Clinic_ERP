@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SabyeGuyz - APT-1 Create Appointment",
-    "description": "ชุดทดสอบ POST /api/appointments (APT-1) สำหรับ Physiotherapy Clinic ERP\n\nวิธีใช้:\n1. เปิด PostgreSQL: docker compose -f deploy/docker-compose.yml up -d postgres\n2. รัน backend: mvn spring-boot:run\n3. รันไล่จากบนลงล่าง หรือกด Run collection\n\nถ้าเจอ 409 ในข้อที่ควรได้ 201 แปลว่าเวลานั้นถูกจองไปแล้วจากการรันรอบก่อน ให้แก้ตัวแปร slotDate เป็นวันอื่น",
+    "description": "ชุดทดสอบ POST /api/appointments (APT-1) สำหรับ Physiotherapy Clinic ERP\n\nวิธีใช้:\n1. ตั้งค่า POSTGRES_PASSWORD และ JWT_SECRET ใน .env แล้วเปิด PostgreSQL: docker compose up -d postgres\n2. รัน backend: mvn spring-boot:run\n3. รันไล่จากบนลงล่าง หรือกด Run collection\n\nถ้าเจอ 409 ในข้อที่ควรได้ 201 แปลว่าเวลานั้นถูกจองไปแล้วจากการรันรอบก่อน ให้แก้ตัวแปร slotDate เป็นวันอื่น",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

@@ -20,7 +20,7 @@ Branch: `feat/connect-to-backend`
 
 ### Frontend Coding
 
-- เพิ่ม API client กลางที่ `frontend/sabyeguyz/src/api/client.ts`
+- เพิ่ม API client กลางที่ `frontend/src/api/client.ts`
 - แนบ JWT Bearer Token กับ protected request
 - จัดการ `401 Unauthorized` และล้าง session อัตโนมัติ
 - เชื่อม Login/Logout กับ Backend
@@ -131,16 +131,16 @@ Therapist ถูกผูกกับ Staff:
 
 มี GitHub Actions workflow ดังนี้:
 
-- `.github/workflows/backend-ci.yml`
-  - Java 17
+- `.github/workflows/backend-verify.yml`
+  - Java 21
   - Maven `verify`
-- `.github/workflows/frontend-ci.yml`
+- `.github/workflows/frontend-verify.yml`
   - Node 24
   - `npm ci`
   - Unit test
   - Production build
-  - Playwright E2E
-- `.github/workflows/docker-ci.yml`
+  - Cypress integration test
+- `.github/workflows/compose-verify.yml`
   - Validate Docker Compose
   - Build application images
 
@@ -173,8 +173,8 @@ Branch ถูก push ขึ้น remote แล้ว และ working tree �
 ## คำสั่งเริ่มระบบ
 
 ```powershell
-docker compose -p sabyeguyz-clinic_erp -f deploy/docker-compose.yml up -d
-docker compose -p sabyeguyz-clinic_erp -f deploy/docker-compose.yml ps
+docker compose -p sabyeguyz-clinic_erp up -d
+docker compose -p sabyeguyz-clinic_erp ps
 ```
 
 ไม่ควรใช้ `docker compose down -v` หากต้องการเก็บข้อมูล PostgreSQL เดิมไว้
