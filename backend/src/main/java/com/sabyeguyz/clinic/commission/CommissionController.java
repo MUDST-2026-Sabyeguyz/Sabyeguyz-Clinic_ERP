@@ -20,7 +20,7 @@ public class CommissionController {
     public record Tier(@NotNull @DecimalMin("0.00") BigDecimal minimum, @DecimalMin("0.00") BigDecimal maximum,
                        @NotNull @DecimalMin("0.00") BigDecimal rate, int order) {}
     public record SchemeRequest(@NotBlank String name, @NotBlank String version, @NotNull LocalDate effectiveFrom,
-                                LocalDate effectiveTo, @NotEmpty List<@Valid Tier> tiers) {}
+                                LocalDate effectiveTo, @NotEmpty List<@Valid Tier> tiers, Boolean active) {}
     public record SchemeResponse(Long id, String name, String version, LocalDate effectiveFrom, LocalDate effectiveTo, boolean active) {}
     public record TierResponse(Long id, BigDecimal minimum, BigDecimal maximum, BigDecimal rate, int order) {}
 
@@ -29,7 +29,7 @@ public class CommissionController {
     @PostMapping("/schemes") @PreAuthorize("hasRole('MANAGER')") @ResponseStatus(HttpStatus.CREATED) SchemeResponse create(@Valid @RequestBody SchemeRequest request) {
         return scheme(service.create(request.name(), request.version(), request.effectiveFrom(), request.effectiveTo(), request.tiers().stream().map(t -> new CommissionService.TierInput(t.minimum(), t.maximum(), t.rate(), t.order())).toList()));
     }
-    @PutMapping("/schemes/{id}") @PreAuthorize("hasRole('MANAGER')") SchemeResponse update(@PathVariable long id,@Valid @RequestBody SchemeRequest r){return scheme(service.update(id,r.name(),r.version(),r.effectiveFrom(),r.effectiveTo(),r.tiers().stream().map(t->new CommissionService.TierInput(t.minimum(),t.maximum(),t.rate(),t.order())).toList()));}
+    @PutMapping("/schemes/{id}") @PreAuthorize("hasRole('MANAGER')") SchemeResponse update(@PathVariable long id,@Valid @RequestBody SchemeRequest r){CommissionScheme scheme=service.update(id,r.name(),r.version(),r.effectiveFrom(),r.effectiveTo(),r.tiers().stream().map(t->new CommissionService.TierInput(t.minimum(),t.maximum(),t.rate(),t.order())).toList());if(r.active()!=null)scheme=service.setActive(id,r.active());return scheme(scheme);}
     @PatchMapping("/schemes/{id}/activate") @PreAuthorize("hasRole('MANAGER')") SchemeResponse activate(@PathVariable long id){return scheme(service.activate(id));}
     @DeleteMapping("/schemes/{id}") @PreAuthorize("hasRole('MANAGER')") @ResponseStatus(HttpStatus.NO_CONTENT) void deactivate(@PathVariable long id){service.deactivate(id);}
     @GetMapping("/report") List<CommissionService.ReportRow> report(@RequestParam LocalDate from,@RequestParam LocalDate to){return service.report(from,to);}

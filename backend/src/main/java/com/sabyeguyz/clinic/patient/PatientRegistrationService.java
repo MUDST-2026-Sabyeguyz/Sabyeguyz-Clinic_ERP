@@ -27,8 +27,8 @@ public class PatientRegistrationService {
     public PatientResponse register(PatientRegistrationRequest request) {
         Branch branch = branchRepository.findByCodeAndActiveTrue(request.branchCode().toUpperCase())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
-        if (patientRepository.existsByUsernameOrEmailOrIdentityNumber(request.username(), request.email(), request.identityNumber())) {
-            throw new IllegalArgumentException("ชื่อผู้ใช้ อีเมล หรือเลขเอกสารยืนยันตัวตนถูกใช้งานแล้ว");
+        if (patientRepository.existsByUsernameOrIdentityNumber(request.username(), request.identityNumber())) {
+            throw new IllegalArgumentException("ชื่อผู้ใช้หรือเลขเอกสารยืนยันตัวตนถูกใช้งานแล้ว");
         }
         Patient patient = patientRepository.save(new Patient(branch, request, passwordEncoder.encode(request.password())));
         entityManager.flush();

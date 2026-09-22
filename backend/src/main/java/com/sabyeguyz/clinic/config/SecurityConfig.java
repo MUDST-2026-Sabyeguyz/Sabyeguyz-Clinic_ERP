@@ -26,6 +26,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.util.List;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.config.Customizer;
 
 @Configuration
 @EnableMethodSecurity
@@ -59,6 +60,7 @@ public class SecurityConfig {
     SecurityFilterChain authEndpoints(HttpSecurity http) throws Exception {
         return http.securityMatcher(new AntPathRequestMatcher("/api/auth/login"))
                 .csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .build();
     }
@@ -66,9 +68,9 @@ public class SecurityConfig {
     @Order(2)
     SecurityFilterChain security(HttpSecurity http, Environment environment) throws Exception {
         if (environment.acceptsProfiles(Profiles.of("test"))) {
-            return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(auth -> auth.anyRequest().permitAll()).build();
+            return http.csrf(csrf -> csrf.disable()).cors(Customizer.withDefaults()).authorizeHttpRequests(auth -> auth.anyRequest().permitAll()).build();
         }
-        return http.csrf(csrf -> csrf.disable()).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        return http.csrf(csrf -> csrf.disable()).cors(Customizer.withDefaults()).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/login", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll().anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))).build();
     }
