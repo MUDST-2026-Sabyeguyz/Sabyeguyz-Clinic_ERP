@@ -193,7 +193,23 @@ public class DatabaseV2CourseRepository {
         int remaining = totalVisits + bonusVisits;
         Long schemeId = getOrCreateDefaultCommissionScheme(actorId);
 
-        Long sellerId = sellerStaffId != null ? sellerStaffId : 1L;
+        Long sellerId = sellerStaffId;
+        if (sellerId == null) {
+            List<Long> staffIds = jdbc.query(
+                    "select staff_id from staff where branch_id = ? and staff_status = true order by staff_id limit 1",
+                    (rs, rowNum) -> rs.getLong(1),
+                    branchId
+            );
+            if (staffIds.isEmpty()) {
+                staffIds = jdbc.query(
+                        "select staff_id from staff where staff_status = true order by staff_id limit 1",
+                        (rs, rowNum) -> rs.getLong(1)
+                );
+            }
+            if (!staffIds.isEmpty()) {
+                sellerId = staffIds.get(0);
+            }
+        }
 
         // 3. Insert course
         Long courseId = jdbc.queryForObject(
@@ -330,7 +346,28 @@ public class DatabaseV2CourseRepository {
             );
         }
 
-        Long treatingId = treatingStaffId != null ? treatingStaffId : 1L;
+        Long treatingId = treatingStaffId;
+        if (treatingId == null) {
+            treatingId = course.caseOwnerStaffId() != null ? course.caseOwnerStaffId() : course.sellerStaffId();
+        }
+        if (treatingId == null) {
+            List<Long> staffIds = jdbc.query(
+                    "select staff_id from staff where branch_id = ? and staff_status = true order by staff_id limit 1",
+                    (rs, rowNum) -> rs.getLong(1),
+                    course.branchId()
+            );
+            if (staffIds.isEmpty()) {
+                staffIds = jdbc.query(
+                        "select staff_id from staff where staff_status = true order by staff_id limit 1",
+                        (rs, rowNum) -> rs.getLong(1)
+                );
+            }
+            if (!staffIds.isEmpty()) {
+                treatingId = staffIds.get(0);
+            }
+        }
+        Long ownerId = course.caseOwnerStaffId() != null ? course.caseOwnerStaffId() : treatingId;
+
         jdbc.update(
                 """
                 insert into course_visit_usage (
@@ -345,7 +382,7 @@ public class DatabaseV2CourseRepository {
                     current_timestamp, ?
                 )
                 """,
-                visitId, courseId, course.patientId(), treatingId, treatingId, actorId
+                visitId, courseId, course.patientId(), treatingId, ownerId, actorId
         );
 
         return findById(courseId).orElseThrow();

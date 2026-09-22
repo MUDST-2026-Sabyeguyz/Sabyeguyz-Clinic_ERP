@@ -168,7 +168,12 @@ public class DatabaseV2SaleController {
                 int bonusVisits = pi.service().bonusVisits() != null ? pi.service().bonusVisits() : 0;
                 int validityDays = pi.service().validityDays() != null ? pi.service().validityDays() : 365;
 
-                Long sellerStaffId = salespersonId != null ? salespersonId : 1L;
+                Long sellerStaffId = salespersonId;
+                if (sellerStaffId == null) {
+                    sellerStaffId = staffRepository.findFirstActive(branch.getId())
+                            .map(DatabaseV2StaffRepository.StaffModel::id)
+                            .orElse(null);
+                }
 
                 Long courseId = saleRepository.createCourse(
                         allocated.receiptNo(), pi.service().name(), pi.unitPrice(),

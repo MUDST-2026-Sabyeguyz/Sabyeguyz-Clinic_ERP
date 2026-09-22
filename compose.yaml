@@ -27,6 +27,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-clinic}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      APP_BOOTSTRAP_ENABLED: ${APP_BOOTSTRAP_ENABLED:-true}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:

@@ -105,6 +105,21 @@ public class DatabaseV2StaffRepository {
         return jdbc.query(SELECT_STAFF + " where u.user_id = ?", ROW_MAPPER, userId).stream().findFirst();
     }
 
+    public Optional<StaffModel> findFirstActive(Long branchId) {
+        if (branchId != null) {
+            List<StaffModel> list = jdbc.query(
+                    SELECT_STAFF + " where s.staff_status = true and s.branch_id = ? order by s.staff_id limit 1",
+                    ROW_MAPPER, branchId
+            );
+            if (!list.isEmpty()) return Optional.of(list.get(0));
+        }
+        List<StaffModel> list = jdbc.query(
+                SELECT_STAFF + " where s.staff_status = true order by s.staff_id limit 1",
+                ROW_MAPPER
+        );
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
+
     public StaffModel create(String code, String fname, String lname, String position, Long branchId,
                              LocalDate hireDate, Long actorId) {
         Long id = jdbc.queryForObject(

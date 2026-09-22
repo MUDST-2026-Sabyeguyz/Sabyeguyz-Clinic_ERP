@@ -51,7 +51,12 @@ public class SecurityConfig {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
             String role = jwt.getClaimAsString("role");
-            return role == null ? List.of() : List.of(new SimpleGrantedAuthority("ROLE_" + role));
+            if (role == null) return List.of();
+            return List.of(
+                    new SimpleGrantedAuthority("ROLE_" + role),
+                    new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()),
+                    new SimpleGrantedAuthority("ROLE_" + role.toLowerCase())
+            );
         });
         return converter;
     }
