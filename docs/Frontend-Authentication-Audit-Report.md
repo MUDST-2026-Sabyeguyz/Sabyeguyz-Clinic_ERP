@@ -1,7 +1,7 @@
 # รายงานตรวจสอบการยืนยันตัวตนของ Frontend
 
 วันที่ตรวจสอบ: 11 กันยายน 2026  
-ขอบเขต: `frontend/sabyeguyz/src` เทียบกับ security configuration ของ backend
+ขอบเขต: `frontend/src` เทียบกับ security configuration ของ backend
 
 ## สรุปผล
 
@@ -23,7 +23,7 @@ Request ไปที่ `POST http://localhost/api/patients` ได้ response 
 
 ### 1. ระบบ login ยังเป็น mock
 
-ไฟล์: `frontend/sabyeguyz/src/features/auth/views/StaffLoginView.vue`
+ไฟล์: `frontend/src/features/auth/views/StaffLoginView.vue`
 
 ฟังก์ชัน `signIn()` ทำเพียง:
 
@@ -35,7 +35,7 @@ Request ไปที่ `POST http://localhost/api/patients` ได้ response 
 
 ### 2. API ลงทะเบียนผู้ป่วยไม่ส่ง token
 
-ไฟล์: `frontend/sabyeguyz/src/api/patients.ts`
+ไฟล์: `frontend/src/api/patients.ts`
 
 ฟังก์ชัน `registerPatient()` ส่งเฉพาะ header:
 
@@ -53,7 +53,7 @@ Authorization: `Bearer ${token}`
 
 ### 3. หน้าอื่นยังเป็น mock/localStorage
 
-จากการค้นหา `fetch`, `/api/`, `Authorization` และ `axios` ใน `frontend/sabyeguyz/src` พบ API call จริงเพียง `registerPatient()` เท่านั้น
+จากการค้นหา `fetch`, `/api/`, `Authorization` และ `axios` ใน `frontend/src` พบ API call จริงเพียง `registerPatient()` เท่านั้น
 
 หน้าที่พบว่าใช้ mock data หรือ localStorage ได้แก่:
 
