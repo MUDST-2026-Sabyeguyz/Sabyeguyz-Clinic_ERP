@@ -12,11 +12,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/treatments")
+@Profile("!database-v2")
 public class TreatmentController {
     private final TreatmentRepository treatments;
     private final PatientRepository patients;
