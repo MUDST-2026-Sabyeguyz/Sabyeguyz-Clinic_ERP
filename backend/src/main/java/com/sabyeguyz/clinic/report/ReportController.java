@@ -15,12 +15,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.context.annotation.Profile;
+
 /**
  * เส้นทางตาม docs/context.md §8 — Dashboard อยู่ที่ {@code /api/dashboard/summary}
  * ส่วนรายงานอยู่ใต้ {@code /api/reports/}
  */
 @RestController
 @RequestMapping("/api")
+@Profile("!database-v2")
 @Tag(name = "Dashboard & Reports", description = "Operational dashboard and revenue, course, and staff reports")
 public class ReportController {
     private final ReportService service;

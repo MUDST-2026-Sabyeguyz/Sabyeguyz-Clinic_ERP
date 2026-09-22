@@ -2,10 +2,12 @@ package com.sabyeguyz.clinic.audit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/audit-logs")
+@Profile("!database-v2")
 public class AuditController {
     private final AuditLogRepository logs;
     public AuditController(AuditLogRepository logs) { this.logs = logs; }
