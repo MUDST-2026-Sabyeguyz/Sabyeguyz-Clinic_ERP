@@ -8,12 +8,14 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/commission")
+@Profile("!database-v2")
 public class CommissionController {
     private final CommissionService service;
     public CommissionController(CommissionService service) { this.service = service; }
