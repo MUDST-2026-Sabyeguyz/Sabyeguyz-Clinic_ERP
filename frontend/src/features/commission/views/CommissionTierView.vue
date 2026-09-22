@@ -4,17 +4,11 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { commissionApi } from '@/api/client'
 
 type Tier = { order: number; min: number; max: number | null; rate: number; active: boolean }
-const tiers = reactive<Tier[]>([
-  { order: 1, min: 0, max: 59999, rate: 5, active: true },
-  { order: 2, min: 60000, max: 69999, rate: 6, active: true },
-  { order: 3, min: 70000, max: 79999, rate: 7, active: true },
-  { order: 4, min: 80000, max: 89999, rate: 8, active: true },
-  { order: 5, min: 90000, max: null, rate: 10, active: true },
-])
+const tiers = reactive<Tier[]>([])
 const editingIndex = ref(-1)
 const editorOpen = ref(false)
 const error = ref('')
-const scheme = reactive({ id: 0, name: 'Commission Scheme V1', version: '1', effectiveFrom: '2026-01-01', effectiveTo: null as string|null })
+const scheme = reactive({ id: 0, name: '', version: '', effectiveFrom: '', effectiveTo: null as string|null })
 const form = reactive({ min: 0, max: '' as number | '', rate: 5, active: true })
 const loading = ref(false)
 
