@@ -260,7 +260,7 @@ public class DatabaseV2CourseRepository {
         return findById(courseId).orElseThrow();
     }
 
-    public CoursePurchaseRecord consumeSession(Long courseId, Long appointmentId, String note, Long treatingStaffId, Long actorId) {
+    public synchronized CoursePurchaseRecord consumeSession(Long courseId, Long appointmentId, String note, Long treatingStaffId, Long actorId) {
         CoursePurchaseRecord course = findById(courseId)
                 .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบคอร์ส id " + courseId));
 
