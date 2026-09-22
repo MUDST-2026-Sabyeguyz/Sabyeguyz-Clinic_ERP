@@ -48,7 +48,7 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ```bash
 npm run type-check
-npm run test:unit -- --run --passWithNoTests
+npm run test:unit -- --run
 npm run build
 
 # ต้องเปิด backend จริงไว้ที่ localhost:8080

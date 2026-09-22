@@ -2,7 +2,7 @@ name: Compose build
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**']
+    branches: [develop, 'feat/**', 'feature/**', 'xan-database-connect']
   pull_request:
     branches: [develop]
   workflow_dispatch:
@@ -28,7 +28,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Validate Compose configuration
-        run: docker compose config --quiet
+        run: |
+          test -n "$POSTGRES_PASSWORD"
+          test -n "$JWT_SECRET"
+          docker compose config --quiet
 
       - name: Build application images
         run: docker compose build --pull
