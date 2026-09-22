@@ -60,8 +60,9 @@ public class DatabaseV2BootstrapRunner implements ApplicationRunner {
         getOrCreateRole("Therapist", adminUserId);
         getOrCreateRole("Receptionist", adminUserId);
 
-        // 4. Seed Initial Staff (Manager position)
+        // 4. Seed Initial Staff (Manager and Therapist positions)
         Long staffId = getOrCreateStaff("ST-MGR-01", "Admin", "Manager", "Manager", branchId, adminUserId);
+        getOrCreateStaff("ST-TH-01", "Primary", "Therapist", "Therapist", branchId, adminUserId);
 
         // 5. Link Admin User to Staff if not linked
         jdbc.update("update app_user set staff_id = ? where user_id = ? and staff_id is null", staffId, adminUserId);

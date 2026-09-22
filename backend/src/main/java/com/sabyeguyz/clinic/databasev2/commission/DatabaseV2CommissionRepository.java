@@ -349,7 +349,7 @@ public class DatabaseV2CommissionRepository {
             throw new IllegalArgumentException("invalid report date range");
         }
         String sql = """
-                select cvu.usage_id,
+                select cvu.visit_usage_id as usage_id,
                        cvu.visit_date,
                        c.course_id,
                        c.course_no,
@@ -373,7 +373,7 @@ public class DatabaseV2CommissionRepository {
                 left join staff ts on ts.staff_id = cvu.treating_staff_id
                 left join staff os on os.staff_id = cvu.case_owner_staff_id
                 where cvu.visit_date >= ? and cvu.visit_date <= ?
-                order by cvu.visit_date desc, cvu.usage_id desc
+                order by cvu.visit_date desc, cvu.visit_usage_id desc
                 """;
         return jdbc.query(sql, (rs, rowNum) -> new TreatmentReportRow(
                 rs.getLong("usage_id"),
