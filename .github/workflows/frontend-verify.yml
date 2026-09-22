@@ -2,7 +2,7 @@ name: Frontend tests and build
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**', 'xan-database-connect']
+    branches: [main, develop, xan, 'feat/**', 'feature/**']
   pull_request:
     branches: [develop]
   workflow_dispatch:
@@ -38,6 +38,9 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Lint
+        run: npm run lint
 
       - name: Start backend integration stack
         working-directory: .

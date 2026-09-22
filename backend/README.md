@@ -5,7 +5,7 @@ Backend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz**
 ## Requirements
 
 - Git
-- Java 17
+- Java 21
 - Maven
 - Docker Desktop
 
@@ -55,7 +55,7 @@ Health Check: `http://localhost:8080/actuator/health`
 
 ## การทำงานร่วมกัน
 
-ใช้ Branch `main`, `develop` และ `feature/<feature-name>` ตาม [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
+ใช้ Branch `main`, `develop`, `xan` และ `feature/<feature-name>` ตาม [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
 
 ## Context กลาง
 
@@ -103,7 +103,7 @@ GET http://localhost:8080/actuator/health
 mvn verify
 ```
 
-CI จะรัน `mvn verify` ใน GitHub Actions ทุกครั้งที่มีการ Push ไปยัง `main`/`develop` หรือเปิด Pull Request
+CI จะรัน `mvn verify` ใน GitHub Actions เมื่อ Push ไปยัง `main`, `develop`, `xan` หรือ feature branch และเมื่อเปิด Pull Request ไปยัง `develop`
 
 ## Test
 
@@ -119,7 +119,7 @@ mvn verify
 mvn test
 ```
 
-CI จะรัน `mvn verify` ใน GitHub Actions ทุกครั้งที่มีการ Push ไปยัง `main`/`develop` หรือเปิด Pull Request
+CI จะรัน `mvn verify` ใน GitHub Actions เมื่อ Push ไปยัง `main`, `develop`, `xan` หรือ feature branch และเมื่อเปิด Pull Request ไปยัง `develop`
 
 ## Prototype: Patient Registration
 
@@ -138,7 +138,7 @@ Branch `xan-prototype` เพิ่ม Vertical Slice แรกตาม Figma:
 
 ## Git
 
-ใช้ `main`, `develop` และ `feature/<feature-name>`
+ใช้ `main`, `develop`, `xan` และ `feature/<feature-name>`
 
 [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
 

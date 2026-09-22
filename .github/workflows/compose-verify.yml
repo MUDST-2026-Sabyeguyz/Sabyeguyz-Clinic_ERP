@@ -2,7 +2,7 @@ name: Compose build
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**', 'xan-database-connect']
+    branches: [main, develop, xan, 'feat/**', 'feature/**']
   pull_request:
     branches: [develop]
   workflow_dispatch:
