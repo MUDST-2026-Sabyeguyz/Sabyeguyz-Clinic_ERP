@@ -20,7 +20,7 @@ Branch: `feat/connect-to-backend`
 
 ### Frontend Coding
 
-- เพิ่ม API client กลางที่ `frontend/sabyeguyz/src/api/client.ts`
+- เพิ่ม API client กลางที่ `frontend/src/api/client.ts`
 - แนบ JWT Bearer Token กับ protected request
 - จัดการ `401 Unauthorized` และล้าง session อัตโนมัติ
 - เชื่อม Login/Logout กับ Backend

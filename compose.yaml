@@ -38,7 +38,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend/sabyeguyz
+      context: ./frontend
       args:
         VITE_API_BASE_URL: ""
     ports:

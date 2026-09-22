@@ -12,7 +12,7 @@ Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz**
 
 ```bash
 git clone https://github.com/MUDST-2026-Sabyeguyz/frontend.git
-cd frontend/sabyeguyz
+cd frontend
 npm install
 npm run dev
 ```
