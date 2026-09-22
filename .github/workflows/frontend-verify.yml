@@ -47,6 +47,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
+          APP_BOOTSTRAP_ENABLED: "true"
         run: |
           test -n "$POSTGRES_PASSWORD"
           test -n "$JWT_SECRET"
