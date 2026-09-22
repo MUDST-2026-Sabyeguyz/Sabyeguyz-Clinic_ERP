@@ -111,21 +111,9 @@ Frontend:
 - Frontend ตอบ HTTP `200`
 - ทดสอบ Login ด้วย username และ email ผ่านจริงทั้ง Manager และ Therapist
 
-### Dev/Test Accounts
+### Development/Test accounts
 
-| Username | Email | Password | Role |
-|---|---|---|---|
-| `manager` | `manager@clinic.local` | `manager123` | `MANAGER` |
-| `therapist` | `therapist@clinic.local` | `therapist123` | `THERAPIST` |
-
-Therapist ถูกผูกกับ Staff:
-
-- Employee Code: `THP-001`
-- Name: `Therapist Demo`
-
-บัญชีเหล่านี้ใช้สำหรับ Development/Test เท่านั้น ต้องเปลี่ยนก่อนใช้งานจริง
-
-บัญชีและ Staff ของ Therapist ถูกเก็บเป็น Flyway seed migration ใน `V20__seed_dev_test_accounts.sql` จึงถูกสร้างอัตโนมัติเมื่อเริ่มฐานข้อมูลใหม่จาก code
+ระบบปัจจุบันไม่ฝังบัญชีหรือรหัสผ่านไว้ใน source/schema ใหม่ การทดสอบต้องสร้างบัญชีผ่าน backend หรือฐานข้อมูลทดสอบที่ควบคุมด้วย environment variables เท่านั้น
 
 ### Pipeline as Code
 
@@ -165,8 +153,8 @@ Branch ถูก push ขึ้น remote แล้ว และ working tree �
 - Refund/Cancel commission adjustment และ audit trail ยังไม่ครบ
 - Employee termination และ outstanding commission policy ยังไม่มี
 - Admin override สำหรับแก้ rate หลังปิดรอบยังไม่มี
-- Course Commission Detail ยังมี fallback สำหรับ route ที่ไม่ใช่ numeric
-- Back Office บางหมวดยังมี localStorage fallback เนื่องจาก Backend ยังไม่มี endpoint ครบ
+- Course Commission Detail ต้องได้รับ numeric purchase id และแสดงสถานะโหลดจาก backend เมื่อไม่พบข้อมูล
+- Back Office บางหมวดยังรอ endpoint เพิ่มเติมจาก backend จึงจะแสดงข้อมูลครบทุกหมวด
 - `POST /api/staff` พบปัญหา JPA detached entity และควรแก้ในรอบถัดไป
 - มี warning ที่ไม่ทำให้ build fail เรื่อง H2/Flyway version และ Vite config import extension
 

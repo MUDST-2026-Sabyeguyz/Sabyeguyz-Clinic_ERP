@@ -1,7 +1,9 @@
-# รายงานตรวจสอบการยืนยันตัวตนของ Frontend
+# รายงานตรวจสอบการยืนยันตัวตนของ Frontend (historical)
 
 วันที่ตรวจสอบ: 11 กันยายน 2026  
 ขอบเขตเดิม: `frontend/src` เทียบกับ security configuration ของ backend
+
+หมายเหตุ: ข้อค้นพบด้าน mock ในรายงานนี้เป็น snapshot ก่อนการเชื่อม backend บน branch `xan-database-connect`; ไฟล์ mock ถูกลบแล้วและโค้ดปัจจุบันใช้ API client กลาง
 
 ## สรุปผล
 
