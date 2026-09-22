@@ -3,11 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { commissionApi } from '@/api/client'
 
-const month = ref('2026-08')
-const rows = ref<Array<{id:number;staff:string;sales:number;tier:number;courses:number;status:string;closedAt:string}>>([])
+const month = ref(new Date().toISOString().slice(0, 7))
+const rows = ref<Array<{id:number;staff:string;sales:number;tier:number;version:string;courses:number | null;status:string;closedAt:string}>>([])
 const error = ref('')
 const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)
-async function load(){try{const data=await commissionApi.closings(month.value);rows.value=data.map(r=>({id:r.id,staff:r.employeeName,sales:r.sales,tier:r.rate*100,courses:0,status:r.status==='CLOSED'?'Closed':'Open',closedAt:''}))}catch(e){error.value=e instanceof Error?e.message:'โหลดรอบคอมมิชชันไม่สำเร็จ'}}
+const totalSales = computed(() => rows.value.reduce((total, row) => total + row.sales, 0))
+const schemeVersions = computed(() => [...new Set(rows.value.map((row) => row.version).filter(Boolean))].join(', ') || '—')
+async function load(){try{const data=await commissionApi.closings(month.value);rows.value=data.map(r=>({id:r.id,staff:r.employeeName,sales:Number(r.sales),tier:Number(r.rate)*100,version:r.version,courses:null,status:r.status==='CLOSED'?'Closed':'Open',closedAt:''}))}catch(e){error.value=e instanceof Error?e.message:'โหลดรอบคอมมิชชันไม่สำเร็จ'}}
 async function closeAll(){try{await commissionApi.closeMonth(month.value);await load()}catch(e){error.value=e instanceof Error?e.message:'ปิดรอบไม่สำเร็จ'}}
 onMounted(load)
 </script>
@@ -28,9 +30,9 @@ onMounted(load)
       </nav>
       <section class="metric-grid">
         <article>
-          <small>รอบที่เลือก</small><b>ส.ค. 2569</b><span>Commission Scheme V1</span>
+            <small>รอบที่เลือก</small><b>{{ month }}</b><span>{{ schemeVersions }}</span>
         </article>
-        <article><small>ยอดขายคอร์สรวม</small><b>฿171,500</b><span>19 คอร์ส</span></article>
+        <article><small>ยอดขายคอร์สรวม</small><b>฿{{ totalSales.toLocaleString() }}</b><span>{{ rows.length }} บุคลากร</span></article>
         <article>
           <small>รอปิดรอบ</small><b>{{ openCount }}</b
           ><span>บุคลากร</span>
@@ -75,7 +77,7 @@ onMounted(load)
                 <b>{{ row.staff }}</b>
               </td>
               <td>฿{{ row.sales.toLocaleString() }}</td>
-              <td>{{ row.courses }}</td>
+              <td>{{ row.courses ?? '—' }}</td>
               <td>Tier {{ row.tier }}%</td>
               <td>{{ row.status === 'Closed' ? `${row.tier}%` : 'รอยืนยัน' }}</td>
               <td>

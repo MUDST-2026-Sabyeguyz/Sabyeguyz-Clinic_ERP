@@ -15,12 +15,12 @@ const identityFocused = ref(false)
 const errorMessage = ref('')
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
-const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
-const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
-const insuranceCompanies = ref(['AIA'])
+const customerGroups = ref<string[]>([])
+const referralChannels = ref<string[]>([])
+const insuranceCompanies = ref<string[]>([])
 const branches = ref<Array<{ code: string; name: string }>>([])
 const form = reactive<PatientRegistrationForm>({
-  branchCode: 'RP', email: '', title: 'นาย', customerType: customerGroups.value[0]!, firstName: '', lastName: '', nickname: '', fullNameEnglish: '', birthDate: '', gender: 'ชาย', phone: '', identityDocumentType: '', identityNumber: '', address: '', bloodGroup: 'ไม่ทราบ', nationality: 'ไทย', customerSource: referralChannels.value[0]!, insuranceCompany: '', salesChannel: 'หน้าสาขา', paymentType: 'ชำระด้วยตนเอง', drugAllergy: false, foodAllergy: false, chronicDisease: '', privacyConsent: false,
+  branchCode: '', email: '', title: 'นาย', customerType: '', firstName: '', lastName: '', nickname: '', fullNameEnglish: '', birthDate: '', gender: 'ชาย', phone: '', identityDocumentType: '', identityNumber: '', address: '', bloodGroup: 'ไม่ทราบ', nationality: 'ไทย', customerSource: '', insuranceCompany: '', salesChannel: 'หน้าสาขา', paymentType: 'ชำระด้วยตนเอง', drugAllergy: false, foodAllergy: false, chronicDisease: '', privacyConsent: false,
 })
 const identityIsValid = computed(() => {
   if (form.identityDocumentType === 'NATIONAL_ID') return /^\d{13}$/.test(form.identityNumber)
@@ -48,13 +48,10 @@ onMounted(async () => {
     branches.value = branchList.filter((item) => item.active).map((item) => ({ code: item.code, name: item.name }))
     if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode)) form.branchCode = branches.value[0]!.code
     const active = items.filter((item) => item.active)
-    const valuesFor = (category: string, fallback: string[]) => {
-      const values = active.filter((item) => item.category === category).map((item) => item.name)
-      return values.length ? values : fallback
-    }
-    customerGroups.value = valuesFor('Customer Group', customerGroups.value)
-    referralChannels.value = valuesFor('Referral Channel', referralChannels.value)
-    insuranceCompanies.value = valuesFor('Insurance Company', insuranceCompanies.value)
+    const valuesFor = (category: string) => active.filter((item) => item.category === category).map((item) => item.name)
+    customerGroups.value = valuesFor('Customer Group')
+    referralChannels.value = valuesFor('Referral Channel')
+    insuranceCompanies.value = valuesFor('Insurance Company')
     if (!form.customerType) form.customerType = customerGroups.value[0]!
     if (!form.customerSource) form.customerSource = referralChannels.value[0]!
   } catch { errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ' }
