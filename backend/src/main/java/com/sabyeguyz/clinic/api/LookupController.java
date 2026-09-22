@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@org.springframework.context.annotation.Profile("!database-v2")
 @RestController
 @RequestMapping("/api/lookups")
 @Transactional(readOnly = true)

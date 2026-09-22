@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+@org.springframework.context.annotation.Profile("!database-v2")
 @RestController
 @RequestMapping("/api/services")
 public class ServiceManagementController {
