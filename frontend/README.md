@@ -8,7 +8,7 @@ Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz** อยู
 * Node.js `22.18+`
 * npm
 
-## Setup
+## Setup (local Vite)
 
 ```bash
 git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
@@ -22,6 +22,9 @@ npm run dev
 ```text
 http://localhost:5173
 ```
+
+เมื่อรันผ่าน Docker Compose ให้เปิด `http://localhost` เพราะ nginx ใน container
+ฟังที่ port 80 (เปลี่ยน host port ได้ด้วย `FRONTEND_PORT` ใน `.env`)
 
 ## การพัฒนา
 
@@ -63,7 +66,7 @@ npm run test:integration
 
 ## Git
 
-ใช้ `main`, `develop` และ `feature/<feature-name>`
+ใช้ `main`, `develop`, `xan` และ `feature/<feature-name>`
 
 [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
 

@@ -5,6 +5,7 @@
 ```text
 main
 develop
+xan
 feature/<feature-name>
 bugfix/<issue-name>
 hotfix/<issue-name>
@@ -39,7 +40,7 @@ git commit -m "feat: add hello world baseline"
 git push -u origin feature/hello-world
 ```
 
-จากนั้นเปิด Pull Request ไปยัง `develop`
+จากนั้นเปิด Pull Request ไปยัง `develop`; ใช้ `xan` สำหรับ integration branch ที่ทีมกำหนด
 
 ## กติกา Branch Protection ที่แนะนำ
 

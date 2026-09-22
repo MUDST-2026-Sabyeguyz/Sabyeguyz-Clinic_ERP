@@ -53,4 +53,4 @@ Database data remains in the Compose volume after `down`. See [deployment instru
 
 ## Development workflow
 
-Create `feat/<feature-name>` branches from `develop`, then open a pull request into `develop` after verification.
+Create `feature/<feature-name>` branches from `develop`, then open a pull request into `develop` after verification.

@@ -28,9 +28,9 @@ docker compose ps
 
 รอให้ `postgres` healthy และ Backend health เป็น `UP` ก่อนใช้งาน:
 
-- Frontend: http://localhost:5173
-- Patients: http://localhost:5173/patients
-- Appointments: http://localhost:5173/appointments
+- Frontend: http://localhost (nginx ใน container port 80)
+- Patients: http://localhost/patients
+- Appointments: http://localhost/appointments
 - Backend health: http://localhost:8080/actuator/health
 
 หยุดระบบโดยเก็บข้อมูลไว้:
@@ -57,7 +57,7 @@ npm ci
 npm run dev
 ```
 
-Frontend ใช้ `http://localhost:5173` และเรียก Backend ที่ `http://localhost:8080` ผ่าน `VITE_API_BASE_URL`
+เมื่อรัน Frontend แยกด้วย Vite จะใช้ `http://localhost:5173` และเรียก Backend ที่ `http://localhost:8080` ผ่าน `VITE_API_BASE_URL`
 
 ## ตรวจสอบคุณภาพ
 
@@ -82,7 +82,7 @@ docker compose -p clinic-check up --build -d
 ## Architecture
 
 ```text
-Browser :5173 → Frontend nginx :80 → backend:8080 → postgres:5432
+Browser :80 → Frontend nginx :80 → backend:8080 → postgres:5432
 ```
 
 nginx รองรับ Vue history fallback และส่ง `/api/` ไป Backend ใน Compose network
