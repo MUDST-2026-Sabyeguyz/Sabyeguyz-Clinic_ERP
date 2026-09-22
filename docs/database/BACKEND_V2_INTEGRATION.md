@@ -36,6 +36,20 @@ The backend migration should proceed by domain in this order:
 Do not enable `database-v2` in production until the endpoint paths used by that
 deployment have been remapped and tested against PostgreSQL.
 
+## Migrated vertical slices
+
+The first migration slice is enabled only by the `database-v2` profile:
+
+- `POST /api/auth/login` reads `app_user`, `user_role`, and `role`, updates
+  `last_login_at`, and issues the existing JWT contract.
+- `GET/POST/PUT/DELETE /api/branches` reads and writes `branch`, including the
+  required address, phone and audit actor columns. Branch codes now follow the
+  confirmed two-digit format and cannot be changed after creation.
+
+The v2 implementation uses explicit JDBC repositories while the legacy JPA
+model remains present. This keeps unmigrated legacy tests operational without
+claiming that their plural-table entities match the confirmed schema.
+
 ## Data Dictionary difference to resolve
 
 The workbook linked from `origin/main:docs/database/README.md` contains 39
