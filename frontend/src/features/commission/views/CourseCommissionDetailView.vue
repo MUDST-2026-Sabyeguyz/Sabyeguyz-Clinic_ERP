@@ -2,42 +2,34 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { courseApi } from '@/api/client'
+import { courseApi, type CoursePurchase } from '@/api/client'
 const route = useRoute()
-const courseId = computed(() => String(route.params.courseId || 'RE-2206315-01'))
+const courseId = computed(() => Number(route.params.courseId))
 const ledger = ref<Array<{date:string;patient:string;owner:string;treating:string;gross:number;fee:number;net:number}>>([])
-const purchase = ref<{ patient: { fullName: string }; commissionStatus?: string; lockedCommissionRate?: number; totalCourseCommissionPool?: number; commissionAllocationPerVisit?: number } | null>(null)
-onMounted(async () => { const id=Number(courseId.value); if(!Number.isNaN(id)){ try { const data=await courseApi.ledger(id); purchase.value=data.purchase; ledger.value=(data.allocations||[]).map(item=>({date:item.visitDate,patient:data.purchase.patient.fullName,owner:'Case Owner',treating:'Treating PT',gross:item.gross,fee:item.fee,net:item.ownerNet})) } catch { /* invalid legacy display id */ } } })
-const fallbackLedger = [
-  {
-    date: '5 ก.ย. 2569',
-    patient: 'สมชาย ใจดี',
-    owner: 'กฤษดา น.',
-    treating: 'กฤษดา น.',
-    gross: 70,
-    fee: 0,
-    net: 70,
-  },
-  {
-    date: '12 ก.ย. 2569',
-    patient: 'สมชาย ใจดี',
-    owner: 'กฤษดา น.',
-    treating: 'ศิริพร ว.',
-    gross: 70,
-    fee: 45,
-    net: 25,
-  },
-  {
-    date: '19 ก.ย. 2569',
-    patient: 'สมชาย ใจดี',
-    owner: 'กฤษดา น.',
-    treating: 'กฤษดา น.',
-    gross: 70,
-    fee: 0,
-    net: 70,
-  },
-]
-if (!ledger.value.length) ledger.value = fallbackLedger
+const purchase = ref<(CoursePurchase & { commissionStatus?: string; lockedCommissionRate?: number; totalCourseCommissionPool?: number; commissionAllocationPerVisit?: number }) | null>(null)
+const loadError = ref('')
+const formatCurrency = (value: number | undefined) => value === undefined ? '—' : `฿${value.toLocaleString('th-TH')}`
+onMounted(async () => {
+  if (!Number.isInteger(courseId.value)) {
+    loadError.value = 'ไม่พบรหัสคอร์สที่ต้องการตรวจสอบ'
+    return
+  }
+  try {
+    const data = await courseApi.ledger(courseId.value)
+    purchase.value = data.purchase
+    ledger.value = data.allocations.map((item) => ({
+      date: item.visitDate,
+      patient: data.purchase.patient.fullName,
+      owner: '—',
+      treating: '—',
+      gross: item.gross,
+      fee: item.fee,
+      net: item.ownerNet,
+    }))
+  } catch {
+    loadError.value = 'โหลดรายละเอียดคอมมิชชันจาก backend ไม่สำเร็จ'
+  }
+})
 </script>
 
 <template>
@@ -58,24 +50,24 @@ if (!ledger.value.length) ledger.value = fallbackLedger
         <header>
           <div>
             <small>COURSE ID</small>
-            <h2>{{ courseId }}</h2>
-            <p class="muted-copy">Receipt RE-2206315 ขาย 18 ส.ค. 2569</p>
+            <h2>{{ purchase?.course.name ?? `คอร์ส #${courseId}` }}</h2>
+            <p class="muted-copy">รหัสคอร์ส {{ purchase?.course.code ?? '—' }} · ซื้อเมื่อ {{ purchase?.purchasedAt ?? '—' }}</p>
           </div>
           <span class="status locked">ล็อกอัตราแล้ว</span>
         </header>
         <div class="detail-grid">
-          <article><span>ผู้ป่วย</span><b>สมชาย ใจดี HN260001</b></article>
-          <article><span>ผู้ขาย / เจ้าของเคส</span><b>กฤษดา น.</b></article>
-          <article><span>แพ็กเกจ</span><b>Routine Pain 10 Visits</b></article>
-          <article><span>ราคาคอร์ส</span><b>฿10,000</b></article>
-          <article><span>Scheme / Tier</span><b>V1 Tier 7%</b></article>
-          <article><span>Commission Pool</span><b>฿700</b></article>
-          <article><span>คอมมิชชันต่อ Visit</span><b>฿70</b></article>
-          <article><span>ใช้แล้ว / คงเหลือ</span><b>3 / 7 Visits</b></article>
-          <article><span>Gross Allocated</span><b>฿210</b></article>
-          <article><span>ค่ารักษาแทน</span><b>฿45</b></article>
-          <article><span>Owner Net Released</span><b>฿165</b></article>
-          <article><span>Outstanding Pool</span><b>฿490</b></article>
+          <article><span>ผู้ป่วย</span><b>{{ purchase?.patient.fullName ?? '—' }}</b></article>
+          <article><span>สาขา</span><b>{{ purchase?.branchCode ?? '—' }}</b></article>
+          <article><span>แพ็กเกจ</span><b>{{ purchase?.course.name ?? '—' }}</b></article>
+          <article><span>ราคาคอร์ส</span><b>{{ formatCurrency(purchase?.price) }}</b></article>
+          <article><span>สถานะ</span><b>{{ purchase?.commissionStatus ?? purchase?.status ?? '—' }}</b></article>
+          <article><span>Commission Pool</span><b>{{ formatCurrency(purchase?.totalCourseCommissionPool) }}</b></article>
+          <article><span>คอมมิชชันต่อ Visit</span><b>{{ formatCurrency(purchase?.commissionAllocationPerVisit) }}</b></article>
+          <article><span>ใช้แล้ว / คงเหลือ</span><b>{{ purchase?.used ?? '—' }} / {{ purchase?.remaining ?? '—' }} Visits</b></article>
+          <article><span>จำนวนครั้งทั้งหมด</span><b>{{ purchase?.purchased ?? '—' }} Visits</b></article>
+          <article><span>อัตราคอมมิชชัน</span><b>{{ purchase?.lockedCommissionRate === undefined ? '—' : `${purchase.lockedCommissionRate}%` }}</b></article>
+          <article><span>วันหมดอายุ</span><b>{{ purchase?.expiresAt ?? '—' }}</b></article>
+          <article><span>การโหลดข้อมูล</span><b>{{ loadError || 'backend' }}</b></article>
         </div>
       </section>
       <section class="staff-panel commission-page-panel">
@@ -98,6 +90,8 @@ if (!ledger.value.length) ledger.value = fallbackLedger
             </tr>
           </thead>
           <tbody>
+            <tr v-if="loadError"><td colspan="7">{{ loadError }}</td></tr>
+            <tr v-else-if="!ledger.length"><td colspan="7">ยังไม่มีรายการจัดสรรจาก backend</td></tr>
             <tr v-for="item in ledger" :key="item.date">
               <td>{{ item.date }}</td>
               <td>{{ item.patient }}</td>
