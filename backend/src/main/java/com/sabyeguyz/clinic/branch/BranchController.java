@@ -19,7 +19,8 @@ public class BranchController {
 
     public record Request(@NotBlank @Size(max = 2) String code,
                           @NotBlank @Pattern(regexp = "\\d{2}", message = "numericCode ต้องเป็นตัวเลข 2 หลัก") String numericCode,
-                          @NotBlank @Size(max = 120) String name) {}
+                          @NotBlank @Size(max = 120) String name,
+                          Boolean active) {}
     public record Response(Long id, String code, String numericCode, String name, boolean active) {}
 
     @GetMapping
@@ -35,7 +36,11 @@ public class BranchController {
         String numericCode = request.numericCode().trim();
         if (repository.findByCode(code).isPresent() || repository.findByNumericCode(numericCode).isPresent())
             throw new IllegalArgumentException("รหัสสาขาซ้ำ");
-        return toResponse(repository.save(new Branch(code, numericCode, request.name().trim())));
+        Branch branch = new Branch(code, numericCode, request.name().trim());
+        if (request.active() != null) {
+            if (request.active()) branch.activate(); else branch.deactivate();
+        }
+        return toResponse(repository.save(branch));
     }
 
     @PutMapping("/{id}")
@@ -49,6 +54,9 @@ public class BranchController {
                 || repository.findByNumericCode(numericCode).filter(found -> !found.getId().equals(id)).isPresent())
             throw new IllegalArgumentException("รหัสสาขาซ้ำ");
         branch.update(code, numericCode, request.name().trim());
+        if (request.active() != null) {
+            if (request.active()) branch.activate(); else branch.deactivate();
+        }
         return toResponse(repository.save(branch));
     }
 

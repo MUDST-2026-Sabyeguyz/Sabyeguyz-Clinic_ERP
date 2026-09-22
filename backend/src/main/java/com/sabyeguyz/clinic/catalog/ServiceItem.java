@@ -50,6 +50,7 @@ public class ServiceItem {
         this.price = price;
     }
     public void deactivate() { this.active = false; }
+    public void activate() { this.active = true; }
 
     public Long getId() { return id; }
     public String getCode() { return code; }

@@ -40,8 +40,6 @@ public class PatientQueryService {
         Patient patient = patientRepository.findById(id).orElseThrow(() -> new PatientNotFoundException(id));
         if (patientRepository.existsByIdentityNumberAndIdNot(request.identityNumber().trim(), id))
             throw new IllegalArgumentException("เลขเอกสารยืนยันตัวตนซ้ำ");
-        if (request.email() != null && patientRepository.existsByEmailAndIdNot(request.email().trim(), id))
-            throw new IllegalArgumentException("อีเมลซ้ำ");
         patient.update(request);
         return PatientProfileResponse.from(patientRepository.save(patient));
     }

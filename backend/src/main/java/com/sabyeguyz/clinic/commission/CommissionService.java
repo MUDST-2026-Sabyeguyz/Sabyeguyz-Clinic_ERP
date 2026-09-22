@@ -61,6 +61,7 @@ public class CommissionService {
     }
     @Transactional public CommissionScheme activate(long id){CommissionScheme s=find(id);s.activate();return schemes.save(s);}
     @Transactional public void deactivate(long id){CommissionScheme s=find(id);s.deactivate();schemes.save(s);}
+    @Transactional public CommissionScheme setActive(long id, boolean active){CommissionScheme s=find(id);if(active)s.activate();else s.deactivate();return schemes.save(s);}
 
     @Transactional(readOnly=true)
     public List<ReportRow> report(LocalDate from, LocalDate to) {

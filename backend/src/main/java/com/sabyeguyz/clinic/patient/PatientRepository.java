@@ -7,9 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PatientRepository extends JpaRepository<Patient, Long> {
-    boolean existsByUsernameOrEmailOrIdentityNumber(String username, String email, String identityNumber);
+    boolean existsByUsernameOrIdentityNumber(String username, String identityNumber);
     boolean existsByIdentityNumberAndIdNot(String identityNumber, Long id);
-    boolean existsByEmailAndIdNot(String email, Long id);
 
     @Query("""
             select p from Patient p
