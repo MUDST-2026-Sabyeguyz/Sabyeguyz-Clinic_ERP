@@ -1,9 +1,11 @@
 package com.sabyeguyz.clinic.course;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 @RestController
+@Profile("!database-v2")
 @RequestMapping("/api/course-transfers")
 public class CourseTransferController {
     private final CourseTransferService service;
