@@ -15,6 +15,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+@org.springframework.context.annotation.Profile("!database-v2")
 @RestController
 @RequestMapping("/api/users")
 @PreAuthorize("hasRole('MANAGER')")

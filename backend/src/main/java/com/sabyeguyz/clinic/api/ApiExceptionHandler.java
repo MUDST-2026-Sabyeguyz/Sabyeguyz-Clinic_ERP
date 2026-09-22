@@ -101,4 +101,20 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiErrorResponse("ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นไปแล้ว กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง"));
     }
+
+    @ExceptionHandler(com.sabyeguyz.clinic.databasev2.common.DatabaseV2NotFoundException.class)
+    ResponseEntity<ApiErrorResponse> databaseV2NotFound(com.sabyeguyz.clinic.databasev2.common.DatabaseV2NotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException.class)
+    ResponseEntity<ApiErrorResponse> databaseV2Conflict(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    ResponseEntity<ApiErrorResponse> dataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse("ข้อมูลขัดแย้งกับระบบ หรือมีข้อมูลนี้อยู่แล้ว"));
+    }
 }

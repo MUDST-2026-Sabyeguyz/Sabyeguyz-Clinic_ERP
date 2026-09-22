@@ -1,4 +1,5 @@
 package com.sabyeguyz.clinic.masterdata; import jakarta.validation.Valid; import jakarta.validation.constraints.NotBlank; import java.util.*; import org.springframework.http.HttpStatus; import org.springframework.web.bind.annotation.*;
+@org.springframework.context.annotation.Profile("!database-v2")
 @RestController @RequestMapping("/api/master-data") public class MasterDataController {
  private final MasterDataRepository repo; public MasterDataController(MasterDataRepository r){repo=r;} public record Request(@NotBlank String category,@NotBlank String code,@NotBlank String name,Boolean active){} public record Response(Long id,String category,String code,String name,boolean active){}
  @GetMapping List<Response> list(){return repo.findAllByOrderByCategoryAscNameAsc().stream().map(this::out).toList();} @GetMapping("/{id}") Response get(@PathVariable Long id){return out(find(id));}

@@ -4,6 +4,7 @@ import com.sabyeguyz.clinic.therapist.TherapistRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.web.bind.annotation.*;
+@org.springframework.context.annotation.Profile("!database-v2")
 @RestController @RequestMapping("/api/catalog") public class CatalogController {
  private final CourseRepository courses; private final ServiceItemRepository services; private final TherapistRepository therapists;
  public CatalogController(CourseRepository courses, ServiceItemRepository services, TherapistRepository therapists){this.courses=courses;this.services=services;this.therapists=therapists;}

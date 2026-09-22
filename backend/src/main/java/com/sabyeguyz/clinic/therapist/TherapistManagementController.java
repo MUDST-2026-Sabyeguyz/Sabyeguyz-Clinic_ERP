@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@org.springframework.context.annotation.Profile("!database-v2")
 @RestController
 @RequestMapping("/api/therapists")
 @PreAuthorize("hasRole('MANAGER')")

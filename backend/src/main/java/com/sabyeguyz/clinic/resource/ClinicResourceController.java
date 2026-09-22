@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinic.resource;
 import com.sabyeguyz.clinic.branch.*; import jakarta.validation.Valid; import jakarta.validation.constraints.NotBlank; import java.util.List; import org.springframework.http.HttpStatus; import org.springframework.web.bind.annotation.*;
+@org.springframework.context.annotation.Profile("!database-v2")
 @RestController @RequestMapping("/api/resources") @org.springframework.transaction.annotation.Transactional public class ClinicResourceController {
  private final ClinicResourceRepository repo; private final BranchRepository branches; public ClinicResourceController(ClinicResourceRepository r,BranchRepository b){repo=r;branches=b;}
  public record Request(@NotBlank String branchCode,@NotBlank String code,@NotBlank String name,@NotBlank String type,@NotBlank String status,Boolean active){} public record Response(Long id,String branchCode,String branchName,String code,String name,String type,String status,boolean active){}
