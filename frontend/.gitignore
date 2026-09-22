@@ -8,3 +8,7 @@ coverage/
 *.log
 .idea/
 .vscode/settings.json
+cypress/videos/
+cypress/screenshots/
+*.tsbuildinfo
+.eslintcache

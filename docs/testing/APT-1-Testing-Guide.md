@@ -107,7 +107,7 @@ mvn -B -f pom.xml verify
 ผลที่ต้องได้เพิ่มมาคือ
 
 ```text
-Building jar: ...\target\clinic-erp-backend-0.0.1-SNAPSHOT.jar
+Building jar: ...\target\sabyeguyz-backend-0.0.1-SNAPSHOT.jar
 BUILD SUCCESS
 ```
 

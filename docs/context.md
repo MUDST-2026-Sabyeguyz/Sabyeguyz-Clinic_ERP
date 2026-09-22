@@ -234,7 +234,7 @@ clinic-erp/
 
 ทดสอบ Controller, Service, Repository, Security และ Database ร่วมกัน เช่น การสร้าง Patient, การจอง Appointment, การซื้อ Course, การใช้ Course และการ Reverse Payment
 
-### E2E Test
+### Cypress integration test
 
 อย่างน้อยต้องทดสอบ Flow นี้:
 
@@ -413,7 +413,7 @@ C:\Users\xanexer\Documents\.3-1\devops\project\frontend\sabyeguyz
 - Pinia: เลือก
 - Vitest: เลือก
 - End-to-End Testing: เลือก
-- E2E Framework: Playwright
+- Integration framework: Cypress
 - Oxfmt: ไม่เลือก
 - Vue 3.6 Release Candidate: ไม่เลือก
 - Example Code: เลือก No เพื่อให้มี Example Code สำหรับตรวจสอบการรันเบื้องต้น
@@ -442,7 +442,7 @@ peer oxlint@"~1.73.0" from eslint-plugin-oxlint@1.73.0
 
 - แก้ Dependency Version Conflict ของ Frontend
 - รันหน้า Vue Example ให้สำเร็จ
-- ตรวจสอบ Router, Pinia, Vitest และ Playwright
+- ตรวจสอบ Router, Pinia, Vitest และ Cypress
 - เพิ่ม README ในแต่ละ Repository
 - เพิ่ม Link ไปยัง `context.md` หรือ Context กลางในทุก Repository
 - สร้าง Branch `develop` และกำหนดรูปแบบ `feature/<feature-name>`

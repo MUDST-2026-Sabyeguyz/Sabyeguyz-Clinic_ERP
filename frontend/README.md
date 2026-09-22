@@ -1,6 +1,6 @@
-# Frontend Repository
+# Sabyeguyz Clinic ERP frontend
 
-Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz**
+Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz** อยู่ที่โฟลเดอร์นี้โดยตรง
 
 ## Requirements
 
@@ -11,8 +11,8 @@ Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz**
 ## Setup
 
 ```bash
-git clone https://github.com/MUDST-2026-Sabyeguyz/frontend.git
-cd frontend/sabyeguyz
+git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+cd Sabyeguyz-Clinic_ERP/frontend
 npm install
 npm run dev
 ```
@@ -34,9 +34,7 @@ Frontend รับผิดชอบ:
 * API Client
 * Frontend Tests
 
-**ขณะพัฒนา UI ไม่จำเป็นต้องมี Backend หรือ PostgreSQL**
-
-หากต้องใช้ข้อมูล สามารถใช้ Mock Data ตาม API Contract ที่ทีมตกลงกัน
+หน้าจอ production ใช้ API จาก backend เท่านั้น ไม่มี mock data หรือ localStorage เป็นแหล่งข้อมูล
 
 ## เชื่อม Backend
 
@@ -50,8 +48,11 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ```bash
 npm run type-check
-npm run test:unit -- --run
+npm run test:unit -- --run --passWithNoTests
 npm run build
+
+# ต้องเปิด backend จริงไว้ที่ localhost:8080
+npm run test:integration
 ```
 
 ## Rules

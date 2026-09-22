@@ -1,10 +1,12 @@
+name: sabyeguyz-clinic-erp
+
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-clinic_erp}
       POSTGRES_USER: ${POSTGRES_USER:-clinic}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinic_local_only}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -20,10 +22,11 @@ services:
     build:
       context: ./backend
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: database-v2
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-clinic_erp}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-clinic}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-clinic_local_only}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -38,7 +41,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend/sabyeguyz
+      context: ./frontend
       args:
         VITE_API_BASE_URL: ""
     ports:

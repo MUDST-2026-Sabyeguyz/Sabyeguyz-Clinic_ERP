@@ -24,27 +24,29 @@ The first startup runs Flyway migrations automatically. PostgreSQL data is store
 
 Configuration defaults are documented in `.env.example`. Copy it to `.env` to override ports or database settings.
 
-## Alternate local Docker configuration
+## Local Docker configuration
 
 Install Docker Desktop with Linux containers and Docker Compose, then run from this repository root:
 
 ```bash
-docker compose -f deploy/docker-compose.yml up --build -d
-docker compose -f deploy/docker-compose.yml ps
+cp .env.example .env
+# แก้ POSTGRES_PASSWORD และ JWT_SECRET ใน .env ให้เป็นค่าจริงของเครื่อง
+docker compose up --build -d
+docker compose ps
 ```
 
 Wait for the backend health endpoint to return `{"status":"UP"}` before using the application:
 
-- Frontend: http://localhost:5173/patients
-- Register patient: http://localhost:5173/patients/register
+- Frontend: http://localhost
+- Login: http://localhost/
 - Backend health: http://localhost:8080/actuator/health
 - Swagger: http://localhost:8080/swagger-ui/index.html
 
 The frontend serves a production build through nginx. Browser requests to `/api/` are forwarded to the backend on the Compose network. No local Node.js, Java, or Maven installation is required.
 
 ```bash
-docker compose -f deploy/docker-compose.yml logs --tail=100 backend frontend
-docker compose -f deploy/docker-compose.yml down
+docker compose logs --tail=100 backend frontend
+docker compose down
 ```
 
 Database data remains in the Compose volume after `down`. See [deployment instructions](deploy/README.md) for port overrides, test steps, and database details.
