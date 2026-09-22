@@ -8,7 +8,7 @@
 - Backend tests: 116 tests ผ่านทั้งหมด (`mvn clean test`)
 - ครอบคลุม: สร้างนัด (APT-1), ค้นหา/ดูรายละเอียด (APT-2), check-in/start-service/complete/no-show/cancel (APT-3/4/5), เลื่อนนัด (APT-6)
 - **สถานะนัดหมายครบ 7 ค่าตาม Workflow Brief V1 §4 แล้ว** — ชื่อเดิม `SCHEDULED`/`CHECKED_IN` ถูกเปลี่ยนเป็น `CONFIRMED`/`ARRIVED` (breaking change, migration `V10` ย้ายข้อมูลเดิมให้แล้ว)
-- Base URL ตอน dev: `http://localhost:8080` (frontend อ่านจาก env var `VITE_API_BASE_URL`, ดู [frontend/sabyeguyz/src/api/patients.ts](Sabyeguyz-Clinic_ERP/frontend/sabyeguyz/src/api/patients.ts) เป็นตัวอย่าง pattern ที่ใช้อยู่)
+- Base URL ตอน dev: `http://localhost:8080` (frontend อ่านจาก env var `VITE_API_BASE_URL`, ดู [frontend/src/api/patients.ts](Sabyeguyz-Clinic_ERP/frontend/src/api/patients.ts) เป็นตัวอย่าง pattern ที่ใช้อยู่)
 - Swagger/OpenAPI สด: `GET /v3/api-docs`, UI ที่ `/swagger-ui/index.html`
 
 ---
@@ -215,6 +215,6 @@ INDEX idx_appointments_branch_start    (branch_id, start_at)
 | Response DTO | `backend/src/main/java/com/sabyeguyz/clinic/appointment/AppointmentResponse.java` |
 | Error handling | `backend/src/main/java/com/sabyeguyz/clinic/api/ApiExceptionHandler.java` |
 | Schema | `backend/src/main/resources/db/migration/V4__appointment.sql` |
-| ตัวอย่าง fetch client pattern | `frontend/sabyeguyz/src/api/patients.ts` |
+| ตัวอย่าง fetch client pattern | `frontend/src/api/patients.ts` |
 
 (path ทั้งหมดอยู่ใต้ `Sabyeguyz-Clinic_ERP/` — repo monorepo ปัจจุบัน)

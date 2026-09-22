@@ -5,7 +5,7 @@ Branch: `feat/connect-to-backend`
 
 ## ผลการ implement
 
-- เพิ่ม `frontend/sabyeguyz/src/api/client.ts` เป็น API client กลาง แนบ `Authorization: Bearer <JWT>` กับ protected endpoint ทุก request, แปลง API error และส่งกลับหน้า login เมื่อได้ `401`
+- เพิ่ม `frontend/src/api/client.ts` เป็น API client กลาง แนบ `Authorization: Bearer <JWT>` กับ protected endpoint ทุก request, แปลง API error และส่งกลับหน้า login เมื่อได้ `401`
 - เปลี่ยน login ให้เรียก `POST /api/auth/login` และเก็บ token/user จาก backend; logout ล้าง session
 - เชื่อมหน้าผู้ป่วยกับ `GET /api/patients`, `GET /api/patients/{id}`, `POST /api/patients`
 - เชื่อมหน้าจัดการนัดหมายกับ search/create/reschedule และ lifecycle actions ของ `/api/appointments`
