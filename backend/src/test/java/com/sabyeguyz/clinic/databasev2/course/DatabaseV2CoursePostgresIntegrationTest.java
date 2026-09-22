@@ -1,0 +1,209 @@
+package com.sabyeguyz.clinic.databasev2.course;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.sabyeguyz.clinic.course.CourseBalanceException;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+
+class DatabaseV2CoursePostgresIntegrationTest {
+
+    private JdbcTemplate jdbc;
+    private DatabaseV2CourseRepository repository;
+
+    @BeforeEach
+    void setUp() {
+        String host = System.getenv().getOrDefault("POSTGRES_HOST", "localhost");
+        String port = System.getenv().getOrDefault("POSTGRES_PORT", "5432");
+        String db = System.getenv().getOrDefault("POSTGRES_DB", "clinic_erp");
+        String user = System.getenv().getOrDefault("POSTGRES_USER", "clinic");
+        String password = System.getenv().getOrDefault("POSTGRES_PASSWORD", "local-verification-password");
+
+        try {
+            DriverManagerDataSource ds = new DriverManagerDataSource();
+            ds.setDriverClassName("org.postgresql.Driver");
+            ds.setUrl("jdbc:postgresql://" + host + ":" + port + "/" + db);
+            ds.setUsername(user);
+            ds.setPassword(password);
+
+            jdbc = new JdbcTemplate(ds);
+            jdbc.execute("select 1");
+            repository = new DatabaseV2CourseRepository(jdbc);
+
+            seedDependencies();
+        } catch (Exception e) {
+            Assumptions.abort("PostgreSQL not available on " + host + ":" + port + ": " + e.getMessage());
+        }
+    }
+
+    private void seedDependencies() {
+        jdbc.execute("""
+            insert into app_user (user_id, username, password_hash, user_status, last_login_at, user_create_at)
+            values (1, 'system_course_test', 'hash', true, current_timestamp, current_timestamp)
+            on conflict (user_id) do nothing
+        """);
+
+        jdbc.execute("""
+            insert into branch (branch_id, branch_code, branch_name, address, phone, branch_status, branch_create_by)
+            values (99, '99', 'Course Test Branch', '123 Course Rd', '020000099', true, 1)
+            on conflict (branch_id) do update set branch_code = '99'
+        """);
+
+        jdbc.execute("""
+            insert into staff (staff_id, staff_code, staff_fname, staff_lname, position, branch_id, staff_status, hire_date, staff_create_by)
+            values (99, 'ST-CRS-99', 'CourseDoc', 'Smith', 'Therapist', 99, true, '2026-01-01', 1)
+            on conflict (staff_id) do nothing
+        """);
+
+        jdbc.execute("""
+            insert into service (service_id, service_code, service_name, service_type, service_price, service_status, default_total_visits, default_bonus_visits, default_validity_days, service_create_by)
+            values (98, 'CRS-INTEG-10', 'Concurrent Course 10', 'Course', 5000.00, true, 10, 0, 365, 1)
+            on conflict (service_id) do nothing
+        """);
+
+        jdbc.execute("""
+            insert into patient (patient_id, hn, customer_type, title, patient_fname, patient_lname, gender, phone, branch_id, registered_by)
+            values (91, '2699099991', 'Thai', 'นาย', 'PatientA', 'Test', 'Male', '0899999991', 99, 1)
+            on conflict (patient_id) do nothing
+        """);
+
+        jdbc.execute("""
+            insert into patient (patient_id, hn, customer_type, title, patient_fname, patient_lname, gender, phone, branch_id, registered_by)
+            values (92, '2699099992', 'Thai', 'นาง', 'PatientB', 'Test', 'Female', '0899999992', 99, 1)
+            on conflict (patient_id) do nothing
+        """);
+    }
+
+    @Test
+    void concurrentUsageNeverAllowsNegativeBalance() throws InterruptedException {
+        // Purchase a course with exactly 10 sessions
+        DatabaseV2CourseRepository.CoursePurchaseRecord purchased = repository.purchase(
+                91L, 98L, 99L, "99", 99L, 1L
+        );
+        Long courseId = purchased.id();
+        assertThat(purchased.remainingVisits()).isEqualTo(10);
+
+        // Run 15 concurrent threads trying to consume 1 session each
+        int threadCount = 15;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+        List<Throwable> unexpectedErrors = Collections.synchronizedList(new ArrayList<>());
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startLatch.await();
+                    repository.consumeSession(courseId, null, "Concurrent test usage", 99L, 1L);
+                    successCount.incrementAndGet();
+                } catch (CourseBalanceException e) {
+                    failureCount.incrementAndGet();
+                } catch (Throwable t) {
+                    unexpectedErrors.add(t);
+                }
+            });
+        }
+
+        readyLatch.await(5, TimeUnit.SECONDS);
+        startLatch.countDown();
+        executor.shutdown();
+        boolean finished = executor.awaitTermination(15, TimeUnit.SECONDS);
+
+        assertThat(finished).isTrue();
+        assertThat(unexpectedErrors).isEmpty();
+        assertThat(successCount.get()).isEqualTo(10);
+        assertThat(failureCount.get()).isEqualTo(5);
+
+        // Verify remaining visits in Postgres database is exactly 0
+        DatabaseV2CourseRepository.CoursePurchaseRecord finalCourse = repository.findById(courseId).orElseThrow();
+        assertThat(finalCourse.remainingVisits()).isEqualTo(0);
+        assertThat(finalCourse.visitsUsed()).isEqualTo(10);
+
+        // Verify ledger entries count: 1 purchase + 10 treatments = 11 entries
+        List<DatabaseV2CourseRepository.CourseMovementRecord> movements = repository.findMovements(courseId);
+        assertThat(movements).hasSize(11);
+        assertThat(movements.get(movements.size() - 1).balanceAfter()).isEqualTo(0);
+    }
+
+    @Test
+    void transferCourseSplitsSessionsCorrectly() {
+        // 1. Purchase course with 10 sessions for Patient 91
+        DatabaseV2CourseRepository.CoursePurchaseRecord source = repository.purchase(
+                91L, 98L, 99L, "99", 99L, 1L
+        );
+        assertThat(source.remainingVisits()).isEqualTo(10);
+
+        // 2. Transfer 4 sessions from Patient 91 to Patient 92
+        DatabaseV2CourseRepository.CourseTransferRecord transfer = repository.transfer(
+                source.id(), 92L, 4, "Gift for sister", 1L
+        );
+
+        assertThat(transfer.id()).isNotNull();
+        assertThat(transfer.quantity()).isEqualTo(4);
+        assertThat(transfer.sourcePatientId()).isEqualTo(91L);
+        assertThat(transfer.destinationPatientId()).isEqualTo(92L);
+
+        // 3. Verify Source Course has 6 remaining
+        DatabaseV2CourseRepository.CoursePurchaseRecord updatedSource = repository.findById(source.id()).orElseThrow();
+        assertThat(updatedSource.remainingVisits()).isEqualTo(6);
+
+        // 4. Verify Destination Course has 4 remaining
+        DatabaseV2CourseRepository.CoursePurchaseRecord destCourse = repository.findById(transfer.destinationPurchaseId()).orElseThrow();
+        assertThat(destCourse.remainingVisits()).isEqualTo(4);
+        assertThat(destCourse.patientId()).isEqualTo(92L);
+
+        // 5. Verify Transfer History
+        List<DatabaseV2CourseRepository.CourseTransferRecord> history = repository.findTransferHistory(91L);
+        assertThat(history).isNotEmpty();
+        assertThat(history.get(0).id()).isEqualTo(transfer.id());
+    }
+
+    @Test
+    void reverseUsageAndCancelLifecycle() {
+        DatabaseV2CourseRepository.CoursePurchaseRecord course = repository.purchase(
+                91L, 98L, 99L, "99", 99L, 1L
+        );
+
+        // 1. Consume 1 session
+        DatabaseV2CourseRepository.CoursePurchaseRecord used = repository.consumeSession(
+                course.id(), null, "Usage before reverse", 99L, 1L
+        );
+        assertThat(used.remainingVisits()).isEqualTo(9);
+
+        // Find movement ID
+        List<DatabaseV2CourseRepository.CourseMovementRecord> movements = repository.findMovements(course.id());
+        Long usageMovementId = movements.stream()
+                .filter(m -> "Treatment".equals(m.entryType()))
+                .findFirst().orElseThrow().id();
+
+        // 2. Reverse usage
+        DatabaseV2CourseRepository.CoursePurchaseRecord reversed = repository.reverseUsage(
+                usageMovementId, "Accidental deduction", 1L
+        );
+        assertThat(reversed.remainingVisits()).isEqualTo(10);
+
+        // 3. Cancel course
+        DatabaseV2CourseRepository.CoursePurchaseRecord cancelled = repository.cancel(
+                course.id(), "Customer requested cancel", 1L
+        );
+        assertThat(cancelled.status()).isEqualTo("Cancelled");
+        assertThat(cancelled.remainingVisits()).isEqualTo(0);
+    }
+}
