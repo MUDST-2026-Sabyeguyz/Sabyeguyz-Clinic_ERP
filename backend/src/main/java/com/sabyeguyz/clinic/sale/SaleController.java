@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * และการอ่านใบเสร็จอยู่ที่ {@code /api/receipts/{id}}
  */
 @RestController
+@Profile("!database-v2")
 @RequestMapping("/api")
 @Tag(name = "Payments & Receipts", description = "Selling, collecting payment, reading and reversing receipts")
 public class SaleController {
