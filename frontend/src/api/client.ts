@@ -195,8 +195,25 @@ export type SaleSummary = {
   status: string
   soldAt: string
   voidedAt?: string
+  voidReason?: string
+  itemDescription?: string
 }
-export type SaleReceipt = SaleSummary & { note?: string; voidReason?: string }
+export type SaleReceipt = SaleSummary & { note?: string }
+export type SaleDetail = SaleReceipt & {
+  items: Array<{ id: number; type: string; description: string; quantity: number; lineTotal: number }>
+  payments: Array<{ id: number; type: string; paymentMethodCode: string; amount: number }>
+}
+export type CourseUsageTransaction = {
+  id: number
+  coursePurchaseId: number
+  patientName: string
+  patientHn: string
+  courseName: string
+  branchCode: string
+  usedAt: string
+  voidedAt?: string | null
+  voidReason?: string | null
+}
 export type DashboardResponse = {
   uniquePatients: number
   visits: number
@@ -373,6 +390,7 @@ export const treatmentApi = {
 }
 
 export const courseApi = {
+  usageTransactions: () => api.get<CourseUsageTransaction[]>('/api/course-usages'),
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
   get: (id: number) => api.get<Course>(`/api/courses/${id}`),
   create: (body: Omit<Course, 'id' | 'active'>) => api.post<Course>('/api/courses', body),
@@ -420,9 +438,9 @@ export const salesApi = {
     })
     return api.get<Page<SaleSummary>>(`/api/payments?${query}`)
   },
-  get: (id: number) => api.get('/api/receipts/' + id),
+  get: (id: number) => api.get<SaleDetail>('/api/receipts/' + id),
   create: (body: unknown) => api.post<SaleReceipt>('/api/payments', body),
-  reverse: (id: number, reason: string) => api.post(`/api/payments/${id}/reverse`, { reason }),
+  reverse: (id: number, reason: string) => api.post<SaleDetail>(`/api/payments/${id}/reverse`, { reason }),
 }
 
 export const paymentMethodApi = {
