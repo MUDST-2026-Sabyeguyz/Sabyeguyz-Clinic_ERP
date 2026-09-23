@@ -30,7 +30,7 @@ const navItems = computed(() =>
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
-        { to: '/staff/commission', label: 'บุคลากรและค่าคอมมิชชัน' },
+        { to: '/staff/commission', label: 'บุคลากร' },
         { to: '/staff/reports', label: 'รายงาน' },
         { to: '/staff/settings', label: 'ตั้งค่า' },
       ]
@@ -50,9 +50,6 @@ function movePill(target: HTMLElement | null) {
   target.classList.add('pill-target')
   pillStyle.value = {
     width: `${targetBox.width}px`,
-    // The pill is an absolutely positioned child of the scrollable nav. Its
-    // offset is already in that same coordinate space, unlike viewport rects
-    // which can be stale while the centered menu is settling after a refresh.
     transform: `translateX(${target.offsetLeft}px)`,
     opacity: '1',
   }
@@ -75,8 +72,6 @@ function handleNavHover(event: Event) {
   const link = target.closest<HTMLAnchorElement>('a')
   if (!link || !navRef.value?.contains(link) || link === hoveredLink) return
   hoveredLink = link
-  // Device/Responsive mode may report a hover during the resize frame.  Make
-  // the transition available first, then position the pill on the next frame.
   pillReady.value = true
   if (hoverFrame) cancelAnimationFrame(hoverFrame)
   nextTick(() => {
@@ -101,9 +96,6 @@ function positionPillWithoutAnimation() {
 }
 onMounted(() => {
   positionPillWithoutAnimation()
-  // Centered Manager tabs move slightly after the browser applies loaded fonts.
-  // Measure again after layout settles so the pill never remains at its
-  // pre-refresh position.
   requestAnimationFrame(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
   })
