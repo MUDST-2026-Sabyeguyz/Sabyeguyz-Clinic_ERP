@@ -13,7 +13,7 @@
   flex-direction: column;
   overflow: hidden;
   color: #d9f4ea;
-  background: linear-gradient(145deg, #176d68, #238d88);
+  background: #176d68 url('@/assets/brand-panel.png') center / cover no-repeat;
 }
 .login-brand img {
   width: min(520px, 76%);
@@ -23,21 +23,6 @@
   margin-top: -20px;
   font-size: 28px;
   font-weight: 400;
-}
-.plus {
-  position: absolute;
-  color: #68c8c2;
-  font-size: 180px;
-  font-family: var(--app-font);
-  opacity: 0.45;
-}
-.plus.one {
-  top: -80px;
-  right: 50px;
-}
-.plus.two {
-  bottom: -60px;
-  left: 20px;
 }
 .login-content {
   display: grid;
@@ -66,12 +51,6 @@
 label {
   position: relative;
   font-size: 18px;
-}
-label a {
-  display: block;
-  color: #177c75;
-  text-align: right;
-  font-size: 15px;
 }
 input {
   width: 100%;
