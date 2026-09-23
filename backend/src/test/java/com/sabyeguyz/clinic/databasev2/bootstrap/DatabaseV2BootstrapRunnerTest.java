@@ -1,17 +1,21 @@
 package com.sabyeguyz.clinic.databasev2.bootstrap;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class DatabaseV2BootstrapRunnerTest {
 
@@ -21,7 +25,30 @@ class DatabaseV2BootstrapRunnerTest {
     @BeforeEach
     void setUp() {
         jdbc = mock(JdbcTemplate.class);
-        runner = new DatabaseV2BootstrapRunner(jdbc);
+        runner = new DatabaseV2BootstrapRunner(jdbc, "admin", "test-only-password");
+    }
+
+    @Test
+    void bootstrapRejectsMissingPasswordBeforeDatabaseWrites() {
+        DatabaseV2BootstrapRunner missingPassword = new DatabaseV2BootstrapRunner(jdbc, "admin", " ");
+        assertThatThrownBy(missingPassword::bootstrap)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("APP_BOOTSTRAP_ADMIN_PASSWORD");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void bootstrapRotatesAnExistingAdminPassword() {
+        when(jdbc.queryForList(eq("select user_id from app_user where username = ?"), eq(Long.class), eq("admin")))
+                .thenReturn(List.of(1L));
+        when(jdbc.queryForList(eq("select password_hash from app_user where user_id = ?"), eq(String.class), eq(1L)))
+                .thenReturn(List.of(new BCryptPasswordEncoder().encode("old-password")));
+
+        ReflectionTestUtils.invokeMethod(runner, "getOrCreateAdminUser", "admin", "test-only-password");
+
+        verify(jdbc).update(eq("update app_user set password_hash = ? where user_id = ?"),
+                argThat(hash -> hash instanceof String value
+                        && new BCryptPasswordEncoder().matches("test-only-password", value)), eq(1L));
     }
 
     @Test
@@ -29,6 +56,8 @@ class DatabaseV2BootstrapRunnerTest {
         // Mock app_user query returning existing admin
         when(jdbc.queryForList(eq("select user_id from app_user where username = ?"), eq(Long.class), eq("admin")))
                 .thenReturn(List.of(1L));
+        when(jdbc.queryForList(eq("select password_hash from app_user where user_id = ?"), eq(String.class), eq(1L)))
+                .thenReturn(List.of(new BCryptPasswordEncoder().encode("test-only-password")));
 
         // Mock branch query returning existing 01
         when(jdbc.queryForList(eq("select branch_id from branch where branch_code = ?"), eq(Long.class), eq("01")))

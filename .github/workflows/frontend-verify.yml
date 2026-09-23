@@ -42,15 +42,27 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Generate integration credentials
+        run: |
+          postgres_password="$(openssl rand -hex 32)"
+          jwt_secret="$(openssl rand -hex 32)"
+          admin_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$postgres_password"
+          echo "::add-mask::$jwt_secret"
+          echo "::add-mask::$admin_password"
+          echo "POSTGRES_PASSWORD=$postgres_password" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$jwt_secret" >> "$GITHUB_ENV"
+          echo "APP_BOOTSTRAP_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+          echo "CYPRESS_BOOTSTRAP_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+
       - name: Start backend integration stack
         working-directory: .
         env:
-          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
-          JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
           APP_BOOTSTRAP_ENABLED: "true"
         run: |
           test -n "$POSTGRES_PASSWORD"
           test -n "$JWT_SECRET"
+          test -n "$APP_BOOTSTRAP_ADMIN_PASSWORD"
           docker compose up --build -d
 
       - name: Cypress backend integration

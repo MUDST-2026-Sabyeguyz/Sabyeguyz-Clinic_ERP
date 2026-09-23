@@ -30,14 +30,15 @@ public class DatabaseV2BootstrapRunner implements ApplicationRunner {
     @Value("${app.bootstrap.default-branch-name:Main Branch}")
     private String defaultBranchName = "Main Branch";
 
-    @Value("${app.bootstrap.admin-username:admin}")
-    private String adminUsername = "admin";
+    private final String adminUsername;
+    private final String adminPassword;
 
-    @Value("${app.bootstrap.admin-password:Admin@123456}")
-    private String adminPassword = "Admin@123456";
-
-    public DatabaseV2BootstrapRunner(JdbcTemplate jdbc) {
+    public DatabaseV2BootstrapRunner(JdbcTemplate jdbc,
+            @Value("${app.bootstrap.admin-username:admin}") String adminUsername,
+            @Value("${APP_BOOTSTRAP_ADMIN_PASSWORD:}") String adminPassword) {
         this.jdbc = jdbc;
+        this.adminUsername = adminUsername;
+        this.adminPassword = adminPassword;
     }
 
     @Override
@@ -49,6 +50,9 @@ public class DatabaseV2BootstrapRunner implements ApplicationRunner {
     }
 
     public void bootstrap() {
+        if (adminPassword == null || adminPassword.isBlank()) {
+            throw new IllegalStateException("APP_BOOTSTRAP_ADMIN_PASSWORD must be set when bootstrap is enabled");
+        }
         // 1. Seed or resolve Admin User
         Long adminUserId = getOrCreateAdminUser(adminUsername, adminPassword);
 
@@ -116,7 +120,14 @@ public class DatabaseV2BootstrapRunner implements ApplicationRunner {
     private Long getOrCreateAdminUser(String username, String password) {
         List<Long> ids = jdbc.queryForList("select user_id from app_user where username = ?", Long.class, username);
         if (!ids.isEmpty()) {
-            return ids.get(0);
+            Long userId = ids.get(0);
+            List<String> hashes = jdbc.queryForList(
+                    "select password_hash from app_user where user_id = ?", String.class, userId);
+            if (hashes.isEmpty() || !passwordEncoder.matches(password, hashes.get(0))) {
+                jdbc.update("update app_user set password_hash = ? where user_id = ?",
+                        passwordEncoder.encode(password), userId);
+            }
+            return userId;
         }
         syncSequence("app_user_user_id_seq", "app_user", "user_id");
         String hash = passwordEncoder.encode(password);

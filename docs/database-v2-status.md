@@ -1,6 +1,6 @@
 # Database v2 Integration Status
 
-> **Last updated:** 2026-09-22 — Branch `xan`, HEAD commit after Step 17
+> **Last updated:** 2026-09-23 — Branch `xan`
 
 The `database-v2` Spring profile is the Compose runtime profile. Flyway applies
 only `db/migration_new/V1__initial_schema.sql`. Legacy JPA entities are isolated
@@ -8,19 +8,21 @@ under the `!database-v2` profile and must never be used by v2 controllers.
 
 ---
 
-## ✅ Integration Complete
+## Integration Status
 
-All 17 steps of the Database v2 integration are fully implemented, verified,
-and committed on branch `xan`.
+Database v2 routes are implemented on `xan`. Direct backend tests are still
+missing for branch, staff, master data, service/room, and payment-method APIs.
+Local checks on a fresh Compose stack passed on 2026-09-23. GitHub Actions
+has not yet verified this revision.
 
-### Backend — 281 tests PASS (0 failures, 0 skipped)
+### Backend — 283 tests PASS (0 failures, 0 skipped; fresh PostgreSQL stack)
 
 | Slice | Controller / Service | Profile annotation | Status |
 |---|---|---|---|
 | Auth & Login | `DatabaseV2AuthController` | `@Profile("database-v2")` | ✅ DONE |
-| Branch Management | `DatabaseV2BranchController` | `@Profile("database-v2")` | ✅ DONE |
-| Staff & Therapists | `DatabaseV2StaffController` | `@Profile("database-v2")` | ✅ DONE |
-| Master Data & Lookups | `DatabaseV2MasterDataController` | `@Profile("database-v2")` | ✅ DONE |
+| Branch Management | `DatabaseV2BranchController` | `@Profile("database-v2")` | ⚠️ Direct test pending |
+| Staff & Therapists | `DatabaseV2StaffController` | `@Profile("database-v2")` | ⚠️ Direct test pending |
+| Master Data & Lookups | `DatabaseV2MasterDataController` | `@Profile("database-v2")` | ⚠️ Direct test pending |
 | Patient Registration & HN | `DatabaseV2PatientController` | `@Profile("database-v2")` | ✅ DONE |
 | Appointments & Visit Lifecycle | `DatabaseV2AppointmentController` | `@Profile("database-v2")` | ✅ DONE |
 | Sales, Receipts & Payments | `DatabaseV2SaleController` | `@Profile("database-v2")` | ✅ DONE |
@@ -31,7 +33,7 @@ and committed on branch `xan`.
 | Reports & Dashboard | `DatabaseV2ReportController` | `@Profile("database-v2")` | ✅ DONE |
 | Bootstrap Runner | `DatabaseV2BootstrapRunner` | Opt-in (`APP_BOOTSTRAP_ENABLED=true`) | ✅ DONE |
 
-### Frontend — Cypress 9 specs / 13 tests PASS (0 failures)
+### Frontend — Cypress 9 specs / 13 tests PASS (0 failures; fresh Compose stack)
 
 | Spec | Description | Result |
 |---|---|---|
@@ -58,9 +60,9 @@ and committed on branch `xan`.
 
 | Workflow | Status |
 |---|---|
-| `backend-verify.yml` — `mvn verify` | ✅ Configured |
-| `frontend-verify.yml` — lint, build, Cypress | ✅ Configured (`APP_BOOTSTRAP_ENABLED=true`) |
-| `compose-verify.yml` — docker compose build | ✅ Configured (`APP_BOOTSTRAP_ENABLED=true`) |
+| `backend-verify.yml` — PostgreSQL + `mvn verify` | Configured; remote run pending |
+| `frontend-verify.yml` — lint, build, Cypress | Configured; remote run pending |
+| `compose-verify.yml` — docker compose build | ✅ Configured (bootstrap disabled by default) |
 
 ---
 
@@ -69,18 +71,19 @@ and committed on branch `xan`.
 - ✅ Never altered `V1__initial_schema.sql`
 - ✅ No compatibility views created
 - ✅ No mock or fixture data used
-- ✅ No tests skipped or disabled
-- ✅ No hardcoded credentials or tokens
+- ✅ Fresh local PostgreSQL run skipped 0 tests
+- ✅ Runtime admin password is supplied by `APP_BOOTSTRAP_ADMIN_PASSWORD`
 - ✅ All new controllers use `@Profile("database-v2")`
 - ✅ Legacy controllers use `@Profile("!database-v2")`
 - ✅ Cypress specs strictly under `frontend/cypress/specs/`
-- ✅ Bootstrap runner opt-in via `APP_BOOTSTRAP_ENABLED=true`
+- ✅ Bootstrap runner disabled by default; enabling it requires an admin password
 
 ---
 
 ## Safe Bootstrap
 
-The schema contains no hardcoded demo accounts or secrets. On first start, set
-`APP_BOOTSTRAP_ENABLED=true` in the environment. The `DatabaseV2BootstrapRunner`
-will idempotently create the initial branch, staff, roles, and admin user.
-Passwords and JWT/database secrets must never be committed to version control.
+On first start, set `APP_BOOTSTRAP_ENABLED=true` and a unique
+`APP_BOOTSTRAP_ADMIN_PASSWORD` in the environment. The runner creates initial
+branch, staff, roles, and admin user. If that admin already exists, its password
+is updated to match the supplied secret. Disable bootstrap after initial setup.
+Database, JWT, and bootstrap passwords must never be committed to version control.
