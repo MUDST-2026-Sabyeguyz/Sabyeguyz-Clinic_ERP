@@ -138,7 +138,8 @@ public class ReportService {
                         .map(row -> new RevenueReportResponse.BranchRevenue(
                                 row.branchCode(), row.branchName(), money(row.amount())))
                         .toList(),
-                dailySeries(period, queries.revenuePerSale(from, to, branchId)));
+                dailySeries(period, queries.revenuePerSale(from, to, branchId)),
+                dailyCategorySeries(period, queries.revenueByCategoryPerSale(from, to, branchId)));
     }
 
     public CourseBalanceReportResponse courseBalances(ReportPeriod period, String branchCode, Long patientId) {
@@ -231,6 +232,29 @@ public class ReportService {
         }
         return buckets.entrySet().stream()
                 .map(entry -> new RevenueReportResponse.DailyRevenue(entry.getKey(), money(entry.getValue())))
+                .toList();
+    }
+
+    private List<RevenueReportResponse.DailyCategoryRevenue> dailyCategorySeries(
+            ReportPeriod period, List<ReportRows.CategorySaleAmount> sales) {
+        Map<LocalDate, Map<SaleItemType, BigDecimal>> buckets = new LinkedHashMap<>();
+        for (LocalDate date = period.from(); !date.isAfter(period.to()); date = date.plusDays(1)) {
+            Map<SaleItemType, BigDecimal> byType = new LinkedHashMap<>();
+            for (SaleItemType type : SaleItemType.values()) {
+                byType.put(type, BigDecimal.ZERO);
+            }
+            buckets.put(date, byType);
+        }
+        for (ReportRows.CategorySaleAmount sale : sales) {
+            Map<SaleItemType, BigDecimal> byType = buckets.get(period.clinicDateOf(sale.soldAt()));
+            if (byType != null) {
+                byType.computeIfPresent(sale.type(), (key, running) -> running.add(sale.amount()));
+            }
+        }
+        return buckets.entrySet().stream()
+                .flatMap(entry -> entry.getValue().entrySet().stream().map(category ->
+                        new RevenueReportResponse.DailyCategoryRevenue(
+                                entry.getKey(), category.getKey(), money(category.getValue()))))
                 .toList();
     }
 
