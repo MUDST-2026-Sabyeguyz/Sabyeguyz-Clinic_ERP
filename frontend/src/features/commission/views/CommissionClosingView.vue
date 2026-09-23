@@ -517,4 +517,28 @@ td {
     width: 100%;
   }
 }
+@media (min-width: 1201px) {
+  .closing-panel {
+    display: grid;
+    grid-template-columns: 310px minmax(0, 1fr);
+    gap: 28px;
+    align-items: end;
+  }
+  .type-picker {
+    width: 100%;
+    margin: 0;
+  }
+  .closing-filters {
+    grid-template-columns: minmax(260px, 1.4fr) minmax(180px, 0.9fr) minmax(150px, 0.8fr) auto;
+    gap: 16px;
+    padding: 0;
+  }
+  .search-field {
+    grid-column: auto;
+  }
+  .error-message,
+  .table-scroll {
+    grid-column: 1 / -1;
+  }
+}
 </style>
