@@ -16,6 +16,9 @@ import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinic.staff.Staff;
@@ -124,6 +127,18 @@ public class CourseLedgerService {
         BigDecimal gross=purchase.getCommissionAllocationPerVisit(); BigDecimal fee=BigDecimal.ZERO;
         if(treating!=null && purchase.getCaseOwner()!=null && !treating.getId().equals(purchase.getCaseOwner().getId())) fee=treatmentFees.findCurrent(treating.getId(),now.atZone(java.time.ZoneId.of("Asia/Bangkok")).toLocalDate()).map(r->r.calculate(purchase)).orElse(BigDecimal.ZERO).min(gross);
         ledger.save(new CommissionAllocationLedger(purchase,gross,fee,gross.subtract(fee),purchase.getCaseOwner(),treating,now.atZone(java.time.ZoneId.of("Asia/Bangkok")).toLocalDate()));
+    }
+
+    /** รายการใช้สิทธิ์ทั้งหมดสำหรับหน้าธุรกรรม พร้อมข้อมูลการกลับรายการ */
+    @Transactional(readOnly = true)
+    public List<CourseUsageTransactionResponse> listUsageTransactions() {
+        List<CourseMovement> usages = movementRepository.findByTypeOrderByIdDesc(CourseMovementType.USAGE);
+        if (usages.isEmpty()) return List.of();
+        Map<Long, CourseMovement> reversals = movementRepository.findByReversesMovementIdIn(
+                usages.stream().map(CourseMovement::getId).toList()).stream().collect(Collectors.toMap(
+                movement -> movement.getReversesMovement().getId(), Function.identity()));
+        return usages.stream().map(usage -> CourseUsageTransactionResponse.from(
+                usage, reversals.get(usage.getId()))).toList();
     }
 
     /** กลับรายการการตัดสิทธิ์ที่บันทึกผิด — รายการเดิมยังอยู่ในประวัติเสมอ */
