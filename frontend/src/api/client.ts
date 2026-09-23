@@ -244,6 +244,8 @@ export type CourseBalanceReport = {
     purchased: number
     used: number
     remaining: number
+    purchasedAt: string
+    expiresAt: string
     expired: boolean
   }>
 }
