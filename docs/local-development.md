@@ -12,7 +12,7 @@ cd Sabyeguyz-Clinic_ERP
 ```text
 Sabyeguyz-Clinic_ERP/
 ├── backend/
-├── frontend/sabyeguyz/
+├── frontend/
 ├── deploy/docker-compose.yml
 └── docs/
 ```
@@ -52,7 +52,7 @@ mvn spring-boot:run
 เปิด Terminal ใหม่เพื่อรัน Frontend:
 
 ```bash
-cd frontend/sabyeguyz
+cd frontend
 npm ci
 npm run dev
 ```
@@ -64,7 +64,7 @@ Frontend ใช้ `http://localhost:5173` และเรียก Backend ท�
 ```bash
 cd backend
 mvn test
-cd ../frontend/sabyeguyz
+cd ../frontend
 npm run test:unit -- --run
 npm run build
 npm run test:e2e -- --project=chromium
