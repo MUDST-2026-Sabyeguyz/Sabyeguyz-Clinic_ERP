@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { authApi, ApiError } from '@/api/client'
+import { authApi, ApiError, clearSession } from '@/api/client'
 import logo from '@/assets/sabyeguyz-logo.png'
 const router = useRouter()
 const submitting = ref(false)
@@ -12,6 +12,8 @@ async function signIn() {
   submitting.value = true
   errorMessage.value = ''
   try {
+    // A new login must never reuse credentials from an earlier local backend.
+    clearSession()
     const result = await authApi.login(form.username, form.password)
     localStorage.setItem('authToken', result.token)
     localStorage.setItem('authUser', JSON.stringify(result))
@@ -49,7 +51,8 @@ async function signIn() {
             autocomplete="current-password"
             required
           /><a href="#">ลืมรหัสผ่าน</a></label
-        ><p class="role-note">ระบบจะใช้บทบาทจริงจากบัญชีผู้ใช้ที่ backend ส่งกลับ</p>
+        >
+        <p class="role-note">ระบบจะใช้บทบาทจริงจากบัญชีผู้ใช้ที่ backend ส่งกลับ</p>
         <button type="submit" :disabled="submitting || !form.username || !form.password">
           {{ submitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ' }}
         </button>
