@@ -192,11 +192,16 @@ public class SaleService {
         Map<Long, BigDecimal> paid = paymentRepository
                 .paidAmountsOf(sales.getContent().stream().map(Sale::getId).toList()).stream()
                 .collect(Collectors.toMap(SalePaidAmount::saleId, SalePaidAmount::amount));
+        Map<Long, String> descriptions = itemRepository
+                .findBySaleIdInOrderByIdAsc(sales.getContent().stream().map(Sale::getId).toList()).stream()
+                .collect(Collectors.toMap(item -> item.getSale().getId(), SaleItem::getDescription,
+                        (first, ignored) -> first));
 
         return new SaleSearchResponse(
                 sales.getContent().stream()
                         .map(sale -> SaleSummaryResponse.from(sale,
-                                paid.getOrDefault(sale.getId(), BigDecimal.ZERO)))
+                                paid.getOrDefault(sale.getId(), BigDecimal.ZERO),
+                                descriptions.getOrDefault(sale.getId(), "รายการขายบริการ / คอร์ส")))
                         .toList(),
                 sales.getNumber(), sales.getSize(), sales.getTotalElements(), sales.getTotalPages());
     }
