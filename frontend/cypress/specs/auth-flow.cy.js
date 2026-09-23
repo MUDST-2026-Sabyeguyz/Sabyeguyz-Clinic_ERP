@@ -5,9 +5,11 @@ describe('Authentication and Session Flow', () => {
     cy.request({
       method: 'POST',
       url: `${backendUrl}/api/auth/login`,
+      log: false,
+      failOnStatusCode: false,
       body: {
         username: 'admin',
-        password: 'Admin@123456',
+        password: Cypress.env('BOOTSTRAP_ADMIN_PASSWORD'),
       },
     }).then((res) => {
       expect(res.status).to.eq(200)

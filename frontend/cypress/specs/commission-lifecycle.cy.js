@@ -7,8 +7,11 @@ describe('Commission Schemes, Tiers & Closing Lifecycle', () => {
     cy.request({
       method: 'POST',
       url: `${backendUrl}/api/auth/login`,
-      body: { username: 'admin', password: 'Admin@123456' },
+      log: false,
+      failOnStatusCode: false,
+      body: { username: 'admin', password: Cypress.env('BOOTSTRAP_ADMIN_PASSWORD') },
     }).then((res) => {
+      expect(res.status).to.eq(200)
       token = res.body.token
     })
   })

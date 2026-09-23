@@ -14,6 +14,7 @@ class DatabaseV2BootstrapPostgresIntegrationTest {
 
     private JdbcTemplate jdbc;
     private DatabaseV2BootstrapRunner runner;
+    private String adminPassword;
 
     @BeforeEach
     void setUp() {
@@ -32,7 +33,10 @@ class DatabaseV2BootstrapPostgresIntegrationTest {
 
             jdbc = new JdbcTemplate(ds);
             jdbc.execute("select 1");
-            runner = new DatabaseV2BootstrapRunner(jdbc);
+            adminPassword = System.getenv("APP_BOOTSTRAP_ADMIN_PASSWORD");
+            Assumptions.assumeTrue(adminPassword != null && !adminPassword.isBlank(),
+                    "APP_BOOTSTRAP_ADMIN_PASSWORD is required for PostgreSQL bootstrap verification");
+            runner = new DatabaseV2BootstrapRunner(jdbc, "admin", adminPassword);
         } catch (Exception e) {
             Assumptions.abort("PostgreSQL not available on " + host + ":" + port + ": " + e.getMessage());
         }
@@ -47,7 +51,7 @@ class DatabaseV2BootstrapPostgresIntegrationTest {
         List<String> hashes = jdbc.queryForList("select password_hash from app_user where username = 'admin'", String.class);
         assertThat(hashes).isNotEmpty();
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-        assertThat(encoder.matches("Admin@123456", hashes.get(0))).isTrue();
+        assertThat(encoder.matches(adminPassword, hashes.get(0))).isTrue();
 
         // 2. Verify Roles
         List<String> roles = jdbc.queryForList("select role_name from role", String.class);
