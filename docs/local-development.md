@@ -13,7 +13,7 @@ cd Sabyeguyz-Clinic_ERP
 Sabyeguyz-Clinic_ERP/
 ├── backend/
 ├── frontend/
-├── deploy/docker-compose.yml
+├── compose.yaml
 └── docs/
 ```
 
@@ -21,30 +21,34 @@ Sabyeguyz-Clinic_ERP/
 
 ต้องเปิด Docker Desktop และใช้ Linux containers:
 
+คัดลอก `.env.example` เป็น `.env` แล้วตั้ง `POSTGRES_PASSWORD` และ `JWT_SECRET` ก่อนรัน:
+
 ```bash
-docker compose -f deploy/docker-compose.yml up --build -d
-docker compose -f deploy/docker-compose.yml ps
+docker compose up --build -d
+docker compose ps
 ```
 
 รอให้ `postgres` healthy และ Backend health เป็น `UP` ก่อนใช้งาน:
 
-- Frontend: http://localhost:5173
-- Patients: http://localhost:5173/patients
-- Appointments: http://localhost:5173/appointments
+- Frontend: http://localhost
+- Patients: http://localhost/patients
+- Appointments: http://localhost/appointments
 - Backend health: http://localhost:8080/actuator/health
 
 หยุดระบบโดยเก็บข้อมูลไว้:
 
 ```bash
-docker compose -f deploy/docker-compose.yml down
+docker compose down
 ```
 
 อย่าใช้ `down -v` หากต้องการเก็บฐานข้อมูลใน local volume
 
 ## วิธีพัฒนาแยกบริการ
 
+ก่อนรัน Backend แยก ให้ตั้ง `DATABASE_PASSWORD` ให้ตรงกับ `POSTGRES_PASSWORD` ใน `.env` และตั้ง `JWT_SECRET` ใน shell ที่ใช้รัน Maven
+
 ```bash
-docker compose -f deploy/docker-compose.yml up -d postgres
+docker compose up -d postgres
 cd backend
 mvn spring-boot:run
 ```
@@ -76,13 +80,13 @@ npm run test:e2e -- --project=chromium
 $env:FRONTEND_PORT = '15173'
 $env:BACKEND_PORT = '18080'
 $env:POSTGRES_PORT = '15432'
-docker compose -p clinic-check -f deploy/docker-compose.yml up --build -d
+docker compose -p clinic-check up --build -d
 ```
 
 ## Architecture
 
 ```text
-Browser :5173 → Frontend nginx :80 → backend:8080 → postgres:5432
+Browser :80 → Frontend nginx :80 → backend:8080 → postgres:5432
 ```
 
 nginx รองรับ Vue history fallback และส่ง `/api/` ไป Backend ใน Compose network
