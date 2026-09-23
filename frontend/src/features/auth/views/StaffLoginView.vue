@@ -28,8 +28,7 @@ async function signIn() {
 <template>
   <main class="login-page">
     <section class="login-brand">
-      <span class="plus one">+</span><span class="plus two">+</span
-      ><img :src="logo" alt="SaByeGuyz" />
+      <img :src="logo" alt="SaByeGuyz" />
       <h2>ฟื้นฟูการเคลื่อนไหว เพื่อคุณภาพชีวิตที่ดีขึ้น</h2>
     </section>
     <section class="login-content">
@@ -50,7 +49,7 @@ async function signIn() {
             type="password"
             autocomplete="current-password"
             required
-          /><a href="#">ลืมรหัสผ่าน</a></label
+          /></label
         >
         <p class="role-note">ระบบจะใช้บทบาทจริงจากบัญชีผู้ใช้ที่ backend ส่งกลับ</p>
         <button type="submit" :disabled="submitting || !form.username || !form.password">
