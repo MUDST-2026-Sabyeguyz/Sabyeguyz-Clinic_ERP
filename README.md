@@ -56,3 +56,7 @@ Database data remains in the Compose volume after `down`. See [deployment instru
 ## Development workflow
 
 Create `feat/<feature-name>` branches from `develop`, then open a pull request into `develop` after verification.
+
+### Frontend tests
+
+Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. The GitHub Actions workflow starts the backend and Vite server before running the same Cypress command in Chrome.
