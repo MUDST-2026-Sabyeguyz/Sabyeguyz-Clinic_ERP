@@ -304,7 +304,7 @@ public class ReportService {
         if (branchCode == null || branchCode.isBlank()) {
             return null;
         }
-        return branchRepository.findByCodeAndActiveTrue(branchCode.trim().toUpperCase())
+        return branchRepository.findByBranchCodeAndActiveTrue(branchCode.trim())
                 .map(Branch::getId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน " + branchCode));
     }
