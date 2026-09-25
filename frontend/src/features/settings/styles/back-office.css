@@ -322,7 +322,7 @@
 }
 .settings-modal {
   box-sizing: border-box;
-  width: min(450px, 100%);
+  width: min(470px, 100%);
   max-height: 100vh;
   overflow: auto;
   padding: 28px 30px 32px;
@@ -351,10 +351,10 @@
 }
 .settings-modal label {
   display: block;
-  margin: 14px 0;
+  margin: 18px 0;
   color: #405047;
   font-size: 0.9rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 .settings-modal input,
 .settings-modal select {
@@ -362,18 +362,66 @@
   box-sizing: border-box;
   width: 100%;
   margin-top: 7px;
-  padding: 11px 12px;
-  border: 1px solid #dce1db;
+  padding: 12px 14px;
+  border: 1px solid #ccdede;
   border-radius: 8px;
   outline: none;
   color: #35463c;
-  background: #fff;
+  background: #f3fafa;
   font: inherit;
+}
+.settings-modal input:disabled,
+.settings-modal select:disabled {
+  color: #6b776f;
+  background: #eef3f3;
+}
+.settings-modal .settings-visual-only:disabled {
+  background: #f3fafa;
+}
+.settings-form-divider {
+  margin: 24px 0 4px;
+  padding-top: 18px;
+  border-top: 1px solid #e5eeeb;
+  color: #5a7066;
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 .settings-modal input:focus,
 .settings-modal select:focus {
   border-color: #1e807c;
   box-shadow: 0 0 0 3px #1e807c1c;
+}
+.settings-permissions {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+}
+.settings-permissions legend {
+  margin-bottom: 10px;
+  color: #405047;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.settings-modal .settings-permissions label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 400;
+}
+.settings-modal .settings-permissions input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  accent-color: #1e807c;
+}
+.settings-modal .settings-permissions input:disabled {
+  opacity: 1;
+  cursor: not-allowed;
 }
 .commission-tier {
   margin: 18px 0;
