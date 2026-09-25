@@ -19,11 +19,9 @@
 
     <properties>
         <java.version>17</java.version>
-        <byte-buddy.version>1.17.8</byte-buddy.version>
     </properties>
 
     <dependencies>
-        <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-test</artifactId><scope>test</scope></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -67,28 +65,38 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>cypress-api</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <mainClass>com.sabyeguyz.clinic.cypress.CypressApiApplication</mainClass>
+                            <useTestClasspath>true</useTestClasspath>
+                            <classesDirectory>${project.build.testOutputDirectory}</classesDirectory>
+                            <additionalClasspathElements>
+                                <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
+                            </additionalClasspathElements>
+                            <jmxPort>19001</jmxPort>
+                            <wait>500</wait>
+                            <maxAttempts>120</maxAttempts>
+                            <arguments>
+                                <argument>--spring.profiles.active=cypress</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>
-            <!--
-                Mockito uses Byte Buddy to instrument Spring test beans. JDK 21+
-                restricts dynamic agent loading; enabling it keeps the test
-                runtime compatible when developers accidentally run with a newer
-                JDK, while the project source/target remains Java 17.
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
