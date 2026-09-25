@@ -28,7 +28,7 @@ public class SystemSetting {
     @Column(name = "setting_update_by")
     private Long settingUpdateBy;
 
-    protected SystemSetting() {}
+    public SystemSetting() {}
 
     public SystemSetting(String settingKey, Permission permission, String settingValue) {
         this.settingKey = settingKey;

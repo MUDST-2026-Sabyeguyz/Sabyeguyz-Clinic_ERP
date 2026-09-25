@@ -48,7 +48,7 @@ public class CommissionScheme {
     @Column(name = "scheme_update_by")
     private Long schemeUpdateBy;
 
-    protected CommissionScheme() {}
+    public CommissionScheme() {}
 
     public Long getId() { return id; }
     public String getSchemeName() { return schemeName; }

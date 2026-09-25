@@ -7,7 +7,7 @@ public class StaffGroupMemberId implements Serializable {
     private Long staffGroup;
     private Long staff;
 
-    protected StaffGroupMemberId() {}
+    public StaffGroupMemberId() {}
 
     public StaffGroupMemberId(Long staffGroup, Long staff) {
         this.staffGroup = staffGroup;

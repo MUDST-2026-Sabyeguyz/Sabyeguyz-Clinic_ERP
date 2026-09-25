@@ -7,7 +7,7 @@ public class UserRoleId implements Serializable {
     private Long user;
     private Long role;
 
-    protected UserRoleId() {}
+    public UserRoleId() {}
 
     public UserRoleId(Long user, Long role) {
         this.user = user;

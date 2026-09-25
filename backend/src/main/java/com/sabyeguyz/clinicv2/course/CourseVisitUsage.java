@@ -82,7 +82,7 @@ public class CourseVisitUsage {
     @Column(name = "usage_update_by")
     private Long usageUpdateBy;
 
-    protected CourseVisitUsage() {}
+    public CourseVisitUsage() {}
 
     public Long getId() { return id; }
     public PatientVisit getVisit() { return visit; }

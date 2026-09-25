@@ -47,7 +47,7 @@ public class TransactionCancellation {
     @Column(name = "reversal_reference_id")
     private Long reversalReferenceId;
 
-    protected TransactionCancellation() {}
+    public TransactionCancellation() {}
 
     public Long getId() { return id; }
     public Permission getPermission() { return permission; }

@@ -138,7 +138,7 @@ public class Course {
     @Column(name = "commission_outstanding", precision = 12, scale = 2, nullable = false)
     private BigDecimal commissionOutstanding = BigDecimal.ZERO;
 
-    protected Course() {}
+    public Course() {}
 
     public Long getId() { return id; }
     public String getCourseNo() { return courseNo; }
