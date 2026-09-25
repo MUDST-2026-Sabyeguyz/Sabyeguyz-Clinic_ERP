@@ -61,7 +61,7 @@ class CourseLedgerApiTest {
     void rejectsPurchaseWithoutPatientId() throws Exception {
         mockMvc.perform(post("/api/course-purchases")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"courseId\":%d,\"branchCode\":\"RP\"}".formatted(courseId)))
+                        .content("{\"courseId\":%d,\"branchCode\":\"01\"}".formatted(courseId)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.patientId").exists());
     }
@@ -70,7 +70,7 @@ class CourseLedgerApiTest {
     void returnsNotFoundForUnknownPatient() throws Exception {
         mockMvc.perform(post("/api/course-purchases")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"patientId\":999999,\"courseId\":%d,\"branchCode\":\"RP\"}".formatted(courseId)))
+                        .content("{\"patientId\":999999,\"courseId\":%d,\"branchCode\":\"01\"}".formatted(courseId)))
                 .andExpect(status().isNotFound());
     }
 
@@ -160,13 +160,13 @@ class CourseLedgerApiTest {
     }
 
     private String purchaseBody() {
-        return "{\"patientId\":%d,\"courseId\":%d,\"branchCode\":\"RP\"}".formatted(patientId, courseId);
+        return "{\"patientId\":%d,\"courseId\":%d,\"branchCode\":\"01\"}".formatted(patientId, courseId);
     }
 
     private Long registerPatient() {
         int unique = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "course-api-" + unique, "course-api-" + unique + "@example.com", "password123", "นาย",
+                "01", "course-api-" + unique, "course-api-" + unique + "@example.com", "password123", "นาย",
                 "ทดสอบ คอร์ส API", LocalDate.of(1990, 1, 1), "ชาย", "0800000012",
                 "NATIONAL_ID", "1100000007" + String.format("%03d", unique), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();

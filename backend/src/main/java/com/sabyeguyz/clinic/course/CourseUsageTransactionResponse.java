@@ -22,7 +22,7 @@ public record CourseUsageTransactionResponse(
                 purchase.getPatient().getFullName(),
                 purchase.getPatient().getHn(),
                 purchase.getCourseName(),
-                purchase.getBranch().getCode(),
+                purchase.getBranch().getBranchCode(),
                 usage.getCreatedAt(),
                 reversal == null ? null : reversal.getCreatedAt(),
                 reversal == null ? null : reversal.getReason());
