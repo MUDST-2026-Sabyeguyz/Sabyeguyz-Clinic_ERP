@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import {
   branchApi,
@@ -47,6 +47,7 @@ type SettingsState = {
   master: MasterData[]
 }
 type DisplayRow = { cells: string[]; status: string; index: number }
+const permissionLabels = ['Patient', 'Visit', 'Treatment', 'Course', 'Transaction', 'Commission']
 
 const sections: {
   key: Section
@@ -81,7 +82,6 @@ const sections: {
     label: 'การชำระเงิน',
     heading: 'การชำระเงิน',
     description: 'เลือกวิธีการชำระเงินที่เปิดให้บริการในระบบ',
-    action: '+ เพิ่มวิธีชำระเงิน',
   },
   {
     key: 'rooms',
@@ -133,7 +133,7 @@ const loadErrors = reactive<Record<Section, string>>({
 function createEmptyForm() {
   return {
     code: '',
-    numericCode: '',
+    branchDisplayCode: '',
     name: '',
     username: '',
     email: '',
@@ -144,7 +144,7 @@ function createEmptyForm() {
     branch: '',
     type: '',
     price: '',
-    sessions: '1',
+    sessions: '',
     durationMinutes: '30',
     bonusSessions: '0',
     validityDays: '365',
@@ -154,10 +154,75 @@ function createEmptyForm() {
     tiers: [{ minimum: '0', maximum: '', rate: '' }],
     category: '',
     resourceStatus: 'AVAILABLE',
+    active: true,
   }
 }
 
 const form = reactive(createEmptyForm())
+watch(
+  () => form.type,
+  (type) => {
+    if (type === 'service') form.sessions = '1'
+  },
+)
+const statusCannotReactivate = computed(
+  () =>
+    editingIndex.value !== null &&
+    !form.active &&
+    (section.value === 'branches' || section.value === 'services'),
+)
+
+function currentActive(index: number): boolean {
+  switch (section.value) {
+    case 'branches':
+      return data.branches[index]!.active
+    case 'users':
+      return data.users[index]!.active
+    case 'services':
+      return data.services[index]!.active
+    case 'rooms':
+      return data.rooms[index]!.active
+    case 'commission':
+      return data.commission[index]!.active
+    case 'master':
+      return data.master
+        .filter((item) => item.category === data.master[index]!.category)
+        .every((item) => item.active)
+    default:
+      return true
+  }
+}
+
+async function applyActiveStatus(id: number, active: boolean) {
+  switch (section.value) {
+    case 'branches':
+      if (!active) await branchApi.deactivate(id)
+      break
+    case 'users':
+      if (active) await userManagementApi.activate(id)
+      else await userManagementApi.deactivate(id)
+      break
+    case 'services': {
+      if (active) break
+      const item = data.services[editingIndex.value ?? -1]
+      if (form.type === 'course' || item?.kind === 'course') await courseApi.deactivate(id)
+      else await serviceManagementApi.deactivate(id)
+      break
+    }
+    case 'rooms':
+      if (active) await resourceApi.activate(id)
+      else await resourceApi.deactivate(id)
+      break
+    case 'commission':
+      if (active) await commissionApi.activateScheme(id)
+      else await commissionApi.deactivateScheme(id)
+      break
+    case 'master':
+      if (active) await masterDataApi.activate(id)
+      else await masterDataApi.deactivate(id)
+      break
+  }
+}
 
 async function loadSection(key: Section) {
   try {
@@ -219,17 +284,17 @@ const resourceStatusLabels: Record<string, string> = {
 const columns = computed(() => {
   switch (section.value) {
     case 'branches':
-      return ['รหัสสาขา', 'ชื่อสาขา', 'รหัสตัวเลข']
+      return ['รหัสสาขา', 'ชื่อสาขา', 'ข้อมูลติดต่อ']
     case 'users':
-      return ['ผู้ใช้งาน', 'บทบาท', 'สาขา', 'ชื่อเข้าระบบ']
+      return ['ผู้ใช้งาน', 'บทบาท', 'สาขา', 'สิทธิ์']
     case 'services':
-      return ['รายการ', 'ประเภท', 'ราคา', 'จำนวน/ระยะเวลา']
+      return ['รายการ', 'ประเภท', 'ราคา', 'จำนวน/ครั้ง']
     case 'rooms':
       return ['ห้อง/ทรัพยากร', 'สาขา', 'ประเภท']
     case 'commission':
-      return ['ชื่อกฎ', 'เวอร์ชัน', 'อัตราคอมมิชชั่น']
+      return ['ชื่อกฎ', 'ผู้ได้รับค่าคอมมิชชั่น', 'วิธีคำนวณ']
     case 'master':
-      return ['ประเภทข้อมูล', 'รหัส', 'ชื่อรายการ']
+      return ['ประเภทข้อมูล', 'จำนวนรายการ', 'ตัวอย่างรายการ']
     default:
       return []
   }
@@ -238,7 +303,7 @@ const rows = computed<DisplayRow[]>(() => {
   switch (section.value) {
     case 'branches':
       return data.branches.map((item, index) => ({
-        cells: [item.code, item.name, item.numericCode],
+        cells: [`${item.code}${item.numericCode}`, item.name, '—'],
         status: item.active ? 'ใช้งาน' : 'ปิดใช้งาน',
         index,
       }))
@@ -248,7 +313,7 @@ const rows = computed<DisplayRow[]>(() => {
           item.fullName,
           item.role === 'MANAGER' ? 'Manager' : 'Therapist',
           item.branchName ?? 'ทุกสาขา',
-          item.username,
+          'ตาม Role',
         ],
         status: item.active ? 'ใช้งาน' : 'ปิดใช้งาน',
         index,
@@ -257,16 +322,20 @@ const rows = computed<DisplayRow[]>(() => {
       return data.services.map((item, index) => ({
         cells: [
           item.name,
-          item.kind === 'course' ? 'Course' : 'Service',
+          item.kind === 'course'
+            ? 'Course'
+            : /assessment/i.test(item.name)
+              ? 'Assessment'
+              : 'Service',
           '฿' + item.price.toLocaleString('th-TH'),
-          item.kind === 'course' ? item.sessions + ' ครั้ง' : item.defaultDurationMinutes + ' นาที',
+          item.kind === 'course' ? item.sessions + ' ครั้ง' : '1 ครั้ง',
         ],
         status: item.active ? 'ใช้งาน' : 'ปิดใช้งาน',
         index,
       }))
     case 'rooms':
       return data.rooms.map((item, index) => ({
-        cells: [item.name, item.branchName, item.type === 'ROOM' ? 'ห้องรักษา' : 'ทรัพยากร'],
+        cells: [item.name, item.branchName, item.type === 'ROOM' ? 'Treatment Room' : 'Resource'],
         status: item.active ? (resourceStatusLabels[item.status] ?? item.status) : 'ปิดใช้งาน',
         index,
       }))
@@ -274,18 +343,26 @@ const rows = computed<DisplayRow[]>(() => {
       return data.commission.map((item, index) => ({
         cells: [
           item.name,
-          item.version,
+          '—',
           item.tiers.map((tier) => `${(tier.rate * 100).toLocaleString('th-TH')}%`).join(', '),
         ],
         status: item.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน',
         index,
       }))
     case 'master':
-      return data.master.map((item, index) => ({
-        cells: [item.category, item.code, item.name],
-        status: item.active ? 'ใช้งาน' : 'ปิดใช้งาน',
-        index,
-      }))
+      return [...new Set(data.master.map((item) => item.category))].map((category) => {
+        const items = data.master.filter((item) => item.category === category)
+        const names = items.flatMap((item) => item.name.split(',').map((part) => part.trim()))
+        return {
+          cells: [
+            category,
+            `${names.filter(Boolean).length} รายการ`,
+            names.filter(Boolean).join(', '),
+          ],
+          status: items.every((item) => item.active) ? 'ใช้งาน' : 'ปิดใช้งาน',
+          index: data.master.findIndex((item) => item.category === category),
+        }
+      })
     default:
       return []
   }
@@ -295,12 +372,10 @@ const drawerTitle = computed(() => {
   switch (section.value) {
     case 'branches':
       return adding ? 'เพิ่มสาขา' : 'แก้ไขสาขา'
-    case 'payments':
-      return 'เพิ่มวิธีชำระเงิน'
     case 'users':
-      return adding ? 'สร้างผู้ใช้' : 'แก้ไขผู้ใช้'
+      return adding ? 'สร้างผู้ใช้' : 'แก้ไข ผู้ใช้และสิทธิ์'
     case 'services':
-      return adding ? 'เพิ่มบริการ/คอร์ส' : 'แก้ไขบริการ/คอร์ส'
+      return `${adding ? 'เพิ่ม' : 'แก้ไข'}${form.type === 'service' ? 'บริการ' : 'คอร์ส'}`
     case 'rooms':
       return adding ? 'เพิ่มห้อง/ทรัพยากร' : 'แก้ไขห้อง/ทรัพยากร'
     case 'commission':
@@ -322,10 +397,14 @@ function openEditor(index: number | null = null) {
   Object.assign(form, createEmptyForm())
   if (section.value === 'rooms') form.type = 'ROOM'
   if (index !== null) {
+    form.active = currentActive(index)
     switch (section.value) {
       case 'branches': {
         const item = data.branches[index]!
-        Object.assign(form, { code: item.code, numericCode: item.numericCode, name: item.name })
+        Object.assign(form, {
+          branchDisplayCode: `${item.code}${item.numericCode}`,
+          name: item.name,
+        })
         break
       }
       case 'users': {
@@ -386,7 +465,13 @@ function openEditor(index: number | null = null) {
       }
       case 'master': {
         const item = data.master[index]!
-        Object.assign(form, { category: item.category, code: item.code, name: item.name })
+        Object.assign(form, {
+          category: item.category,
+          name: data.master
+            .filter((entry) => entry.category === item.category)
+            .map((entry) => entry.name)
+            .join(', '),
+        })
         break
       }
     }
@@ -399,20 +484,21 @@ async function save() {
   const name = form.name.trim()
   const current = editingIndex.value
   const code = form.code.trim().toUpperCase()
+  const previousActive = current === null ? true : currentActive(current)
+  let savedId: number | null = null
   saving.value = true
   try {
     switch (section.value) {
-      case 'payments': {
-        if (!code || !name) throw new Error('กรุณาระบุรหัสและชื่อวิธีชำระเงิน')
-        await paymentMethodApi.create({ code, name })
-        break
-      }
       case 'branches': {
-        if (!code || code.length > 2 || !/^\d{2}$/.test(form.numericCode) || !name)
-          throw new Error('กรุณาระบุรหัสสาขาไม่เกิน 2 ตัว รหัสตัวเลข 2 หลัก และชื่อสาขา')
-        const body = { code, numericCode: form.numericCode, name }
-        if (current === null) await branchApi.create(body)
-        else await branchApi.update(data.branches[current]!.id, body)
+        const match = /^([A-Z]{1,2})(\d{2})$/.exec(form.branchDisplayCode.trim().toUpperCase())
+        if (!match || !name) throw new Error('กรุณาระบุรหัสสาขา เช่น BR01 และชื่อสาขา')
+        if (current !== null && match[2] !== data.branches[current]!.numericCode)
+          throw new Error('ไม่สามารถเปลี่ยนตัวเลขท้ายรหัสสาขาได้ เพราะใช้ผูกกับ HN เดิม')
+        const body = { code: match[1]!, numericCode: match[2]!, name }
+        savedId =
+          current === null
+            ? (await branchApi.create(body)).id
+            : (await branchApi.update(data.branches[current]!.id, body)).id
         break
       }
       case 'users': {
@@ -432,8 +518,10 @@ async function save() {
           branchCode: form.branch || undefined,
           ...(form.password ? { password: form.password } : {}),
         }
-        if (current === null) await userManagementApi.create({ ...body, password: form.password })
-        else await userManagementApi.update(data.users[current]!.id, body)
+        savedId =
+          current === null
+            ? (await userManagementApi.create({ ...body, password: form.password })).id
+            : (await userManagementApi.update(data.users[current]!.id, body)).id
         break
       }
       case 'services': {
@@ -453,15 +541,17 @@ async function save() {
           )
             throw new Error('จำนวนครั้ง โบนัส และอายุคอร์สต้องเป็นจำนวนเต็มที่ถูกต้อง')
           const body = { code, name, price, sessions, bonusSessions, validityDays }
-          if (existing) await courseApi.update(existing.id, body)
-          else await courseApi.create(body)
+          savedId = existing
+            ? (await courseApi.update(existing.id, body)).id
+            : (await courseApi.create(body)).id
         } else if (form.type === 'service') {
           const defaultDurationMinutes = Number(form.durationMinutes)
           if (!Number.isInteger(defaultDurationMinutes) || defaultDurationMinutes < 1)
             throw new Error('กรุณาระบุระยะเวลาบริการเป็นจำนวนนาที')
           const body = { code, name, price, defaultDurationMinutes }
-          if (existing) await serviceManagementApi.update(existing.id, body)
-          else await serviceManagementApi.create(body)
+          savedId = existing
+            ? (await serviceManagementApi.update(existing.id, body)).id
+            : (await serviceManagementApi.create(body)).id
         } else throw new Error('กรุณาเลือกประเภทบริการหรือคอร์ส')
         break
       }
@@ -475,8 +565,10 @@ async function save() {
           type: form.type,
           status: form.resourceStatus,
         }
-        if (current === null) await resourceApi.create(body)
-        else await resourceApi.update(data.rooms[current]!.id, body)
+        savedId =
+          current === null
+            ? (await resourceApi.create(body)).id
+            : (await resourceApi.update(data.rooms[current]!.id, body)).id
         break
       }
       case 'commission': {
@@ -522,24 +614,62 @@ async function save() {
           effectiveTo: form.effectiveTo || null,
           tiers,
         }
-        if (current === null) await commissionApi.createScheme(body)
-        else await commissionApi.updateScheme(data.commission[current]!.id, body)
+        const saved =
+          current === null
+            ? await commissionApi.createScheme(body)
+            : await commissionApi.updateScheme(data.commission[current]!.id, body)
+        savedId = (saved as { id: number }).id
         break
       }
       case 'master': {
-        if (!form.category.trim() || !code || !name)
-          throw new Error('กรุณาระบุประเภท รหัส และชื่อรายการ')
-        const body = { category: form.category.trim(), code, name }
-        if (current === null) await masterDataApi.create(body)
-        else await masterDataApi.update(data.master[current]!.id, body)
+        const category = form.category.trim()
+        const names = form.name
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean)
+        if (!category || names.length === 0)
+          throw new Error('กรุณาระบุประเภทข้อมูลและตัวอย่างรายการ')
+        if (
+          current === null &&
+          data.master.some((item) => item.category === category.toUpperCase())
+        )
+          throw new Error('ประเภทข้อมูลนี้มีอยู่แล้ว กรุณาแก้ไขรายการเดิม')
+        if (new Set(names.map((item) => item.toLocaleLowerCase())).size !== names.length)
+          throw new Error('ตัวอย่างรายการต้องไม่ซ้ำกัน')
+        const originalCategory = current === null ? null : data.master[current]!.category
+        const existing =
+          originalCategory === null
+            ? []
+            : data.master.filter((item) => item.category === originalCategory)
+        if (names.length < existing.length)
+          throw new Error('ยังไม่สามารถลบรายการเดิมจากช่องนี้ได้ กรุณาคงจำนวนรายการเดิมไว้')
+        for (const [index, itemName] of names.entries()) {
+          const original = existing[index]
+          const item = original
+            ? await masterDataApi.update(original.id, {
+                category,
+                code: original.code,
+                name: itemName,
+              })
+            : await masterDataApi.create({
+                category,
+                code: `MD_${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`,
+                name: itemName,
+              })
+          if (item.active !== form.active) await applyActiveStatus(item.id, form.active)
+        }
         break
       }
       default:
         return
     }
+    if (savedId !== null && form.active !== previousActive) {
+      await applyActiveStatus(savedId, form.active)
+    }
     await loadSection(section.value)
     editorOpen.value = false
   } catch (error) {
+    if (section.value === 'master') await loadSection('master')
     formError.value = error instanceof Error ? error.message : 'บันทึกข้อมูลไม่สำเร็จ'
   } finally {
     saving.value = false
@@ -668,37 +798,20 @@ async function togglePayment(index: number) {
           <button type="button" aria-label="ปิด" @click="editorOpen = false">×</button>
         </header>
         <template v-if="section === 'branches'">
-          <label>รหัสสาขา<input v-model="form.code" maxlength="2" placeholder="เช่น BR" /></label>
+          <label
+            >รหัสสาขา<input v-model="form.branchDisplayCode" maxlength="4" placeholder="เช่น BR01"
+          /></label>
           <label>ชื่อสาขา<input v-model="form.name" placeholder="ระบุชื่อสาขา" /></label>
           <label
-            >รหัสตัวเลข 2 หลัก<input
-              v-model="form.numericCode"
-              inputmode="numeric"
-              maxlength="2"
-              :readonly="editingIndex !== null"
-              placeholder="เช่น 01"
+            >ข้อมูลติดต่อ<input
+              class="settings-visual-only"
+              placeholder="เบอร์โทรศัพท์สาขา"
+              title="ข้อมูลติดต่อยังไม่มีใน API สาขา"
+              disabled
           /></label>
         </template>
         <template v-else-if="section === 'users'">
           <label>ชื่อผู้ใช้งาน<input v-model="form.name" placeholder="ระบุชื่อผู้ใช้งาน" /></label>
-          <label>Username<input v-model="form.username" placeholder="ชื่อเข้าระบบ" /></label>
-          <label
-            >อีเมล<input v-model="form.email" type="email" placeholder="อีเมล (ถ้ามี)"
-          /></label>
-          <label
-            >รหัสพนักงาน<input v-model="form.employeeCode" placeholder="ระบุรหัสพนักงาน"
-          /></label>
-          <label
-            >เบอร์โทรศัพท์<input v-model="form.phone" placeholder="เบอร์โทรศัพท์ (ถ้ามี)"
-          /></label>
-          <label
-            >รหัสผ่าน<input
-              v-model="form.password"
-              type="password"
-              :placeholder="
-                editingIndex === null ? 'อย่างน้อย 8 ตัวอักษร' : 'เว้นว่างหากไม่เปลี่ยนรหัสผ่าน'
-              "
-          /></label>
           <label
             >Role<select v-model="form.role">
               <option value="">เลือกบทบาท</option>
@@ -718,30 +831,64 @@ async function togglePayment(index: number) {
               </option>
             </select></label
           >
-          <p class="settings-form-note">สิทธิ์การเข้าถึงกำหนดตาม Role ของผู้ใช้</p>
+          <fieldset class="settings-permissions" disabled>
+            <legend>สิทธิ์การเข้าถึง</legend>
+            <label v-for="permission in permissionLabels" :key="permission">
+              <input type="checkbox" />
+              <span>{{ permission }}</span>
+            </label>
+          </fieldset>
+          <div class="settings-form-divider">ข้อมูลบัญชีสำหรับระบบ</div>
+          <label>Username<input v-model="form.username" placeholder="ชื่อเข้าระบบ" /></label>
+          <label
+            >อีเมล<input v-model="form.email" type="email" placeholder="อีเมล (ถ้ามี)"
+          /></label>
+          <label
+            >รหัสพนักงาน<input v-model="form.employeeCode" placeholder="ระบุรหัสพนักงาน"
+          /></label>
+          <label
+            >เบอร์โทรศัพท์<input v-model="form.phone" placeholder="เบอร์โทรศัพท์ (ถ้ามี)"
+          /></label>
+          <label
+            >รหัสผ่าน<input
+              v-model="form.password"
+              type="password"
+              :placeholder="
+                editingIndex === null ? 'อย่างน้อย 8 ตัวอักษร' : 'เว้นว่างหากไม่เปลี่ยนรหัสผ่าน'
+              "
+          /></label>
         </template>
         <template v-else-if="section === 'services'">
           <label
-            >รหัสรายการ<input v-model="form.code" placeholder="ระบุรหัสบริการหรือคอร์ส"
-          /></label>
-          <label
-            >ชื่อรายการ<input v-model="form.name" placeholder="ระบุชื่อคอร์สหรือบริการ"
+            >{{ form.type === 'course' ? 'ชื่อคอร์ส' : 'ชื่อบริการ'
+            }}<input v-model="form.name" placeholder="ระบุชื่อคอร์สหรือบริการ"
           /></label>
           <label
             >ประเภท<select v-model="form.type" :disabled="editingIndex !== null">
               <option value="">เลือกประเภท</option>
-              <option value="service">บริการ</option>
-              <option value="course">คอร์ส</option>
+              <option value="service">Assessment / Service</option>
+              <option value="course">Course</option>
             </select></label
           >
           <label
             >ราคา (บาท)<input v-model="form.price" type="number" min="0" placeholder="ระบุราคา"
           /></label>
+          <label
+            >จำนวนครั้ง<input
+              v-model="form.sessions"
+              type="number"
+              min="1"
+              placeholder="ระบุจำนวนครั้ง"
+              :disabled="form.type === 'service'"
+          /></label>
+          <div class="settings-form-divider">ข้อมูลเพิ่มเติมสำหรับระบบ</div>
+          <label
+            >รหัสรายการ<input v-model="form.code" placeholder="ระบุรหัสบริการหรือคอร์ส"
+          /></label>
           <label v-if="form.type === 'service'"
             >ระยะเวลา (นาที)<input v-model="form.durationMinutes" type="number" min="1"
           /></label>
           <template v-if="form.type === 'course'">
-            <label>จำนวนครั้ง<input v-model="form.sessions" type="number" min="1" /></label>
             <label
               >จำนวนครั้งโบนัส<input v-model="form.bonusSessions" type="number" min="0"
             /></label>
@@ -750,16 +897,7 @@ async function togglePayment(index: number) {
             /></label>
           </template>
         </template>
-        <template v-else-if="section === 'payments'">
-          <label>รหัสวิธีชำระเงิน<input v-model="form.code" placeholder="เช่น CASH" /></label>
-          <label
-            >ชื่อวิธีชำระเงิน<input v-model="form.name" placeholder="ระบุชื่อวิธีชำระเงิน"
-          /></label>
-        </template>
         <template v-else-if="section === 'rooms'">
-          <label
-            >รหัสห้อง/ทรัพยากร<input v-model="form.code" placeholder="ระบุรหัสห้อง/ทรัพยากร"
-          /></label>
           <label
             >ชื่อห้อง/ทรัพยากร<input
               v-model="form.name"
@@ -779,20 +917,52 @@ async function togglePayment(index: number) {
           >
           <label
             >ประเภท<select v-model="form.type">
-              <option value="ROOM">ห้องรักษา</option>
-              <option value="EQUIPMENT">ทรัพยากร</option>
+              <option value="ROOM">Treatment Room</option>
+              <option value="EQUIPMENT">Resource</option>
             </select></label
           >
           <label
-            >สถานะ<select v-model="form.resourceStatus">
+            >ความจุ (คน)<input
+              class="settings-visual-only"
+              placeholder="ระบุจำนวนคนสูงสุด"
+              title="API ห้องยังไม่มีข้อมูลความจุ"
+              disabled
+          /></label>
+          <label
+            >สถานะห้อง/ทรัพยากร<select v-model="form.resourceStatus">
               <option value="AVAILABLE">พร้อมใช้งาน</option>
               <option value="IN_USE">กำลังใช้งาน</option>
               <option value="MAINTENANCE">ซ่อมบำรุง</option>
             </select></label
           >
+          <div class="settings-form-divider">ข้อมูลเพิ่มเติมสำหรับระบบ</div>
+          <label
+            >รหัสห้อง/ทรัพยากร<input v-model="form.code" placeholder="ระบุรหัสห้อง/ทรัพยากร"
+          /></label>
         </template>
         <template v-else-if="section === 'commission'">
           <label>ชื่อเกณฑ์คอมมิชชั่น<input v-model="form.name" placeholder="ระบุชื่อกฎ" /></label>
+          <label
+            >ผู้ได้รับค่าคอมมิชชั่น<input
+              class="settings-visual-only"
+              placeholder="เลือกผู้ได้รับ"
+              title="API เกณฑ์คอมมิชชั่นยังไม่มีช่องผู้ได้รับ"
+              disabled
+          /></label>
+          <label
+            >วิธีคำนวณ<input
+              class="settings-visual-only"
+              :value="
+                form.tiers
+                  .map((tier) => (tier.rate ? `${tier.rate}%` : ''))
+                  .filter(Boolean)
+                  .join(', ')
+              "
+              placeholder="เช่น 300 บาท/ครั้ง หรือ 5% ของยอดขาย"
+              title="API เกณฑ์คอมมิชชั่นใช้ช่วงอัตราแทนวิธีคำนวณในแบบ"
+              disabled
+          /></label>
+          <div class="settings-form-divider">ข้อมูลเพิ่มเติมสำหรับระบบ</div>
           <label>เวอร์ชัน<input v-model="form.version" placeholder="เช่น 1.0" /></label>
           <label>วันที่เริ่มใช้<input v-model="form.effectiveFrom" type="date" /></label>
           <label>วันที่สิ้นสุด (ถ้ามี)<input v-model="form.effectiveTo" type="date" /></label>
@@ -824,11 +994,34 @@ async function togglePayment(index: number) {
         </template>
         <template v-else-if="section === 'master'">
           <label
-            >ประเภทข้อมูล<input v-model="form.category" placeholder="เช่น CUSTOMER_GROUP"
+            >ประเภทข้อมูล<input
+              v-model="form.category"
+              list="settings-master-categories"
+              placeholder="เลือกหรือระบุประเภทข้อมูล"
           /></label>
-          <label>รหัส<input v-model="form.code" placeholder="ระบุรหัสรายการ" /></label>
-          <label>ชื่อรายการ<input v-model="form.name" placeholder="ระบุชื่อรายการ" /></label>
+          <datalist id="settings-master-categories">
+            <option
+              v-for="category in [...new Set(data.master.map((item) => item.category))]"
+              :key="category"
+              :value="category"
+            />
+          </datalist>
+          <label
+            >ตัวอย่างรายการ<input
+              v-model="form.name"
+              placeholder="ระบุรายการตัวอย่าง คั่นด้วยจุลภาค"
+          /></label>
         </template>
+        <label
+          >{{ section === 'rooms' ? 'การเปิดใช้งาน' : 'สถานะ' }}
+          <select v-model="form.active" :disabled="statusCannotReactivate">
+            <option :value="true">ใช้งาน</option>
+            <option :value="false">ปิดใช้งาน</option>
+          </select>
+        </label>
+        <p v-if="statusCannotReactivate" class="settings-form-note">
+          รายการนี้ปิดใช้งานแล้ว และ backend ยังไม่รองรับการเปิดใช้งานกลับ
+        </p>
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
         <footer>
           <button class="settings-primary" type="button" :disabled="saving" @click="save">
