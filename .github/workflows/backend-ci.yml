@@ -31,5 +31,32 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
 
-      - name: Test and package
-        run: mvn --batch-mode --no-transfer-progress verify
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install API test dependencies
+        run: npm ci
+
+      - name: Install Cypress binary
+        run: npx cypress install
+
+      - name: Package backend and run all Cypress tests
+        run: npm test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            backend/cypress/results/
+            backend/cypress/screenshots/
+          if-no-files-found: ignore
+
+      - name: Stop isolated API test server
+        if: always()
+        run: mvn --batch-mode --no-transfer-progress -Pcypress-api spring-boot:stop
