@@ -7,7 +7,7 @@ public class RolePermissionId implements Serializable {
     private Long role;
     private Long permission;
 
-    protected RolePermissionId() {}
+    public RolePermissionId() {}
 
     public RolePermissionId(Long role, Long permission) {
         this.role = role;

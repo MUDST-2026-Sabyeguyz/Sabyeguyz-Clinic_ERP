@@ -52,7 +52,7 @@ public class PaymentTransaction {
     @Column(name = "payment_update_by")
     private Long paymentUpdateBy;
 
-    protected PaymentTransaction() {}
+    public PaymentTransaction() {}
 
     public Long getId() { return id; }
     public Patient getPatient() { return patient; }

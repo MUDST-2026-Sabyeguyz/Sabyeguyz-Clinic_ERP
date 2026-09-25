@@ -38,7 +38,7 @@ public class Room {
     @Column(name = "room_update_by")
     private Long roomUpdateBy;
 
-    protected Room() {}
+    public Room() {}
 
     public Long getId() { return id; }
     public Branch getBranch() { return branch; }

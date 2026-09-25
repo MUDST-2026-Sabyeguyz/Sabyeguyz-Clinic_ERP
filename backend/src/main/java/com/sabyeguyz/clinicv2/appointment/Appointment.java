@@ -65,7 +65,7 @@ public class Appointment {
     @Column(name = "appointment_update_by")
     private Long appointmentUpdateBy;
 
-    protected Appointment() {}
+    public Appointment() {}
 
     public Long getId() { return id; }
     public Patient getPatient() { return patient; }
