@@ -200,18 +200,18 @@ class AppointmentLifecycleApiTest {
 
     private long bookTomorrowNineAm() {
         return bookingService.create(
-                new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, nineAmTomorrow, null)).id();
+                new AppointmentCreateRequest("01", patientId, therapistId, serviceId, nineAmTomorrow, null)).id();
     }
 
     private String body(OffsetDateTime startAt) {
         return """
-                {"branchCode":"RP","patientId":%d,"therapistId":%d,"serviceId":%d,"startAt":"%s","note":"นัดทดสอบ"}
+                {"branchCode":"01","patientId":%d,"therapistId":%d,"serviceId":%d,"startAt":"%s","note":"นัดทดสอบ"}
                 """.formatted(patientId, therapistId, serviceId, startAt);
     }
 
     private Long registerPatient() {
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "lifecycle-test", "lifecycle-test@example.com", "password123", "นาย",
+                "01", "lifecycle-test", "lifecycle-test@example.com", "password123", "นาย",
                 "ทดสอบ สถานะนัด", LocalDate.of(1990, 1, 1), "ชาย", "0800000004",
                 "NATIONAL_ID", "1100000000995", "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();
