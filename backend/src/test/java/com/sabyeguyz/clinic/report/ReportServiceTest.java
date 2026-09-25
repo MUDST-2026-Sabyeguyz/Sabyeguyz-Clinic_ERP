@@ -86,7 +86,7 @@ class ReportServiceTest {
     void totalRevenueEqualsTheSumOfTheCategoryBreakdown() {
         sellOn(DAY, patientId, null, List.of(courseLine(), assessmentLine(2)), "17400.00");
 
-        RevenueReportResponse report = service.revenue(PERIOD, "RP");
+        RevenueReportResponse report = service.revenue(PERIOD, "01");
 
         BigDecimal categorySum = report.byCategory().stream()
                 .map(RevenueReportResponse.CategoryRevenue::amount)
@@ -102,7 +102,7 @@ class ReportServiceTest {
         sellOn(DAY, patientId, null, List.of(courseLine()), "15000.00");
         sellOn(DAY, patientId, null, List.of(assessmentLine(1)), "1200.00");
 
-        DashboardResponse dashboard = service.dashboard(PERIOD, "RP");
+        DashboardResponse dashboard = service.dashboard(PERIOD, "01");
 
         assertThat(dashboard.courseRevenue()).isEqualByComparingTo("15000.00");
         assertThat(dashboard.assessmentRevenue()).isEqualByComparingTo("1200.00");
@@ -115,7 +115,7 @@ class ReportServiceTest {
         SaleResponse cancelled = sellOn(DAY, patientId, null, List.of(courseLine()), "15000.00");
         saleService.voidSale(cancelled.id(), new SaleVoidRequest("ลูกค้าขอยกเลิก"));
 
-        DashboardResponse dashboard = service.dashboard(PERIOD, "RP");
+        DashboardResponse dashboard = service.dashboard(PERIOD, "01");
 
         assertThat(dashboard.totalRevenue())
                 .as("ใบที่ยกเลิกแล้วต้องไม่ถูกนับเป็นรายได้ แม้ sales.total ยังอยู่ในตาราง")
@@ -128,7 +128,7 @@ class ReportServiceTest {
 
     @Test
     void reportsZeroRatherThanNullWhenThereIsNoActivity() {
-        DashboardResponse dashboard = service.dashboard(PERIOD, "RP");
+        DashboardResponse dashboard = service.dashboard(PERIOD, "01");
 
         assertThat(dashboard.totalRevenue()).isEqualByComparingTo("0.00");
         assertThat(dashboard.uniquePatients()).isZero();
@@ -140,7 +140,7 @@ class ReportServiceTest {
     void categorySharesAddUpToOne() {
         sellOn(DAY, patientId, null, List.of(courseLine(), assessmentLine(1)), "16200.00");
 
-        RevenueReportResponse report = service.revenue(PERIOD, "RP");
+        RevenueReportResponse report = service.revenue(PERIOD, "01");
 
         BigDecimal shareSum = report.byCategory().stream()
                 .map(RevenueReportResponse.CategoryRevenue::share)
@@ -155,7 +155,7 @@ class ReportServiceTest {
         ReportPeriod week = new ReportPeriod(DAY, DAY.plusDays(6));
         sellOn(DAY.plusDays(2), patientId, null, List.of(assessmentLine(1)), "1200.00");
 
-        RevenueReportResponse report = service.revenue(week, "RP");
+        RevenueReportResponse report = service.revenue(week, "01");
 
         assertThat(report.daily()).hasSize(7);
         assertThat(report.daily().get(0).amount()).isEqualByComparingTo("0.00");
@@ -168,7 +168,7 @@ class ReportServiceTest {
         SaleResponse sale = sellOn(DAY, patientId, null, List.of(assessmentLine(1)), "1200.00");
         moveSoldAt(sale.id(), DAY.atTime(0, 30).toInstant(ZoneOffset.ofHours(7)));
 
-        RevenueReportResponse report = service.revenue(PERIOD, "RP");
+        RevenueReportResponse report = service.revenue(PERIOD, "01");
 
         assertThat(report.daily()).singleElement()
                 .satisfies(day -> assertThat(day.date()).isEqualTo(DAY));
@@ -182,7 +182,7 @@ class ReportServiceTest {
         sellOn(DAY.minusDays(1), patientId, null, List.of(assessmentLine(1)), "1200.00");
         sellOn(DAY.plusDays(1), patientId, null, List.of(assessmentLine(1)), "1200.00");
 
-        assertThat(service.dashboard(PERIOD, "RP").totalRevenue()).isEqualByComparingTo("0.00");
+        assertThat(service.dashboard(PERIOD, "01").totalRevenue()).isEqualByComparingTo("0.00");
     }
 
     @Test
@@ -191,7 +191,7 @@ class ReportServiceTest {
         sellOn(DAY, patientId, null, List.of(assessmentLine(1)), "1200.00");
         sellOn(DAY.plusDays(6), patientId, null, List.of(assessmentLine(1)), "1200.00");
 
-        assertThat(service.dashboard(week, "RP").totalRevenue())
+        assertThat(service.dashboard(week, "01").totalRevenue())
                 .as("ทั้งวันแรกและวันสุดท้ายต้องนับรวม").isEqualByComparingTo("2400.00");
     }
 
@@ -220,29 +220,29 @@ class ReportServiceTest {
 
     @Test
     void filtersRevenueByBranch() {
-        Branch other = branchRepository.save(new Branch("CM", "02", "สาขาเชียงใหม่"));
-        Long otherPatient = registerPatientAt(other.getCode(), "หญิง");
+        Branch other = branchRepository.save(new Branch("02", "สาขาเชียงใหม่", "-", "-", null));
+        Long otherPatient = registerPatientAt(other.getBranchCode(), "หญิง");
         sellOn(DAY, patientId, null, List.of(assessmentLine(1)), "1200.00");
-        sellAtBranch(DAY, otherPatient, other.getCode(), List.of(assessmentLine(2)), "2400.00");
+        sellAtBranch(DAY, otherPatient, other.getBranchCode(), List.of(assessmentLine(2)), "2400.00");
 
-        assertThat(service.dashboard(PERIOD, "RP").totalRevenue()).isEqualByComparingTo("1200.00");
-        assertThat(service.dashboard(PERIOD, "CM").totalRevenue()).isEqualByComparingTo("2400.00");
+        assertThat(service.dashboard(PERIOD, "01").totalRevenue()).isEqualByComparingTo("1200.00");
+        assertThat(service.dashboard(PERIOD, "02").totalRevenue()).isEqualByComparingTo("2400.00");
         assertThat(service.dashboard(PERIOD, null).totalRevenue())
                 .as("ไม่ระบุสาขาต้องได้ทุกสาขารวมกัน").isEqualByComparingTo("3600.00");
     }
 
     @Test
     void breaksRevenueDownByBranch() {
-        Branch other = branchRepository.save(new Branch("CM", "02", "สาขาเชียงใหม่"));
-        Long otherPatient = registerPatientAt(other.getCode(), "หญิง");
+        Branch other = branchRepository.save(new Branch("02", "สาขาเชียงใหม่", "-", "-", null));
+        Long otherPatient = registerPatientAt(other.getBranchCode(), "หญิง");
         sellOn(DAY, patientId, null, List.of(assessmentLine(1)), "1200.00");
-        sellAtBranch(DAY, otherPatient, other.getCode(), List.of(assessmentLine(1)), "1200.00");
+        sellAtBranch(DAY, otherPatient, other.getBranchCode(), List.of(assessmentLine(1)), "1200.00");
 
         RevenueReportResponse report = service.revenue(PERIOD, null);
 
         assertThat(report.byBranch()).hasSize(2);
         assertThat(report.byBranch()).extracting(RevenueReportResponse.BranchRevenue::branchCode)
-                .containsExactly("CM", "RP");
+                .containsExactly("01", "02");
     }
 
     // ---------- ผู้ป่วยและ Visit ----------
@@ -256,7 +256,7 @@ class ReportServiceTest {
         noShow(other, 15);
         booked(other, 17);
 
-        DashboardResponse dashboard = service.dashboard(PERIOD, "RP");
+        DashboardResponse dashboard = service.dashboard(PERIOD, "01");
 
         assertThat(dashboard.visits()).as("นับเฉพาะนัดที่ผู้ป่วยมาถึงจริง").isEqualTo(3);
         assertThat(dashboard.uniquePatients()).as("ผู้ป่วยคนเดิมมาสองครั้งนับเป็นคนเดียว").isEqualTo(2);
@@ -269,7 +269,7 @@ class ReportServiceTest {
         attendedVisit(female, 11);
         attendedVisit(female, 13);
 
-        DashboardResponse dashboard = service.dashboard(PERIOD, "RP");
+        DashboardResponse dashboard = service.dashboard(PERIOD, "01");
 
         assertThat(dashboard.patientsByGender())
                 .extracting(DashboardResponse.GenderBreakdown::gender,
@@ -292,7 +292,7 @@ class ReportServiceTest {
         noShow(patientId, 13);
         booked(patientId, 15);
 
-        AppointmentReportResponse report = service.appointments(PERIOD, "RP");
+        AppointmentReportResponse report = service.appointments(PERIOD, "01");
 
         assertThat(report.appointments()).isEqualTo(4);
         assertThat(report.visits()).as("นับเฉพาะที่มาถึงจริง").isEqualTo(2);
@@ -315,7 +315,7 @@ class ReportServiceTest {
         booked(patientId, 17);
         booked(patientId, 19);
 
-        AppointmentReportResponse report = service.appointments(PERIOD, "RP");
+        AppointmentReportResponse report = service.appointments(PERIOD, "01");
 
         assertThat(report.noShowRate()).as("1 ใน 4 ที่ถึงกำหนด ไม่ใช่ 1 ใน 6")
                 .isEqualByComparingTo("0.2500");
@@ -325,7 +325,7 @@ class ReportServiceTest {
     void reportsZeroNoShowRateWhenNothingHasComeDue() {
         booked(patientId, 9);
 
-        assertThat(service.appointments(PERIOD, "RP").noShowRate()).isEqualByComparingTo("0.0000");
+        assertThat(service.appointments(PERIOD, "01").noShowRate()).isEqualByComparingTo("0.0000");
     }
 
     @Test
@@ -333,7 +333,7 @@ class ReportServiceTest {
         attendedVisit(patientId, 9);
         noShow(patientId, 11);
 
-        AppointmentReportResponse report = service.appointments(PERIOD, "RP");
+        AppointmentReportResponse report = service.appointments(PERIOD, "01");
 
         assertThat(report.byTherapist()).singleElement().satisfies(load -> {
             assertThat(load.appointments()).isEqualTo(2);
@@ -347,7 +347,7 @@ class ReportServiceTest {
         ReportPeriod week = new ReportPeriod(DAY, DAY.plusDays(3));
         attendedVisit(patientId, 9);
 
-        AppointmentReportResponse report = service.appointments(week, "RP");
+        AppointmentReportResponse report = service.appointments(week, "01");
 
         assertThat(report.daily()).hasSize(4);
         assertThat(report.daily().get(0).appointments()).isEqualTo(1);
@@ -366,7 +366,7 @@ class ReportServiceTest {
         sellOn(DAY, patientId, salesperson, List.of(assessmentLine(1)), "1200.00");
         sellOn(DAY, patientId, null, List.of(assessmentLine(2)), "2400.00");
 
-        StaffSalesReportResponse report = service.staffSales(PERIOD, "RP");
+        StaffSalesReportResponse report = service.staffSales(PERIOD, "01");
 
         assertThat(report.rows()).singleElement()
                 .satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("1200.00"));
@@ -383,7 +383,7 @@ class ReportServiceTest {
         sellOn(DAY, patientId, second, List.of(assessmentLine(1)), "1200.00");
         sellOn(DAY, patientId, null, List.of(assessmentLine(1)), "1200.00");
 
-        StaffSalesReportResponse report = service.staffSales(PERIOD, "RP");
+        StaffSalesReportResponse report = service.staffSales(PERIOD, "01");
 
         BigDecimal sum = report.rows().stream().map(StaffSalesReportResponse.Row::amount)
                 .reduce(report.unassigned().amount(), BigDecimal::add);
@@ -399,7 +399,7 @@ class ReportServiceTest {
         sellOn(DAY, patientId, small, List.of(assessmentLine(1)), "1200.00");
         sellOn(DAY, patientId, big, List.of(courseLine()), "15000.00");
 
-        StaffSalesReportResponse report = service.staffSales(PERIOD, "RP");
+        StaffSalesReportResponse report = service.staffSales(PERIOD, "01");
 
         assertThat(report.rows()).extracting(StaffSalesReportResponse.Row::staffId)
                 .containsExactly(big, small);
@@ -411,7 +411,7 @@ class ReportServiceTest {
         SaleResponse sale = sellOn(DAY, patientId, salesperson, List.of(courseLine()), "15000.00");
         saleService.voidSale(sale.id(), new SaleVoidRequest("ยกเลิก"));
 
-        StaffSalesReportResponse report = service.staffSales(PERIOD, "RP");
+        StaffSalesReportResponse report = service.staffSales(PERIOD, "01");
 
         assertThat(report.branchTotal()).isEqualByComparingTo("0.00");
         assertThat(report.rows()).isEmpty();
@@ -426,7 +426,7 @@ class ReportServiceTest {
         courseLedgerService.use(new CourseUsageRequest(purchaseId, null, null));
         courseLedgerService.use(new CourseUsageRequest(purchaseId, null, null));
 
-        CourseBalanceReportResponse report = service.courseBalances(PERIOD, "RP", null);
+        CourseBalanceReportResponse report = service.courseBalances(PERIOD, "01", null);
 
         assertThat(report.rows()).singleElement().satisfies(row -> {
             assertThat(row.purchased()).isEqualTo(13);
@@ -444,7 +444,7 @@ class ReportServiceTest {
         SaleResponse sale = sellOn(DAY, patientId, null, List.of(courseLine()), "15000.00");
         courseLedgerService.use(new CourseUsageRequest(sale.items().get(0).coursePurchaseId(), null, null));
 
-        CourseBalanceReportResponse.Row row = service.courseBalances(PERIOD, "RP", null).rows().get(0);
+        CourseBalanceReportResponse.Row row = service.courseBalances(PERIOD, "01", null).rows().get(0);
 
         assertThat(row.used() + row.remaining()).isEqualTo(row.purchased());
     }
@@ -455,7 +455,7 @@ class ReportServiceTest {
         courseLedgerService.use(new CourseUsageRequest(sale.items().get(0).coursePurchaseId(), null, null));
         courseLedgerService.cancel(sale.items().get(0).coursePurchaseId(), new CourseReasonRequest("ยกเลิก"));
 
-        CourseBalanceReportResponse report = service.courseBalances(PERIOD, "RP", null);
+        CourseBalanceReportResponse report = service.courseBalances(PERIOD, "01", null);
 
         assertThat(report.rows()).singleElement().satisfies(row -> {
             assertThat(row.used()).as("ครั้งที่ใช้ไปแล้วต้องยังอยู่").isEqualTo(1);
@@ -471,8 +471,8 @@ class ReportServiceTest {
         sellOn(DAY, patientId, null, List.of(courseLine()), "15000.00");
         sellOn(DAY, other, null, List.of(courseLine()), "15000.00");
 
-        assertThat(service.courseBalances(PERIOD, "RP", patientId).rows()).hasSize(1);
-        assertThat(service.courseBalances(PERIOD, "RP", null).rows()).hasSize(2);
+        assertThat(service.courseBalances(PERIOD, "01", patientId).rows()).hasSize(1);
+        assertThat(service.courseBalances(PERIOD, "01", null).rows()).hasSize(2);
     }
 
     // ---------- helpers ----------
@@ -487,7 +487,7 @@ class ReportServiceTest {
 
     private SaleResponse sellOn(LocalDate date, Long patient, Long salesperson,
                                 List<SaleRequest.Item> items, String amount) {
-        SaleResponse sale = saleService.create(new SaleRequest(patient, "RP", salesperson, null, items,
+        SaleResponse sale = saleService.create(new SaleRequest(patient, "01", salesperson, null, items,
                 List.of(new SaleRequest.Payment("CASH", new BigDecimal(amount)))));
         moveSoldAt(sale.id(), date.atTime(10, 0).toInstant(ZoneOffset.ofHours(7)));
         movePurchasedAt(sale, date);
@@ -546,11 +546,11 @@ class ReportServiceTest {
     }
 
     private Appointment newAppointment(Long patient, int hour) {
-        Branch branch = branchRepository.findByCodeAndActiveTrue("RP").orElseThrow();
+        Branch branch = branchRepository.findByBranchCodeAndActiveTrue("01").orElseThrow();
         // ใช้นักกายภาพที่ migration seed ไว้ Therapist ไม่มี constructor สาธารณะให้สร้างใหม่
         // ทุกนัดในเทสนี้อยู่คนละชั่วโมงกัน จึงไม่ชน EXCLUDE constraint ของ Postgres
         Therapist therapist = therapistRepository.findAll().stream()
-                .filter(candidate -> candidate.getBranch().getCode().equals("RP"))
+                .filter(candidate -> candidate.getBranch().getBranchCode().equals("01"))
                 .findFirst().orElseThrow();
         ServiceItem item = serviceRepository.findById(assessmentId).orElseThrow();
         Instant start = DAY.atTime(hour, 0).toInstant(ZoneOffset.ofHours(7));
@@ -565,7 +565,7 @@ class ReportServiceTest {
     }
 
     private Long registerPatient(String gender) {
-        return registerPatientAt("RP", gender);
+        return registerPatientAt("01", gender);
     }
 
     private Long registerPatientAt(String branchCode, String gender) {
