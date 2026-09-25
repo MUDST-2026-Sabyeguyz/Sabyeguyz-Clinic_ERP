@@ -108,12 +108,12 @@ function getTreatmentName(type: string): string {
 
 function getBranchName(branchCode?: string): string {
   if (branchCode) {
-    const found = branches.value.find((b) => b.code === branchCode || b.name === branchCode)
+    const found = branches.value.find((b) => b.branchCode === branchCode || b.name === branchCode)
     if (found) return found.name
     return branchCode
   }
   if (filters.branch !== 'ทุกสาขา') {
-    const found = branches.value.find((b) => b.code === filters.branch)
+    const found = branches.value.find((b) => b.branchCode === filters.branch)
     return found ? found.name : filters.branch
   }
   return 'ทุกสาขา'
@@ -506,8 +506,8 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                 <div class="select-wrapper">
                   <select v-model="filters.branch">
                     <option>ทุกสาขา</option>
-                    <option v-for="b in branches" :key="b.code" :value="b.code">
-                      {{ b.name }} ({{ b.code }})
+                    <option v-for="b in branches" :key="b.branchCode" :value="b.branchCode">
+                      {{ b.name }} ({{ b.branchCode }})
                     </option>
                   </select>
                   <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
@@ -558,8 +558,8 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                 <div class="select-wrapper">
                   <select v-model="filters.branch">
                     <option>ทุกสาขา</option>
-                    <option v-for="b in branches" :key="b.code" :value="b.code">
-                      {{ b.name }} ({{ b.code }})
+                    <option v-for="b in branches" :key="b.branchCode" :value="b.branchCode">
+                      {{ b.name }} ({{ b.branchCode }})
                     </option>
                   </select>
                   <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
@@ -596,8 +596,8 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
               <div class="select-wrapper">
                 <select v-model="filters.branch">
                   <option>ทุกสาขา</option>
-                  <option v-for="b in branches" :key="b.code" :value="b.code">
-                    {{ b.name }} ({{ b.code }})
+                  <option v-for="b in branches" :key="b.branchCode" :value="b.branchCode">
+                    {{ b.name }} ({{ b.branchCode }})
                   </option>
                 </select>
                 <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
