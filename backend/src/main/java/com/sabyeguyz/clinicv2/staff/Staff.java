@@ -61,7 +61,7 @@ public class Staff {
     @Column(name = "staff_update_by")
     private Long staffUpdateBy;
 
-    protected Staff() {}
+    public Staff() {}
 
     public Long getId() { return id; }
     public String getStaffCode() { return staffCode; }

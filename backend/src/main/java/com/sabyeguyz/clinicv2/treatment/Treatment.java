@@ -47,7 +47,7 @@ public class Treatment {
     @Column(name = "treatment_update_by")
     private Long treatmentUpdateBy;
 
-    protected Treatment() {}
+    public Treatment() {}
 
     public Long getId() { return id; }
     public PatientVisit getVisit() { return visit; }

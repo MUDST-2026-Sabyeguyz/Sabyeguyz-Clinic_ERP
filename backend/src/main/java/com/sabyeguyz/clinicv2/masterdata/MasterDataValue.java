@@ -36,7 +36,7 @@ public class MasterDataValue {
     @Column(name = "value_update_by")
     private Long valueUpdateBy;
 
-    protected MasterDataValue() {}
+    public MasterDataValue() {}
 
     public Long getId() { return id; }
     public MasterDataType getType() { return type; }

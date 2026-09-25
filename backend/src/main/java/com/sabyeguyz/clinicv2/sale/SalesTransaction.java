@@ -85,7 +85,7 @@ public class SalesTransaction {
     @Column(name = "transaction_update_by")
     private Long transactionUpdateBy;
 
-    protected SalesTransaction() {}
+    public SalesTransaction() {}
 
     public Long getId() { return id; }
     public PatientVisit getVisit() { return visit; }

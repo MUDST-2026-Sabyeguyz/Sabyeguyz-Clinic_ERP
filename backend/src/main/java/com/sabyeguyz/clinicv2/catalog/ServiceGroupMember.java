@@ -16,7 +16,7 @@ public class ServiceGroupMember {
     @JoinColumn(name = "service_id")
     private Service service;
 
-    protected ServiceGroupMember() {}
+    public ServiceGroupMember() {}
 
     public ServiceGroupMember(ServiceGroup serviceGroup, Service service) {
         this.serviceGroup = serviceGroup;

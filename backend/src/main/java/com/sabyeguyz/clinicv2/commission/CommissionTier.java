@@ -56,7 +56,7 @@ public class CommissionTier {
     @Column(name = "tier_update_by")
     private Long tierUpdateBy;
 
-    protected CommissionTier() {}
+    public CommissionTier() {}
 
     public Long getId() { return id; }
     public CommissionScheme getCommissionScheme() { return commissionScheme; }
