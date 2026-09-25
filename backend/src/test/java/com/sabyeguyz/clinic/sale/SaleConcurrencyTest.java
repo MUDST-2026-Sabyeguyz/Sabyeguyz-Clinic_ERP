@@ -71,8 +71,8 @@ class SaleConcurrencyTest {
             execute("DELETE FROM sales WHERE patient_id IN (" + ownedPatients + ")");
             execute("DELETE FROM course_purchases WHERE patient_id IN (" + ownedPatients + ")");
             execute("DELETE FROM patients WHERE username LIKE '" + USERNAME_PREFIX + "%'");
-            execute("DELETE FROM hn_counters WHERE branch_id = (SELECT id FROM branches WHERE code = 'RP')");
-            execute("DELETE FROM receipt_counters WHERE branch_id = (SELECT id FROM branches WHERE code = 'RP')");
+            execute("DELETE FROM hn_counters WHERE branch_id = (SELECT branch_id FROM branch WHERE branch_code = '01')");
+            execute("DELETE FROM receipt_counters WHERE branch_id = (SELECT branch_id FROM branch WHERE branch_code = '01')");
         });
     }
 
@@ -110,7 +110,7 @@ class SaleConcurrencyTest {
     }
 
     private SaleRequest courseSale() {
-        return new SaleRequest(patientId, "RP", null, null,
+        return new SaleRequest(patientId, "01", null, null,
                 List.of(new SaleRequest.Item(SaleItemType.COURSE, courseId, 1)),
                 List.of(new SaleRequest.Payment("CASH", new BigDecimal("5000.00"))));
     }
@@ -152,7 +152,7 @@ class SaleConcurrencyTest {
     private Long registerPatient() {
         int unique = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", USERNAME_PREFIX + unique, USERNAME_PREFIX + unique + "@example.com", "password123", "นาย",
+                "01", USERNAME_PREFIX + unique, USERNAME_PREFIX + unique + "@example.com", "password123", "นาย",
                 "ทดสอบ ใบเสร็จพร้อมกัน", LocalDate.of(1990, 1, 1), "ชาย", "0800000016",
                 "NATIONAL_ID", "1100000004" + String.format("%03d", unique), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();
