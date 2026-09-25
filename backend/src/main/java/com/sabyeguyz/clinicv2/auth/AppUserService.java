@@ -1,0 +1,115 @@
+package com.sabyeguyz.clinicv2.auth;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.branch.BranchRepository;
+import com.sabyeguyz.clinicv2.role.Role;
+import com.sabyeguyz.clinicv2.role.RoleRepository;
+import com.sabyeguyz.clinicv2.staff.Staff;
+import java.time.Instant;
+import java.util.Optional;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AppUserService {
+    private final AppUserRepository users;
+    private final RoleRepository roles;
+    private final UserRoleRepository userRoles;
+    private final BranchRepository branches;
+    private final UserBranchAccessRepository userBranchAccess;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    public AppUserService(AppUserRepository users, RoleRepository roles, UserRoleRepository userRoles,
+                           BranchRepository branches, UserBranchAccessRepository userBranchAccess) {
+        this.users = users;
+        this.roles = roles;
+        this.userRoles = userRoles;
+        this.branches = branches;
+        this.userBranchAccess = userBranchAccess;
+    }
+
+    @Transactional
+    public AppUser register(String username, String rawPassword, Staff staff, Long actorId) {
+        String normalized = requireText(username, "username");
+        if (users.findByUsername(normalized).isPresent()) {
+            throw new IllegalArgumentException("ชื่อผู้ใช้นี้มีอยู่แล้ว");
+        }
+        if (rawPassword == null || rawPassword.length() < 8) {
+            throw new IllegalArgumentException("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+        }
+        AppUser user = new AppUser();
+        user.setUsername(normalized);
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setStaff(staff);
+        user.setUserStatus(true);
+        user.setUserCreateAt(Instant.now());
+        user.setUserCreateBy(actorId);
+        return users.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public AppUser login(String username, String rawPassword) {
+        AppUser user = users.findByUsername(requireText(username, "username"))
+                .orElseThrow(() -> new IllegalArgumentException("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"));
+        if (!user.isUserStatus() || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+            throw new IllegalArgumentException("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+        }
+        return user;
+    }
+
+    @Transactional
+    public void recordLogin(Long userId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        user.setLastLoginAt(Instant.now());
+        users.save(user);
+    }
+
+    /** Idempotent: assigning a Role the user already has is a no-op. */
+    @Transactional
+    public void assignRole(Long userId, Long roleId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        Role role = roles.findById(roleId).orElseThrow(() -> new IllegalArgumentException("ไม่พบบทบาท"));
+        UserRoleId id = new UserRoleId(userId, roleId);
+        Optional<UserRole> existing = userRoles.findById(id);
+        if (existing.isEmpty()) {
+            userRoles.save(new UserRole(user, role));
+        }
+    }
+
+    @Transactional
+    public void revokeRole(Long userId, Long roleId) {
+        userRoles.deleteById(new UserRoleId(userId, roleId));
+    }
+
+    /** Idempotent: granting Branch access the user already has is a no-op. */
+    @Transactional
+    public void grantBranchAccess(Long userId, Long branchId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        Branch branch = branches.findById(branchId).orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา"));
+        UserBranchAccessId id = new UserBranchAccessId(userId, branchId);
+        Optional<UserBranchAccess> existing = userBranchAccess.findById(id);
+        if (existing.isEmpty()) {
+            userBranchAccess.save(new UserBranchAccess(user, branch));
+        }
+    }
+
+    @Transactional
+    public void revokeBranchAccess(Long userId, Long branchId) {
+        userBranchAccess.deleteById(new UserBranchAccessId(userId, branchId));
+    }
+
+    @Transactional
+    public AppUser deactivate(Long userId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        user.setUserStatus(false);
+        return users.save(user);
+    }
+
+    private static String requireText(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " ห้ามว่าง");
+        }
+        return value.trim();
+    }
+}

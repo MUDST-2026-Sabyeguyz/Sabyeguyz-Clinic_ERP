@@ -60,7 +60,7 @@ public class CourseLedger {
     @Column(name = "ledger_update_by")
     private Long ledgerUpdateBy;
 
-    protected CourseLedger() {}
+    public CourseLedger() {}
 
     public Long getId() { return id; }
     public Course getCourse() { return course; }

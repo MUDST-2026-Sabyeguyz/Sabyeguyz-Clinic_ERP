@@ -7,7 +7,7 @@ public class UserBranchAccessId implements Serializable {
     private Long user;
     private Long branch;
 
-    protected UserBranchAccessId() {}
+    public UserBranchAccessId() {}
 
     public UserBranchAccessId(Long user, Long branch) {
         this.user = user;

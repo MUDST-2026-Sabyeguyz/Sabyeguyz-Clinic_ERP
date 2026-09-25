@@ -47,7 +47,7 @@ public class CourseTransfer {
     @Column(name = "transfer_update_by")
     private Long transferUpdateBy;
 
-    protected CourseTransfer() {}
+    public CourseTransfer() {}
 
     public Long getId() { return id; }
     public Course getCourse() { return course; }

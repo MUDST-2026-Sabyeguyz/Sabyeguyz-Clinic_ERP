@@ -27,7 +27,7 @@ public class MasterDataType {
     @Column(name = "type_update_by")
     private Long typeUpdateBy;
 
-    protected MasterDataType() {}
+    public MasterDataType() {}
 
     public Long getId() { return id; }
     public String getTypeName() { return typeName; }

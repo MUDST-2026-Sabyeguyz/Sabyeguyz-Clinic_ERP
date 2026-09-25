@@ -26,7 +26,7 @@ public class Role {
     @Column(name = "role_update_by")
     private Long roleUpdateBy;
 
-    protected Role() {}
+    public Role() {}
 
     public Long getId() { return id; }
     public String getRoleName() { return roleName; }

@@ -29,7 +29,7 @@ public class Permission {
     @Column(name = "permission_update_by")
     private Long permissionUpdateBy;
 
-    protected Permission() {}
+    public Permission() {}
 
     public Long getId() { return id; }
     public String getPermissionName() { return permissionName; }

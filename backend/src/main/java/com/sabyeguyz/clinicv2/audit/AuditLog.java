@@ -37,7 +37,7 @@ public class AuditLog {
     @Column(name = "changed_at", nullable = false)
     private Instant changedAt;
 
-    protected AuditLog() {}
+    public AuditLog() {}
 
     public Long getId() { return id; }
     public String getTableName() { return tableName; }

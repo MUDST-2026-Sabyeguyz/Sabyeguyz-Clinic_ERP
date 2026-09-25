@@ -29,7 +29,7 @@ public class CourseSharedMember {
     @Column(name = "member_status", nullable = false)
     private boolean memberStatus = true;
 
-    protected CourseSharedMember() {}
+    public CourseSharedMember() {}
 
     public CourseSharedMember(Course course, Patient patient, CourseMemberRole memberRole) {
         this.course = course;

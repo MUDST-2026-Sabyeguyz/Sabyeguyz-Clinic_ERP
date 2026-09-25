@@ -7,7 +7,7 @@ public class ServiceGroupMemberId implements Serializable {
     private Long serviceGroup;
     private Long service;
 
-    protected ServiceGroupMemberId() {}
+    public ServiceGroupMemberId() {}
 
     public ServiceGroupMemberId(Long serviceGroup, Long service) {
         this.serviceGroup = serviceGroup;
