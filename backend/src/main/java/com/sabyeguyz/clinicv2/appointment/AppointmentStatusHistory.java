@@ -37,7 +37,7 @@ public class AppointmentStatusHistory {
     @Column(length = 255)
     private String reason;
 
-    protected AppointmentStatusHistory() {}
+    public AppointmentStatusHistory() {}
 
     public Long getId() { return id; }
     public Appointment getAppointment() { return appointment; }

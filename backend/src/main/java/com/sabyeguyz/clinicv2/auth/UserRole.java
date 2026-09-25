@@ -17,7 +17,7 @@ public class UserRole {
     @JoinColumn(name = "role_id")
     private Role role;
 
-    protected UserRole() {}
+    public UserRole() {}
 
     public UserRole(AppUser user, Role role) {
         this.user = user;

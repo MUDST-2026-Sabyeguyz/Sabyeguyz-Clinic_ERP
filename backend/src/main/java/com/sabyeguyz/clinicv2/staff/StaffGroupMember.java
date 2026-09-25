@@ -16,7 +16,7 @@ public class StaffGroupMember {
     @JoinColumn(name = "staff_id")
     private Staff staff;
 
-    protected StaffGroupMember() {}
+    public StaffGroupMember() {}
 
     public StaffGroupMember(StaffGroup staffGroup, Staff staff) {
         this.staffGroup = staffGroup;

@@ -16,7 +16,7 @@ public class RolePermission {
     @JoinColumn(name = "permission_id")
     private Permission permission;
 
-    protected RolePermission() {}
+    public RolePermission() {}
 
     public RolePermission(Role role, Permission permission) {
         this.role = role;

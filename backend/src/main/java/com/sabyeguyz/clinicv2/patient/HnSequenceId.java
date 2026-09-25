@@ -7,7 +7,7 @@ public class HnSequenceId implements Serializable {
     private Long branch;
     private String yearMonth;
 
-    protected HnSequenceId() {}
+    public HnSequenceId() {}
 
     public HnSequenceId(Long branch, String yearMonth) {
         this.branch = branch;

@@ -40,7 +40,7 @@ public class AppUser {
     @Column(name = "user_update_by")
     private Long userUpdateBy;
 
-    protected AppUser() {}
+    public AppUser() {}
 
     public Long getId() { return id; }
     public String getUsername() { return username; }
