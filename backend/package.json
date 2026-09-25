@@ -1,0 +1,18 @@
+{
+  "name": "clinic-erp-backend-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cypress HTTP API tests for the Spring Boot backend",
+  "scripts": {
+    "test": "npm run build && npm run test:api",
+    "build": "mvn --batch-mode --no-transfer-progress clean package",
+    "test:api": "node scripts/run-api-tests.cjs",
+    "test:api:open": "node scripts/run-api-tests.cjs --open"
+  },
+  "devDependencies": {
+    "cypress": "16.1.0"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.12.0"
+  }
+}
