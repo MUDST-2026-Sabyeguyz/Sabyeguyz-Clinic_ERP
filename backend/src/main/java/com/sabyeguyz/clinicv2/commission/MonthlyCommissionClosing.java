@@ -53,7 +53,7 @@ public class MonthlyCommissionClosing {
     @Column(name = "closed_by")
     private Long closedBy;
 
-    protected MonthlyCommissionClosing() {}
+    public MonthlyCommissionClosing() {}
 
     public Long getId() { return id; }
     public String getClosingMonth() { return closingMonth; }

@@ -7,7 +7,7 @@ public class CourseSharedMemberId implements Serializable {
     private Long course;
     private Long patient;
 
-    protected CourseSharedMemberId() {}
+    public CourseSharedMemberId() {}
 
     public CourseSharedMemberId(Long course, Long patient) {
         this.course = course;

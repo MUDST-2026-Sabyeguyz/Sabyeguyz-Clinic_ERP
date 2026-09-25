@@ -26,7 +26,7 @@ public class StaffGroup {
     @Column(name = "staff_group_update_by")
     private Long staffGroupUpdateBy;
 
-    protected StaffGroup() {}
+    public StaffGroup() {}
 
     public Long getId() { return id; }
     public String getGroupName() { return groupName; }

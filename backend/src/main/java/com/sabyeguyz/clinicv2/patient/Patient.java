@@ -103,7 +103,7 @@ public class Patient {
     @JoinColumn(name = "insurance_company_value_id")
     private MasterDataValue insuranceCompany;
 
-    protected Patient() {}
+    public Patient() {}
 
     public Long getId() { return id; }
     public String getPatientHn() { return patientHn; }

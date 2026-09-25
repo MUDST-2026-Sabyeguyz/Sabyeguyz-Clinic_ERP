@@ -30,7 +30,7 @@ public class PaymentMethod {
     @Column(name = "payment_method_update_by")
     private Long paymentMethodUpdateBy;
 
-    protected PaymentMethod() {}
+    public PaymentMethod() {}
 
     public Long getId() { return id; }
     public String getMethodName() { return methodName; }

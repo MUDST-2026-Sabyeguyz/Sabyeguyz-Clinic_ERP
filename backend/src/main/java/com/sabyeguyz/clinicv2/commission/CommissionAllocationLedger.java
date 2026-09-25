@@ -95,7 +95,7 @@ public class CommissionAllocationLedger {
     @Column(name = "allocation_update_by")
     private Long allocationUpdateBy;
 
-    protected CommissionAllocationLedger() {}
+    public CommissionAllocationLedger() {}
 
     public Long getId() { return id; }
     public CourseVisitUsage getVisitUsage() { return visitUsage; }

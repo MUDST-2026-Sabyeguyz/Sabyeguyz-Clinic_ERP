@@ -54,7 +54,7 @@ public class Service {
     @Column(name = "default_validity_days")
     private Integer defaultValidityDays;
 
-    protected Service() {}
+    public Service() {}
 
     public Long getId() { return id; }
     public ServiceType getServiceType() { return serviceType; }

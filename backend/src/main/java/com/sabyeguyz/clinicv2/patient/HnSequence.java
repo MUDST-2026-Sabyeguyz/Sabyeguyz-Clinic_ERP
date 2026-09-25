@@ -27,7 +27,7 @@ public class HnSequence {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    protected HnSequence() {}
+    public HnSequence() {}
 
     public HnSequence(Branch branch, String yearMonth, int lastRunningNo, Instant lastRunningAt, Instant createdAt) {
         this.branch = branch;

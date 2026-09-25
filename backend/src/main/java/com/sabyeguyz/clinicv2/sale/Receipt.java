@@ -41,7 +41,7 @@ public class Receipt {
     @Column(name = "receipt_update_by")
     private Long receiptUpdateBy;
 
-    protected Receipt() {}
+    public Receipt() {}
 
     public Long getId() { return id; }
     public String getReceiptNo() { return receiptNo; }

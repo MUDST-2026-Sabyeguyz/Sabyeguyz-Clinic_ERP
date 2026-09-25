@@ -27,7 +27,7 @@ public class ServiceGroup {
     @Column(name = "service_group_update_by")
     private Long serviceGroupUpdateBy;
 
-    protected ServiceGroup() {}
+    public ServiceGroup() {}
 
     public Long getId() { return id; }
     public String getGroupName() { return groupName; }
