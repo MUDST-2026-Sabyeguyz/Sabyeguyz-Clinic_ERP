@@ -17,9 +17,9 @@ class PatientRegistrationServiceTest {
 
     @Test
     void persistsPatientAndGeneratesBranchHn() {
-        entityManager.createNativeQuery("UPDATE branches SET numeric_code = '07' WHERE code = 'RP'").executeUpdate();
+        entityManager.createNativeQuery("UPDATE branch SET branch_code = '07' WHERE branch_code = '01'").executeUpdate();
         PatientResponse response = registrationService.register(new PatientRegistrationRequest(
-                "RP", "prototype", "prototype@example.com", "password123", "นาย", "ผู้ป่วย ทดสอบ",
+                "07", "prototype", "prototype@example.com", "password123", "นาย", "ผู้ป่วย ทดสอบ",
                 LocalDate.of(1990, 1, 1), "ชาย", "0812345678", "NATIONAL_ID", "1100000000001",
                 "กรุงเทพฯ", false, false, "", "ผู้ติดต่อ ทดสอบ", "ญาติ", "0899999999", true));
 
@@ -29,7 +29,7 @@ class PatientRegistrationServiceTest {
 
     @Test
     void incrementsRunningNumberForSameBranchAndMonth() {
-        entityManager.createNativeQuery("UPDATE branches SET numeric_code = '07' WHERE code = 'RP'").executeUpdate();
+        entityManager.createNativeQuery("UPDATE branch SET branch_code = '07' WHERE branch_code = '01'").executeUpdate();
         PatientRegistrationRequest first = request("running-one", "running-one@example.com", "1100000000002");
         PatientRegistrationRequest second = request("running-two", "running-two@example.com", "1100000000003");
 
@@ -42,7 +42,7 @@ class PatientRegistrationServiceTest {
     }
 
     private PatientRegistrationRequest request(String username, String email, String identityNumber) {
-        return new PatientRegistrationRequest("RP", username, email, "password123", "นาย", "ผู้ป่วย " + username,
+        return new PatientRegistrationRequest("07", username, email, "password123", "นาย", "ผู้ป่วย " + username,
                 LocalDate.of(1990, 1, 1), "ชาย", "0812345678", "NATIONAL_ID", identityNumber,
                 "กรุงเทพฯ", false, false, "", "ผู้ติดต่อ", "ญาติ", "0899999999", true);
     }

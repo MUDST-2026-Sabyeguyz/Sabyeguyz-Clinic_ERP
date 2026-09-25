@@ -70,7 +70,7 @@ class SaleApiTest {
         mockMvc.perform(post("/api/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"patientId":%d,"branchCode":"RP","items":[],
+                                {"patientId":%d,"branchCode":"01","items":[],
                                  "payments":[{"paymentMethodCode":"CASH","amount":100}]}
                                 """.formatted(patientId)))
                 .andExpect(status().isBadRequest())
@@ -91,7 +91,7 @@ class SaleApiTest {
         mockMvc.perform(post("/api/payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"patientId":999999,"branchCode":"RP",
+                                {"patientId":999999,"branchCode":"01",
                                  "items":[{"type":"COURSE","referenceId":%d,"quantity":1}],
                                  "payments":[{"paymentMethodCode":"CASH","amount":9000.00}]}
                                 """.formatted(courseId)))
@@ -203,7 +203,7 @@ class SaleApiTest {
 
     private String courseSaleBody(String amount) {
         return """
-                {"patientId":%d,"branchCode":"RP",
+                {"patientId":%d,"branchCode":"01",
                  "items":[{"type":"COURSE","referenceId":%d,"quantity":1}],
                  "payments":[{"paymentMethodCode":"CASH","amount":%s}]}
                 """.formatted(patientId, courseId, amount);
@@ -212,7 +212,7 @@ class SaleApiTest {
     private Long registerPatient() {
         int unique = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "sale-api-" + unique, "sale-api-" + unique + "@example.com", "password123", "นาย",
+                "01", "sale-api-" + unique, "sale-api-" + unique + "@example.com", "password123", "นาย",
                 "ทดสอบ ใบเสร็จ API", LocalDate.of(1990, 1, 1), "ชาย", "0800000015",
                 "NATIONAL_ID", "1100000005" + String.format("%03d", unique), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();
