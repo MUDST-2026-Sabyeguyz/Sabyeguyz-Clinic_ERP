@@ -17,7 +17,7 @@ public class UserBranchAccess {
     @JoinColumn(name = "branch_id")
     private Branch branch;
 
-    protected UserBranchAccess() {}
+    public UserBranchAccess() {}
 
     public UserBranchAccess(AppUser user, Branch branch) {
         this.user = user;

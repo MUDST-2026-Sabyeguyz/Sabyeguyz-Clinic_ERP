@@ -42,7 +42,7 @@ public class CommissionRateOverrideAudit {
     @Column(length = 255, nullable = false)
     private String reason;
 
-    protected CommissionRateOverrideAudit() {}
+    public CommissionRateOverrideAudit() {}
 
     public Long getId() { return id; }
     public Permission getPermission() { return permission; }

@@ -40,7 +40,7 @@ public class Branch {
     @Column(name = "branch_update_by")
     private Long branchUpdateBy;
 
-    protected Branch() {}
+    public Branch() {}
 
     public Long getId() { return id; }
     public String getBranchCode() { return branchCode; }

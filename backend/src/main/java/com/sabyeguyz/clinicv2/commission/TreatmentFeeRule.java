@@ -78,7 +78,7 @@ public class TreatmentFeeRule {
     @Column(name = "treatment_fee_rule_update_by")
     private Long treatmentFeeRuleUpdateBy;
 
-    protected TreatmentFeeRule() {}
+    public TreatmentFeeRule() {}
 
     public Long getId() { return id; }
     public Permission getPermission() { return permission; }
