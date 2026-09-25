@@ -21,7 +21,7 @@ public record AppointmentResponse(
     static AppointmentResponse from(Appointment appointment) {
         return new AppointmentResponse(
                 appointment.getId(),
-                appointment.getBranch().getCode(),
+                appointment.getBranch().getBranchCode(),
                 new PatientSummary(
                         appointment.getPatient().getId(),
                         appointment.getPatient().getHn(),

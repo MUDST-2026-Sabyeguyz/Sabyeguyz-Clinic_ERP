@@ -27,7 +27,7 @@ public record SaleSummaryResponse(
                 sale.getReceiptNo(),
                 new SaleResponse.PatientSummary(sale.getPatient().getId(), sale.getPatient().getHn(),
                         sale.getPatient().getFullName()),
-                sale.getBranch().getCode(),
+                sale.getBranch().getBranchCode(),
                 sale.getSalesperson() == null ? null : new SaleResponse.SalespersonSummary(
                         sale.getSalesperson().getId(), sale.getSalesperson().getEmployeeCode(),
                         sale.getSalesperson().getFullName()),
