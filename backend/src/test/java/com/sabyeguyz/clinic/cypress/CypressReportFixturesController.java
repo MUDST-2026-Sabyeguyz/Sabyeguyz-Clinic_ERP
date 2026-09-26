@@ -54,9 +54,9 @@ public class CypressReportFixturesController {
     @PostMapping("/report-branch")
     @Transactional
     public Map<String, String> branch() {
-        Branch branch = branches.findByCodeAndActiveTrue("CM")
-                .orElseGet(() -> branches.save(new Branch("CM", "02", "สาขาเชียงใหม่")));
-        return Map.of("branchCode", branch.getCode());
+        Branch branch = branches.findByBranchCodeAndActiveTrue("02")
+                .orElseGet(() -> branches.save(new Branch("02", "สาขาเชียงใหม่", "-", "-", null)));
+        return Map.of("branchCode", branch.getBranchCode());
     }
 
     @PostMapping("/report-staff/{number}")

@@ -19,7 +19,7 @@ describe('Appointment query API', () => {
   })
 
   it('returns paged appointments with patient details', function () {
-    cy.api('GET', '/api/appointments', undefined, { qs: { branchCode: 'RP', date: this.fixtures.tomorrow } })
+    cy.api('GET', '/api/appointments', undefined, { qs: { branchCode: '01', date: this.fixtures.tomorrow } })
       .then(({ status, body }) => {
         expect(status).to.equal(200)
         expect(body.items).to.have.length(3)

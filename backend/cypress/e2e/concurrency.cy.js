@@ -92,7 +92,7 @@ describe('CourseLedgerConcurrencyTest via concurrent HTTP transactions', () => {
   beforeEach(() => {
     cy.registerPatient().then((patient) => {
       create('POST', '/api/courses', { code: 'ONE', name: 'คอร์สครั้งเดียว', price: 1000, sessions: 1, bonusSessions: 0, validityDays: 30 })
-        .then((course) => create('POST', '/api/course-purchases', { patientId: patient.id, courseId: course.id, branchCode: 'RP' }).as('purchase'))
+        .then((course) => create('POST', '/api/course-purchases', { patientId: patient.id, courseId: course.id, branchCode: '01' }).as('purchase'))
     })
   })
 

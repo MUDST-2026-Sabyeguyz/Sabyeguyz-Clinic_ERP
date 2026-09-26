@@ -9,7 +9,7 @@ INSERT INTO patients (
 )
 SELECT
     '07' || lpad((700000000 + n)::text, 10, '0'),
-    (SELECT id FROM branches WHERE code = 'RP'),
+    (SELECT branch_id FROM branch WHERE branch_code = '01'),
     'demo-patient-' || n,
     'demo-patient-' || n || '@clinic.local',
     '$2a$10$7EqJtq98hPqEX7fNZaFWoO1cVhX4j7P6cQ0Q8Z9f3X7mX8Qw8W7Qe',
@@ -25,7 +25,7 @@ WHERE NOT EXISTS (SELECT 1 FROM patients p WHERE p.username = 'demo-patient-' ||
 
 INSERT INTO appointments (branch_id, patient_id, therapist_id, service_id, start_at, end_at, status, note)
 SELECT
-    (SELECT id FROM branches WHERE code = 'RP'),
+    (SELECT branch_id FROM branch WHERE branch_code = '01'),
     p.id,
     t.id,
     s.id,
@@ -41,10 +41,10 @@ WHERE NOT EXISTS (SELECT 1 FROM appointments a WHERE a.note = 'ข้อมู�
 
 INSERT INTO sales (receipt_no, patient_id, branch_id, salesperson_staff_id, total, status, note, sold_at)
 SELECT
-    'DEMO-' || lpad(g.n::text, 6, '0'), p.id, b.id, st.id, s.price, 'COMPLETED', 'ธุรกรรมจำลอง', CURRENT_TIMESTAMP - g.n * INTERVAL '1 day'
+    'DEMO-' || lpad(g.n::text, 6, '0'), p.id, b.branch_id, st.id, s.price, 'COMPLETED', 'ธุรกรรมจำลอง', CURRENT_TIMESTAMP - g.n * INTERVAL '1 day'
 FROM generate_series(1, 40) AS g(n)
 JOIN patients p ON p.username = 'demo-patient-' || g.n
-JOIN branches b ON b.code = 'RP'
+JOIN branch b ON b.branch_code = '01'
 JOIN services s ON s.code = CASE WHEN g.n % 3 = 0 THEN 'ASSESSMENT' ELSE 'PHYSIO_30' END
 JOIN staff st ON st.employee_code = 'THP-001'
 WHERE NOT EXISTS (SELECT 1 FROM sales x WHERE x.receipt_no = 'DEMO-' || lpad(g.n::text, 6, '0'));

@@ -61,14 +61,14 @@ async function load() {
   try {
     const [a, b, p, s, t, r] = await Promise.all([appointmentApi.search({ page: page.value, size: 20 }), branchApi.list(), patientApi.searchAll(), catalogApi.services(), catalogApi.therapists(), resourceApi.list()])
     appointments.value = a.items; totalPages.value = a.totalPages; branches.value = b; patients.value = p; services.value = s; therapists.value = t; rooms.value = r
-    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
+    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].branchCode
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ' }
 }
 onMounted(load)
 async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; await load() } }
 function firstRoomId(branchCode: string) { return rooms.value.find((item) => item.active && item.type === 'ROOM' && item.branchCode === branchCode)?.id ?? 0 }
 function syncRoomToBranch() { if (!roomOptions.value.some((item) => item.id === form.value.roomId)) form.value.roomId = firstRoomId(form.value.branchCode) }
-function openCreate() { editingId.value = null; patientQuery.value = ''; showPatientResults.value = false; const branch = branchOptions.value[0]; const branchCode = branch?.code ?? 'RP'; form.value = { patientId: 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, roomId: firstRoomId(branchCode), branchCode, date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
+function openCreate() { editingId.value = null; patientQuery.value = ''; showPatientResults.value = false; const branch = branchOptions.value[0]; const branchCode = branch?.branchCode ?? '01'; form.value = { patientId: 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, roomId: firstRoomId(branchCode), branchCode, date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
 function openEdit(item: Appointment) { editingId.value = item.id; patientQuery.value = item.patient.fullName; showPatientResults.value = false; form.value = { patientId: item.patient.id, therapistId: item.therapist.id, serviceId: item.service.id, roomId: firstRoomId(item.branchCode), branchCode: item.branchCode, date: item.startAt.slice(0, 10), time: new Date(item.startAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }), note: item.note ?? '' }; viewMode.value = 'edit' }
 function choosePatient(patient: Patient) { form.value.patientId = patient.id; patientQuery.value = patient.fullName; showPatientResults.value = false }
 function changePatientQuery() { form.value.patientId = 0; if (patientError.value) errorMessage.value = ''; showPatientResults.value = true }
@@ -195,7 +195,7 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
             <label>
               สาขา
               <select v-model="form.branchCode" :disabled="isEditing" @change="syncRoomToBranch">
-                <option v-for="item in branchOptions" :key="item.code" :value="item.code">{{ item.name }} ({{ item.code }})</option>
+                <option v-for="item in branchOptions" :key="item.branchCode" :value="item.branchCode">{{ item.name }} ({{ item.branchCode }})</option>
               </select>
             </label>
             <label>
@@ -229,7 +229,7 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
           </div>
           <select v-model="selectedBranch" class="branch-filter" aria-label="กรองตามสาขา">
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
-            <option v-for="item in branchOptions" :key="item.code" :value="item.code">{{ item.name }}</option>
+            <option v-for="item in branchOptions" :key="item.branchCode" :value="item.branchCode">{{ item.name }}</option>
           </select>
           <ThaiDatePicker v-model="selectedDate" class="appointment-date-filter" show-calendar-icon numeric-month hide-caret aria-label="กรองตามวันที่นัด" />
           <select v-model="selectedStatus" class="appointment-status-filter" aria-label="กรองตามสถานะนัดหมาย">
