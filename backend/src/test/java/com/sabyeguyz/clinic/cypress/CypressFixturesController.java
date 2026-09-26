@@ -48,8 +48,8 @@ public class CypressFixturesController {
         jdbc.update("DELETE FROM app_users WHERE username NOT IN ('manager', 'therapist')");
         jdbc.update("DELETE FROM therapists WHERE code NOT IN ('RP-T01', 'RP-T02')");
         jdbc.update("DELETE FROM services WHERE code NOT IN ('PHYSIO_30', 'PHYSIO_60', 'ASSESSMENT')");
-        jdbc.update("DELETE FROM branches WHERE code <> 'RP'");
-        jdbc.update("UPDATE branches SET numeric_code = '01', active = TRUE WHERE code = 'RP'");
+        jdbc.update("DELETE FROM branch WHERE branch_id NOT IN (SELECT branch_id FROM therapists WHERE code = 'RP-T01')");
+        jdbc.update("UPDATE branch SET branch_code = '01', branch_status = TRUE WHERE branch_id IN (SELECT branch_id FROM therapists WHERE code = 'RP-T01')");
         jdbc.update("UPDATE therapists SET active = TRUE");
         jdbc.update("UPDATE services SET active = TRUE, price = 1200, default_duration_minutes = 60 WHERE code = 'PHYSIO_60'");
         jdbc.update("UPDATE services SET active = TRUE, price = 700, default_duration_minutes = 30 WHERE code = 'PHYSIO_30'");

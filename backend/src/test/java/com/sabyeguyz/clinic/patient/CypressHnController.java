@@ -44,6 +44,6 @@ public class CypressHnController {
 
     @PostMapping("/branch-code")
     public void numericBranchCode(@RequestBody Map<String, String> request) {
-        jdbc.update("UPDATE branches SET numeric_code = ? WHERE code = 'RP'", request.get("numericCode"));
+        jdbc.update("UPDATE branch SET branch_code = ? WHERE branch_code = '01'", request.get("numericCode"));
     }
 }

@@ -45,7 +45,7 @@ watch(() => form.nationality, (nationality) => { form.identityDocumentType = nat
 onMounted(async () => {
   try {
     const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.list()])
-    branches.value = branchList.filter((item) => item.active).map((item) => ({ code: item.code, name: item.name }))
+    branches.value = branchList.filter((item) => item.active).map((item) => ({ code: item.branchCode, name: item.name }))
     if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode)) form.branchCode = branches.value[0]!.code
     const active = items.filter((item) => item.active)
     const valuesFor = (category: string, fallback: string[]) => {
