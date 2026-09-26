@@ -1,4 +1,11 @@
 describe('API contracts', () => {
+  it('preserves the fixed-width branch code defined by the migration', () => {
+    cy.api('GET', '/__cypress/schema/branch-code').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body).to.deep.equal({ dataType: 'CHARACTER', length: 2 })
+    })
+  })
+
   it('returns the initial hello contract', () => {
     cy.api('GET', '/api/hello').then(({ status, body }) => {
       expect(status).to.equal(200)
