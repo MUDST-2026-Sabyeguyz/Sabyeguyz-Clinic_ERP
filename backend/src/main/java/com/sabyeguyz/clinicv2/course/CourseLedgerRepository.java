@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.course;
 
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,4 +15,6 @@ public interface CourseLedgerRepository extends JpaRepository<CourseLedger, Long
     @Query("select coalesce(sum(l.qtyChange), 0) from CourseLedger l "
             + "where l.course.id = :courseId and l.patient.id = :patientId")
     Long sumQtyChangeByCourseAndPatient(@Param("courseId") Long courseId, @Param("patientId") Long patientId);
+
+    List<CourseLedger> findByCourseIdOrderByIdDesc(Long courseId);
 }
