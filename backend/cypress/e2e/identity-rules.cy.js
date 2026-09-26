@@ -26,7 +26,7 @@ describe('HnGeneratorTest migrated domain operations', () => {
   })
 
   it('rejectsUnresolvedOrNonNumericBranchCode', () => {
-    for (const branchCode of ['RP', null]) {
+    for (const branchCode of ['AB', null]) {
       cy.api('POST', '/__cypress/hn/next', { date: '2026-12-01', branchCode, runningNumber: 1 })
         .then(({ status, body }) => {
           expect(status).to.equal(400)
@@ -42,7 +42,7 @@ describe('PatientRegistrationServiceTest migrated API behavior', () => {
   })
 
   it('persistsPatientAndGeneratesBranchHn', () => {
-    cy.registerPatient().then((patient) => {
+    cy.registerPatient({ branchCode: '07' }).then((patient) => {
       expect(patient.hn).to.match(/^\d{2}07\d{2}\d{4}$/)
       expect(patient.active).to.equal(true)
       cy.api('GET', `/api/patients/${patient.id}`).then(({ status, body }) => {
@@ -53,8 +53,8 @@ describe('PatientRegistrationServiceTest migrated API behavior', () => {
   })
 
   it('incrementsRunningNumberForSameBranchAndMonth', () => {
-    cy.registerPatient().then((first) => {
-      cy.registerPatient({ username: 'second', email: 'second@example.com', identityNumber: '1100000000102' })
+    cy.registerPatient({ branchCode: '07' }).then((first) => {
+      cy.registerPatient({ branchCode: '07', username: 'second', email: 'second@example.com', identityNumber: '1100000000102' })
         .then((second) => {
           expect(first.hn).to.have.length(10).and.match(/0001$/)
           expect(second.hn).to.match(/0002$/)

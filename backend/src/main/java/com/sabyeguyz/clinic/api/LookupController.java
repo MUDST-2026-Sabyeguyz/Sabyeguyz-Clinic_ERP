@@ -35,9 +35,9 @@ public class LookupController {
     @GetMapping("/therapists")
     public List<TherapistOption> therapists(@RequestParam(required = false) String branchCode) {
         return therapists.findAll().stream()
-                .filter(t -> branchCode == null || t.getBranch().getCode().equalsIgnoreCase(branchCode.trim()))
+                .filter(t -> branchCode == null || t.getBranch().getBranchCode().equalsIgnoreCase(branchCode.trim()))
                 .map(t -> new TherapistOption(t.getId(), t.getCode(), t.getFullName(),
-                        t.getBranch().getCode(), t.isActive()))
+                        t.getBranch().getBranchCode(), t.isActive()))
                 .sorted(Comparator.comparing(TherapistOption::fullName)).toList();
     }
 }

@@ -102,7 +102,7 @@ describe('AppointmentBookingServiceTest migrated to HTTP', () => {
   it('createsConfirmedAppointmentUsingServiceDuration', function () {
     book(this.booking).then((body) => {
       expect(body.id).not.to.be.null
-      expect(body).to.include({ status: 'CONFIRMED', branchCode: 'RP' })
+      expect(body).to.include({ status: 'CONFIRMED', branchCode: '01' })
       expect(Date.parse(body.endAt) - Date.parse(body.startAt)).to.equal(60 * 60 * 1000)
       expect(body.patient.hn.trim()).not.to.be.empty
       expect(body.service.durationMinutes).to.equal(60)
@@ -128,7 +128,7 @@ describe('AppointmentBookingServiceTest migrated to HTTP', () => {
   })
   it('rejectsTherapistFromAnotherBranch', function () {
     fixture({ otherBranch: true })
-    request('POST', '/api/appointments', { ...this.booking, branchCode: 'QQ' }, 400, 'ไม่ได้สังกัดสาขานี้')
+    request('POST', '/api/appointments', { ...this.booking, branchCode: '99' }, 400, 'ไม่ได้สังกัดสาขานี้')
   })
 })
 
@@ -237,7 +237,7 @@ describe('AppointmentQueryServiceTest migrated to HTTP', () => {
     book({ ...this.booking, therapistId: this.otherTherapistId })
   })
   function find(context, extra = {}, expected = 200, message) {
-    const query = new URLSearchParams({ branchCode: 'RP', date: context.fixtures.tomorrow, ...extra })
+    const query = new URLSearchParams({ branchCode: '01', date: context.fixtures.tomorrow, ...extra })
     return request('GET', `/api/appointments?${query}`, undefined, expected, message)
   }
   it('returnsAppointmentsOfTheDaySortedByStartTime', function () {

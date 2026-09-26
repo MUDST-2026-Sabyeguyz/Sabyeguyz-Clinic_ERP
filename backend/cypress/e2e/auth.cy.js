@@ -1,6 +1,9 @@
 describe('Real JWT authentication', () => {
   it('rejects anonymous protected API requests', () => {
     cy.request({ url: '/api/patients', failOnStatusCode: false }).its('status').should('equal', 401)
+    for (const [method, url] of v2Endpoints) {
+      cy.request({ method, url, failOnStatusCode: false }).its('status').should('equal', 401)
+    }
   })
 
   it('rejects an invalid bearer token', () => {
@@ -27,6 +30,16 @@ describe('Real JWT authentication', () => {
           body: { username: 'forbidden', password: 'password123' }, failOnStatusCode: false })
           .its('status').should('equal', 403)
       }
+      for (const [method, url] of v2Endpoints) {
+        cy.request({ method, url, headers: { Authorization: `Bearer ${body.token}` }, failOnStatusCode: false })
+          .its('status').should('equal', 403)
+      }
     })
   })
 })
+
+const v2Endpoints = [
+  ['POST', '/__cypress/v2/core/BranchService/createsBranchWithValidTwoDigitCode'],
+  ['POST', '/__cypress/v2/finance/scheme-current'],
+  ['GET', '/__cypress/v2/workflows/appointment/book'],
+]

@@ -25,7 +25,7 @@ describe('Appointment booking and lifecycle API', () => {
     cy.api('POST', '/api/appointments', this.booking).then(({ status, headers, body }) => {
       expect(status).to.equal(201)
       expect(headers.location).to.include(`/api/appointments/${body.id}`)
-      expect(body).to.include({ status: 'CONFIRMED', branchCode: 'RP' })
+      expect(body).to.include({ status: 'CONFIRMED', branchCode: '01' })
       expect(body.patient.hn).not.to.be.empty
       expect(body.service.durationMinutes).to.equal(60)
     })

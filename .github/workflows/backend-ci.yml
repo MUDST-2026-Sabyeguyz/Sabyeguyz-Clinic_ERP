@@ -2,9 +2,9 @@ name: Backend CI
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**']
+    branches: [develop, dev-backed, 'feat/**', 'feature/**']
   pull_request:
-    branches: [develop]
+    branches: [develop, dev-backed]
   workflow_dispatch:
 
 permissions:
