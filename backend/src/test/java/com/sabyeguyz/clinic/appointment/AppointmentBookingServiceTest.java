@@ -49,7 +49,7 @@ class AppointmentBookingServiceTest {
 
         assertThat(response.id()).isNotNull();
         assertThat(response.status()).isEqualTo(AppointmentStatus.CONFIRMED);
-        assertThat(response.branchCode()).isEqualTo("RP");
+        assertThat(response.branchCode()).isEqualTo("01");
         assertThat(response.endAt()).isEqualTo(response.startAt().plus(Duration.ofMinutes(60)));
         assertThat(response.patient().hn()).isNotBlank();
         assertThat(response.service().durationMinutes()).isEqualTo(60);
@@ -81,7 +81,7 @@ class AppointmentBookingServiceTest {
     @Test
     void rejectsUnknownPatient() {
         AppointmentCreateRequest request = new AppointmentCreateRequest(
-                "RP", 999999L, therapistId, serviceId, nineAmTomorrow, null);
+                "01", 999999L, therapistId, serviceId, nineAmTomorrow, null);
 
         assertThatThrownBy(() -> bookingService.create(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -103,10 +103,11 @@ class AppointmentBookingServiceTest {
     @Test
     void rejectsTherapistFromAnotherBranch() {
         entityManager.createNativeQuery(
-                        "INSERT INTO branches (code, numeric_code, name, active) VALUES ('QQ', '99', 'สาขาทดสอบ', true)")
+                        "INSERT INTO branch (branch_code, branch_name, address, phone, branch_status) "
+                                + "VALUES ('99', 'สาขาทดสอบ', '-', '-', true)")
                 .executeUpdate();
         AppointmentCreateRequest request = new AppointmentCreateRequest(
-                "QQ", patientId, therapistId, serviceId, nineAmTomorrow, null);
+                "99", patientId, therapistId, serviceId, nineAmTomorrow, null);
 
         assertThatThrownBy(() -> bookingService.create(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -114,12 +115,12 @@ class AppointmentBookingServiceTest {
     }
 
     private AppointmentCreateRequest request(OffsetDateTime startAt) {
-        return new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, startAt, "นัดทดสอบ");
+        return new AppointmentCreateRequest("01", patientId, therapistId, serviceId, startAt, "นัดทดสอบ");
     }
 
     private Long registerPatient() {
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "booking-test", "booking-test@example.com", "password123", "นาย",
+                "01", "booking-test", "booking-test@example.com", "password123", "นาย",
                 "ทดสอบ จองนัด", LocalDate.of(1990, 1, 1), "ชาย", "0800000001",
                 "NATIONAL_ID", "1100000000998", "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();

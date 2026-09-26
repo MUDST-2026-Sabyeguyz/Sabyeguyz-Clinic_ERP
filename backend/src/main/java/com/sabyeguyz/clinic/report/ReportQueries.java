@@ -116,14 +116,14 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
 
     @Query("""
             select new com.sabyeguyz.clinic.report.ReportRows$BranchAmount(
-                b.code, b.name, coalesce(sum(sp.amount), 0))
+                b.branchCode, b.name, coalesce(sum(sp.amount), 0))
             from SalePayment sp
               join sp.sale s
               join s.branch b
             where s.soldAt >= :from and s.soldAt < :to
               and (:branchId is null or b.id = :branchId)
-            group by b.code, b.name
-            order by b.code
+            group by b.branchCode, b.name
+            order by b.branchCode
             """)
     List<ReportRows.BranchAmount> revenueByBranch(@Param("from") Instant from,
                                                   @Param("to") Instant to,
@@ -187,7 +187,7 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
 
     @Query("""
             select new com.sabyeguyz.clinic.report.ReportRows$PurchaseRow(
-                cp.id, p.id, p.hn, p.fullName, b.code,
+                cp.id, p.id, p.hn, p.fullName, b.branchCode,
                 cp.courseCode, cp.courseName, cp.sessions, cp.bonusSessions, cp.price,
                 cp.purchasedAt, cp.expiresAt, cp.status)
             from CoursePurchase cp

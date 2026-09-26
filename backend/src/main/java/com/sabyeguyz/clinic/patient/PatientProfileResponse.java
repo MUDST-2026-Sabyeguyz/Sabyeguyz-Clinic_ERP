@@ -30,12 +30,12 @@ public record PatientProfileResponse(
         String customerSource,
         String insuranceCompany
 ) {
-    public record BranchSummary(Long id, String code, String name, boolean active) {}
+    public record BranchSummary(Long id, String branchCode, String name, boolean active) {}
 
     static PatientProfileResponse from(Patient patient) {
         var branch = patient.getBranch();
         return new PatientProfileResponse(patient.getId(), patient.getHn(),
-                new BranchSummary(branch.getId(), branch.getCode(), branch.getName(), branch.isActive()),
+                new BranchSummary(branch.getId(), branch.getBranchCode(), branch.getName(), branch.isActive()),
                 patient.getTitle(), patient.getFullName(), patient.getBirthDate(), patient.getGender(), patient.getPhone(),
                 patient.getIdentityDocumentType(), patient.getIdentityNumber(), patient.getAddress(), patient.isDrugAllergy(),
                 patient.isFoodAllergy(), patient.getChronicDisease(), patient.getEmergencyContactName(),

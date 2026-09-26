@@ -25,7 +25,7 @@ public class ReceiptNumberGenerator {
         // จองสิทธิ์เดินเลขของสาขานี้ก่อนแตะตารางตัวนับ
         // ถ้าไม่ล็อกตรงนี้ สอง request ที่ออกใบเสร็จ "ใบแรกของเดือน" พร้อมกันจะแย่งกัน INSERT
         // แถวตัวนับแถวเดียวกัน แล้วฝ่ายที่ช้ากว่าจะชน primary key จนออกใบเสร็จไม่ได้
-        entityManager.createNativeQuery("SELECT id FROM branches WHERE id = :branchId FOR UPDATE")
+        entityManager.createNativeQuery("SELECT branch_id FROM branch WHERE branch_id = :branchId FOR UPDATE")
                 .setParameter("branchId", branchId)
                 .getSingleResult();
         entityManager.createNativeQuery("""

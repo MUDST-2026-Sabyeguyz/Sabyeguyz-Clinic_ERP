@@ -1,0 +1,84 @@
+package com.sabyeguyz.clinicv2.catalog;
+
+import com.sabyeguyz.clinicv2.enums.ServiceType;
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import java.math.BigDecimal;
+import java.time.Instant;
+
+@Entity
+@Table(name = "service")
+public class Service {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "service_id")
+    private Long id;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "service_type", nullable = false)
+    private ServiceType serviceType;
+
+    @Column(name = "service_name", length = 150, nullable = false)
+    private String serviceName;
+
+    @Column(name = "service_price", precision = 12, scale = 2, nullable = false)
+    private BigDecimal servicePrice;
+
+    @Column(name = "service_status", nullable = false)
+    private boolean serviceStatus = true;
+
+    @Column(name = "service_code", length = 20, nullable = false, unique = true)
+    private String serviceCode;
+
+    @Column(name = "service_create_at", nullable = false, updatable = false)
+    private Instant serviceCreateAt;
+
+    @Column(name = "service_create_by", nullable = false, updatable = false)
+    private Long serviceCreateBy;
+
+    @Column(name = "service_update_at")
+    private Instant serviceUpdateAt;
+
+    @Column(name = "service_update_by")
+    private Long serviceUpdateBy;
+
+    /** Template value used when this Service (a Course) is sold; NULL for Assessment/SingleVisit. */
+    @Column(name = "default_total_visits")
+    private Integer defaultTotalVisits;
+
+    @Column(name = "default_bonus_visits")
+    private Integer defaultBonusVisits;
+
+    @Column(name = "default_validity_days")
+    private Integer defaultValidityDays;
+
+    public Service() {}
+
+    public Long getId() { return id; }
+    public ServiceType getServiceType() { return serviceType; }
+    public void setServiceType(ServiceType serviceType) { this.serviceType = serviceType; }
+    public String getServiceName() { return serviceName; }
+    public void setServiceName(String serviceName) { this.serviceName = serviceName; }
+    public BigDecimal getServicePrice() { return servicePrice; }
+    public void setServicePrice(BigDecimal servicePrice) { this.servicePrice = servicePrice; }
+    public boolean isServiceStatus() { return serviceStatus; }
+    public void setServiceStatus(boolean serviceStatus) { this.serviceStatus = serviceStatus; }
+    public String getServiceCode() { return serviceCode; }
+    public void setServiceCode(String serviceCode) { this.serviceCode = serviceCode; }
+    public Instant getServiceCreateAt() { return serviceCreateAt; }
+    public void setServiceCreateAt(Instant serviceCreateAt) { this.serviceCreateAt = serviceCreateAt; }
+    public Long getServiceCreateBy() { return serviceCreateBy; }
+    public void setServiceCreateBy(Long serviceCreateBy) { this.serviceCreateBy = serviceCreateBy; }
+    public Instant getServiceUpdateAt() { return serviceUpdateAt; }
+    public void setServiceUpdateAt(Instant serviceUpdateAt) { this.serviceUpdateAt = serviceUpdateAt; }
+    public Long getServiceUpdateBy() { return serviceUpdateBy; }
+    public void setServiceUpdateBy(Long serviceUpdateBy) { this.serviceUpdateBy = serviceUpdateBy; }
+    public Integer getDefaultTotalVisits() { return defaultTotalVisits; }
+    public void setDefaultTotalVisits(Integer defaultTotalVisits) { this.defaultTotalVisits = defaultTotalVisits; }
+    public Integer getDefaultBonusVisits() { return defaultBonusVisits; }
+    public void setDefaultBonusVisits(Integer defaultBonusVisits) { this.defaultBonusVisits = defaultBonusVisits; }
+    public Integer getDefaultValidityDays() { return defaultValidityDays; }
+    public void setDefaultValidityDays(Integer defaultValidityDays) { this.defaultValidityDays = defaultValidityDays; }
+}
