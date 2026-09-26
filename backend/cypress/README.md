@@ -56,7 +56,7 @@ transactions and Cypress checks both outcomes and persisted state. Ordinary
 queued `cy.request` calls would be serial and are not used for these races. The
 task settles both requests before returning, including when one fails.
 
-Like the previous Java integration suite, this suite uses Flyway through V20
+Like the previous Java integration suite, this suite uses Flyway through V20.1
 and Hibernate schema update. V21+ demo migrations contain PostgreSQL-specific
 SQL, and H2 does not enforce PostgreSQL's exclusion constraint for overlapping
 appointments. These tests do not replace migration/constraint verification on
@@ -91,7 +91,7 @@ The remaining 146 original Java cases are migrated as follows:
 | AuthService/PatientRegistrationService/HnGenerator/CourseRepositoryTest | identity-rules.cy.js | 11 |
 | Appointment/CourseLedger/SaleConcurrencyTest | concurrency.cy.js | 9 |
 
-Total: **227 Cypress cases**, preserving the original 221 scenarios plus six
+Legacy suite: **227 Cypress cases**, preserving the original 221 scenarios plus six
 additional cases. All assertions are JavaScript/Chai. Tests of internal Java
 methods use focused helper endpoints; most cases exercise the public API and
 therefore now verify HTTP integration rather than isolated Java units.
@@ -102,7 +102,27 @@ Per-method mapping: [appointments](migration/appointments.md),
 [Original Java case inventory](migration/original-java-cases.json) records the
 146 methods migrated in the final phase. Frontend tests and CI are independent.
 
-CI runs `npm test` and uploads Cypress XML and failure screenshots. XML uses the
+## clinicv2 merge migration
+
+The 23 service test classes added on dev-backed contribute **86 more Cypress
+cases**, for **313 total**. Every original method is recorded in
+[clinicv2 inventory](migration/clinicv2-java-cases.json).
+
+| Original clinicv2 modules | Cypress spec | Cases |
+| --- | --- | ---: |
+| Auth, branch, catalog, master data, patient, role, settings, staff | v2-core.cy.js | 41 |
+| Commission and sales | v2-finance.cy.js | 24 |
+| Appointment, visits, audit, course transfers and usage | v2-workflows.cy.js | 21 |
+
+These v2 scenarios preserve the original service-unit scope: Java adapters invoke
+production services with fresh in-memory repository doubles and return observed
+values, exceptions and interactions. Cypress performs all assertions. They do
+not verify v2 database mappings or transaction behavior. The legacy API scenarios
+continue to use real repositories and H2. No JUnit or Mockito dependency is needed.
+Branch fixtures follow V20.1 (branch table, two-digit branch codes).
+
+CI runs `npm test` for develop and dev-backed pull requests and uploads Cypress
+XML and failure screenshots. XML uses the
 JUnit report format for CI compatibility; this does not invoke JUnit. Cypress
 reports are written to `cypress/results/api-[hash].xml`, with old reports cleared
 before each run.

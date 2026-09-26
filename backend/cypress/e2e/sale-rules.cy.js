@@ -18,7 +18,7 @@ describe('SaleService rules migrated from JUnit', () => {
   const course = (quantity = 1) => ({ type: 'COURSE', referenceId: courseId, quantity })
   const payment = (paymentMethodCode, amount) => ({ paymentMethodCode, amount })
   const sell = (items = [course()], payments = [payment('CASH', 15000)], overrides = {}) =>
-    cy.api('POST', '/api/payments', { patientId, branchCode: 'RP', items, payments, ...overrides })
+    cy.api('POST', '/api/payments', { patientId, branchCode: '01', items, payments, ...overrides })
   const paid = (...args) => sell(...args).then(ok(201))
   const voidSale = (id, reason = 'ยกเลิก') => cy.api('POST', `/api/payments/${id}/reverse`, { reason })
   const ledger = (id) => cy.api('GET', `/api/course-purchases/${id}`).then(ok(200))
