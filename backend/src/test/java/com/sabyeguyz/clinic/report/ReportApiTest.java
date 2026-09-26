@@ -59,10 +59,10 @@ class ReportApiTest {
         sell();
 
         mockMvc.perform(get("/api/dashboard/summary")
-                        .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "RP"))
+                        .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "01"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.from").value(DAY.toString()))
-                .andExpect(jsonPath("$.branchCode").value("RP"))
+                .andExpect(jsonPath("$.branchCode").value("01"))
                 .andExpect(jsonPath("$.totalRevenue").value(9000.00))
                 .andExpect(jsonPath("$.courseRevenue").value(9000.00))
                 .andExpect(jsonPath("$.singleVisitRevenue").value(0))
@@ -104,7 +104,7 @@ class ReportApiTest {
         sell();
 
         mockMvc.perform(get("/api/reports/staff-sales")
-                        .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "RP"))
+                        .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "01"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.branchTotal").value(9000.00))
                 .andExpect(jsonPath("$.rows.length()").value(0))
@@ -115,7 +115,7 @@ class ReportApiTest {
     @Test
     void returnsTheAppointmentReport() throws Exception {
         mockMvc.perform(get("/api/reports/appointments")
-                        .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "RP"))
+                        .param("from", DAY.toString()).param("to", DAY.toString()).param("branchCode", "01"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.appointments").value(0))
                 .andExpect(jsonPath("$.visits").value(0))
@@ -160,7 +160,7 @@ class ReportApiTest {
     }
 
     private void sell() {
-        SaleResponse sale = saleService.create(new SaleRequest(patientId, "RP", null, null,
+        SaleResponse sale = saleService.create(new SaleRequest(patientId, "01", null, null,
                 List.of(new SaleRequest.Item(SaleItemType.COURSE, courseId, 1)),
                 List.of(new SaleRequest.Payment("CASH", new BigDecimal("9000.00")))));
         entityManager.flush();
@@ -180,7 +180,7 @@ class ReportApiTest {
     private Long registerPatient() {
         int unique = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "report-api-" + unique, "report-api-" + unique + "@example.com", "password123", "นาย",
+                "01", "report-api-" + unique, "report-api-" + unique + "@example.com", "password123", "นาย",
                 "ทดสอบ รายงาน API", LocalDate.of(1990, 1, 1), "ชาย", "0800000032",
                 "NATIONAL_ID", "1100000002" + String.format("%03d", unique), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();

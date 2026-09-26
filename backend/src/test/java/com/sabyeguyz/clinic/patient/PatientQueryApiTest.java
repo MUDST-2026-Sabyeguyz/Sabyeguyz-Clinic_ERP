@@ -87,7 +87,7 @@ class PatientQueryApiTest {
         String content = mockMvc.perform(get("/api/patients/{id}", somchai.id()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(somchai.id()))
-                .andExpect(jsonPath("$.branch.code").value("RP"))
+                .andExpect(jsonPath("$.branch.branchCode").value("01"))
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode profile = objectMapper.readTree(content);
@@ -113,7 +113,7 @@ class PatientQueryApiTest {
 
     private PatientResponse register(String username, String email, String identityNumber, String name, String phone) {
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", username, email, "password123", "นาย", name, LocalDate.of(1990, 1, 1), "ชาย", phone,
+                "01", username, email, "password123", "นาย", name, LocalDate.of(1990, 1, 1), "ชาย", phone,
                 "NATIONAL_ID", identityNumber, "กรุงเทพฯ", false, false, "", "ผู้ติดต่อ", "ญาติ",
                 "0899999999", true));
     }

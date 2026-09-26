@@ -28,7 +28,7 @@ class HnGeneratorTest {
 
     @Test
     void rejectsUnresolvedOrNonNumericBranchCode() {
-        assertThatThrownBy(() -> new HnGenerator(null).next(1L, "RP", LocalDate.of(2026, 12, 1)))
+        assertThatThrownBy(() -> new HnGenerator(null).next(1L, "AB", LocalDate.of(2026, 12, 1)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }
