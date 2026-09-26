@@ -2,6 +2,8 @@ package com.sabyeguyz.clinicv2.branch;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** Matches the confirmed Branch data dictionary. */
 @Entity
@@ -14,6 +16,7 @@ public class Branch {
 
     /** 2-digit numeric code, e.g. "01"-"99". */
     @Column(name = "branch_code", length = 2, nullable = false, unique = true)
+    @JdbcTypeCode(SqlTypes.CHAR)
     private String branchCode;
 
     @Column(name = "branch_name", length = 100, nullable = false)
