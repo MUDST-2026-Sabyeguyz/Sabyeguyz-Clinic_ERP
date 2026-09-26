@@ -11,7 +11,7 @@ public record CourseTransferResponse(Long id, Long sourcePurchaseId, Long destin
                 transfer.getSource().getPatient().getHn(), transfer.getSource().getPatient().getFullName(),
                 transfer.getDestination().getPatient().getId(), transfer.getDestination().getPatient().getHn(),
                 transfer.getDestination().getPatient().getFullName(), transfer.getSource().getCourse().getId(),
-                transfer.getSource().getBranch().getCode(), transfer.getQuantity(), transfer.getActorId(),
+                transfer.getSource().getBranch().getBranchCode(), transfer.getQuantity(), transfer.getActorId(),
                 transfer.getReason(), transfer.getCreatedAt());
     }
 }

@@ -23,8 +23,8 @@ const branches = reactive<
   Array<{
     id?: number
     code: string
-    numericCode: string
     name: string
+    address: string
     detail: string
     status: string
   }>
@@ -120,10 +120,10 @@ async function loadBackendSettings() {
       branches.length,
       ...branchResult.value.map((item) => ({
         id: item.id,
-        code: item.code,
-        numericCode: item.numericCode,
+        code: item.branchCode,
         name: item.name,
-        detail: item.numericCode,
+        address: item.address,
+        detail: item.phone,
         status: item.active ? 'Active' : 'Inactive',
       })),
     )
@@ -275,7 +275,7 @@ rooms.forEach((item) => {
 })
 const form = reactive({
   code: '',
-  numericCode: '',
+  address: '',
   name: '',
   detail: '',
   role: 'นักกายภาพบำบัด',
@@ -387,17 +387,21 @@ async function save() {
   if (section.value === 'branches') {
     try {
       const body = {
-        code: form.code,
-        numericCode: form.numericCode || form.detail,
+        branchCode: form.code,
         name: form.name,
+        address: form.address,
+        phone: form.detail,
       }
       const existing = editingIndex.value >= 0 ? branches[editingIndex.value] : undefined
       const result = existing?.id
         ? await branchApi.update(existing.id, body)
         : await branchApi.create(body)
       const record = {
-        ...result,
-        detail: result.numericCode,
+        id: result.id,
+        code: result.branchCode,
+        name: result.name,
+        address: result.address,
+        detail: result.phone,
         status: result.active ? 'Active' : 'Inactive',
       }
       if (editingIndex.value >= 0) Object.assign(branches[editingIndex.value]!, record)
@@ -652,7 +656,7 @@ function openEditor(index = -1) {
   formError.value = ''
   Object.assign(form, {
     code: '',
-    numericCode: '',
+    address: '',
     name: '',
     username: '',
     email: '',
@@ -986,14 +990,10 @@ async function toggleUser(user: (typeof users)[number]) {
           <button type="button" aria-label="ปิด" @click="editing = false">×</button>
         </header>
         <template v-if="section === 'branches'">
-          <label>รหัสสาขา<input v-model="form.code" maxlength="2" placeholder="เช่น RP" /></label>
-          <label
-            >รหัสตัวเลข 2 หลัก<input v-model="form.numericCode" maxlength="2" placeholder="เช่น 01"
-          /></label>
+          <label>รหัสสาขา (ตัวเลข 2 หลัก)<input v-model="form.code" maxlength="2" placeholder="เช่น 01" /></label>
           <label>ชื่อสาขา<input v-model="form.name" placeholder="ชื่อสาขา" /></label>
-          <label
-            >ข้อมูลติดต่อ<input v-model="form.detail" placeholder="เบอร์โทรศัพท์หรือที่อยู่"
-          /></label>
+          <label>ที่อยู่<input v-model="form.address" placeholder="ที่อยู่สาขา" /></label>
+          <label>เบอร์โทรศัพท์<input v-model="form.detail" placeholder="เบอร์โทรศัพท์" /></label>
         </template>
         <template v-else-if="section === 'users'">
           <label>ชื่อผู้ใช้งาน<input v-model="form.name" placeholder="ชื่อ-นามสกุล" /></label>
