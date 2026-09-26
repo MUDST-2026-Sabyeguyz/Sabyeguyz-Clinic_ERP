@@ -25,6 +25,9 @@ describe('Clinic v2 commission and sale services', () => {
     'sale-wrong-type': 'rejectsCoursePurchaseInRecordVisitSale',
     'sale-course': 'coursePurchaseCreatesTheCourseFirstThenTheTransaction',
     'sale-void': 'voidRejectsAnAlreadyVoidedTransaction',
+    'schemecrud-create': 'createsASchemeWithItsTiers',
+    'schemecrud-next-version': 'nextVersionIncrementsFromTheLatestExistingScheme',
+    'schemecrud-update-keeps-tiers': 'updateOnlyTouchesNameAndDatesNeverTiers',
   }
   const cases = [
     ['override-applies', { oldRate: 0.07, newRate: 0.10, rate: 0.10, pool: 1000, outstanding: 790 }],
@@ -40,6 +43,9 @@ describe('Clinic v2 commission and sale services', () => {
     ['receipt-create', { number: 'RE-2600001', date: '2026-08-18' }],
     ['sale-assessment', { amount: 1200, status: true }],
     ['sale-course', { sameCourse: true, amount: 10000, type: 'CoursePurchase', saveOrder: ['course', 'transaction'] }],
+    ['schemecrud-create', { version: 1, tiersSaved: 2, firstRate: 0.05 }],
+    ['schemecrud-next-version', { version: 2 }],
+    ['schemecrud-update-keeps-tiers', { name: 'Renamed', tiersSaveCallsDuringUpdate: 0 }],
   ]
   cases.forEach(([scenario, expected]) => {
     it(originalNames[scenario], () => {
@@ -68,6 +74,22 @@ describe('Clinic v2 commission and sale services', () => {
       cy.api('POST', `/__cypress/v2/finance/${scenario}`).then(({ status, body }) => {
         expect(status).to.equal(200)
         expect(body.error).to.equal(error)
+      })
+    })
+  })
+  // schemecrud-overlap/-gap call V2RepositoryStub.outcome() themselves inside
+  // schemeCrud(), so their IllegalArgumentException is caught one level down:
+  // the outer run() wraps that already-caught result in its own {value: ...}.
+  const nestedFailures = [
+    ['schemecrud-overlap', 'rejectsOverlappingTierRanges', 'IllegalArgumentException'],
+    ['schemecrud-gap', 'rejectsAGapBetweenTierRanges', 'IllegalArgumentException'],
+  ]
+  nestedFailures.forEach(([scenario, name, error]) => {
+    it(name, () => {
+      cy.api('POST', `/__cypress/v2/finance/${scenario}`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body).not.to.have.property('error')
+        expect(body.value.error).to.equal(error)
       })
     })
   })
