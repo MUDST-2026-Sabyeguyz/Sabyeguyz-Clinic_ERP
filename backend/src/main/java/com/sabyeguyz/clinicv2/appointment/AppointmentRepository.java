@@ -23,4 +23,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     Page<Appointment> search(@Param("branchId") Long branchId, @Param("date") LocalDate date,
                               @Param("staffId") Long staffId, @Param("status") AppointmentStatus status,
                               Pageable pageable);
+
+    @Query("select a from Appointment a where a.appointmentDate between :from and :to "
+            + "and (:branchId is null or a.branch.id = :branchId)")
+    java.util.List<Appointment> findByAppointmentDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to,
+                                                               @Param("branchId") Long branchId);
 }

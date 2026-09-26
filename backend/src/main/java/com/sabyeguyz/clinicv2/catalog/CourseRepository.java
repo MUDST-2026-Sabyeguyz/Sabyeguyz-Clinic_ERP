@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinicv2.catalog;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -24,4 +25,10 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("select distinct c from Course c left join CourseSharedMember m on m.course = c "
             + "where c.receipt.patient.id = :patientId or m.patient.id = :patientId")
     List<Course> findByPatientId(@Param("patientId") Long patientId);
+
+    @Query("select c from Course c where c.receipt.saleDate between :from and :to")
+    List<Course> findByReceiptSaleDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("select distinct c.sellerStaff.id from Course c where c.saleMonth = :saleMonth")
+    List<Long> findDistinctSellerStaffIdsBySaleMonth(@Param("saleMonth") String saleMonth);
 }
