@@ -58,7 +58,7 @@ class AppointmentQueryServiceTest {
 
     @Test
     void returnsAppointmentsOfTheDaySortedByStartTime() {
-        AppointmentSearchResponse response = queryService.search("RP", tomorrow, null, null, 0, 20);
+        AppointmentSearchResponse response = queryService.search("01", tomorrow, null, null, 0, 20);
 
         assertThat(response.totalItems()).isEqualTo(3);
         assertThat(response.items()).extracting(AppointmentResponse::startAt).isSorted();
@@ -66,7 +66,7 @@ class AppointmentQueryServiceTest {
 
     @Test
     void filtersByTherapist() {
-        AppointmentSearchResponse response = queryService.search("RP", tomorrow, therapistTwoId, null, 0, 20);
+        AppointmentSearchResponse response = queryService.search("01", tomorrow, therapistTwoId, null, 0, 20);
 
         assertThat(response.totalItems()).isEqualTo(1);
         assertThat(response.items().get(0).therapist().id()).isEqualTo(therapistTwoId);
@@ -78,15 +78,15 @@ class AppointmentQueryServiceTest {
         cancelled.cancel("ผู้ป่วยแจ้งยกเลิก");
         appointmentRepository.saveAndFlush(cancelled);
 
-        assertThat(queryService.search("RP", tomorrow, null, AppointmentStatus.CANCELLED, 0, 20).totalItems())
+        assertThat(queryService.search("01", tomorrow, null, AppointmentStatus.CANCELLED, 0, 20).totalItems())
                 .isEqualTo(1);
-        assertThat(queryService.search("RP", tomorrow, null, AppointmentStatus.CONFIRMED, 0, 20).totalItems())
+        assertThat(queryService.search("01", tomorrow, null, AppointmentStatus.CONFIRMED, 0, 20).totalItems())
                 .isEqualTo(2);
     }
 
     @Test
     void returnsEmptyPageForDayWithoutAppointments() {
-        AppointmentSearchResponse response = queryService.search("RP", tomorrow.plusDays(30), null, null, 0, 20);
+        AppointmentSearchResponse response = queryService.search("01", tomorrow.plusDays(30), null, null, 0, 20);
 
         assertThat(response.items()).isEmpty();
         assertThat(response.totalItems()).isZero();
@@ -95,7 +95,7 @@ class AppointmentQueryServiceTest {
 
     @Test
     void paginatesInDatabase() {
-        AppointmentSearchResponse response = queryService.search("RP", tomorrow, null, null, 1, 2);
+        AppointmentSearchResponse response = queryService.search("01", tomorrow, null, null, 1, 2);
 
         assertThat(response.items()).hasSize(1);
         assertThat(response.page()).isEqualTo(1);
@@ -136,7 +136,7 @@ class AppointmentQueryServiceTest {
     @Test
     void returnsPagedAppointments() throws Exception {
         mockMvc.perform(get("/api/appointments")
-                        .param("branchCode", "RP")
+                        .param("branchCode", "01")
                         .param("date", tomorrow.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(3))
@@ -175,7 +175,7 @@ class AppointmentQueryServiceTest {
     //
 
     private void book(Long therapistId, OffsetDateTime startAt) {
-        bookingService.create(new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, startAt, null));
+        bookingService.create(new AppointmentCreateRequest("01", patientId, therapistId, serviceId, startAt, null));
     }
 
     private Long therapistId(String code) {
@@ -185,7 +185,7 @@ class AppointmentQueryServiceTest {
 
     private Long registerPatient() {
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "query-appt", "query-appt@example.com", "password123", "นาย",
+                "01", "query-appt", "query-appt@example.com", "password123", "นาย",
                 "ทดสอบ ค้นหานัด", LocalDate.of(1990, 1, 1), "ชาย", "0800000003",
                 "NATIONAL_ID", "1100000000996", "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();
