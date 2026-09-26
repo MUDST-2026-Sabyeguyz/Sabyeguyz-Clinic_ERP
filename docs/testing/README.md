@@ -9,7 +9,7 @@
 | ส่วน | Quality Gate ระยะเริ่มต้น |
 |---|---|
 | Frontend | `npm ci`, type-check, Unit Test และ production build |
-| Backend | Compile, Unit Test และ Spring Context Test เมื่อมีโค้ดแล้ว |
+| Backend | `npm ci`, `npx cypress install`, `npm test` (package + Cypress tests ทั้งหมด) |
 | Docs/API | ตรวจว่า User Story, Acceptance Criteria และ API Contract สอดคล้องกัน |
 | Deploy | ตรวจ Docker Compose และ Kubernetes manifest เมื่อมีไฟล์แล้ว |
 
@@ -79,8 +79,13 @@ E2E ต้องตรวจอย่างน้อย Success Case, Validation
 
 ## Current Baseline
 
-- Frontend มี type-check, Unit Test, Build และ Playwright configuration แล้ว
-- Backend มี Spring Boot baseline, `/api/hello`, `/actuator/health` และ Controller Test แล้ว
+- Frontend มี type-check, Vitest Unit Test, Build และ Cypress browser tests; การย้ายครั้งนี้ไม่ได้เปลี่ยน frontend
+- Backend ย้าย MockMvc API tests 9 คลาสไป Cypress แล้ว: ผู้ป่วย นัดหมาย คอร์ส การชำระเงิน รายงาน และ API contract รวมทั้งตรวจ JWT/สิทธิ์ผ่าน HTTP จริง
+- Backend ย้ายเทสต์ Java ที่เหลืออีก 146 กรณีไป Cypress แล้ว รวม 227 กรณี ไม่มี JUnit/Mockito; Java helpers ใน `src/test` ใช้เตรียมข้อมูลและเข้าถึง logic ภายในเท่านั้น การตรวจผลอยู่ใน Cypress ทั้งหมด
+- Concurrency ใช้ Node task ส่ง HTTP สองคำขอพร้อมกันและตรวจข้อมูลหลังจบ ส่วน specs รันตามลำดับเพื่อไม่ให้ชนการ reset ฐานข้อมูล
+- `npm test` ใน `backend` เป็นคำสั่งตรวจทั้งหมดพร้อม package; `mvn package`/`mvn verify` ไม่ได้รัน Cypress
 - Deploy มี Backend Dockerfile และ Docker Compose สำหรับ PostgreSQL/Backend แล้ว แต่ยังไม่มี Kubernetes manifest
-- Database ยังไม่ได้เชื่อมกับ Business Entity จึงยังไม่ถือว่าเป็น Database Integration Test
+- Backend tests เชื่อมฐานข้อมูล H2 ชั่วคราว ใช้ Flyway ถึง V20 และ Hibernate schema update; ยังไม่ยืนยัน migration V21+ หรือ constraint เฉพาะ PostgreSQL
 - เมื่อมี API Contract ที่ BA/Backend ยืนยันแล้ว ให้เพิ่ม Contract Test ก่อนเชื่อม Frontend กับ Backend
+
+รายละเอียดการรัน การแยกฐานข้อมูล และตารางเทสต์ที่ย้าย: [Backend Cypress API tests](../../backend/cypress/README.md)
