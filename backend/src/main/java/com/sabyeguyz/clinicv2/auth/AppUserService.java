@@ -106,6 +106,35 @@ public class AppUserService {
         return users.save(user);
     }
 
+    @Transactional
+    public AppUser activate(Long userId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        user.setUserStatus(true);
+        return users.save(user);
+    }
+
+    /** rawPassword may be null/blank to leave the password unchanged. */
+    @Transactional
+    public AppUser updateProfile(Long userId, String username, String rawPassword, Long actorId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        String normalized = requireText(username, "username");
+        users.findByUsername(normalized)
+                .filter(other -> !other.getId().equals(userId))
+                .ifPresent(other -> {
+                    throw new IllegalArgumentException("ชื่อผู้ใช้นี้มีอยู่แล้ว");
+                });
+        user.setUsername(normalized);
+        if (rawPassword != null && !rawPassword.isBlank()) {
+            if (rawPassword.length() < 8) {
+                throw new IllegalArgumentException("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+            }
+            user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        }
+        user.setUserUpdateAt(Instant.now());
+        user.setUserUpdateBy(actorId);
+        return users.save(user);
+    }
+
     private static String requireText(String value, String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
