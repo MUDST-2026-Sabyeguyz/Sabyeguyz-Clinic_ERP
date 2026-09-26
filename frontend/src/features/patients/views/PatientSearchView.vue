@@ -84,7 +84,7 @@ watch(sortOrder, () => { page.value = 0; void loadPatients() })
           </div>
           <select v-model="branch" class="branch-filter" aria-label="กรองตามสาขา">
             <option value="ทั้งหมด">สาขาทั้งหมด</option>
-            <option v-for="item in branches" :key="item.code" :value="item.code">{{ item.name }}</option>
+            <option v-for="item in branches" :key="item.branchCode" :value="item.branchCode">{{ item.name }}</option>
           </select>
           <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับผู้ป่วย">
             <option value="asc">ชื่อ ก-ฮ</option>
