@@ -31,6 +31,7 @@ public class V2FinanceScenarios {
         return V2RepositoryStub.outcome(() -> {
             if (scenario.startsWith("override-")) return override(scenario);
             if (scenario.startsWith("scheme-")) return scheme(scenario);
+            if (scenario.startsWith("schemecrud-")) return schemeCrud(scenario);
             if (scenario.startsWith("tier-")) return tier(scenario);
             if (scenario.startsWith("closing-")) return closing(scenario);
             if (scenario.startsWith("fee-")) return fee(scenario);
@@ -89,6 +90,54 @@ public class V2FinanceScenarios {
         var resolved = new CommissionSchemeResolver(repository.proxy()).resolveEffective(
                 LocalDate.parse(scenario.equals("scheme-newest") ? "2027-06-01" : "2026-08-18"));
         return Map.of("sameV1",resolved == v1,"sameV2",resolved == v2);
+    }
+    /** Coverage for CommissionSchemeService (SS2 tier validation, SS24 Tier Versioning) - no prior Scenarios existed for this. */
+    private Object schemeCrud(String scenario) {
+        var schemesStub = new V2RepositoryStub<>(CommissionSchemeRepository.class);
+        var tiersStub = new V2RepositoryStub<>(CommissionTierRepository.class);
+        schemesStub.on("save", a -> a[0]);
+        var savedTiers = new ArrayList<CommissionTier>();
+        tiersStub.on("save", a -> { savedTiers.add((CommissionTier) a[0]); return a[0]; });
+        var service = new CommissionSchemeService(schemesStub.proxy(), tiersStub.proxy());
+
+        List<CommissionSchemeService.TierInput> validTiers = List.of(
+                new CommissionSchemeService.TierInput(decimal("0"), decimal("59999"), decimal("0.05"), 1),
+                new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
+
+        if (scenario.equals("schemecrud-create")) {
+            schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of());
+            var created = service.create("Default", LocalDate.parse("2026-01-01"), null, new Permission(), validTiers, 1L);
+            return Map.of("version", created.getSchemeVersion(), "tiersSaved", savedTiers.size(),
+                    "firstRate", savedTiers.get(0).getCommissionRate());
+        }
+        if (scenario.equals("schemecrud-next-version")) {
+            var existing = schemeVersion(1, "2026-01-01", null);
+            schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(existing));
+            var created = service.create("V2", LocalDate.parse("2027-01-01"), null, new Permission(), validTiers, 1L);
+            return Map.of("version", created.getSchemeVersion());
+        }
+        if (scenario.equals("schemecrud-overlap")) {
+            // Case 8 from the requirement doc: 0-59,999=5% then 50,000-79,999=7% overlaps.
+            List<CommissionSchemeService.TierInput> overlapping = List.of(
+                    new CommissionSchemeService.TierInput(decimal("0"), decimal("59999"), decimal("0.05"), 1),
+                    new CommissionSchemeService.TierInput(decimal("50000"), decimal("79999"), decimal("0.07"), 2));
+            return V2RepositoryStub.outcome(() ->
+                    service.create("Overlap", LocalDate.parse("2026-01-01"), null, new Permission(), overlapping, 1L));
+        }
+        if (scenario.equals("schemecrud-gap")) {
+            List<CommissionSchemeService.TierInput> gapped = List.of(
+                    new CommissionSchemeService.TierInput(decimal("0"), decimal("49999"), decimal("0.05"), 1),
+                    new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
+            return V2RepositoryStub.outcome(() ->
+                    service.create("Gap", LocalDate.parse("2026-01-01"), null, new Permission(), gapped, 1L));
+        }
+        if (scenario.equals("schemecrud-update-keeps-tiers")) {
+            var existing = schemeVersion(1, "2026-01-01", null);
+            schemesStub.on("findById", a -> Optional.of(existing));
+            service.update(existing.getId(), "Renamed", null, null, 9L);
+            return Map.of("name", existing.getSchemeName(), "tiersSaveCallsDuringUpdate", tiersStub.calls("save"));
+        }
+        throw new IllegalArgumentException("Unknown schemecrud scenario: " + scenario);
     }
     private Object tier(String scenario) {
         var repository = new V2RepositoryStub<>(CommissionTierRepository.class)
