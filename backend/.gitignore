@@ -6,5 +6,10 @@ target/
 *.log
 .idea/
 .vscode/settings.json
-node_modules
-cypress
+
+# Node dependencies and generated Cypress output
+node_modules/
+cypress/results/
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/

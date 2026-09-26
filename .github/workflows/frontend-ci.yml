@@ -57,6 +57,11 @@ jobs:
           browser: chrome
           command: npm run test:e2e -- --browser chrome
 
+      - name: Show backend logs on failure
+        if: failure()
+        working-directory: .
+        run: docker compose logs --no-color --tail=200 postgres backend
+
       - name: Stop backend test services
         if: always()
         working-directory: .
