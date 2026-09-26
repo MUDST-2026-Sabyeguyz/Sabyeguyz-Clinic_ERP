@@ -8,6 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "branch")
@@ -19,6 +21,7 @@ public class Branch {
     private Long id;
 
     @Column(name = "branch_code", length = 2, nullable = false, unique = true)
+    @JdbcTypeCode(SqlTypes.CHAR)
     private String branchCode;
 
     @Column(name = "branch_name", nullable = false)
