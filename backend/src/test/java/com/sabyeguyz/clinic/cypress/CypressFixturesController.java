@@ -61,6 +61,15 @@ public class CypressFixturesController {
                 "tomorrow", LocalDate.now(ZoneOffset.ofHours(7)).plusDays(1).toString());
     }
 
+    @GetMapping("/schema/branch-code")
+    public Map<String, Object> branchCodeSchema() {
+        return jdbc.queryForMap("""
+                SELECT DATA_TYPE AS "dataType", CHARACTER_MAXIMUM_LENGTH AS "length"
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = 'BRANCH' AND COLUMN_NAME = 'BRANCH_CODE'
+                """);
+    }
+
     @PostMapping("/sales/{id}/report-date")
     @Transactional
     public void setReportDate(@PathVariable long id) {
