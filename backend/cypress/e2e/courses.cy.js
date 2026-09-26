@@ -1,7 +1,7 @@
 describe('Course purchase and ledger API', () => {
   beforeEach(function () {
     cy.registerPatient().then((patient) => {
-      cy.wrap({ patientId: patient.id, courseId: this.fixtures.courseId, branchCode: 'RP' }).as('purchaseBody')
+      cy.wrap({ patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01' }).as('purchaseBody')
     })
   })
 
@@ -22,7 +22,7 @@ describe('Course purchase and ledger API', () => {
   })
 
   it('rejects a purchase without a patient ID', function () {
-    cy.api('POST', '/api/course-purchases', { courseId: this.fixtures.courseId, branchCode: 'RP' })
+    cy.api('POST', '/api/course-purchases', { courseId: this.fixtures.courseId, branchCode: '01' })
       .then(({ status, body }) => {
         expect(status).to.equal(400)
         expect(body.fields).to.have.property('patientId')

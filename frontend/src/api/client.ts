@@ -115,9 +115,10 @@ export type Page<T> = {
 }
 export type Branch = {
   id: number
-  code: string
-  numericCode: string
+  branchCode: string
   name: string
+  address: string
+  phone: string
   active: boolean
 }
 export type Staff = {
@@ -306,9 +307,9 @@ export const patientApi = {
 export const branchApi = {
   list: () => api.get<Branch[]>('/api/branches'),
   get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
-  create: (body: { code: string; numericCode: string; name: string }) =>
+  create: (body: { branchCode: string; name: string; address: string; phone: string }) =>
     api.post<Branch>('/api/branches', body),
-  update: (id: number, body: { code: string; numericCode: string; name: string }) =>
+  update: (id: number, body: { branchCode: string; name: string; address: string; phone: string }) =>
     api.put<Branch>(`/api/branches/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }

@@ -18,7 +18,7 @@ describe('ReportServiceTest migration', () => {
   const assessment = (quantity = 1) => ({ type: 'ASSESSMENT', referenceId: catalog.assessmentId, quantity })
   function sell(items, amount, options = {}) {
     return cy.api('POST', '/api/payments', {
-      patientId: options.patientId ?? patient.id, branchCode: options.branchCode ?? 'RP',
+      patientId: options.patientId ?? patient.id, branchCode: options.branchCode ?? '01',
       salespersonStaffId: options.staffId ?? null, items,
       payments: [{ paymentMethodCode: 'CASH', amount }],
     }).then(({ status, body }) => {
@@ -33,7 +33,7 @@ describe('ReportServiceTest migration', () => {
   }
   function report(type = 'dashboard', query = {}) {
     const url = type === 'dashboard' ? '/api/dashboard/summary' : `/api/reports/${type}`
-    return cy.api('GET', url, undefined, { qs: { from: DAY, to: DAY, branchCode: 'RP', ...query } })
+    return cy.api('GET', url, undefined, { qs: { from: DAY, to: DAY, branchCode: '01', ...query } })
       .then(({ status, body }) => { expect(status).to.equal(200); return body })
   }
   function otherPatient(overrides = {}) {
@@ -42,7 +42,7 @@ describe('ReportServiceTest migration', () => {
   }
   function visit(patientId, hour, status = 'COMPLETED') {
     return cy.api('POST', '/api/appointments', {
-      branchCode: 'RP', patientId, therapistId: fixtures.therapistId,
+      branchCode: '01', patientId, therapistId: fixtures.therapistId,
       serviceId: catalog.assessmentId, startAt: `${DAY}T${String(hour).padStart(2, '0')}:00:00+07:00`,
     }).then(({ status: responseStatus, body }) => {
       expect(responseStatus).to.equal(201)
@@ -133,20 +133,20 @@ describe('ReportServiceTest migration', () => {
   function branchSales(quantity) {
     cy.api('POST', '/__cypress/report-branch').its('status').should('equal', 200)
     sell([assessment()], 1200)
-    otherPatient({ branchCode: 'CM' }).then((other) => sell([assessment(quantity)], 1200 * quantity,
-      { patientId: other.id, branchCode: 'CM' }))
+    otherPatient({ branchCode: '02' }).then((other) => sell([assessment(quantity)], 1200 * quantity,
+      { patientId: other.id, branchCode: '02' }))
   }
   it('filtersRevenueByBranch', () => {
     branchSales(2)
     report().its('totalRevenue').should('equal', 1200)
-    report('dashboard', { branchCode: 'CM' }).its('totalRevenue').should('equal', 2400)
+    report('dashboard', { branchCode: '02' }).its('totalRevenue').should('equal', 2400)
     report('dashboard', { branchCode: undefined }).its('totalRevenue').should('equal', 3600)
   })
   it('breaksRevenueDownByBranch', () => {
     branchSales(1)
     report('revenue', { branchCode: undefined }).then((r) => {
       expect(r.byBranch).to.have.length(2)
-      expect(r.byBranch.map((b) => b.branchCode)).to.deep.equal(['CM', 'RP'])
+      expect(r.byBranch.map((b) => b.branchCode)).to.deep.equal(['01', '02'])
     })
   })
   it('countsOnlyAppointmentsThePatientActuallyAttended', () => {

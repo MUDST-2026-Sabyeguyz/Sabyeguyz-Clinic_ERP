@@ -143,7 +143,7 @@ public class UserManagementController {
                 value.getEmployeeCode(),
                 value.getFullName(),
                 value.getPhone(),
-                branch == null ? null : branch.getCode(),
+                branch == null ? null : branch.getBranchCode(),
                 branch == null ? null : branch.getName(),
                 user.isActive() && value.isActive());
     }
@@ -152,7 +152,7 @@ public class UserManagementController {
         if (code == null || code.isBlank()) {
             return null;
         }
-        return branches.findByCodeAndActiveTrue(code.trim().toUpperCase())
+        return branches.findByBranchCodeAndActiveTrue(code.trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน " + code));
     }
 

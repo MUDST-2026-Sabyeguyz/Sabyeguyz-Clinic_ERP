@@ -39,8 +39,8 @@ public class CypressAppointmentController {
         if (change.inactiveService()) jdbc.update("UPDATE services SET active = false WHERE code = 'PHYSIO_60'");
         if (change.inactiveTherapist()) jdbc.update("UPDATE therapists SET active = false WHERE code = 'RP-T02'");
         if (change.otherBranch()) {
-            jdbc.update("INSERT INTO branches (code, numeric_code, name, active) VALUES ('QQ', '99', 'สาขาทดสอบ', true)");
-            jdbc.update("INSERT INTO therapists (branch_id, code, full_name, active) VALUES ((SELECT id FROM branches WHERE code = 'QQ'), 'QQ-T01', 'นักกายภาพบำบัด สาขาอื่น', true)");
+            jdbc.update("INSERT INTO branch (branch_code, branch_name, address, phone, branch_status) VALUES ('99', 'สาขาทดสอบ', '-', '-', true)");
+            jdbc.update("INSERT INTO therapists (branch_id, code, full_name, active) VALUES ((SELECT branch_id FROM branch WHERE branch_code = '99'), 'QQ-T01', 'นักกายภาพบำบัด สาขาอื่น', true)");
             return Map.of("otherBranchTherapistId", jdbc.queryForObject("SELECT id FROM therapists WHERE code = 'QQ-T01'", Long.class));
         }
         return Map.of();

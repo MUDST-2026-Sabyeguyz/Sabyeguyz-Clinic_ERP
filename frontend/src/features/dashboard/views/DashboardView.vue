@@ -8,7 +8,7 @@ const now = new Date()
 const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
 const to = ref(now.toISOString().slice(0, 10))
 const branchCode = ref('')
-const branches = ref<Array<{ code: string; name: string }>>([])
+const branches = ref<Array<{ branchCode: string; name: string }>>([])
 const loading = ref(true)
 const errorMessage = ref('')
 const patients = ref(0)
@@ -39,7 +39,7 @@ const maxAppointments = computed(() =>
   Math.max(...dashboardStatuses.value.map((item) => item.appointments), 1),
 )
 const branchName = computed(
-  () => branches.value.find((item) => item.code === branchCode.value)?.name ?? 'ทุกสาขา',
+  () => branches.value.find((item) => item.branchCode === branchCode.value)?.name ?? 'ทุกสาขา',
 )
 const patientGenderLabel = computed(
   () =>
@@ -143,7 +143,7 @@ watch([from, to, branchCode], loadDashboard)
           <label
             >สาขา<select v-model="branchCode">
               <option value="">ทุกสาขา</option>
-              <option v-for="branch in branches" :key="branch.code" :value="branch.code">
+              <option v-for="branch in branches" :key="branch.branchCode" :value="branch.branchCode">
                 {{ branch.name }}
               </option>
             </select></label

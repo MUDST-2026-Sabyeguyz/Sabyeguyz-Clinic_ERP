@@ -136,10 +136,10 @@ async function loadTransactions() {
         salesApi.list({ page: index + 1, size: 100 }),
       ),
     )
-    branchNames.value = Object.fromEntries(branches.map((branch) => [branch.code, branch.name]))
+    branchNames.value = Object.fromEntries(branches.map((branch) => [branch.branchCode, branch.name]))
     branchOptions.value = branches
       .filter((branch) => branch.active)
-      .map(({ code, name }) => ({ code, name }))
+      .map(({ branchCode, name }) => ({ code: branchCode, name }))
     const sales = [firstPage, ...remainingPages].flatMap((result) => result.items)
     rows.value = [...sales.map(saleRow), ...usages.map(usageRow)]
     const voidedSales = rows.value.filter((row) => row.kind === 'sale' && row.status !== 'ปกติ')
