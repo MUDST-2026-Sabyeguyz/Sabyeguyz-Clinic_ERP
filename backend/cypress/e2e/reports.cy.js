@@ -14,10 +14,10 @@ describe('Dashboard and report API', () => {
 
   it('returns dashboard revenue for the requested period and branch', function () {
     sellOnReportDate(this.fixtures)
-    cy.api('GET', '/api/dashboard/summary', undefined, { qs: { ...period, branchCode: 'RP' } })
+    cy.api('GET', '/api/dashboard/summary', undefined, { qs: { ...period, branchCode: '01' } })
       .then(({ status, body }) => {
         expect(status).to.equal(200)
-        expect(body).to.include({ from: '2032-07-04', branchCode: 'RP', totalRevenue: 9000,
+        expect(body).to.include({ from: '2032-07-04', branchCode: '01', totalRevenue: 9000,
           courseRevenue: 9000, singleVisitRevenue: 0, receiptsIssued: 1, receiptsVoided: 0 })
       })
   })
@@ -46,7 +46,7 @@ describe('Dashboard and report API', () => {
 
   it('puts sales without a salesperson in the unassigned bucket', function () {
     sellOnReportDate(this.fixtures)
-    cy.api('GET', '/api/reports/staff-sales', undefined, { qs: { ...period, branchCode: 'RP' } }).then(({ status, body }) => {
+    cy.api('GET', '/api/reports/staff-sales', undefined, { qs: { ...period, branchCode: '01' } }).then(({ status, body }) => {
       expect(status).to.equal(200)
       expect(body.branchTotal).to.equal(9000)
       expect(body.rows).to.have.length(0)
@@ -55,7 +55,7 @@ describe('Dashboard and report API', () => {
   })
 
   it('returns an empty appointment report', () => {
-    cy.api('GET', '/api/reports/appointments', undefined, { qs: { ...period, branchCode: 'RP' } }).then(({ status, body }) => {
+    cy.api('GET', '/api/reports/appointments', undefined, { qs: { ...period, branchCode: '01' } }).then(({ status, body }) => {
       expect(status).to.equal(200)
       expect(body).to.include({ appointments: 0, visits: 0, noShowRate: 0 })
       expect(body.daily).to.have.length(1)

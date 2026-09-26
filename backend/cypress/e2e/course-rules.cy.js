@@ -11,7 +11,7 @@ describe('CourseLedgerService rules migrated from JUnit', () => {
     cy.registerPatient().then((p) => { patientId = p.id })
     cy.api('POST', '/api/courses', master).then(ok(201)).then((c) => { courseId = c.id })
   })
-  const purchase = (id = courseId) => cy.api('POST', '/api/course-purchases', { patientId, courseId: id, branchCode: 'RP' }).then(ok(201))
+  const purchase = (id = courseId) => cy.api('POST', '/api/course-purchases', { patientId, courseId: id, branchCode: '01' }).then(ok(201))
   const ledger = (id) => cy.api('GET', `/api/course-purchases/${id}`).then(ok(200))
   const useRequest = (id, reason = null) => cy.api('POST', '/api/course-usages', { coursePurchaseId: id, appointmentId: null, note: reason })
   const use = (id, reason) => useRequest(id, reason).then(ok(201))

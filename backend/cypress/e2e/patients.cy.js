@@ -67,7 +67,7 @@ describe('Patient query API', () => {
     cy.api('GET', `/api/patients/${this.patient.id}`).then(({ status, body }) => {
       expect(status).to.equal(200)
       expect(body.id).to.equal(this.patient.id)
-      expect(body.branch.code).to.equal('RP')
+      expect(body.branch.branchCode).to.equal('01')
       for (const key of ['password', 'passwordHash', 'username']) expect(body).not.to.have.property(key)
       expect(body.email).to.equal('cypress-patient@example.com')
     })

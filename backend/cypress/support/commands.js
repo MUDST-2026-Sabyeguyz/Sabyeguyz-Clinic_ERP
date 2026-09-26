@@ -13,7 +13,7 @@ Cypress.Commands.add('parallelApi', (requests) => {
 
 export function patientPayload(overrides = {}) {
   return {
-    branchCode: 'RP', username: 'cypress-patient', email: 'cypress-patient@example.com',
+    branchCode: '01', username: 'cypress-patient', email: 'cypress-patient@example.com',
     password: 'password123', title: 'นาย', fullName: 'สมชาย ใจดี', birthDate: '1990-01-01',
     gender: 'ชาย', phone: '0811111111', identityDocumentType: 'NATIONAL_ID',
     identityNumber: '1100000000101', address: 'กรุงเทพฯ', drugAllergy: false,
@@ -32,14 +32,14 @@ Cypress.Commands.add('registerPatient', (overrides = {}) => {
 
 export function appointmentBody(fixtures, patientId, time = '09:00') {
   return {
-    branchCode: 'RP', patientId, therapistId: fixtures.therapistId,
+    branchCode: '01', patientId, therapistId: fixtures.therapistId,
     serviceId: fixtures.serviceId, startAt: `${fixtures.tomorrow}T${time}:00+07:00`, note: 'นัดทดสอบ',
   }
 }
 
 export function saleBody(courseId, patientId, amount = 9000) {
   return {
-    patientId, branchCode: 'RP', items: [{ type: 'COURSE', referenceId: courseId, quantity: 1 }],
+    patientId, branchCode: '01', items: [{ type: 'COURSE', referenceId: courseId, quantity: 1 }],
     payments: [{ paymentMethodCode: 'CASH', amount }],
   }
 }
