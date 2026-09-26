@@ -48,7 +48,7 @@ class CourseLedgerConcurrencyTest {
         // 1 ครั้ง ไม่มี Bonus เพื่อให้เหลือสิทธิ์ครั้งเดียวให้แย่งกัน
         Long courseId = courseRepository.save(new Course(
                 "CONC" + UNIQUE.incrementAndGet(), "คอร์สครั้งเดียว", new BigDecimal("1000.00"), 1, 0, 30)).getId();
-        purchaseId = service.purchase(new CoursePurchaseRequest(patientId, courseId, "RP")).id();
+        purchaseId = service.purchase(new CoursePurchaseRequest(patientId, courseId, "01")).id();
     }
 
     @AfterEach
@@ -71,7 +71,7 @@ class CourseLedgerConcurrencyTest {
             entityManager.createNativeQuery("DELETE FROM patients WHERE username LIKE 'course-concurrency-%'")
                     .executeUpdate();
             entityManager.createNativeQuery(
-                            "DELETE FROM hn_counters WHERE branch_id = (SELECT id FROM branches WHERE code = 'RP')")
+                            "DELETE FROM hn_counters WHERE branch_id = (SELECT branch_id FROM branch WHERE branch_code = '01')")
                     .executeUpdate();
         });
     }
@@ -147,7 +147,7 @@ class CourseLedgerConcurrencyTest {
     private Long registerPatient() {
         int unique = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "course-concurrency-" + unique, "course-concurrency-" + unique + "@example.com",
+                "01", "course-concurrency-" + unique, "course-concurrency-" + unique + "@example.com",
                 "password123", "นาย", "ทดสอบ คอร์สพร้อมกัน", LocalDate.of(1990, 1, 1), "ชาย", "0800000011",
                 "NATIONAL_ID", "1100000008" + String.format("%03d", unique), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();

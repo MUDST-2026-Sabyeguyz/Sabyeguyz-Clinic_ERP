@@ -68,7 +68,7 @@ class AppointmentConcurrencyTest {
             entityManager.createNativeQuery("DELETE FROM patients WHERE username LIKE 'concurrency-test-%'")
                     .executeUpdate();
             entityManager.createNativeQuery(
-                            "DELETE FROM hn_counters WHERE branch_id = (SELECT id FROM branches WHERE code = 'RP')")
+                            "DELETE FROM hn_counters WHERE branch_id = (SELECT branch_id FROM branch WHERE branch_code = '01')")
                     .executeUpdate();
         });
     }
@@ -206,7 +206,7 @@ class AppointmentConcurrencyTest {
     }
 
     private AppointmentCreateRequest request(OffsetDateTime startAt) {
-        return new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, startAt, "นัดทดสอบ concurrency");
+        return new AppointmentCreateRequest("01", patientId, therapistId, serviceId, startAt, "นัดทดสอบ concurrency");
     }
 
     private Long therapistId(String code) {
@@ -217,7 +217,7 @@ class AppointmentConcurrencyTest {
     private Long registerPatient() {
         int seq = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "concurrency-test-" + seq, "concurrency-test-" + seq + "@example.com", "password123", "นาย",
+                "01", "concurrency-test-" + seq, "concurrency-test-" + seq + "@example.com", "password123", "นาย",
                 "ทดสอบ พร้อมกัน", LocalDate.of(1990, 1, 1), "ชาย", "0800000000",
                 "NATIONAL_ID", "99000000000" + String.format("%02d", seq), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();
