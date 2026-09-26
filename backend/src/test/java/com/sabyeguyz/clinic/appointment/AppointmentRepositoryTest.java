@@ -40,7 +40,7 @@ class AppointmentRepositoryTest {
 
     @BeforeEach
     void setUp() {
-        branch = branchRepository.findByCodeAndActiveTrue("RP").orElseThrow();
+        branch = branchRepository.findByBranchCodeAndActiveTrue("01").orElseThrow();
         patient = patientRepository.findById(registerPatient()).orElseThrow();
         therapistOne = therapistByCode("RP-T01");
         therapistTwo = therapistByCode("RP-T02");
@@ -156,7 +156,7 @@ class AppointmentRepositoryTest {
 
     private Long registerPatient() {
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "appt-test", "appt-test@example.com", "password123", "นาย",
+                "01", "appt-test", "appt-test@example.com", "password123", "นาย",
                 "ทดสอบ นัดหมาย", LocalDate.of(1990, 1, 1), "ชาย", "0800000000",
                 "NATIONAL_ID", "1100000000999", "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();

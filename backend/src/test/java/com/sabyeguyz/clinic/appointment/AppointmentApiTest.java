@@ -56,7 +56,7 @@ class AppointmentApiTest {
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
-                .andExpect(jsonPath("$.branchCode").value("RP"))
+                .andExpect(jsonPath("$.branchCode").value("01"))
                 .andExpect(jsonPath("$.patient.hn").isNotEmpty())
                 .andExpect(jsonPath("$.service.durationMinutes").value(60));
     }
@@ -83,7 +83,7 @@ class AppointmentApiTest {
     @Test
     void rejectsMissingPatientId() throws Exception {
         String invalid = """
-                {"branchCode":"RP","therapistId":%d,"serviceId":%d,"startAt":"%s"}
+                {"branchCode":"01","therapistId":%d,"serviceId":%d,"startAt":"%s"}
                 """.formatted(therapistId, serviceId, nineAmTomorrow);
 
         mockMvc.perform(postAppointment(invalid))
@@ -94,7 +94,7 @@ class AppointmentApiTest {
     @Test
     void rejectsUnknownTherapistWithBadRequest() throws Exception {
         String invalid = """
-                {"branchCode":"RP","patientId":%d,"therapistId":999999,"serviceId":%d,"startAt":"%s"}
+                {"branchCode":"01","patientId":%d,"therapistId":999999,"serviceId":%d,"startAt":"%s"}
                 """.formatted(patientId, serviceId, nineAmTomorrow);
 
         mockMvc.perform(postAppointment(invalid))
@@ -105,7 +105,7 @@ class AppointmentApiTest {
     @Test
     void rejectsMalformedStartAt() throws Exception {
         String invalid = """
-                {"branchCode":"RP","patientId":%d,"therapistId":%d,"serviceId":%d,"startAt":"1 กันยายน 2026"}
+                {"branchCode":"01","patientId":%d,"therapistId":%d,"serviceId":%d,"startAt":"1 กันยายน 2026"}
                 """.formatted(patientId, therapistId, serviceId);
 
         mockMvc.perform(postAppointment(invalid))
@@ -171,13 +171,13 @@ class AppointmentApiTest {
 
     private String body(OffsetDateTime startAt) {
         return """
-                {"branchCode":"RP","patientId":%d,"therapistId":%d,"serviceId":%d,"startAt":"%s","note":"นัดทดสอบ"}
+                {"branchCode":"01","patientId":%d,"therapistId":%d,"serviceId":%d,"startAt":"%s","note":"นัดทดสอบ"}
                 """.formatted(patientId, therapistId, serviceId, startAt);
     }
 
     private long bookTomorrowNineAm() {
         return bookingService.create(
-                new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, nineAmTomorrow, null)).id();
+                new AppointmentCreateRequest("01", patientId, therapistId, serviceId, nineAmTomorrow, null)).id();
     }
 
     private OffsetDateTime tomorrowAt(int hour) {
@@ -187,7 +187,7 @@ class AppointmentApiTest {
 
     private Long registerPatient() {
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "api-test", "api-test@example.com", "password123", "นาย",
+                "01", "api-test", "api-test@example.com", "password123", "นาย",
                 "ทดสอบ API นัดหมาย", LocalDate.of(1990, 1, 1), "ชาย", "0800000002",
                 "NATIONAL_ID", "1100000000997", "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();

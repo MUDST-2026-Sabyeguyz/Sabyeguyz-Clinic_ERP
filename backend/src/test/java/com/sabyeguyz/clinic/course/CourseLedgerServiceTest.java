@@ -113,7 +113,7 @@ class CourseLedgerServiceTest {
     void rejectsUsageOfExpiredCourse() {
         Long expiredCourseId = courseRepository.save(
                 new Course(uniqueCode("EXP"), "คอร์สอายุสั้น", new BigDecimal("1000.00"), 5, 0, 1)).getId();
-        CoursePurchaseResponse bought = service.purchase(new CoursePurchaseRequest(patientId, expiredCourseId, "RP"));
+        CoursePurchaseResponse bought = service.purchase(new CoursePurchaseRequest(patientId, expiredCourseId, "01"));
 
         // ย้อนวันหมดอายุให้ผ่านไปแล้ว โดยไม่แตะยอดคงเหลือ
         expirePurchase(bought.id());
@@ -218,7 +218,7 @@ class CourseLedgerServiceTest {
     }
 
     private CoursePurchaseResponse purchase() {
-        return service.purchase(new CoursePurchaseRequest(patientId, courseId, "RP"));
+        return service.purchase(new CoursePurchaseRequest(patientId, courseId, "01"));
     }
 
     private void expirePurchase(long purchaseId) {
@@ -239,7 +239,7 @@ class CourseLedgerServiceTest {
     private Long registerPatient() {
         int unique = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "course-test-" + unique, "course-test-" + unique + "@example.com", "password123", "นาย",
+                "01", "course-test-" + unique, "course-test-" + unique + "@example.com", "password123", "นาย",
                 "ทดสอบ คอร์ส", LocalDate.of(1990, 1, 1), "ชาย", "0800000010",
                 "NATIONAL_ID", "1100000009" + String.format("%03d", unique), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();

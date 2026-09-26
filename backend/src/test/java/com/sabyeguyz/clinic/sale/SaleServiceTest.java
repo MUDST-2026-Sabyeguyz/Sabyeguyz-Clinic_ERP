@@ -159,7 +159,7 @@ class SaleServiceTest {
     void storesTheSalespersonSeparatelyFromTheTreatingStaff() {
         Long salespersonId = registerSalesperson();
 
-        SaleResponse sale = service.create(new SaleRequest(patientId, "RP", salespersonId, null,
+        SaleResponse sale = service.create(new SaleRequest(patientId, "01", salespersonId, null,
                 List.of(assessmentLine(1)), List.of(payment("CASH", "1200.00"))));
 
         assertThat(sale.salesperson()).isNotNull();
@@ -316,7 +316,7 @@ class SaleServiceTest {
     void listsEveryPatientWhenNoFilterIsGiven() {
         Long other = registerPatient();
         service.create(request(List.of(assessmentLine(1)), List.of(payment("CASH", "1200.00"))));
-        service.create(new SaleRequest(other, "RP", null, null,
+        service.create(new SaleRequest(other, "01", null, null,
                 List.of(assessmentLine(1)), List.of(payment("CASH", "1200.00"))));
 
         assertThat(service.search(null, null, 0, 20).totalItems()).isGreaterThanOrEqualTo(2);
@@ -337,7 +337,7 @@ class SaleServiceTest {
     }
 
     private SaleRequest request(List<SaleRequest.Item> items, List<SaleRequest.Payment> payments) {
-        return new SaleRequest(patientId, "RP", null, null, items, payments);
+        return new SaleRequest(patientId, "01", null, null, items, payments);
     }
 
     private SaleRequest.Item assessmentLine(int quantity) {
@@ -378,7 +378,7 @@ class SaleServiceTest {
     private Long registerPatient() {
         int unique = UNIQUE.incrementAndGet();
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "sale-test-" + unique, "sale-test-" + unique + "@example.com", "password123", "นาย",
+                "01", "sale-test-" + unique, "sale-test-" + unique + "@example.com", "password123", "นาย",
                 "ทดสอบ การขาย", LocalDate.of(1990, 1, 1), "ชาย", "0800000014",
                 "NATIONAL_ID", "1100000006" + String.format("%03d", unique), "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999999", true)).id();
