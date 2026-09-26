@@ -19,4 +19,9 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             + "where c.sellerStaff.id = :sellerStaffId and c.saleMonth = :saleMonth")
     BigDecimal sumCoursePriceBySellerAndSaleMonth(@Param("sellerStaffId") Long sellerStaffId,
                                                    @Param("saleMonth") String saleMonth);
+
+    /** Every Course a patient can use: as the Receipt's buyer (implicit Owner) or as a Shared Member. */
+    @Query("select distinct c from Course c left join CourseSharedMember m on m.course = c "
+            + "where c.receipt.patient.id = :patientId or m.patient.id = :patientId")
+    List<Course> findByPatientId(@Param("patientId") Long patientId);
 }
