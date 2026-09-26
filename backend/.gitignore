@@ -6,3 +6,5 @@ target/
 *.log
 .idea/
 .vscode/settings.json
+node_modules
+cypress
