@@ -42,7 +42,7 @@ class PatientControllerTest {
 
     private String validRequest() {
         return """
-                {"branchCode":"RP","username":"somchai","email":"somchai@example.com","password":"password123",
+                {"branchCode":"01","username":"somchai","email":"somchai@example.com","password":"password123",
                 "title":"นาย","fullName":"สมชาย ใจดี","birthDate":"1990-01-01","gender":"ชาย","phone":"0812345678",
                 "identityDocumentType":"NATIONAL_ID","identityNumber":"1100000000001","address":"กรุงเทพฯ",
                 "drugAllergy":false,"foodAllergy":false,"chronicDisease":"",

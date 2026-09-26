@@ -150,11 +150,12 @@ class AppointmentRescheduleServiceTest {
     void rejectsTherapistFromAnotherBranch() {
         AppointmentResponse original = bookingService.create(request(nineAmTomorrow));
         entityManager.createNativeQuery(
-                        "INSERT INTO branches (code, numeric_code, name, active) VALUES ('QQ', '99', 'สาขาทดสอบ', true)")
+                        "INSERT INTO branch (branch_code, branch_name, address, phone, branch_status) "
+                                + "VALUES ('99', 'สาขาทดสอบ', '-', '-', true)")
                 .executeUpdate();
         entityManager.createNativeQuery(
                         "INSERT INTO therapists (branch_id, code, full_name, active) "
-                                + "VALUES ((SELECT id FROM branches WHERE code = 'QQ'), 'QQ-T01', 'นักกายภาพบำบัด สาขาอื่น', true)")
+                                + "VALUES ((SELECT branch_id FROM branch WHERE branch_code = '99'), 'QQ-T01', 'นักกายภาพบำบัด สาขาอื่น', true)")
                 .executeUpdate();
         entityManager.flush();
         entityManager.clear();
@@ -175,12 +176,12 @@ class AppointmentRescheduleServiceTest {
     }
 
     private AppointmentCreateRequest request(OffsetDateTime startAt) {
-        return new AppointmentCreateRequest("RP", patientId, therapistId, serviceId, startAt, "นัดทดสอบ");
+        return new AppointmentCreateRequest("01", patientId, therapistId, serviceId, startAt, "นัดทดสอบ");
     }
 
     private Long registerPatient() {
         return registrationService.register(new PatientRegistrationRequest(
-                "RP", "reschedule-test", "reschedule-test@example.com", "password123", "นาย",
+                "01", "reschedule-test", "reschedule-test@example.com", "password123", "นาย",
                 "ทดสอบ เลื่อนนัด", LocalDate.of(1990, 1, 1), "ชาย", "0800000002",
                 "NATIONAL_ID", "1100000000997", "กรุงเทพฯ", false, false, "",
                 "ผู้ติดต่อ", "ญาติ", "0899999998", true)).id();
