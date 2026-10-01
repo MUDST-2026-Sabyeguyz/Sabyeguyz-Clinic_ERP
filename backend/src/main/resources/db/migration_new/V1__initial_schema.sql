@@ -6,7 +6,7 @@
 
 -- ENUM types
 CREATE TYPE service_type_enum AS ENUM (
-    'Assessment', 'SingleVisit', 'Course'
+    'SingleVisit', 'Course'
 );
 CREATE TYPE staff_position_enum AS ENUM (
     'Therapist', 'Manager'
@@ -14,6 +14,7 @@ CREATE TYPE staff_position_enum AS ENUM (
 CREATE TYPE commission_after_termination_policy_enum AS ENUM (
     'FORFEIT', 'CONTINUE_UNTIL_COMPLETE'
 );
+-------------------------------------------------------
 CREATE TYPE customer_type_enum AS ENUM (
     'Thai', 'Foreigner'
 );
@@ -174,7 +175,7 @@ CREATE TABLE room(
 
 CREATE TABLE master_data_type(
     type_id BIGSERIAL PRIMARY KEY,                  -- auto-increment
-    type_name VARCHAR(50) NOT NULL,
+    type_name VARCHAR(50) NOT NULL UNIQUE,
 
     type_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     type_create_by BIGINT NOT NULL,
@@ -203,6 +204,7 @@ CREATE TABLE staff (
     staff_create_by BIGINT NOT NULL,
     staff_update_at TIMESTAMP,
     staff_update_by BIGINT,
+    termination_policy_locked_at TIMESTAMP,
 
     CONSTRAINT fk_staff_branch
        FOREIGN KEY (branch_id)
@@ -1509,7 +1511,7 @@ ALTER TABLE staff
         FOREIGN KEY (staff_update_by)
             REFERENCES app_user(user_id);
 
-
+-------------------------------------------------
 ALTER TABLE app_user
     ADD CONSTRAINT fk_app_user_create_by
         FOREIGN KEY (user_create_by)
