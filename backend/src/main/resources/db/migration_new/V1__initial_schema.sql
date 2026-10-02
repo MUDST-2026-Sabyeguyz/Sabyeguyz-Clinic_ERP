@@ -14,7 +14,6 @@ CREATE TYPE staff_position_enum AS ENUM (
 CREATE TYPE commission_after_termination_policy_enum AS ENUM (
     'FORFEIT', 'CONTINUE_UNTIL_COMPLETE'
 );
--------------------------------------------------------
 CREATE TYPE customer_type_enum AS ENUM (
     'Thai', 'Foreigner'
 );
@@ -28,17 +27,33 @@ CREATE TYPE blood_group_enum AS ENUM (
     'A', 'B', 'O', 'AB'
 );
 CREATE TYPE appointment_status_enum AS ENUM (
+    'Unconfirmed', 'Confirmed', 'Arrived', 'InService', 'Completed', 'Cancelled', 'Rescheduled', 'NoShow'
+);
+CREATE TYPE appointment_patient_type_enum AS ENUM (
+    'NEW', 'CURRENT'
+);
+CREATE TYPE requested_service_type_enum AS ENUM (
+    'SingleVisit', 'Course'
+);
+CREATE TYPE calendar_sync_status_enum AS ENUM (
+    'Pending', 'Synced', 'Failed', 'Deleted'                   -- pending integration scope
+);
+CREATE TYPE appointment_to_status_enum AS ENUM (
     'Confirmed', 'Arrived', 'InService', 'Completed', 'Cancelled', 'Rescheduled', 'NoShow'
 );
 CREATE TYPE visit_status_enum AS ENUM (
     'Arrived', 'InService', 'Completed', 'Cancelled'
 );
-CREATE TYPE fee_type_enum AS ENUM (
+CREATE TYPE fixed_per_enum AS ENUM (
     'Fixed', 'Percentage'
 );
-CREATE TYPE calculation_base_enum AS ENUM (
+CREATE TYPE percentage_base_enum AS ENUM (
     'CourseValuePerVisit', 'OtherConfiguredBase'
 );
+CREATE TYPE receipt_status_enum AS ENUM (
+    'Issued', 'Voided', 'Refunded'
+);
+-------------------------------------------------------
 CREATE TYPE course_status_enum AS ENUM (
     'Active', 'Completed', 'Cancelled', 'Refunded'
 );
@@ -230,7 +245,15 @@ CREATE TABLE app_user (
 
     CONSTRAINT fk_user_staff
       FOREIGN KEY (staff_id)
-          REFERENCES staff(staff_id)
+          REFERENCES staff(staff_id),
+
+    CONSTRAINT fk_app_user_create_by
+        FOREIGN KEY (user_create_by)
+            REFERENCES app_user(user_id),
+
+    CONSTRAINT fk_app_user_update_by
+        FOREIGN KEY (user_update_by)
+            REFERENCES app_user(user_id)
 
     -- Circular Foreign Key : user_create_by, user_update_by
 );
@@ -402,20 +425,20 @@ CREATE TABLE system_setting(
 
 -- Patient tables
 CREATE TABLE patient (
-    patient_id BIGSERIAL PRIMARY KEY,       -- auto-increment
-    hn CHAR(10) NOT NULL UNIQUE,            -- YYBBMMNNNN
+    patient_id BIGSERIAL PRIMARY KEY,               -- auto-increment
+    patient_hn CHAR(10) NOT NULL UNIQUE,            -- YYBBMMNNNN
     customer_type customer_type_enum NOT NULL,
     title title_enum NOT NULL,
     patient_fname VARCHAR(100) NOT NULL,
     patient_lname VARCHAR(100) NOT NULL,
     gender gender_enum NOT NULL,
-    phone VARCHAR(20) NOT NULL,
+    phone VARCHAR(20),                              -- Thai: required; Foreigner: optional
     branch_id BIGINT NOT NULL,
     registered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     gender_detail VARCHAR(50),
     patient_nickname VARCHAR(50),
-    national_id CHAR(13),                   -- x-xxxx-xxxxx-xx-x
+    national_id CHAR(13),                   -- x-xxxx-xxxxx-xx-x ; Thai: 13 digits required; foreigner: optional
     passport_no VARCHAR(20),
     birthdate DATE,
     blood_group blood_group_enum,
@@ -495,10 +518,10 @@ CREATE TABLE hn_sequence (
 -- Appointment tables
 CREATE TABLE appointment (
     appointment_id BIGSERIAL PRIMARY KEY,   -- auto-increment
-    patient_id BIGINT NOT NULL,
+    patient_id BIGINT,                      -- CURRENT: required; NEW: nullable
     branch_id BIGINT NOT NULL,
     staff_id BIGINT NOT NULL,
-    service_id BIGINT NOT NULL,
+    service_id BIGINT,
     appointment_status appointment_status_enum NOT NULL,
     room_id BIGINT,
 
@@ -509,6 +532,19 @@ CREATE TABLE appointment (
     appointment_create_by BIGINT NOT NULL,
     appointment_update_at TIMESTAMP,
     appointment_update_by BIGINT,
+
+    appointment_patient_type appointment_patient_type_enum NOT NULL,
+    contact_name VARCHAR(200),                  -- NEW: ชื่อ–นามสกุล หรือชื่อเล่นพร้อมเบอร์โทร; CURRENT: ใช้ข้อมูล Patient
+    contact_phone VARCHAR(20),                  -- NEW: บังคับเมื่อใช้ชื่อเล่น; ชื่อ–นามสกุลอย่างเดียวรับได้ตาม feedback
+    requested_service_type requested_service_type_enum,
+    external_calendar_event_id VARCHAR(255),    -- Pending integration scope
+    calendar_sync_status calendar_sync_status_enum,
+
+
+    CONSTRAINT chk_appointment_patient_type
+        CHECK (
+            appointment_patient_type <> 'CURRENT' OR patient_id IS NOT NULL     -- CURRENT ต้องระบุ patient_id
+        ),
 
     CONSTRAINT fk_appointment_patient
         FOREIGN KEY (patient_id)
@@ -543,7 +579,7 @@ CREATE TABLE appointment_status_history (
     history_id BIGSERIAL PRIMARY KEY,           -- auto-increment
     appointment_id BIGINT NOT NULL,
     from_status appointment_status_enum,
-    to_status appointment_status_enum NOT NULL,
+    to_status appointment_to_status_enum NOT NULL,
     changed_by BIGINT NOT NULL,
     changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     reason VARCHAR(255),
@@ -566,7 +602,7 @@ CREATE TABLE patient_visit (
     branch_id BIGINT NOT NULL,
     assigned_staff_id BIGINT,
     visit_date TIMESTAMP NOT NULL,
-    completed_at TIMESTAMP,
+    checkout_time TIMESTAMP,
     visit_status visit_status_enum NOT NULL,
 
     visit_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -614,8 +650,12 @@ CREATE TABLE commission_scheme(
     scheme_update_at TIMESTAMP,
     scheme_update_by BIGINT,
 
+
+    -- >=1; historical version immutable once used
     CONSTRAINT chk_commission_scheme_version
         CHECK (scheme_version >= 1),
+    CONSTRAINT chk_commission_scheme_effective_dates
+        CHECK (effective_to IS NULL OR effective_to >= effective_from),
 
     CONSTRAINT fk_commission_scheme_permission
         FOREIGN KEY (permission_id)
@@ -637,7 +677,7 @@ CREATE TABLE commission_tier(
     permission_id BIGINT NOT NULL,
     tier_order INT NOT NULL,                        -- >= 1
 
-    minimum_monthly_sales NUMERIC(12, 2) NOT NULL,  -- >= 0
+    minimum_monthly_sales NUMERIC(12, 2) NOT NULL,  -- >= 0 ; no overlap/gaps
     maximum_monthly_sales NUMERIC(12, 2),           -- >= minimum_monthly_sales
     commission_rate NUMERIC(5, 4) NOT NULL,         -- 0 to 1
     tier_status BOOLEAN NOT NULL DEFAULT TRUE,      -- 1 : Enabled, 0 : Disabled
@@ -687,9 +727,9 @@ CREATE TABLE treatment_fee_rule(
     service_id BIGINT,
     service_group_id BIGINT,
 
-    fee_type fee_type_enum NOT NULL,
+    fee_type fixed_per_enum NOT NULL,
     fee_value NUMERIC(12, 4) NOT NULL,              -- >= 0
-    calculation_base calculation_base_enum,
+    percentage_base percentage_base_enum,
 
     effective_from DATE NOT NULL,
     effective_to DATE,
@@ -702,6 +742,13 @@ CREATE TABLE treatment_fee_rule(
 
     CONSTRAINT chk_treatment_fee_rule_value
         CHECK (fee_value >= 0),
+
+    -- require percentage_base when fee_type is 'Percentage'
+    CONSTRAINT chk_treatment_fee_rule_percentage_base
+        CHECK (
+            (fee_type = 'Percentage' AND percentage_base IS NOT NULL)
+                OR (fee_type = 'Fixed' AND percentage_base IS NULL)
+            ),
 
     CONSTRAINT fk_treatment_fee_rule_permission
         FOREIGN KEY (permission_id)
@@ -740,16 +787,58 @@ CREATE TABLE receipt (
 
     patient_id BIGINT NOT NULL,
     branch_id BIGINT NOT NULL,
-    sale_date DATE NOT NULL,
+    sale_date TIMESTAMP NOT NULL,
 
     receipt_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     receipt_create_by BIGINT NOT NULL,
     receipt_update_at TIMESTAMP,
     receipt_update_by BIGINT,
 
-    -- RE-xxxxxxx
-    CONSTRAINT chk_receipt_no
-        CHECK (receipt_no ~ '^RE-[0-9]{7}$'),
+    subtotal_before_discount DECIMAL(12,2) NOT NULL,        -- >=0
+    bill_discount_type fixed_per_enum,
+    bill_discount_value DECIMAL(12,4),
+    bill_discount_amount DECIMAL(12, 2) NOT NULL,           -- >=0
+    taxable_amount DECIMAL(12,2) NOT NULL,                  -- >=0; tax policy to confirm
+    tax_amount DECIMAL(12,2) NOT NULL,                      -- >=0; tax policy to confirm
+    net_amount DECIMAL(12,2) NOT NULL,                      -- >=0
+    receipt_status receipt_status_enum NOT NULL,
+
+
+--     -- RE-xxxxxxx
+--     CONSTRAINT chk_receipt_no
+--         CHECK (receipt_no ~ '^RE-[0-9]{7}$'),
+
+    CONSTRAINT chk_receipt_subtotal_before_discount
+        CHECK (subtotal_before_discount >= 0),
+
+    -- Fixed >=0; Percentage 0..100
+    CONSTRAINT chk_receipt_bill_discount
+        CHECK (
+            (bill_discount_type IS NULL
+                AND bill_discount_value IS NULL
+                AND bill_discount_amount = 0)
+                OR
+            (bill_discount_type = 'Fixed'
+                AND bill_discount_value IS NOT NULL
+                AND bill_discount_value >= 0)
+                OR
+            (bill_discount_type = 'Percentage'
+                AND bill_discount_value IS NOT NULL
+                AND bill_discount_value BETWEEN 0 AND 100)
+            ),
+
+    CONSTRAINT chk_receipt_bill_discount_amount
+        CHECK (bill_discount_amount >= 0),
+
+    CONSTRAINT chk_receipt_taxable_amount
+        CHECK (taxable_amount >= 0),
+
+    CONSTRAINT chk_receipt_tax_amount
+        CHECK (tax_amount >= 0),
+
+    CONSTRAINT chk_receipt_net_amount
+        CHECK (net_amount >= 0),
+
 
     CONSTRAINT fk_receipt_patient
         FOREIGN KEY (patient_id)
@@ -1511,13 +1600,13 @@ ALTER TABLE staff
         FOREIGN KEY (staff_update_by)
             REFERENCES app_user(user_id);
 
--------------------------------------------------
-ALTER TABLE app_user
-    ADD CONSTRAINT fk_app_user_create_by
-        FOREIGN KEY (user_create_by)
-            REFERENCES app_user(user_id);
 
-ALTER TABLE app_user
-    ADD CONSTRAINT fk_app_user_update_by
-        FOREIGN KEY (user_update_by)
-            REFERENCES app_user(user_id);
+-- ALTER TABLE app_user
+--     ADD CONSTRAINT fk_app_user_create_by
+--         FOREIGN KEY (user_create_by)
+--             REFERENCES app_user(user_id);
+--
+-- ALTER TABLE app_user
+--     ADD CONSTRAINT fk_app_user_update_by
+--         FOREIGN KEY (user_update_by)
+--             REFERENCES app_user(user_id);
