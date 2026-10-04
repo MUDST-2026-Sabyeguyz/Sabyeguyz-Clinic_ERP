@@ -1,8 +1,11 @@
 package com.sabyeguyz.clinic.databasev2.course;
 
+import com.sabyeguyz.clinic.databasev2.common.PostgresIntegrationTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
+import org.assertj.core.api.SoftAssertions;
 
 import com.sabyeguyz.clinic.course.CourseBalanceException;
+import com.sabyeguyz.clinic.databasev2.commission.DatabaseV2CommissionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -13,7 +16,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,7 +47,7 @@ class DatabaseV2CoursePostgresIntegrationTest {
 
             seedDependencies();
         } catch (Exception e) {
-            Assumptions.abort("PostgreSQL not available on " + host + ":" + port + ": " + e.getMessage());
+            PostgresIntegrationTestSupport.handleSetupFailure("PostgreSQL integration setup failed on " + host + ":" + port, e);
         }
     }
 
@@ -65,6 +67,12 @@ class DatabaseV2CoursePostgresIntegrationTest {
         jdbc.execute("""
             insert into staff (staff_id, staff_code, staff_fname, staff_lname, position, branch_id, staff_status, hire_date, staff_create_by)
             values (99, 'ST-CRS-99', 'CourseDoc', 'Smith', 'Therapist', 99, true, '2026-01-01', 1)
+            on conflict (staff_id) do nothing
+        """);
+
+        jdbc.execute("""
+            insert into staff (staff_id, staff_code, staff_fname, staff_lname, position, branch_id, staff_status, hire_date, staff_create_by)
+            values (98, 'ST-CRS-98', 'CourseOwner', 'Jones', 'Therapist', 99, true, '2026-01-01', 1)
             on conflict (staff_id) do nothing
         """);
 
@@ -140,6 +148,104 @@ class DatabaseV2CoursePostgresIntegrationTest {
         List<DatabaseV2CourseRepository.CourseMovementRecord> movements = repository.findMovements(courseId);
         assertThat(movements).hasSize(11);
         assertThat(movements.get(movements.size() - 1).balanceAfter()).isEqualTo(0);
+    }
+
+    @Test
+    void ownerTreatingTheirOwnCourseKeepsTheFullLockedAllocation() {
+        DatabaseV2CourseRepository.CoursePurchaseRecord purchased = repository.purchase(
+                91L, 98L, 99L, "99", 99L, 1L
+        );
+        jdbc.update("""
+                update course
+                set commission_status = 'Locked', locked_commission_rate = 0.14,
+                    total_course_commission_pool = 700.00,
+                    commission_allocation_per_visit = 70.00
+                where course_id = ?
+                """, purchased.id());
+        var lockedCourse = repository.findById(purchased.id()).orElseThrow();
+        DatabaseV2CommissionRepository commissions = new DatabaseV2CommissionRepository(jdbc);
+        commissions.createFeeRule(
+                99L, "Fixed", new BigDecimal("45.00"), null, LocalDate.now(), null, 1L
+        );
+
+        repository.consumeSession(purchased.id(), null, "locked allocation check", 99L, 1L);
+
+        assertThat(purchased.caseOwnerStaffId()).isEqualTo(99L);
+        assertThat(lockedCourse.commissionStatus()).isEqualTo("Locked");
+        assertThat(lockedCourse.commissionAllocationPerVisit()).isEqualByComparingTo("70.00");
+
+        var usage = jdbc.queryForMap("""
+                select treating_staff_id, case_owner_staff_id, gross_commission_allocation,
+                       treatment_fee_rule_id, substitute_treatment_fee_amount,
+                       owner_net_commission_released
+                from course_visit_usage where course_id = ?
+                """, purchased.id());
+        assertThat(((Number) usage.get("treating_staff_id")).longValue()).isEqualTo(99L);
+        assertThat(((Number) usage.get("case_owner_staff_id")).longValue()).isEqualTo(99L);
+        assertThat(usage.get("treatment_fee_rule_id")).isNull();
+        assertThat((BigDecimal) usage.get("substitute_treatment_fee_amount")).isEqualByComparingTo("0.00");
+        assertThat((BigDecimal) usage.get("owner_net_commission_released")).isEqualByComparingTo("70.00");
+        assertThat((BigDecimal) usage.get("gross_commission_allocation")).isEqualByComparingTo("70.00");
+    }
+
+    @Test
+    void substituteTreatmentUsesEffectiveRuleAndPreservesUsageHistory() {
+        DatabaseV2CourseRepository.CoursePurchaseRecord purchased = repository.purchase(
+                91L, 98L, 99L, "99", 98L, 1L
+        );
+        jdbc.update("""
+                update course
+                set commission_status = 'Locked', locked_commission_rate = 0.14,
+                    total_course_commission_pool = 700.00,
+                    commission_allocation_per_visit = 70.00
+                where course_id = ?
+                """, purchased.id());
+        var lockedCourse = repository.findById(purchased.id()).orElseThrow();
+        DatabaseV2CommissionRepository commissions = new DatabaseV2CommissionRepository(jdbc);
+        var rule = commissions.createFeeRule(
+                99L, "Fixed", new BigDecimal("45.00"), null, LocalDate.now(), null, 1L
+        );
+
+        repository.consumeSession(purchased.id(), null, "substitute locked allocation check", 99L, 1L);
+
+        var usage = jdbc.queryForMap("""
+                select treating_staff_id, case_owner_staff_id, gross_commission_allocation,
+                       treatment_fee_rule_id, substitute_treatment_fee_amount,
+                       owner_net_commission_released
+                from course_visit_usage where course_id = ?
+                """, purchased.id());
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(purchased.caseOwnerStaffId()).isEqualTo(98L);
+        softly.assertThat(lockedCourse.commissionStatus()).isEqualTo("Locked");
+        softly.assertThat(lockedCourse.commissionAllocationPerVisit()).isEqualByComparingTo("70.00");
+        softly.assertThat(((Number) usage.get("treating_staff_id")).longValue()).isEqualTo(99L);
+        softly.assertThat(((Number) usage.get("case_owner_staff_id")).longValue()).isEqualTo(98L);
+        softly.assertThat(usage.get("treatment_fee_rule_id")).isEqualTo(rule.id());
+        softly.assertThat((BigDecimal) usage.get("substitute_treatment_fee_amount")).isEqualByComparingTo("45.00");
+        softly.assertThat((BigDecimal) usage.get("owner_net_commission_released")).isEqualByComparingTo("25.00");
+
+        var activeRule = commissions.listFeeRules().stream()
+                .filter(candidate -> candidate.id().equals(rule.id()) && candidate.active())
+                .findFirst().orElseThrow();
+        softly.assertThat(activeRule.employeeId()).isEqualTo(99L);
+        softly.assertThat(activeRule.feeValue()).isEqualByComparingTo("45.00");
+        softly.assertThat(activeRule.effectiveFrom()).isEqualTo(LocalDate.now());
+        softly.assertThat(activeRule.effectiveTo()).isNull();
+
+        commissions.deactivateFeeRule(rule.id(), 1L);
+        var historicalUsage = jdbc.queryForMap("""
+                select treatment_fee_rule_id, substitute_treatment_fee_amount, owner_net_commission_released
+                from course_visit_usage where course_id = ?
+                """, purchased.id());
+        softly.assertThat(historicalUsage.get("treatment_fee_rule_id")).isEqualTo(rule.id());
+        softly.assertThat((BigDecimal) historicalUsage.get("substitute_treatment_fee_amount")).isEqualByComparingTo("45.00");
+        softly.assertThat((BigDecimal) historicalUsage.get("owner_net_commission_released")).isEqualByComparingTo("25.00");
+        softly.assertThat(commissions.listFeeRules().stream().filter(candidate -> candidate.id().equals(rule.id()))
+                .findFirst().orElseThrow().active()).isFalse();
+        softly.assertThat(jdbc.queryForObject("select count(*) from course_visit_usage where course_id = ?", Integer.class, purchased.id()))
+                .isEqualTo(1);
+        softly.assertThat((BigDecimal) usage.get("gross_commission_allocation")).isEqualByComparingTo("70.00");
+        softly.assertAll();
     }
 
     @Test

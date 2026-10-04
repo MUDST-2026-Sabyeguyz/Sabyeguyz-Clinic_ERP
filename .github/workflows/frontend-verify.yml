@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop, xan, 'feat/**', 'feature/**']
   pull_request:
-    branches: [develop]
+    branches: [develop, xan]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,15 @@ jobs:
         run: npm ci
 
       - name: Unit tests
-        run: npm run test:unit -- --run
+        run: npm run test:unit:coverage
+
+      - name: Upload unit coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-unit-coverage
+          path: frontend/coverage
+          if-no-files-found: ignore
 
       - name: Production build
         run: npm run build

@@ -1,11 +1,11 @@
 package com.sabyeguyz.clinic.databasev2.appointment;
 
+import com.sabyeguyz.clinic.databasev2.common.PostgresIntegrationTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Optional;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,7 +38,7 @@ class DatabaseV2AppointmentPostgresIntegrationTest {
             // Clean up dependencies for tests
             seedDependencies();
         } catch (Exception e) {
-            Assumptions.abort("PostgreSQL not available on " + host + ":" + port + ": " + e.getMessage());
+            PostgresIntegrationTestSupport.handleSetupFailure("PostgreSQL integration setup failed on " + host + ":" + port, e);
         }
     }
 

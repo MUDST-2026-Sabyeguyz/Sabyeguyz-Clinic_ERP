@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinic.databasev2.commission;
 
+import com.sabyeguyz.clinic.databasev2.common.PostgresIntegrationTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -7,7 +8,7 @@ import com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import org.junit.jupiter.api.Assumptions;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -39,7 +40,7 @@ class DatabaseV2CommissionPostgresIntegrationTest {
             seedDependencies();
 
         } catch (Exception e) {
-            Assumptions.abort("PostgreSQL not available on " + host + ":" + port + ": " + e.getMessage());
+            PostgresIntegrationTestSupport.handleSetupFailure("PostgreSQL integration setup failed on " + host + ":" + port, e);
         }
     }
 
@@ -112,6 +113,11 @@ class DatabaseV2CommissionPostgresIntegrationTest {
     void monthlyClosingLocksCoursesAndPreventsDoubleClose() {
         LocalDate month = LocalDate.of(2026, 8, 1);
         String monthStr = "2026-08";
+        DatabaseV2CommissionRepository.SchemeRecord scheme = repository.createScheme(
+                "Monthly close fixture " + UUID.randomUUID(), "1", month, null,
+                List.of(new DatabaseV2CommissionRepository.TierInput(
+                        BigDecimal.ZERO, null, new BigDecimal("0.10"), 1)), 1L
+        );
 
         // Seed receipt and course
         Long receiptId = jdbc.queryForObject("select nextval('receipt_receipt_id_seq')", Long.class);
@@ -121,7 +127,7 @@ class DatabaseV2CommissionPostgresIntegrationTest {
                 receiptId, receiptNo
         );
 
-        Long schemeId = repository.getOrCreateCommissionPermission(1L);
+        repository.getOrCreateCommissionPermission(1L);
         Long courseId = jdbc.queryForObject(
                 """
                 insert into course (
@@ -134,11 +140,11 @@ class DatabaseV2CommissionPostgresIntegrationTest {
                     ?, 1, 'Commission Test Course', 20000.00,
                     10, 0, '2027-08-15', 'Active',
                     96, ?, ?, 96, 96,
-                    'Provisional', (select commission_scheme_id from commission_scheme limit 1), 1,
+                    'Provisional', ?, 1,
                     0, 10, current_timestamp, 1
                 ) returning course_id
                 """,
-                Long.class, receiptNo, receiptId, monthStr
+                Long.class, receiptNo, receiptId, monthStr, scheme.id()
         );
 
         // 1. Perform monthly closing
@@ -162,6 +168,18 @@ class DatabaseV2CommissionPostgresIntegrationTest {
         assertThatThrownBy(() -> repository.closeSingle(record.id(), 1L))
                 .isInstanceOf(DatabaseV2ConflictException.class)
                 .hasMessageContaining("รอบนี้ปิดแล้ว");
+
+        repository.updateScheme(
+                scheme.id(), "Revised monthly fixture", "2", month, null,
+                List.of(new DatabaseV2CommissionRepository.TierInput(
+                        BigDecimal.ZERO, null, new BigDecimal("0.25"), 1)), true, 1L
+        );
+        repository.closeMonth(month, 1L);
+
+        BigDecimal afterReclose = jdbc.queryForObject(
+                "select locked_commission_rate from course where course_id = ?", BigDecimal.class, courseId
+        );
+        assertThat(afterReclose).isEqualByComparingTo("0.10");
     }
 
     @Test
