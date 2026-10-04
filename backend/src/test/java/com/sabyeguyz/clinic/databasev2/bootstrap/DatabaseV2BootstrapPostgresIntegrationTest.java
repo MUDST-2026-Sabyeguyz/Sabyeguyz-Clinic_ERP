@@ -1,9 +1,9 @@
 package com.sabyeguyz.clinic.databasev2.bootstrap;
 
+import com.sabyeguyz.clinic.databasev2.common.PostgresIntegrationTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -34,11 +34,16 @@ class DatabaseV2BootstrapPostgresIntegrationTest {
             jdbc = new JdbcTemplate(ds);
             jdbc.execute("select 1");
             adminPassword = System.getenv("APP_BOOTSTRAP_ADMIN_PASSWORD");
-            Assumptions.assumeTrue(adminPassword != null && !adminPassword.isBlank(),
-                    "APP_BOOTSTRAP_ADMIN_PASSWORD is required for PostgreSQL bootstrap verification");
+            if (adminPassword == null || adminPassword.isBlank()) {
+                PostgresIntegrationTestSupport.handleSetupFailure(
+                        Boolean.parseBoolean(System.getenv().getOrDefault("PG_INTEGRATION_REQUIRED", "false")),
+                        "APP_BOOTSTRAP_ADMIN_PASSWORD is required for PostgreSQL bootstrap verification",
+                        new IllegalStateException("APP_BOOTSTRAP_ADMIN_PASSWORD is missing")
+                );
+            }
             runner = new DatabaseV2BootstrapRunner(jdbc, "admin", adminPassword);
         } catch (Exception e) {
-            Assumptions.abort("PostgreSQL not available on " + host + ":" + port + ": " + e.getMessage());
+            PostgresIntegrationTestSupport.handleSetupFailure("PostgreSQL integration setup failed on " + host + ":" + port, e);
         }
     }
 

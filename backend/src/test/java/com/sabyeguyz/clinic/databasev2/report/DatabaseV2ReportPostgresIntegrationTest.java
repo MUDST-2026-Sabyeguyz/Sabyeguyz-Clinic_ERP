@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinic.databasev2.report;
 
+import com.sabyeguyz.clinic.databasev2.common.PostgresIntegrationTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,7 +12,6 @@ import com.sabyeguyz.clinic.report.RevenueReportResponse;
 import com.sabyeguyz.clinic.report.StaffSalesReportResponse;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -42,7 +42,7 @@ class DatabaseV2ReportPostgresIntegrationTest {
             jdbc.execute("select 1");
             repository = new DatabaseV2ReportRepository(jdbc);
         } catch (Exception e) {
-            Assumptions.abort("PostgreSQL not available on " + host + ":" + port + ": " + e.getMessage());
+            PostgresIntegrationTestSupport.handleSetupFailure("PostgreSQL integration setup failed on " + host + ":" + port, e);
         }
 
         seedDependencies();
