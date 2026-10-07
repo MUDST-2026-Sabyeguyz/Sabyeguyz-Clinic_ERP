@@ -244,12 +244,13 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($pod)) { throw 'PostgreSQL pod is not available.' }
           $remoteDump = "/tmp/fast03-predeploy-$env:GITHUB_RUN_ID.dump"
           $restoreDb = "clinic_erp_restore_$env:GITHUB_RUN_ID"
-          $backup = Join-Path $env:RUNNER_TEMP "clinic_erp-predeploy-$env:GITHUB_RUN_ID.dump"
+          Push-Location $env:RUNNER_TEMP
+          $backup = "clinic_erp-predeploy-$env:GITHUB_RUN_ID.dump"
           $restoreCreated = $false
           try {
             kubectl -n $namespace exec $pod -- sh -c 'pg_dump -U "$POSTGRES_USER" -d clinic_erp -Fc -f "$1"' sh $remoteDump
             if ($LASTEXITCODE -ne 0) { throw 'pg_dump failed; deployment is blocked.' }
-            kubectl -n $namespace cp "${pod}:$remoteDump" $backup
+            kubectl -n $namespace cp "$namespace/${pod}:$remoteDump" "./$backup"
             if ($LASTEXITCODE -ne 0) { throw 'Could not copy the backup outside the cluster; deployment is blocked.' }
             $hash = (Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash
             $size = (Get-Item -LiteralPath $backup).Length
@@ -271,6 +272,7 @@ jobs:
             if ($restoreCreated) { kubectl -n $namespace exec $pod -- sh -c 'dropdb -U "$POSTGRES_USER" "$1"' sh $restoreDb | Out-Null }
             kubectl -n $namespace exec $pod -- rm -f $remoteDump | Out-Null
             Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+            Pop-Location
           }
 
       - name: Deploy immutable digests with previous-image rollback on rollout failure
