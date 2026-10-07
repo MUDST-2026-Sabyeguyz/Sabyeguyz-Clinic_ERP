@@ -173,8 +173,8 @@ Branch ถูก push ขึ้น remote แล้ว และ working tree �
 ## คำสั่งเริ่มระบบ
 
 ```powershell
-docker compose -p sabyeguyz-clinic_erp -f deploy/docker-compose.yml up -d
-docker compose -p sabyeguyz-clinic_erp -f deploy/docker-compose.yml ps
+docker compose -p sabyeguyz-clinic_erp up -d
+docker compose -p sabyeguyz-clinic_erp ps
 ```
 
 ไม่ควรใช้ `docker compose down -v` หากต้องการเก็บข้อมูล PostgreSQL เดิมไว้
