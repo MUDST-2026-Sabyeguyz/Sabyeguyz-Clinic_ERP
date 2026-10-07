@@ -261,7 +261,7 @@ jobs:
             $restoreCreated = $true
             kubectl -n $namespace exec $pod -- sh -c 'pg_restore --exit-on-error --no-owner --no-acl -U "$POSTGRES_USER" -d "$1" "$2"' sh $restoreDb $remoteDump
             if ($LASTEXITCODE -ne 0) { throw 'Restore rehearsal failed; deployment is blocked.' }
-            $sql = "SELECT (SELECT count(*) FROM patients)||'|'||(SELECT count(*) FROM receipts)||'|'||(SELECT count(*) FROM sales)||'|'||(SELECT count(*) FROM payments)||'|'||(SELECT count(*) FROM cancellations)||'|'||(SELECT count(*) FROM courses)||'|'||(SELECT version||'/'||success FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1)"
+            $sql = "SELECT (SELECT count(*) FROM patient)||'|'||(SELECT count(*) FROM receipt)||'|'||(SELECT count(*) FROM sales_transaction)||'|'||(SELECT count(*) FROM payment_transaction)||'|'||(SELECT count(*) FROM transaction_cancellation)||'|'||(SELECT count(*) FROM course)||'|'||(SELECT version||'/'||success FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1)"
             $sourceCounts = kubectl -n $namespace exec $pod -- sh -c 'psql -U "$POSTGRES_USER" -d clinic_erp -tAc "$1"' sh $sql
             if ($LASTEXITCODE -ne 0) { throw 'Could not read source aggregate verification counts.' }
             $restoredCounts = kubectl -n $namespace exec $pod -- sh -c 'psql -U "$POSTGRES_USER" -d "$1" -tAc "$2"' sh $restoreDb $sql
