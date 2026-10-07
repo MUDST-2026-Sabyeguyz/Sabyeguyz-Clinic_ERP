@@ -17,9 +17,11 @@ public record SaleSummaryResponse(
         BigDecimal paid,
         SaleStatus status,
         Instant soldAt,
-        Instant voidedAt
+        Instant voidedAt,
+        String voidReason,
+        String itemDescription
 ) {
-    static SaleSummaryResponse from(Sale sale, BigDecimal paid) {
+    static SaleSummaryResponse from(Sale sale, BigDecimal paid, String itemDescription) {
         return new SaleSummaryResponse(
                 sale.getId(),
                 sale.getReceiptNo(),
@@ -33,6 +35,8 @@ public record SaleSummaryResponse(
                 paid,
                 sale.getStatus(),
                 sale.getSoldAt(),
-                sale.getVoidedAt());
+                sale.getVoidedAt(),
+                sale.getVoidReason(),
+                itemDescription);
     }
 }
