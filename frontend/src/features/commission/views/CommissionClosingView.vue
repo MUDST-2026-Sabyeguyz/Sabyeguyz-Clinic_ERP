@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { commissionApi } from '@/api/client'
 
 type ClosingRow = {
@@ -119,12 +120,15 @@ function selectView(event: Event) {
             numeric-month
             hide-caret
           />
-          <label class="branch-field"
-            ><span class="sr-only">สาขา</span
-            ><select v-model="branch">
-              <option>ทุกสาขา</option>
-            </select></label
-          >
+          <div class="branch-field">
+            <FilterDropdown
+              v-model="branch"
+              label="สาขา"
+              default-value="ทุกสาขา"
+              default-label="ทุกสาขา"
+              :options="[]"
+            />
+          </div>
           <button
             class="close-all"
             type="button"
