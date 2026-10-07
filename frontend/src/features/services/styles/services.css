@@ -3,6 +3,9 @@
   color: #1f2937;
   background: #f9f4ee;
 }
+.service-header-shell {
+  display: contents;
+}
 main {
   width: min(1080px, calc(100% - 48px));
   margin: auto;
@@ -15,6 +18,11 @@ main > h1,
   font-size: clamp(30px, 3.2vw, 38px);
   font-weight: 700;
   line-height: 1.4;
+}
+.service-page-intro {
+  margin: 12px 0 0;
+  color: #56665d;
+  font-size: 16px;
 }
 .service-search {
   margin-top: 18px;
@@ -37,7 +45,7 @@ main > h1,
   border: 1px solid #8f8f8f;
   border-radius: 12px;
   background: #fff;
-  box-shadow: 0 1px 2px rgb(119 119 119 / 25%);
+  box-shadow: none;
 }
 .search-icon {
   display: grid;
@@ -504,5 +512,854 @@ main > h1,
   .service-search-button {
     box-sizing: border-box;
     width: 100%;
+  }
+}
+
+/* Figma service sales flow */
+.sales-progress {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: min(720px, 100%);
+  margin: 0 auto 38px;
+  padding: 0;
+  list-style: none;
+}
+.sales-progress li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: #66786e;
+  font-size: 13px;
+}
+.sales-progress li:not(:last-child)::after {
+  position: absolute;
+  z-index: 0;
+  top: 12px;
+  left: calc(50% + 22px);
+  width: calc(100% - 44px);
+  height: 2px;
+  background: #cbd5cf;
+  content: '';
+}
+.sales-progress li.done::after,
+.sales-progress li.active::after {
+  background: #1e8883;
+}
+.sales-progress i {
+  z-index: 1;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #9fb5ad;
+  border-radius: 50%;
+  background: #fff;
+  place-items: center;
+  font-style: normal;
+}
+.sales-progress li.active,
+.sales-progress li.done {
+  color: #25372e;
+  font-weight: 700;
+}
+.sales-progress li.active i,
+.sales-progress li.done i {
+  border-color: #1e8883;
+  color: #fff;
+  background: #1e8883;
+}
+.sale-page {
+  padding-top: 18px;
+}
+.sale-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 22px;
+  padding: 8px 0;
+  border: 0;
+  color: #173d47;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.sale-back-button span {
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+.sale-back-button:hover span {
+  transform: translateX(-3px);
+}
+.sale-page > h1 {
+  font-size: 34px;
+}
+.sale-intro {
+  margin: 0 0 28px;
+  color: #52645b;
+}
+.sale-patient-summary {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border-left: 5px solid #1f8883;
+  border-radius: 12px;
+  background: #fff;
+}
+.sale-patient-summary i {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: #176c68;
+  background: #eaf5f3;
+  place-items: center;
+  font-style: normal;
+  font-weight: 700;
+}
+.sale-patient-summary div {
+  display: grid;
+  gap: 4px;
+}
+.sale-patient-summary strong {
+  font-size: 19px;
+}
+.sale-patient-summary span {
+  color: #667a72;
+  font-size: 14px;
+}
+.sale-patient-summary > b {
+  padding: 8px 20px;
+  border-radius: 999px;
+  color: #34724c;
+  background: #eef6f0;
+  font-size: 13px;
+}
+.sales-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: 24px;
+  margin-top: 20px;
+}
+.sales-workspace > *,
+.sale-line-card,
+.sale-summary-card,
+.sale-line-values > * {
+  min-width: 0;
+}
+.sale-line-card,
+.sale-summary-card {
+  border: 1px solid #d9e1dc;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 5%);
+}
+.sale-line-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+.sale-line-card > header,
+.sale-line-head,
+.sale-line-values {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(90px, 1fr));
+  align-items: center;
+  gap: 12px;
+}
+.sale-line-card > header {
+  display: flex;
+  justify-content: space-between;
+}
+.sale-line-card h2,
+.sale-summary-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.sale-line-card small,
+.sale-line-head {
+  color: #52645b;
+  font-size: 12px;
+}
+.sale-line-head span:not(:first-child) {
+  text-align: center;
+}
+.sale-line-values > span,
+.sale-line-values > b {
+  text-align: center;
+  font-size: 14px;
+}
+.sale-line-values > b {
+  color: #27663a;
+}
+.sale-line-values > div {
+  display: grid;
+  gap: 2px;
+}
+.sale-line-values select,
+.sale-people select {
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d9e1dc;
+  border-radius: 8px;
+  color: #25372e;
+  background: #fff;
+  font: inherit;
+}
+.sale-service-readonly {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  color: #25372e;
+  font-size: 14px;
+  font-weight: 500;
+}
+.sale-people {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+.sale-people label,
+.sale-note {
+  display: grid;
+  gap: 8px;
+  color: #52645b;
+  font-size: 13px;
+}
+.sale-line-card .payment-group {
+  margin-top: 12px;
+}
+.sale-line-card .payment-options button {
+  min-height: 52px;
+  border: 1px solid #d1dbd6;
+  background: #f0f4ed;
+}
+.sale-line-card .payment-options button.active {
+  border-color: #1e8883;
+  color: #fff;
+  background: #1e8883;
+}
+.sale-note textarea {
+  min-height: 56px;
+  padding: 14px;
+  border: 1px solid #d9e1dc;
+  border-radius: 8px;
+  background: #f8faf9;
+  font: inherit;
+  resize: vertical;
+}
+.sale-edit {
+  justify-self: start;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 8px;
+  color: #25372e;
+  background: #eff4ed;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sale-summary-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+.sale-summary-card > p,
+.sale-summary-card .commission p {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 8px;
+  font-size: 13px;
+}
+.sale-summary-card .bill-discount {
+  border-radius: 8px;
+  color: #6f5314;
+  background: #fff6d8;
+}
+.sale-summary-card .net-total {
+  align-items: center;
+  border-radius: 8px;
+  color: #27663a;
+  background: #e8f6ec;
+}
+.sale-summary-card .net-total strong:last-child {
+  font-size: 18px;
+}
+.commission {
+  padding: 10px 8px;
+  border-radius: 8px;
+  color: #25372e;
+  background: #edf6f2;
+}
+.sale-summary-card .commission p {
+  align-items: center;
+  color: #25372e;
+}
+.sale-summary-card .commission b {
+  color: #244f8f;
+  font-size: 16px;
+}
+.sale-summary-card .commission p:last-child {
+  color: #244f8f;
+}
+.sale-summary-card > button {
+  min-height: 52px;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: #1e807c;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.payment-modal-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  padding: 24px;
+  background: rgb(25 47 42 / 52%);
+  place-items: center;
+}
+.payment-modal {
+  display: grid;
+  gap: 18px;
+  width: min(620px, 100%);
+  box-sizing: border-box;
+  padding: 28px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 20px 54px rgb(0 0 0 / 18%);
+}
+.payment-modal h2,
+.payment-modal p {
+  margin: 0;
+}
+.payment-modal > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 20px;
+  border-radius: 12px;
+  background: #eaf5f3;
+}
+.payment-modal section {
+  display: grid;
+  gap: 8px;
+}
+.payment-modal strong {
+  color: #1e8883;
+  font-size: 28px;
+}
+.payment-modal footer,
+.sale-success-card footer,
+.receipt-print-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.payment-modal button,
+.sale-success-card button,
+.receipt-print-actions button {
+  min-height: 48px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 8px;
+  color: #25372e;
+  background: #eff4ed;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.payment-modal button:last-child,
+.sale-success-card button:last-child,
+.receipt-print-actions button:last-child {
+  color: #fff;
+  background: #1e807c;
+}
+.sale-success-card {
+  display: grid;
+  gap: 10px;
+  width: min(760px, 100%);
+  margin: 44px auto;
+  padding: 34px 32px;
+  border: 1px solid #d9e1dc;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgb(0 0 0 / 8%);
+  text-align: center;
+}
+.sale-success-card > i {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  border-radius: 50%;
+  color: #159447;
+  background: #d8f9e3;
+  place-items: center;
+  font-size: 38px;
+  font-style: normal;
+}
+.sale-success-card h1,
+.sale-success-card p {
+  margin: 0;
+}
+.sale-success-card > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  margin: 10px 0 0;
+  padding: 20px;
+  border-radius: 10px;
+  background: #f8faf9;
+  text-align: left;
+}
+.sale-success-card section {
+  display: grid;
+  gap: 7px;
+}
+.sale-success-card section:last-child strong {
+  color: #1e8883;
+  font-size: 28px;
+}
+.sale-success-card footer {
+  margin-top: 0;
+}
+.service-receipt-page {
+  position: relative;
+  padding-top: 24px;
+}
+.printable-receipt {
+  position: relative;
+  width: min(840px, 100%);
+  min-height: 994px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 34px 36px 24px;
+  border: 1px solid #d9e1dc;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
+}
+.printable-receipt > header {
+  display: grid;
+  grid-template-columns: 1fr 230px;
+  gap: 24px;
+  min-height: 140px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #25372e;
+}
+.printable-receipt h1,
+.printable-receipt h2,
+.printable-receipt p {
+  margin: 0;
+}
+.receipt-clinic h1 {
+  margin-bottom: 12px;
+  font-size: 24px;
+}
+.receipt-clinic p,
+.receipt-document p {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.receipt-document {
+  align-self: start;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #eafbf7;
+  text-align: right;
+}
+.receipt-document h2 {
+  color: #1e807c;
+  font-size: 26px;
+}
+.receipt-customer {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 4px 28px;
+  padding: 24px 0;
+}
+.receipt-customer p {
+  font-size: 14px;
+}
+.printable-receipt table {
+  width: 100%;
+  border-collapse: collapse;
+  border-bottom: 1px solid #25372e;
+}
+.printable-receipt th,
+.printable-receipt td {
+  padding: 12px;
+  text-align: left;
+}
+.printable-receipt th {
+  color: #25372e;
+  background: #2fa4a0;
+}
+.printable-receipt tbody tr {
+  height: 122px;
+  vertical-align: top;
+}
+.printable-receipt th:first-child,
+.printable-receipt td:first-child {
+  width: 58%;
+}
+.receipt-totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 34px;
+}
+.receipt-totals > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: start;
+  gap: 8px 12px;
+  min-height: 176px;
+  box-sizing: border-box;
+  padding: 20px;
+  border-radius: 8px;
+  background: #eafbf7;
+  font-size: 14px;
+}
+.receipt-totals > div strong {
+  margin-top: 12px;
+  font-size: 20px;
+}
+.receipt-balance {
+  margin: 46px 12px 0;
+}
+.receipt-balance p {
+  display: flex;
+  gap: 210px;
+  margin: 6px 0;
+  font-size: 15px;
+}
+.receipt-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 42px 100px;
+  margin: 54px 70px 0;
+  text-align: center;
+}
+.receipt-signatures div {
+  display: grid;
+  font-size: 13px;
+  font-weight: 400;
+}
+.receipt-signatures div:last-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: 280px;
+}
+.receipt-printed-at {
+  position: absolute;
+  right: 36px;
+  bottom: 20px;
+  color: #56665d;
+  font-size: 13px;
+}
+.receipt-print-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: min(840px, 100%);
+  margin: 18px auto 0;
+}
+.receipt-print-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  color: #25372e;
+  background: #f1f4f1;
+  font-size: 15px;
+  box-shadow: none;
+}
+.receipt-print-actions button:last-child {
+  color: #fff;
+  background: #1e807c;
+}
+.receipt-print-modal-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  padding: 20px;
+  background: rgb(25 47 42 / 52%);
+  place-items: center;
+}
+.receipt-print-modal {
+  display: grid;
+  gap: 18px;
+  width: min(620px, 100%);
+  box-sizing: border-box;
+  align-content: start;
+  padding: 32px 36px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 54px rgb(0 0 0 / 18%);
+}
+.receipt-print-modal h2 {
+  margin: 0;
+  color: #26352f;
+  font-size: 28px;
+}
+.receipt-print-modal p {
+  margin: 0;
+  color: #51635c;
+  font-size: 16px;
+}
+.receipt-print-modal footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.receipt-print-modal button {
+  min-height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 10px;
+  color: #26352f;
+  background: #eef2f0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.receipt-print-modal button:last-child {
+  padding-inline: 22px;
+  color: #fff;
+  background: #1e807c;
+}
+@media (max-width: 1100px) {
+  .sales-workspace {
+    grid-template-columns: 1fr;
+  }
+  .sale-summary-card {
+    width: auto;
+  }
+}
+@media (max-width: 900px) {
+  .sale-line-head {
+    display: none;
+  }
+  .sale-line-values {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .sale-line-values > div {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 700px) {
+  .sales-progress {
+    margin-bottom: 28px;
+  }
+  .sales-progress span {
+    font-size: 11px;
+  }
+  .sale-patient-summary {
+    grid-template-columns: 44px 1fr;
+  }
+  .sale-patient-summary > b {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .sale-line-head {
+    display: none;
+  }
+  .sale-line-values {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sale-line-values > div {
+    grid-column: 1 / -1;
+  }
+  .sale-people,
+  .payment-modal > div,
+  .receipt-totals {
+    grid-template-columns: 1fr;
+  }
+  .payment-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .sale-success-card > div,
+  .receipt-customer {
+    grid-template-columns: 1fr;
+  }
+  .sale-page > h1 {
+    font-size: 28px;
+  }
+  .sale-back-button {
+    margin-bottom: 16px;
+  }
+  .sale-line-card,
+  .sale-summary-card {
+    padding: 14px;
+  }
+  .payment-modal-backdrop {
+    padding: 14px;
+  }
+  .payment-modal {
+    padding: 20px 16px;
+  }
+  .payment-modal footer,
+  .sale-success-card footer,
+  .receipt-print-actions {
+    flex-direction: column;
+  }
+  .receipt-print-actions {
+    align-items: stretch;
+  }
+  .payment-modal button,
+  .sale-success-card button,
+  .receipt-print-actions button {
+    width: 100%;
+  }
+  .printable-receipt {
+    min-height: auto;
+    padding: 24px 18px;
+    overflow-x: auto;
+  }
+  .printable-receipt > header {
+    grid-template-columns: 1fr;
+  }
+  .receipt-document {
+    text-align: left;
+  }
+  .receipt-balance p {
+    gap: 18px;
+    justify-content: space-between;
+  }
+  .receipt-signatures {
+    grid-template-columns: 1fr;
+    margin-inline: 20px;
+  }
+  .receipt-signatures div:last-child {
+    grid-column: auto;
+    width: auto;
+  }
+  .receipt-printed-at {
+    position: static;
+    margin-top: 50px;
+    text-align: right;
+  }
+  .receipt-print-modal {
+    padding: 26px 22px;
+  }
+  .receipt-print-modal footer {
+    flex-direction: column;
+  }
+  .receipt-print-modal button {
+    width: 100%;
+  }
+}
+@media (max-width: 480px) {
+  .sales-progress span {
+    display: none;
+  }
+  .sales-progress {
+    margin-bottom: 22px;
+  }
+  .sale-line-values {
+    grid-template-columns: 1fr;
+  }
+  .sale-line-values > span,
+  .sale-line-values > b {
+    text-align: left;
+  }
+  .sale-people,
+  .payment-options {
+    grid-template-columns: 1fr;
+  }
+  .sale-patient-summary {
+    grid-template-columns: 40px 1fr;
+    padding: 14px;
+  }
+  .sale-patient-summary i {
+    width: 40px;
+    height: 40px;
+  }
+  .sale-success-card {
+    box-sizing: border-box;
+    padding: 24px 16px;
+  }
+}
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body > *:not(#app) {
+    display: none !important;
+  }
+  .service-page > header,
+  .service-header-shell,
+  .service-receipt-page > .service-back,
+  .receipt-print-actions,
+  .receipt-print-modal-backdrop {
+    display: none !important;
+  }
+  .service-page,
+  .service-page main,
+  .service-receipt-page {
+    width: 100% !important;
+    min-height: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  .printable-receipt {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    height: 265mm;
+    max-height: 265mm;
+    box-sizing: border-box;
+    padding: 8mm 12mm 7mm;
+    border: 0;
+    box-shadow: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    overflow: hidden;
+  }
+  .printable-receipt > header {
+    min-height: 32mm;
+  }
+  .printable-receipt tbody tr {
+    height: 25mm;
+  }
+  .receipt-totals {
+    margin-top: 7mm;
+  }
+  .receipt-totals > div {
+    min-height: 38mm;
+    padding: 4mm;
+  }
+  .receipt-balance {
+    margin-top: 8mm;
+  }
+  .receipt-signatures {
+    gap: 9mm 25mm;
+    margin: auto 18mm 0;
+  }
+  .receipt-printed-at {
+    position: static;
+    margin: 8mm 0 0;
+    text-align: right;
   }
 }
