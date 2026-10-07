@@ -1,4 +1,4 @@
-name: Compose build
+name: Compose build and manual release
 
 on:
   push:
@@ -6,9 +6,19 @@ on:
   pull_request:
     branches: [develop]
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full green commit SHA from xan to publish and deploy
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: fast03-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   compose-build:
@@ -40,3 +50,288 @@ jobs:
 
       - name: Build application images
         run: docker compose build --pull
+
+  verify-green-source:
+    name: Verify selected source has green CI
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/xan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - name: Checkout xan history
+        uses: actions/checkout@v5
+        with:
+          ref: xan
+          fetch-depth: 0
+
+      - name: Require tested SHA on xan and three successful push CI runs
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::source_sha must be a full lowercase 40-character commit SHA"
+            exit 1
+          fi
+          git fetch origin xan --no-tags
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/xan
+          runs="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SOURCE_SHA&per_page=100")"
+          for workflow in "Backend tests and package" "Frontend tests and build" "Compose build"; do
+            count="$(jq --arg name "$workflow" --arg sha "$SOURCE_SHA" \
+              '[.workflow_runs[] | select(.name == $name and .head_sha == $sha and .event == "push" and .status == "completed" and .conclusion == "success")] | length' \
+              <<< "$runs")"
+            if [[ "$count" -lt 1 ]]; then
+              echo "::error::No successful push CI run for $workflow at $SOURCE_SHA"
+              exit 1
+            fi
+            echo "Verified green push CI: $workflow ($SOURCE_SHA)"
+          done
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Build, publish and pull images by digest
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/xan'
+    needs: verify-green-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      source_sha: ${{ needs.verify-green-source.outputs.source_sha }}
+      backend_image: ${{ steps.backend.outputs.image }}
+      frontend_image: ${{ steps.frontend.outputs.image }}
+      backend_digest: ${{ steps.backend.outputs.digest }}
+      frontend_digest: ${{ steps.frontend.outputs.digest }}
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify-green-source.outputs.source_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build, publish and pull backend image by digest
+        id: backend
+        env:
+          SOURCE_SHA: ${{ needs.verify-green-source.outputs.source_sha }}
+          IMAGE: ghcr.io/mudst-2026-sabyeguyz/sabyeguyz-clinic-erp-backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx build --push --provenance=true \
+            --metadata-file "$RUNNER_TEMP/backend-metadata.json" \
+            --tag "$IMAGE:sha-$SOURCE_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+            --file backend/Dockerfile backend
+          digest="$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/backend-metadata.json")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull "$IMAGE@$digest"
+          pulled="$(docker image inspect "$IMAGE@$digest" --format '{{ index .RepoDigests 0 }}')"
+          [[ "$pulled" == "$IMAGE@$digest" ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE@$digest" >> "$GITHUB_OUTPUT"
+          echo "Backend: $IMAGE@$digest" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build, publish and pull frontend image by digest
+        id: frontend
+        env:
+          SOURCE_SHA: ${{ needs.verify-green-source.outputs.source_sha }}
+          IMAGE: ghcr.io/mudst-2026-sabyeguyz/sabyeguyz-clinic-erp-frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx build --push --provenance=true \
+            --metadata-file "$RUNNER_TEMP/frontend-metadata.json" \
+            --tag "$IMAGE:sha-$SOURCE_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+            --file frontend/Dockerfile frontend
+          digest="$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/frontend-metadata.json")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull "$IMAGE@$digest"
+          pulled="$(docker image inspect "$IMAGE@$digest" --format '{{ index .RepoDigests 0 }}')"
+          [[ "$pulled" == "$IMAGE@$digest" ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE@$digest" >> "$GITHUB_OUTPUT"
+          echo "Frontend: $IMAGE@$digest" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Logout from GHCR
+        if: always()
+        run: docker logout ghcr.io
+
+  deploy-minikube:
+    name: Backup, restore rehearsal and deploy to Minikube
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/xan'
+    needs: publish
+    runs-on: [self-hosted, Windows, X64, clinic-phase1, powershell7]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.publish.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Verify deployment target and pull images into Minikube
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_IMAGE: ${{ needs.publish.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ needs.publish.outputs.frontend_image }}
+          SOURCE_SHA: ${{ needs.publish.outputs.source_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $context = kubectl config current-context
+          if ($LASTEXITCODE -ne 0 -or $context.Trim() -ne 'clinic-phase1') { throw "Unexpected Kubernetes context: $context" }
+          $minikube = Join-Path $env:USERPROFILE 'Documents\3-1MU\devops\tools\minikube\v1.39.0\minikube-windows-amd64.exe'
+          if (-not (Test-Path -LiteralPath $minikube)) { throw "Minikube executable missing: $minikube" }
+          & $minikube status --profile clinic-phase1
+          if ($LASTEXITCODE -ne 0) { throw 'Minikube profile clinic-phase1 is not healthy.' }
+          kubectl get nodes --no-headers
+          if ($LASTEXITCODE -ne 0) { throw 'Kubernetes API is unavailable.' }
+          kubectl -n clinic-erp-phase1 get pvc postgres-data-clinic-erp-postgres-0 -o jsonpath='{.status.phase}' | Tee-Object -Variable pvcPhase
+          if ($LASTEXITCODE -ne 0 -or $pvcPhase.Trim() -ne 'Bound') { throw 'Existing PostgreSQL PVC is not Bound; refusing deploy.' }
+          kubectl -n clinic-erp-phase1 get ingress clinic-erp -o jsonpath='{.spec.ingressClassName}' | Tee-Object -Variable ingressClass
+          if ($LASTEXITCODE -ne 0 -or $ingressClass.Trim() -ne 'traefik') { throw 'Expected Traefik Ingress is missing; refusing deploy.' }
+          if ($env:BACKEND_IMAGE -notmatch '^ghcr\.io/.+@sha256:[0-9a-f]{64}$' -or $env:FRONTEND_IMAGE -notmatch '^ghcr\.io/.+@sha256:[0-9a-f]{64}$') { throw 'Published image reference is not an immutable GHCR digest.' }
+          $env:GH_TOKEN | docker login ghcr.io --username $env:GITHUB_ACTOR --password-stdin
+          if ($LASTEXITCODE -ne 0) { throw 'GHCR login failed.' }
+          try {
+            docker pull $env:BACKEND_IMAGE
+            if ($LASTEXITCODE -ne 0) { throw 'Runner could not pull the backend digest from GHCR.' }
+            docker pull $env:FRONTEND_IMAGE
+            if ($LASTEXITCODE -ne 0) { throw 'Runner could not pull the frontend digest from GHCR.' }
+            & $minikube image load $env:BACKEND_IMAGE --profile clinic-phase1
+            if ($LASTEXITCODE -ne 0) { throw 'Could not load backend digest into Minikube.' }
+            & $minikube image load $env:FRONTEND_IMAGE --profile clinic-phase1
+            if ($LASTEXITCODE -ne 0) { throw 'Could not load frontend digest into Minikube.' }
+          } finally {
+            docker logout ghcr.io | Out-Null
+          }
+          "Verified deployment source: $env:SOURCE_SHA" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "Backend digest: $env:BACKEND_IMAGE" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "Frontend digest: $env:FRONTEND_IMAGE" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Backup live database and restore to an isolated rehearsal database
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ needs.publish.outputs.source_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $namespace = 'clinic-erp-phase1'
+          $pod = kubectl -n $namespace get pods -l app.kubernetes.io/name=clinic-erp-postgres -o jsonpath='{.items[0].metadata.name}'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($pod)) { throw 'PostgreSQL pod is not available.' }
+          $remoteDump = "/tmp/fast03-predeploy-$env:GITHUB_RUN_ID.dump"
+          $restoreDb = "clinic_erp_restore_$env:GITHUB_RUN_ID"
+          $backup = Join-Path $env:RUNNER_TEMP "clinic_erp-predeploy-$env:GITHUB_RUN_ID.dump"
+          $restoreCreated = $false
+          try {
+            kubectl -n $namespace exec $pod -- sh -c 'pg_dump -U "$POSTGRES_USER" -d clinic_erp -Fc -f "$1"' sh $remoteDump
+            if ($LASTEXITCODE -ne 0) { throw 'pg_dump failed; deployment is blocked.' }
+            kubectl -n $namespace cp "${pod}:$remoteDump" $backup
+            if ($LASTEXITCODE -ne 0) { throw 'Could not copy the backup outside the cluster; deployment is blocked.' }
+            $hash = (Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash
+            $size = (Get-Item -LiteralPath $backup).Length
+            kubectl -n $namespace exec $pod -- sh -c 'pg_restore --list "$1" >/dev/null' sh $remoteDump
+            if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL backup archive validation failed.' }
+            kubectl -n $namespace exec $pod -- sh -c 'createdb -U "$POSTGRES_USER" "$1"' sh $restoreDb
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the isolated restore database.' }
+            $restoreCreated = $true
+            kubectl -n $namespace exec $pod -- sh -c 'pg_restore --exit-on-error --no-owner --no-acl -U "$POSTGRES_USER" -d "$1" "$2"' sh $restoreDb $remoteDump
+            if ($LASTEXITCODE -ne 0) { throw 'Restore rehearsal failed; deployment is blocked.' }
+            $sql = "SELECT (SELECT count(*) FROM patients)||'|'||(SELECT count(*) FROM receipts)||'|'||(SELECT count(*) FROM sales)||'|'||(SELECT count(*) FROM payments)||'|'||(SELECT count(*) FROM cancellations)||'|'||(SELECT count(*) FROM courses)||'|'||(SELECT version||'/'||success FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1)"
+            $sourceCounts = kubectl -n $namespace exec $pod -- sh -c 'psql -U "$POSTGRES_USER" -d clinic_erp -tAc "$1"' sh $sql
+            if ($LASTEXITCODE -ne 0) { throw 'Could not read source aggregate verification counts.' }
+            $restoredCounts = kubectl -n $namespace exec $pod -- sh -c 'psql -U "$POSTGRES_USER" -d "$1" -tAc "$2"' sh $restoreDb $sql
+            if ($LASTEXITCODE -ne 0 -or $sourceCounts.Trim() -ne $restoredCounts.Trim()) { throw 'Restored aggregate counts do not match source.' }
+            "Pre-deploy backup SHA-256: $hash ($size bytes)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "Isolated restore aggregate check: matched; Flyway included; rehearsal DB: $restoreDb" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } finally {
+            if ($restoreCreated) { kubectl -n $namespace exec $pod -- sh -c 'dropdb -U "$POSTGRES_USER" "$1"' sh $restoreDb | Out-Null }
+            kubectl -n $namespace exec $pod -- rm -f $remoteDump | Out-Null
+            Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Deploy immutable digests with previous-image rollback on rollout failure
+        shell: pwsh
+        env:
+          BACKEND_IMAGE: ${{ needs.publish.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ needs.publish.outputs.frontend_image }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $namespace = 'clinic-erp-phase1'
+          $oldBackend = kubectl -n $namespace get deployment clinic-erp-backend -o jsonpath='{.spec.template.spec.containers[?(@.name=="backend")].image}'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($oldBackend)) { throw 'Cannot read the current backend image.' }
+          $oldFrontend = kubectl -n $namespace get deployment clinic-erp-frontend -o jsonpath='{.spec.template.spec.containers[?(@.name=="frontend")].image}'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($oldFrontend)) { throw 'Cannot read the current frontend image.' }
+          try {
+            kubectl -n $namespace set image deployment/clinic-erp-backend "backend=$env:BACKEND_IMAGE"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the backend image reference.' }
+            kubectl -n $namespace set image deployment/clinic-erp-frontend "frontend=$env:FRONTEND_IMAGE"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update the frontend image reference.' }
+            kubectl -n $namespace rollout status deployment/clinic-erp-backend --timeout=10m
+            if ($LASTEXITCODE -ne 0) { throw 'Backend rollout failed.' }
+            kubectl -n $namespace rollout status deployment/clinic-erp-frontend --timeout=5m
+            if ($LASTEXITCODE -ne 0) { throw 'Frontend rollout failed.' }
+          } catch {
+            Write-Host 'New rollout failed; restoring the prior image references.'
+            kubectl -n $namespace set image deployment/clinic-erp-backend "backend=$($oldBackend.Trim())"
+            kubectl -n $namespace set image deployment/clinic-erp-frontend "frontend=$($oldFrontend.Trim())"
+            kubectl -n $namespace rollout status deployment/clinic-erp-backend --timeout=10m
+            kubectl -n $namespace rollout status deployment/clinic-erp-frontend --timeout=5m
+            throw 'New rollout failed; previous image references were restored. Check the migration and pod logs before retrying.'
+          }
+          $actualBackend = kubectl -n $namespace get deployment clinic-erp-backend -o jsonpath='{.spec.template.spec.containers[?(@.name=="backend")].image}'
+          $actualFrontend = kubectl -n $namespace get deployment clinic-erp-frontend -o jsonpath='{.spec.template.spec.containers[?(@.name=="frontend")].image}'
+          if ($actualBackend.Trim() -ne $env:BACKEND_IMAGE -or $actualFrontend.Trim() -ne $env:FRONTEND_IMAGE) { throw 'Live deployment image references do not match published digests.' }
+          "Rollout uses backend $($actualBackend.Trim()) and frontend $($actualFrontend.Trim())." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Ingress smoke through Traefik
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $kubectl = (Get-Command kubectl).Source
+          $stdout = Join-Path $env:RUNNER_TEMP 'fast03-port-forward.out.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'fast03-port-forward.err.log'
+          $forward = Start-Process -FilePath $kubectl -ArgumentList @('port-forward','-n','kube-system','svc/traefik','16969:80','--address','127.0.0.1') -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              if ($forward.HasExited) { Get-Content $stderr -ErrorAction SilentlyContinue; throw 'Traefik port-forward exited before readiness.' }
+              $code = & curl.exe --silent --show-error --output NUL --write-out '%{http_code}' --header 'Host: localhost' 'http://127.0.0.1:16969/healthz'
+              if ($LASTEXITCODE -eq 0 -and $code -eq '200') { $ready = $true; break }
+              Start-Sleep -Seconds 2
+            }
+            if (-not $ready) { Get-Content $stdout,$stderr -ErrorAction SilentlyContinue; throw 'Ingress health endpoint did not return HTTP 200.' }
+            $bodyFile = Join-Path $env:RUNNER_TEMP 'fast03-ingress-index.html'
+            $code = & curl.exe --fail --silent --show-error --output $bodyFile --write-out '%{http_code}' --header 'Host: localhost' 'http://127.0.0.1:16969/'
+            if ($LASTEXITCODE -ne 0 -or $code -ne '200') { throw "Ingress UI returned HTTP $code." }
+            $html = Get-Content -LiteralPath $bodyFile -Raw
+            if ($html -notmatch 'id="app"') { throw 'Ingress response did not contain the application shell.' }
+            "Ingress smoke: GET /healthz = 200; GET / = 200 and Vue application shell present (Host: localhost)." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } finally {
+            if (-not $forward.HasExited) { Stop-Process -Id $forward.Id -Force }
+          }
