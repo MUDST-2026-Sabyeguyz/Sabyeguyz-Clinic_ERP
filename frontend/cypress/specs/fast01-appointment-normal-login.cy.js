@@ -59,10 +59,10 @@ describe('FAST01 appointment ordinary login', () => {
     cy.location('pathname').should('eq', '/staff/services')
     cy.get('.card h2').should(($heading) => expect($heading.text()).to.contain(patient.fullName))
     cy.get('.card select').first().should('have.value', 'single')
-    cy.get('.card select').eq(1).should(($select) => expect($select.val()).to.eq(String(serviceId)))
+    cy.get('.fields select').eq(1).should(($select) => expect($select.val()).to.eq(String(serviceId)))
     cy.reload()
     cy.get('.card h2').should(($heading) => expect($heading.text()).to.contain(patient.fullName))
-    cy.get('.card select').eq(1).should(($select) => expect($select.val()).to.eq(String(serviceId)))
+    cy.get('.fields select').eq(1).should(($select) => expect($select.val()).to.eq(String(serviceId)))
     cy.then(() => request('POST', '/api/appointments', { branchCode: '01', patientId: patient.id,
       therapistId, serviceId, startAt: new Date(new Date(appointment.startAt).getTime() + 15 * 60000).toISOString(), roomId }, 409))
     cy.visit('/staff/appointments')

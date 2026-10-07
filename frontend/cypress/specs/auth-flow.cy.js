@@ -14,7 +14,7 @@ describe('Authentication and Session Flow', () => {
     }).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body).to.have.property('token')
-      expect(res.body).to.have.property('role', 'Manager')
+      expect(res.body).to.have.property('role', 'MANAGER')
       expect(res.body.token).to.be.a('string')
     })
   })

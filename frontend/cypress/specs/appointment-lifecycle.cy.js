@@ -25,7 +25,7 @@ describe('Appointment Lifecycle & State Machine', () => {
         headers: { Authorization: `Bearer ${token}` },
         body: {
           branchCode: '01',
-          customerType: 'Thai',
+          patientType: 'Thai',
           title: 'นาย',
           firstName: `ApptPatient${uniqueSuffix}`,
           lastName: `Test${uniqueSuffix}`,
