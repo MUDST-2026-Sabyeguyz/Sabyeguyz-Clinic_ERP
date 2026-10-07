@@ -27,7 +27,7 @@ public class DatabaseV2AuthService {
         return user;
     }
 
-    private static IllegalArgumentException invalidCredentials() {
-        return new IllegalArgumentException("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+    private static org.springframework.security.authentication.BadCredentialsException invalidCredentials() {
+        return new org.springframework.security.authentication.BadCredentialsException("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
     }
 }

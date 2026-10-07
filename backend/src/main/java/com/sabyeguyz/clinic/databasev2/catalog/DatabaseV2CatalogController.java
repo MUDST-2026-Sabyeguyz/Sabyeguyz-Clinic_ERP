@@ -30,7 +30,7 @@ public class DatabaseV2CatalogController {
     public List<ServiceResponse> listServices() {
         return services.findActive().stream()
                 .filter(s -> !"Course".equalsIgnoreCase(s.type()))
-                .map(s -> new ServiceResponse(s.id(), s.code(), s.name(), 60, s.price()))
+                .map(s -> new ServiceResponse(s.id(), s.code(), s.name(), s.durationMinutes(), s.price()))
                 .toList();
     }
 

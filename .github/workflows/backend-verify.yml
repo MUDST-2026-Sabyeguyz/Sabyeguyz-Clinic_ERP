@@ -25,9 +25,6 @@ jobs:
       POSTGRES_DB: clinic_erp_ci
       POSTGRES_USER: clinic_ci
       POSTGRES_PASSWORD: clinic_ci_ephemeral_test_only
-      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/clinic_erp_ci
-      SPRING_DATASOURCE_USERNAME: clinic_ci
-      SPRING_DATASOURCE_PASSWORD: clinic_ci_ephemeral_test_only
       JWT_SECRET: clinic_ci_ephemeral_jwt_test_only
       APP_BOOTSTRAP_ADMIN_PASSWORD: clinic_ci_ephemeral_admin_test_only
     services:
@@ -58,28 +55,122 @@ jobs:
           cache-dependency-path: backend/pom.xml
 
       - name: Start database-v2 migrations against the isolated PostgreSQL service
+        id: migration
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/clinic_erp_ci
+          SPRING_DATASOURCE_USERNAME: clinic_ci
+          SPRING_DATASOURCE_PASSWORD: clinic_ci_ephemeral_test_only
         run: |
-          mvn --batch-mode --no-transfer-progress spring-boot:run -Dspring-boot.run.profiles=database-v2 > /tmp/clinic-backend-startup.log 2>&1 &
-          echo $! > /tmp/clinic-backend-startup.pid
+          set -euo pipefail
+          diagnostics_dir=target/ci-diagnostics
+          mkdir -p "$diagnostics_dir"
+          startup_log="$diagnostics_dir/migration-startup.log"
+          pid_file="$diagnostics_dir/migration-process-group.id"
+          : > "$startup_log"
+          rm -f "$pid_file"
+
+          if ss -H -ltn 'sport = :8080' | grep -q .; then
+            echo 'Refusing migration startup: port 8080 already has a listener.' >&2
+            ss -ltnp 'sport = :8080' >&2
+            exit 1
+          fi
+
+          migration_ready=0
+          migration_pgid=''
+          cleanup_failed_start() {
+            status=$?
+            trap - EXIT INT TERM
+            if (( status != 0 )) && [[ -n "$migration_pgid" ]]; then
+              if ! bash scripts/ci/stop-migration-process-group.sh "$pid_file"; then
+                echo 'Failed to clean up the owned migration process group after startup failure.' >&2
+                status=1
+              fi
+            fi
+            exit "$status"
+          }
+          trap cleanup_failed_start EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+
+          setsid bash -c 'printf "%s\\n" "$$" > "$1"; exec mvn --batch-mode --no-transfer-progress spring-boot:run -Dspring-boot.run.profiles=database-v2' _ "$pid_file" > "$startup_log" 2>&1 &
+          launcher_pid=$!
+          for attempt in $(seq 1 20); do
+            if [[ -s "$pid_file" ]]; then
+              candidate_pgid=$(cat "$pid_file")
+              if [[ "$candidate_pgid" =~ ^[0-9]+$ ]] && kill -0 "$candidate_pgid" 2>/dev/null; then
+                actual_pgid=$(ps -o pgid= -p "$candidate_pgid" | tr -d '[:space:]')
+                actual_sid=$(ps -o sid= -p "$candidate_pgid" | tr -d '[:space:]')
+                if [[ "$actual_pgid" != "$candidate_pgid" || "$actual_sid" != "$candidate_pgid" ]]; then
+                  echo "Migration process did not enter its own session (pid=$candidate_pgid pgid=$actual_pgid sid=$actual_sid)." >&2
+                  exit 1
+                fi
+                migration_pgid=$candidate_pgid
+                break
+              fi
+            fi
+            if ! kill -0 "$launcher_pid" 2>/dev/null; then
+              cat "$startup_log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+
+          if [[ -z "$migration_pgid" ]]; then
+            cat "$startup_log"
+            echo 'Timed out waiting for the owned migration process to start.' >&2
+            exit 1
+          fi
+
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://localhost:8080/actuator/health > /dev/null; then
+              echo "Migration app ready in owned session PID/PGID $migration_pgid."
+              migration_ready=1
               exit 0
             fi
-            if ! kill -0 "$(cat /tmp/clinic-backend-startup.pid)" 2>/dev/null; then
-              cat /tmp/clinic-backend-startup.log
+            if ! kill -0 "$migration_pgid" 2>/dev/null; then
+              cat "$startup_log"
               exit 1
             fi
             sleep 2
           done
-          cat /tmp/clinic-backend-startup.log
+          cat "$startup_log"
           exit 1
 
+      - name: Stop database-v2 migration process before tests
+        id: stop_migration
+        if: always()
+        run: bash scripts/ci/stop-migration-process-group.sh target/ci-diagnostics/migration-process-group.id
+
       - name: Test and package
+        if: ${{ steps.migration.outcome == 'success' && steps.stop_migration.outcome == 'success' }}
         run: mvn --batch-mode --no-transfer-progress verify
 
       - name: Generate backend coverage report
         if: always()
         run: mvn --batch-mode --no-transfer-progress jacoco:report
+
+      - name: Print first backend test exception chain
+        if: failure()
+        run: |
+          set -euo pipefail
+          for report in target/surefire-reports/*.txt; do
+            [[ -f "$report" ]] || continue
+            if grep -q '<<< ERROR!' "$report"; then
+              echo "First error report: $report"
+              sed -n '/^Caused by:/,$p' "$report"
+              break
+            fi
+          done
+
+      - name: Upload backend test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-diagnostics
+          path: |
+            backend/target/surefire-reports
+            backend/target/ci-diagnostics
+          if-no-files-found: ignore
 
       - name: Upload backend coverage report
         if: always()

@@ -17,6 +17,7 @@ import com.sabyeguyz.clinic.databasev2.common.CurrentActorProvider;
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException;
 import com.sabyeguyz.clinic.databasev2.patient.DatabaseV2PatientRepository;
 import com.sabyeguyz.clinic.databasev2.payment.DatabaseV2PaymentMethodRepository;
+import com.sabyeguyz.clinic.databasev2.security.BranchAccessGuard;
 import com.sabyeguyz.clinic.databasev2.staff.DatabaseV2StaffRepository;
 import com.sabyeguyz.clinic.sale.SaleItemType;
 import com.sabyeguyz.clinic.sale.SaleRequest;
@@ -43,6 +44,7 @@ class DatabaseV2SaleControllerTest {
     private DatabaseV2ServiceRepository serviceRepository;
     private DatabaseV2PaymentMethodRepository paymentMethodRepository;
     private CurrentActorProvider actorProvider;
+    private BranchAccessGuard branchAccess;
     private DatabaseV2SaleController controller;
     private Authentication auth;
 
@@ -55,15 +57,17 @@ class DatabaseV2SaleControllerTest {
         serviceRepository = mock(DatabaseV2ServiceRepository.class);
         paymentMethodRepository = mock(DatabaseV2PaymentMethodRepository.class);
         actorProvider = mock(CurrentActorProvider.class);
+        branchAccess = mock(BranchAccessGuard.class);
         auth = mock(Authentication.class);
 
         controller = new DatabaseV2SaleController(
                 saleRepository, patientRepository, branchRepository,
                 staffRepository, serviceRepository, paymentMethodRepository,
-                actorProvider
+                actorProvider, branchAccess
         );
 
         when(actorProvider.getActorIdOrDefault(any(), any())).thenReturn(1L);
+        when(branchAccess.actorId(auth)).thenReturn(1L);
 
         DatabaseV2PatientRepository.PatientRecord patient = mock(DatabaseV2PatientRepository.PatientRecord.class);
         when(patientRepository.findById(10L)).thenReturn(Optional.of(patient));
@@ -121,6 +125,23 @@ class DatabaseV2SaleControllerTest {
         assertThat(response.getBody().total()).isEqualByComparingTo("5000.00");
         assertThat(response.getBody().paid()).isEqualByComparingTo("5000.00");
         assertThat(response.getBody().status()).isEqualTo(SaleStatus.PAID);
+        verify(branchAccess).require(auth, 1L);
+    }
+
+    @Test
+    void createSaleRejectsBranchOutsideAuthenticatedAccessBeforeAllocatingReceipt() {
+        DatabaseV2Branch otherBranch = new DatabaseV2Branch(2L, "02", "Branch 02", "123 Road", "021234568", true);
+        when(branchRepository.findByCode("02")).thenReturn(Optional.of(otherBranch));
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("no branch access"))
+                .when(branchAccess).require(auth, 2L);
+        SaleRequest request = new SaleRequest(10L, "02", null, null,
+                List.of(new SaleRequest.Item(SaleItemType.SINGLE_VISIT, 31L, 1)),
+                List.of(new SaleRequest.Payment("CASH", new BigDecimal("1200.00"))));
+
+        assertThatThrownBy(() -> controller.create(request, auth))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(saleRepository, org.mockito.Mockito.never()).allocateReceipt();
     }
 
     @Test
@@ -178,13 +199,23 @@ class DatabaseV2SaleControllerTest {
                 "PAID", LocalDateTime.now(), null
         );
 
-        when(saleRepository.search(eq(10L), eq("01"), eq(20), eq(0))).thenReturn(List.of(r));
-        when(saleRepository.countSearch(eq(10L), eq("01"))).thenReturn(1);
+        when(saleRepository.searchAccessible(eq(10L), eq("01"), eq(20), eq(0), eq(1L))).thenReturn(List.of(r));
+        when(saleRepository.countSearchAccessible(eq(10L), eq("01"), eq(1L))).thenReturn(1);
 
-        SaleSearchResponse page = controller.list(10L, "01", 0, 20);
+        SaleSearchResponse page = controller.list(10L, "01", 0, 20, auth);
 
         assertThat(page.totalItems()).isEqualTo(1);
         assertThat(page.items()).hasSize(1);
         assertThat(page.items().get(0).receiptNo()).isEqualTo("RE-0000001");
+        verify(branchAccess).require(auth, 1L);
+    }
+
+    @Test
+    void listSalesRejectsPageWhenOffsetOverflows() {
+        assertThatThrownBy(() -> controller.list(10L, "01", Integer.MAX_VALUE, 100, auth))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("page เกินขอบเขต");
+
+        org.mockito.Mockito.verifyNoInteractions(saleRepository);
     }
 }

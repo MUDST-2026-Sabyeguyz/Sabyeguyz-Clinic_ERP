@@ -60,7 +60,7 @@ class DatabaseV2BootstrapPostgresIntegrationTest {
 
         // 2. Verify Roles
         List<String> roles = jdbc.queryForList("select role_name from role", String.class);
-        assertThat(roles).contains("Manager", "Therapist", "Receptionist");
+        assertThat(roles).contains("MANAGER", "THERAPIST");
 
         // 3. Verify Branch
         Integer branchCount = jdbc.queryForObject("select count(*) from branch where branch_code = '01'", Integer.class);

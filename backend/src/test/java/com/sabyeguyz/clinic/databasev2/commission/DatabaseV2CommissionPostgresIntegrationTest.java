@@ -111,8 +111,10 @@ class DatabaseV2CommissionPostgresIntegrationTest {
 
     @Test
     void monthlyClosingLocksCoursesAndPreventsDoubleClose() {
-        LocalDate month = LocalDate.of(2026, 8, 1);
-        String monthStr = "2026-08";
+        int fixtureYear = 3000 + java.util.concurrent.ThreadLocalRandom.current().nextInt(0, 6000);
+        LocalDate month = LocalDate.of(fixtureYear, 8, 1);
+        String monthStr = String.format("%04d-%02d", month.getYear(), month.getMonthValue());
+        LocalDate saleDate = month.plusDays(14);
         DatabaseV2CommissionRepository.SchemeRecord scheme = repository.createScheme(
                 "Monthly close fixture " + UUID.randomUUID(), "1", month, null,
                 List.of(new DatabaseV2CommissionRepository.TierInput(
@@ -123,8 +125,8 @@ class DatabaseV2CommissionPostgresIntegrationTest {
         Long receiptId = jdbc.queryForObject("select nextval('receipt_receipt_id_seq')", Long.class);
         String receiptNo = String.format("RE-%07d", receiptId);
         jdbc.update(
-                "insert into receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_at, receipt_create_by) values (?, ?, 96, 96, '2026-08-15', current_timestamp, 1)",
-                receiptId, receiptNo
+                "insert into receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_at, receipt_create_by) values (?, ?, 96, 96, ?, current_timestamp, 1)",
+                receiptId, receiptNo, saleDate
         );
 
         repository.getOrCreateCommissionPermission(1L);
@@ -138,13 +140,13 @@ class DatabaseV2CommissionPostgresIntegrationTest {
                     visits_used, remaining_visits, course_create_at, course_create_by
                 ) values (
                     ?, 1, 'Commission Test Course', 20000.00,
-                    10, 0, '2027-08-15', 'Active',
+                    10, 0, ?, 'Active',
                     96, ?, ?, 96, 96,
                     'Provisional', ?, 1,
                     0, 10, current_timestamp, 1
                 ) returning course_id
                 """,
-                Long.class, receiptNo, receiptId, monthStr, scheme.id()
+                Long.class, receiptNo, month.plusYears(1), receiptId, monthStr, scheme.id()
         );
 
         // 1. Perform monthly closing
@@ -163,6 +165,16 @@ class DatabaseV2CommissionPostgresIntegrationTest {
 
         BigDecimal lockedRate = jdbc.queryForObject("select locked_commission_rate from course where course_id = ?", BigDecimal.class, courseId);
         assertThat(lockedRate).isNotNull();
+        var closedSnapshot = jdbc.queryForMap("""
+                select monthly_course_sales, commission_scheme_id, commission_scheme_version,
+                       calculated_commission_rate, locked_commission_rate, closing_status, closing_at, closed_by
+                from monthly_commission_closing where closing_id = ?
+                """, record.id());
+        var courseSnapshot = jdbc.queryForMap("""
+                select locked_commission_rate, total_course_commission_pool,
+                       commission_allocation_per_visit, course_update_at
+                from course where course_id = ?
+                """, courseId);
 
         // 3. Trying to close again on single record throws conflict
         assertThatThrownBy(() -> repository.closeSingle(record.id(), 1L))
@@ -174,12 +186,27 @@ class DatabaseV2CommissionPostgresIntegrationTest {
                 List.of(new DatabaseV2CommissionRepository.TierInput(
                         BigDecimal.ZERO, null, new BigDecimal("0.25"), 1)), true, 1L
         );
-        repository.closeMonth(month, 1L);
+        List<DatabaseV2CommissionRepository.ClosingRecord> repeatedClosings = repository.closeMonth(month, 1L);
+        DatabaseV2CommissionRepository.ClosingRecord repeated = repeatedClosings.stream()
+                .filter(c -> c.id().equals(record.id())).findFirst().orElseThrow();
+        assertThat(repeated.status()).isEqualTo("CLOSED");
+        assertThat(repeated.rate()).isEqualByComparingTo("0.10");
+        assertThat(repeated.version()).isEqualTo(record.version());
 
         BigDecimal afterReclose = jdbc.queryForObject(
                 "select locked_commission_rate from course where course_id = ?", BigDecimal.class, courseId
         );
         assertThat(afterReclose).isEqualByComparingTo("0.10");
+        assertThat(jdbc.queryForMap("""
+                select monthly_course_sales, commission_scheme_id, commission_scheme_version,
+                       calculated_commission_rate, locked_commission_rate, closing_status, closing_at, closed_by
+                from monthly_commission_closing where closing_id = ?
+                """, record.id())).containsAllEntriesOf(closedSnapshot);
+        assertThat(jdbc.queryForMap("""
+                select locked_commission_rate, total_course_commission_pool,
+                       commission_allocation_per_visit, course_update_at
+                from course where course_id = ?
+                """, courseId)).containsAllEntriesOf(courseSnapshot);
     }
 
     @Test

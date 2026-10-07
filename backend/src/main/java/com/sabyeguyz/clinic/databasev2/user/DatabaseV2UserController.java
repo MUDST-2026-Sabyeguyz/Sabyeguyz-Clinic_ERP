@@ -96,7 +96,7 @@ public class DatabaseV2UserController {
                     rs.getLong("user_id"),
                     rs.getString("username"),
                     null,
-                    rs.getString("role_name"),
+                    rs.getString("role_name") == null ? null : rs.getString("role_name").toUpperCase(java.util.Locale.ROOT),
                     rs.getString("staff_code"),
                     fullName.trim().isEmpty() ? rs.getString("username") : fullName.trim(),
                     null,
@@ -127,8 +127,8 @@ public class DatabaseV2UserController {
         }
 
         DatabaseV2Branch branch = resolveBranch(request.branchCode());
-        String roleName = request.role().trim().toUpperCase();
-        String position = roleName.contains("MANAGER") ? "Manager" : "Therapist";
+        String roleName = canonicalRole(request.role());
+        String position = "MANAGER".equals(roleName) ? "Manager" : "Therapist";
         String[] names = DatabaseV2StaffController.splitFullName(request.fullName());
 
         DatabaseV2StaffRepository.StaffModel staff = staffRepository.create(
@@ -171,6 +171,10 @@ public class DatabaseV2UserController {
     @Transactional
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request, Authentication auth) {
         Long actorId = actorProvider.getActorIdOrDefault(auth, 1L);
+        Boolean existingActive = jdbc.query("select user_status from app_user where user_id=?",
+                (rs,rowNum)->rs.getBoolean("user_status"),id).stream().findFirst()
+                .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบผู้ใช้"));
+        boolean active = request.active() == null ? existingActive : request.active();
         Long staffId = jdbc.query(
                 "select staff_id from app_user where user_id = ?",
                 (rs, rowNum) -> (Long) rs.getObject("staff_id"),
@@ -186,8 +190,8 @@ public class DatabaseV2UserController {
         }
 
         DatabaseV2Branch branch = resolveBranch(request.branchCode());
-        String roleName = request.role().trim().toUpperCase();
-        String position = roleName.contains("MANAGER") ? "Manager" : "Therapist";
+        String roleName = canonicalRole(request.role());
+        String position = "MANAGER".equals(roleName) ? "Manager" : "Therapist";
         String[] names = DatabaseV2StaffController.splitFullName(request.fullName());
 
         if (staffId != null) {
@@ -202,10 +206,10 @@ public class DatabaseV2UserController {
 
         if (request.password() != null && !request.password().isBlank()) {
             jdbc.update("update app_user set username = ?, password_hash = ?, user_status = ?, user_update_at = ?, user_update_by = ? where user_id = ?",
-                    username, encoder.encode(request.password()), request.active() != null ? request.active() : true, LocalDateTime.now(), actorId, id);
+                    username, encoder.encode(request.password()), active, LocalDateTime.now(), actorId, id);
         } else {
             jdbc.update("update app_user set username = ?, user_status = ?, user_update_at = ?, user_update_by = ? where user_id = ?",
-                    username, request.active() != null ? request.active() : true, LocalDateTime.now(), actorId, id);
+                    username, active, LocalDateTime.now(), actorId, id);
         }
 
         DatabaseV2SecurityRepository.RoleRecord role = securityRepository.getOrCreateRole(roleName, actorId);
@@ -217,7 +221,7 @@ public class DatabaseV2UserController {
                 id, username, request.email(), roleName,
                 request.employeeCode().trim(), request.fullName().trim(), request.phone(),
                 branch.getCode(), branch.getName(),
-                request.active() == null || request.active()
+                active
         );
     }
 
@@ -255,6 +259,14 @@ public class DatabaseV2UserController {
             staffRepository.setStatus(staffId, true, actorId);
         }
         return list().stream().filter(u -> u.id().equals(id)).findFirst().orElseThrow();
+    }
+
+    private static String canonicalRole(String role) {
+        String value = role == null ? "" : role.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"MANAGER".equals(value) && !"THERAPIST".equals(value)) {
+            throw new IllegalArgumentException("บทบาทต้องเป็น MANAGER หรือ THERAPIST");
+        }
+        return value;
     }
 
     private DatabaseV2Branch resolveBranch(String code) {

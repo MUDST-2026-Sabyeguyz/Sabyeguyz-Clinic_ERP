@@ -132,13 +132,14 @@ class DatabaseV2SalePostgresIntegrationTest {
         LocalDateTime now = LocalDateTime.now();
 
         // 1. Insert receipt
-        repository.insertReceipt(allocated.id(), allocated.receiptNo(), 99L, 99L, today, 1L);
+        repository.insertReceipt(allocated.id(), allocated.receiptNo(), 99L, 99L, today, 1L,
+                new BigDecimal("3000.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("3000.00"));
 
         // 2. Insert sales transaction & course
-        Long txId = repository.createSalesTransaction(
-                99L, 99L, 99L, "CoursePurchase",
+        Long txId = repository.createSalesTransactionForReceipt(
+                allocated.id(), 99L, 99L, 99L, "CoursePurchase",
                 null, 99L,
-                1, new BigDecimal("3000.00"), new BigDecimal("3000.00"),
+                1, new BigDecimal("3000.00"), new BigDecimal("3000.00"), new BigDecimal("3000.00"), BigDecimal.ZERO,
                 now, null, 1L
         );
         assertThat(txId).isNotNull();

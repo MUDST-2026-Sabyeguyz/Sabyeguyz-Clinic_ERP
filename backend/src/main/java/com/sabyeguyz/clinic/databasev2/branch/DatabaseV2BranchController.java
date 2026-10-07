@@ -24,9 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/branches")
 public class DatabaseV2BranchController {
     private final DatabaseV2BranchRepository branches;
+    private final com.sabyeguyz.clinic.databasev2.security.BranchAccessGuard branchAccess;
 
-    public DatabaseV2BranchController(DatabaseV2BranchRepository branches) {
+    public DatabaseV2BranchController(DatabaseV2BranchRepository branches, com.sabyeguyz.clinic.databasev2.security.BranchAccessGuard branchAccess) {
         this.branches = branches;
+        this.branchAccess = branchAccess;
     }
 
     public record Request(
@@ -38,8 +40,12 @@ public class DatabaseV2BranchController {
     public record Response(Long id, String code, String name, String address, String phone, boolean active) {}
 
     @GetMapping
-    List<Response> list() {
-        return branches.findAllByOrderByName().stream().map(DatabaseV2BranchController::response).toList();
+    List<Response> list(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean accessible,
+            org.springframework.security.core.Authentication authentication) {
+        var allowed = accessible ? branchAccess.allowedBranchIds(authentication) : null;
+        return branches.findAllByOrderByName().stream()
+                .filter(branch -> allowed == null || allowed.contains(branch.id()))
+                .map(DatabaseV2BranchController::response).toList();
     }
 
     @GetMapping("/{id}")

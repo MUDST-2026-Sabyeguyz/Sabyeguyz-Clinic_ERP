@@ -56,7 +56,7 @@ public class DatabaseV2AppointmentRepository {
                    concat(s.staff_fname, case when s.staff_lname is not null and s.staff_lname <> '-' then concat(' ', s.staff_lname) else '' end) as staff_name,
                    a.service_id, sv.service_name,
                    a.room_id, r.room_name,
-                   a.appointment_date, a.appointment_time,
+                   a.appointment_date, a.appointment_time, a.duration_minutes,
                    cast(a.appointment_status as varchar) as status,
                    a.appointment_create_at,
                    (select h.reason from appointment_status_history h where h.appointment_id = a.appointment_id and h.to_status = 'Cancelled' order by h.history_id desc limit 1) as cancel_reason,
@@ -80,7 +80,7 @@ public class DatabaseV2AppointmentRepository {
             rs.getString("staff_name"),
             rs.getLong("service_id"),
             rs.getString("service_name"),
-            60,
+            rs.getInt("duration_minutes"),
             (Long) rs.getObject("room_id"),
             rs.getString("room_name"),
             rs.getObject("appointment_date", LocalDate.class),
@@ -97,6 +97,81 @@ public class DatabaseV2AppointmentRepository {
 
     public Optional<AppointmentModel> findById(Long id) {
         return jdbc.query(SELECT_APPOINTMENT + " where a.appointment_id = ?", ROW_MAPPER, id).stream().findFirst();
+    }
+
+    /** Serializes state changes so one arrival creates one visit/history transition. */
+    public Optional<AppointmentModel> findForUpdate(Long id) {
+        return jdbc.query(SELECT_APPOINTMENT + " where a.appointment_id = ? for update of a", ROW_MAPPER, id)
+                .stream().findFirst();
+    }
+
+    /** Transaction-scoped locks work across JVMs; all resource keys use one ordering. */
+    public void lockSchedule(Long staffId, Long roomId) {
+        var keys = new ArrayList<String>();
+        keys.add("clinic.appointment.staff:" + staffId);
+        if (roomId != null) keys.add("clinic.appointment.room:" + roomId);
+        keys.sort(String::compareTo);
+        for (String key : keys) jdbc.query("select pg_advisory_xact_lock(hashtextextended(?, 0))",
+                rs -> { }, key);
+    }
+
+    public void requireActiveRoomAtBranch(Long roomId, Long branchId) {
+        if (roomId == null) return;
+        Integer count = jdbc.queryForObject("select count(*) from room where room_id=? and branch_id=? and room_status=true",
+                Integer.class, roomId, branchId);
+        if (count == null || count == 0) throw new IllegalArgumentException("ห้องต้องเปิดใช้งานในสาขานัดหมาย");
+    }
+
+    public boolean hasIntervalConflict(Long staffId, Long roomId, LocalDate date, LocalTime time,
+                                       int durationMinutes, Long excludeId) {
+        LocalDateTime start = date.atTime(time);
+        Integer count = jdbc.queryForObject("""
+                select count(*) from appointment
+                where (staff_id=? or (cast(? as bigint) is not null and room_id=?))
+                  and appointment_status in ('Confirmed','Arrived','InService','Rescheduled')
+                  and appointment_date + appointment_time < cast(? as timestamp)
+                  and appointment_date + appointment_time + duration_minutes * interval '1 minute' > cast(? as timestamp)
+                  and (cast(? as bigint) is null or appointment_id <> ?)
+                """, Integer.class, staffId, roomId, roomId, start.plusMinutes(durationMinutes), start, excludeId, excludeId);
+        return count != null && count > 0;
+    }
+
+    private record SearchFilter(String where, List<Object> params) {}
+
+    private SearchFilter filter(String branchCode, LocalDate date, Long staffId, String status,
+                                String query, Long actorId) {
+        List<String> conditions = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+        if (actorId != null) {
+            conditions.add("exists(select 1 from user_branch_access uba where uba.branch_id=a.branch_id and uba.user_id=?)");
+            params.add(actorId);
+        }
+        if (branchCode != null && !branchCode.isBlank()) { conditions.add("b.branch_code=?"); params.add(branchCode.trim().toUpperCase()); }
+        if (date != null) { conditions.add("a.appointment_date=?"); params.add(date); }
+        if (staffId != null) { conditions.add("a.staff_id=?"); params.add(staffId); }
+        if (status != null && !status.isBlank()) { conditions.add("a.appointment_status=cast(? as appointment_status_enum)"); params.add(normalizeStatus(status)); }
+        if (query != null && !query.isBlank()) {
+            conditions.add("strpos(lower(concat_ws(' ',p.hn,p.patient_fname,p.patient_lname,p.phone,sv.service_name,s.staff_fname,s.staff_lname)), lower(?)) > 0");
+            params.add(query.trim());
+        }
+        return new SearchFilter(conditions.isEmpty() ? "" : " where " + String.join(" and ", conditions), params);
+    }
+
+    public List<AppointmentModel> searchScoped(String branchCode, LocalDate date, Long staffId, String status,
+                                               String query, Long actorId, boolean descending, int limit, int offset) {
+        SearchFilter f = filter(branchCode,date,staffId,status,query,actorId);
+        var params = new ArrayList<>(f.params()); params.add(limit); params.add(offset);
+        String direction = descending ? " desc" : " asc";
+        return jdbc.query(SELECT_APPOINTMENT + f.where() + " order by a.appointment_date" + direction
+                + ",a.appointment_time" + direction + ",a.appointment_id" + direction + " limit ? offset ?",
+                ROW_MAPPER, params.toArray());
+    }
+
+    public int countScoped(String branchCode, LocalDate date, Long staffId, String status, String query, Long actorId) {
+        SearchFilter f = filter(branchCode,date,staffId,status,query,actorId);
+        Integer count = jdbc.queryForObject("select count(*) from (" + SELECT_APPOINTMENT + f.where() + ") matched",
+                Integer.class, f.params().toArray());
+        return count == null ? 0 : count;
     }
 
     public List<AppointmentModel> search(String branchCode, LocalDate date, Long staffId, String status, int limit, int offset) {
@@ -125,7 +200,7 @@ public class DatabaseV2AppointmentRepository {
             sql.append(" where ").append(String.join(" and ", conditions));
         }
 
-        sql.append(" order by a.appointment_date, a.appointment_time limit ? offset ?");
+        sql.append(" order by a.appointment_date, a.appointment_time, a.appointment_id limit ? offset ?");
         params.add(limit);
         params.add(offset);
 
@@ -183,17 +258,17 @@ public class DatabaseV2AppointmentRepository {
                 """
                 insert into appointment (
                     patient_id, branch_id, staff_id, service_id, room_id,
-                    appointment_date, appointment_time, appointment_status,
+                    appointment_date, appointment_time, appointment_status, duration_minutes,
                     appointment_create_at, appointment_create_by
                 ) values (
                     ?, ?, ?, ?, ?,
-                    ?, ?, 'Confirmed',
+                    ?, ?, 'Confirmed', (select default_duration_minutes from service where service_id=?),
                     current_timestamp, ?
                 ) returning appointment_id
                 """,
                 Long.class,
                 patientId, branchId, staffId, serviceId, roomId,
-                date, time, actorId
+                date, time, serviceId, actorId
         );
 
         String reason = (note != null && !note.isBlank()) ? note.trim() : "Initial booking";
@@ -305,7 +380,7 @@ public class DatabaseV2AppointmentRepository {
             case "CANCELLED" -> "Cancelled";
             case "RESCHEDULED" -> "Rescheduled";
             case "NO_SHOW", "NOSHOW" -> "NoShow";
-            default -> s;
+            default -> throw new IllegalArgumentException("สถานะนัดหมายไม่ถูกต้อง");
         };
     }
 }

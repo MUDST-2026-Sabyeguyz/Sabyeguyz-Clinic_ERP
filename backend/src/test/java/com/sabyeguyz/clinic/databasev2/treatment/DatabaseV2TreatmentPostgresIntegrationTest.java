@@ -70,6 +70,11 @@ class DatabaseV2TreatmentPostgresIntegrationTest {
             values (97, '2697099997', 'Thai', 'นาย', 'TreatmentPatient', 'Test', 'Male', '0899999997', 97, 1)
             on conflict (patient_id) do nothing
         """);
+        jdbc.execute("""
+            insert into patient (patient_id, hn, customer_type, title, patient_fname, patient_lname, gender, phone, branch_id, registered_by)
+            values (98, '2697099998', 'Thai', 'นาย', 'OtherPatient', 'Test', 'Male', '0899999998', 97, 1)
+            on conflict (patient_id) do nothing
+        """);
     }
 
     @Test
@@ -98,5 +103,30 @@ class DatabaseV2TreatmentPostgresIntegrationTest {
         List<DatabaseV2TreatmentRepository.TreatmentRecord> treatments = repository.findByPatientId(97L);
         assertThat(treatments).isNotEmpty();
         assertThat(treatments.get(0).id()).isEqualTo(walkin.id());
+    }
+
+    @Test
+    void pagedCareHistoryIsPatientScopedAndHasStableTimeAndIdOrdering() {
+        var patientARecord = repository.createTreatment(97L, null, 97L, 97L, "Patient A synthetic care", 1L);
+        var patientBRecord = repository.createTreatment(98L, null, 97L, 97L, "Patient B synthetic care", 1L);
+
+        var patientAAll = repository.findByPatientId(97L);
+        var patientAFirstPage = repository.findByPatientId(97L, 1, 0);
+        var patientAFirstPageReload = repository.findByPatientId(97L, 1, 0);
+        var patientBPage = repository.findByPatientId(98L, 10, 0);
+
+        assertThat(repository.countByPatientId(97L)).isEqualTo(patientAAll.size());
+        assertThat(repository.patientExists(97L)).isTrue();
+        assertThat(patientAAll).extracting(DatabaseV2TreatmentRepository.TreatmentRecord::patientId)
+                .containsOnly(97L);
+        assertThat(patientAFirstPage).hasSize(1);
+        assertThat(patientAFirstPage.get(0).id()).isEqualTo(patientAAll.get(0).id());
+        assertThat(patientAFirstPageReload).extracting(DatabaseV2TreatmentRepository.TreatmentRecord::id)
+                .containsExactlyElementsOf(patientAFirstPage.stream().map(DatabaseV2TreatmentRepository.TreatmentRecord::id).toList());
+        assertThat(patientAAll.get(0).createdAt()).isNotNull();
+        assertThat(patientAAll).extracting(DatabaseV2TreatmentRepository.TreatmentRecord::id)
+                .contains(patientARecord.id()).doesNotContain(patientBRecord.id());
+        assertThat(patientBPage).extracting(DatabaseV2TreatmentRepository.TreatmentRecord::patientId)
+                .containsOnly(98L);
     }
 }

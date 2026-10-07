@@ -22,14 +22,20 @@ public class DatabaseV2ServiceRepository {
             boolean active,
             Integer totalVisits,
             Integer bonusVisits,
-            Integer validityDays
-    ) {}
+            Integer validityDays,
+            int durationMinutes
+    ) {
+        public ServiceModel(Long id, String code, String name, String type, BigDecimal price, boolean active,
+                            Integer totalVisits, Integer bonusVisits, Integer validityDays) {
+            this(id,code,name,type,price,active,totalVisits,bonusVisits,validityDays,60);
+        }
+    }
 
     private final JdbcTemplate jdbc;
 
     private static final String SELECT_SERVICE = """
             select service_id, service_code, service_name, cast(service_type as varchar) as service_type,
-                   service_price, service_status, default_total_visits, default_bonus_visits, default_validity_days
+                   service_price, service_status, default_total_visits, default_bonus_visits, default_validity_days, default_duration_minutes
             from service
             """;
 
@@ -42,7 +48,8 @@ public class DatabaseV2ServiceRepository {
             rs.getBoolean("service_status"),
             (Integer) rs.getObject("default_total_visits"),
             (Integer) rs.getObject("default_bonus_visits"),
-            (Integer) rs.getObject("default_validity_days")
+            (Integer) rs.getObject("default_validity_days"),
+            rs.getInt("default_duration_minutes")
     );
 
     public DatabaseV2ServiceRepository(JdbcTemplate jdbc) {
@@ -69,6 +76,10 @@ public class DatabaseV2ServiceRepository {
 
     public Optional<ServiceModel> findById(Long id) {
         return jdbc.query(SELECT_SERVICE + " where service_id = ?", ROW_MAPPER, id).stream().findFirst();
+    }
+
+    public Optional<ServiceModel> findForBooking(Long id) {
+        return jdbc.query(SELECT_SERVICE + " where service_id = ? for share", ROW_MAPPER, id).stream().findFirst();
     }
 
     public Optional<ServiceModel> findByCode(String code) {
@@ -125,5 +136,10 @@ public class DatabaseV2ServiceRepository {
                 "update service set service_status = ?, service_update_at = ?, service_update_by = ? where service_id = ?",
                 active, LocalDateTime.now(), actorId, id
         );
+    }
+
+    public void setDuration(Long id, int minutes) {
+        if (minutes < 1) throw new IllegalArgumentException("ระยะเวลาบริการต้องมากกว่า 0");
+        jdbc.update("update service set default_duration_minutes=? where service_id=?",minutes,id);
     }
 }

@@ -4,6 +4,7 @@ import com.sabyeguyz.clinic.course.CourseBalanceException;
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException;
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2NotFoundException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -154,6 +155,27 @@ public class DatabaseV2CourseRepository {
         return jdbc.query(sql, ROW_MAPPER, patientId, patientId);
     }
 
+    public List<CoursePurchaseRecord> findByPatientId(Long patientId, int limit, int offset) {
+        String sql = SELECT_COURSE + """
+                where p.patient_id = ?
+                   or c.course_id in (select csm.course_id from course_shared_member csm where csm.patient_id = ? and csm.member_status = true)
+                order by c.course_id desc limit ? offset ?
+                """;
+        return jdbc.query(sql, ROW_MAPPER, patientId, patientId, limit, offset);
+    }
+
+    public int countByPatientId(Long patientId) {
+        Integer count = jdbc.queryForObject("""
+                select count(distinct c.course_id)
+                from course c
+                join receipt r on r.receipt_id = c.receipt_id
+                left join course_shared_member csm on csm.course_id = c.course_id and csm.member_role = 'Owner'
+                where coalesce(csm.patient_id, r.patient_id) = ?
+                   or c.course_id in (select member.course_id from course_shared_member member where member.patient_id = ? and member.member_status = true)
+                """, Integer.class, patientId, patientId);
+        return count == null ? 0 : count;
+    }
+
     public CoursePurchaseRecord purchase(
             Long patientId, Long serviceId, Long branchId, String branchCode,
             Long sellerStaffId, Long actorId
@@ -162,18 +184,7 @@ public class DatabaseV2CourseRepository {
         String receiptNo = String.format("RE-%07d", nextVal);
         LocalDate today = LocalDate.now();
 
-        // 1. Insert receipt
-        jdbc.update(
-                """
-                insert into receipt (
-                    receipt_id, receipt_no, patient_id, branch_id, sale_date,
-                    receipt_create_at, receipt_create_by
-                ) values (?, ?, ?, ?, ?, current_timestamp, ?)
-                """,
-                nextVal, receiptNo, patientId, branchId, today, actorId
-        );
-
-        // 2. Fetch service properties
+        // 1. Fetch service properties
         var serviceProps = jdbc.queryForMap(
                 "select service_name, service_price, default_total_visits, default_bonus_visits, default_validity_days from service where service_id = ?",
                 serviceId
@@ -187,6 +198,18 @@ public class DatabaseV2CourseRepository {
         if (bonusVisits == null) bonusVisits = 0;
         Integer validityDays = (Integer) serviceProps.get("default_validity_days");
         if (validityDays == null || validityDays <= 0) validityDays = 365;
+
+        // 2. Persist no-discount totals independently from the commission base.
+        jdbc.update(
+                """
+                insert into receipt (
+                    receipt_id, receipt_no, patient_id, branch_id, sale_date,
+                    receipt_create_at, receipt_create_by,
+                    gross_total, line_discount_total, bill_discount_amount, net_due
+                ) values (?, ?, ?, ?, ?, current_timestamp, ?, ?, 0, 0, ?)
+                """,
+                nextVal, receiptNo, patientId, branchId, today, actorId, price, price
+        );
 
         LocalDate expiryDate = today.plusDays(validityDays);
         String saleMonth = String.format("%04d-%02d", today.getYear(), today.getMonthValue());
@@ -261,16 +284,16 @@ public class DatabaseV2CourseRepository {
                 insert into sales_transaction (
                     patient_id, branch_id, service_id, transaction_type,
                     salesperson_staff_id, quantity, unit_price, amount,
-                    transaction_date, course_id, transaction_status,
+                    transaction_date, course_id, transaction_status, gross_amount, line_discount_amount,
                     transaction_create_at, transaction_create_by
                 ) values (
                     ?, ?, ?, 'CoursePurchase',
                     ?, 1, ?, ?,
-                    current_timestamp, ?, true,
+                    current_timestamp, ?, true, ?, 0,
                     current_timestamp, ?
                 )
                 """,
-                patientId, branchId, serviceId, sellerId, price, price, courseId, actorId
+                patientId, branchId, serviceId, sellerId, price, price, courseId, price, actorId
         );
 
         return findById(courseId).orElseThrow();
@@ -367,26 +390,87 @@ public class DatabaseV2CourseRepository {
             }
         }
         Long ownerId = course.caseOwnerStaffId() != null ? course.caseOwnerStaffId() : treatingId;
+        BigDecimal gross = course.commissionAllocationPerVisit() != null
+                && "Locked".equals(course.commissionStatus())
+                ? course.commissionAllocationPerVisit()
+                : BigDecimal.ZERO;
+        FeeAllocation feeAllocation = allocateTreatmentFee(course, treatingId, ownerId, gross);
 
         jdbc.update(
                 """
                 insert into course_visit_usage (
                     visit_id, course_id, patient_id, treating_staff_id, case_owner_staff_id,
                     visit_date, visit_qty, commission_allocation_per_visit, gross_commission_allocation,
+                    treatment_fee_rule_id,
                     substitute_treatment_fee_amount, owner_net_commission_released,
                     usage_create_at, usage_create_by
                 ) values (
                     ?, ?, ?, ?, ?,
-                    current_date, 1, 0, 0,
-                    0, 0,
+                    current_date, 1, ?, ?, ?,
+                    ?, ?,
                     current_timestamp, ?
                 )
                 """,
-                visitId, courseId, course.patientId(), treatingId, ownerId, actorId
+                visitId, courseId, course.patientId(), treatingId, ownerId,
+                gross, gross, feeAllocation.ruleId(), feeAllocation.fee(), feeAllocation.ownerNet(), actorId
         );
 
         return findById(courseId).orElseThrow();
     }
+
+    private FeeAllocation allocateTreatmentFee(
+            CoursePurchaseRecord course,
+            Long treatingStaffId,
+            Long ownerStaffId,
+            BigDecimal gross
+    ) {
+        if (gross.signum() <= 0 || treatingStaffId == null || treatingStaffId.equals(ownerStaffId)) {
+            return new FeeAllocation(null, BigDecimal.ZERO, gross);
+        }
+
+        List<FeeRuleSnapshot> rules = jdbc.query("""
+                select treatment_fee_rule_id, cast(fee_type as varchar) as fee_type,
+                       fee_value, cast(calculation_base as varchar) as calculation_base
+                from treatment_fee_rule
+                where treatment_fee_rule_status = true
+                  and staff_id = ?
+                  and effective_from <= current_date
+                  and (effective_to is null or effective_to > current_date)
+                order by effective_from desc, treatment_fee_rule_id desc
+                limit 1
+                """, (rs, rowNum) -> new FeeRuleSnapshot(
+                rs.getLong("treatment_fee_rule_id"),
+                rs.getString("fee_type"),
+                rs.getBigDecimal("fee_value"),
+                rs.getString("calculation_base")
+        ), treatingStaffId);
+        if (rules.isEmpty()) {
+            return new FeeAllocation(null, BigDecimal.ZERO, gross);
+        }
+
+        FeeRuleSnapshot rule = rules.get(0);
+        BigDecimal fee;
+        if ("Fixed".equals(rule.feeType())) {
+            fee = rule.value();
+        } else if ("Percentage".equals(rule.feeType())
+                && "CourseValuePerVisit".equals(rule.calculationBase())) {
+            int totalSessions = Math.max(1, course.totalVisits() + course.bonusVisits());
+            BigDecimal courseValuePerVisit = course.price()
+                    .divide(BigDecimal.valueOf(totalSessions), 2, RoundingMode.HALF_UP);
+            fee = courseValuePerVisit.multiply(rule.value())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        } else {
+            throw new DatabaseV2ConflictException("ไม่รองรับฐานคำนวณค่ารักษาแทนของกฎนี้");
+        }
+
+        // Preserve the existing course-ledger behavior: an individual fee cannot consume more than this visit's gross.
+        fee = fee.min(gross);
+        return new FeeAllocation(rule.id(), fee, gross.subtract(fee));
+    }
+
+    private record FeeRuleSnapshot(Long id, String feeType, BigDecimal value, String calculationBase) {}
+
+    private record FeeAllocation(Long ruleId, BigDecimal fee, BigDecimal ownerNet) {}
 
     public CoursePurchaseRecord reverseUsage(Long movementId, String reason, Long actorId) {
         List<CourseMovementRecord> movements = jdbc.query(

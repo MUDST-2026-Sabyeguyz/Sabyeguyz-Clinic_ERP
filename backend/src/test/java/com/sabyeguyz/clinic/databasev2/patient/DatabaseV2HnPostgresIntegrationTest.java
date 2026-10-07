@@ -2,6 +2,7 @@ package com.sabyeguyz.clinic.databasev2.patient;
 
 import com.sabyeguyz.clinic.databasev2.common.PostgresIntegrationTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -47,7 +48,7 @@ class DatabaseV2HnPostgresIntegrationTest {
     }
 
     @Test
-    void generatesUniqueConsecutiveHnUnderHighConcurrency() throws InterruptedException {
+    void generatesUniqueHnUnderHighConcurrency() throws InterruptedException {
         // Ensure a test app_user exists for circular FKs
         jdbc.execute("""
             insert into app_user (user_id, username, password_hash, user_status, last_login_at, user_create_at)
@@ -107,5 +108,56 @@ class DatabaseV2HnPostgresIntegrationTest {
                 Integer.class, yearMonth
         );
         assertThat(lastRunning).isEqualTo(threadCount);
+    }
+
+    @Test
+    void rejectsHnOverflowWithoutAdvancingOrReusingCounter() {
+        jdbc.execute("""
+            insert into app_user (user_id, username, password_hash, user_status, last_login_at, user_create_at)
+            values (1, 'system_test', 'hash', true, current_timestamp, current_timestamp)
+            on conflict (user_id) do nothing
+        """);
+        jdbc.execute("""
+            insert into branch (branch_id, branch_code, branch_name, address, phone, branch_status, branch_create_by)
+            values (99, '99', 'Test Branch 99', '123 Test Rd', '020000099', true, 1)
+            on conflict (branch_id) do update set branch_code = '99'
+        """);
+        String yearMonth = "2610";
+        jdbc.update("delete from hn_sequence where branch_id = 99 and year_month = ?", yearMonth);
+        jdbc.update("""
+            insert into hn_sequence (branch_id, year_month, last_running_no, last_running_at, created_at)
+            values (99, ?, 9999, current_timestamp, current_timestamp)
+            """, yearMonth);
+
+        assertThatThrownBy(() -> repository.generateHn(99L, "99", LocalDate.of(2026, 10, 5)))
+                .isInstanceOf(HnCapacityExceededException.class)
+                .hasMessageContaining("HN running number exhausted");
+        assertThat(jdbc.queryForObject(
+                "select last_running_no from hn_sequence where branch_id = 99 and year_month = ?",
+                Integer.class, yearMonth)).isEqualTo(9999);
+    }
+
+    @Test
+    void partitionsRunningNumbersByBranchAndYearMonth() {
+        jdbc.execute("""
+            insert into app_user (user_id, username, password_hash, user_status, last_login_at, user_create_at)
+            values (1, 'system_test', 'hash', true, current_timestamp, current_timestamp)
+            on conflict (user_id) do nothing
+        """);
+        jdbc.execute("""
+            insert into branch (branch_id, branch_code, branch_name, address, phone, branch_status, branch_create_by)
+            values (99, '99', 'Test Branch 99', '123 Test Rd', '020000099', true, 1)
+            on conflict (branch_id) do update set branch_code = '99'
+        """);
+        jdbc.execute("""
+            insert into branch (branch_id, branch_code, branch_name, address, phone, branch_status, branch_create_by)
+            values (10098, '98', 'Test Branch 98', '98 Test Rd', '020000098', true, 1)
+            on conflict (branch_id) do update set branch_code = '98'
+        """);
+        jdbc.update("delete from hn_sequence where branch_id in (99, 10098) and year_month in ('2609', '2610')");
+
+        assertThat(repository.generateHn(99L, "99", LocalDate.of(2026, 9, 30))).isEqualTo("2699090001");
+        assertThat(repository.generateHn(99L, "99", LocalDate.of(2026, 10, 1))).isEqualTo("2699100001");
+        assertThat(repository.generateHn(10098L, "98", LocalDate.of(2026, 9, 30))).isEqualTo("2698090001");
     }
 }

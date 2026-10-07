@@ -31,6 +31,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api")
 public class DatabaseV2CourseLedgerController {
 
+    private static final int MAX_HISTORY_PAGE_SIZE = 100;
+
+    public record HistoryPageResponse<T>(List<T> items, int page, int size, long totalItems, int totalPages) {}
+
     private static final ZoneOffset BANGKOK_OFFSET = ZoneOffset.ofHours(7);
 
     private final DatabaseV2CourseRepository courseRepository;
@@ -96,6 +100,35 @@ public class DatabaseV2CourseLedgerController {
         return courseRepository.findByPatientId(patientId).stream()
                 .map(DatabaseV2CourseLedgerController::toResponse)
                 .toList();
+    }
+
+    @GetMapping("/patients/{patientId}/courses/history")
+    public HistoryPageResponse<CoursePurchaseResponse> historyByPatient(
+            @PathVariable Long patientId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        patientRepository.findById(patientId)
+                .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบผู้ป่วย id " + patientId));
+        validateHistoryPage(page, size);
+        int offset;
+        try {
+            offset = Math.multiplyExact(page, size);
+        } catch (ArithmeticException tooLarge) {
+            throw new IllegalArgumentException("page เกินขอบเขตที่รองรับ", tooLarge);
+        }
+        int total = courseRepository.countByPatientId(patientId);
+        int totalPages = (int) Math.ceil((double) total / size);
+        List<CoursePurchaseResponse> items = courseRepository.findByPatientId(patientId, size, offset).stream()
+                .map(DatabaseV2CourseLedgerController::toResponse)
+                .toList();
+        return new HistoryPageResponse<>(items, page, size, total, totalPages);
+    }
+
+    private static void validateHistoryPage(int page, int size) {
+        if (page < 0) throw new IllegalArgumentException("page ต้องไม่น้อยกว่า 0");
+        if (size < 1 || size > MAX_HISTORY_PAGE_SIZE) {
+            throw new IllegalArgumentException("size ต้องอยู่ระหว่าง 1 ถึง " + MAX_HISTORY_PAGE_SIZE);
+        }
     }
 
     @GetMapping("/course-purchases/{id}")

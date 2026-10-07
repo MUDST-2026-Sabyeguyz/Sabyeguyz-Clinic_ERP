@@ -9,6 +9,7 @@ import com.sabyeguyz.clinic.databasev2.common.DatabaseV2NotFoundException;
 import com.sabyeguyz.clinic.databasev2.patient.DatabaseV2PatientRepository;
 import com.sabyeguyz.clinic.databasev2.payment.DatabaseV2PaymentMethodRepository;
 import com.sabyeguyz.clinic.databasev2.staff.DatabaseV2StaffRepository;
+import com.sabyeguyz.clinic.databasev2.security.BranchAccessGuard;
 import com.sabyeguyz.clinic.sale.SaleItemType;
 import com.sabyeguyz.clinic.sale.SalePaymentType;
 import com.sabyeguyz.clinic.sale.SaleRequest;
@@ -47,6 +48,7 @@ public class DatabaseV2SaleController {
     private final DatabaseV2ServiceRepository serviceRepository;
     private final DatabaseV2PaymentMethodRepository paymentMethodRepository;
     private final CurrentActorProvider actorProvider;
+    private final BranchAccessGuard branchAccess;
 
     public DatabaseV2SaleController(
             DatabaseV2SaleRepository saleRepository,
@@ -55,7 +57,8 @@ public class DatabaseV2SaleController {
             DatabaseV2StaffRepository staffRepository,
             DatabaseV2ServiceRepository serviceRepository,
             DatabaseV2PaymentMethodRepository paymentMethodRepository,
-            CurrentActorProvider actorProvider) {
+            CurrentActorProvider actorProvider,
+            BranchAccessGuard branchAccess) {
         this.saleRepository = saleRepository;
         this.patientRepository = patientRepository;
         this.branchRepository = branchRepository;
@@ -63,6 +66,7 @@ public class DatabaseV2SaleController {
         this.serviceRepository = serviceRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.actorProvider = actorProvider;
+        this.branchAccess = branchAccess;
     }
 
     private record PricedItem(
@@ -70,7 +74,10 @@ public class DatabaseV2SaleController {
             DatabaseV2ServiceRepository.ServiceModel service,
             int quantity,
             BigDecimal unitPrice,
-            BigDecimal lineTotal
+            BigDecimal grossAmount,
+            BigDecimal lineDiscountAmount,
+            BigDecimal lineTotal,
+            BigDecimal commissionBase
     ) {}
 
     private record ResolvedPayment(
@@ -88,6 +95,10 @@ public class DatabaseV2SaleController {
 
         DatabaseV2Branch branch = branchRepository.findByCode(request.branchCode().trim().toUpperCase())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
+        branchAccess.require(auth, branch.getId());
+        if (!branch.active()) {
+            throw new IllegalArgumentException("สาขานี้ปิดใช้งาน");
+        }
 
         Long salespersonId = null;
         if (request.salespersonStaffId() != null) {
@@ -101,7 +112,8 @@ public class DatabaseV2SaleController {
 
         // Validate items and prices from master service table
         List<PricedItem> pricedItems = new ArrayList<>();
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal grossTotal = BigDecimal.ZERO;
+        BigDecimal lineDiscountTotal = BigDecimal.ZERO;
 
         for (SaleRequest.Item item : request.items()) {
             if (item.type() == SaleItemType.COURSE && item.quantity() != 1) {
@@ -116,11 +128,25 @@ public class DatabaseV2SaleController {
             }
 
             BigDecimal unitPrice = service.price();
-            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(item.quantity()));
-            total = total.add(lineTotal);
+            BigDecimal grossAmount = unitPrice.multiply(BigDecimal.valueOf(item.quantity()));
+            BigDecimal lineDiscount = item.lineDiscountAmount() == null ? BigDecimal.ZERO : item.lineDiscountAmount();
+            if (lineDiscount.compareTo(grossAmount) > 0) {
+                throw new IllegalArgumentException("ส่วนลดรายการต้องไม่เกินยอดรายการ");
+            }
+            BigDecimal lineTotal = grossAmount.subtract(lineDiscount);
+            grossTotal = grossTotal.add(grossAmount);
+            lineDiscountTotal = lineDiscountTotal.add(lineDiscount);
 
-            pricedItems.add(new PricedItem(item.type(), service, item.quantity(), unitPrice, lineTotal));
+            pricedItems.add(new PricedItem(item.type(), service, item.quantity(), unitPrice, grossAmount,
+                    lineDiscount, lineTotal, lineTotal));
         }
+
+        BigDecimal billDiscount = request.billDiscountAmount() == null ? BigDecimal.ZERO : request.billDiscountAmount();
+        BigDecimal afterLineDiscounts = grossTotal.subtract(lineDiscountTotal);
+        if (billDiscount.compareTo(afterLineDiscounts) > 0) {
+            throw new IllegalArgumentException("ส่วนลดท้ายบิลต้องไม่เกินยอดหลังหักส่วนลดรายการ");
+        }
+        BigDecimal netDue = afterLineDiscounts.subtract(billDiscount);
 
         // Validate payments
         List<ResolvedPayment> resolvedPayments = new ArrayList<>();
@@ -138,8 +164,8 @@ public class DatabaseV2SaleController {
             resolvedPayments.add(new ResolvedPayment(pm, p.amount()));
         }
 
-        if (paymentTotal.compareTo(total) != 0) {
-            throw new IllegalArgumentException("ยอดเงินที่ชำระ (" + paymentTotal + ") ไม่ตรงกับยอดที่ต้องชำระ (" + total + ")");
+        if (paymentTotal.compareTo(netDue) != 0) {
+            throw new IllegalArgumentException("ยอดเงินที่ชำระ (" + paymentTotal + ") ไม่ตรงกับยอดที่ต้องชำระ (" + netDue + ")");
         }
 
         LocalDate saleDate = LocalDate.now(CLINIC_ZONE);
@@ -147,15 +173,16 @@ public class DatabaseV2SaleController {
 
         // 1. Allocate receipt
         DatabaseV2SaleRepository.GeneratedReceipt allocated = saleRepository.allocateReceipt();
-        saleRepository.insertReceipt(allocated.id(), allocated.receiptNo(), request.patientId(), branch.getId(), saleDate, actorId);
+        saleRepository.insertReceipt(allocated.id(), allocated.receiptNo(), request.patientId(), branch.getId(), saleDate,
+                actorId, grossTotal, lineDiscountTotal, billDiscount, netDue);
 
         // 2. Create transactions and courses
         Long primaryTxId = null;
         for (PricedItem pi : pricedItems) {
-            Long txId = saleRepository.createSalesTransaction(
-                    request.patientId(), branch.getId(), pi.service().id(),
+            Long txId = saleRepository.createSalesTransactionForReceipt(
+                    allocated.id(), request.patientId(), branch.getId(), pi.service().id(),
                     pi.type().name(), null, salespersonId,
-                    pi.quantity(), pi.unitPrice(), pi.lineTotal(),
+                    pi.quantity(), pi.unitPrice(), pi.commissionBase(), pi.grossAmount(), pi.lineDiscountAmount(),
                     now, null, actorId
             );
 
@@ -176,7 +203,7 @@ public class DatabaseV2SaleController {
                 }
 
                 Long courseId = saleRepository.createCourse(
-                        allocated.receiptNo(), pi.service().name(), pi.unitPrice(),
+                        allocated.receiptNo(), pi.service().name(), pi.commissionBase(),
                         totalVisits, bonusVisits, validityDays,
                         pi.service().id(), allocated.id(), saleDate,
                         sellerStaffId, sellerStaffId, actorId
@@ -203,16 +230,24 @@ public class DatabaseV2SaleController {
             @RequestParam(required = false) Long patientId,
             @RequestParam(required = false) String branchCode,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            Authentication auth
     ) {
         if (page < 0) {
             throw new IllegalArgumentException("page ต้องไม่น้อยกว่า 0");
         }
         int limit = Math.max(1, Math.min(size, 100));
-        int offset = page * limit;
+        int offset;
+        try {
+            offset = Math.multiplyExact(page, limit);
+        } catch (ArithmeticException tooLarge) {
+            throw new IllegalArgumentException("page เกินขอบเขตที่รองรับ", tooLarge);
+        }
 
-        List<DatabaseV2SaleRepository.SaleSummaryRecord> records = saleRepository.search(patientId, branchCode, limit, offset);
-        int total = saleRepository.countSearch(patientId, branchCode);
+        Long userId = branchAccess.actorId(auth);
+        if (branchCode != null && !branchCode.isBlank()) requireBranchCode(auth, branchCode);
+        List<DatabaseV2SaleRepository.SaleSummaryRecord> records = saleRepository.searchAccessible(patientId, branchCode, limit, offset, userId);
+        int total = saleRepository.countSearchAccessible(patientId, branchCode, userId);
         int totalPages = (int) Math.ceil((double) total / limit);
 
         List<SaleSummaryResponse> items = records.stream().map(DatabaseV2SaleController::toSummaryResponse).toList();
@@ -220,9 +255,11 @@ public class DatabaseV2SaleController {
     }
 
     @GetMapping("/receipts/{id}")
-    public SaleResponse get(@PathVariable Long id) {
-        return toResponse(saleRepository.findById(id)
-                .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบใบเสร็จ id " + id)));
+    public SaleResponse get(@PathVariable Long id, Authentication auth) {
+        DatabaseV2SaleRepository.SaleRecord record = saleRepository.findById(id)
+                .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบใบเสร็จ id " + id));
+        requireBranchCode(auth, record.branchCode());
+        return toResponse(record);
     }
 
     @PostMapping("/payments/{id}/reverse")
@@ -230,8 +267,9 @@ public class DatabaseV2SaleController {
     public SaleResponse reverse(@PathVariable Long id, @Valid @RequestBody SaleVoidRequest request, Authentication auth) {
         Long actorId = actorProvider.getActorIdOrDefault(auth, 1L);
 
-        saleRepository.findById(id)
+        DatabaseV2SaleRepository.SaleRecord existing = saleRepository.findById(id)
                 .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบใบเสร็จ id " + id));
+        requireBranchCode(auth, existing.branchCode());
 
         if (saleRepository.isVoided(id)) {
             throw new DatabaseV2ConflictException("ใบเสร็จนี้ถูกยกเลิกไปแล้ว");
@@ -240,6 +278,12 @@ public class DatabaseV2SaleController {
         saleRepository.voidReceipt(id, request.reason().trim(), actorId);
 
         return toResponse(saleRepository.findById(id).orElseThrow());
+    }
+
+    private void requireBranchCode(Authentication auth, String branchCode) {
+        DatabaseV2Branch branch = branchRepository.findByCode(branchCode.trim().toUpperCase())
+                .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบสาขา " + branchCode));
+        branchAccess.require(auth, branch.getId());
     }
 
     public static SaleResponse toResponse(DatabaseV2SaleRepository.SaleRecord r) {
@@ -257,6 +301,9 @@ public class DatabaseV2SaleController {
                 item.unitPrice(),
                 item.quantity(),
                 item.lineTotal(),
+                item.grossAmount(),
+                item.lineDiscountAmount(),
+                item.commissionBase(),
                 item.coursePurchaseId()
         )).toList();
 
@@ -277,6 +324,10 @@ public class DatabaseV2SaleController {
                 r.branchCode(),
                 salesperson,
                 r.total(),
+                r.grossTotal(),
+                r.lineDiscountTotal(),
+                r.billDiscountAmount(),
+                r.commissionBase(),
                 r.paid(),
                 status,
                 r.note(),

@@ -50,7 +50,7 @@ class DatabaseV2AppointmentControllerTest {
 
         controller = new DatabaseV2AppointmentController(
                 appointmentRepository, patientRepository, branchRepository,
-                staffRepository, serviceRepository, actorProvider
+                staffRepository, serviceRepository, actorProvider, mock(com.sabyeguyz.clinic.databasev2.security.BranchAccessGuard.class)
         );
 
         when(actorProvider.getActorIdOrDefault(any(), any())).thenReturn(1L);
@@ -70,7 +70,7 @@ class DatabaseV2AppointmentControllerTest {
         DatabaseV2ServiceRepository.ServiceModel service = new DatabaseV2ServiceRepository.ServiceModel(
                 30L, "SRV-01", "Physical Therapy 60", "SingleVisit", new BigDecimal("1000"), true, null, null, null
         );
-        when(serviceRepository.findById(30L)).thenReturn(Optional.of(service));
+        when(serviceRepository.findForBooking(30L)).thenReturn(Optional.of(service));
     }
 
     private DatabaseV2AppointmentRepository.AppointmentModel mockAppointment(Long id, String status) {
@@ -85,7 +85,7 @@ class DatabaseV2AppointmentControllerTest {
     @Test
     void createAppointmentSuccess() {
         Instant startAt = Instant.parse("2026-09-25T03:00:00Z"); // 10:00 Asia/Bangkok
-        when(appointmentRepository.hasConflict(eq(20L), any(LocalDate.class), any(LocalTime.class), any())).thenReturn(false);
+        when(appointmentRepository.hasIntervalConflict(eq(20L), any(), any(LocalDate.class), any(LocalTime.class), eq(60), any())).thenReturn(false);
 
         DatabaseV2AppointmentRepository.AppointmentModel model = mockAppointment(100L, "Confirmed");
         when(appointmentRepository.create(eq(10L), eq(1L), eq(20L), eq(30L), any(), any(), any(), eq("First visit"), eq(1L)))
@@ -107,7 +107,7 @@ class DatabaseV2AppointmentControllerTest {
     @Test
     void createAppointmentRejectsOnConflict() {
         Instant startAt = Instant.parse("2026-09-25T03:00:00Z");
-        when(appointmentRepository.hasConflict(eq(20L), any(LocalDate.class), any(LocalTime.class), any())).thenReturn(true);
+        when(appointmentRepository.hasIntervalConflict(eq(20L), any(), any(LocalDate.class), any(LocalTime.class), eq(60), any())).thenReturn(true);
 
         DatabaseV2AppointmentController.CreateRequest req = new DatabaseV2AppointmentController.CreateRequest(
                 "01", 10L, 20L, 30L, startAt, null, null
@@ -123,7 +123,8 @@ class DatabaseV2AppointmentControllerTest {
         DatabaseV2AppointmentRepository.AppointmentModel confirmed = mockAppointment(100L, "Confirmed");
         DatabaseV2AppointmentRepository.AppointmentModel arrived = mockAppointment(100L, "Arrived");
 
-        when(appointmentRepository.findById(100L)).thenReturn(Optional.of(confirmed), Optional.of(arrived));
+        when(appointmentRepository.findForUpdate(100L)).thenReturn(Optional.of(confirmed));
+        when(appointmentRepository.findById(100L)).thenReturn(Optional.of(arrived));
 
         DatabaseV2AppointmentController.AppointmentResponse res = controller.checkIn(100L, auth);
 
@@ -137,7 +138,8 @@ class DatabaseV2AppointmentControllerTest {
         DatabaseV2AppointmentRepository.AppointmentModel arrived = mockAppointment(100L, "Arrived");
         DatabaseV2AppointmentRepository.AppointmentModel inService = mockAppointment(100L, "InService");
 
-        when(appointmentRepository.findById(100L)).thenReturn(Optional.of(arrived), Optional.of(inService));
+        when(appointmentRepository.findForUpdate(100L)).thenReturn(Optional.of(arrived));
+        when(appointmentRepository.findById(100L)).thenReturn(Optional.of(inService));
 
         DatabaseV2AppointmentController.AppointmentResponse res = controller.startService(100L, auth);
 
@@ -151,7 +153,8 @@ class DatabaseV2AppointmentControllerTest {
         DatabaseV2AppointmentRepository.AppointmentModel inService = mockAppointment(100L, "InService");
         DatabaseV2AppointmentRepository.AppointmentModel completed = mockAppointment(100L, "Completed");
 
-        when(appointmentRepository.findById(100L)).thenReturn(Optional.of(inService), Optional.of(completed));
+        when(appointmentRepository.findForUpdate(100L)).thenReturn(Optional.of(inService));
+        when(appointmentRepository.findById(100L)).thenReturn(Optional.of(completed));
 
         DatabaseV2AppointmentController.AppointmentResponse res = controller.complete(100L, auth);
 
@@ -163,7 +166,7 @@ class DatabaseV2AppointmentControllerTest {
     @Test
     void cancelRejectsIfCompleted() {
         DatabaseV2AppointmentRepository.AppointmentModel completed = mockAppointment(100L, "Completed");
-        when(appointmentRepository.findById(100L)).thenReturn(Optional.of(completed));
+        when(appointmentRepository.findForUpdate(100L)).thenReturn(Optional.of(completed));
 
         DatabaseV2AppointmentController.CancelRequest req = new DatabaseV2AppointmentController.CancelRequest("Changed mind");
 

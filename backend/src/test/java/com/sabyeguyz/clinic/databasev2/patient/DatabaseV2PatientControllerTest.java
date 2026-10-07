@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sabyeguyz.clinic.databasev2.branch.DatabaseV2Branch;
@@ -16,6 +18,9 @@ import com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException;
 import com.sabyeguyz.clinic.databasev2.masterdata.DatabaseV2MasterDataRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,8 +45,13 @@ class DatabaseV2PatientControllerTest {
         auth = mock(Authentication.class);
 
         controller = new DatabaseV2PatientController(
-                patientRepository, branchRepository, masterDataRepository, actorProvider
-        );
+                patientRepository, branchRepository, masterDataRepository, actorProvider,
+                Clock.fixed(Instant.parse("2026-09-30T17:30:00Z"), ZoneId.of("Asia/Bangkok"))
+        , org.mockito.Mockito.mock(com.sabyeguyz.clinic.databasev2.security.BranchAccessGuard.class));
+
+        when(masterDataRepository.findByCategory("Customer Group")).thenReturn(List.of(
+                new DatabaseV2MasterDataRepository.MasterDataRecord(1L, 1L, "Customer Group", "Thai", "Thai", true, 0),
+                new DatabaseV2MasterDataRepository.MasterDataRecord(1L, 1L, "Customer Group", "ทั่วไป", "ลูกค้าทั่วไป", true, 0)));
 
         when(actorProvider.getActorIdOrDefault(any(), any())).thenReturn(1L);
 
@@ -51,8 +61,8 @@ class DatabaseV2PatientControllerTest {
 
     @Test
     void registerThaiPatientGeneratesCorrectHn() {
-        String hn = "2601090001";
-        when(patientRepository.generateHn(eq(1L), eq("01"), any(LocalDate.class))).thenReturn(hn);
+        String hn = "2610010001";
+        when(patientRepository.generateHn(eq(1L), eq("01"), eq(LocalDate.of(2026, 10, 1)))).thenReturn(hn);
         when(patientRepository.findByNationalId("1234567890123")).thenReturn(Optional.empty());
 
         DatabaseV2PatientRepository.PatientRecord record = new DatabaseV2PatientRepository.PatientRecord(
@@ -70,7 +80,7 @@ class DatabaseV2PatientControllerTest {
         DatabaseV2PatientController.RegisterRequest request = new DatabaseV2PatientController.RegisterRequest(
                 "01", null, null, null, "นาย", "สมชาย ใจดี", "สมชาย", "ใจดี",
                 LocalDate.of(1990, 1, 1), "ชาย", "0812345678", "NATIONAL_ID", "1234567890123",
-                "Bangkok", false, false, "", "", "", "", true, "ชาย", "O", "ไทย", "Thai", null, null
+                "Bangkok", false, false, "", "", "", "", true, "ชาย", "O", "ไทย", "Thai", null, null, "Thai"
         );
 
         DatabaseV2PatientController.PatientResponse response = controller.register(request, auth);
@@ -89,7 +99,7 @@ class DatabaseV2PatientControllerTest {
         DatabaseV2PatientController.RegisterRequest request = new DatabaseV2PatientController.RegisterRequest(
                 "01", null, null, null, "นาย", "สมชาย ใจดี", "สมชาย", "ใจดี",
                 LocalDate.of(1990, 1, 1), "ชาย", "0812345678", "NATIONAL_ID", "1234567890123",
-                "Bangkok", false, false, "", "", "", "", true, "ชาย", "O", "ไทย", "Thai", null, null
+                "Bangkok", false, false, "", "", "", "", true, "ชาย", "O", "ไทย", "Thai", null, null, "Thai"
         );
 
         assertThatThrownBy(() -> controller.register(request, auth))
@@ -102,12 +112,52 @@ class DatabaseV2PatientControllerTest {
         DatabaseV2PatientController.RegisterRequest request = new DatabaseV2PatientController.RegisterRequest(
                 "01", null, null, null, "นาย", "สมชาย ใจดี", "สมชาย", "ใจดี",
                 LocalDate.of(1990, 1, 1), "ชาย", "0812345678", "NATIONAL_ID", "12345",
-                "Bangkok", false, false, "", "", "", "", true, "ชาย", "O", "ไทย", "Thai", null, null
+                "Bangkok", false, false, "", "", "", "", true, "ชาย", "O", "ไทย", "Thai", null, null, "Thai"
         );
 
         assertThatThrownBy(() -> controller.register(request, auth))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("เลขประจำตัวประชาชนต้องเป็นตัวเลข 13 หลัก");
+    }
+
+    @Test
+    void permitsOptionalThaiIdentityAndPersistsNoFabricatedBirthday() {
+        String hn = "2610010002";
+        when(patientRepository.generateHn(eq(1L), eq("01"), eq(LocalDate.of(2026, 10, 1)))).thenReturn(hn);
+        DatabaseV2PatientRepository.PatientRecord record = new DatabaseV2PatientRepository.PatientRecord(
+                11L, hn, "Thai", "นางสาว", "Ada", "Lovelace Byron", null, "Female", null, "0812345678",
+                1L, "01", "Main Branch", null, null, null, null, "ไทย", null, LocalDateTime.now(), 1L,
+                null, null, null, null, null, null
+        );
+        when(patientRepository.create(eq(hn), eq("Thai"), eq("นางสาว"), eq("Ada"), eq("Lovelace Byron"),
+                eq("Female"), any(), isNull(), eq("0812345678"), eq(1L), isNull(), isNull(), isNull(),
+                isNull(), eq("ไทย"), isNull(), eq(1L), any(), any(), any())).thenReturn(record);
+        DatabaseV2PatientController.RegisterRequest request = new DatabaseV2PatientController.RegisterRequest(
+                "01", null, null, null, "นางสาว", null, "Ada", "Lovelace Byron", null, "หญิง",
+                "0812345678", "NATIONAL_ID", "   ", "   ", false, false, "", "", "", "", true,
+                "  ", "ไม่ทราบ", "ไทย", "ลูกค้าทั่วไป", null, null, "Thai"
+        );
+
+        controller.register(request, auth);
+
+        verify(patientRepository).create(eq(hn), eq("Thai"), eq("นางสาว"), eq("Ada"), eq("Lovelace Byron"),
+                eq("Female"), any(), isNull(), eq("0812345678"), eq(1L), isNull(), isNull(), isNull(),
+                isNull(), eq("ไทย"), isNull(), eq(1L), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"Foreigner,Canada,PASSPORT,Foreigner", "Thai,ต่างชาติ,PASSPORT,Thai", ",Canada,PASSPORT,Foreigner", ",ไทย,NATIONAL_ID,Thai"})
+    void explicitTypeWinsAndLegacyInferenceDoesNotRequireDob(String type, String nationality, String document, String expected) {
+        var record = mock(DatabaseV2PatientRepository.PatientRecord.class);
+        when(patientRepository.create(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(record);
+        var request = new DatabaseV2PatientController.RegisterRequest(
+                "01", null, null, null, "นาย", null, "Alex", "Example", null, "ชาย", "0812345678",
+                document, "", null, null, null, null, null, null, null, null, null,
+                null, nationality, null, null, null, type);
+        controller.register(request, auth);
+        verify(patientRepository).create(any(), eq(expected), any(), eq("Alex"), eq("Example"), any(), any(),
+                any(), any(), any(), isNull(), isNull(), isNull(), any(), eq(nationality), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -128,5 +178,17 @@ class DatabaseV2PatientControllerTest {
         assertThat(page.totalPages()).isEqualTo(1);
         assertThat(page.items()).hasSize(1);
         assertThat(page.items().get(0).hn()).isEqualTo("2601090001");
+    }
+
+    @Test
+    void searchRejectsUnboundedOrNegativePagination() {
+        assertThatThrownBy(() -> controller.search("", null, "nameAsc", -1, 20))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("page");
+        assertThatThrownBy(() -> controller.search("", null, "nameAsc", 0, 0))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("size");
+        assertThatThrownBy(() -> controller.search("", null, "nameAsc", 0, 101))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("size");
+        assertThatThrownBy(() -> controller.search("", null, "nameAsc", Integer.MAX_VALUE, 100))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("page");
     }
 }

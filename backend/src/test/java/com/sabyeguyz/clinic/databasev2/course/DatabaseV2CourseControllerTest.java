@@ -156,4 +156,28 @@ class DatabaseV2CourseControllerTest {
         assertThat(res.getBody().sourcePurchaseId()).isEqualTo(100L);
         assertThat(res.getBody().destinationPurchaseId()).isEqualTo(101L);
     }
+
+    @Test
+    void patientCourseHistoryIsBoundedAndReturnsTotals() {
+        when(courseRepository.countByPatientId(10L)).thenReturn(11);
+        when(courseRepository.findByPatientId(10L, 10, 0)).thenReturn(List.of(mockCourse(100L, 3, "Active")));
+
+        var page = ledgerController.historyByPatient(10L, 0, 10);
+
+        assertThat(page.items()).hasSize(1);
+        assertThat(page.items().get(0).id()).isEqualTo(100L);
+        assertThat(page.page()).isZero();
+        assertThat(page.size()).isEqualTo(10);
+        assertThat(page.totalItems()).isEqualTo(11);
+        assertThat(page.totalPages()).isEqualTo(2);
+        verify(courseRepository).findByPatientId(10L, 10, 0);
+    }
+
+    @Test
+    void patientCourseHistoryRejectsInvalidPagination() {
+        assertThatThrownBy(() -> ledgerController.historyByPatient(10L, -1, 10))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("page");
+        assertThatThrownBy(() -> ledgerController.historyByPatient(10L, 0, 101))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("size");
+    }
 }

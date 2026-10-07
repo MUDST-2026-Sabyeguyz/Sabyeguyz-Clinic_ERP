@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { clearSession, readAuthUser } from '@/api/client'
 import logo from '@/assets/sabyeguyz-logo.png'
 import drawerLogo from '@/assets/sabyeguyz-logo2.png'
 const profileOpen = ref(false)
@@ -14,11 +15,8 @@ let routeFrame: number | undefined
 let hoverFrame: number | undefined
 let settleFrame: number | undefined
 let hoveredLink: HTMLAnchorElement | null = null
-const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
-  role?: string
-  branchName?: string
-} | null
-const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
+const storedUser = readAuthUser()
+const role = ref(storedUser?.role === 'MANAGER' ? 'manager' : 'therapist')
 const isManager = computed(() => role.value === 'manager')
 const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
@@ -137,7 +135,7 @@ watch(
   },
 )
 function signOut() {
-  localStorage.removeItem('authToken')
+  clearSession()
 }
 </script>
 

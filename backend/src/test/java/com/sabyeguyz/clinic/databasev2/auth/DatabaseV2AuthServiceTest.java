@@ -38,6 +38,19 @@ class DatabaseV2AuthServiceTest {
         when(users.findByUsername("inactive")).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> service.login("inactive", "password123"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class);
     }
+    @Test
+    void historicalRoleCasingIsCanonicalAndUnsupportedRolesAreNotGranted() {
+        var manager = new DatabaseV2AppUser(7L, "manager", "hash", true,
+                Set.of(new DatabaseV2Role(1L, "Manager"), new DatabaseV2Role(2L, "Therapist")));
+        assertThat(manager.primaryRole()).isEqualTo("MANAGER");
+        var therapist = new DatabaseV2AppUser(8L, "therapist", "hash", true,
+                Set.of(new DatabaseV2Role(2L, "Therapist")));
+        assertThat(therapist.primaryRole()).isEqualTo("THERAPIST");
+        var unsupported = new DatabaseV2AppUser(9L, "unsupported", "hash", true,
+                Set.of(new DatabaseV2Role(3L, "Receptionist")));
+        assertThatThrownBy(unsupported::primaryRole).isInstanceOf(IllegalArgumentException.class);
+    }
+
 }

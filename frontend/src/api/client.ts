@@ -23,6 +23,13 @@ export function clearSession() {
   localStorage.removeItem('authUser')
 }
 
+export function readAuthUser(): (AuthResponse & { branchName?: string }) | null {
+  try {
+    const value = JSON.parse(localStorage.getItem('authUser') ?? 'null') as AuthResponse | null
+    return value && (value.role === 'MANAGER' || value.role === 'THERAPIST') ? value : null
+  } catch { return null }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
@@ -60,13 +67,25 @@ export const api = {
 
 export type AuthResponse = { id: number; username: string; email?: string; role: 'MANAGER' | 'THERAPIST'; token: string }
 export type Patient = { id: number; hn: string; fullName: string; phone: string; active: boolean; branchId?: number; branchCode?: string; branchName?: string }
+export type PatientRegistrationRequest = {
+  branchCode: string; title: string; firstName: string; lastName: string
+  birthDate?: string | null; gender: string; phone: string; identityDocumentType?: string; identityNumber?: string
+  address?: string | null; nickname?: string; bloodGroup?: string; nationality?: string
+  patientType: 'Thai' | 'Foreigner'; customerType?: string; customerSource?: string; insuranceCompany?: string
+}
 export type PatientProfile = Patient & {
   branch: { id: number; code: string; name: string; active: boolean }
-  title: string; birthDate: string; gender: string; identityDocumentType: string; identityNumber: string
-  address: string; drugAllergy: boolean; foodAllergy: boolean; chronicDisease: string
-  emergencyContactName: string; emergencyContactRelationship: string; emergencyContactPhone: string
-  privacyConsent: boolean
-  nickname?: string; email?: string; bloodGroup?: string; nationality?: string; customerType?: string; customerSource?: string; insuranceCompany?: string
+  title: string; firstName: string; lastName: string; birthDate: string | null; gender: string; identityDocumentType: string; identityNumber: string
+  address: string | null; drugAllergy: boolean | null; foodAllergy: boolean | null; chronicDisease: string | null
+  emergencyContactName: string | null; emergencyContactRelationship: string | null; emergencyContactPhone: string | null
+  privacyConsent: boolean | null; nickname?: string | null; bloodGroup?: string | null; nationality?: string | null
+  patientType?: 'Thai' | 'Foreigner'; customerGroup?: string | null; customerSource?: string | null; insuranceCompany?: string | null
+}
+export type PatientProfileUpdateRequest = {
+  branchCode: string
+  title: string; firstName: string; lastName: string; birthDate?: string | null; gender: string; phone: string
+  identityDocumentType?: string; identityNumber?: string; address?: string | null; nickname?: string | null
+  bloodGroup?: string | null; nationality?: string | null; customerType?: string; customerSource?: string; insuranceCompany?: string
 }
 export type Page<T> = { items: T[]; page: number; size: number; totalItems: number; totalPages: number }
 export type Branch = { id: number; code: string; name: string; address: string; phone: string; active: boolean }
@@ -79,11 +98,22 @@ export type AppointmentStatus = 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLE
 export type Appointment = {
   id: number; branchCode: string; patient: { id: number; hn: string; fullName: string }
   therapist: { id: number; fullName: string }; service: { id: number; name: string; durationMinutes: number }
-  startAt: string; endAt: string; status: AppointmentStatus; note?: string; cancelReason?: string
+  startAt: string; endAt: string; status: AppointmentStatus; note?: string; cancelReason?: string; room?: { id: number; name: string } | null
 }
 export type AppointmentPage = Page<Appointment>
 export type CoursePurchase = { id: number; patient: Patient; branchCode: string; course: { id: number; code: string; name: string }; price: number; sessions: number; bonusSessions: number; purchased: number; used: number; remaining: number; purchasedAt: string; expiresAt: string; expired: boolean; usable: boolean; status: string }
 export type SaleSummary = { id: number; receiptNo: string; patient: Patient; branchCode: string; salesperson?: { id: number; employeeCode: string; fullName: string }; total: number; paid: number; status: string; soldAt: string; voidedAt?: string }
+export type SaleReceipt = SaleSummary & {
+  grossTotal: number; lineDiscountTotal: number; billDiscountAmount: number; commissionBase: number
+  items: Array<{ id: number; type: 'ASSESSMENT' | 'SINGLE_VISIT' | 'COURSE'; description: string; unitPrice: number; quantity: number; lineTotal: number; grossAmount: number; lineDiscountAmount: number; commissionBase: number; coursePurchaseId?: number }>
+  payments: Array<{ id: number; type: string; paymentMethodCode: string; amount: number; reason?: string; createdAt: string }>
+}
+export type SaleCreateRequest = {
+  patientId: number; branchCode: string; salespersonStaffId?: number; note?: string
+  items: Array<{ type: 'ASSESSMENT' | 'SINGLE_VISIT' | 'COURSE'; referenceId: number; quantity: number; lineDiscountAmount?: number }>
+  payments: Array<{ paymentMethodCode: string; amount: number }>; billDiscountAmount?: number
+}
+export type TreatmentHistoryItem = { id: number; patientId: number; appointmentId: number | null; staffId: number | null; serviceId: number; service: string; note: string; createdAt: string }
 export type DashboardResponse = { uniquePatients: number; visits: number; totalRevenue: number; courseRevenue: number; singleVisitRevenue: number; assessmentRevenue: number; receiptsIssued: number; receiptsVoided: number }
 export type AppointmentReport = { byStatus: Array<{ status: string; appointments: number }>; appointments: number; visits: number; noShowRate: number }
 export type RevenueReport = { totalRevenue: number; byCategory: Array<{ type: string; amount: number; share: number }> }
@@ -104,12 +134,12 @@ export const patientApi = {
     return [first, ...rest].flatMap((page) => page.items)
   },
   get: (id: number) => api.get<PatientProfile>(`/api/patients/${id}`),
-  register: (payload: object) => api.post<Patient>('/api/patients', payload),
-  update: (id: number, payload: object) => api.put<PatientProfile>(`/api/patients/${id}`, payload),
+  register: (payload: PatientRegistrationRequest) => api.post<Patient>('/api/patients', payload),
+  update: (id: number, payload: PatientProfileUpdateRequest) => api.put<PatientProfile>(`/api/patients/${id}`, payload),
 }
 
 export const branchApi = {
-  list: () => api.get<Branch[]>('/api/branches'),
+  list: (options: { accessible?: boolean } = {}) => api.get<Branch[]>(options.accessible ? '/api/branches?accessible=true' : '/api/branches'),
   get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
   create: (body: { code: string; name: string; address: string; phone: string }) => api.post<Branch>('/api/branches', body),
   update: (id: number, body: { code: string; name: string; address: string; phone: string }) => api.put<Branch>(`/api/branches/${id}`, body),
@@ -133,13 +163,13 @@ export const serviceManagementApi = {
 }
 
 export const appointmentApi = {
-  search: (params: { branchCode?: string; date?: string; therapistId?: number; status?: AppointmentStatus; page?: number; size?: number } = {}) => {
+  search: (params: { branchCode?: string; date?: string; therapistId?: number; status?: AppointmentStatus; query?: string; sort?: 'newest' | 'oldest'; page?: number; size?: number } = {}) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) })
     return api.get<AppointmentPage>(`/api/appointments?${query}`)
   },
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
-  create: (body: { branchCode: string; patientId: number; therapistId: number; serviceId: number; startAt: string; note?: string }) => api.post<Appointment>('/api/appointments', body),
+  create: (body: { branchCode: string; patientId: number; therapistId: number; serviceId: number; startAt: string; note?: string; roomId?: number }) => api.post<Appointment>('/api/appointments', body),
   checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}),
   startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}),
   noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}),
@@ -151,6 +181,7 @@ export const appointmentApi = {
 export const treatmentApi = {
   services: () => api.get<ServiceOption[]>('/api/treatments/services'),
   listByPatient: (patientId: number) => api.get<unknown[]>(`/api/treatments/patients/${patientId}`),
+  historyByPatient: (patientId: number, page = 0, size = 10) => api.get<Page<TreatmentHistoryItem>>(`/api/treatments/patients/${patientId}/history?${new URLSearchParams({ page: String(page), size: String(size) })}`),
   create: (body: { patientId: number; appointmentId?: number; staffId?: number; serviceId: number; note: string }) => api.post('/api/treatments', body),
 }
 
@@ -161,6 +192,7 @@ export const courseApi = {
   update: (id: number, body: Omit<Course, 'id' | 'active'>) => api.put<Course>(`/api/courses/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/courses/${id}`),
   patientCourses: (patientId: number) => api.get<CoursePurchase[]>(`/api/patients/${patientId}/courses`),
+  patientHistory: (patientId: number, page = 0, size = 10) => api.get<Page<CoursePurchase>>(`/api/patients/${patientId}/courses/history?${new URLSearchParams({ page: String(page), size: String(size) })}`),
   purchase: (body: { patientId: number; courseId: number; branchCode: string }) => api.post<CoursePurchase>('/api/course-purchases', body),
   ledger: (id: number) => api.get<{ purchase: CoursePurchase & { commissionStatus?: string; lockedCommissionRate?: number; totalCourseCommissionPool?: number; commissionAllocationPerVisit?: number }; movements: unknown[]; allocations: Array<{visitDate:string; gross:number; fee:number; ownerNet:number}> }>(`/api/course-purchases/${id}`),
   use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) => api.post<CoursePurchase>('/api/course-usages', body),
@@ -176,8 +208,8 @@ export const salesApi = {
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key, String(value)) })
     return api.get<Page<SaleSummary>>(`/api/payments?${query}`)
   },
-  get: (id: number) => api.get('/api/receipts/' + id),
-  create: (body: unknown) => api.post('/api/payments', body),
+  get: (id: number) => api.get<SaleReceipt>('/api/receipts/' + id),
+  create: (body: SaleCreateRequest) => api.post<SaleReceipt>('/api/payments', body),
   reverse: (id: number, reason: string) => api.post(`/api/payments/${id}/reverse`, { reason }),
 }
 

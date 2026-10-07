@@ -151,6 +151,28 @@ class DatabaseV2CoursePostgresIntegrationTest {
     }
 
     @Test
+    void patientCourseHistoryIsPagedAndDoesNotReturnAnotherPatientsCourses() {
+        var patientACourse = repository.purchase(91L, 98L, 99L, "99", 99L, 1L);
+        var patientBCourse = repository.purchase(92L, 98L, 99L, "99", 99L, 1L);
+
+        var patientAFirstPage = repository.findByPatientId(91L, 1, 0);
+        var patientAFirstPageReload = repository.findByPatientId(91L, 1, 0);
+        int patientATotal = repository.countByPatientId(91L);
+        var patientBHistory = repository.findByPatientId(92L, 100, 0);
+
+        assertThat(patientAFirstPage).hasSize(1);
+        assertThat(patientAFirstPage.get(0).id()).isEqualTo(patientACourse.id());
+        assertThat(patientAFirstPage.get(0).patientId()).isEqualTo(91L);
+        assertThat(patientAFirstPageReload).extracting(DatabaseV2CourseRepository.CoursePurchaseRecord::id)
+                .containsExactlyElementsOf(patientAFirstPage.stream().map(DatabaseV2CourseRepository.CoursePurchaseRecord::id).toList());
+        assertThat(patientATotal).isGreaterThanOrEqualTo(1);
+        assertThat(patientBHistory).extracting(DatabaseV2CourseRepository.CoursePurchaseRecord::id)
+                .contains(patientBCourse.id()).doesNotContain(patientACourse.id());
+        assertThat(repository.findByPatientId(91L, 100, 0))
+                .allSatisfy(course -> assertThat(course.patientId()).isEqualTo(91L));
+    }
+
+    @Test
     void ownerTreatingTheirOwnCourseKeepsTheFullLockedAllocation() {
         DatabaseV2CourseRepository.CoursePurchaseRecord purchased = repository.purchase(
                 91L, 98L, 99L, "99", 99L, 1L

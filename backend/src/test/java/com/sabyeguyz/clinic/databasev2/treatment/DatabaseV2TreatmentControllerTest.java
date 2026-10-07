@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.databasev2.treatment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -72,5 +73,34 @@ class DatabaseV2TreatmentControllerTest {
         assertThat(res.serviceId()).isEqualTo(1L);
         assertThat(res.service()).isEqualTo("Acupuncture");
         assertThat(res.note()).isEqualTo("Treated tension");
+    }
+
+    @Test
+    void patientTreatmentHistoryIsBoundedAndIncludesEventTime() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 10, 5, 9, 30);
+        when(treatmentRepository.patientExists(10L)).thenReturn(true);
+        when(treatmentRepository.countByPatientId(10L)).thenReturn(2);
+        when(treatmentRepository.findByPatientId(10L, 1, 1)).thenReturn(List.of(
+                new DatabaseV2TreatmentRepository.TreatmentRecord(101L, 10L, null, 30L, 1L, "Acupuncture", "Care note", createdAt)
+        ));
+
+        var page = controller.history(10L, 1, 1);
+
+        assertThat(page.items()).hasSize(1);
+        assertThat(page.items().get(0).patientId()).isEqualTo(10L);
+        assertThat(page.items().get(0).service()).isEqualTo("Acupuncture");
+        assertThat(page.items().get(0).createdAt()).isEqualTo(createdAt);
+        assertThat(page.page()).isEqualTo(1);
+        assertThat(page.totalItems()).isEqualTo(2);
+        assertThat(page.totalPages()).isEqualTo(2);
+    }
+
+    @Test
+    void patientTreatmentHistoryRejectsInvalidPagination() {
+        when(treatmentRepository.patientExists(10L)).thenReturn(true);
+        assertThatThrownBy(() -> controller.history(10L, -1, 10))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("page");
+        assertThatThrownBy(() -> controller.history(10L, 0, 101))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("size");
     }
 }

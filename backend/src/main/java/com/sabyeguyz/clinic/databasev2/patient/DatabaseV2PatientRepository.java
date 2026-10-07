@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -110,17 +111,26 @@ public class DatabaseV2PatientRepository {
         int month2Digit = date.getMonthValue();
         String yearMonth = String.format("%02d%02d", year2Digit, month2Digit);
 
-        Integer nextRunningNo = jdbc.queryForObject(
+        Integer nextRunningNo;
+        try {
+            nextRunningNo = jdbc.queryForObject(
                 """
                 insert into hn_sequence (branch_id, year_month, last_running_no, last_running_at, created_at)
                 values (?, ?, 1, current_timestamp, current_timestamp)
                 on conflict (branch_id, year_month)
                 do update set last_running_no = hn_sequence.last_running_no + 1,
                               last_running_at = current_timestamp
+                where hn_sequence.last_running_no < 9999
                 returning last_running_no
                 """,
                 Integer.class, branchId, yearMonth
-        );
+            );
+        } catch (EmptyResultDataAccessException exhausted) {
+            throw new HnCapacityExceededException("HN running number exhausted for branch/month " + branchCode.trim() + "/" + yearMonth, exhausted);
+        }
+        if (nextRunningNo == null || nextRunningNo > 9999) {
+            throw new HnCapacityExceededException("HN running number exhausted for branch/month " + branchCode.trim() + "/" + yearMonth);
+        }
         return String.format("%02d%s%02d%04d", year2Digit, branchCode.trim(), month2Digit, nextRunningNo);
     }
 
@@ -143,9 +153,18 @@ public class DatabaseV2PatientRepository {
     }
 
     public List<PatientRecord> search(String query, String branchCode, int limit, int offset) {
+        return search(query, branchCode, limit, offset, null);
+    }
+
+    public List<PatientRecord> search(String query, String branchCode, int limit, int offset, Long actorId) {
         StringBuilder sql = new StringBuilder(SELECT_PATIENT);
         List<Object> params = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
+        if (actorId != null) {
+            conditions.add("exists (select 1 from user_branch_access uba where uba.branch_id = p.branch_id and uba.user_id = ?)");
+            params.add(actorId);
+        }
+
 
         if (branchCode != null && !branchCode.isBlank()) {
             conditions.add("b.branch_code = ?");
@@ -167,7 +186,7 @@ public class DatabaseV2PatientRepository {
             sql.append(" where ").append(String.join(" and ", conditions));
         }
 
-        sql.append(" order by p.patient_fname, p.patient_lname limit ? offset ?");
+        sql.append(" order by p.patient_fname, p.patient_lname, p.patient_id limit ? offset ?");
         params.add(limit);
         params.add(offset);
 
@@ -175,9 +194,18 @@ public class DatabaseV2PatientRepository {
     }
 
     public int countSearch(String query, String branchCode) {
+        return countSearch(query, branchCode, null);
+    }
+
+    public int countSearch(String query, String branchCode, Long actorId) {
         StringBuilder sql = new StringBuilder("select count(*) from patient p join branch b on b.branch_id = p.branch_id");
         List<Object> params = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
+        if (actorId != null) {
+            conditions.add("exists (select 1 from user_branch_access uba where uba.branch_id = p.branch_id and uba.user_id = ?)");
+            params.add(actorId);
+        }
+
 
         if (branchCode != null && !branchCode.isBlank()) {
             conditions.add("b.branch_code = ?");

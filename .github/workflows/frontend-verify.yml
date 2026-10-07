@@ -73,11 +73,59 @@ jobs:
           test -n "$APP_BOOTSTRAP_ADMIN_PASSWORD"
           docker compose up --build -d
 
+      - name: Wait for integration backend
+        working-directory: .
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8080/actuator/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --no-color backend
+          exit 1
+
+      - name: Start Vite for browser integration
+        run: |
+          mkdir -p cypress/diagnostics
+          npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > cypress/diagnostics/vite.log 2>&1 &
+          echo $! > cypress/diagnostics/vite.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:5173 > /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat cypress/diagnostics/vite.pid)" 2>/dev/null; then
+              cat cypress/diagnostics/vite.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat cypress/diagnostics/vite.log
+          exit 1
+
       - name: Cypress backend integration
         env:
-          CYPRESS_BASE_URL: http://localhost
+          CYPRESS_BASE_URL: http://localhost:5173
           CYPRESS_BACKEND_URL: http://localhost:8080
         run: npm run test:integration
+
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-browser-diagnostics
+          path: |
+            frontend/cypress/diagnostics
+            frontend/cypress/screenshots
+            frontend/cypress/videos
+          if-no-files-found: ignore
+
+      - name: Stop Vite
+        if: always()
+        run: |
+          if [ -f cypress/diagnostics/vite.pid ]; then
+            kill "$(cat cypress/diagnostics/vite.pid)" 2>/dev/null || true
+          fi
 
       - name: Stop integration stack
         if: always()

@@ -175,6 +175,65 @@ class DatabaseV2ReportPostgresIntegrationTest {
     }
 
     @Test
+    void dashboardCountsVoidedReceiptByExplicitLinkWhenTransactionIdsMatchOtherReceipts() {
+        Long base = jdbc.queryForObject("""
+                select greatest(
+                    coalesce((select max(receipt_id) from receipt), 0),
+                    coalesce((select max(transaction_id) from sales_transaction), 0),
+                    100000
+                ) + 100
+                """, Long.class);
+        long transactionA = base;
+        long transactionB = base + 1;
+        long receiptA = base + 2;
+        long receiptB = transactionA;
+        long receiptC = transactionB;
+        long baselineVoided = repository.dashboard(new ReportPeriod(DAY, DAY), "96").receiptsVoided();
+
+        try {
+            jdbc.update("""
+                    insert into receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_by)
+                    values (?, ?, 96, 96, ?, 1), (?, ?, 96, 96, ?, 1), (?, ?, 96, 96, ?, 1)
+                    """, receiptA, receiptNo(receiptA), DAY, receiptB, receiptNo(receiptB), DAY,
+                    receiptC, receiptNo(receiptC), DAY);
+            jdbc.update("""
+                    insert into sales_transaction (transaction_id, patient_id, branch_id, service_id,
+                        transaction_type, quantity, unit_price, amount, transaction_date,
+                        transaction_status, transaction_create_by, receipt_id)
+                    values (?, 96, 96, 96, 'SingleVisit', 1, 10.00, 10.00, ?, true, 1, ?),
+                           (?, 96, 96, 96, 'SingleVisit', 1, 10.00, 10.00, ?, true, 1, ?)
+                    """, transactionA, DAY.atStartOfDay(), receiptA,
+                    transactionB, DAY.atStartOfDay(), receiptA);
+            jdbc.update("""
+                    insert into transaction_cancellation (permission_id, transaction_id, reason, cancelled_by, cancelled_at)
+                    values (96, ?, 'dashboard receipt identity regression', 1, ?),
+                           (96, ?, 'dashboard receipt identity regression', 1, ?)
+                    """, transactionA, DAY.atStartOfDay(), transactionB, DAY.atStartOfDay());
+
+            // Both cancelled transactions belong to receiptA even though their transaction IDs
+            // coincide with two different receipt IDs. They must count as one voided receipt.
+            assertThat(repository.dashboard(new ReportPeriod(DAY, DAY), "96").receiptsVoided())
+                    .isEqualTo(baselineVoided + 1);
+            assertThat(jdbc.queryForObject("""
+                    select count(distinct coalesce(st.receipt_id, c.receipt_id))
+                    from transaction_cancellation tc
+                    join sales_transaction st on st.transaction_id = tc.transaction_id
+                    left join course c on c.course_id = st.course_id
+                    where st.transaction_id in (?, ?)
+                      and st.receipt_link_status = 'VERIFIED'
+                    """, Long.class, transactionA, transactionB)).isEqualTo(1L);
+        } finally {
+            jdbc.update("delete from transaction_cancellation where transaction_id in (?, ?)", transactionA, transactionB);
+            jdbc.update("delete from sales_transaction where transaction_id in (?, ?)", transactionA, transactionB);
+            jdbc.update("delete from receipt where receipt_id in (?, ?, ?)", receiptA, receiptB, receiptC);
+        }
+    }
+
+    private static String receiptNo(long receiptId) {
+        return "RE-" + String.format("%07d", receiptId % 10_000_000);
+    }
+
+    @Test
     void appointmentReportGeneratesFullDailySeries() {
         ReportPeriod period = new ReportPeriod(DAY, DAY.plusDays(2));
         AppointmentReportResponse res = repository.appointments(period, "96");
