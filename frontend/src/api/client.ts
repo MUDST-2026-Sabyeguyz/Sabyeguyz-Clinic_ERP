@@ -1,4 +1,3 @@
-// Vite forwards local /api requests to the backend, so the backend needs no browser CORS changes.
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export type ApiErrorBody = { message?: string; fields?: Record<string, string> }
@@ -28,8 +27,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const token = getToken()
-  // A stale token from another local backend must not be sent with a fresh
-  // login attempt: Spring Security can reject it before checking credentials.
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
@@ -74,6 +71,8 @@ export type AuthResponse = {
   username: string
   email?: string
   role: 'MANAGER' | 'THERAPIST'
+  branchCode?: string
+  branchName?: string
   token: string
 }
 export type Patient = {
@@ -195,10 +194,34 @@ export type SaleSummary = {
   status: string
   soldAt: string
   voidedAt?: string
+  voidReason?: string
+  itemDescription?: string
 }
-export type SaleReceipt = SaleSummary & { note?: string; voidReason?: string }
+export type SaleReceipt = SaleSummary & { note?: string }
+export type SaleDetail = SaleReceipt & {
+  items: Array<{
+    id: number
+    type: string
+    description: string
+    quantity: number
+    lineTotal: number
+  }>
+  payments: Array<{ id: number; type: string; paymentMethodCode: string; amount: number }>
+}
+export type CourseUsageTransaction = {
+  id: number
+  coursePurchaseId: number
+  patientName: string
+  patientHn: string
+  courseName: string
+  branchCode: string
+  usedAt: string
+  voidedAt?: string | null
+  voidReason?: string | null
+}
 export type DashboardResponse = {
   uniquePatients: number
+  patientsByGender: Array<{ gender: string; patients: number }>
   visits: number
   totalRevenue: number
   courseRevenue: number
@@ -216,6 +239,11 @@ export type AppointmentReport = {
 export type RevenueReport = {
   totalRevenue: number
   byCategory: Array<{ type: string; amount: number; share: number }>
+  dailyByCategory: Array<{
+    date: string
+    type: 'COURSE' | 'SINGLE_VISIT' | 'ASSESSMENT'
+    amount: number
+  }>
 }
 export type CourseBalanceReport = {
   purchases: number
@@ -227,6 +255,8 @@ export type CourseBalanceReport = {
     purchased: number
     used: number
     remaining: number
+    purchasedAt: string
+    expiresAt: string
     expired: boolean
   }>
 }
@@ -373,6 +403,7 @@ export const treatmentApi = {
 }
 
 export const courseApi = {
+  usageTransactions: () => api.get<CourseUsageTransaction[]>('/api/course-usages'),
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
   get: (id: number) => api.get<Course>(`/api/courses/${id}`),
   create: (body: Omit<Course, 'id' | 'active'>) => api.post<Course>('/api/courses', body),
@@ -420,9 +451,10 @@ export const salesApi = {
     })
     return api.get<Page<SaleSummary>>(`/api/payments?${query}`)
   },
-  get: (id: number) => api.get('/api/receipts/' + id),
+  get: (id: number) => api.get<SaleDetail>('/api/receipts/' + id),
   create: (body: unknown) => api.post<SaleReceipt>('/api/payments', body),
-  reverse: (id: number, reason: string) => api.post(`/api/payments/${id}/reverse`, { reason }),
+  reverse: (id: number, reason: string) =>
+    api.post<SaleDetail>(`/api/payments/${id}/reverse`, { reason }),
 }
 
 export const paymentMethodApi = {
