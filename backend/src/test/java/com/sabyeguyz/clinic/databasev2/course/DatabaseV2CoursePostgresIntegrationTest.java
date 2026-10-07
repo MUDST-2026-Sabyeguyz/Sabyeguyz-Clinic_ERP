@@ -2,6 +2,7 @@ package com.sabyeguyz.clinic.databasev2.course;
 
 import com.sabyeguyz.clinic.databasev2.common.PostgresIntegrationTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.assertj.core.api.SoftAssertions;
 
 import com.sabyeguyz.clinic.course.CourseBalanceException;
@@ -16,15 +17,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class DatabaseV2CoursePostgresIntegrationTest {
 
     private JdbcTemplate jdbc;
     private DatabaseV2CourseRepository repository;
+    private TransactionTemplate transactionTemplate;
 
     @BeforeEach
     void setUp() {
@@ -42,6 +47,7 @@ class DatabaseV2CoursePostgresIntegrationTest {
             ds.setPassword(password);
 
             jdbc = new JdbcTemplate(ds);
+            transactionTemplate = new TransactionTemplate(new DataSourceTransactionManager(ds));
             jdbc.execute("select 1");
             repository = new DatabaseV2CourseRepository(jdbc);
 
@@ -119,7 +125,8 @@ class DatabaseV2CoursePostgresIntegrationTest {
                 readyLatch.countDown();
                 try {
                     startLatch.await();
-                    repository.consumeSession(courseId, null, "Concurrent test usage", 99L, 1L);
+                    transactionTemplate.executeWithoutResult(status ->
+                            repository.consumeSession(courseId, null, "Concurrent test usage", 99L, 1L));
                     successCount.incrementAndGet();
                 } catch (CourseBalanceException e) {
                     failureCount.incrementAndGet();
@@ -148,6 +155,31 @@ class DatabaseV2CoursePostgresIntegrationTest {
         List<DatabaseV2CourseRepository.CourseMovementRecord> movements = repository.findMovements(courseId);
         assertThat(movements).hasSize(11);
         assertThat(movements.get(movements.size() - 1).balanceAfter()).isEqualTo(0);
+    }
+
+    @Test
+    void usageFailureRollsBackBalanceLedgerAndVisitTogether() {
+        var course = repository.purchase(91L, 98L, 99L, "99", 99L, 1L);
+        int visitsBefore = jdbc.queryForObject("select count(*) from patient_visit where patient_id=?", Integer.class, 91L);
+        String trigger = "course_usage_fail_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String function = trigger + "_fn";
+        jdbc.execute(("create function %s() returns trigger language plpgsql as $$ begin "
+                + "raise exception 'course usage rollback injection'; end $$").formatted(function));
+        jdbc.execute(("create trigger %s before insert on course_visit_usage for each row execute function %s()").formatted(trigger, function));
+        try {
+            assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status ->
+                    repository.consumeSession(course.id(), null, "injected usage write failure", 99L, 1L)))
+                    .isInstanceOf(RuntimeException.class);
+            var after = repository.findById(course.id()).orElseThrow();
+            assertThat(after.remainingVisits()).isEqualTo(10);
+            assertThat(after.visitsUsed()).isZero();
+            assertThat(jdbc.queryForObject("select count(*) from course_ledger where course_id=? and entry_type='Treatment'", Integer.class, course.id())).isZero();
+            assertThat(jdbc.queryForObject("select count(*) from course_visit_usage where course_id=?", Integer.class, course.id())).isZero();
+            assertThat(jdbc.queryForObject("select count(*) from patient_visit where patient_id=?", Integer.class, 91L)).isEqualTo(visitsBefore);
+        } finally {
+            jdbc.execute(("drop trigger if exists %s on course_visit_usage").formatted(trigger));
+            jdbc.execute(("drop function if exists %s()").formatted(function));
+        }
     }
 
     @Test

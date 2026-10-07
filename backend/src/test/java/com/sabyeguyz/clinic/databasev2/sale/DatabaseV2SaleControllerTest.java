@@ -180,6 +180,21 @@ class DatabaseV2SaleControllerTest {
     }
 
     @Test
+    void combinedDiscountsAreRejectedBeforeAllocatingReceipt() {
+        var service = new DatabaseV2ServiceRepository.ServiceModel(
+                31L, "SRV-01", "Single Visit", "SingleVisit", new BigDecimal("2000.00"), true, null, null, null);
+        when(serviceRepository.findById(31L)).thenReturn(Optional.of(service));
+        var request = new SaleRequest(10L, "01", null, null,
+                List.of(new SaleRequest.Item(SaleItemType.SINGLE_VISIT, 31L, 1, new BigDecimal("100.00"))),
+                List.of(new SaleRequest.Payment("CASH", new BigDecimal("1800.00"))), new BigDecimal("100.00"));
+
+        assertThatThrownBy(() -> controller.create(request, auth))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ส่วนลดรายการร่วมกับส่วนลดท้ายบิล");
+        org.mockito.Mockito.verifyNoInteractions(saleRepository);
+    }
+
+    @Test
     void reverseSaleRejectsIfAlreadyVoided() {
         when(saleRepository.findById(1L)).thenReturn(Optional.of(mockRecord(1L, "VOIDED")));
         when(saleRepository.isVoided(1L)).thenReturn(true);

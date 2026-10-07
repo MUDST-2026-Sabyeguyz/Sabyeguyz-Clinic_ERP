@@ -142,6 +142,9 @@ public class DatabaseV2SaleController {
         }
 
         BigDecimal billDiscount = request.billDiscountAmount() == null ? BigDecimal.ZERO : request.billDiscountAmount();
+        if (billDiscount.signum() > 0 && lineDiscountTotal.signum() > 0) {
+            throw new IllegalArgumentException("ยังไม่รองรับส่วนลดรายการร่วมกับส่วนลดท้ายบิล จนกว่าจะยืนยันกฎการคำนวณ");
+        }
         BigDecimal afterLineDiscounts = grossTotal.subtract(lineDiscountTotal);
         if (billDiscount.compareTo(afterLineDiscounts) > 0) {
             throw new IllegalArgumentException("ส่วนลดท้ายบิลต้องไม่เกินยอดหลังหักส่วนลดรายการ");
@@ -169,7 +172,9 @@ public class DatabaseV2SaleController {
         }
 
         LocalDate saleDate = LocalDate.now(CLINIC_ZONE);
-        LocalDateTime now = LocalDateTime.now();
+        // TIMESTAMP columns in the database represent clinic-local wall time.
+        // Always write Bangkok local time, independent of the JVM's default zone.
+        LocalDateTime now = LocalDateTime.now(CLINIC_ZONE);
 
         // 1. Allocate receipt
         DatabaseV2SaleRepository.GeneratedReceipt allocated = saleRepository.allocateReceipt();
