@@ -60,6 +60,7 @@ public class DatabaseV2ServiceController {
     }
 
     @PostMapping
+    @org.springframework.transaction.annotation.Transactional
     @PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
     public Response create(@Valid @RequestBody Request request, Authentication auth) {
@@ -73,10 +74,12 @@ public class DatabaseV2ServiceController {
         DatabaseV2ServiceRepository.ServiceModel created = repository.create(
                 code, request.name().trim(), type, request.price(), 1, 0, 365, active, actorId
         );
-        return toResponse(created);
+        repository.setDuration(created.id(), request.defaultDurationMinutes() == null ? 60 : request.defaultDurationMinutes());
+        return toResponse(find(created.id()));
     }
 
     @PutMapping("/{id}")
+    @org.springframework.transaction.annotation.Transactional
     @PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request, Authentication auth) {
         Long actorId = actorProvider.getActorIdOrDefault(auth, 1L);
@@ -91,7 +94,8 @@ public class DatabaseV2ServiceController {
                 id, code, request.name().trim(), type, request.price(), existing.totalVisits(),
                 existing.bonusVisits(), existing.validityDays(), active, actorId
         );
-        return toResponse(updated);
+        repository.setDuration(updated.id(), request.defaultDurationMinutes() == null ? existing.durationMinutes() : request.defaultDurationMinutes());
+        return toResponse(find(updated.id()));
     }
 
     @DeleteMapping("/{id}")
@@ -113,7 +117,7 @@ public class DatabaseV2ServiceController {
                 s.id(),
                 s.code(),
                 s.name(),
-                60,
+                s.durationMinutes(),
                 s.price(),
                 s.active()
         );

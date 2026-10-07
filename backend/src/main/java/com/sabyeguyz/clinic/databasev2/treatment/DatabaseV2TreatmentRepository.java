@@ -75,6 +75,43 @@ public class DatabaseV2TreatmentRepository {
         ), patientId);
     }
 
+    public List<TreatmentRecord> findByPatientId(Long patientId, int limit, int offset) {
+        String sql = """
+                select t.treatment_id, pv.patient_id, pv.appointment_id, t.treating_staff_id,
+                       t.service_id, s.service_name, t.notes, t.treatment_create_at
+                from treatment t
+                join patient_visit pv on pv.visit_id = t.visit_id
+                join service s on s.service_id = t.service_id
+                where pv.patient_id = ?
+                order by t.treatment_create_at desc, t.treatment_id desc
+                limit ? offset ?
+                """;
+        return jdbc.query(sql, (rs, rowNum) -> new TreatmentRecord(
+                rs.getLong("treatment_id"),
+                rs.getLong("patient_id"),
+                (Long) rs.getObject("appointment_id"),
+                (Long) rs.getObject("treating_staff_id"),
+                rs.getLong("service_id"),
+                rs.getString("service_name"),
+                rs.getString("notes"),
+                rs.getObject("treatment_create_at", LocalDateTime.class)
+        ), patientId, limit, offset);
+    }
+
+    public int countByPatientId(Long patientId) {
+        Integer count = jdbc.queryForObject("""
+                select count(*) from treatment t
+                join patient_visit pv on pv.visit_id = t.visit_id
+                where pv.patient_id = ?
+                """, Integer.class, patientId);
+        return count == null ? 0 : count;
+    }
+
+    public boolean patientExists(Long patientId) {
+        Boolean exists = jdbc.queryForObject("select exists(select 1 from patient where patient_id = ?)", Boolean.class, patientId);
+        return Boolean.TRUE.equals(exists);
+    }
+
     public TreatmentRecord createTreatment(
             Long patientId,
             Long appointmentId,

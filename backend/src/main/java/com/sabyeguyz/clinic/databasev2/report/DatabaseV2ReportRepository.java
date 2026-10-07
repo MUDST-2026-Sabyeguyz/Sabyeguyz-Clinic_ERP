@@ -143,11 +143,13 @@ public class DatabaseV2ReportRepository {
         if (receiptsIssued == null) receiptsIssued = 0L;
 
         String rVoidedSql = """
-                select count(distinct coalesce(c.receipt_id, st.transaction_id))
+                select count(distinct coalesce(st.receipt_id, c.receipt_id))
                 from transaction_cancellation tc
                 join sales_transaction st on st.transaction_id = tc.transaction_id
                 left join course c on c.course_id = st.course_id
                 where cast(tc.cancelled_at as date) >= ? and cast(tc.cancelled_at as date) <= ?
+                  and st.receipt_link_status = 'VERIFIED'
+                  and (st.receipt_id is not null or c.receipt_id is not null)
                 """ + (branchId != null ? " and st.branch_id = ?" : "");
         Long receiptsVoided = branchId != null
                 ? jdbc.queryForObject(rVoidedSql, Long.class, from, to, branchId)

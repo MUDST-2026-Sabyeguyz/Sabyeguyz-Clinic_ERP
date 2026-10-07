@@ -13,6 +13,7 @@ import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 @Profile("database-v2")
@@ -423,9 +424,11 @@ public class DatabaseV2CommissionRepository {
         ), monthStr);
     }
 
+    @Transactional
     public List<ClosingRecord> closeMonth(LocalDate month, Long actorId) {
         String monthStr = String.format("%04d-%02d", month.getYear(), month.getMonthValue());
         LocalDate monthStart = month.withDayOfMonth(1);
+        acquireMonthlyClosingLock(monthStr);
         Long permId = getOrCreateCommissionPermission(actorId);
 
         // Find active scheme
@@ -465,6 +468,33 @@ public class DatabaseV2CommissionRepository {
                     Long.class, monthStr, sellerId
             );
             Long closingId;
+            if (!existing.isEmpty()) {
+                closingId = existing.get(0);
+                List<ClosingRecord> priorClosings = jdbc.query("""
+                        select mc.closing_id, mc.closing_month, mc.staff_id,
+                               concat(s.staff_fname, ' ', s.staff_lname) as employee_name,
+                               mc.monthly_course_sales, mc.commission_scheme_version,
+                               mc.calculated_commission_rate,
+                               coalesce(mc.locked_commission_rate, mc.calculated_commission_rate) as locked_rate,
+                               mc.closing_status
+                        from monthly_commission_closing mc
+                        join staff s on s.staff_id = mc.staff_id
+                        where mc.closing_id = ?
+                        """, (rs, rowNum) -> new ClosingRecord(
+                        rs.getLong("closing_id"),
+                        LocalDate.parse(rs.getString("closing_month") + "-01"),
+                        rs.getLong("staff_id"),
+                        rs.getString("employee_name"),
+                        rs.getBigDecimal("monthly_course_sales"),
+                        String.valueOf(rs.getInt("commission_scheme_version")),
+                        rs.getBigDecimal("locked_rate"),
+                        rs.getBoolean("closing_status") ? "CLOSED" : "OPEN"
+                ), closingId);
+                if (!priorClosings.isEmpty() && "CLOSED".equals(priorClosings.get(0).status())) {
+                    results.add(priorClosings.get(0));
+                    continue;
+                }
+            }
             if (existing.isEmpty()) {
                 closingId = jdbc.queryForObject(
                         """
@@ -529,6 +559,15 @@ public class DatabaseV2CommissionRepository {
         }
 
         return results;
+    }
+
+    private void acquireMonthlyClosingLock(String monthStr) {
+        jdbc.execute("select pg_advisory_xact_lock(hashtext(?))",
+                (org.springframework.jdbc.core.PreparedStatementCallback<Void>) statement -> {
+            statement.setString(1, monthStr);
+            statement.execute();
+            return null;
+        });
     }
 
     public ClosingRecord closeSingle(Long id, Long actorId) {

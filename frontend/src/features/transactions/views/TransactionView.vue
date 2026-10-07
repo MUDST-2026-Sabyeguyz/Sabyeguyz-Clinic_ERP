@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { courseApi, salesApi } from '@/api/client'
+import { appointmentApi, catalogApi, courseApi, patientApi, salesApi, type Appointment, type Patient, type ServiceOption } from '@/api/client'
 
 type Transaction = {
   id: string
@@ -37,6 +38,9 @@ const loading = ref(false)
 const rows = ref<Transaction[]>([])
 const page = ref(0)
 const pageSize = 20
+const route = useRoute()
+const handoff = ref<{ appointment: Appointment; patient: Patient; service: ServiceOption } | null>(null)
+const handoffError = ref('')
 
 const formatDate = (value: string) => new Date(value).toLocaleString('th-TH')
 
@@ -87,7 +91,25 @@ async function loadTransactions() {
   }
 }
 
-onMounted(loadTransactions)
+async function loadAppointmentHandoff() {
+  const rawId = route.query.appointmentId
+  if (typeof rawId !== 'string') return
+  const id = Number(rawId)
+  if (!Number.isSafeInteger(id) || id < 1) throw new Error('เลขนัดหมายไม่ถูกต้อง')
+  const appointment = await appointmentApi.get(id)
+  if (!['CONFIRMED', 'RESCHEDULED', 'ARRIVED', 'IN_SERVICE'].includes(appointment.status)) throw new Error('สถานะนัดหมายยังไม่อนุญาตให้ส่งต่อบริการ')
+  const [patient, services] = await Promise.all([patientApi.get(appointment.patient.id), catalogApi.services()])
+  const service = services.find((item) => item.id === appointment.service.id)
+  if (!patient.active) throw new Error('ผู้ป่วยนี้ปิดใช้งาน')
+  if (!service) throw new Error('บริการของนัดหมายไม่อยู่ในรายการที่ใช้งาน')
+  handoff.value = { appointment, patient, service }
+}
+onMounted(() => {
+  void Promise.all([loadTransactions(), loadAppointmentHandoff().catch((error) => {
+    handoff.value = null
+    handoffError.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ'
+  })])
+})
 
 function splitDateTime(value: string) {
   const separator = value.lastIndexOf(' ')
@@ -175,6 +197,13 @@ async function applyVoid() {
         <h1>รายการธุรกรรม</h1>
         <p>รวมรายการขาย การใช้บริการ การโอนสิทธิ์</p>
       </section>
+      <section v-if="handoff" class="staff-panel appointment-service-handoff" aria-label="ข้อมูลส่งต่อบริการ">
+        <h2>นัดหมายที่ส่งต่อ</h2>
+        <p>{{ handoff.patient.fullName }} · HN {{ handoff.patient.hn }}</p>
+        <p>{{ handoff.service.name }} · นัดหมาย #{{ handoff.appointment.id }}</p>
+        <RouterLink :to="{ path: '/staff/services', query: { appointmentId: String(handoff.appointment.id) } }">ตรวจข้อมูลและไปหน้าบริการ</RouterLink>
+      </section>
+      <p v-if="handoffError" class="error" role="alert">{{ handoffError }}</p>
       <section class="staff-panel transaction-list">
         <header class="panel-head">
           <div class="search-box">

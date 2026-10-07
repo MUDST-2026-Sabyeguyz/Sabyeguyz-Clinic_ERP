@@ -20,10 +20,12 @@ public record DatabaseV2AppUser(
     public Set<DatabaseV2Role> getRoles() { return roles; }
 
     public String primaryRole() {
-        return roles.stream().map(DatabaseV2Role::name)
-                .filter("MANAGER"::equals)
-                .findFirst()
-                .orElseGet(() -> roles.stream().map(DatabaseV2Role::name).sorted().findFirst()
-                        .orElseThrow(() -> new IllegalStateException("ผู้ใช้ยังไม่มี role")));
+        Set<String> canonical = roles.stream().map(DatabaseV2Role::name)
+                .map(name -> name.trim().toUpperCase(java.util.Locale.ROOT))
+                .filter(name -> "MANAGER".equals(name) || "THERAPIST".equals(name))
+                .collect(java.util.stream.Collectors.toSet());
+        if (canonical.contains("MANAGER")) return "MANAGER";
+        if (canonical.contains("THERAPIST")) return "THERAPIST";
+        throw new IllegalArgumentException("บัญชีผู้ใช้ไม่มีบทบาทที่ใช้งานได้");
     }
 }

@@ -59,10 +59,9 @@ public class DatabaseV2BootstrapRunner implements ApplicationRunner {
         // 2. Seed Default Branch
         Long branchId = getOrCreateBranch(defaultBranchCode, defaultBranchName, adminUserId);
 
-        // 3. Seed Roles (Manager, Therapist, Receptionist)
-        Long managerRoleId = getOrCreateRole("Manager", adminUserId);
-        getOrCreateRole("Therapist", adminUserId);
-        getOrCreateRole("Receptionist", adminUserId);
+        // 3. Seed the two supported application roles
+        Long managerRoleId = getOrCreateRole("MANAGER", adminUserId);
+        getOrCreateRole("THERAPIST", adminUserId);
 
         // 4. Seed Initial Staff (Manager and Therapist positions)
         Long staffId = getOrCreateStaff("ST-MGR-01", "Admin", "Manager", "Manager", branchId, adminUserId);

@@ -23,8 +23,16 @@ public class DatabaseV2SaleRepository {
             BigDecimal unitPrice,
             int quantity,
             BigDecimal lineTotal,
+            BigDecimal grossAmount,
+            BigDecimal lineDiscountAmount,
+            BigDecimal commissionBase,
             Long coursePurchaseId
-    ) {}
+    ) {
+        public SaleItemRecord(Long id, String type, String description, BigDecimal unitPrice, int quantity,
+                              BigDecimal lineTotal, Long coursePurchaseId) {
+            this(id, type, description, unitPrice, quantity, lineTotal, lineTotal, BigDecimal.ZERO, lineTotal, coursePurchaseId);
+        }
+    }
 
     public record SalePaymentRecord(
             Long id,
@@ -47,6 +55,10 @@ public class DatabaseV2SaleRepository {
             String salespersonCode,
             String salespersonFullName,
             BigDecimal total,
+            BigDecimal grossTotal,
+            BigDecimal lineDiscountTotal,
+            BigDecimal billDiscountAmount,
+            BigDecimal commissionBase,
             BigDecimal paid,
             String status,
             String note,
@@ -55,7 +67,17 @@ public class DatabaseV2SaleRepository {
             String voidReason,
             List<SaleItemRecord> items,
             List<SalePaymentRecord> payments
-    ) {}
+    ) {
+        public SaleRecord(Long id, String receiptNo, Long patientId, String patientHn, String patientFullName,
+                          String branchCode, Long salespersonId, String salespersonCode, String salespersonFullName,
+                          BigDecimal total, BigDecimal paid, String status, String note, LocalDateTime soldAt,
+                          LocalDateTime voidedAt, String voidReason, List<SaleItemRecord> items,
+                          List<SalePaymentRecord> payments) {
+            this(id, receiptNo, patientId, patientHn, patientFullName, branchCode, salespersonId, salespersonCode,
+                    salespersonFullName, total, total, BigDecimal.ZERO, BigDecimal.ZERO, total, paid, status, note,
+                    soldAt, voidedAt, voidReason, items, payments);
+        }
+    }
 
     public record SaleSummaryRecord(
             Long id,
@@ -86,14 +108,23 @@ public class DatabaseV2SaleRepository {
     }
 
     public void insertReceipt(Long receiptId, String receiptNo, Long patientId, Long branchId, LocalDate saleDate, Long actorId) {
+        insertReceipt(receiptId, receiptNo, patientId, branchId, saleDate, actorId,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+    }
+
+    public void insertReceipt(Long receiptId, String receiptNo, Long patientId, Long branchId, LocalDate saleDate,
+                              Long actorId, BigDecimal grossTotal, BigDecimal lineDiscountTotal,
+                              BigDecimal billDiscountAmount, BigDecimal netDue) {
         jdbc.update(
                 """
                 insert into receipt (
                     receipt_id, receipt_no, patient_id, branch_id, sale_date,
-                    receipt_create_at, receipt_create_by
-                ) values (?, ?, ?, ?, ?, current_timestamp, ?)
+                    receipt_create_at, receipt_create_by,
+                    gross_total, line_discount_total, bill_discount_amount, net_due
+                ) values (?, ?, ?, ?, ?, current_timestamp, ?, ?, ?, ?, ?)
                 """,
-                receiptId, receiptNo, patientId, branchId, saleDate, actorId
+                receiptId, receiptNo, patientId, branchId, saleDate, actorId,
+                grossTotal, lineDiscountTotal, billDiscountAmount, netDue
         );
     }
 
@@ -102,6 +133,27 @@ public class DatabaseV2SaleRepository {
             Long treatingStaffId, Long salespersonStaffId,
             int quantity, BigDecimal unitPrice, BigDecimal amount,
             LocalDateTime transactionDate, Long courseId, Long actorId
+    ) {
+        return createSalesTransactionForReceipt(null, patientId, branchId, serviceId, type,
+                treatingStaffId, salespersonStaffId, quantity, unitPrice, amount, transactionDate, courseId, actorId);
+    }
+
+    public Long createSalesTransactionForReceipt(
+            Long receiptId, Long patientId, Long branchId, Long serviceId, String type,
+            Long treatingStaffId, Long salespersonStaffId,
+            int quantity, BigDecimal unitPrice, BigDecimal amount,
+            LocalDateTime transactionDate, Long courseId, Long actorId
+    ) {
+        return createSalesTransactionForReceipt(receiptId, patientId, branchId, serviceId, type,
+                treatingStaffId, salespersonStaffId, quantity, unitPrice, amount, amount,
+                BigDecimal.ZERO, transactionDate, courseId, actorId);
+    }
+
+    public Long createSalesTransactionForReceipt(
+            Long receiptId, Long patientId, Long branchId, Long serviceId, String type,
+            Long treatingStaffId, Long salespersonStaffId,
+            int quantity, BigDecimal unitPrice, BigDecimal amount, BigDecimal grossAmount,
+            BigDecimal lineDiscountAmount, LocalDateTime transactionDate, Long courseId, Long actorId
     ) {
         String dbType = switch (type) {
             case "COURSE" -> "CoursePurchase";
@@ -113,24 +165,24 @@ public class DatabaseV2SaleRepository {
         return jdbc.queryForObject(
                 """
                 insert into sales_transaction (
-                    patient_id, branch_id, service_id, transaction_type,
+                    receipt_id, patient_id, branch_id, service_id, transaction_type,
                     treating_staff_id, salesperson_staff_id,
                     quantity, unit_price, amount, transaction_date,
-                    course_id, transaction_status,
+                    course_id, transaction_status, gross_amount, line_discount_amount,
                     transaction_create_at, transaction_create_by
                 ) values (
-                    ?, ?, ?, cast(? as transaction_type_enum),
+                    ?, ?, ?, ?, cast(? as transaction_type_enum),
                     ?, ?,
                     ?, ?, ?, ?,
-                    ?, true,
+                    ?, true, ?, ?,
                     current_timestamp, ?
                 ) returning transaction_id
                 """,
                 Long.class,
-                patientId, branchId, serviceId, dbType,
+                receiptId, patientId, branchId, serviceId, dbType,
                 treatingStaffId, salespersonStaffId,
                 quantity, unitPrice, amount, transactionDate,
-                courseId, actorId
+                courseId, grossAmount, lineDiscountAmount, actorId
         );
     }
 
@@ -221,12 +273,13 @@ public class DatabaseV2SaleRepository {
     public Optional<SaleRecord> findById(Long receiptId) {
         String sql = """
                 select r.receipt_id, r.receipt_no, r.sale_date, r.receipt_create_at,
+                       r.gross_total, r.line_discount_total, r.bill_discount_amount, r.net_due,
                        p.patient_id, p.hn,
                        concat(p.patient_fname, case when p.patient_lname is not null and p.patient_lname <> '-' then concat(' ', p.patient_lname) else '' end) as patient_name,
                        b.branch_code,
-                       (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id limit 1) as salesperson_id,
-                       (select tc.reason from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id limit 1) as void_reason,
-                       (select tc.cancelled_at from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id limit 1) as voided_at
+                       (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where (st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') limit 1) as salesperson_id,
+                       (select tc.reason from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where ((st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED')) limit 1) as void_reason,
+                       (select tc.cancelled_at from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where ((st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED')) limit 1) as voided_at
                 from receipt r
                 join patient p on p.patient_id = r.patient_id
                 join branch b on b.branch_id = r.branch_id
@@ -251,8 +304,13 @@ public class DatabaseV2SaleRepository {
             List<SaleItemRecord> items = findItemsForReceipt(receiptId);
             List<SalePaymentRecord> payments = findPaymentsForReceipt(receiptId, isVoided, voidReason, voidedAt);
 
-            BigDecimal total = items.stream().map(SaleItemRecord::lineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal paid = isVoided ? BigDecimal.ZERO : total;
+            BigDecimal total = rs.getBigDecimal("net_due");
+            BigDecimal grossTotal = rs.getBigDecimal("gross_total");
+            BigDecimal lineDiscountTotal = rs.getBigDecimal("line_discount_total");
+            BigDecimal billDiscountAmount = rs.getBigDecimal("bill_discount_amount");
+            BigDecimal commissionBase = items.stream().map(SaleItemRecord::commissionBase).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal paid = isVoided ? BigDecimal.ZERO : payments.stream().filter(p -> "PAYMENT".equals(p.type()))
+                    .map(SalePaymentRecord::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
             return new SaleRecord(
                     rs.getLong("receipt_id"),
@@ -265,6 +323,10 @@ public class DatabaseV2SaleRepository {
                     scode,
                     sname,
                     total,
+                    grossTotal,
+                    lineDiscountTotal,
+                    billDiscountAmount,
+                    commissionBase,
                     paid,
                     isVoided ? "VOIDED" : "PAID",
                     null,
@@ -286,12 +348,16 @@ public class DatabaseV2SaleRepository {
                        s.service_name,
                        st.unit_price,
                        st.quantity,
-                       st.amount,
+                       (st.gross_amount - st.line_discount_amount) as line_total,
+                       st.gross_amount,
+                       st.line_discount_amount,
+                       st.amount as commission_base,
                        st.course_id
                 from sales_transaction st
                 join service s on s.service_id = st.service_id
                 left join course c on c.course_id = st.course_id
-                where c.receipt_id = ? or st.transaction_id = ?
+                where (st.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
+                   or (st.receipt_id is null and c.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
                 order by st.transaction_id asc
                 """;
 
@@ -310,7 +376,10 @@ public class DatabaseV2SaleRepository {
                     rs.getString("service_name"),
                     rs.getBigDecimal("unit_price"),
                     rs.getInt("quantity"),
-                    rs.getBigDecimal("amount"),
+                    rs.getBigDecimal("line_total"),
+                    rs.getBigDecimal("gross_amount"),
+                    rs.getBigDecimal("line_discount_amount"),
+                    rs.getBigDecimal("commission_base"),
                     (Long) rs.getObject("course_id")
             );
         }, receiptId, receiptId);
@@ -328,7 +397,8 @@ public class DatabaseV2SaleRepository {
                 where pt.transaction_id in (
                     select st.transaction_id from sales_transaction st
                     left join course c on c.course_id = st.course_id
-                    where c.receipt_id = ? or st.transaction_id = ?
+                    where (st.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
+                       or (st.receipt_id is null and c.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
                 )
                 order by pt.payment_id asc
                 """;
@@ -364,17 +434,26 @@ public class DatabaseV2SaleRepository {
     }
 
     public List<SaleSummaryRecord> search(Long patientId, String branchCode, int limit, int offset) {
+        return searchInternal(patientId, branchCode, limit, offset, null);
+    }
+
+    public List<SaleSummaryRecord> searchAccessible(Long patientId, String branchCode, int limit, int offset, Long userId) {
+        return searchInternal(patientId, branchCode, limit, offset, userId);
+    }
+
+    private List<SaleSummaryRecord> searchInternal(Long patientId, String branchCode, int limit, int offset, Long userId) {
         StringBuilder sql = new StringBuilder("""
                 select r.receipt_id, r.receipt_no, r.sale_date, r.receipt_create_at,
                        p.patient_id, p.hn,
                        concat(p.patient_fname, case when p.patient_lname is not null and p.patient_lname <> '-' then concat(' ', p.patient_lname) else '' end) as patient_name,
                        b.branch_code,
-                       (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id limit 1) as salesperson_id,
-                       (select concat(stf.staff_fname, ' ', stf.staff_lname) from staff stf where stf.staff_id = (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id limit 1)) as salesperson_name,
-                       (select stf.staff_code from staff stf where stf.staff_id = (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id limit 1)) as salesperson_code,
-                       (select coalesce(sum(st.amount), 0) from sales_transaction st left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id) as total_amount,
-                       (select count(*) from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id) as void_count,
-                       (select tc.cancelled_at from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where c.receipt_id = r.receipt_id or st.transaction_id = r.receipt_id limit 1) as voided_at
+                       (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where (st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') limit 1) as salesperson_id,
+                       (select concat(stf.staff_fname, ' ', stf.staff_lname) from staff stf where stf.staff_id = (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where (st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') limit 1)) as salesperson_name,
+                       (select stf.staff_code from staff stf where stf.staff_id = (select st.salesperson_staff_id from sales_transaction st left join course c on c.course_id = st.course_id where (st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') limit 1)) as salesperson_code,
+                       r.net_due as total_amount,
+                       (select coalesce(sum(pt.amount), 0) from payment_transaction pt where pt.payment_status = true and pt.transaction_id in (select st.transaction_id from sales_transaction st left join course c on c.course_id = st.course_id where (st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED'))) as paid_amount,
+                       (select count(*) from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where ((st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED'))) as void_count,
+                       (select tc.cancelled_at from transaction_cancellation tc join sales_transaction st on st.transaction_id = tc.transaction_id left join course c on c.course_id = st.course_id where ((st.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED') or (st.receipt_id is null and c.receipt_id = r.receipt_id and st.receipt_link_status = 'VERIFIED')) limit 1) as voided_at
                 from receipt r
                 join patient p on p.patient_id = r.patient_id
                 join branch b on b.branch_id = r.branch_id
@@ -391,6 +470,10 @@ public class DatabaseV2SaleRepository {
             conditions.add("b.branch_code = ?");
             params.add(branchCode.trim().toUpperCase());
         }
+        if (userId != null) {
+            conditions.add("exists (select 1 from user_branch_access uba where uba.user_id = ? and uba.branch_id = r.branch_id)");
+            params.add(userId);
+        }
 
         if (!conditions.isEmpty()) {
             sql.append(" where ").append(String.join(" and ", conditions));
@@ -404,7 +487,7 @@ public class DatabaseV2SaleRepository {
             boolean isVoided = rs.getInt("void_count") > 0;
             BigDecimal total = rs.getBigDecimal("total_amount");
             if (total == null) total = BigDecimal.ZERO;
-            BigDecimal paid = isVoided ? BigDecimal.ZERO : total;
+            BigDecimal paid = isVoided ? BigDecimal.ZERO : rs.getBigDecimal("paid_amount");
 
             return new SaleSummaryRecord(
                     rs.getLong("receipt_id"),
@@ -426,6 +509,14 @@ public class DatabaseV2SaleRepository {
     }
 
     public int countSearch(Long patientId, String branchCode) {
+        return countSearchInternal(patientId, branchCode, null);
+    }
+
+    public int countSearchAccessible(Long patientId, String branchCode, Long userId) {
+        return countSearchInternal(patientId, branchCode, userId);
+    }
+
+    private int countSearchInternal(Long patientId, String branchCode, Long userId) {
         StringBuilder sql = new StringBuilder("select count(*) from receipt r join branch b on b.branch_id = r.branch_id");
         List<Object> params = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
@@ -437,6 +528,10 @@ public class DatabaseV2SaleRepository {
         if (branchCode != null && !branchCode.isBlank()) {
             conditions.add("b.branch_code = ?");
             params.add(branchCode.trim().toUpperCase());
+        }
+        if (userId != null) {
+            conditions.add("exists (select 1 from user_branch_access uba where uba.user_id = ? and uba.branch_id = r.branch_id)");
+            params.add(userId);
         }
 
         if (!conditions.isEmpty()) {
@@ -455,7 +550,8 @@ public class DatabaseV2SaleRepository {
                 select distinct st.transaction_id
                 from sales_transaction st
                 left join course c on c.course_id = st.course_id
-                where c.receipt_id = ? or st.transaction_id = ?
+                where (st.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
+                   or (st.receipt_id is null and c.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
                 """,
                 Long.class, receiptId, receiptId
         );
@@ -496,7 +592,16 @@ public class DatabaseV2SaleRepository {
         }
 
         List<Long> courseIds = jdbc.queryForList(
-                "select course_id from course where receipt_id = ? and course_status = 'Active'",
+                """
+                select c.course_id from course c
+                where c.receipt_id = ? and c.course_status = 'Active'
+                  and not exists (
+                      select 1 from sales_transaction st
+                      where st.course_id = c.course_id
+                        and st.receipt_id is not null
+                        and (st.receipt_id <> c.receipt_id or st.receipt_link_status <> 'VERIFIED')
+                  )
+                """,
                 Long.class, receiptId
         );
         for (Long cId : courseIds) {
@@ -538,7 +643,8 @@ public class DatabaseV2SaleRepository {
                 from transaction_cancellation tc
                 join sales_transaction st on st.transaction_id = tc.transaction_id
                 left join course c on c.course_id = st.course_id
-                where c.receipt_id = ? or st.transaction_id = ?
+                where (st.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
+                   or (st.receipt_id is null and c.receipt_id = ? and st.receipt_link_status = 'VERIFIED')
                 """,
                 Integer.class, receiptId, receiptId
         );

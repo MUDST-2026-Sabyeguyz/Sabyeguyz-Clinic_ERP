@@ -12,6 +12,10 @@ public record SaleResponse(
         SalespersonSummary salesperson,
         /** ยอดที่ต้องชำระ คำนวณจากราคาใน master ตอนขาย */
         BigDecimal total,
+        BigDecimal grossTotal,
+        BigDecimal lineDiscountTotal,
+        BigDecimal billDiscountAmount,
+        BigDecimal commissionBase,
         /** เงินที่รับจริงหลังหักการคืนเงินแล้ว ใบที่ถูกยกเลิกจะเป็น 0 */
         BigDecimal paid,
         SaleStatus status,
@@ -33,12 +37,15 @@ public record SaleResponse(
             BigDecimal unitPrice,
             int quantity,
             BigDecimal lineTotal,
+            BigDecimal grossAmount,
+            BigDecimal lineDiscountAmount,
+            BigDecimal commissionBase,
             /** ใบซื้อคอร์สที่บรรทัดนี้สร้างขึ้น เป็น null สำหรับรายการที่ไม่ใช่คอร์ส */
             Long coursePurchaseId
     ) {
         static SaleItemResponse from(SaleItem item) {
             return new SaleItemResponse(item.getId(), item.getItemType(), item.getDescription(),
-                    item.getUnitPrice(), item.getQuantity(), item.getLineTotal(),
+                    item.getUnitPrice(), item.getQuantity(), item.getLineTotal(), item.getLineTotal(), BigDecimal.ZERO, item.getLineTotal(),
                     item.getCoursePurchase() == null ? null : item.getCoursePurchase().getId());
         }
     }
@@ -69,7 +76,7 @@ public record SaleResponse(
                 sale.getBranch().getCode(),
                 sale.getSalesperson() == null ? null : new SalespersonSummary(sale.getSalesperson().getId(),
                         sale.getSalesperson().getEmployeeCode(), sale.getSalesperson().getFullName()),
-                sale.getTotal(),
+                sale.getTotal(), sale.getTotal(), BigDecimal.ZERO, BigDecimal.ZERO, sale.getTotal(),
                 paid,
                 sale.getStatus(),
                 sale.getNote(),

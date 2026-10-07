@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { clearSession, getToken, readAuthUser } from '@/api/client'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -105,11 +106,10 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (!to.path.startsWith('/staff/')) return true
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
+  const authUser = readAuthUser()
   const role = authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
-  if (role !== 'manager' && role !== 'therapist') {
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('authUser')
+  if (!getToken() || (role !== 'manager' && role !== 'therapist')) {
+    clearSession()
     return { name: 'staff-login' }
   }
   const allowedRoles = to.meta.roles as string[] | undefined
@@ -132,7 +132,7 @@ router.beforeEach((to) => {
 })
 
 router.afterEach(() => {
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
+  const authUser = readAuthUser()
   const usesSharedStaffUi = authUser?.role === 'THERAPIST' || authUser?.role === 'MANAGER'
   document.body.classList.toggle(
     'therapist-ui',

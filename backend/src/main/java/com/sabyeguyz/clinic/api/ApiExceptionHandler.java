@@ -23,6 +23,11 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    ResponseEntity<ApiErrorResponse> invalidCredentials(org.springframework.security.authentication.BadCredentialsException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiErrorResponse> validation(MethodArgumentNotValidException exception) {
         Map<String, String> fields = new LinkedHashMap<>();
@@ -109,6 +114,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException.class)
     ResponseEntity<ApiErrorResponse> databaseV2Conflict(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(com.sabyeguyz.clinic.databasev2.patient.HnCapacityExceededException.class)
+    ResponseEntity<ApiErrorResponse> hnCapacityExceeded(com.sabyeguyz.clinic.databasev2.patient.HnCapacityExceededException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
     }
 

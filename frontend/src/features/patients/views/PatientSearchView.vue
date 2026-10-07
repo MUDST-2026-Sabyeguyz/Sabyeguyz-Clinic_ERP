@@ -48,7 +48,7 @@ onMounted(() => {
   showCreationNotice.value = true
   window.setTimeout(() => { showCreationNotice.value = false }, 3000)
 })
-onMounted(async () => { branches.value = await branchApi.list(); await loadPatients() })
+onMounted(async () => { branches.value = await branchApi.list({ accessible: true }); await loadPatients() })
 watch(branch, () => { page.value = 0; void loadPatients() })
 watch(sortOrder, () => { page.value = 0; void loadPatients() })
 </script>
