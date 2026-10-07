@@ -25,6 +25,18 @@ const router = createRouter({
       meta: { permission: 'Patient' },
     },
     {
+      path: '/staff/patients/:id/history',
+      name: 'patient-history',
+      component: () => import('@/features/patients/views/PatientHistoryView.vue'),
+      meta: { permission: 'Patient' },
+    },
+    {
+      path: '/staff/patients/:patientId/courses/:courseId',
+      name: 'patient-course-history',
+      component: () => import('@/features/courses/views/CourseActionView.vue'),
+      meta: { permission: 'Patient' },
+    },
+    {
       path: '/staff/patients/:id',
       name: 'patient-profile',
       component: () => import('@/features/patients/views/PatientProfileView.vue'),
