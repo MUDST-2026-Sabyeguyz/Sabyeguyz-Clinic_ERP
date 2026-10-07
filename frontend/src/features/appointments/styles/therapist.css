@@ -16,7 +16,9 @@ body.therapist-ui .appointment-page .staff-hero {
   background: transparent;
 }
 
-body.therapist-ui .appointment-page .staff-hero small { display: none; }
+body.therapist-ui .appointment-page .staff-hero small {
+  display: none;
+}
 
 body.therapist-ui .appointment-page .staff-hero h1,
 body.therapist-ui .appointment-page .create-card > h1 {
@@ -83,8 +85,12 @@ body.therapist-ui .appointment-page .appointment-panel .search-box {
   padding: 0 14px;
 }
 
-body.therapist-ui .appointment-page .appointment-panel .search-icon { color: #7fa672; }
-body.therapist-ui .appointment-page .appointment-panel .search-box input { font-size: 16px; }
+body.therapist-ui .appointment-page .appointment-panel .search-icon {
+  color: #7fa672;
+}
+body.therapist-ui .appointment-page .appointment-panel .search-box input {
+  font-size: 16px;
+}
 
 body.therapist-ui .appointment-page .branch-filter {
   width: 180px;
@@ -115,7 +121,9 @@ body.therapist-ui .appointment-page .appointment-panel .staff-table td {
   background: #fff;
 }
 
-body.therapist-ui .appointment-page .appointment-panel .staff-table tbody tr:hover td { background: #f4fbf8; }
+body.therapist-ui .appointment-page .appointment-panel .staff-table tbody tr:hover td {
+  background: #f4fbf8;
+}
 
 body.therapist-ui .appointment-page .appointment-panel .secondary {
   min-width: 78px;
@@ -135,8 +143,12 @@ body.therapist-ui .appointment-page .pagination .secondary:disabled {
   opacity: 0.48;
 }
 
-body.therapist-ui .appointment-page.appointment-form-open { background: #f9f4ee; }
-body.therapist-ui .appointment-page .appointment-form-page { padding-top: 12px; }
+body.therapist-ui .appointment-page.appointment-form-open {
+  background: #f9f4ee;
+}
+body.therapist-ui .appointment-page .appointment-form-page {
+  padding-top: 12px;
+}
 
 body.therapist-ui .appointment-page .appointment-back {
   padding: 4px 0;
@@ -151,15 +163,15 @@ body.therapist-ui .appointment-page .appointment-back:hover {
 }
 
 body.therapist-ui .appointment-page .create-card {
-  margin-top: 20px;
+  margin-top: 16px;
   border-color: #e1e4df;
   border-radius: 16px;
   box-shadow: 0 8px 24px rgb(64 70 65 / 10%);
 }
 
 body.therapist-ui .appointment-page .create-card > h1 {
-  margin-bottom: 30px;
-  font-size: 31px;
+  margin-bottom: 24px;
+  font-size: 28px;
 }
 
 body.therapist-ui .appointment-page .create-card .form-grid label {
@@ -188,13 +200,27 @@ body.therapist-ui .appointment-page .appointment-save .primary {
   border-radius: 10px;
 }
 
+body.therapist-ui .appointment-page .appointment-confirm-modal .secondary {
+  border-color: #1e807c;
+  color: #1f2937;
+  background: #faf6f0;
+}
+
+body.therapist-ui .appointment-page .appointment-confirm-modal .primary {
+  border-color: transparent;
+  color: #fff;
+  background: #749b6c;
+}
+
 @media (max-width: 1180px) {
   body.therapist-ui .appointment-page .appointment-panel {
     overflow-x: auto;
     overflow-y: hidden;
   }
 
-  body.therapist-ui .appointment-page .appointment-panel .staff-table { min-width: 980px; }
+  body.therapist-ui .appointment-page .appointment-panel .staff-table {
+    min-width: 980px;
+  }
 }
 
 @media (max-width: 960px) {
@@ -214,7 +240,9 @@ body.therapist-ui .appointment-page .appointment-save .primary {
 }
 
 @media (max-width: 760px) {
-  body.therapist-ui .appointment-page .staff-main { width: calc(100% - 24px); }
+  body.therapist-ui .appointment-page .staff-main {
+    width: calc(100% - 24px);
+  }
 
   body.therapist-ui .appointment-page .staff-hero {
     min-height: 220px;
@@ -222,12 +250,16 @@ body.therapist-ui .appointment-page .appointment-save .primary {
     padding: 38px 24px;
   }
 
-  body.therapist-ui .appointment-page .staff-hero h1 { font-size: 32px; }
+  body.therapist-ui .appointment-page .staff-hero h1 {
+    font-size: 32px;
+  }
 
   body.therapist-ui .appointment-page .appointment-panel > .panel-head {
     display: grid;
     grid-template-columns: 1fr;
   }
 
-  body.therapist-ui .appointment-page .branch-filter { width: 100%; }
+  body.therapist-ui .appointment-page .branch-filter {
+    width: 100%;
+  }
 }
