@@ -221,10 +221,25 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Runner could not pull the backend digest from GHCR.' }
             docker pull $env:FRONTEND_IMAGE
             if ($LASTEXITCODE -ne 0) { throw 'Runner could not pull the frontend digest from GHCR.' }
-            & $minikube image load $env:BACKEND_IMAGE --profile clinic-phase1
+            $backendTag = $env:BACKEND_IMAGE.Split('@')[0] + ':sha-' + $env:SOURCE_SHA
+            $frontendTag = $env:FRONTEND_IMAGE.Split('@')[0] + ':sha-' + $env:SOURCE_SHA
+            docker tag $env:BACKEND_IMAGE $backendTag
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create a local source-SHA tag for the backend image.' }
+            docker tag $env:FRONTEND_IMAGE $frontendTag
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create a local source-SHA tag for the frontend image.' }
+            & $minikube --profile=clinic-phase1 image load --daemon=true $backendTag
             if ($LASTEXITCODE -ne 0) { throw 'Could not load backend digest into Minikube.' }
-            & $minikube image load $env:FRONTEND_IMAGE --profile clinic-phase1
+            & $minikube --profile=clinic-phase1 image load --daemon=true $frontendTag
             if ($LASTEXITCODE -ne 0) { throw 'Could not load frontend digest into Minikube.' }
+            $backendAlias = 'sudo ctr -n k8s.io images tag --local --force ' + $backendTag + ' ' + $env:BACKEND_IMAGE
+            & $minikube --profile=clinic-phase1 ssh -- $backendAlias
+            if ($LASTEXITCODE -ne 0) { throw 'Could not add the backend digest reference to Minikube containerd.' }
+            $frontendAlias = 'sudo ctr -n k8s.io images tag --local --force ' + $frontendTag + ' ' + $env:FRONTEND_IMAGE
+            & $minikube --profile=clinic-phase1 ssh -- $frontendAlias
+            if ($LASTEXITCODE -ne 0) { throw 'Could not add the frontend digest reference to Minikube containerd.' }
+            $nodeImages = & $minikube --profile=clinic-phase1 ssh -- 'sudo ctr -n k8s.io images ls'
+            $nodeImageText = $nodeImages -join "`n"
+            if ($LASTEXITCODE -ne 0 -or $nodeImageText -notmatch [regex]::Escape($env:BACKEND_IMAGE) -or $nodeImageText -notmatch [regex]::Escape($env:FRONTEND_IMAGE)) { throw 'Minikube containerd does not list both exact GHCR digest references; refusing rollout.' }
           } finally {
             docker logout ghcr.io | Out-Null
           }
