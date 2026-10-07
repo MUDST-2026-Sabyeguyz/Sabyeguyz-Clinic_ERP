@@ -65,6 +65,12 @@ const router = createRouter({
       meta: { permission: 'Commission' },
     },
     {
+      path: '/staff/compensation',
+      name: 'therapist-compensation',
+      component: () => import('@/features/commission/views/TherapistCompensationView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
       path: '/staff/commission/tiers',
       name: 'commission-tiers',
       component: () => import('@/features/commission/views/CommissionTierView.vue'),
