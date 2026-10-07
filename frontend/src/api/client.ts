@@ -71,6 +71,8 @@ export type AuthResponse = {
   username: string
   email?: string
   role: 'MANAGER' | 'THERAPIST'
+  branchCode?: string
+  branchName?: string
   token: string
 }
 export type Patient = {
