@@ -1,85 +1,161 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { courseApi, salesApi } from '@/api/client'
+import searchIcon from '@/assets/transaction-search.svg'
+import {
+  branchApi,
+  courseApi,
+  salesApi,
+  type CourseUsageTransaction,
+  type SaleDetail,
+  type SaleSummary,
+} from '@/api/client'
 
+type Tab = 'sales' | 'usage' | 'history'
+type Step = 'list' | 'detail' | 'reason' | 'confirm' | 'success'
 type Transaction = {
-  id: string
+  key: string
+  kind: 'sale' | 'usage'
+  id: number
+  number: string
   date: string
-  sortAt: number
   patient: string
   hn: string
-  branch: string
+  item: string
+  branchCode: string
+  quantity: string
+  status: 'ปกติ' | 'ยกเลิก (Void)'
   performedBy: string
-  type: 'Receipt' | 'Course Transfer'
-  amount: string
-  status: 'สำเร็จ' | 'Void'
-  detail?: string
-  transferFrom?: string
-  transferTo?: string
-  voidReason?: string
+  paymentMethod: string
   voidedAt?: string
-  voidedBy?: string
-  paymentId?: number
+  voidReason?: string
+  detail?: SaleDetail
 }
 
-const search = ref('')
-const sortOrder = ref<'date-desc' | 'date-asc' | 'id-desc' | 'id-asc'>('date-desc')
-const typeFilter = ref('ทั้งหมด')
-const statusFilter = ref('ทั้งหมด')
-const selected = ref<Transaction | null>(null)
-const voiding = ref(false)
-const voidConfirmationOpen = ref(false)
-const reason = ref('')
-const snackbarMessage = ref('')
-const errorMessage = ref('')
-const loading = ref(false)
+const tab = ref<Tab>('sales')
+const step = ref<Step>('list')
 const rows = ref<Transaction[]>([])
-const page = ref(0)
-const pageSize = 20
+const selected = ref<Transaction | null>(null)
+const search = ref('')
+const branchFilter = ref('')
+const statusFilter = ref('')
+const page = ref(1)
+const loading = ref(false)
+const submitting = ref(false)
+const showCancelWarning = ref(false)
+const cancelWarningBackButton = ref<HTMLButtonElement | null>(null)
+const errorMessage = ref('')
+const reasonType = ref('')
+const otherReason = ref('')
+const expandedOriginal = ref<string[]>([])
+const lastCancelledKey = ref('')
+const branchNames = ref<Record<string, string>>({})
+const branchOptions = ref<Array<{ code: string; name: string }>>([])
+const cancellationActor = ref('')
+const pageSize = computed(() => (tab.value === 'history' ? 5 : 10))
 
-const formatDate = (value: string) => new Date(value).toLocaleString('th-TH')
+function formatDate(value?: string) {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+        date,
+      )
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : new Intl.DateTimeFormat('th-TH', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date)
+}
+
+function branchName(code: string) {
+  return branchNames.value[code] ?? code
+}
+
+function saleRow(sale: SaleSummary): Transaction {
+  return {
+    key: `sale-${sale.id}`,
+    kind: 'sale',
+    id: sale.id,
+    number: sale.receiptNo,
+    date: sale.soldAt,
+    patient: sale.patient.fullName,
+    hn: sale.patient.hn,
+    item: sale.itemDescription || 'รายการขายบริการ / คอร์ส',
+    branchCode: sale.branchCode,
+    quantity: `฿${Number(sale.total).toLocaleString('th-TH')}`,
+    status: sale.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ',
+    performedBy: sale.salesperson?.fullName ?? 'ไม่ระบุ',
+    paymentMethod: '—',
+    voidedAt: sale.voidedAt,
+    voidReason: sale.voidReason,
+  }
+}
+
+function usageRow(usage: CourseUsageTransaction): Transaction {
+  return {
+    key: `usage-${usage.id}`,
+    kind: 'usage',
+    id: usage.id,
+    number: `USE-${usage.id}`,
+    date: usage.usedAt,
+    patient: usage.patientName,
+    hn: usage.patientHn,
+    item: usage.courseName,
+    branchCode: usage.branchCode,
+    quantity: '1 ครั้ง',
+    status: usage.voidedAt ? 'ยกเลิก (Void)' : 'ปกติ',
+    performedBy: 'ไม่ระบุ',
+    paymentMethod: 'ใช้สิทธิ์คอร์ส',
+    voidedAt: usage.voidedAt ?? undefined,
+    voidReason: usage.voidReason ?? undefined,
+  }
+}
 
 async function loadTransactions() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [payments, transfers] = await Promise.all([
+    const [firstPage, usages, branches] = await Promise.all([
       salesApi.list({ page: 0, size: 100 }),
-      courseApi.transferHistory(),
+      courseApi.usageTransactions(),
+      branchApi.list(),
     ])
-    rows.value = [
-      ...payments.items.map((payment): Transaction => ({
-        id: payment.receiptNo,
-        date: formatDate(payment.soldAt),
-        sortAt: new Date(payment.soldAt).getTime(),
-        patient: payment.patient.fullName,
-        hn: payment.patient.hn,
-        branch: payment.branchCode,
-        performedBy: payment.salesperson?.fullName ?? 'ไม่ระบุ',
-        type: 'Receipt',
-        detail: 'รายการชำระเงิน',
-        amount: `฿${Number(payment.paid).toLocaleString()}`,
-        status: payment.status === 'VOIDED' ? 'Void' : 'สำเร็จ',
-        voidedAt: payment.voidedAt ? formatDate(payment.voidedAt) : undefined,
-        paymentId: payment.id,
-      })),
-      ...transfers.map((transfer): Transaction => ({
-        id: `TRF-${transfer.id}`,
-        date: formatDate(transfer.createdAt),
-        sortAt: new Date(transfer.createdAt).getTime(),
-        patient: transfer.destinationPatientName,
-        hn: transfer.destinationPatientHn,
-        branch: transfer.branchCode,
-        performedBy: 'ไม่ระบุ',
-        type: 'Course Transfer',
-        detail: `คอร์ส #${transfer.courseId}`,
-        transferFrom: transfer.sourcePatientName,
-        transferTo: transfer.destinationPatientName,
-        amount: `${transfer.quantity} ครั้ง`,
-        status: 'สำเร็จ',
-      })),
-    ]
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, firstPage.totalPages - 1) }, (_, index) =>
+        salesApi.list({ page: index + 1, size: 100 }),
+      ),
+    )
+    branchNames.value = Object.fromEntries(branches.map((branch) => [branch.code, branch.name]))
+    branchOptions.value = branches
+      .filter((branch) => branch.active)
+      .map(({ code, name }) => ({ code, name }))
+    const sales = [firstPage, ...remainingPages].flatMap((result) => result.items)
+    rows.value = [...sales.map(saleRow), ...usages.map(usageRow)]
+    const voidedSales = rows.value.filter((row) => row.kind === 'sale' && row.status !== 'ปกติ')
+    await Promise.all(
+      voidedSales.map(async (row) => {
+        try {
+          const detail = await salesApi.get(row.id)
+          updateFromDetail(row, detail)
+        } catch {
+          // A failed detail request must not hide the transaction from the list.
+        }
+      }),
+    )
+    if (selected.value) {
+      selected.value = rows.value.find((row) => row.key === selected.value?.key) ?? selected.value
+    }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการธุรกรรมไม่สำเร็จ'
   } finally {
@@ -87,329 +163,684 @@ async function loadTransactions() {
   }
 }
 
+function updateFromDetail(row: Transaction, detail: SaleDetail) {
+  row.detail = detail
+  row.item = detail.items.map((item) => item.description).join(', ') || row.item
+  row.paymentMethod =
+    detail.payments.find((payment) => payment.type !== 'REFUND')?.paymentMethodCode ?? '—'
+  row.voidReason = detail.voidReason
+  row.voidedAt = detail.voidedAt
+}
+
 onMounted(loadTransactions)
 
-function splitDateTime(value: string) {
-  const separator = value.lastIndexOf(' ')
-  return separator < 0
-    ? { date: value, time: '-' }
-    : { date: value.slice(0, separator), time: value.slice(separator + 1) }
-}
-
-const filteredRows = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  return rows.value.filter((row) => {
-    const matchesSearch = !term || `${row.id} ${row.hn} ${row.patient} ${row.type}`.toLowerCase().includes(term)
-    const matchesType = typeFilter.value === 'ทั้งหมด' || row.type === typeFilter.value
-    const matchesStatus = statusFilter.value === 'ทั้งหมด' || row.status === statusFilter.value
-    return matchesSearch && matchesType && matchesStatus
-  }).sort((left, right) => {
-    if (sortOrder.value.startsWith('id')) {
-      return sortOrder.value === 'id-asc' ? left.id.localeCompare(right.id) : right.id.localeCompare(left.id)
-    }
-    return sortOrder.value === 'date-asc' ? left.sortAt - right.sortAt : right.sortAt - left.sortAt
-  })
-})
-
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)))
 const visibleRows = computed(() => {
-  const start = page.value * pageSize
-  return filteredRows.value.slice(start, start + pageSize)
+  const term = search.value.trim().toLocaleLowerCase()
+  return rows.value
+    .filter((row) =>
+      tab.value === 'history'
+        ? row.status === 'ยกเลิก (Void)'
+        : row.kind === (tab.value === 'sales' ? 'sale' : 'usage'),
+    )
+    .filter(
+      (row) =>
+        !term ||
+        `${row.number} ${row.patient} ${row.hn} ${row.item}`.toLocaleLowerCase().includes(term),
+    )
+    .filter((row) => !branchFilter.value || row.branchCode === branchFilter.value)
+    .filter(
+      (row) =>
+        !statusFilter.value ||
+        (statusFilter.value === 'void' ? row.status !== 'ปกติ' : row.status === 'ปกติ'),
+    )
+    .sort((left, right) => Date.parse(right.date) - Date.parse(left.date))
+})
+const totalPages = computed(() => Math.max(1, Math.ceil(visibleRows.value.length / pageSize.value)))
+const pagedRows = computed(() =>
+  visibleRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value),
+)
+const reason = computed(() =>
+  reasonType.value === 'อื่น ๆ' ? otherReason.value.trim() : reasonType.value,
+)
+const canReview = computed(() => Boolean(reason.value))
+const warning = computed(() =>
+  selected.value?.kind === 'sale'
+    ? 'ระบบจะบันทึกสถานะ Void และกลับรายการรับเงินของใบเสร็จนี้ คอร์สที่ซื้อในรายการจะถูกยกเลิก แต่สิทธิ์ที่ใช้ไปแล้วจะยังอยู่ในประวัติ'
+    : 'ระบบจะบันทึกสถานะ Void และคืนสิทธิ์คอร์ส 1 ครั้ง โดยเก็บรายการเดิมไว้ตรวจสอบย้อนหลัง',
+)
+
+watch([tab, search, branchFilter, statusFilter], () => {
+  page.value = 1
+})
+watch(totalPages, (count) => {
+  if (page.value > count) page.value = count
 })
 
-watch([search, typeFilter, statusFilter, sortOrder], () => {
-  page.value = 0
+function changeTab(next: Tab) {
+  tab.value = next
+  step.value = 'list'
   selected.value = null
-})
-watch(totalPages, (nextTotal) => {
-  if (page.value >= nextTotal) page.value = nextTotal - 1
-})
-
-function changePage(nextPage: number) {
-  if (nextPage < 0 || nextPage >= totalPages.value) return
-  page.value = nextPage
-  selected.value = null
+  statusFilter.value = ''
+  search.value = ''
+  branchFilter.value = ''
+  expandedOriginal.value = []
 }
 
-function open(row: Transaction) {
-  if (selected.value?.id === row.id) {
-    selected.value = null
-    return
-  }
+async function openDetail(row: Transaction) {
   selected.value = row
-  voiding.value = false
-  voidConfirmationOpen.value = false
-  reason.value = ''
-  nextTick(() => document.querySelector('.detail-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+  errorMessage.value = ''
+  expandedOriginal.value = []
+  if (row.kind === 'sale' && !row.detail) {
+    try {
+      updateFromDetail(row, await salesApi.get(row.id))
+    } catch (error) {
+      errorMessage.value = error instanceof Error ? error.message : 'โหลดรายละเอียดไม่สำเร็จ'
+      return
+    }
+  }
+  step.value = 'detail'
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-function confirmVoid() {
-  if (!selected.value?.paymentId || !reason.value.trim()) return
-  voidConfirmationOpen.value = true
+function startCancellation() {
+  reasonType.value = ''
+  otherReason.value = ''
+  errorMessage.value = ''
+  step.value = 'reason'
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-async function applyVoid() {
-  if (!selected.value?.paymentId || !reason.value.trim()) return
-  loading.value = true
+async function openCancelWarning() {
+  if (!selected.value || !canReview.value || submitting.value) return
+  showCancelWarning.value = true
+  await nextTick()
+  cancelWarningBackButton.value?.focus()
+}
+
+function closeCancelWarning() {
+  if (!submitting.value) showCancelWarning.value = false
+}
+
+async function confirmCancellation() {
+  const row = selected.value
+  if (!showCancelWarning.value || !row || !canReview.value || submitting.value) return
+  submitting.value = true
+  showCancelWarning.value = false
+  errorMessage.value = ''
   try {
-    await salesApi.reverse(selected.value.paymentId, reason.value.trim())
-    snackbarMessage.value = 'ยกเลิกรายการเรียบร้อยแล้ว'
-    window.setTimeout(() => { snackbarMessage.value = '' }, 3500)
-    voiding.value = false
-    voidConfirmationOpen.value = false
-    reason.value = ''
-    selected.value = null
-    await loadTransactions()
+    if (row.kind === 'sale') {
+      updateFromDetail(row, await salesApi.reverse(row.id, reason.value))
+    } else {
+      await courseApi.reverse(row.id, reason.value)
+    }
+    row.status = 'ยกเลิก (Void)'
+    row.voidReason = reason.value
+    row.voidedAt = new Date().toISOString()
+    lastCancelledKey.value = row.key
+    try {
+      const user = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+        username?: string
+      } | null
+      cancellationActor.value = user?.username ?? 'ไม่ระบุ'
+    } catch {
+      cancellationActor.value = 'ไม่ระบุ'
+    }
+    step.value = 'success'
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'ยกเลิกรายการไม่สำเร็จ'
   } finally {
-    loading.value = false
+    submitting.value = false
   }
 }
+
+function backToList(next: Tab = tab.value) {
+  showCancelWarning.value = false
+  step.value = 'list'
+  tab.value = next
+  selected.value = null
+  expandedOriginal.value = []
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function toggleOriginal(key: string) {
+  expandedOriginal.value = expandedOriginal.value.includes(key)
+    ? expandedOriginal.value.filter((item) => item !== key)
+    : [...expandedOriginal.value, key]
+}
 </script>
+
 <template>
   <div class="staff-page transaction-page">
     <StaffHeader />
-    <main class="staff-main transaction-main">
-      <section class="staff-hero">
-        <h1>รายการธุรกรรม</h1>
-        <p>รวมรายการขาย การใช้บริการ การโอนสิทธิ์</p>
-      </section>
-      <section class="staff-panel transaction-list">
-        <header class="panel-head">
-          <div class="search-box">
-            <span class="search-icon" aria-hidden="true"
-              ><svg viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="6" />
-                <path d="m16 16 4 4" /></svg></span
-            ><input
-              v-model="search"
-              aria-label="ค้นหารายการธุรกรรม"
-              placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
-            />
-          </div>
-          <select v-model="typeFilter" class="transaction-filter" aria-label="กรองประเภทธุรกรรม">
-            <option>ทั้งหมด</option>
-            <option>Receipt</option>
-            <option>Course Transfer</option>
-          </select>
-          <select v-model="statusFilter" class="transaction-filter" aria-label="กรองสถานะธุรกรรม">
-            <option>ทั้งหมด</option>
-            <option>สำเร็จ</option>
-            <option>Void</option>
-          </select>
-          <select v-model="sortOrder" class="sort-filter" aria-label="เรียงลำดับธุรกรรม">
-            <option value="date-desc">วันที่ล่าสุด</option>
-            <option value="date-asc">วันที่เก่าสุด</option>
-            <option value="id-desc">เลขรายการมากไปน้อย</option>
-            <option value="id-asc">เลขรายการน้อยไปมาก</option>
-          </select>
+    <main class="transaction-main">
+      <template v-if="step === 'list'">
+        <header class="transaction-heading">
+          <h1>ธุรกรรม</h1>
+          <p>ตรวจสอบรายการขายและการใช้บริการ พร้อมหลักฐานการยกเลิกย้อนหลัง</p>
         </header>
-        <div class="transaction-table-scroll">
-          <table class="staff-table">
-          <thead>
-            <tr>
-              <th>เลขที่รายการ</th>
-              <th>วันที่</th>
-              <th>เวลา</th>
-              <th>ผู้ป่วย</th>
-              <th>ประเภทรายการ</th>
-              <th>จำนวน</th>
-              <th>สถานะ</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!visibleRows.length">
-              <td colspan="8" class="empty-result">ไม่พบรายการที่ตรงกับคำค้น</td>
-            </tr>
-            <template v-for="row in visibleRows" :key="row.id">
-              <tr
-                class="transaction-row"
-                :class="{ 'is-expanded': selected?.id === row.id }"
-                tabindex="0"
-                @click="open(row)"
-                @keydown.enter="open(row)"
-                @keydown.space.prevent="open(row)"
-              >
-                <td>
-                  <b>{{ row.id }}</b>
-                </td>
-                <td>{{ splitDateTime(row.date).date }}</td>
-                <td>{{ splitDateTime(row.date).time }}</td>
-                <td>
-                  <b>{{ row.patient }}</b>
-                </td>
-                <td>{{ row.type }}</td>
-                <td>{{ row.amount }}</td>
-                <td>
-                  <span class="status" :class="{ void: row.status === 'Void' }">{{
-                    row.status === 'Void' ? 'ยกเลิกแล้ว' : row.status
-                  }}</span>
-                </td>
-                <td>
-                  <button
-                    class="detail-toggle"
-                    :class="{ open: selected?.id === row.id }"
-                    :aria-expanded="selected?.id === row.id"
-                    :aria-label="selected?.id === row.id ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'"
-                    @click.stop="open(row)"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="m7 10 5 5 5-5" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-              <tr v-if="selected?.id === row.id" class="detail-row">
-                <td colspan="8">
-                  <section class="inline-transaction-detail">
-                    <header class="detail-header">
-                      <div class="detail-title">
-                        <span class="receipt-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M7 3h10a2 2 0 0 1 2 2v16l-3-2-4 2-4-2-3 2V5a2 2 0 0 1 2-2Z" />
-                            <path d="M8 8h8M8 12h6" />
-                          </svg>
-                        </span>
-                        <div>
-                          <small>รายละเอียดธุรกรรม</small>
-                          <h2>{{ row.id }}</h2>
-                        </div>
-                      </div>
-                      <div class="detail-amount">
-                        <small>ยอดรายการ</small>
-                        <strong>{{ row.amount }}</strong>
-                      </div>
-                    </header>
-
-                    <dl class="inline-detail-grid">
-                      <div>
-                        <dt>ประเภทรายการ</dt>
-                        <dd>{{ row.type }}</dd>
-                      </div>
-                      <div v-if="row.detail">
-                        <dt>รายการที่ซื้อ</dt>
-                        <dd>{{ row.detail }}</dd>
-                      </div>
-                      <div v-if="row.transferFrom">
-                        <dt>เจ้าของคอร์ส</dt>
-                        <dd>{{ row.transferFrom }}</dd>
-                      </div>
-                      <div v-if="row.transferTo">
-                        <dt>ผู้รับสิทธิ์</dt>
-                        <dd>{{ row.transferTo }}</dd>
-                      </div>
-                      <div>
-                        <dt>วันที่</dt>
-                        <dd>{{ splitDateTime(row.date).date }}</dd>
-                      </div>
-                      <div>
-                        <dt>เวลา</dt>
-                        <dd>{{ splitDateTime(row.date).time }}</dd>
-                      </div>
-                      <div v-if="!row.transferFrom">
-                        <dt>ผู้ป่วย</dt>
-                        <dd>{{ row.patient }}</dd>
-                      </div>
-                      <div v-if="!row.transferFrom">
-                        <dt>รหัสผู้ป่วย</dt>
-                        <dd>{{ row.hn }}</dd>
-                      </div>
-                      <div>
-                        <dt>ผู้ทำรายการ</dt>
-                        <dd>{{ row.performedBy }}</dd>
-                      </div>
-                      <div>
-                        <dt>สาขา</dt>
-                        <dd>{{ row.branch }}</dd>
-                      </div>
-                    </dl>
-
-                    <section v-if="row.status === 'Void' && row.voidReason" class="void-history">
-                      <h3>ข้อมูลการยกเลิกรายการ</h3>
-                      <p><b>เหตุผล:</b> {{ row.voidReason }}</p>
-                      <p>{{ row.voidedAt }} {{ row.voidedBy }}</p>
-                    </section>
-
-                    <section v-if="voiding" class="void-form">
-                      <label>
-                        เหตุผลการยกเลิกรายการ <span>*</span>
-                        <div class="void-form-controls">
-                          <textarea
-                            v-model.trim="reason"
-                            rows="1"
-                            placeholder="ระบุเหตุผลการยกเลิกรายการ"
-                          ></textarea>
-                          <button
-                            class="danger solid"
-                            :disabled="!reason.trim()"
-                            @click="confirmVoid"
-                          >
-                            ยืนยันยกเลิกรายการ
-                          </button>
-                        </div>
-                      </label>
-                    </section>
-
-                    <footer v-if="!voiding">
-                      <button
-                        v-if="row.status !== 'Void' && row.paymentId"
-                        class="danger"
-                        @click="voiding = true"
-                      >
-                        ยกเลิกรายการ
-                      </button>
-                    </footer>
-                  </section>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-          </table>
-        </div>
-        <nav v-if="totalPages > 1" class="transaction-pagination" aria-label="เปลี่ยนหน้ารายการธุรกรรม">
-          <button type="button" :disabled="page === 0" @click="changePage(page - 1)">← ก่อนหน้า</button>
-          <span>หน้า {{ page + 1 }} จาก {{ totalPages }}</span>
-          <button type="button" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">ถัดไป →</button>
+        <nav class="transaction-tabs" aria-label="ประเภทของธุรกรรม">
+          <button type="button" :class="{ active: tab === 'sales' }" @click="changeTab('sales')">
+            รายการขาย
+          </button>
+          <button type="button" :class="{ active: tab === 'usage' }" @click="changeTab('usage')">
+            รายการใช้บริการ
+          </button>
+          <button
+            type="button"
+            :class="{ active: tab === 'history' }"
+            @click="changeTab('history')"
+          >
+            ประวัติการยกเลิก
+          </button>
         </nav>
-        <p v-if="loading" class="empty-result">กำลังโหลดรายการธุรกรรม...</p>
-        <p v-if="errorMessage" class="empty-result" role="alert">{{ errorMessage }}</p>
-        <p class="audit-note">
-          รายการจะถูกเก็บเป็นประวัติตรวจสอบย้อนหลังและไม่สามารถลบออกจากระบบได้
-        </p>
-      </section>
-    </main>
-    <Teleport to="body">
-      <div
-        v-if="voidConfirmationOpen"
-        class="confirmation-backdrop"
-        @click.self="voidConfirmationOpen = false"
-      >
-        <section
-          class="confirmation-dialog"
-          role="alertdialog"
-          aria-modal="true"
-          aria-describedby="void-confirmation-description"
-        >
-          <p id="void-confirmation-description">
-            ต้องการยกเลิกรายการ <strong>{{ selected?.id }}</strong> หรือไม่?
-          </p>
-          <div class="confirmation-actions">
-            <button type="button" class="secondary" @click="voidConfirmationOpen = false">
-              ยกเลิก
-            </button>
-            <button type="button" class="danger solid" :disabled="loading" @click="applyVoid">ยืนยัน</button>
+        <section class="transaction-card transaction-list">
+          <h2>
+            {{
+              tab === 'sales'
+                ? 'รายการขาย'
+                : tab === 'usage'
+                  ? 'รายการใช้บริการ'
+                  : 'ประวัติการยกเลิก'
+            }}
+          </h2>
+          <div v-if="tab !== 'history'" class="transaction-filters">
+            <label class="transaction-search">
+              <img :src="searchIcon" alt="" width="24" height="24" />
+              <input
+                v-model="search"
+                type="search"
+                aria-label="ค้นหารายการ"
+                placeholder="ค้นหาเลขที่ ชื่อผู้ป่วย หรือรายการ"
+              />
+            </label>
+            <select v-model="branchFilter" aria-label="กรองสาขา">
+              <option value="">สาขาทั้งหมด</option>
+              <option v-for="branch in branchOptions" :key="branch.code" :value="branch.code">
+                {{ branch.name }}
+              </option>
+            </select>
+            <select v-model="statusFilter" aria-label="กรองสถานะ">
+              <option value="">สถานะทั้งหมด</option>
+              <option value="normal">ปกติ</option>
+              <option value="void">ยกเลิก (Void)</option>
+            </select>
           </div>
+          <div v-if="loading" class="transaction-empty" role="status">
+            กำลังโหลดรายการธุรกรรม...
+          </div>
+          <div v-else-if="!visibleRows.length" class="transaction-empty">
+            {{ tab === 'history' ? 'ยังไม่มีประวัติการยกเลิก' : 'ไม่พบรายการที่ตรงกับเงื่อนไข' }}
+          </div>
+          <div v-else-if="tab === 'history'" class="transaction-history-list">
+            <article v-for="row in pagedRows" :key="row.key" class="transaction-history-card">
+              <div class="transaction-record-head">
+                <div>
+                  <small>รายการที่ยกเลิก</small>
+                  <h3>{{ row.number }}</h3>
+                  <p>{{ row.kind === 'sale' ? 'ขายบริการ / คอร์ส' : 'ใช้สิทธิ์คอร์ส' }}</p>
+                </div>
+                <span class="transaction-status void">ยกเลิก (Void)</span>
+              </div>
+              <div class="transaction-patient">
+                <strong>{{ row.patient }}</strong
+                ><span>HN {{ row.hn }}</span>
+              </div>
+              <section class="transaction-evidence">
+                <h3>หลักฐานการยกเลิก</h3>
+                <dl class="transaction-detail-grid">
+                  <div>
+                    <dt>ผู้ดำเนินการยกเลิก</dt>
+                    <dd>{{ row.key === lastCancelledKey ? cancellationActor : 'ไม่ระบุ' }}</dd>
+                  </div>
+                  <div>
+                    <dt>วันที่และเวลาที่ยกเลิก</dt>
+                    <dd>{{ formatDateTime(row.voidedAt) }}</dd>
+                  </div>
+                  <div>
+                    <dt>เหตุผลในการยกเลิก</dt>
+                    <dd>{{ row.voidReason || 'ไม่ระบุ' }}</dd>
+                  </div>
+                </dl>
+              </section>
+              <button
+                class="transaction-secondary"
+                type="button"
+                :aria-expanded="expandedOriginal.includes(row.key)"
+                @click="toggleOriginal(row.key)"
+              >
+                ดู / ซ่อนข้อมูลรายการเดิม
+              </button>
+              <dl
+                v-if="expandedOriginal.includes(row.key)"
+                class="transaction-detail-grid transaction-original"
+              >
+                <div>
+                  <dt>บริการ / คอร์ส</dt>
+                  <dd>{{ row.item }}</dd>
+                </div>
+                <div>
+                  <dt>วันที่และเวลาของรายการเดิม</dt>
+                  <dd>{{ formatDateTime(row.date) }}</dd>
+                </div>
+                <div>
+                  <dt>สาขา</dt>
+                  <dd>{{ branchName(row.branchCode) }}</dd>
+                </div>
+                <div>
+                  <dt>ยอดชำระ / สิทธิ์ที่ใช้</dt>
+                  <dd>{{ row.quantity }}</dd>
+                </div>
+              </dl>
+            </article>
+          </div>
+          <div v-else class="transaction-table-wrap">
+            <table class="transaction-table">
+              <thead>
+                <tr>
+                  <th>เลขที่</th>
+                  <th>วันที่</th>
+                  <th>ผู้ป่วย</th>
+                  <th>รายการ</th>
+                  <th>สาขา</th>
+                  <th>จำนวน</th>
+                  <th>สถานะ</th>
+                  <th>รายละเอียด</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in pagedRows" :key="row.key">
+                  <td>{{ row.number }}</td>
+                  <td>{{ formatDate(row.date) }}</td>
+                  <td>{{ row.patient }}</td>
+                  <td>{{ row.item }}</td>
+                  <td>{{ branchName(row.branchCode) }}</td>
+                  <td>{{ row.quantity }}</td>
+                  <td>
+                    <span class="transaction-status" :class="{ void: row.status !== 'ปกติ' }">{{
+                      row.status
+                    }}</span>
+                  </td>
+                  <td>
+                    <button
+                      class="transaction-primary transaction-row-button"
+                      type="button"
+                      @click="openDetail(row)"
+                    >
+                      ดูรายละเอียด
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <nav
+            v-if="tab === 'history' || totalPages > 1"
+            class="transaction-pagination"
+            :class="{ 'transaction-history-pagination': tab === 'history' }"
+            aria-label="เปลี่ยนหน้ารายการ"
+          >
+            <button type="button" :disabled="page === 1" @click="page -= 1">← ก่อนหน้า</button>
+            <span>หน้า {{ page }} จาก {{ totalPages }}</span>
+            <button type="button" :disabled="page === totalPages" @click="page += 1">
+              ถัดไป →
+            </button>
+          </nav>
         </section>
-      </div>
-    </Teleport>
-    <Transition name="snackbar">
-      <p v-if="snackbarMessage" class="transaction-snackbar" role="status" aria-live="polite">
-        {{ snackbarMessage }}
-      </p>
-    </Transition>
+      </template>
+
+      <template v-else-if="selected">
+        <button
+          class="transaction-back"
+          type="button"
+          @click="step === 'confirm' ? (step = 'detail') : backToList()"
+        >
+          ← {{ step === 'confirm' ? 'กลับรายละเอียด' : 'กลับไปรายการ' }}
+        </button>
+
+        <template v-if="step === 'detail'">
+          <header class="transaction-heading">
+            <h1>รายละเอียดธุรกรรม</h1>
+            <p>ตรวจสอบรายการขายและการใช้บริการ พร้อมหลักฐานการยกเลิกย้อนหลัง</p>
+          </header>
+          <section class="transaction-card transaction-detail-card">
+            <div class="transaction-record-head">
+              <div>
+                <small>เลขที่รายการ</small>
+                <h2>{{ selected.number }}</h2>
+                <p>{{ selected.kind === 'sale' ? 'ขายบริการ / คอร์ส' : 'ใช้สิทธิ์คอร์ส' }}</p>
+              </div>
+              <span class="transaction-status" :class="{ void: selected.status !== 'ปกติ' }">{{
+                selected.status
+              }}</span>
+            </div>
+            <div class="transaction-patient">
+              <strong>{{ selected.patient }}</strong
+              ><span>HN {{ selected.hn }}</span>
+            </div>
+            <h3>ข้อมูลรายการ</h3>
+            <dl class="transaction-detail-grid">
+              <div>
+                <dt>บริการ / คอร์ส</dt>
+                <dd>{{ selected.item }}</dd>
+              </div>
+              <div>
+                <dt>วันที่และเวลา</dt>
+                <dd>{{ formatDateTime(selected.date) }}</dd>
+              </div>
+              <div>
+                <dt>สาขา</dt>
+                <dd>{{ branchName(selected.branchCode) }}</dd>
+              </div>
+              <div>
+                <dt>ผู้บันทึกรายการ</dt>
+                <dd>{{ selected.performedBy }}</dd>
+              </div>
+              <div>
+                <dt>{{ selected.kind === 'sale' ? 'ยอดชำระ' : 'สิทธิ์ที่ใช้' }}</dt>
+                <dd>{{ selected.quantity }}</dd>
+              </div>
+              <div>
+                <dt>ช่องทาง / ประเภท</dt>
+                <dd>{{ selected.paymentMethod }}</dd>
+              </div>
+            </dl>
+            <section v-if="selected.status !== 'ปกติ'" class="transaction-evidence">
+              <h3>หลักฐานการยกเลิก</h3>
+              <p>วันที่และเวลา: {{ formatDateTime(selected.voidedAt) }}</p>
+              <p>เหตุผล: {{ selected.voidReason || 'ไม่ระบุ' }}</p>
+            </section>
+            <p v-else class="transaction-warning">
+              <strong>โปรดตรวจสอบก่อนยกเลิก</strong><br />{{ warning }}
+            </p>
+            <div class="transaction-actions">
+              <button class="transaction-secondary" type="button" @click="backToList()">
+                ← กลับไปรายการ</button
+              ><button
+                v-if="selected.status === 'ปกติ'"
+                class="transaction-danger"
+                type="button"
+                @click="startCancellation"
+              >
+                ยกเลิกรายการ
+              </button>
+            </div>
+          </section>
+        </template>
+
+        <template v-else-if="step === 'reason'">
+          <header class="transaction-heading">
+            <h1>ระบุเหตุผลในการยกเลิก</h1>
+            <p>ตรวจสอบรายการและระบุเหตุผล ก่อนดำเนินการต่อ</p>
+          </header>
+          <section class="transaction-card transaction-detail-card">
+            <h2>รายการที่จะยกเลิก</h2>
+            <div class="transaction-record-head">
+              <div>
+                <strong>{{ selected.number }}</strong>
+                <p>{{ selected.kind === 'sale' ? 'ขายบริการ / คอร์ส' : 'ใช้สิทธิ์คอร์ส' }}</p>
+              </div>
+            </div>
+            <div class="transaction-patient">
+              <strong>{{ selected.patient }}</strong
+              ><span>HN {{ selected.hn }}</span>
+            </div>
+            <dl class="transaction-detail-grid">
+              <div>
+                <dt>บริการ / คอร์ส</dt>
+                <dd>{{ selected.item }}</dd>
+              </div>
+              <div>
+                <dt>วันที่และเวลา</dt>
+                <dd>{{ formatDateTime(selected.date) }}</dd>
+              </div>
+              <div>
+                <dt>สาขา</dt>
+                <dd>{{ branchName(selected.branchCode) }}</dd>
+              </div>
+              <div>
+                <dt>ผู้บันทึกรายการ</dt>
+                <dd>{{ selected.performedBy }}</dd>
+              </div>
+              <div>
+                <dt>{{ selected.kind === 'sale' ? 'ยอดชำระ' : 'สิทธิ์ที่ใช้' }}</dt>
+                <dd>{{ selected.quantity }}</dd>
+              </div>
+              <div>
+                <dt>ช่องทาง / ประเภท</dt>
+                <dd>{{ selected.paymentMethod }}</dd>
+              </div>
+            </dl>
+          </section>
+          <section class="transaction-card transaction-reason-card">
+            <h2>เหตุผลในการยกเลิก</h2>
+            <label for="transaction-reason">เลือกเหตุผล <span aria-hidden="true">*</span></label
+            ><select id="transaction-reason" v-model="reasonType">
+              <option value="">เลือกเหตุผล</option>
+              <option>บันทึกรายการซ้ำ</option>
+              <option>บันทึกข้อมูลไม่ถูกต้อง</option>
+              <option>อื่น ๆ</option></select
+            ><label v-if="reasonType === 'อื่น ๆ'" for="transaction-other-reason"
+              >รายละเอียดเพิ่มเติม <span aria-hidden="true">*</span></label
+            ><textarea
+              v-if="reasonType === 'อื่น ๆ'"
+              id="transaction-other-reason"
+              v-model="otherReason"
+              rows="3"
+              placeholder="ระบุเหตุผลเพิ่มเติม"
+            />
+            <p v-if="reasonType === 'อื่น ๆ' && !otherReason.trim()" class="transaction-validation">
+              กรุณาระบุรายละเอียดเมื่อเลือก “อื่น ๆ”
+            </p>
+            <p class="transaction-warning">
+              <strong>โปรดตรวจสอบก่อนยกเลิก</strong><br />{{ warning }}
+            </p>
+            <div class="transaction-actions">
+              <button class="transaction-secondary" type="button" @click="step = 'detail'">
+                ← กลับ</button
+              ><button
+                class="transaction-primary"
+                type="button"
+                :disabled="!canReview"
+                @click="step = 'confirm'"
+              >
+                ตรวจสอบการยกเลิก →
+              </button>
+            </div>
+          </section>
+        </template>
+
+        <template v-else-if="step === 'confirm'">
+          <header class="transaction-heading">
+            <h1>ยืนยันการยกเลิกรายการ</h1>
+            <p>ตรวจสอบข้อมูลและเหตุผลเป็นครั้งสุดท้าย ก่อนยืนยัน</p>
+          </header>
+          <section class="transaction-card transaction-detail-card">
+            <div class="transaction-record-head">
+              <div>
+                <small>รายการที่จะยกเลิก</small>
+                <h2>{{ selected.number }}</h2>
+                <p>{{ selected.kind === 'sale' ? 'ขายบริการ / คอร์ส' : 'ใช้สิทธิ์คอร์ส' }}</p>
+              </div>
+              <span class="transaction-pending">รอยืนยันการยกเลิก</span>
+            </div>
+            <div class="transaction-patient">
+              <strong>{{ selected.patient }}</strong
+              ><span>HN {{ selected.hn }}</span>
+            </div>
+            <dl class="transaction-detail-grid">
+              <div>
+                <dt>บริการ / คอร์ส</dt>
+                <dd>{{ selected.item }}</dd>
+              </div>
+              <div>
+                <dt>วันที่และเวลา</dt>
+                <dd>{{ formatDateTime(selected.date) }}</dd>
+              </div>
+              <div>
+                <dt>สาขา</dt>
+                <dd>{{ branchName(selected.branchCode) }}</dd>
+              </div>
+              <div>
+                <dt>ผู้บันทึกรายการ</dt>
+                <dd>{{ selected.performedBy }}</dd>
+              </div>
+              <div>
+                <dt>ยอดชำระ / สิทธิ์ที่ใช้ในรายการเดิม</dt>
+                <dd>{{ selected.quantity }}</dd>
+              </div>
+              <div>
+                <dt>ช่องทาง / ประเภท</dt>
+                <dd>{{ selected.paymentMethod }}</dd>
+              </div>
+            </dl>
+            <div class="transaction-review-reason">
+              <div>
+                <strong>เหตุผลในการยกเลิก</strong>
+                <p>{{ reason }}</p>
+              </div>
+              <button type="button" @click="step = 'reason'">แก้ไขเหตุผล</button>
+            </div>
+            <p class="transaction-warning">
+              <strong>โปรดตรวจสอบผลของการยกเลิก</strong><br />{{ warning }}
+            </p>
+            <div class="transaction-actions">
+              <button class="transaction-secondary" type="button" @click="step = 'detail'">
+                ← ไม่ยกเลิกรายการ</button
+              ><button
+                class="transaction-danger"
+                type="button"
+                :disabled="submitting"
+                @click="openCancelWarning"
+              >
+                {{ submitting ? 'กำลังยกเลิก...' : 'ยืนยันยกเลิกรายการ' }}
+              </button>
+            </div>
+          </section>
+        </template>
+
+        <template v-else-if="step === 'success'">
+          <header class="transaction-success-heading">
+            <span aria-hidden="true">✓</span>
+            <div>
+              <h1>ยกเลิกรายการสำเร็จ</h1>
+              <p>บันทึกสถานะและเหตุผลการยกเลิกเรียบร้อยแล้ว</p>
+            </div>
+          </header>
+          <section class="transaction-card transaction-detail-card">
+            <div class="transaction-record-head">
+              <div>
+                <small>รายการที่ยกเลิก</small>
+                <h2>{{ selected.number }}</h2>
+                <p>{{ selected.kind === 'sale' ? 'ขายบริการ / คอร์ส' : 'ใช้สิทธิ์คอร์ส' }}</p>
+              </div>
+              <span class="transaction-status void">ยกเลิก (Void)</span>
+            </div>
+            <div class="transaction-patient">
+              <strong>{{ selected.patient }}</strong
+              ><span>HN {{ selected.hn }}</span>
+            </div>
+            <dl class="transaction-detail-grid">
+              <div>
+                <dt>บริการ / คอร์ส</dt>
+                <dd>{{ selected.item }}</dd>
+              </div>
+              <div>
+                <dt>วันที่และเวลาของรายการเดิม</dt>
+                <dd>{{ formatDateTime(selected.date) }}</dd>
+              </div>
+              <div>
+                <dt>สาขา</dt>
+                <dd>{{ branchName(selected.branchCode) }}</dd>
+              </div>
+              <div>
+                <dt>ผู้บันทึกรายการ</dt>
+                <dd>{{ selected.performedBy }}</dd>
+              </div>
+              <div>
+                <dt>ยอดชำระ / สิทธิ์ที่ใช้ในรายการเดิม</dt>
+                <dd>{{ selected.quantity }}</dd>
+              </div>
+              <div>
+                <dt>ช่องทาง / ประเภท</dt>
+                <dd>{{ selected.paymentMethod }}</dd>
+              </div>
+            </dl>
+            <section class="transaction-evidence">
+              <h3>หลักฐานการยกเลิก</h3>
+              <dl class="transaction-detail-grid">
+                <div>
+                  <dt>ผู้ดำเนินการยกเลิก</dt>
+                  <dd>{{ cancellationActor }}</dd>
+                </div>
+                <div>
+                  <dt>วันที่และเวลาที่ยกเลิก</dt>
+                  <dd>{{ formatDateTime(selected.voidedAt) }}</dd>
+                </div>
+                <div>
+                  <dt>เหตุผลในการยกเลิก</dt>
+                  <dd>{{ selected.voidReason }}</dd>
+                </div>
+              </dl>
+            </section>
+            <div class="transaction-actions">
+              <button class="transaction-secondary" type="button" @click="backToList()">
+                กลับไปรายการ</button
+              ><button class="transaction-primary" type="button" @click="backToList('history')">
+                ดูประวัติการยกเลิก
+              </button>
+            </div>
+          </section>
+        </template>
+      </template>
+
+      <p v-if="errorMessage" class="transaction-error" role="alert">{{ errorMessage }}</p>
+    </main>
+    <div
+      v-if="showCancelWarning && selected"
+      class="transaction-modal-backdrop"
+      @click.self="closeCancelWarning"
+      @keydown.esc="closeCancelWarning"
+    >
+      <section
+        class="transaction-modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="transaction-modal-title"
+        aria-describedby="transaction-modal-description"
+      >
+        <h2 id="transaction-modal-title">ยืนยันการยกเลิกรายการ?</h2>
+        <p id="transaction-modal-description">
+          การยกเลิกจะบันทึกประวัติไว้ และอาจมีผลต่อยอดชำระหรือสิทธิ์คอร์ส
+          โปรดตรวจสอบอีกครั้งก่อนดำเนินการ
+        </p>
+        <div class="transaction-modal-summary">
+          <strong>{{ selected.number }} · {{ selected.patient }}</strong>
+          <span>{{ selected.item }} · {{ selected.quantity }}</span>
+          <span>เหตุผล: {{ reason }}</span>
+        </div>
+        <div class="transaction-actions">
+          <button
+            ref="cancelWarningBackButton"
+            class="transaction-secondary"
+            type="button"
+            :disabled="submitting"
+            @click="closeCancelWarning"
+          >
+            กลับไปตรวจสอบ
+          </button>
+          <button
+            class="transaction-danger"
+            type="button"
+            :disabled="submitting"
+            @click="confirmCancellation"
+          >
+            {{ submitting ? 'กำลังยกเลิก...' : 'ยืนยันการยกเลิก' }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
+
 <style scoped src="../styles/transactions.css"></style>
-<style src="../styles/therapist.css"></style>
