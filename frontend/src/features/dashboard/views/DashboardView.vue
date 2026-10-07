@@ -2,10 +2,10 @@
 import { onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { patientApi, reportApi } from '@/api/client'
+import { clinicDate } from '@/utils/clinicDate'
 
-const today = new Date()
-const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
-const to = today.toISOString().slice(0, 10)
+const to = clinicDate()
+const from = `${to.slice(0, 7)}-01`
 const patients = ref(0), visits = ref(0), revenue = ref(0), courses = ref(0)
 const statuses = ref<Array<{ status: string; value: number }>>([])
 const loading = ref(true), errorMessage = ref('')

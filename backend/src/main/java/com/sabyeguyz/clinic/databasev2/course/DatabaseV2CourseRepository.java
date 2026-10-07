@@ -3,6 +3,7 @@ package com.sabyeguyz.clinic.databasev2.course;
 import com.sabyeguyz.clinic.course.CourseBalanceException;
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException;
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2NotFoundException;
+import com.sabyeguyz.clinic.databasev2.common.DatabaseV2BusinessDates;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 @Profile("database-v2")
@@ -182,7 +184,7 @@ public class DatabaseV2CourseRepository {
     ) {
         Long nextVal = jdbc.queryForObject("select nextval('receipt_receipt_id_seq')", Long.class);
         String receiptNo = String.format("RE-%07d", nextVal);
-        LocalDate today = LocalDate.now();
+        LocalDate today = DatabaseV2BusinessDates.today();
 
         // 1. Fetch service properties
         var serviceProps = jdbc.queryForMap(
@@ -299,15 +301,30 @@ public class DatabaseV2CourseRepository {
         return findById(courseId).orElseThrow();
     }
 
-    public synchronized CoursePurchaseRecord consumeSession(Long courseId, Long appointmentId, String note, Long treatingStaffId, Long actorId) {
+    @Transactional
+    public CoursePurchaseRecord consumeSession(Long courseId, Long appointmentId, String note, Long treatingStaffId, Long actorId) {
         CoursePurchaseRecord course = findById(courseId)
                 .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบคอร์ส id " + courseId));
 
         if (!"Active".equals(course.status())) {
             throw new CourseBalanceException("คอร์สไม่อยู่ในสถานะใช้งาน (" + course.status() + ")");
         }
-        if (course.expiryDate().isBefore(LocalDate.now())) {
+        if (course.expiryDate().isBefore(DatabaseV2BusinessDates.today())) {
             throw new CourseBalanceException("คอร์สหมดอายุแล้ว");
+        }
+
+        if (appointmentId != null) {
+            // Serialize usage attempts for the same appointment across application instances.
+            jdbc.queryForList("select appointment_id from appointment where appointment_id = ? for update", Long.class, appointmentId);
+            Integer existingUsage = jdbc.queryForObject("""
+                    select count(*)
+                    from course_visit_usage usage
+                    join patient_visit visit on visit.visit_id = usage.visit_id
+                    where usage.course_id = ? and visit.appointment_id = ?
+                    """, Integer.class, courseId, appointmentId);
+            if (existingUsage != null && existingUsage > 0) {
+                throw new DatabaseV2ConflictException("คอร์สนี้ถูกใช้กับนัดหมายนี้แล้ว");
+            }
         }
 
         List<Integer> list = jdbc.queryForList("""
@@ -603,7 +620,7 @@ public class DatabaseV2CourseRepository {
         CoursePurchaseRecord source = findByIdForUpdate(sourcePurchaseId)
                 .orElseThrow(() -> new DatabaseV2NotFoundException("ไม่พบคอร์สต้นทาง id " + sourcePurchaseId));
 
-        if (!"Active".equals(source.status()) || source.expiryDate().isBefore(LocalDate.now())) {
+        if (!"Active".equals(source.status()) || source.expiryDate().isBefore(DatabaseV2BusinessDates.today())) {
             throw new CourseBalanceException("คอร์สต้นทางไม่อยู่ในสถานะใช้งานหรือหมดอายุแล้ว");
         }
         if (source.patientId().equals(destinationPatientId)) {

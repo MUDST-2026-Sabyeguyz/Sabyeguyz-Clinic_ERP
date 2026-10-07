@@ -12,6 +12,10 @@ import com.sabyeguyz.clinic.report.RevenueReportResponse;
 import com.sabyeguyz.clinic.report.StaffSalesReportResponse;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +26,36 @@ class DatabaseV2ReportPostgresIntegrationTest {
     private JdbcTemplate jdbc;
     private DatabaseV2ReportRepository repository;
     private static final LocalDate DAY = LocalDate.of(2026, 6, 15);
+    private static final LocalDate DISCOUNT_DAY = LocalDate.of(2040, 2, 3);
+    private final List<Long> discountReceipts = new ArrayList<>();
+
+    @AfterEach
+    void cleanupOwnedDiscountReceipts() {
+        for (Long receiptId : discountReceipts) {
+            jdbc.update("delete from payment_transaction where transaction_id in (select transaction_id from sales_transaction where receipt_id=?)", receiptId);
+            jdbc.update("delete from sales_transaction where receipt_id=?", receiptId);
+            jdbc.update("delete from receipt where receipt_id=?", receiptId);
+        }
+    }
+
+    private long discountReceipt(List<String> types, List<BigDecimal> bases, BigDecimal billDiscount, List<BigDecimal> payments) {
+        long id = jdbc.queryForObject("select greatest(coalesce((select max(receipt_id) from receipt),0),coalesce((select max(transaction_id) from sales_transaction),0))+100", Long.class);
+        BigDecimal gross = bases.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        jdbc.update("insert into receipt(receipt_id,receipt_no,patient_id,branch_id,sale_date,receipt_create_by,gross_total,bill_discount_amount,net_due) values(?,?,96,96,?,1,?,?,?)",
+                id, "RE-" + String.format("%07d", id), DISCOUNT_DAY, gross, billDiscount, gross.subtract(billDiscount));
+        discountReceipts.add(id);
+        for (int index = 0; index < types.size(); index++) {
+            jdbc.update("""
+                    insert into sales_transaction(transaction_id,receipt_id,receipt_link_status,patient_id,branch_id,service_id,
+                        transaction_type,quantity,unit_price,amount,gross_amount,transaction_date,transaction_status,transaction_create_by)
+                    values(?,?,'VERIFIED',96,96,96,cast(? as transaction_type_enum),1,?,?,?,cast(? as date),true,1)
+                    """, id + index, id, types.get(index), bases.get(index), bases.get(index), bases.get(index), DISCOUNT_DAY);
+        }
+        for (BigDecimal paid : payments) {
+            jdbc.update("insert into payment_transaction(patient_id,branch_id,transaction_id,amount,payment_method_id,payment_date,payment_status,payment_create_by) values(96,96,?,?,96,cast(? as date),true,1)", id, paid, DISCOUNT_DAY);
+        }
+        return id;
+    }
 
     @BeforeEach
     void setUp() {
@@ -259,6 +293,108 @@ class DatabaseV2ReportPostgresIntegrationTest {
         assertThat(res.daily().get(0).date()).isEqualTo(DAY);
         assertThat(res.daily().get(0).amount()).isGreaterThanOrEqualTo(new BigDecimal("5000.00"));
         assertThat(res.daily().get(1).amount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    void oneCategoryBillDiscountUsesReceivedCashAcrossItemsAndPayments() {
+        long receipt = discountReceipt(List.of("SingleVisit", "SingleVisit"),
+                List.of(new BigDecimal("1000"), new BigDecimal("1000")), new BigDecimal("500"),
+                List.of(new BigDecimal("750"), new BigDecimal("750")));
+        ReportPeriod period = new ReportPeriod(DISCOUNT_DAY, DISCOUNT_DAY);
+        var dashboard = repository.dashboard(period, "96");
+        var revenue = repository.revenue(period, "96");
+        assertThat(dashboard.totalRevenue()).isEqualByComparingTo("1500");
+        assertThat(dashboard.singleVisitRevenue()).isEqualByComparingTo("1500");
+        assertThat(revenue.byCategory()).filteredOn(row -> row.type() == com.sabyeguyz.clinic.sale.SaleItemType.SINGLE_VISIT)
+                .singleElement().satisfies(row -> {
+                    assertThat(row.amount()).isEqualByComparingTo("1500");
+                    assertThat(row.share()).isEqualByComparingTo("1");
+                });
+        assertThat(revenue.byCategory().stream().map(RevenueReportResponse.CategoryRevenue::amount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(revenue.totalRevenue());
+        assertThat(jdbc.queryForObject("select sum(amount) from sales_transaction where receipt_id=?", BigDecimal.class, receipt))
+                .isEqualByComparingTo("2000");
+    }
+
+    @Test
+    void mixedCategoryWithoutBillDiscountKeepsExactKnownCategoryAmounts() {
+        discountReceipt(List.of("SingleVisit", "CoursePurchase"),
+                List.of(new BigDecimal("1200"), new BigDecimal("800")), BigDecimal.ZERO, List.of(new BigDecimal("2000")));
+        var revenue = repository.revenue(new ReportPeriod(DISCOUNT_DAY, DISCOUNT_DAY), "96");
+        assertThat(revenue.totalRevenue()).isEqualByComparingTo("2000");
+        assertThat(revenue.byCategory()).filteredOn(row -> row.type() == com.sabyeguyz.clinic.sale.SaleItemType.SINGLE_VISIT)
+                .singleElement().satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("1200"));
+        assertThat(revenue.byCategory()).filteredOn(row -> row.type() == com.sabyeguyz.clinic.sale.SaleItemType.COURSE)
+                .singleElement().satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("800"));
+    }
+
+    @Test
+    void mixedCategoryBillDiscountRequiresApprovedAllocationInsteadOfReportingBasesAsRevenue() {
+        discountReceipt(List.of("SingleVisit", "CoursePurchase"),
+                List.of(new BigDecimal("1200"), new BigDecimal("800")), new BigDecimal("500"), List.of(new BigDecimal("1500")));
+        ReportPeriod period = new ReportPeriod(DISCOUNT_DAY, DISCOUNT_DAY);
+        assertThatThrownBy(() -> repository.revenue(period, "96"))
+                .isInstanceOf(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException.class)
+                .hasMessageContaining("REVIEW_REQUIRED");
+        assertThatThrownBy(() -> repository.dashboard(period, "96"))
+                .isInstanceOf(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException.class);
+    }
+
+    @Test
+    void heldReceiptLinkIsNotUsedForRevenueAttributionOrRewritten() {
+        long receipt = discountReceipt(List.of("SingleVisit"), List.of(new BigDecimal("2000")),
+                new BigDecimal("500"), List.of(new BigDecimal("1500")));
+        jdbc.update("update sales_transaction set receipt_link_status='REVIEW_REQUIRED' where receipt_id=?", receipt);
+        assertThatThrownBy(() -> repository.revenue(new ReportPeriod(DISCOUNT_DAY, DISCOUNT_DAY), "96"))
+                .isInstanceOf(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException.class)
+                .hasMessageContaining("REVIEW_REQUIRED");
+        assertThat(jdbc.queryForObject("select receipt_link_status from sales_transaction where receipt_id=?", String.class, receipt))
+                .isEqualTo("REVIEW_REQUIRED");
+    }
+
+    @Test
+    void aHeldSecondaryLineDoesNotTurnAMixedReceiptIntoAnApprovedSingleCategory() {
+        long receipt = discountReceipt(List.of("SingleVisit", "CoursePurchase"),
+                List.of(new BigDecimal("1200"), new BigDecimal("800")), new BigDecimal("500"), List.of(new BigDecimal("1500")));
+        jdbc.update("update sales_transaction set receipt_link_status='REVIEW_REQUIRED' where receipt_id=? and transaction_type='CoursePurchase'", receipt);
+        assertThatThrownBy(() -> repository.revenue(new ReportPeriod(DISCOUNT_DAY, DISCOUNT_DAY), "96"))
+                .isInstanceOf(com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException.class)
+                .hasMessageContaining("REVIEW_REQUIRED");
+        assertThat(jdbc.queryForObject("select count(*) from sales_transaction where receipt_id=? and receipt_link_status='REVIEW_REQUIRED'", Integer.class, receipt))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void revenueReportsUseBangkokTimestampDayBoundariesAndReconcileAcrossViews() {
+        long receipt = discountReceipt(List.of("SingleVisit"), List.of(new BigDecimal("300")),
+                BigDecimal.ZERO, List.of(new BigDecimal("100"), new BigDecimal("200")));
+        Long transactionId = jdbc.queryForObject("select transaction_id from sales_transaction where receipt_id=?", Long.class, receipt);
+        LocalDate boundaryDay = DISCOUNT_DAY.plusDays(1);
+        jdbc.update("update payment_transaction set payment_date=? where transaction_id=? and amount=100",
+                LocalDateTime.of(boundaryDay, java.time.LocalTime.MIDNIGHT), transactionId);
+        jdbc.update("update payment_transaction set payment_date=? where transaction_id=? and amount=200",
+                LocalDateTime.of(boundaryDay, java.time.LocalTime.of(23, 59, 59, 999_000_000)), transactionId);
+        jdbc.update("insert into payment_transaction(patient_id,branch_id,transaction_id,amount,payment_method_id,payment_date,payment_status,payment_create_by) values(96,96,?,50,96,?,true,1)",
+                transactionId, LocalDateTime.of(boundaryDay.minusDays(1), java.time.LocalTime.of(23, 59, 59, 999_000_000)));
+        jdbc.update("insert into payment_transaction(patient_id,branch_id,transaction_id,amount,payment_method_id,payment_date,payment_status,payment_create_by) values(96,96,?,50,96,?,true,1)",
+                transactionId, LocalDateTime.of(boundaryDay.plusDays(1), java.time.LocalTime.MIDNIGHT));
+
+        ReportPeriod period = new ReportPeriod(boundaryDay, boundaryDay);
+        var dashboard = repository.dashboard(period, "96");
+        var revenue = repository.revenue(period, "96");
+
+        assertThat(dashboard.totalRevenue()).isEqualByComparingTo("300");
+        assertThat(revenue.totalRevenue()).isEqualByComparingTo("300");
+        assertThat(revenue.daily()).singleElement().satisfies(day -> {
+            assertThat(day.date()).isEqualTo(boundaryDay);
+            assertThat(day.amount()).isEqualByComparingTo("300");
+        });
+        assertThat(revenue.byCategory()).filteredOn(row -> row.type() == com.sabyeguyz.clinic.sale.SaleItemType.SINGLE_VISIT)
+                .singleElement().satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("300"));
+        assertThat(revenue.byCategory().stream().map(RevenueReportResponse.CategoryRevenue::amount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(revenue.totalRevenue());
+        assertThat(revenue.daily().stream().map(RevenueReportResponse.DailyRevenue::amount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(revenue.totalRevenue());
     }
 
     @Test

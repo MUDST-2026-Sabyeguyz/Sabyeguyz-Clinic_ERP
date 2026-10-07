@@ -131,6 +131,7 @@ class DatabaseV2PatientHttpPostgresIntegrationTest {
                 visitIds.forEach(visitId -> jdbc.update("delete from patient_visit where visit_id=?",visitId));
             jdbc.update("delete from course_ledger where course_id=?",courseId);
             jdbc.update("delete from course_shared_member where course_id=?",courseId);
+            jdbc.update("delete from course_transfer where course_id=?",courseId);
             jdbc.update("delete from sales_transaction where course_id=?",courseId);
             jdbc.update("delete from course where course_id=?",courseId);
         }
@@ -372,6 +373,96 @@ class DatabaseV2PatientHttpPostgresIntegrationTest {
     }
 
     @Test
+    void duplicateCourseUseForTheSameAppointmentDoesNotConsumeTwice() throws Exception {
+        appointmentFixtures();
+        long patientId = create(patient("Thai")).path("id").asLong();
+        long courseServiceId = jdbc.queryForObject("""
+                insert into service(service_code,service_name,service_type,service_price,service_status,
+                    default_total_visits,default_bonus_visits,default_validity_days,service_create_by)
+                values(?,?,'Course',500,true,2,0,365,870) returning service_id
+                """, Long.class, "FDU" + UUID.randomUUID().toString().replace("-", "").substring(0, 12), "Duplicate usage course");
+        financialServiceIds.add(courseServiceId);
+        long courseId = body(send("POST", "/api/course-purchases", Map.of("patientId", patientId, "courseId", courseServiceId,
+                "branchCode", "86", "sellerEmployeeId", 881), managerToken), 201).path("id").asLong();
+        long appointmentId = body(send("POST", "/api/appointments", appointment(patientId, "2026-11-02T02:00:00Z", 880, false), managerToken), 201)
+                .path("id").asLong();
+        var use = Map.of("coursePurchaseId", courseId, "appointmentId", appointmentId, "treatingStaffId", 880, "note", "one treatment use");
+        var executor = Executors.newFixedThreadPool(2);
+        var start = new CountDownLatch(1);
+        try {
+            var attempts = List.of(
+                    executor.submit(() -> { start.await(); return send("POST", "/api/course-usages", use, managerToken).statusCode(); }),
+                    executor.submit(() -> { start.await(); return send("POST", "/api/course-usages", use, managerToken).statusCode(); }));
+            start.countDown();
+            var statuses = attempts.stream().map(future -> {
+                try { return future.get(30, TimeUnit.SECONDS); }
+                catch (Exception failure) { throw new AssertionError(failure); }
+            }).toList();
+            assertThat(statuses).containsExactlyInAnyOrder(201, 409);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject("select remaining_visits from course where course_id=?", Integer.class, courseId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select visits_used from course where course_id=?", Integer.class, courseId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from course_ledger where course_id=? and entry_type='Treatment'", Integer.class, courseId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from course_visit_usage where course_id=?", Integer.class, courseId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from patient_visit where appointment_id=?", Integer.class, appointmentId)).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentCourseTransfersCannotAllocateMoreThanTheSourceBalance() throws Exception {
+        long sourcePatientId = create(patient("Thai")).path("id").asLong();
+        long recipientOneId = create(patient("Thai")).path("id").asLong();
+        long recipientTwoId = create(patient("Thai")).path("id").asLong();
+        long courseServiceId = jdbc.queryForObject("""
+                insert into service(service_code,service_name,service_type,service_price,service_status,
+                    default_total_visits,default_bonus_visits,default_validity_days,service_create_by)
+                values(?,?,'Course',500,true,2,0,365,870) returning service_id
+                """, Long.class, "FTR" + UUID.randomUUID().toString().replace("-", "").substring(0, 12), "Concurrent transfer course");
+        financialServiceIds.add(courseServiceId);
+        long courseId = body(send("POST", "/api/course-purchases", Map.of("patientId", sourcePatientId, "courseId", courseServiceId,
+                "branchCode", "86", "sellerEmployeeId", 881), managerToken), 201).path("id").asLong();
+        var first = Map.of("sourcePurchaseId", courseId, "destinationPatientId", recipientOneId, "quantity", 2, "reason", "transfer race one");
+        var second = Map.of("sourcePurchaseId", courseId, "destinationPatientId", recipientTwoId, "quantity", 2, "reason", "transfer race two");
+        var executor = Executors.newFixedThreadPool(2);
+        var start = new CountDownLatch(1);
+        long destinationCourseId;
+        try {
+            var attempts = List.of(
+                    executor.submit(() -> { start.await(); return send("POST", "/api/course-transfers", first, managerToken); }),
+                    executor.submit(() -> { start.await(); return send("POST", "/api/course-transfers", second, managerToken); }));
+            start.countDown();
+            var responses = attempts.stream().map(future -> {
+                try { return future.get(30, TimeUnit.SECONDS); }
+                catch (Exception failure) { throw new AssertionError(failure); }
+            }).toList();
+            assertThat(responses.stream().map(HttpResponse::statusCode).toList()).containsExactlyInAnyOrder(201, 409);
+            var successful = body(responses.stream().filter(response -> response.statusCode() == 201).findFirst().orElseThrow(), 201);
+            assertThat(successful.path("sourcePurchaseId").asLong()).isEqualTo(courseId);
+            assertThat(successful.path("destinationPatientId").asLong()).isIn(recipientOneId, recipientTwoId);
+            assertThat(successful.path("quantity").asInt()).isEqualTo(2);
+            assertThat(successful.path("actorId").asLong()).isEqualTo(870L);
+            destinationCourseId = successful.path("destinationPurchaseId").asLong();
+            long transferId = successful.path("id").asLong();
+            assertThat(jdbc.queryForObject("select transfer_create_by from course_transfer where transfer_id=?", Long.class, transferId)).isEqualTo(870L);
+            assertThat(jdbc.queryForObject("select remark from course_transfer where transfer_id=?", String.class, transferId))
+                    .isEqualTo(successful.path("reason").asText());
+            assertThat(jdbc.queryForObject("select count(*) from course_transfer where transfer_id=? and transfer_date is not null", Integer.class, transferId)).isEqualTo(1);
+            assertThat(body(send("GET", "/api/course-transfers?patientId=" + sourcePatientId, null, managerToken), 200)
+                    .findValuesAsText("id")).contains(successful.path("id").asText());
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject("select remaining_visits from course where course_id=?", Integer.class, courseId)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from course_transfer where course_id=?", Integer.class, courseId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select sum(qty_transferred) from course_transfer where course_id=?", Integer.class, courseId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select count(*) from course_ledger where course_id=? and entry_type='TransferOut'", Integer.class, courseId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from course_ledger where course_id=? and reference_type='TRANSFER' and entry_type='TransferIn'", Integer.class, destinationCourseId)).isEqualTo(1);
+    }
+
+    @Test
     void saleUsesAnAuthorizedBranchAndRejectsAnotherBranchBeforeWriting() throws Exception {
         appointmentFixtures();
         long patientId=create(patient("Thai")).path("id").asLong();
@@ -412,6 +503,13 @@ class DatabaseV2PatientHttpPostgresIntegrationTest {
         assertThat(readback.path("branchCode").asText()).isEqualTo("87");
         assertThat(readback.path("items").size()).isEqualTo(1);
         assertThat(readback.path("payments").get(0).path("amount").decimalValue()).isEqualByComparingTo("100.00");
+        jdbc.update("delete from user_branch_access where user_id=870 and branch_id=?",allowedBranchId);
+        body(send("GET","/api/receipts/"+receiptId,null,managerToken),403);
+        body(send("POST","/api/payments/"+receiptId+"/reverse",Map.of("reason","denied cross-branch attempt"),managerToken),403);
+        assertThat(jdbc.queryForObject("select count(*) from transaction_cancellation where transaction_id=?",Integer.class,transactionId)).isZero();
+        assertThat(jdbc.queryForObject("select payment_status from payment_transaction where transaction_id=?",Boolean.class,transactionId)).isTrue();
+        jdbc.update("insert into user_branch_access(user_id,branch_id) values(870,?) on conflict do nothing",allowedBranchId);
+        assertThat(body(send("GET","/api/receipts/"+receiptId,null,managerToken),200).path("status").asText()).isEqualTo("PAID");
         var visible=body(send("GET","/api/payments?page=0&size=100",null,managerToken),200);
         assertThat(visible.path("items").findValuesAsText("branchCode")).contains("87").doesNotContain("88");
 
@@ -482,6 +580,84 @@ class DatabaseV2PatientHttpPostgresIntegrationTest {
         System.out.println("FAST02_DISCOUNT_SQL bill receipt="+jdbc.queryForMap("select gross_total,line_discount_total,bill_discount_amount,net_due from receipt where receipt_id=?",billReceipt)
                 +" transaction="+jdbc.queryForMap("select gross_amount,line_discount_amount,amount from sales_transaction where receipt_id=? and receipt_link_status='VERIFIED'",billReceipt)
                 +" paid="+jdbc.queryForObject("select sum(amount) from payment_transaction where transaction_id in (select transaction_id from sales_transaction where receipt_id=?) and payment_status=true",BigDecimal.class,billReceipt));
+
+        String day = LocalDate.now(ZoneId.of("Asia/Bangkok")).toString();
+        jdbc.update("insert into user_branch_access(user_id,branch_id) values(870,871) on conflict do nothing");
+        temporaryBranchAccessIds.add(871L);
+        var otherBranchPayload = new HashMap<>(billPayload);
+        otherBranchPayload.put("branchCode", "85");
+        otherBranchPayload.put("billDiscountAmount", 0);
+        otherBranchPayload.put("payments", List.of(Map.of("paymentMethodCode", method, "amount", 2000)));
+        body(send("POST", "/api/payments", otherBranchPayload, managerToken), 201);
+        String filter = "?from=" + day + "&to=" + day + "&branchCode=86";
+        var dashboard = body(send("GET", "/api/dashboard/summary" + filter, null, managerToken), 200);
+        var revenue = body(send("GET", "/api/reports/revenue" + filter, null, managerToken), 200);
+        assertThat(dashboard.path("totalRevenue").decimalValue()).isEqualByComparingTo("3000.00");
+        assertThat(dashboard.path("singleVisitRevenue").decimalValue()).isEqualByComparingTo("3000.00");
+        assertThat(revenue.path("totalRevenue").decimalValue()).isEqualByComparingTo("3000.00");
+        var single = java.util.stream.StreamSupport.stream(revenue.path("byCategory").spliterator(), false)
+                .filter(category -> category.path("type").asText().equals("SINGLE_VISIT")).findFirst().orElseThrow();
+        assertThat(single.path("amount").decimalValue()).isEqualByComparingTo("3000.00");
+        assertThat(single.path("share").decimalValue()).isEqualByComparingTo("1.0000");
+        assertThat(revenue.path("byBranch").size()).isEqualTo(1);
+        assertThat(revenue.path("byBranch").get(0).path("branchCode").asText()).isEqualTo("86");
+        assertThat(revenue.path("byBranch").get(0).path("amount").decimalValue()).isEqualByComparingTo("3000.00");
+        System.out.println("FAST02_F05_HTTP dashboard=" + dashboard + " revenue=" + revenue);
+    }
+
+    @Test
+    void combinedDiscountHttpRejectsBeforeAnyFinancialWrite() throws Exception {
+        long patientId = create(patient("Thai")).path("id").asLong();
+        long serviceId = body(send("POST", "/api/services", Map.of(
+                "code", "COMB-" + UUID.randomUUID().toString().substring(0, 8),
+                "name", "Unsupported combination fixture", "defaultDurationMinutes", 60, "price", 2000), managerToken), 201).path("id").asLong();
+        financialServiceIds.add(serviceId);
+        long methodId = jdbc.queryForObject("insert into payment_method(payment_method_name,payment_method_status,payment_method_create_by) values(?,true,870) returning payment_method_id",
+                Long.class, "COMB-" + UUID.randomUUID().toString().substring(0, 8));
+        temporaryPaymentMethodIds.add(methodId);
+        String method = jdbc.queryForObject("select payment_method_name from payment_method where payment_method_id=?", String.class, methodId);
+        var payload = Map.of("patientId", patientId, "branchCode", "86",
+                "items", List.of(Map.of("type", "SINGLE_VISIT", "referenceId", serviceId, "quantity", 1, "lineDiscountAmount", 100)),
+                "billDiscountAmount", 100, "payments", List.of(Map.of("paymentMethodCode", method, "amount", 1800)));
+
+        var response = send("POST", "/api/payments", payload, managerToken);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).contains("ส่วนลดรายการร่วมกับส่วนลดท้ายบิล");
+        for (String table : List.of("receipt", "sales_transaction", "payment_transaction")) {
+            assertThat(jdbc.queryForObject("select count(*) from " + table + " where patient_id=?", Integer.class, patientId))
+                    .as("no write in %s", table).isZero();
+        }
+        System.out.println("FAST02_F04_HTTP status=400 financial_rows=0");
+    }
+
+    @Test
+    void salePaymentWriteFailureRollsBackReceiptAndSalesRows() throws Exception {
+        long patientId = create(patient("Thai")).path("id").asLong();
+        long serviceId = body(send("POST", "/api/services", Map.of(
+                "code", "ROLLBACK-" + UUID.randomUUID().toString().substring(0, 8),
+                "name", "FAST02 rollback fixture", "defaultDurationMinutes", 60, "price", 100), managerToken), 201).path("id").asLong();
+        financialServiceIds.add(serviceId);
+        long methodId = jdbc.queryForObject("insert into payment_method(payment_method_name,payment_method_status,payment_method_create_by) values(?,true,870) returning payment_method_id",
+                Long.class, "ROLLBACK-" + UUID.randomUUID().toString().substring(0, 8));
+        temporaryPaymentMethodIds.add(methodId);
+        String method = jdbc.queryForObject("select payment_method_name from payment_method where payment_method_id=?", String.class, methodId);
+        String trigger = "fast02_fail_payment_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String function = trigger + "_fn";
+        jdbc.execute(("create function %s() returns trigger language plpgsql as $$ begin "
+                + "raise exception 'FAST02 rollback injection'; end $$").formatted(function));
+        jdbc.execute(("create trigger %s before insert on payment_transaction for each row execute function %s()").formatted(trigger, function));
+        try {
+            var payload = Map.of("patientId", patientId, "branchCode", "86",
+                    "items", List.of(Map.of("type", "SINGLE_VISIT", "referenceId", serviceId, "quantity", 1)),
+                    "payments", List.of(Map.of("paymentMethodCode", method, "amount", 100)));
+            assertThat(send("POST", "/api/payments", payload, managerToken).statusCode()).isEqualTo(500);
+            assertThat(jdbc.queryForObject("select count(*) from receipt where patient_id=?", Integer.class, patientId)).isZero();
+            assertThat(jdbc.queryForObject("select count(*) from sales_transaction where patient_id=?", Integer.class, patientId)).isZero();
+            assertThat(jdbc.queryForObject("select count(*) from payment_transaction where patient_id=?", Integer.class, patientId)).isZero();
+        } finally {
+            jdbc.execute(("drop trigger if exists %s on payment_transaction").formatted(trigger));
+            jdbc.execute(("drop function if exists %s()").formatted(function));
+        }
     }
 
     @Test
@@ -519,12 +695,23 @@ class DatabaseV2PatientHttpPostgresIntegrationTest {
         var summaryB=java.util.stream.StreamSupport.stream(list.path("items").spliterator(),false)
                 .filter(item->item.path("id").asLong()==receiptB).findFirst().orElseThrow();
         assertThat(summaryB.path("total").decimalValue()).isEqualByComparingTo("70.00");
-        body(send("POST","/api/payments/"+receiptB+"/reverse",Map.of("reason","B3 crossed-ID isolation"),managerToken),200);
+        var voidedReceipt=body(send("POST","/api/payments/"+receiptB+"/reverse",Map.of("reason","B3 crossed-ID isolation"),managerToken),200);
+        assertThat(voidedReceipt.path("status").asText()).isEqualTo("VOIDED");
+        assertThat(voidedReceipt.path("voidReason").asText()).isEqualTo("B3 crossed-ID isolation");
         assertThat(jdbc.queryForObject("select count(*) from payment_transaction where transaction_id in (?,?) and payment_status=true",Integer.class,crossedTx,secondTx)).isEqualTo(2);
         assertThat(jdbc.queryForObject("select count(*) from payment_transaction where transaction_id=? and payment_status=false",Integer.class,receiptBTx)).isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from transaction_cancellation where transaction_id=?",Integer.class,crossedTx)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from transaction_cancellation where transaction_id=?",Integer.class,receiptBTx)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select payment_id from transaction_cancellation where transaction_id=?",Long.class,receiptBTx))
+                .isEqualTo(jdbc.queryForObject("select payment_id from payment_transaction where transaction_id=?",Long.class,receiptBTx));
+        assertThat(jdbc.queryForObject("select reason from transaction_cancellation where transaction_id=?",String.class,receiptBTx))
+                .isEqualTo("B3 crossed-ID isolation");
+        assertThat(jdbc.queryForObject("select cancelled_by from transaction_cancellation where transaction_id=?",Long.class,receiptBTx))
+                .isEqualTo(870L);
+        assertThat(jdbc.queryForObject("select cancelled_at is not null from transaction_cancellation where transaction_id=?",Boolean.class,receiptBTx))
+                .isTrue();
         assertThat(jdbc.queryForObject("select count(*) from sales_transaction where transaction_id in (?,?) and transaction_status=true",Integer.class,crossedTx,secondTx)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select count(*) from receipt where receipt_id=?",Integer.class,receiptB)).isEqualTo(1);
         assertThat(body(send("GET","/api/receipts/"+receiptA,null,managerToken),200).path("status").asText()).isEqualTo("PAID");
     }
 

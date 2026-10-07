@@ -2,14 +2,17 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { branchApi, commissionApi, courseApi, reportApi, type Branch, type CourseBalanceReport, type RevenueReport, type StaffSalesReport, type TransferRecord } from '@/api/client'
+import { clinicDate } from '@/utils/clinicDate'
 const report = ref('revenue')
-const filters = reactive({ patient: '', branch: 'ทุกสาขา', treatment: 'ทั้งหมด', commissionRule: 'ทั้งหมด', saleType: 'ทั้งหมด', from: `${new Date().getFullYear()}-01-01`, to: new Date().toISOString().slice(0, 10) })
+const today = clinicDate()
+const filters = reactive({ patient: '', branch: 'ทุกสาขา', treatment: 'ทั้งหมด', commissionRule: 'ทั้งหมด', saleType: 'ทั้งหมด', from: `${today.slice(0, 4)}-01-01`, to: today })
 const branches = ref<Branch[]>([])
 type CommissionReportRow = { staffId: number | null; staffName: string; branchCode: string; branchName: string; saleCount: number; base: number; rate: number; commission: number }
 type ReportData = RevenueReport | CourseBalanceReport | StaffSalesReport | CommissionReportRow[] | TransferRecord[] | null
 const reportData = ref<ReportData>(null)
 const loading = ref(false)
 const errorMessage = ref('')
+let reportRequest = 0
 const reports: Array<[string, string]> = [
   ['revenue', 'รายงานรายได้'],
   ['balance', 'ยอดคงเหลือคอร์ส'],
@@ -28,10 +31,12 @@ const title = computed(() => reports.find(([key]) => key === report.value)?.[1])
 const reportDescription = computed(() => {
   return reportDescriptions[report.value]
 })
-const formatReportDate = (value: string) =>
-  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(
-    new Date(value),
-  )
+const formatReportDate = (value: string) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
+}
 const reportPeriodLabel = computed(() =>
   report.value === 'balance'
     ? `ข้อมูล ณ ${formatReportDate(filters.to)}`
@@ -55,16 +60,26 @@ const headers: Record<string, string[]> = {
   commission: ['พนักงาน', 'ประเภท', 'สาขา', 'ช่วงวันที่', 'จำนวนรายการ', 'ค่าคอมมิชชัน'],
 }
 async function loadReport() {
+  const request = ++reportRequest
+  if (!filters.from || !filters.to || filters.from > filters.to) {
+    loading.value = false; reportData.value = null; errorMessage.value = 'เลือกช่วงวันที่ให้ถูกต้อง'
+    return
+  }
   loading.value = true; errorMessage.value = ''; reportData.value = null
   try {
     const branchCode = filters.branch === 'ทุกสาขา' ? undefined : filters.branch
-    if (report.value === 'revenue') reportData.value = await reportApi.revenue(filters.from, filters.to, branchCode)
-    else if (report.value === 'balance') reportData.value = await reportApi.balances(filters.from, filters.to, branchCode)
-    else if (report.value === 'sales') reportData.value = await reportApi.staffSales(filters.from, filters.to, branchCode)
-    else if (report.value === 'transfer') reportData.value = await courseApi.transferHistory()
-    else reportData.value = await commissionApi.report(filters.from, filters.to)
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดรายงานไม่สำเร็จ' }
-  finally { loading.value = false }
+    let data: ReportData
+    if (report.value === 'revenue') data = await reportApi.revenue(filters.from, filters.to, branchCode)
+    else if (report.value === 'balance') data = await reportApi.balances(filters.from, filters.to, branchCode)
+    else if (report.value === 'sales') data = await reportApi.staffSales(filters.from, filters.to, branchCode)
+    else if (report.value === 'transfer') data = await courseApi.transferHistory()
+    else data = await commissionApi.report(filters.from, filters.to)
+    if (request === reportRequest) reportData.value = data
+  } catch (error) {
+    if (request === reportRequest) errorMessage.value = error instanceof Error ? error.message : 'โหลดรายงานไม่สำเร็จ'
+  } finally {
+    if (request === reportRequest) loading.value = false
+  }
 }
 onMounted(async () => { try { branches.value = await branchApi.list() } catch { /* report request shows the API error */ } await loadReport() })
 watch([report, () => filters.branch, () => filters.from, () => filters.to], loadReport)

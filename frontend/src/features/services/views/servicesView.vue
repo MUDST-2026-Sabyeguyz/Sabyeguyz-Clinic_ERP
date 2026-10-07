@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { appointmentApi, branchApi, catalogApi, courseApi, patientApi, paymentMethodApi, salesApi, staffApi, type Branch, type Course, type Patient, type PaymentMethod, type SaleReceipt, type ServiceOption, type Staff } from '@/api/client'
@@ -10,7 +10,8 @@ const query = ref(''),
   action = ref<'use' | 'buy'>('use'),
   confirmed = ref(false),
   loading = ref(false),
-  errorMessage = ref('')
+  errorMessage = ref(''),
+  receiptErrorMessage = ref('')
 const results = ref<Patient[]>([])
 const services = ref<ServiceOption[]>([])
 const courses = ref<Course[]>([])
@@ -25,6 +26,9 @@ const router = useRouter()
 const discountKind = ref<'none' | 'line' | 'bill'>('none')
 const discountAmount = ref('')
 const receipt = ref<SaleReceipt | null>(null)
+const pendingReceiptId = ref<number | null>(null)
+const receiptLoading = ref(false)
+const receiptRoutePresent = ref(false)
 async function loadMaster() {
   const [s, c, p, methods, staffList, allowedBranches] = await Promise.all([catalogApi.services(), catalogApi.courses(), patientApi.searchAll(), paymentMethodApi.list(), staffApi.list(), branchApi.list({ accessible: true })])
   services.value = s; courses.value = c; results.value = p; paymentMethods.value = methods; staff.value = staffList
@@ -50,15 +54,35 @@ async function loadAppointmentHandoff() {
   mode.value = 'single'
   selectedServiceId.value = verifiedService.id
 }
-onMounted(async () => { try { await loadMaster(); await loadAppointmentHandoff(); await loadReceiptFromRoute() } catch (error) { patient.value = null; errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ' } })
+onMounted(async () => {
+  try { await loadReceiptFromRoute() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลใบเสร็จไม่สำเร็จ' }
+  try { await loadMaster(); await loadAppointmentHandoff() } catch (error) { patient.value = null; errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ' }
+})
 async function loadReceiptFromRoute() {
   const rawId = route.query.receiptId
-  if (typeof rawId !== 'string') return
+  if (rawId === undefined) return
+  receiptRoutePresent.value = true
+  if (typeof rawId !== 'string') throw new Error('เลขที่ใบเสร็จไม่ถูกต้อง')
   const id = Number(rawId)
   if (!Number.isSafeInteger(id) || id < 1) throw new Error('เลขที่ใบเสร็จไม่ถูกต้อง')
-  receipt.value = await salesApi.get(id)
+  pendingReceiptId.value = id
+  await refreshReceipt(id)
+}
+async function refreshReceipt(id = pendingReceiptId.value) {
+  if (id === null || receiptLoading.value) return
+  pendingReceiptId.value = id
+  receiptLoading.value = true
+  try {
+    receipt.value = await salesApi.get(id)
+    receiptErrorMessage.value = ''
+  } catch {
+    receiptErrorMessage.value = `ใบเสร็จ ${id} โหลดไม่สำเร็จ กดโหลดอีกครั้งได้ โดยไม่ต้องบันทึกรายการซ้ำ`
+  } finally {
+    receiptLoading.value = false
+  }
 }
 let searchTimer: number | undefined
+onBeforeUnmount(() => window.clearTimeout(searchTimer))
 watch(query, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(async () => { if (query.value.trim()) results.value = (await patientApi.search(query.value, 0, 20)).items }, 250) })
 const item = computed(() =>
   mode.value === 'single'
@@ -85,7 +109,7 @@ function choose(p: Patient) {
   query.value = `${p.fullName} ${p.hn}`
 }
 async function submit() {
-  if (!patient.value || !selectedBranchCode.value) return
+  if (loading.value || receiptRoutePresent.value || pendingReceiptId.value !== null || !patient.value || !selectedBranchCode.value) return
   loading.value = true; errorMessage.value = ''; confirmed.value = false
   try {
     if (mode.value === 'course' && action.value === 'use') {
@@ -99,8 +123,12 @@ async function submit() {
         items: [{ type, referenceId, quantity: 1, ...(discountKind.value === 'line' ? { lineDiscountAmount: fixedDiscount.value } : {}) }],
         billDiscountAmount: billDiscount.value,
         payments: [{ paymentMethodCode: paymentCode.value, amount: amountDue.value }] })
-      receipt.value = await salesApi.get(created.id)
-      await router.replace({ query: { ...route.query, receiptId: String(created.id) } })
+      pendingReceiptId.value = created.id
+      receiptRoutePresent.value = true
+      receipt.value = created
+      confirmed.value = true
+      try { await router.replace({ query: { ...route.query, receiptId: String(created.id) } }) } catch { /* Keep the returned receipt visible even if route persistence fails. */ }
+      await refreshReceipt(created.id)
     }
     confirmed.value = true
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการไม่สำเร็จ' }
@@ -204,11 +232,13 @@ async function submit() {
             <strong>{{ item }}</strong
             ><b>{{ amount }}</b
             ><p>ก่อนส่วนลด ฿{{ grossAmount.toLocaleString() }} · ส่วนลด ฿{{ (lineDiscount + billDiscount).toLocaleString() }} · ยอดชำระ ฿{{ amountDue.toLocaleString() }}</p
-            ><button :disabled="loading || !selectedBranchCode" @click="submit">{{ loading ? 'กำลังบันทึก...' : 'ยืนยันรายการ' }}</button>
+            ><button :disabled="loading || !selectedBranchCode || receiptRoutePresent || pendingReceiptId !== null" @click="submit">{{ loading ? 'กำลังบันทึก...' : receiptRoutePresent || pendingReceiptId !== null ? 'บันทึกแล้ว' : 'ยืนยันรายการ' }}</button>
           </div>
         </footer>
-        <p v-if="confirmed" class="success">บันทึกรายการเรียบร้อยแล้ว</p>
+      <p v-if="confirmed" class="success">บันทึกรายการเรียบร้อยแล้ว</p>
       </section>
+      <p v-if="receiptErrorMessage" class="error" role="alert">{{ receiptErrorMessage }}</p>
+      <button v-if="pendingReceiptId !== null && receiptErrorMessage" type="button" :disabled="receiptLoading" @click="refreshReceipt()">{{ receiptLoading ? 'กำลังโหลดใบเสร็จ...' : 'โหลดใบเสร็จอีกครั้ง' }}</button>
       <section v-if="receipt" class="receipt-preview" aria-label="ใบเสร็จสำหรับพิมพ์">
         <h2>ใบเสร็จ {{ receipt.receiptNo }}</h2>
         <p>{{ receipt.patient.fullName }} · HN {{ receipt.patient.hn }} · สาขา {{ receipt.branchCode }}</p>

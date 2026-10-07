@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { commissionApi } from '@/api/client'
+import { clinicDate } from '@/utils/clinicDate'
 
-const month = ref(new Date().toISOString().slice(0, 7))
+const month = ref(clinicDate().slice(0, 7))
 const rows = ref<Array<{id:number;staff:string;sales:number;tier:number;version:string;courses:number | null;status:string;closedAt:string}>>([])
 const error = ref('')
 const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)

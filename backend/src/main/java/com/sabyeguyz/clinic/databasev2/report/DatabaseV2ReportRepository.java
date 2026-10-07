@@ -3,6 +3,8 @@ package com.sabyeguyz.clinic.databasev2.report;
 import com.sabyeguyz.clinic.appointment.AppointmentStatus;
 import com.sabyeguyz.clinic.course.CoursePurchaseStatus;
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2NotFoundException;
+import com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException;
+import com.sabyeguyz.clinic.databasev2.common.DatabaseV2BusinessDates;
 import com.sabyeguyz.clinic.report.AppointmentReportResponse;
 import com.sabyeguyz.clinic.report.CourseBalanceReportResponse;
 import com.sabyeguyz.clinic.report.DashboardResponse;
@@ -31,6 +33,71 @@ public class DatabaseV2ReportRepository {
 
     public DatabaseV2ReportRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    private record PaidCategory(Long receiptId, BigDecimal paid, BigDecimal billDiscount,
+                                long categoryCount, BigDecimal baseTotal, String type, BigDecimal categoryBase) {}
+
+    /** Attribute cash only where the category is known; never allocate a mixed-category bill discount. */
+    private Map<String, BigDecimal> paidCategoryTotals(ReportPeriod period, Long branchId) {
+        String sql = """
+                with paid_receipts as (
+                    select case when st.receipt_link_status = 'VERIFIED' and st.transaction_status = true
+                                then coalesce(st.receipt_id, c.receipt_id) end as receipt_id,
+                           sum(pt.amount) as paid
+                    from payment_transaction pt
+                    join sales_transaction st on st.transaction_id = pt.transaction_id
+                    left join course c on c.course_id = st.course_id
+                    where pt.payment_status = true
+                      and cast(pt.payment_date as date) >= ? and cast(pt.payment_date as date) <= ?
+                """ + (branchId != null ? " and pt.branch_id = ?\n" : "\n") + """
+                    group by case when st.receipt_link_status = 'VERIFIED' and st.transaction_status = true
+                                  then coalesce(st.receipt_id, c.receipt_id) end
+                ), category_bases as (
+                    select coalesce(st.receipt_id, c.receipt_id) as receipt_id,
+                           cast(st.transaction_type as varchar) as tx_type, sum(st.amount) as base,
+                           bool_and(st.receipt_link_status = 'VERIFIED') as links_verified
+                    from sales_transaction st
+                    left join course c on c.course_id = st.course_id
+                    join paid_receipts p on p.receipt_id = coalesce(st.receipt_id, c.receipt_id)
+                    where st.transaction_status = true
+                    group by coalesce(st.receipt_id, c.receipt_id), st.transaction_type
+                ), receipt_categories as (
+                    select receipt_id, count(*) as category_count, sum(base) as base_total,
+                           bool_and(links_verified) as links_verified
+                    from category_bases group by receipt_id
+                )
+                select p.receipt_id, p.paid, r.bill_discount_amount, rc.category_count, rc.base_total,
+                       case when rc.links_verified then cb.tx_type end as tx_type, cb.base as category_base
+                from paid_receipts p
+                left join receipt r on r.receipt_id = p.receipt_id
+                left join receipt_categories rc on rc.receipt_id = p.receipt_id
+                left join category_bases cb on cb.receipt_id = p.receipt_id
+                """;
+        Object[] params = branchId != null
+                ? new Object[]{period.from(), period.to(), branchId}
+                : new Object[]{period.from(), period.to()};
+        List<PaidCategory> rows = jdbc.query(sql, (rs, row) -> new PaidCategory(
+                rs.getObject("receipt_id", Long.class), rs.getBigDecimal("paid"), rs.getBigDecimal("bill_discount_amount"),
+                rs.getLong("category_count"), rs.getBigDecimal("base_total"), rs.getString("tx_type"),
+                rs.getBigDecimal("category_base")), params);
+        Map<String, BigDecimal> totals = new HashMap<>();
+        for (PaidCategory row : rows) {
+            if (row.receiptId() == null || row.type() == null || row.billDiscount() == null) {
+                throw new DatabaseV2ConflictException("REVIEW_REQUIRED: ต้องตรวจสอบการผูกใบเสร็จก่อนสรุปรายได้ตามประเภท");
+            }
+            BigDecimal amount;
+            if (row.categoryCount() == 1) {
+                // All items have the same category: every received baht belongs to it, without per-item allocation.
+                amount = row.paid();
+            } else if (row.billDiscount().signum() == 0 && row.paid().compareTo(row.baseTotal()) == 0) {
+                amount = row.categoryBase();
+            } else {
+                throw new DatabaseV2ConflictException("REVIEW_REQUIRED: รายได้หลายประเภทในใบเดียวต้องยืนยันการจัดสรรส่วนลดหรือยอดชำระก่อน");
+            }
+            totals.merge(row.type(), amount, BigDecimal::add);
+        }
+        return totals;
     }
 
     public Long resolveBranchId(String branchCode) {
@@ -115,18 +182,7 @@ public class DatabaseV2ReportRepository {
                 : jdbc.queryForObject(revSql, BigDecimal.class, from, to);
         if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
 
-        String catSql = """
-                select cast(st.transaction_type as varchar) as tx_type, coalesce(sum(st.amount), 0) as amt
-                from sales_transaction st
-                where st.transaction_status = true
-                  and cast(st.transaction_date as date) >= ? and cast(st.transaction_date as date) <= ?
-                """ + (branchId != null ? " and st.branch_id = ?" : "") + " group by st.transaction_type";
-        Map<String, BigDecimal> catMap = new HashMap<>();
-        if (branchId != null) {
-            jdbc.query(catSql, (rs) -> { catMap.put(rs.getString("tx_type"), rs.getBigDecimal("amt")); }, from, to, branchId);
-        } else {
-            jdbc.query(catSql, (rs) -> { catMap.put(rs.getString("tx_type"), rs.getBigDecimal("amt")); }, from, to);
-        }
+        Map<String, BigDecimal> catMap = paidCategoryTotals(period, branchId);
 
         BigDecimal courseRev = catMap.getOrDefault("CoursePurchase", BigDecimal.ZERO);
         BigDecimal singleRev = catMap.getOrDefault("SingleVisit", BigDecimal.ZERO);
@@ -282,18 +338,7 @@ public class DatabaseV2ReportRepository {
         if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
 
         // Category breakdown
-        String catSql = """
-                select cast(st.transaction_type as varchar) as tx_type, coalesce(sum(st.amount), 0) as amt
-                from sales_transaction st
-                where st.transaction_status = true
-                  and cast(st.transaction_date as date) >= ? and cast(st.transaction_date as date) <= ?
-                """ + (branchId != null ? " and st.branch_id = ?" : "") + " group by st.transaction_type";
-        Map<String, BigDecimal> catMap = new HashMap<>();
-        if (branchId != null) {
-            jdbc.query(catSql, (rs) -> { catMap.put(rs.getString("tx_type"), rs.getBigDecimal("amt")); }, from, to, branchId);
-        } else {
-            jdbc.query(catSql, (rs) -> { catMap.put(rs.getString("tx_type"), rs.getBigDecimal("amt")); }, from, to);
-        }
+        Map<String, BigDecimal> catMap = paidCategoryTotals(period, branchId);
 
         List<RevenueReportResponse.CategoryRevenue> byCategory = new ArrayList<>();
         for (SaleItemType type : SaleItemType.values()) {
@@ -316,12 +361,13 @@ public class DatabaseV2ReportRepository {
                 join branch b on b.branch_id = pt.branch_id
                 where pt.payment_status = true
                   and cast(pt.payment_date as date) >= ? and cast(pt.payment_date as date) <= ?
+                """ + (branchId != null ? " and pt.branch_id = ?\n" : "\n") + """
                 group by b.branch_code, b.branch_name
                 order by b.branch_code asc
                 """;
         List<RevenueReportResponse.BranchRevenue> byBranch = jdbc.query(bSql, (rs, rowNum) -> new RevenueReportResponse.BranchRevenue(
                 rs.getString("branch_code"), rs.getString("branch_name"), rs.getBigDecimal("amt")
-        ), from, to);
+        ), branchId != null ? new Object[]{from, to, branchId} : new Object[]{from, to});
 
         // Daily
         String dSql = """
@@ -399,7 +445,7 @@ public class DatabaseV2ReportRepository {
 
         List<CourseBalanceReportResponse.Row> rows = jdbc.query(sql.toString(), (rs, rowNum) -> {
             LocalDate expDate = rs.getObject("expiry_date", LocalDate.class);
-            boolean expired = expDate != null && expDate.isBefore(LocalDate.now());
+            boolean expired = expDate != null && expDate.isBefore(DatabaseV2BusinessDates.today());
             String st = rs.getString("status");
             CoursePurchaseStatus statusEnum;
             try {

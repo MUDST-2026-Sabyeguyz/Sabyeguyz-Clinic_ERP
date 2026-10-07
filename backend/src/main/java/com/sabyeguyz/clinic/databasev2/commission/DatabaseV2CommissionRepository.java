@@ -2,6 +2,7 @@ package com.sabyeguyz.clinic.databasev2.commission;
 
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2ConflictException;
 import com.sabyeguyz.clinic.databasev2.common.DatabaseV2NotFoundException;
+import com.sabyeguyz.clinic.databasev2.common.DatabaseV2BusinessDates;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -116,7 +117,7 @@ public class DatabaseV2CommissionRepository {
                 from commission_scheme
                 order by effective_from desc, commission_scheme_id desc
                 """;
-        LocalDate today = LocalDate.now();
+        LocalDate today = DatabaseV2BusinessDates.today();
         return jdbc.query(sql, (rs, rowNum) -> {
             LocalDate to = rs.getObject("effective_to", LocalDate.class);
             boolean active = to == null || !to.isBefore(today);
@@ -137,7 +138,7 @@ public class DatabaseV2CommissionRepository {
                 from commission_scheme
                 where commission_scheme_id = ?
                 """;
-        LocalDate today = LocalDate.now();
+        LocalDate today = DatabaseV2BusinessDates.today();
         return jdbc.query(sql, (rs, rowNum) -> {
             LocalDate to = rs.getObject("effective_to", LocalDate.class);
             boolean active = to == null || !to.isBefore(today);
@@ -202,10 +203,10 @@ public class DatabaseV2CommissionRepository {
 
         LocalDate effectiveTo = to;
         if (Boolean.FALSE.equals(active)) {
-            if (effectiveTo == null || effectiveTo.isAfter(LocalDate.now())) {
-                effectiveTo = LocalDate.now().minusDays(1);
+            if (effectiveTo == null || effectiveTo.isAfter(DatabaseV2BusinessDates.today())) {
+                effectiveTo = DatabaseV2BusinessDates.today().minusDays(1);
             }
-        } else if (Boolean.TRUE.equals(active) && effectiveTo != null && effectiveTo.isBefore(LocalDate.now())) {
+        } else if (Boolean.TRUE.equals(active) && effectiveTo != null && effectiveTo.isBefore(DatabaseV2BusinessDates.today())) {
             effectiveTo = null;
         }
 
@@ -240,7 +241,7 @@ public class DatabaseV2CommissionRepository {
     }
 
     public void deactivateScheme(Long id, Long actorId) {
-        LocalDate yesterday = LocalDate.now().minusDays(1);
+        LocalDate yesterday = DatabaseV2BusinessDates.today().minusDays(1);
         int rows = jdbc.update(
                 "update commission_scheme set effective_to = ?, scheme_update_at = current_timestamp, scheme_update_by = ? where commission_scheme_id = ?",
                 yesterday, actorId, id
