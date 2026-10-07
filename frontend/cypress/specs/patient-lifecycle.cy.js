@@ -19,7 +19,7 @@ describe('Patient Lifecycle & HN Validation', () => {
   it('registers a patient, returns sequential HN and verifies profile', () => {
     const payload = {
       branchCode: '01',
-      customerType: 'Thai',
+      patientType: 'Thai',
       title: 'นาย',
       firstName: `CypressFirst${uniqueSuffix}`,
       lastName: `CypressLast${uniqueSuffix}`,

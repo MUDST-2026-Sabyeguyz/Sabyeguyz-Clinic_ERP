@@ -24,7 +24,7 @@ describe('Course Usages, Ledger & Transfer Lifecycle', () => {
         headers: { Authorization: `Bearer ${token}` },
         body: {
           branchCode: '01',
-          customerType: 'Thai',
+          patientType: 'Thai',
           title: 'นาย',
           firstName: `CourseSource${uniqueSuffix}`,
           lastName: `Test${uniqueSuffix}`,
@@ -54,7 +54,7 @@ describe('Course Usages, Ledger & Transfer Lifecycle', () => {
         headers: { Authorization: `Bearer ${token}` },
         body: {
           branchCode: '01',
-          customerType: 'Thai',
+          patientType: 'Thai',
           title: 'นางสาว',
           firstName: `CourseDest${uniqueSuffix}`,
           lastName: `Test${uniqueSuffix}`,

@@ -22,7 +22,7 @@ describe('Sales, Receipt Issuance & Cancellation Lifecycle', () => {
         headers: { Authorization: `Bearer ${token}` },
         body: {
           branchCode: '01',
-          customerType: 'Thai',
+          patientType: 'Thai',
           title: 'นาง',
           firstName: `SalePatient${uniqueSuffix}`,
           lastName: `Test${uniqueSuffix}`,
