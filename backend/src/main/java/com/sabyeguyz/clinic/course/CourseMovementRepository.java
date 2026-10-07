@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.course;
 
 import java.util.List;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,6 +29,11 @@ public interface CourseMovementRepository extends JpaRepository<CourseMovement, 
     int usedSessionsOf(@Param("purchaseId") Long purchaseId);
 
     List<CourseMovement> findByCoursePurchaseIdOrderByIdAsc(Long purchaseId);
+
+    @EntityGraph(attributePaths = {"coursePurchase", "coursePurchase.patient", "coursePurchase.branch"})
+    List<CourseMovement> findByTypeOrderByIdDesc(CourseMovementType type);
+
+    List<CourseMovement> findByReversesMovementIdIn(List<Long> movementIds);
 
     boolean existsByReversesMovementId(Long movementId);
 }

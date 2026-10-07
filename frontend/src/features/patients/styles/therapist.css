@@ -100,6 +100,168 @@ body.therapist-ui .registration-page .actions .primary {
   background: #1e807c;
 }
 
+/* Registration layout follows the 1440px Figma frame while remaining fluid. */
+body.therapist-ui .registration-page .registration-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 80px;
+}
+
+body.therapist-ui .registration-page .back-row {
+  width: min(1376px, calc(100% - 64px));
+  margin: 24px auto 0;
+}
+
+body.therapist-ui .registration-page .back-link {
+  min-height: 24px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+body.therapist-ui .registration-page .registration-shell {
+  width: min(1000px, calc(100% - 64px));
+  margin: 12px auto 0;
+}
+
+body.therapist-ui .registration-page .intro h1 {
+  color: #115e59;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+body.therapist-ui .registration-page .intro p {
+  margin: 15px 0 10px;
+  color: rgb(17 94 89 / 80%);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+body.therapist-ui .registration-page .form-card {
+  padding: 61px 41px 41px;
+  border-color: rgb(243 244 246 / 80%);
+  border-radius: 16px;
+  box-shadow: 0 4px 12.5px rgb(0 0 0 / 5%);
+}
+
+body.therapist-ui .registration-page .registration-section h2 {
+  margin-bottom: 20px;
+  font-size: 22px;
+  line-height: 27px;
+}
+
+body.therapist-ui .registration-page .registration-section + .registration-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top-color: #e5e7eb;
+}
+
+body.therapist-ui .registration-page .form-grid {
+  gap: 16px 24px;
+}
+
+body.therapist-ui .registration-page label,
+body.therapist-ui .registration-page legend {
+  font-size: 16px;
+}
+
+body.therapist-ui .registration-page input,
+body.therapist-ui .registration-page select,
+body.therapist-ui .registration-page textarea {
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 11px 17px;
+  border-color: #d1d5db;
+  border-radius: 8px;
+  font-size: 16px;
+  box-shadow: none;
+}
+
+body.therapist-ui .registration-page textarea {
+  min-height: 96px;
+}
+
+body.therapist-ui .registration-page .patient-type {
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+body.therapist-ui .registration-page .patient-type label {
+  width: 220px;
+  min-height: 52px;
+  padding: 12px 16px;
+}
+
+body.therapist-ui .registration-page .patient-type input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+body.therapist-ui .registration-page .filter-dropdown,
+body.therapist-ui .registration-page .thai-date-picker {
+  margin-top: 6px;
+}
+
+body.therapist-ui .registration-page .filter-dropdown__button,
+body.therapist-ui .registration-page .date-trigger {
+  min-height: 48px;
+  padding: 11px 17px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #1f2937;
+  background: #fff;
+  box-shadow: none;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+body.therapist-ui .registration-page .filter-dropdown__menu {
+  z-index: 60;
+  border-color: #d1d5db;
+  border-radius: 8px;
+}
+
+body.therapist-ui .registration-page .filter-dropdown__option {
+  min-height: 40px;
+  font-size: 16px;
+}
+
+body.therapist-ui .registration-page .thai-date-picker .calendar {
+  z-index: 70;
+  border-color: #d1d5db;
+}
+
+body.therapist-ui .registration-page .thai-date-picker .calendar select {
+  min-height: 38px;
+  margin: 0;
+  padding: 4px 6px;
+  border-color: #c7d7d0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+body.therapist-ui .registration-page .actions {
+  margin-top: 0;
+  padding-top: 32px;
+}
+
+body.therapist-ui .registration-page .actions .primary {
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 40px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
 @media (max-width: 680px) {
   body.therapist-ui .registration-page {
     /* Keep the original rounded green artwork rather than turning the whole
@@ -297,7 +459,6 @@ body.therapist-ui .patient-workspace .directory {
     /* Keep the decorative layer as tall as the compact hero instead of scaling only by width. */
     background-size: 100% 100%;
   }
-
 }
 
 body.therapist-ui .patient-workspace .directory > header {
@@ -306,8 +467,8 @@ body.therapist-ui .patient-workspace .directory > header {
 }
 
 body.therapist-ui .patient-workspace .search,
-body.therapist-ui .patient-workspace .branch-filter,
-body.therapist-ui .patient-workspace .sort-filter {
+body.therapist-ui .patient-workspace .branch-filter .filter-dropdown__button,
+body.therapist-ui .patient-workspace .sort-filter .filter-dropdown__button {
   height: 48px;
   min-height: 48px;
   border: 1px solid #9abfbc;
@@ -317,14 +478,12 @@ body.therapist-ui .patient-workspace .sort-filter {
 
 body.therapist-ui .patient-workspace .branch-filter {
   width: 180px;
-  padding: 0 16px;
   color: var(--therapist-ink);
   font: inherit;
 }
 
 body.therapist-ui .patient-workspace .sort-filter {
   width: 180px;
-  padding: 0 16px;
   color: var(--therapist-ink);
   font: inherit;
 }
