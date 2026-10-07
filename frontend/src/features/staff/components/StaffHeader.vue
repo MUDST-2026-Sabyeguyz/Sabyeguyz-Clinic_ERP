@@ -40,6 +40,7 @@ const navItems = computed(() =>
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
+        { to: '/staff/compensation', label: 'คอมมิชชัน' },
       ],
 )
 function movePill(target: HTMLElement | null) {
@@ -120,11 +121,7 @@ function signOut() {
     >
       <span></span><span></span><span></span>
     </button>
-    <nav
-      ref="navRef"
-      :class="{ 'mobile-open': menuOpen }"
-      aria-label="เมนูเจ้าหน้าที่คลินิก"
-    >
+    <nav ref="navRef" :class="{ 'mobile-open': menuOpen }" aria-label="เมนูเจ้าหน้าที่คลินิก">
       <div class="mobile-menu-head">
         <button type="button" aria-label="ปิดเมนู" @click="menuOpen = false">×</button>
         <img :src="drawerLogo" alt="SaByeGuyz" />
