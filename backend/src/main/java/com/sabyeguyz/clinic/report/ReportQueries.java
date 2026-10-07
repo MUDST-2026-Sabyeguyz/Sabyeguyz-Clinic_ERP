@@ -146,6 +146,19 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
                                                @Param("to") Instant to,
                                                @Param("branchId") Long branchId);
 
+    @Query("""
+            select new com.sabyeguyz.clinic.report.ReportRows$CategorySaleAmount(
+                s.soldAt, si.itemType, coalesce(sum(si.lineTotal), 0))
+            from SaleItem si join si.sale s
+            where s.soldAt >= :from and s.soldAt < :to
+              and s.status = com.sabyeguyz.clinic.sale.SaleStatus.PAID
+              and (:branchId is null or s.branch.id = :branchId)
+            group by s.id, s.soldAt, si.itemType
+            """)
+    List<ReportRows.CategorySaleAmount> revenueByCategoryPerSale(@Param("from") Instant from,
+                                                                 @Param("to") Instant to,
+                                                                 @Param("branchId") Long branchId);
+
     @Query("select count(s) from Sale s where s.soldAt >= :from and s.soldAt < :to "
             + "and s.status = :status and (:branchId is null or s.branch.id = :branchId)")
     long countReceipts(@Param("from") Instant from,
