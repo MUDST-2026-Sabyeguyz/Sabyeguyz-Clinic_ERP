@@ -108,6 +108,31 @@ export type PatientProfile = Patient & {
   customerSource?: string
   insuranceCompany?: string
 }
+export type PatientUpdatePayload = {
+  title: string
+  fullName: string
+  birthDate: string
+  gender: string
+  phone: string
+  identityDocumentType: 'NATIONAL_ID' | 'PASSPORT'
+  identityNumber: string
+  address: string
+  drugAllergy: boolean
+  foodAllergy: boolean
+  chronicDisease: string
+  emergencyContactName: string
+  emergencyContactRelationship: string
+  emergencyContactPhone: string
+  privacyConsent: boolean
+  active: boolean
+  nickname: string
+  email: string
+  bloodGroup: string
+  nationality: string
+  customerType: string
+  customerSource: string
+  insuranceCompany: string
+}
 export type Page<T> = {
   items: T[]
   page: number
@@ -120,6 +145,11 @@ export type Branch = {
   code: string
   numericCode: string
   name: string
+  address?: string
+  phone?: string
+  email?: string
+  licenseNumber?: string
+  taxId?: string
   active: boolean
 }
 export type Staff = {
@@ -302,7 +332,8 @@ export const patientApi = {
   },
   get: (id: number) => api.get<PatientProfile>(`/api/patients/${id}`),
   register: (payload: object) => api.post<Patient>('/api/patients', payload),
-  update: (id: number, payload: object) => api.put<PatientProfile>(`/api/patients/${id}`, payload),
+  update: (id: number, payload: PatientUpdatePayload) =>
+    api.put<PatientProfile>(`/api/patients/${id}`, payload),
 }
 
 export const branchApi = {
