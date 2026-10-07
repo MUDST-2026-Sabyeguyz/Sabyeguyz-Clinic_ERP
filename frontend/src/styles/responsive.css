@@ -67,7 +67,6 @@ canvas {
 
   .panel-head,
   .directory > header,
-  .transaction-list > .panel-head,
   .report-toolbar {
     flex-wrap: wrap;
     gap: 12px;
@@ -101,8 +100,7 @@ canvas {
   }
 
   .appointment-pagination > div,
-  .patient-pagination > div,
-  .transaction-pagination > div {
+  .patient-pagination > div {
     width: 100%;
     justify-content: space-between;
   }
