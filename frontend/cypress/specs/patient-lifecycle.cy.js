@@ -62,7 +62,7 @@ describe('Patient Lifecycle & HN Validation', () => {
         expect(getRes.status).to.eq(200)
         expect(getRes.body.hn).to.eq(patientHn)
         expect(getRes.body.fullName).to.include(payload.firstName)
-        expect(getRes.body.customerType).to.eq('Thai')
+        expect(getRes.body.patientType).to.eq('Thai')
         expect(getRes.body.gender).to.eq('Male')
       })
 
