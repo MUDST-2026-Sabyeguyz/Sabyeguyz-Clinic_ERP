@@ -117,33 +117,34 @@ public class SaleController {
     @PostMapping("/api/payments")
     @ResponseStatus(HttpStatus.CREATED)
     public Summary create(@RequestBody CreateRequest request) {
-        if (request.items() == null || request.items().size() != 1) {
-            throw new IllegalArgumentException("รองรับการขาย 1 รายการต่อใบเสร็จเท่านั้นในตอนนี้");
+        if (request.items() == null || request.items().isEmpty()) {
+            throw new IllegalArgumentException("ต้องมีรายการขายอย่างน้อย 1 รายการ");
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         Branch branch = resolveBranch(request.branchCode());
         Staff salesperson = request.salespersonStaffId() == null ? null
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
-        ItemRequest item = request.items().get(0);
-        Service svc = services.findById(item.referenceId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส"));
 
-        Discount discount = Discount.of(item.discountType(), item.discountValue());
         String receiptNo = receiptService.nextReceiptNo();
         Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
 
-        SalesTransaction transaction;
-        if ("COURSE".equalsIgnoreCase(item.type())) {
-            transaction = salesTransactionService.recordCoursePurchase(receipt, patient, branch, svc, salesperson,
-                    null, null, null, null, discount, null, LocalDate.now(), actor.currentId()).transaction();
-        } else {
-            TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
-                    ? TransactionType.Assessment : TransactionType.SingleVisit;
-            transaction = salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, null,
-                    salesperson, Math.max(1, item.quantity()), null, null, discount, actor.currentId());
+        List<SalesTransaction> lines = new java.util.ArrayList<>();
+        for (ItemRequest item : request.items()) {
+            Service svc = services.findById(item.referenceId())
+                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส"));
+            Discount discount = Discount.of(item.discountType(), item.discountValue());
+            if ("COURSE".equalsIgnoreCase(item.type())) {
+                lines.add(salesTransactionService.recordCoursePurchase(receipt, patient, branch, svc, salesperson,
+                        null, null, null, null, discount, null, LocalDate.now(), actor.currentId()).transaction());
+            } else {
+                TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
+                        ? TransactionType.Assessment : TransactionType.SingleVisit;
+                lines.add(salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, null,
+                        salesperson, Math.max(1, item.quantity()), null, null, discount, actor.currentId()));
+            }
         }
-        receiptService.finalizeTotals(receipt, List.of(transaction),
+        receiptService.finalizeTotals(receipt, lines,
                 Discount.of(request.billDiscountType(), request.billDiscountValue()), actor.currentId());
 
         if (request.payments() != null) {
@@ -154,7 +155,7 @@ public class SaleController {
             }
         }
 
-        return toSummary(transaction);
+        return toSummary(lines.get(0), lines);
     }
 
     @PostMapping("/api/payments/{id}/reverse")
@@ -175,6 +176,13 @@ public class SaleController {
     }
 
     private Summary toSummary(SalesTransaction t) {
+        return toSummary(t, List.of(t));
+    }
+
+    /** Summary of a receipt: the first line identifies it, the total spans every line in {@code lines}. */
+    private Summary toSummary(SalesTransaction t, List<SalesTransaction> lines) {
+        BigDecimal total = lines.stream().map(l -> l.getAmount().subtract(l.getAllocatedBillDiscountAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         Staff seller = t.getSalespersonStaff();
         return new Summary(t.getId(), t.getReceipt().getReceiptNo(),
                 new PatientSummary(t.getPatient().getId(), t.getPatient().getPatientHn(),
@@ -182,15 +190,16 @@ public class SaleController {
                 t.getBranch().getBranchCode(),
                 seller == null ? null : new SalespersonSummary(seller.getId(), seller.getStaffCode(),
                         seller.getStaffFname() + " " + seller.getStaffLname()),
-                t.getAmount().subtract(t.getAllocatedBillDiscountAmount()), payments.paidAmountOf(t.getReceipt().getId()),
+                total, payments.paidAmountOf(t.getReceipt().getId()),
                 t.isTransactionStatus() ? "PAID" : "VOIDED",
                 t.getTransactionDate(), null, null, null);
     }
 
     private Detail toDetail(SalesTransaction t) {
-        Summary s = toSummary(t);
-        List<ItemResponse> items = List.of(new ItemResponse(t.getId(), t.getTransactionType().name(),
-                t.getService().getServiceName(), t.getQuantity(), t.getAmount()));
+        List<SalesTransaction> lines = transactions.findByReceiptId(t.getReceipt().getId());
+        Summary s = toSummary(t, lines);
+        List<ItemResponse> items = lines.stream().map(l -> new ItemResponse(l.getId(), l.getTransactionType().name(),
+                l.getService().getServiceName(), l.getQuantity(), l.getAmount())).toList();
         List<PaymentResponse> paymentList = payments.findByReceiptIdOrderByIdAsc(t.getReceipt().getId()).stream()
                 .map(p -> new PaymentResponse(p.getId(), p.isPaymentStatus() ? "PAYMENT" : "REFUND",
                         p.getPaymentMethod().getMethodName(), p.getAmount()))
