@@ -170,6 +170,13 @@ describe('Clinic v2 core service scenarios', () => {
     })
   })
 
+  it('ServiceCatalogService: rejectsAnAssessmentService', () => {
+    cy.api('POST', '/__cypress/v2/core/ServiceCatalogService/rejectsAnAssessmentService').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.error).to.equal('IllegalArgumentException')
+    })
+  })
+
   it('ServiceCatalogService: rejectsNegativePrice', () => {
     cy.api('POST', '/__cypress/v2/core/ServiceCatalogService/rejectsNegativePrice').then(({ status, body }) => {
       expect(status).to.equal(200)
