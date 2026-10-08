@@ -189,7 +189,7 @@ public class CommissionController {
                 c.getMonthlyCourseSales(), String.valueOf(c.getCommissionSchemeVersion()),
                 c.getLockedCommissionRate() != null ? c.getLockedCommissionRate() : c.getCalculatedCommissionRate(),
                 c.isClosingStatus() ? "CLOSED" : "OPEN")).toList());
-        if (saleMonth.matches("\d{4}-(0[1-9]|1[0-2])")) {
+        if (saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])")) {
             java.util.Set<Long> listed = new java.util.HashSet<>();
             rows.forEach(r -> listed.add(r.employeeId()));
             for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonth(saleMonth)) {
