@@ -549,19 +549,38 @@ export const userManagementApi = {
   activate: (id: number) => api.patch<ManagedUser>(`/api/users/${id}/activate`, {}),
 }
 
+// v2 names transaction types and statuses in PascalCase (SingleVisit, CoursePurchase, NoShow); the screens use
+// SINGLE_VISIT / COURSE / NO_SHOW. The old backend's spellings pass through unchanged.
+type RevenueDailyType = 'COURSE' | 'SINGLE_VISIT' | 'ASSESSMENT'
+const revenueTypeFromServer = (type: string) =>
+  type === 'CoursePurchase' ? 'COURSE' : /[a-z]/.test(type) && /^[A-Za-z]+$/.test(type)
+    ? type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+    : type
+
 export const reportApi = {
   dashboard: (from: string, to: string, branchCode?: string) =>
     api.get<DashboardResponse>(
       `/api/dashboard/summary?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
     ),
   appointments: (from: string, to: string, branchCode?: string) =>
-    api.get<AppointmentReport>(
-      `/api/reports/appointments?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
-    ),
+    api
+      .get<AppointmentReport>(
+        `/api/reports/appointments?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
+      )
+      .then((report) => ({
+        ...report,
+        byStatus: report.byStatus.map((item) => ({ ...item, status: statusFromServer(item.status) })),
+      })),
   revenue: (from: string, to: string, branchCode?: string) =>
-    api.get<RevenueReport>(
-      `/api/reports/revenue?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
-    ),
+    api
+      .get<RevenueReport>(
+        `/api/reports/revenue?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
+      )
+      .then((report) => ({
+        ...report,
+        byCategory: report.byCategory.map((item) => ({ ...item, type: revenueTypeFromServer(item.type) })),
+        dailyByCategory: report.dailyByCategory?.map((item) => ({ ...item, type: revenueTypeFromServer(item.type) as RevenueDailyType })),
+      })),
   balances: (from: string, to: string, branchCode?: string, patientId?: number) =>
     api.get<CourseBalanceReport>(
       `/api/reports/course-balances?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}), ...(patientId ? { patientId: String(patientId) } : {}) })}`,
