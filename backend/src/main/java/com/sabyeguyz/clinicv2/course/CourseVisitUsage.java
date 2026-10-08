@@ -76,7 +76,7 @@ public class CourseVisitUsage {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "usage_status", nullable = false)
+    @Column(name = "usage_status", nullable = false, columnDefinition = "usage_status_enum")
     private UsageStatus usageStatus = UsageStatus.Completed;
 
     /** A Completed usage always needs its printed usage document. */

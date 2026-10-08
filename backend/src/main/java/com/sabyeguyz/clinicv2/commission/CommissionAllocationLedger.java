@@ -55,7 +55,7 @@ public class CommissionAllocationLedger {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "treatment_fee_type")
+    @Column(name = "treatment_fee_type", columnDefinition = "fee_type_enum")
     private FeeType treatmentFeeType;
 
     @Column(name = "treatment_fee_rate_or_amount", precision = 12, scale = 4)
@@ -76,7 +76,7 @@ public class CommissionAllocationLedger {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "overflow_policy_used")
+    @Column(name = "overflow_policy_used", columnDefinition = "overflow_policy_enum")
     private OverflowPolicy overflowPolicyUsed;
 
     /** Prior ledger entry this row adjusts, if any. */
@@ -99,7 +99,7 @@ public class CommissionAllocationLedger {
     /** Allocation books the commission; Reversal (negative amounts) undoes one Allocation; Adjustment is an approved correction. */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "entry_type", nullable = false)
+    @Column(name = "entry_type", nullable = false, columnDefinition = "commission_allocation_entry_type_enum")
     private AllocationEntryType entryType = AllocationEntryType.Allocation;
 
     @Column(name = "adjustment_reason", length = 255)
