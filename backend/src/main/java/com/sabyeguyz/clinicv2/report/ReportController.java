@@ -167,11 +167,11 @@ public class ReportController {
         Long branchId = resolveBranchId(branchCode);
         List<Course> rows = courses.findByReceiptSaleDateBetween(from, to).stream()
                 .filter(c -> branchId == null || c.getReceipt().getBranch().getId().equals(branchId))
-                .filter(c -> patientId == null || c.getReceipt().getPatient().getId().equals(patientId))
+                .filter(c -> patientId == null || c.getPurchaserPatient().getId().equals(patientId))
                 .toList();
         List<BalanceRow> balanceRows = rows.stream().map(c -> {
             int purchased = c.getTotalVisits() + (c.getBonusVisits() == null ? 0 : c.getBonusVisits());
-            var patient = c.getReceipt().getPatient();
+            var patient = c.getPurchaserPatient();
             return new BalanceRow(patient.getPatientHn(), patient.getPatientFname() + " " + patient.getPatientLname(),
                     c.getReceipt().getBranch().getBranchCode(), c.getCourseName(), purchased, c.getVisitsUsed(),
                     c.getRemainingVisits(), c.getCourseCreateAt(),
