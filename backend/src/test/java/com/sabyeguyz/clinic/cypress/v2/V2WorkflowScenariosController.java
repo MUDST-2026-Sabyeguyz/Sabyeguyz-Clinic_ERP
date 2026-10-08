@@ -33,7 +33,17 @@ public class V2WorkflowScenariosController {
         var service = new AppointmentService(appointments.proxy(), history.proxy());
         Appointment existing = new Appointment();
         existing.setStaff(new Staff());
-        existing.setAppointmentStatus(scenario.equals("completed") ? AppointmentStatus.Completed : AppointmentStatus.Confirmed);
+        existing.setAppointmentStatus(switch (scenario) {
+            case "completed" -> AppointmentStatus.Completed;
+            case "confirm", "arrive-unconfirmed" -> AppointmentStatus.Unconfirmed;
+            default -> AppointmentStatus.Confirmed;
+        });
+        if (scenario.equals("link-patient") || scenario.equals("arrive-new-patient")) {
+            existing.setAppointmentPatientType(com.sabyeguyz.clinicv2.enums.AppointmentPatientType.NEW);
+        }
+        if (scenario.equals("link-patient-already-linked") || scenario.equals("arrive-confirmed")) {
+            existing.setPatient(new Patient());
+        }
         appointments.on("findById", args -> Optional.of(existing));
         appointments.on("existsByStaffIdAndAppointmentDateAndAppointmentTimeAndAppointmentStatusNotIn",
                 args -> scenario.equals("conflict"));
@@ -43,6 +53,22 @@ public class V2WorkflowScenariosController {
                         LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), 1L);
                 case "cancel", "completed" -> service.cancel(1L, "ผู้ป่วยขอยกเลิก", 9L);
                 case "reschedule" -> service.reschedule(1L, LocalDate.of(2026, 12, 5), LocalTime.of(10, 0), "ผู้ป่วยขอเลื่อน", 9L);
+                case "book-unconfirmed" -> service.book(new Patient(), new Branch(), new Staff(), new Service(), null,
+                        LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), AppointmentStatus.Unconfirmed, 1L);
+                case "book-bad-initial-status" -> service.book(new Patient(), new Branch(), new Staff(), new Service(), null,
+                        LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), AppointmentStatus.Completed, 1L);
+                case "book-new-patient" -> service.bookNewPatient("สมชาย ใจดี", null, new Branch(), new Staff(),
+                        com.sabyeguyz.clinicv2.enums.RequestedServiceType.Course, null, LocalDate.of(2026, 12, 1),
+                        LocalTime.of(9, 0), AppointmentStatus.Unconfirmed, 1L);
+                case "new-nickname-with-phone" -> service.bookNewPatient("แบงค์", "0812345678", new Branch(), new Staff(),
+                        null, null, LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), null, 1L);
+                case "new-nickname-without-phone" -> service.bookNewPatient("แบงค์", " ", new Branch(), new Staff(),
+                        null, null, LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), null, 1L);
+                case "new-without-name" -> service.bookNewPatient("  ", "0812345678", new Branch(), new Staff(),
+                        null, null, LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), null, 1L);
+                case "confirm", "confirm-already-confirmed" -> service.confirm(1L, 9L);
+                case "link-patient", "link-patient-already-linked" -> service.linkRegisteredPatient(1L, new Patient(), 9L);
+                case "arrive-unconfirmed", "arrive-new-patient", "arrive-confirmed" -> service.markArrived(1L, 9L);
                 default -> throw new IllegalArgumentException("Unknown scenario");
             };
             Map<String, Object> resultMap = new LinkedHashMap<>();
@@ -50,6 +76,10 @@ public class V2WorkflowScenariosController {
             resultMap.put("date", result.getAppointmentDate());
             resultMap.put("time", result.getAppointmentTime());
             resultMap.put("historySaves", history.calls("save"));
+            resultMap.put("patientType", result.getAppointmentPatientType());
+            resultMap.put("hasPatient", result.getPatient() != null);
+            resultMap.put("contactName", result.getContactName());
+            resultMap.put("contactPhone", result.getContactPhone());
             return resultMap;
         });
     }
