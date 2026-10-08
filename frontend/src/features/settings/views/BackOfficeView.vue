@@ -89,6 +89,8 @@ const resourceStatusToUi: Record<string, string> = {
   AVAILABLE: 'ว่าง',
   IN_USE: 'ไม่ว่าง',
   MAINTENANCE: 'ซ่อม',
+  ACTIVE: 'ว่าง',
+  INACTIVE: 'ปิดใช้งาน',
 }
 const resourceStatusToApi: Record<string, string> = {
   ว่าง: 'AVAILABLE',

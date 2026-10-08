@@ -61,6 +61,7 @@ describe('monthly closing', () => {
     cy.contains('button', 'ปิดรอบทั้งหมด').click()
     cy.contains('h2', 'ต้องการปิดรอบเดือนหรือไม่?').should('be.visible')
     cy.contains('button', 'ใช่').click()
+    cy.noAlert()
     cy.get('tbody tr').should('contain.text', 'ปิดรอบแล้ว')
     cy.contains('button', 'ปิดรอบทั้งหมด').should('be.disabled')
     cy.get('@fixtures').then(() => cy.api('GET', '/api/patients').its('body.items.0.id').then((id) => cy.api('GET', `/api/patients/${id}/courses`)))
