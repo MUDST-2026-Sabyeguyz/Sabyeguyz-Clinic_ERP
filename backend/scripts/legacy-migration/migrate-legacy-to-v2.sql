@@ -502,7 +502,7 @@ CREATE TEMP TABLE _orphan AS
 SELECT o.old_id,
        nextval(pg_get_serial_sequence('public.receipt', 'receipt_id')) AS receipt_id,
        nextval(pg_get_serial_sequence('public.sales_transaction', 'transaction_id')) AS txn_id,
-       (SELECT coalesce(max(substr(receipt_no, 4)::int), 0) FROM public.receipt) + (row_number() OVER (ORDER BY o.purchased_at, o.old_id))::int AS no
+       (SELECT coalesce(max(substr(receipt_no, 4)::int), 0) FROM public.receipt) + (row_number() OVER (ORDER BY o.purchased_at, o.old_id))::int AS rno
 FROM _purchase o WHERE o.sale_id IS NULL;
 
 INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
