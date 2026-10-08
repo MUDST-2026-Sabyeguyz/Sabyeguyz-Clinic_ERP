@@ -6,7 +6,7 @@ function buyAndClose(fx, patient) {
     patientId: patient.id, courseId: fx.courseId, branchCode: '01',
   }).then(({ body: purchase }) => {
     cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
-    return purchase
+    return cy.wrap(purchase)
   })
 }
 
