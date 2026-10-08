@@ -32,10 +32,15 @@ describe('v2 auth and roles', () => {
   })
 
   it('lets a manager list users and register a new one who can log in', () => {
-    cy.api('GET', '/api/users').its('status').should('equal', 200)
-    cy.api('POST', '/api/auth/register', { username: 'newuser01', password: 'password123' }).then(({ status }) => {
-      expect(status).to.equal(201)
+    const describe = ({ status, body }) => `HTTP ${status} ${JSON.stringify(body)}`
+    cy.api('GET', '/api/users').then((response) => {
+      expect(response.status, `list users: ${describe(response)}`).to.equal(200)
     })
-    cy.login('newuser01', 'password123').its('status').should('equal', 200)
+    cy.api('POST', '/api/auth/register', { username: 'newuser01', password: 'password123' }).then((response) => {
+      expect(response.status, `register: ${describe(response)}`).to.equal(201)
+    })
+    cy.login('newuser01', 'password123').then((response) => {
+      expect(response.status, `login of the new user: ${describe(response)}`).to.equal(200)
+    })
   })
 })
