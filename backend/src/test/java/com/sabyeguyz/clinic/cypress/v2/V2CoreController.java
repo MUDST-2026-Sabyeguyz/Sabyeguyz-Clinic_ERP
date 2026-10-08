@@ -38,6 +38,7 @@ public class V2CoreController {
             case "CourseService/rejectsSaleSharesThatDoNotTotalOneHundred" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsSaleSharesThatDoNotTotalOneHundred();
             case "CourseService/rejectsTheSameStaffTwiceInTheSaleShares" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsTheSameStaffTwiceInTheSaleShares();
             case "CourseService/createsTheOwnerMemberAndEntitlementForThePurchaser" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().createsTheOwnerMemberAndEntitlementForThePurchaser();
+            case "CourseService/recordsThePurchaseLedgerEntryAgainstTheSaleLine" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().recordsThePurchaseLedgerEntryAgainstTheSaleLine();
             case "ServiceCatalogService/createsASingleVisitService" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().createsASingleVisitService();
             case "ServiceCatalogService/courseRequiresADefaultTotalVisits" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().courseRequiresADefaultTotalVisits();
             case "ServiceCatalogService/rejectsNegativePrice" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().rejectsNegativePrice();
@@ -64,6 +65,9 @@ public class V2CoreController {
             case "StaffService/rejectsMissingBranch" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().rejectsMissingBranch();
             case "StaffService/terminateSetsStatusAndPolicy" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateSetsStatusAndPolicy();
             case "StaffService/terminateRequiresAPolicy" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateRequiresAPolicy();
+            case "StaffService/terminateStampsThePolicyLockTime" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateStampsThePolicyLockTime();
+            case "StaffService/rejectsChangingALockedTerminationPolicy" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().rejectsChangingALockedTerminationPolicy();
+            case "StaffService/repeatingTheSameLockedPolicyKeepsTheOriginalLockTime" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().repeatingTheSameLockedPolicyKeepsTheOriginalLockTime();
             default -> throw new IllegalArgumentException("Unknown core scenario: " + group + "/" + scenario);
         };
     }
