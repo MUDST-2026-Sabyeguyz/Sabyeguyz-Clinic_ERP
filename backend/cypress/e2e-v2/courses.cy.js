@@ -13,7 +13,8 @@ describe('v2 courses', () => {
         expect(body.remaining).to.equal(6)
         expect(body.used).to.equal(0)
         expect(body.expired).to.equal(false)
-        expect(body.course.code).to.equal('CYPRESS')
+        expect(body.course.id).to.equal(this.fixtures.courseId)
+        expect(body.course.code).to.match(/^RE-\d{7}$/)
       })
     })
   })
@@ -27,12 +28,12 @@ describe('v2 courses', () => {
     })
   })
 
-  it('locks a commission rate and spreads the commission over the visits', function () {
+  it('leaves the commission provisional until the monthly closing locks the rate', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient).then(({ body }) => {
-        expect(Number(body.lockedCommissionRate)).to.be.greaterThan(0)
-        expect(Number(body.totalCourseCommissionPool)).to.be.greaterThan(0)
-        expect(Number(body.commissionAllocationPerVisit)).to.be.greaterThan(0)
+        expect(body.commissionStatus).to.equal('Provisional')
+        expect(Number(body.lockedCommissionRate)).to.equal(0)
+        expect(Number(body.totalCourseCommissionPool)).to.equal(0)
       })
     })
   })
