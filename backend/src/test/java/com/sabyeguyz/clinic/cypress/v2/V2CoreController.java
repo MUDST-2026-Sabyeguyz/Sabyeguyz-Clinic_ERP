@@ -29,6 +29,10 @@ public class V2CoreController {
             case "CourseService/appendsSequenceSuffixWhenMultipleCoursesShareAReceipt" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().appendsSequenceSuffixWhenMultipleCoursesShareAReceipt();
             case "CourseService/remainingVisitsIncludesBonusButCommissionRateIgnoresIt" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().remainingVisitsIncludesBonusButCommissionRateIgnoresIt();
             case "CourseService/rejectsACourseTemplateWithoutADefaultValidity" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsACourseTemplateWithoutADefaultValidity();
+            case "CourseService/recordsThePurchaserTheSaleLineAndEntitledVisits" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().recordsThePurchaserTheSaleLineAndEntitledVisits();
+            case "CourseService/rejectsASaleLineThatIsNotACoursePurchase" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsASaleLineThatIsNotACoursePurchase();
+            case "CourseService/rejectsASaleLineThatAlreadyHasACourse" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsASaleLineThatAlreadyHasACourse();
+            case "CourseService/rejectsAPurchaserThatDiffersFromTheReceiptPatient" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsAPurchaserThatDiffersFromTheReceiptPatient();
             case "ServiceCatalogService/createsASingleVisitService" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().createsASingleVisitService();
             case "ServiceCatalogService/courseRequiresADefaultTotalVisits" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().courseRequiresADefaultTotalVisits();
             case "ServiceCatalogService/rejectsNegativePrice" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().rejectsNegativePrice();
