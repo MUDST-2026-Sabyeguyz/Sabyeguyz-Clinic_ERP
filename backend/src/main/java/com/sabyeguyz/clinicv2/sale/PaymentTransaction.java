@@ -23,8 +23,8 @@ public class PaymentTransaction {
     private Branch branch;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "transaction_id")
-    private SalesTransaction transaction;
+    @JoinColumn(name = "receipt_id")
+    private Receipt receipt;
 
     @Column(precision = 12, scale = 2, nullable = false)
     private BigDecimal amount;
@@ -59,8 +59,8 @@ public class PaymentTransaction {
     public void setPatient(Patient patient) { this.patient = patient; }
     public Branch getBranch() { return branch; }
     public void setBranch(Branch branch) { this.branch = branch; }
-    public SalesTransaction getTransaction() { return transaction; }
-    public void setTransaction(SalesTransaction transaction) { this.transaction = transaction; }
+    public Receipt getReceipt() { return receipt; }
+    public void setReceipt(Receipt receipt) { this.receipt = receipt; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public PaymentMethod getPaymentMethod() { return paymentMethod; }
