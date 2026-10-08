@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.resource;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
  * Room has no "code" column (just room_name/room_type) - code is always
  * null here, a real gap vs. the old ClinicResource type.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/resources")
 public class ResourceController {
