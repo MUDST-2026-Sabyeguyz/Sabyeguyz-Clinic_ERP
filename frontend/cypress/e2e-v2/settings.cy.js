@@ -2,7 +2,10 @@
 const sectionButton = (name) => cy.contains('.settings-nav button', name)
 const openEditor = (label) => cy.contains('button.settings-primary', label).click()
 const modal = () => cy.get('.settings-modal')
-const save = () => cy.get('.settings-modal').contains('button', 'บันทึก').click()
+const save = () => {
+  cy.get('.settings-modal').contains('button', 'บันทึก').click()
+  cy.noAlert()
+}
 
 describe('settings', () => {
   it('is closed to a therapist', () => {
@@ -82,6 +85,7 @@ describe('settings', () => {
     sectionButton('Room / Resource').click()
     openEditor('+ เพิ่มห้อง/ทรัพยากร')
     modal().contains('label', 'ชื่อห้อง').find('input').type('ห้องทดสอบ 9')
+    modal().contains('label', 'ประเภท').find('select').select('ห้องรักษา')
     save()
     cy.contains('บันทึกข้อมูลเรียบร้อยแล้ว').should('be.visible')
     cy.contains('tbody tr', 'ห้องทดสอบ 9').should('contain.text', 'ว่าง')

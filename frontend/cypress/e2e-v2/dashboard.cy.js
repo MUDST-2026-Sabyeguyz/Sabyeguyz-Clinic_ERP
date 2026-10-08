@@ -23,12 +23,13 @@ describe('manager dashboard', () => {
         patientId: patient.id, branchCode: '01',
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
         payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
-      }).its('status').should('equal', 201)
+      }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(201))
       cy.api('POST', '/api/payments', {
         patientId: patient.id, branchCode: '01',
+        salespersonStaffId: this.fixtures.managerStaffId,
         items: [{ type: 'COURSE', referenceId: this.fixtures.courseId, quantity: 1 }],
         payments: [{ paymentMethodCode: 'Cash', amount: 9000 }],
-      }).its('status').should('equal', 201)
+      }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(201))
     })
     cy.visitAs('manager', '/staff/dashboard')
     card('รายได้รวม').should('contain.text', '9,800 บาท')
@@ -50,8 +51,10 @@ describe('manager dashboard', () => {
         patientId: patient.id, branchCode: '01',
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
         payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
-      }).its('status').should('equal', 201)
+      }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(201))
     })
+    const today = new Date().toISOString().slice(0, 10)
+    cy.api('GET', `/api/dashboard/summary?from=${today.slice(0, 8)}01&to=${today}`).then(({ body }) => expect(JSON.stringify(body), 'what the backend reports for the month').to.contain('"totalRevenue":800'))
     cy.visitAs('manager', '/staff/dashboard')
     card('รายได้รวม').should('contain.text', '800 บาท')
     cy.contains('label', 'สาขา').find('select').select('02')
