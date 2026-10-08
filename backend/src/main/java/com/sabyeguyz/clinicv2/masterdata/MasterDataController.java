@@ -41,6 +41,7 @@ public class MasterDataController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@RequestBody Request request) {
         MasterDataType type = resolveOrCreateType(request.category());
         MasterDataValue value = service.createValue(type, request.name(), null, actor.currentId());
@@ -48,6 +49,7 @@ public class MasterDataController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @RequestBody Request request) {
         MasterDataValue value = values.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
         value.setValueName(request.name());
@@ -58,11 +60,13 @@ public class MasterDataController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
         service.deactivateValue(id, actor.currentId());
     }
 
     @PatchMapping("/{id}/activate")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
         MasterDataValue value = values.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
         value.setValueStatus(true);
