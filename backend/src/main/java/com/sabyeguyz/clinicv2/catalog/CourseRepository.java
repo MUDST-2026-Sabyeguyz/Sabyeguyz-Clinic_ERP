@@ -24,6 +24,8 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     long countByReceiptId(Long receiptId);
 
+    Optional<Course> findBySaleTransactionId(Long saleTransactionId);
+
     boolean existsBySaleTransactionId(Long saleTransactionId);
 
     List<Course> findBySellerStaffIdAndSaleMonth(Long sellerStaffId, String saleMonth);
