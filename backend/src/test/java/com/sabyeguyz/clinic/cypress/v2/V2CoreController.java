@@ -33,6 +33,11 @@ public class V2CoreController {
             case "CourseService/rejectsASaleLineThatIsNotACoursePurchase" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsASaleLineThatIsNotACoursePurchase();
             case "CourseService/rejectsASaleLineThatAlreadyHasACourse" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsASaleLineThatAlreadyHasACourse();
             case "CourseService/rejectsAPurchaserThatDiffersFromTheReceiptPatient" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsAPurchaserThatDiffersFromTheReceiptPatient();
+            case "CourseService/creditsTheSaleToTheSellerAtOneHundredPercentByDefault" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().creditsTheSaleToTheSellerAtOneHundredPercentByDefault();
+            case "CourseService/splitsTheSaleCreditBetweenTwoStaff" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().splitsTheSaleCreditBetweenTwoStaff();
+            case "CourseService/rejectsSaleSharesThatDoNotTotalOneHundred" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsSaleSharesThatDoNotTotalOneHundred();
+            case "CourseService/rejectsTheSameStaffTwiceInTheSaleShares" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsTheSameStaffTwiceInTheSaleShares();
+            case "CourseService/createsTheOwnerMemberAndEntitlementForThePurchaser" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().createsTheOwnerMemberAndEntitlementForThePurchaser();
             case "ServiceCatalogService/createsASingleVisitService" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().createsASingleVisitService();
             case "ServiceCatalogService/courseRequiresADefaultTotalVisits" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().courseRequiresADefaultTotalVisits();
             case "ServiceCatalogService/rejectsNegativePrice" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().rejectsNegativePrice();

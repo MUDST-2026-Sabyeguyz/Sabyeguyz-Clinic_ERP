@@ -30,10 +30,19 @@ public record Discount(DiscountType type, BigDecimal value) {
         }
         DiscountType parsed = switch (type.trim().toUpperCase()) {
             case "PERCENT", "PERCENTAGE" -> DiscountType.Percentage;
-            case "AMOUNT", "BAHT" -> DiscountType.Amount;
+            case "FIXED", "AMOUNT", "BAHT" -> DiscountType.Fixed;
             default -> throw new IllegalArgumentException("ประเภทส่วนลดไม่ถูกต้อง: " + type);
         };
         return new Discount(parsed, value);
+    }
+
+    public boolean isNone() {
+        return type == null;
+    }
+
+    /** The money taken off {@code base}; zero when there is no discount. */
+    public BigDecimal amountOff(BigDecimal base) {
+        return type == null ? BigDecimal.ZERO.setScale(2) : base.subtract(apply(base)).setScale(2, RoundingMode.HALF_UP);
     }
 
     public BigDecimal apply(BigDecimal price) {
@@ -50,7 +59,7 @@ public record Discount(DiscountType type, BigDecimal value) {
                 }
                 yield price.subtract(price.multiply(value).divide(HUNDRED, 2, RoundingMode.HALF_UP));
             }
-            case Amount -> {
+            case Fixed -> {
                 if (value.compareTo(price) > 0) {
                     throw new IllegalArgumentException("ส่วนลดต้องไม่เกินราคา");
                 }
