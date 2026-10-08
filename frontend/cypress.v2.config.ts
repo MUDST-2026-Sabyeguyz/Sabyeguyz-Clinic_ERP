@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress'
+import { appendFileSync } from 'node:fs'
 import process from 'node:process'
 
 // Browser tests of the staff web app against the real v2 backend on PostgreSQL (see docs/frontend-e2e-tests.md).
@@ -21,6 +22,11 @@ export default defineConfig({
           if (test.state !== 'failed') continue
           console.log(`\nFAILED ${spec.relative} :: ${test.title.join(' > ')}`)
           console.log(`  ${(test.displayError || 'no error message').split('\n').slice(0, 10).join('\n  ')}`)
+          // Also on the run's summary page, which lists every failure (the log view can hide some).
+          if (process.env.GITHUB_STEP_SUMMARY) {
+            const reason = (test.displayError || '').split('\n').slice(0, 4).join('\n')
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n\`\`\`\nFAILED ${spec.relative} :: ${test.title.join(' > ')}\n${reason}\n\`\`\`\n`)
+          }
         }
       })
     },
