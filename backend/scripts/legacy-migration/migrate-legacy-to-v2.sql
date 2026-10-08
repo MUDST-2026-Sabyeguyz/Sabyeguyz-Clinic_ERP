@@ -264,11 +264,11 @@ SELECT p.id, p.branch_id, p.created_at, p.updated_at, p.active,
 FROM legacy.patients p;
 
 INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
-SELECT 'patient', 'patients.id=' || id, 'identity number "' || p.identity_number || '" is not a 13-digit national id', 'national_id left empty; the number stays in legacy.patients'
+SELECT 'patient', 'patients.id=' || p.id, 'identity number "' || p.identity_number || '" is not a 13-digit national id', 'national_id left empty; the number stays in legacy.patients'
 FROM legacy.patients p JOIN _patient x ON x.id = p.id
 WHERE p.identity_document_type = 'NATIONAL_ID' AND x.national_id IS NULL;
 INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
-SELECT 'patient', 'patients.id=' || id, 'title "' || coalesce(p.title, '') || '" is not in the new title list', 'title chosen from gender'
+SELECT 'patient', 'patients.id=' || p.id, 'title "' || coalesce(p.title, '') || '" is not in the new title list', 'title chosen from gender'
 FROM legacy.patients p JOIN _patient x ON x.id = p.id WHERE x.title_guessed;
 
 -- re-issue HNs that do not have the 10-digit YYBBMMNNNN shape
@@ -506,12 +506,12 @@ SELECT o.old_id,
 FROM _purchase o WHERE o.sale_id IS NULL;
 
 INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
-SELECT 'course purchase', 'course_purchases.id=' || old_id, 'purchase has no sale line', 'receipt RE-' || lpad(no::text, 7, '0') || ' created for it'
+SELECT 'course purchase', 'course_purchases.id=' || old_id, 'purchase has no sale line', 'receipt RE-' || lpad(rno::text, 7, '0') || ' created for it'
 FROM _orphan;
 
 INSERT INTO public.receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_at, receipt_create_by,
                             subtotal_before_discount, bill_discount_amount, taxable_amount, tax_amount, net_amount, receipt_status)
-SELECT o.receipt_id, 'RE-' || lpad(o.no::text, 7, '0'), p.patient_id, p.branch_id, p.purchased_at AT TIME ZONE 'UTC',
+SELECT o.receipt_id, 'RE-' || lpad(o.rno::text, 7, '0'), p.patient_id, p.branch_id, p.purchased_at AT TIME ZONE 'UTC',
        p.purchased_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx), p.price, 0, p.price, 0, p.price, 'Issued'
 FROM _orphan o JOIN _purchase p ON p.old_id = o.old_id;
 
