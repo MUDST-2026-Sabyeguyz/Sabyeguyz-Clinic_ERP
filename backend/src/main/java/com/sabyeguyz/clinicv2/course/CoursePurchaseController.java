@@ -65,6 +65,7 @@ import org.springframework.web.bind.annotation.*;
  *   implemented.</li>
  * </ul>
  */
+@Transactional
 @RestController
 public class CoursePurchaseController {
     private final CourseRepository courses;

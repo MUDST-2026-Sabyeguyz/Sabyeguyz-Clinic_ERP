@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.branch;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
  * address/phone. The frontend's Branch type and branchApi calls need
  * updating to match this shape.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/branches")
 public class BranchController {

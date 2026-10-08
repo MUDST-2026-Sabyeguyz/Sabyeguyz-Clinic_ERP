@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.report;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.appointment.Appointment;
 import com.sabyeguyz.clinicv2.appointment.AppointmentRepository;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
@@ -39,6 +40,7 @@ import org.springframework.web.bind.annotation.*;
  * receipt_id to group by - see SaleController's Javadoc for the same
  * underlying schema gap.</p>
  */
+@Transactional
 @RestController
 public class ReportController {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");

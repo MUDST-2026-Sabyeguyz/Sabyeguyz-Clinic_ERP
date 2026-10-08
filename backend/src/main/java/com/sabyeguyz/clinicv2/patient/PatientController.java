@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.patient;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.*;
  *   about yet.</li>
  * </ul>
  */
+@Transactional
 @RestController
 @RequestMapping("/api/patients")
 public class PatientController {

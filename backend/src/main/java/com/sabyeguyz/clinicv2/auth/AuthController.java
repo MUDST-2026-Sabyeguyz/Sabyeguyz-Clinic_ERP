@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.auth;
 
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
  * returns the first assigned role's name to keep the response shape
  * compatible, which loses information for a multi-role user.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
