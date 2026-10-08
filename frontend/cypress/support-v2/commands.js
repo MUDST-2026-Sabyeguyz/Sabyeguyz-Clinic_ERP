@@ -52,3 +52,13 @@ Cypress.Commands.add('registerPatient', (overrides = {}) => {
     return body
   })
 })
+
+// Fails with the text of any error the page is showing (used right after a save, so a rejected save explains itself).
+Cypress.Commands.add('noAlert', () => {
+  cy.wait(1500)
+  cy.get('body').then(($body) => {
+    const shown = [...$body.find('[role="alert"], .validation-error, .settings-error, .error-message, .error')]
+      .map((element) => element.textContent.trim()).filter(Boolean)
+    expect(shown.join(' | '), 'error shown on the page').to.equal('')
+  })
+})
