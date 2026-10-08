@@ -38,6 +38,32 @@ describe('v2 courses', () => {
     })
   })
 
+  it('credits a course sale to two PTs when shares add up to 100%', function () {
+    cy.registerPatient().then((patient) => {
+      buy(this.fixtures, patient, {
+        shares: [
+          { staffId: this.fixtures.managerStaffId, percent: 60 },
+          { staffId: this.fixtures.therapistId, percent: 40 },
+        ],
+        caseOwnerStaffId: this.fixtures.therapistId,
+      }).then(({ status, body }) => {
+        expect(status).to.equal(201)
+        expect(Number(body.price)).to.equal(9000)
+      })
+    })
+  })
+
+  it('rejects shares that do not add up to 100%', function () {
+    cy.registerPatient().then((patient) => {
+      buy(this.fixtures, patient, {
+        shares: [
+          { staffId: this.fixtures.managerStaffId, percent: 60 },
+          { staffId: this.fixtures.therapistId, percent: 30 },
+        ],
+      }).its('status').should('equal', 400)
+    })
+  })
+
   it('lists the patient\'s courses', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient).its('status').should('equal', 201)
