@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.auth;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
@@ -38,6 +39,7 @@ import org.springframework.web.bind.annotation.*;
  *   had, just made explicit.</li>
  * </ul>
  */
+@PreAuthorize("hasRole('MANAGER')")
 @RestController
 @RequestMapping("/api/users")
 public class UserManagementController {
