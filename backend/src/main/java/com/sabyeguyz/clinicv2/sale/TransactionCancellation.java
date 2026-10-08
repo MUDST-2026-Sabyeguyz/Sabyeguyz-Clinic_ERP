@@ -48,7 +48,7 @@ public class TransactionCancellation {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "cancellation_type", nullable = false)
+    @Column(name = "cancellation_type", nullable = false, columnDefinition = "cancellation_type_enum")
     private CancellationType cancellationType;
 
     public TransactionCancellation() {}
