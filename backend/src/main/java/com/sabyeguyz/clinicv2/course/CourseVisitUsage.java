@@ -12,7 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * One use of a Course entitlement. Follows Commission_System_Requirement_Dev
@@ -51,7 +51,7 @@ public class CourseVisitUsage {
     private Staff caseOwnerStaff;
 
     @Column(name = "visit_date", nullable = false)
-    private LocalDate visitDate;
+    private LocalDateTime visitDate;
 
     @Column(name = "visit_qty", nullable = false)
     private int visitQty = 1;
@@ -112,8 +112,8 @@ public class CourseVisitUsage {
     public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
     public Staff getCaseOwnerStaff() { return caseOwnerStaff; }
     public void setCaseOwnerStaff(Staff caseOwnerStaff) { this.caseOwnerStaff = caseOwnerStaff; }
-    public LocalDate getVisitDate() { return visitDate; }
-    public void setVisitDate(LocalDate visitDate) { this.visitDate = visitDate; }
+    public LocalDateTime getVisitDate() { return visitDate; }
+    public void setVisitDate(LocalDateTime visitDate) { this.visitDate = visitDate; }
     public int getVisitQty() { return visitQty; }
     public void setVisitQty(int visitQty) { this.visitQty = visitQty; }
     public BigDecimal getCommissionAllocationPerVisit() { return commissionAllocationPerVisit; }
