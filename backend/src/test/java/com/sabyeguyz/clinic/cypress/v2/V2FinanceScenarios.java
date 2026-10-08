@@ -203,8 +203,9 @@ public class V2FinanceScenarios {
         }
         if (scenario.equals("sale-course")) {
             template.setDefaultTotalVisits(10); template.setDefaultBonusVisits(0); template.setDefaultValidityDays(365);
-            var receipt = new Receipt(); receipt.setReceiptNo("RE-2600001");
-            var transaction = service.recordCoursePurchase(new Patient(),new Branch(),receipt,template,staff(),null,
+            var patient = new Patient();
+            var receipt = new Receipt(); receipt.setReceiptNo("RE-2600001"); receipt.setPatient(patient);
+            var transaction = service.recordCoursePurchase(patient,new Branch(),receipt,template,staff(),null,
                     decimal("10000.00"),null,null,LocalDate.of(2026,8,18),1L);
             return Map.of("sameCourse",transaction.getCourse() == courses.arguments("save").get(0)[0],
                     "amount",transaction.getAmount(),"type",transaction.getTransactionType(),"saveOrder",saveOrder);
