@@ -11,14 +11,12 @@ STATUS=""
 BODY=""
 failures=0
 
-req() { # method path [json body]
+req() { # method path [json body]; the Authorization header is only sent when TOKEN is set
   local method="$1" path="$2" body="${3:-}" response
-  if [ -n "$body" ]; then
-    response=$(curl -s -w '\n%{http_code}' -X "$method" "$BASE$path" \
-      -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "$body")
-  else
-    response=$(curl -s -w '\n%{http_code}' -X "$method" "$BASE$path" -H "Authorization: Bearer $TOKEN")
-  fi
+  local args=(-s -w '\n%{http_code}' -X "$method" "$BASE$path")
+  if [ -n "$TOKEN" ]; then args+=(-H "Authorization: Bearer $TOKEN"); fi
+  if [ -n "$body" ]; then args+=(-H 'Content-Type: application/json' -d "$body"); fi
+  response=$(curl "${args[@]}")
   STATUS=$(printf '%s' "$response" | tail -n1)
   BODY=$(printf '%s' "$response" | sed '$d')
 }
