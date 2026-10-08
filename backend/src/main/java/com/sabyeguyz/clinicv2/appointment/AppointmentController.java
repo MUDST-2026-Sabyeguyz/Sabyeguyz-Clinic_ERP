@@ -99,7 +99,8 @@ public class AppointmentController {
                                 @RequestParam(defaultValue = "20") int size) {
         Long branchId = branchCode == null || branchCode.isBlank() ? null : resolveBranch(branchCode).getId();
         AppointmentStatus statusValue = status == null || status.isBlank() ? null : AppointmentStatus.valueOf(status);
-        Page<Appointment> result = repository.search(branchId, date, therapistId, statusValue,
+        Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date, therapistId,
+                statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
                 PageRequest.of(page, size, Sort.by("appointmentDate").ascending().and(Sort.by("appointmentTime").ascending())));
         return new PageResponse(result.getContent().stream().map(AppointmentController::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
