@@ -110,7 +110,7 @@ public class CourseVisitUsageService {
         usage.setPatient(usingPatient);
         usage.setTreatingStaff(treatingStaff);
         usage.setCaseOwnerStaff(caseOwner);
-        usage.setVisitDate(visitDate);
+        usage.setVisitDate(visitDate.atStartOfDay());
         usage.setVisitQty(1);
         usage.setUsageStatus(UsageStatus.Completed);
         usage.setPrintRequired(true);
