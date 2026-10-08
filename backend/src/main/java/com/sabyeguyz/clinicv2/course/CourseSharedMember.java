@@ -6,6 +6,7 @@ import com.sabyeguyz.clinicv2.patient.Patient;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import java.time.Instant;
 
 @Entity
 @Table(name = "course_shared_member")
@@ -29,6 +30,12 @@ public class CourseSharedMember {
     @Column(name = "member_status", nullable = false)
     private boolean memberStatus = true;
 
+    @Column(name = "joined_at", nullable = false)
+    private Instant joinedAt = Instant.now();
+
+    @Column(name = "ended_at")
+    private Instant endedAt;
+
     public CourseSharedMember() {}
 
     public CourseSharedMember(Course course, Patient patient, CourseMemberRole memberRole) {
@@ -44,4 +51,7 @@ public class CourseSharedMember {
     public void setMemberRole(CourseMemberRole memberRole) { this.memberRole = memberRole; }
     public boolean isMemberStatus() { return memberStatus; }
     public void setMemberStatus(boolean memberStatus) { this.memberStatus = memberStatus; }
+    public Instant getJoinedAt() { return joinedAt; }
+    public Instant getEndedAt() { return endedAt; }
+    public void setEndedAt(Instant endedAt) { this.endedAt = endedAt; }
 }

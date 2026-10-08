@@ -18,6 +18,13 @@ public class PermissionService {
         return repository.findAll();
     }
 
+    /** The named permission, created on first use (cancellations must cite the permission that allowed them). */
+    @Transactional
+    public Permission getOrCreate(String permissionName, String moduleName, Long actorId) {
+        return repository.findByPermissionName(permissionName)
+                .orElseGet(() -> create(permissionName, moduleName, actorId));
+    }
+
     @Transactional
     public Permission create(String permissionName, String moduleName, Long actorId) {
         if (permissionName == null || permissionName.isBlank()) {
