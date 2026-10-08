@@ -139,7 +139,7 @@ public class CoursePurchaseController {
     @GetMapping("/api/course-purchases/{id}")
     public LedgerResponse ledger(@PathVariable Long id) {
         Course course = findCourse(id);
-        Long ownerPatientId = course.getReceipt().getPatient().getId();
+        Long ownerPatientId = course.getPurchaserPatient().getId();
         List<MovementResponse> movements = ledger.findByCourseIdOrderByIdDesc(id).stream()
                 .map(l -> new MovementResponse(l.getId(), l.getEntryType().name(), l.getQtyChange(), l.getRemark(),
                         l.getLedgerCreateAt()))
@@ -154,7 +154,7 @@ public class CoursePurchaseController {
     @PostMapping("/api/course-usages")
     public Response use(@RequestBody UseRequest request) {
         Course course = findCourse(request.coursePurchaseId());
-        Patient owner = course.getReceipt().getPatient();
+        Patient owner = course.getPurchaserPatient();
         PatientVisit visit = request.appointmentId() == null ? null
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId()).orElse(null);
         // Always treats the Case Owner as the Treating PT - see class Javadoc.
@@ -192,7 +192,7 @@ public class CoursePurchaseController {
         course.setCourseUpdateAt(Instant.now());
         course.setCourseUpdateBy(actor.currentId());
         Course saved = courses.save(course);
-        return toResponse(saved, saved.getReceipt().getPatient().getId());
+        return toResponse(saved, saved.getPurchaserPatient().getId());
     }
 
     private Staff resolveActorStaff() {
@@ -213,7 +213,7 @@ public class CoursePurchaseController {
                 : ledger.sumQtyChangeByCourseAndPatient(course.getId(), forPatientId);
         boolean expired = course.getExpiryDate().isBefore(LocalDate.now());
         boolean usable = !expired && course.getCourseStatus() == CourseStatus.Active && remaining > 0;
-        Patient patient = course.getReceipt().getPatient();
+        Patient patient = course.getPurchaserPatient();
         return new Response(course.getId(), new PatientSummary(patient.getId(), patient.getPatientHn(),
                 patient.getPatientFname() + " " + patient.getPatientLname()),
                 course.getReceipt().getBranch().getBranchCode(),
