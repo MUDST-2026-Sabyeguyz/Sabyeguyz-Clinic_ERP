@@ -38,7 +38,7 @@ public class SalesTransaction {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "transaction_type", nullable = false)
+    @Column(name = "transaction_type", nullable = false, columnDefinition = "transaction_type_enum")
     private TransactionType transactionType;
 
     /** Treating PT (who performs the service). */
@@ -88,7 +88,7 @@ public class SalesTransaction {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "line_discount_type")
+    @Column(name = "line_discount_type", columnDefinition = "line_discount_type_enum")
     private DiscountType lineDiscountType;
 
     @Column(name = "line_discount_value", precision = 12, scale = 4)

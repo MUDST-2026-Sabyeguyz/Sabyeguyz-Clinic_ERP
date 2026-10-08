@@ -55,7 +55,7 @@ public class Receipt {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "bill_discount_type")
+    @Column(name = "bill_discount_type", columnDefinition = "bill_discount_type_enum")
     private DiscountType billDiscountType;
 
     @Column(name = "bill_discount_value", precision = 12, scale = 4)
@@ -76,7 +76,7 @@ public class Receipt {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "receipt_status", nullable = false)
+    @Column(name = "receipt_status", nullable = false, columnDefinition = "receipt_status_enum")
     private ReceiptStatus receiptStatus = ReceiptStatus.Issued;
 
     public Receipt() {}

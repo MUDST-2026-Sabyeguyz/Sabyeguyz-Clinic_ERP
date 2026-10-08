@@ -28,7 +28,7 @@ public class Staff {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "staff_position_enum")
     private StaffPosition position;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -43,7 +43,7 @@ public class Staff {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "commission_after_termination_policy")
+    @Column(name = "commission_after_termination_policy", columnDefinition = "commission_after_termination_policy_enum")
     private CommissionAfterTerminationPolicy commissionAfterTerminationPolicy;
 
     /** When the termination policy was first recorded; from then on it can no longer be changed. */
