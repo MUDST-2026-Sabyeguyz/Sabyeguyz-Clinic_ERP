@@ -8,11 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
-    List<PaymentTransaction> findByTransactionIdOrderByIdAsc(Long transactionId);
+    List<PaymentTransaction> findByReceiptIdOrderByIdAsc(Long receiptId);
 
     @Query("select coalesce(sum(p.amount), 0) from PaymentTransaction p "
-            + "where p.transaction.id = :transactionId and p.paymentStatus = true")
-    BigDecimal paidAmountOf(@Param("transactionId") Long transactionId);
+            + "where p.receipt.id = :receiptId and p.paymentStatus = true")
+    BigDecimal paidAmountOf(@Param("receiptId") Long receiptId);
 
     @Query("select p from PaymentTransaction p where p.paymentDate between :from and :to "
             + "and p.paymentStatus = true and (:branchId is null or p.branch.id = :branchId)")

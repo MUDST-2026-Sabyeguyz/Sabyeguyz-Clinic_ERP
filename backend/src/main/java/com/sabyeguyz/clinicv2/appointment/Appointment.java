@@ -2,7 +2,10 @@ package com.sabyeguyz.clinicv2.appointment;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.Service;
+import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
 import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
+import com.sabyeguyz.clinicv2.enums.CalendarSyncStatus;
+import com.sabyeguyz.clinicv2.enums.RequestedServiceType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.resource.Room;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -13,6 +16,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+/**
+ * A booked slot. A NEW patient is not registered yet, so patient and service
+ * stay empty and contact_name/contact_phone identify them; CURRENT requires a
+ * patient (enforced by the database check as well as AppointmentService).
+ */
 @Entity
 @Table(name = "appointment")
 public class Appointment {
@@ -21,7 +29,7 @@ public class Appointment {
     @Column(name = "appointment_id")
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "patient_id")
     private Patient patient;
 
@@ -34,7 +42,7 @@ public class Appointment {
     @JoinColumn(name = "staff_id")
     private Staff staff;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_id")
     private Service service;
 
@@ -65,6 +73,32 @@ public class Appointment {
     @Column(name = "appointment_update_by")
     private Long appointmentUpdateBy;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "appointment_patient_type", nullable = false)
+    private AppointmentPatientType appointmentPatientType = AppointmentPatientType.CURRENT;
+
+    /** NEW: name, or nickname with phone; CURRENT: taken from the Patient. */
+    @Column(name = "contact_name", length = 200)
+    private String contactName;
+
+    @Column(name = "contact_phone", length = 20)
+    private String contactPhone;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "requested_service_type")
+    private RequestedServiceType requestedServiceType;
+
+    /** Calendar integration scope is still pending; nothing writes these two yet. */
+    @Column(name = "external_calendar_event_id", length = 255)
+    private String externalCalendarEventId;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "calendar_sync_status")
+    private CalendarSyncStatus calendarSyncStatus;
+
     public Appointment() {}
 
     public Long getId() { return id; }
@@ -92,4 +126,16 @@ public class Appointment {
     public void setAppointmentUpdateAt(Instant appointmentUpdateAt) { this.appointmentUpdateAt = appointmentUpdateAt; }
     public Long getAppointmentUpdateBy() { return appointmentUpdateBy; }
     public void setAppointmentUpdateBy(Long appointmentUpdateBy) { this.appointmentUpdateBy = appointmentUpdateBy; }
+    public AppointmentPatientType getAppointmentPatientType() { return appointmentPatientType; }
+    public void setAppointmentPatientType(AppointmentPatientType appointmentPatientType) { this.appointmentPatientType = appointmentPatientType; }
+    public String getContactName() { return contactName; }
+    public void setContactName(String contactName) { this.contactName = contactName; }
+    public String getContactPhone() { return contactPhone; }
+    public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
+    public RequestedServiceType getRequestedServiceType() { return requestedServiceType; }
+    public void setRequestedServiceType(RequestedServiceType requestedServiceType) { this.requestedServiceType = requestedServiceType; }
+    public String getExternalCalendarEventId() { return externalCalendarEventId; }
+    public void setExternalCalendarEventId(String externalCalendarEventId) { this.externalCalendarEventId = externalCalendarEventId; }
+    public CalendarSyncStatus getCalendarSyncStatus() { return calendarSyncStatus; }
+    public void setCalendarSyncStatus(CalendarSyncStatus calendarSyncStatus) { this.calendarSyncStatus = calendarSyncStatus; }
 }
