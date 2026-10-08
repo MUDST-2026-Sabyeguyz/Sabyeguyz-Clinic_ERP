@@ -9,6 +9,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,8 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Receipt numbers are RE- plus seven digits. The data dictionary has no
  * dedicated receipt-numbering sequence table (unlike HN_sequence for
  * patients), so {@link #nextReceiptNo()} takes the highest number in use plus
- * one; it is not safe under concurrent requests and needs a locked sequence
- * before this goes live.</p>
+ * one. To make that safe under concurrent requests it first takes a
+ * transaction-scoped PostgreSQL advisory lock, which the caller's transaction
+ * holds until it commits, so two sales can never be given the same number.</p>
  *
  * <p>Tax policy is still to be confirmed with the business, so no tax is
  * charged: taxable_amount is the amount after the bill discount, tax_amount is
@@ -29,14 +32,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReceiptService {
     private static final String RECEIPT_NO_FORMAT = "^RE-[0-9]{7}$";
 
+    private static final long RECEIPT_NUMBERING_LOCK = 7_001_001L;
+
     private final ReceiptRepository repository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public ReceiptService(ReceiptRepository repository) {
         this.repository = repository;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public String nextReceiptNo() {
+        if (entityManager != null) {
+            entityManager.createNativeQuery("select cast(pg_advisory_xact_lock(" + RECEIPT_NUMBERING_LOCK + ") as text)")
+                    .getResultList();
+        }
         return "RE-%07d".formatted(repository.findMaxReceiptSequence() + 1);
     }
 
