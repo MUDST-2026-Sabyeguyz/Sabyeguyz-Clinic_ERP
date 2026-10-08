@@ -16,6 +16,7 @@ import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
+import com.sabyeguyz.clinicv2.sale.Discount;
 import com.sabyeguyz.clinicv2.sale.Receipt;
 import com.sabyeguyz.clinicv2.sale.ReceiptRepository;
 import com.sabyeguyz.clinicv2.sale.ReceiptService;
@@ -96,7 +97,8 @@ public class CoursePurchaseController {
         this.actor = actor;
     }
 
-    public record PurchaseRequest(Long patientId, Long courseId, String branchCode) {}
+    public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
+                                   BigDecimal discountValue) {}
     public record UseRequest(Long coursePurchaseId, Long appointmentId, String note) {}
     public record ReasonRequest(String reason) {}
 
@@ -132,7 +134,8 @@ public class CoursePurchaseController {
         String receiptNo = "RE%s%06d".formatted(branch.getBranchCode(), receipts.count() + 1);
         Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
         var transaction = salesTransactionService.recordCoursePurchase(patient, branch, receipt, courseTemplate,
-                seller, null, null, null, null, LocalDate.now(), actor.currentId());
+                seller, null, null, null, null, Discount.of(request.discountType(), request.discountValue()),
+                LocalDate.now(), actor.currentId());
         return toResponse(transaction.getCourse(), patient.getId());
     }
 

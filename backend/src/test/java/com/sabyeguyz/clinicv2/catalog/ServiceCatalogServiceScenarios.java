@@ -38,7 +38,15 @@ public class ServiceCatalogServiceScenarios {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findByServiceCode", args -> Optional.empty());
         out.putAll(V2RepositoryStub.outcome(() -> { new ServiceCatalogService(repository).create(
-                "X", "ชื่อ", ServiceType.Assessment, new BigDecimal("-1"), null, null, null, 1L); return null; }));
+                "X", "ชื่อ", ServiceType.SingleVisit, new BigDecimal("-1"), null, null, null, 1L); return null; }));
+        return out;
+    }
+
+    public Map<String, Object> rejectsAnAssessmentService() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        repositoryStub.on("findByServiceCode", args -> Optional.empty());
+        out.putAll(V2RepositoryStub.outcome(() -> { new ServiceCatalogService(repository).create(
+                "A1", "ประเมิน", ServiceType.Assessment, new BigDecimal("500.00"), null, null, null, 1L); return null; }));
         return out;
     }
 }
