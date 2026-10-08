@@ -13,7 +13,7 @@ type ClosingRow = {
   status: 'Open' | 'Closed'
 }
 
-const selectedMonth = ref('2026-08-01')
+const selectedMonth = ref(`${new Date().toISOString().slice(0, 7)}-01`)
 const month = computed(() => selectedMonth.value.slice(0, 7))
 const router = useRouter()
 const branch = ref('ทุกสาขา')
@@ -30,7 +30,7 @@ async function load() {
       id: row.id,
       staff: row.employeeName,
       sales: Number(row.sales),
-      rate: Number(row.rate) * 100,
+      rate: Math.round(Number(row.rate) * 10000) / 100,
       status: row.status === 'CLOSED' ? 'Closed' : 'Open',
     }))
     errorMessage.value = ''
