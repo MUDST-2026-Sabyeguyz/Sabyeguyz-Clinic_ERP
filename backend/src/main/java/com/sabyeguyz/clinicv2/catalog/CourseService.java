@@ -9,7 +9,10 @@ import com.sabyeguyz.clinicv2.course.CourseLedgerRepository;
 import com.sabyeguyz.clinicv2.enums.CommissionStatus;
 import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
+import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.sale.Receipt;
+import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -45,16 +48,25 @@ public class CourseService {
         this.tierResolver = tierResolver;
     }
 
+    /** The course price is the sale line's amount (Course.course_price must equal the sale line). */
     @Transactional
-    public Course sell(Receipt receipt, Service serviceTemplate, Staff sellerStaff, Staff caseOwnerStaff,
-                        BigDecimal priceOverride, Integer totalVisitsOverride, Integer bonusVisitsOverride,
+    public Course sell(Receipt receipt, SalesTransaction transaction, Service serviceTemplate, Staff sellerStaff,
+                        Staff caseOwnerStaff, Integer totalVisitsOverride, Integer bonusVisitsOverride,
                         LocalDate saleDate, Long actorId) {
         require(receipt != null, "ต้องระบุใบเสร็จ");
+        require(transaction != null, "ต้องระบุรายการขาย");
         require(serviceTemplate != null, "ต้องระบุบริการ/คอร์สต้นแบบ");
         require(sellerStaff != null, "ต้องระบุผู้ขาย");
+        require(transaction.getTransactionType() == TransactionType.CoursePurchase,
+                "รายการขายต้องเป็นประเภท CoursePurchase");
+        require(transaction.getCourse() == null && !courses.existsBySaleTransactionId(transaction.getId()),
+                "รายการขายนี้มีคอร์สผูกอยู่แล้ว (1 คอร์สต่อ 1 รายการขาย)");
+        Patient purchaser = transaction.getPatient();
+        require(purchaser != null && samePatient(purchaser, receipt.getPatient()),
+                "ผู้ซื้อต้องตรงกับผู้ป่วยในรายการขายและใบเสร็จ");
         LocalDate effectiveSaleDate = saleDate == null ? LocalDate.now() : saleDate;
 
-        BigDecimal price = priceOverride != null ? priceOverride : serviceTemplate.getServicePrice();
+        BigDecimal price = transaction.getAmount();
         Integer totalVisits = totalVisitsOverride != null ? totalVisitsOverride : serviceTemplate.getDefaultTotalVisits();
         Integer bonusVisits = bonusVisitsOverride != null ? bonusVisitsOverride : serviceTemplate.getDefaultBonusVisits();
         Integer validityDays = serviceTemplate.getDefaultValidityDays();
@@ -90,6 +102,8 @@ public class CourseService {
         course.setCourseCreateAt(Instant.now());
         course.setCourseCreateBy(actorId);
         course.setReceipt(receipt);
+        course.setPurchaserPatient(purchaser);
+        course.setSaleTransaction(transaction);
         course.setSaleMonth(saleMonth);
         course.setSellerStaff(sellerStaff);
         course.setCaseOwnerStaff(owner);
@@ -107,7 +121,7 @@ public class CourseService {
 
         CourseLedger purchase = new CourseLedger();
         purchase.setCourse(saved);
-        purchase.setPatient(receipt.getPatient());
+        purchase.setPatient(purchaser);
         purchase.setEntryType(CourseLedgerEntryType.Purchase);
         purchase.setQtyChange(totalUsableVisits);
         purchase.setBalanceAfter(totalUsableVisits);
@@ -118,6 +132,10 @@ public class CourseService {
         ledger.save(purchase);
 
         return saved;
+    }
+
+    private static boolean samePatient(Patient a, Patient b) {
+        return a == b || (a != null && b != null && a.getId() != null && a.getId().equals(b.getId()));
     }
 
     private static void require(boolean condition, String message) {

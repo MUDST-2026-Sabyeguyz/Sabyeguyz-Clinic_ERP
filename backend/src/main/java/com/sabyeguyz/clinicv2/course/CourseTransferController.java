@@ -55,7 +55,7 @@ public class CourseTransferController {
     public Response create(@RequestBody Request request) {
         Course course = courses.findById(request.sourcePurchaseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Patient from = course.getReceipt().getPatient();
+        Patient from = course.getPurchaserPatient();
         Patient to = patients.findById(request.destinationPatientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วยปลายทาง"));
         CourseTransfer transfer = service.transfer(course, from, to, request.quantity(), request.reason(), actor.currentId());
