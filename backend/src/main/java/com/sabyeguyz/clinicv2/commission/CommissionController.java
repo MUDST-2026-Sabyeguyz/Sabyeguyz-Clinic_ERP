@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Course;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
  * the old API grouped Sale totals directly; this is closer to how v2's
  * Tier actually gets picked (see CourseService/MonthlyCommissionClosingService).
  */
+@Transactional
 @PreAuthorize("hasRole('MANAGER')")
 @RestController
 @RequestMapping("/api/commission")

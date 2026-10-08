@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.masterdata;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
  * into the old flat {category, code, name} shape. v2's Master_data_value
  * has no "code" column (just value_name) - code is always null here.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/master-data")
 public class MasterDataController {
