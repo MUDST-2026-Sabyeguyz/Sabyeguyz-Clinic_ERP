@@ -30,16 +30,19 @@ public class RefundController {
     private final PaymentMethodRepository paymentMethods;
     private final PermissionService permissions;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public RefundController(RefundService refundService, RefundTransactionRepository refunds,
                              PaymentTransactionRepository payments, PaymentMethodRepository paymentMethods,
-                             PermissionService permissions, CurrentActor actor) {
+                             PermissionService permissions, CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.refundService = refundService;
         this.refunds = refunds;
         this.payments = payments;
         this.paymentMethods = paymentMethods;
         this.permissions = permissions;
         this.actor = actor;
+        this.audit = audit;
     }
 
     public record RefundRequest(BigDecimal amount, String paymentMethodCode, String reason) {}
@@ -56,8 +59,11 @@ public class RefundController {
                 : paymentMethods.findByMethodNameIgnoreCase(request.paymentMethodCode())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
         var permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
-        return toResponse(refundService.request(payment, request.amount(), method, permission, request.reason(),
-                actor.currentId()));
+        RefundTransaction refund = refundService.request(payment, request.amount(), method, permission,
+                request.reason(), actor.currentId());
+        audit.record("refund_transaction", String.valueOf(refund.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
+                "Pending " + request.amount() + " (payment " + paymentId + ")", actor.currentId());
+        return toResponse(refund);
     }
 
     @GetMapping("/api/payments/{paymentId}/refunds")
@@ -67,12 +73,16 @@ public class RefundController {
 
     @PostMapping("/api/refunds/{id}/complete")
     public Response complete(@PathVariable Long id) {
-        return toResponse(refundService.complete(id, actor.currentId()));
+        RefundTransaction refund = refundService.complete(id, actor.currentId());
+        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Completed", actor.currentId());
+        return toResponse(refund);
     }
 
     @PostMapping("/api/refunds/{id}/fail")
     public Response fail(@PathVariable Long id) {
-        return toResponse(refundService.fail(id));
+        RefundTransaction refund = refundService.fail(id);
+        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Failed", actor.currentId());
+        return toResponse(refund);
     }
 
     private static Response toResponse(RefundTransaction refund) {

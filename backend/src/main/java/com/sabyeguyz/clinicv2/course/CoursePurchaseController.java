@@ -85,6 +85,7 @@ public class CoursePurchaseController {
     private final AppUserRepository users;
     private final com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
@@ -94,7 +95,8 @@ public class CoursePurchaseController {
                                      PatientRepository patients, BranchRepository branches, ServiceRepository services,
                                      PatientVisitRepository visits, PatientVisitService visitService,
                                      AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
-                                     CurrentActor actor) {
+                                     CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.courses = courses;
         this.ledger = ledger;
         this.usages = usages;
@@ -112,6 +114,7 @@ public class CoursePurchaseController {
         this.users = users;
         this.staffRepository = staffRepository;
         this.actor = actor;
+        this.audit = audit;
     }
 
     /** A sale credit split: {@code percent} of the course price is credited to {@code staffId}. */
@@ -165,6 +168,8 @@ public class CoursePurchaseController {
                 seller, caseOwner, null, null, null, Discount.of(request.discountType(), request.discountValue()),
                 shares, LocalDate.now(), actor.currentId());
         receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
+        audit.record("course", String.valueOf(purchase.course().getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
+                purchase.course().getCourseNo() + " price " + purchase.course().getCoursePrice(), actor.currentId());
         return toResponse(purchase.course(), patient.getId());
     }
 
@@ -220,6 +225,8 @@ public class CoursePurchaseController {
         course.setCourseUpdateAt(Instant.now());
         course.setCourseUpdateBy(actor.currentId());
         Course saved = courses.save(course);
+        audit.record("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Active", "Cancelled: " + request.reason(),
+                actor.currentId());
         return toResponse(saved, saved.getPurchaserPatient().getId());
     }
 
