@@ -35,6 +35,9 @@ public class ServiceCatalogService {
         if (repository.findByServiceCode(code).isPresent()) {
             throw new IllegalArgumentException("รหัสบริการซ้ำ");
         }
+        if (type == ServiceType.Assessment) {
+            throw new IllegalArgumentException("ไม่รองรับบริการประเภท Assessment แล้ว (เหลือ SingleVisit และ Course)");
+        }
         if (price == null || price.signum() < 0) {
             throw new IllegalArgumentException("ราคาต้องไม่ติดลบ");
         }
