@@ -64,7 +64,7 @@ describe('selling a service or a course', () => {
     cy.contains('h2', 'บันทึกการขายสำเร็จ').should('be.visible')
     cy.contains('a', 'ใช้สิทธิ์').click()
     cy.location('pathname').should('eq', '/staff/courses')
-    cy.api('GET', '/api/course-purchases').its('body').should('have.length', 1)
+    cy.api('GET', '/api/payments').its('body.totalItems').should('equal', 1)
   })
 
   it('goes back from the review without recording anything', () => {
