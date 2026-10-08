@@ -56,7 +56,7 @@ public class TreatmentController {
     @GetMapping("/services")
     public List<ServiceOption> serviceList() {
         return services.findByServiceStatusTrueOrderByServiceName().stream()
-                .filter(s -> s.getServiceType() != ServiceType.Course)
+                .filter(s -> s.getServiceType() == ServiceType.SingleVisit)
                 .map(s -> new ServiceOption(s.getId(), s.getServiceCode(), s.getServiceName(), 0, s.getServicePrice()))
                 .toList();
     }
