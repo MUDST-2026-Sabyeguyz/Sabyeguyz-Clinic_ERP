@@ -4,15 +4,16 @@ function sellVisit(fx, patient, branchCode = '01') {
     patientId: patient.id, branchCode,
     items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
     payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
-  }).its('status').should('equal', 201)
+  }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(201))
 }
 
 function sellCourse(fx, patient) {
   return cy.api('POST', '/api/payments', {
     patientId: patient.id, branchCode: '01',
+    salespersonStaffId: fx.managerStaffId,
     items: [{ type: 'COURSE', referenceId: fx.courseId, quantity: 1 }],
     payments: [{ paymentMethodCode: 'Cash', amount: 9000 }],
-  }).its('status').should('equal', 201)
+  }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(201))
 }
 
 describe('reports', () => {
