@@ -10,6 +10,7 @@ import com.sabyeguyz.clinicv2.commission.CommissionTier;
 import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
+import com.sabyeguyz.clinicv2.course.CourseLedger;
 import com.sabyeguyz.clinicv2.course.CourseLedgerRepository;
 import com.sabyeguyz.clinicv2.course.CourseSaleStaffShare;
 import com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository;
@@ -286,6 +287,28 @@ public class CourseServiceScenarios {
         out.put("allocatedVisits", entitlement.getAllocatedVisits());
         out.put("usedVisits", entitlement.getUsedVisits());
         out.put("remainingVisits", entitlement.getRemainingVisits());
+        return out;
+    }
+
+    public Map<String, Object> recordsThePurchaseLedgerEntryAgainstTheSaleLine() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Service template = courseTemplate();
+        template.setDefaultBonusVisits(3);
+        Receipt receipt = new Receipt();
+        receipt.setReceiptNo("RE-6000006");
+        SalesTransaction line = purchaseLine(receipt);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        schemeResult = new CommissionScheme();
+        tierResult = new CommissionTier();
+
+        service().sell(receipt, line, template, new Staff(), null, null, null, null, LocalDate.of(2026, 8, 18), 1L);
+
+        CourseLedger entry = (CourseLedger) ledgerStub.arguments("save").get(0)[0];
+        out.put("entryType", entry.getEntryType());
+        out.put("qtyChange", entry.getQtyChange());
+        out.put("balanceAfter", entry.getBalanceAfter());
+        out.put("sourceIsTheSaleLine", entry.getSalesTransaction() == line);
+        out.put("hasOtherSource", entry.getTransfer() != null || entry.getVisitUsage() != null || entry.getReversesLedger() != null);
         return out;
     }
 }

@@ -168,8 +168,7 @@ public class CourseService {
         purchase.setEntryType(CourseLedgerEntryType.Purchase);
         purchase.setQtyChange(totalUsableVisits);
         purchase.setBalanceAfter(totalUsableVisits);
-        purchase.setReferenceType("RECEIPT");
-        purchase.setReferenceId(receipt.getId());
+        purchase.setSalesTransaction(transaction);
         purchase.setLedgerCreateAt(Instant.now());
         purchase.setLedgerCreateBy(actorId);
         ledger.save(purchase);
