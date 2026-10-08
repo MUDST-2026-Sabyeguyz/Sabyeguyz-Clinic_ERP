@@ -38,7 +38,7 @@ public class ServiceManagementController {
     @GetMapping
     public List<Response> list() {
         return repository.findAll().stream()
-                .filter(s -> s.getServiceType() != ServiceType.Course)
+                .filter(s -> s.getServiceType() == ServiceType.SingleVisit)
                 .map(ServiceManagementController::toResponse).toList();
     }
 
