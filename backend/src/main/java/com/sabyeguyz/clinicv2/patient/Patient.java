@@ -6,6 +6,7 @@ import com.sabyeguyz.clinicv2.enums.CustomerType;
 import com.sabyeguyz.clinicv2.enums.Gender;
 import com.sabyeguyz.clinicv2.masterdata.MasterDataValue;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.time.Instant;
@@ -20,15 +21,20 @@ public class Patient {
     private Long id;
 
     /** Format YYBBMMNNNN. */
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "patient_hn", length = 10, unique = true)
     private String patientHn;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "customer_type", nullable = false)
+    @Column(name = "customer_type", nullable = false, columnDefinition = "customer_type_enum")
     private CustomerType customerType;
 
-    /** ด.ช., ด.ญ., นาย, นาง, นางสาว — plain string since the values are not valid Java identifiers. */
+    /**
+     * ด.ช., ด.ญ., นาย, นาง, นางสาว — a String since the values are not valid Java identifiers;
+     * the column is a PostgreSQL enum, so writes cast the parameter to it.
+     */
+    @ColumnTransformer(write = "cast(? as title_enum)")
     @Column(length = 20, nullable = false)
     private String title;
 
@@ -40,7 +46,7 @@ public class Patient {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "gender_enum")
     private Gender gender;
 
     @Column(length = 20, nullable = false)
@@ -59,6 +65,7 @@ public class Patient {
     @Column(name = "patient_nickname", length = 50)
     private String patientNickname;
 
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "national_id", length = 13)
     private String nationalId;
 
@@ -69,7 +76,7 @@ public class Patient {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "blood_group")
+    @Column(name = "blood_group", columnDefinition = "blood_group_enum")
     private BloodGroup bloodGroup;
 
     @Column(length = 50)
