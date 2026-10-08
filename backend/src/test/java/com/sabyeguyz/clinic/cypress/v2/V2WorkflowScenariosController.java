@@ -324,7 +324,7 @@ public class V2WorkflowScenariosController {
         var service = new CourseUsagePrintService(prints.proxy(), events.proxy());
         Course course = lockedCourse(); course.setCourseNo("RE-0000001"); course.setCourseName("คอร์สทดสอบ");
         var usage = new CourseVisitUsage();
-        usage.setCourse(course); usage.setVisitDate(LocalDate.of(2026, 9, 1));
+        usage.setCourse(course); usage.setVisitDate(LocalDate.of(2026, 9, 1).atStartOfDay());
         usage.setUsageStatus(scenario.equals("issue-reversed-usage") ? UsageStatus.Reversed : UsageStatus.Completed);
         if (scenario.equals("issue-second-version")) prints.on("countByVisitUsageId", args -> 1L);
         var existing = new CourseUsagePrint();
