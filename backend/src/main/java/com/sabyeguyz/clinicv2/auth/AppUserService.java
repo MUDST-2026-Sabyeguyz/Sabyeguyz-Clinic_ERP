@@ -45,6 +45,8 @@ public class AppUserService {
         user.setUserStatus(true);
         user.setUserCreateAt(Instant.now());
         user.setUserCreateBy(actorId);
+        // last_login_at is NOT NULL in the schema; a new account counts as "seen" at creation.
+        user.setLastLoginAt(user.getUserCreateAt());
         return users.save(user);
     }
 
