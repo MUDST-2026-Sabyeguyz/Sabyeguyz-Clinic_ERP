@@ -27,7 +27,7 @@ public class CourseUsagePrintEvent {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "event_type", nullable = false)
+    @Column(name = "event_type", nullable = false, columnDefinition = "event_type_enum")
     private PrintEventType eventType;
 
     public CourseUsagePrintEvent() {}
