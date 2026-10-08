@@ -8,7 +8,9 @@ import com.sabyeguyz.clinicv2.sale.Receipt;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.generator.EventType;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -150,8 +152,9 @@ public class Course {
     @JoinColumn(name = "sale_transaction_id", unique = true)
     private SalesTransaction saleTransaction;
 
-    /** total_visits + bonus_visits (null bonus counts as 0); derived, never set directly. */
-    @Column(name = "entitled_visits", nullable = false)
+    /** total_visits + bonus_visits (null bonus counts as 0); a GENERATED ALWAYS column, so never written. */
+    @Generated(event = {EventType.INSERT, EventType.UPDATE})
+    @Column(name = "entitled_visits", insertable = false, updatable = false)
     private int entitledVisits;
 
     public Course() {}

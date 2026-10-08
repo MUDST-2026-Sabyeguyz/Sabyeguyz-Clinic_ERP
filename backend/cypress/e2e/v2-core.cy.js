@@ -141,10 +141,45 @@ describe('Clinic v2 core service scenarios', () => {
     })
   })
 
+  it('CourseService: creditsTheSaleToTheSellerAtOneHundredPercentByDefault', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/creditsTheSaleToTheSellerAtOneHundredPercentByDefault').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body).not.to.have.property('error')
+      expect(body.sharesSaved).to.equal(1)
+      expect(body.percent).to.equal(100)
+      expect(body.credit).to.equal(10000)
+      expect(body.salesSeenByTier).to.equal(10000)
+    })
+  })
+
+  it('CourseService: splitsTheSaleCreditBetweenTwoStaff', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/splitsTheSaleCreditBetweenTwoStaff').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body).not.to.have.property('error')
+      expect(body.sharesSaved).to.equal(2)
+      expect(body.firstCredit).to.equal(6000)
+      expect(body.secondCredit).to.equal(4000)
+      expect(body.salesSeenByTier).to.equal(6000)
+    })
+  })
+
+  it('CourseService: createsTheOwnerMemberAndEntitlementForThePurchaser', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/createsTheOwnerMemberAndEntitlementForThePurchaser').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.memberRole).to.equal('Owner')
+      expect(body.memberIsPurchaser).to.equal(true)
+      expect(body.allocatedVisits).to.equal(13)
+      expect(body.usedVisits).to.equal(0)
+      expect(body.remainingVisits).to.equal(13)
+    })
+  })
+
   const rejectedPurchases = [
     'rejectsASaleLineThatIsNotACoursePurchase',
     'rejectsASaleLineThatAlreadyHasACourse',
     'rejectsAPurchaserThatDiffersFromTheReceiptPatient',
+    'rejectsSaleSharesThatDoNotTotalOneHundred',
+    'rejectsTheSameStaffTwiceInTheSaleShares',
   ]
   rejectedPurchases.forEach((scenario) => {
     it(`CourseService: ${scenario}`, () => {
