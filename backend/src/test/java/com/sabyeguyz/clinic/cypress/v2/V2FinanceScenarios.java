@@ -38,6 +38,8 @@ public class V2FinanceScenarios {
             if (scenario.startsWith("payment-")) return payment(scenario);
             if (scenario.startsWith("receipt-")) return receipt(scenario);
             if (scenario.startsWith("sale-")) return sale(scenario);
+            if (scenario.startsWith("discount-")) return discount(scenario);
+            if (scenario.startsWith("preview-")) return preview(scenario);
             throw new IllegalArgumentException("Unknown finance scenario: " + scenario);
         });
     }
@@ -196,22 +198,69 @@ public class V2FinanceScenarios {
         courses.on("save", a -> { saveOrder.add("course"); return a[0]; });
         transactions.on("save", a -> { saveOrder.add("transaction"); return a[0]; });
         var service = new SalesTransactionService(transactions.proxy(),new CourseService(courses.proxy(),ledger.proxy(),schemeResolver(),tierResolver()));
-        Service template = new Service(); template.setServiceType(ServiceType.Assessment); template.setServicePrice(decimal("1200.00"));
+        Service template = new Service(); template.setServiceType(ServiceType.SingleVisit); template.setServicePrice(decimal("1200.00"));
         if (scenario.equals("sale-void")) {
             var transaction = new SalesTransaction(); transaction.setTransactionStatus(false);
             transactions.on("findById", a -> Optional.of(transaction)); return service.voidTransaction(1L,1L);
         }
         if (scenario.equals("sale-course")) {
             template.setDefaultTotalVisits(10); template.setDefaultBonusVisits(0); template.setDefaultValidityDays(365);
-            var receipt = new Receipt(); receipt.setReceiptNo("RE-2600001");
-            var transaction = service.recordCoursePurchase(new Patient(),new Branch(),receipt,template,staff(),null,
-                    decimal("10000.00"),null,null,LocalDate.of(2026,8,18),1L);
+            var patient = new Patient();
+            var receipt = new Receipt(); receipt.setReceiptNo("RE-2600001"); receipt.setPatient(patient);
+            var transaction = service.recordCoursePurchase(patient,new Branch(),receipt,template,staff(),null,
+                    decimal("10000.00"),null,null,Discount.none(),LocalDate.of(2026,8,18),1L);
             return Map.of("sameCourse",transaction.getCourse() == courses.arguments("save").get(0)[0],
                     "amount",transaction.getAmount(),"type",transaction.getTransactionType(),"saveOrder",saveOrder);
         }
+        if (scenario.equals("sale-visit-discount")) {
+            var discounted = service.recordVisitSale(new Patient(),new Branch(),template,TransactionType.SingleVisit,
+                    new Staff(),new Staff(),1,null,null,Discount.of("PERCENT",decimal("10")),1L);
+            return Map.of("unitPrice",discounted.getUnitPrice(),"amount",discounted.getAmount());
+        }
+        if (scenario.startsWith("sale-course-discount-")) {
+            template.setServiceType(ServiceType.Course); template.setServicePrice(decimal("2000.00"));
+            template.setDefaultTotalVisits(10); template.setDefaultBonusVisits(0); template.setDefaultValidityDays(365);
+            var patient = new Patient();
+            var receipt = new Receipt(); receipt.setReceiptNo("RE-2600002"); receipt.setPatient(patient);
+            var discount = scenario.equals("sale-course-discount-percent")
+                    ? Discount.of("PERCENT",decimal("25")) : Discount.of("BAHT",decimal("500"));
+            var purchase = service.recordCoursePurchase(patient,new Branch(),receipt,template,staff(),null,null,null,null,
+                    discount,LocalDate.of(2026,8,18),1L);
+            return Map.of("unitPrice",purchase.getUnitPrice(),"amount",purchase.getAmount(),
+                    "coursePrice",purchase.getCourse().getCoursePrice());
+        }
         var transaction = service.recordVisitSale(new Patient(),new Branch(),template,
-                scenario.equals("sale-wrong-type") ? TransactionType.CoursePurchase : TransactionType.Assessment,
-                new Staff(),new Staff(),1,null,null,1L);
+                scenario.equals("sale-wrong-type") ? TransactionType.CoursePurchase
+                        : scenario.equals("sale-assessment-rejected") ? TransactionType.Assessment : TransactionType.SingleVisit,
+                new Staff(),new Staff(),1,null,null,Discount.none(),1L);
         return Map.of("amount",transaction.getAmount(),"status",transaction.isTransactionStatus());
+    }
+
+    private Object discount(String scenario) {
+        BigDecimal price = decimal("2000.00");
+        return switch (scenario) {
+            case "discount-percent" -> Discount.of("PERCENT", decimal("25")).apply(price);
+            case "discount-amount" -> Discount.of("BAHT", decimal("500")).apply(price);
+            case "discount-none" -> Discount.none().apply(price);
+            case "discount-percent-over" -> Discount.of("PERCENT", decimal("101")).apply(price);
+            case "discount-amount-over" -> Discount.of("BAHT", decimal("2000.01")).apply(price);
+            case "discount-unknown-type" -> Discount.of("COUPON", decimal("5"));
+            case "discount-value-without-type" -> Discount.of(null, decimal("5"));
+            default -> throw new IllegalArgumentException("Unknown discount scenario: " + scenario);
+        };
+    }
+    private Object preview(String scenario) {
+        var courses = new V2RepositoryStub<>(CourseRepository.class).on("sumCoursePriceBySellerAndSaleMonth",
+                a -> scenario.equals("preview-running-total") ? decimal("60000") : BigDecimal.ZERO);
+        var service = new CommissionPreviewService(courses.proxy(), schemeResolver(), tierResolver());
+        Service template = new Service(); template.setServiceType(ServiceType.Course);
+        template.setServicePrice(decimal("2000.00")); template.setDefaultTotalVisits(10);
+        if (scenario.equals("preview-invalid-template")) {
+            template.setServiceType(ServiceType.SingleVisit);
+            return service.previewCourse(template, staff(), null, Discount.none(), LocalDate.of(2026,8,18));
+        }
+        var result = service.previewCourse(template, staff(), null, Discount.of("BAHT", decimal("500")), LocalDate.of(2026,8,18));
+        return Map.of("net",result.netPrice(),"rate",result.commissionRate(),"pool",result.commissionPool(),
+                "perVisit",result.commissionPerVisit(),"monthlySales",result.monthlySalesToDate());
     }
 }
