@@ -120,10 +120,14 @@ public class CommissionSchemeService {
         if (tiers == null || tiers.isEmpty()) throw new IllegalArgumentException("ต้องมีอย่างน้อย 1 Tier");
     }
 
-    /** Enforces Commission_System_Requirement_Dev §2: no overlap, no gap, min<=max, rate>=0. */
+    /**
+     * Enforces Commission_System_Requirement_Dev §2: first tier starts at 0, no overlap, no gap, min<=max,
+     * rate>=0. Ranges are whole-baht (59,999 then 60,000 in the doc's example), so a gap of up to 1 baht
+     * between one tier's maximum and the next tier's minimum counts as contiguous.
+     */
     private static void validateTiers(List<TierInput> inputs) {
         List<TierInput> ordered = inputs.stream().sorted(Comparator.comparingInt(TierInput::order)).toList();
-        BigDecimal expectedMinimum = BigDecimal.ZERO;
+        BigDecimal previousMaximum = null;
         for (int i = 0; i < ordered.size(); i++) {
             TierInput tier = ordered.get(i);
             if (tier.minimum() == null || tier.minimum().signum() < 0) {
@@ -135,15 +139,20 @@ public class CommissionSchemeService {
             if (tier.maximum() != null && tier.maximum().compareTo(tier.minimum()) < 0) {
                 throw new IllegalArgumentException("maximum_monthly_sales ต้องไม่น้อยกว่า minimum_monthly_sales");
             }
-            if (tier.minimum().compareTo(expectedMinimum) != 0) {
-                throw new IllegalArgumentException("ช่วงยอดขายของ Tier ต้องต่อเนื่องกันโดยไม่ซ้อนหรือมีช่องว่าง");
+            if (previousMaximum == null) {
+                if (tier.minimum().signum() != 0) {
+                    throw new IllegalArgumentException("Tier แรกต้องเริ่มที่ 0");
+                }
+            } else {
+                BigDecimal gap = tier.minimum().subtract(previousMaximum);
+                if (gap.signum() <= 0 || gap.compareTo(BigDecimal.ONE) > 0) {
+                    throw new IllegalArgumentException("ช่วงยอดขายของ Tier ต้องต่อเนื่องกันโดยไม่ซ้อนหรือมีช่องว่าง");
+                }
             }
             if (tier.maximum() == null && i != ordered.size() - 1) {
                 throw new IllegalArgumentException("Tier ที่ไม่มีเพดานต้องเป็น Tier สุดท้ายเท่านั้น");
             }
-            if (tier.maximum() != null) {
-                expectedMinimum = tier.maximum().add(new BigDecimal("0.01"));
-            }
+            previousMaximum = tier.maximum();
         }
     }
 }

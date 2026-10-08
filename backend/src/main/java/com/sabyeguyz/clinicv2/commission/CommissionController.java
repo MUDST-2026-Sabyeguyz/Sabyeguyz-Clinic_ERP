@@ -3,6 +3,8 @@ package com.sabyeguyz.clinicv2.commission;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.course.CourseSaleStaffShare;
+import com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.role.PermissionRepository;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -19,8 +21,9 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Matches frontend/src/api/client.ts's commissionApi. {@code report} is
- * approximated by grouping Course sales (not raw Sales_transaction) by
- * seller within the date range and re-resolving the Tier for that base -
+ * approximated by grouping the credited sales of Courses (Course_sale_staff_share,
+ * so a shared sale counts for each staff member's own part) by
+ * staff within the date range and re-resolving the Tier for that base -
  * the old API grouped Sale totals directly; this is closer to how v2's
  * Tier actually gets picked (see CourseService/MonthlyCommissionClosingService).
  */
@@ -35,6 +38,7 @@ public class CommissionController {
     private final CommissionAllocationLedgerRepository allocationLedger;
     private final TreatmentFeeRuleRepository treatmentFeeRules;
     private final CourseRepository courses;
+    private final CourseSaleStaffShareRepository saleShares;
     private final StaffRepository staff;
     private final PermissionRepository permissions;
     private final CurrentActor actor;
@@ -44,6 +48,7 @@ public class CommissionController {
                                  MonthlyCommissionClosingRepository closings,
                                  CommissionAllocationLedgerRepository allocationLedger,
                                  TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
+                                 CourseSaleStaffShareRepository saleShares,
                                  StaffRepository staff, PermissionRepository permissions, CurrentActor actor) {
         this.schemeService = schemeService;
         this.tierResolver = tierResolver;
@@ -53,6 +58,7 @@ public class CommissionController {
         this.allocationLedger = allocationLedger;
         this.treatmentFeeRules = treatmentFeeRules;
         this.courses = courses;
+        this.saleShares = saleShares;
         this.staff = staff;
         this.permissions = permissions;
         this.actor = actor;
@@ -117,15 +123,18 @@ public class CommissionController {
     @GetMapping("/report")
     public List<ReportRow> report(@RequestParam LocalDate from, @RequestParam LocalDate to) {
         if (to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
-        Map<Long, List<Course>> bySeller = new LinkedHashMap<>();
+        Map<Long, List<CourseSaleStaffShare>> byStaff = new LinkedHashMap<>();
         for (Course course : courses.findByReceiptSaleDateBetween(from, to)) {
-            bySeller.computeIfAbsent(course.getSellerStaff().getId(), k -> new ArrayList<>()).add(course);
+            for (CourseSaleStaffShare share : saleShares.findByCourseId(course.getId())) {
+                byStaff.computeIfAbsent(share.getStaff().getId(), k -> new ArrayList<>()).add(share);
+            }
         }
         List<ReportRow> rows = new ArrayList<>();
-        for (List<Course> group : bySeller.values()) {
-            Course first = group.get(0);
-            Staff seller = first.getSellerStaff();
-            BigDecimal base = group.stream().map(Course::getCoursePrice).reduce(BigDecimal.ZERO, BigDecimal::add);
+        for (List<CourseSaleStaffShare> group : byStaff.values()) {
+            Course first = group.get(0).getCourse();
+            Staff seller = group.get(0).getStaff();
+            BigDecimal base = group.stream().map(CourseSaleStaffShare::getCreditedSalesAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
             CommissionScheme scheme = first.getCommissionScheme();
             CommissionTier tier = tierResolver.resolve(scheme, base);
             rows.add(new ReportRow(seller.getId(), seller.getStaffFname() + " " + seller.getStaffLname(),
@@ -168,7 +177,7 @@ public class CommissionController {
     public List<ClosingResponse> closeMonth(@PathVariable String month) {
         String saleMonth = month.length() >= 7 ? month.substring(0, 7) : month;
         Permission permission = resolveOrCreatePermission("COMMISSION_CLOSING_MANAGE");
-        for (Long sellerId : courses.findDistinctSellerStaffIdsBySaleMonth(saleMonth)) {
+        for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonth(saleMonth)) {
             Staff seller = staff.findById(sellerId).orElseThrow();
             boolean alreadyClosed = closings.findByClosingMonthAndStaffId(saleMonth, sellerId)
                     .map(MonthlyCommissionClosing::isClosingStatus).orElse(false);

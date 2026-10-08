@@ -3,12 +3,16 @@ package com.sabyeguyz.clinicv2.course;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.commission.TreatmentFeeRule;
+import com.sabyeguyz.clinicv2.enums.UsageStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
+import com.sabyeguyz.clinicv2.treatment.Treatment;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * One use of a Course entitlement. Follows Commission_System_Requirement_Dev
@@ -47,7 +51,7 @@ public class CourseVisitUsage {
     private Staff caseOwnerStaff;
 
     @Column(name = "visit_date", nullable = false)
-    private LocalDate visitDate;
+    private LocalDateTime visitDate;
 
     @Column(name = "visit_qty", nullable = false)
     private int visitQty = 1;
@@ -69,6 +73,19 @@ public class CourseVisitUsage {
     /** gross_commission_allocation - substitute_treatment_fee_amount. */
     @Column(name = "owner_net_commission", precision = 12, scale = 2, nullable = false)
     private BigDecimal ownerNetCommission;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "usage_status", nullable = false, columnDefinition = "usage_status_enum")
+    private UsageStatus usageStatus = UsageStatus.Completed;
+
+    /** A Completed usage always needs its printed usage document. */
+    @Column(name = "print_required", nullable = false)
+    private boolean printRequired = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "treatment_id")
+    private Treatment treatment;
 
     @Column(name = "usage_create_at", nullable = false, updatable = false)
     private Instant usageCreateAt;
@@ -95,8 +112,8 @@ public class CourseVisitUsage {
     public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
     public Staff getCaseOwnerStaff() { return caseOwnerStaff; }
     public void setCaseOwnerStaff(Staff caseOwnerStaff) { this.caseOwnerStaff = caseOwnerStaff; }
-    public LocalDate getVisitDate() { return visitDate; }
-    public void setVisitDate(LocalDate visitDate) { this.visitDate = visitDate; }
+    public LocalDateTime getVisitDate() { return visitDate; }
+    public void setVisitDate(LocalDateTime visitDate) { this.visitDate = visitDate; }
     public int getVisitQty() { return visitQty; }
     public void setVisitQty(int visitQty) { this.visitQty = visitQty; }
     public BigDecimal getCommissionAllocationPerVisit() { return commissionAllocationPerVisit; }
@@ -117,4 +134,10 @@ public class CourseVisitUsage {
     public void setUsageUpdateAt(Instant usageUpdateAt) { this.usageUpdateAt = usageUpdateAt; }
     public Long getUsageUpdateBy() { return usageUpdateBy; }
     public void setUsageUpdateBy(Long usageUpdateBy) { this.usageUpdateBy = usageUpdateBy; }
+    public UsageStatus getUsageStatus() { return usageStatus; }
+    public void setUsageStatus(UsageStatus usageStatus) { this.usageStatus = usageStatus; }
+    public boolean isPrintRequired() { return printRequired; }
+    public void setPrintRequired(boolean printRequired) { this.printRequired = printRequired; }
+    public Treatment getTreatment() { return treatment; }
+    public void setTreatment(Treatment treatment) { this.treatment = treatment; }
 }
