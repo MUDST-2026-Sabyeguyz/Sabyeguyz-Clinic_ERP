@@ -19,6 +19,14 @@ module.exports = defineConfig({
         throw new Error('The v2 backend Cypress tests require the isolated server on 127.0.0.1:18080')
       }
       on('task', { parallelRequests })
+      // The junit reporter writes failures to XML only; print them so they show up in the CI log.
+      on('after:spec', (spec, results) => {
+        for (const test of results?.tests ?? []) {
+          if (test.state !== 'failed') continue
+          console.log(`\nFAILED ${spec.relative} :: ${test.title.join(' > ')}`)
+          console.log(`  ${(test.displayError || 'no error message').split('\n').slice(0, 12).join('\n  ')}`)
+        }
+      })
       on('before:run', () => {
         const results = path.join(__dirname, 'cypress', 'results')
         if (fs.existsSync(results)) {
