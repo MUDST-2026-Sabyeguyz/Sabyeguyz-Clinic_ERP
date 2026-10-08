@@ -172,7 +172,9 @@ public class CoursePurchaseController {
     @PostMapping("/api/course-usages")
     @Transactional
     public Response use(@RequestBody UseRequest request) {
-        Course course = findCourse(request.coursePurchaseId());
+        // Row-lock first: two parallel usages must not both see the last remaining visit.
+        Course course = courses.findByIdForUpdate(request.coursePurchaseId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Patient owner = course.getPurchaserPatient();
         PatientVisit visit = request.appointmentId() == null ? walkInVisit(course, owner)
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())

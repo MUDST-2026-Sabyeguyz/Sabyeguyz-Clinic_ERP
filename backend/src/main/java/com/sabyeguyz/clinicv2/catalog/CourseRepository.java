@@ -4,12 +4,23 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CourseRepository extends JpaRepository<Course, Long> {
     Optional<Course> findByCourseNo(String courseNo);
+
+    /**
+     * Loads a course with a row lock (SELECT ... FOR UPDATE) so concurrent visit usages of the same
+     * course queue up and each sees the balance left by the previous one. Call it before anything
+     * else reads the course in the transaction: a course already loaded keeps its earlier state.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Course c where c.id = :id")
+    Optional<Course> findByIdForUpdate(@Param("id") Long id);
 
     long countByReceiptId(Long receiptId);
 
