@@ -174,6 +174,17 @@ describe('Clinic v2 core service scenarios', () => {
     })
   })
 
+  it('CourseService: recordsThePurchaseLedgerEntryAgainstTheSaleLine', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/recordsThePurchaseLedgerEntryAgainstTheSaleLine').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.entryType).to.equal('Purchase')
+      expect(body.qtyChange).to.equal(13)
+      expect(body.balanceAfter).to.equal(13)
+      expect(body.sourceIsTheSaleLine).to.equal(true)
+      expect(body.hasOtherSource).to.equal(false)
+    })
+  })
+
   const rejectedPurchases = [
     'rejectsASaleLineThatIsNotACoursePurchase',
     'rejectsASaleLineThatAlreadyHasACourse',
@@ -373,6 +384,27 @@ describe('Clinic v2 core service scenarios', () => {
       expect(body.staffStatus).to.equal(false)
       expect(body.terminationDate).to.equal("2026-06-30")
       expect(body.commissionAfterTerminationPolicy).to.equal("CONTINUE_UNTIL_COMPLETE")
+    })
+  })
+
+  it('StaffService: terminateStampsThePolicyLockTime', () => {
+    cy.api('POST', '/__cypress/v2/core/StaffService/terminateStampsThePolicyLockTime').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.locked).to.equal(true)
+    })
+  })
+
+  it('StaffService: rejectsChangingALockedTerminationPolicy', () => {
+    cy.api('POST', '/__cypress/v2/core/StaffService/rejectsChangingALockedTerminationPolicy').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.error).to.equal('IllegalArgumentException')
+    })
+  })
+
+  it('StaffService: repeatingTheSameLockedPolicyKeepsTheOriginalLockTime', () => {
+    cy.api('POST', '/__cypress/v2/core/StaffService/repeatingTheSameLockedPolicyKeepsTheOriginalLockTime').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.lockedAtUnchanged).to.equal(true)
     })
   })
 
