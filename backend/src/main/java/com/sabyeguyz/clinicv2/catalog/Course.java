@@ -55,7 +55,7 @@ public class Course {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "course_status", nullable = false)
+    @Column(name = "course_status", nullable = false, columnDefinition = "course_status_enum")
     private CourseStatus courseStatus;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -79,6 +79,7 @@ public class Course {
     private Receipt receipt;
 
     /** yyyy-mm, used to aggregate monthly sales for Tier calc. */
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "sale_month", length = 7, nullable = false)
     private String saleMonth;
 
@@ -93,7 +94,7 @@ public class Course {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "commission_status", nullable = false)
+    @Column(name = "commission_status", nullable = false, columnDefinition = "commission_status_enum")
     private CommissionStatus commissionStatus;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
