@@ -19,6 +19,7 @@
 
     <properties>
         <java.version>17</java.version>
+        <start-class>com.sabyeguyz.clinic.ClinicErpApplication</start-class>
     </properties>
 
     <dependencies>
@@ -88,6 +89,20 @@
                             <arguments>
                                 <argument>--spring.profiles.active=cypress</argument>
                             </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>v2</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <mainClass>com.sabyeguyz.clinicv2.ClinicV2Application</mainClass>
                         </configuration>
                     </plugin>
                 </plugins>
