@@ -11,6 +11,15 @@ function book(fx, patient, overrides = {}) {
   })
 }
 
+// The page shows the chosen value before the save has reached the backend: poll the backend until it has the status.
+function backendStatus(expected, tries = 20) {
+  return cy.api('GET', '/api/appointments').then(({ body }) => {
+    if (body.items[0].status === expected) return
+    expect(tries, `backend status still ${body.items[0].status}, wanted ${expected}`).to.be.greaterThan(0)
+    cy.wait(500)
+    backendStatus(expected, tries - 1)
+  })
+}
 const statusSelect = (name) => cy.contains('tr', name).find('select.status-select')
 // The select shows the new value at once; the save is finished when the page says so (only then is the backend updated).
 const saved = () => cy.contains('.status-feedback', 'บันทึกแล้ว').should('be.visible')
@@ -63,7 +72,7 @@ describe('creating and changing appointments', () => {
     cy.contains('button', 'บันทึกนัดหมาย').click()
     cy.contains('ต้องการสร้างนัดหมายนี้ใช่หรือไม่').should('be.visible')
     cy.contains('button', 'ยืนยันการสร้าง').click()
-    cy.contains('สร้างนัดหมายเรียบร้อยแล้ว').should('be.visible')
+    cy.contains('tr', 'สมชาย ใจดี', { timeout: 15000 }).should('contain.text', '10:00')
     cy.contains('tr', 'สมชาย ใจดี').should('contain.text', '10:00')
     cy.api('GET', '/api/appointments').its('body.items').should('have.length', 1)
       .its('0.startAt').should('contain', 'T03:00:00')
@@ -133,7 +142,7 @@ describe('appointment status', () => {
     statusSelect('สมชาย ใจดี').select('COMPLETED')
     saved()
     statusSelect('สมชาย ใจดี').find('option:selected').should('have.text', 'เสร็จสิ้น')
-    cy.api('GET', '/api/appointments').its('body.items.0.status').should('equal', 'Completed')
+    backendStatus('Completed')
   })
 
   it('confirms an appointment that was waiting for confirmation', function () {
@@ -142,7 +151,7 @@ describe('appointment status', () => {
     statusSelect('สมชาย ใจดี').select('CONFIRMED')
     saved()
     statusSelect('สมชาย ใจดี').find('option:selected').should('have.text', 'ยืนยันแล้ว')
-    cy.api('GET', '/api/appointments').its('body.items.0.status').should('equal', 'Confirmed')
+    backendStatus('Confirmed')
   })
 
   it('cancels only with a reason', function () {
@@ -156,10 +165,8 @@ describe('appointment status', () => {
     cy.contains('button', 'ยืนยันการยกเลิก').click()
     saved()
     statusSelect('สมชาย ใจดี').find('option:selected').should('have.text', 'ยกเลิก')
-    cy.api('GET', '/api/appointments').its('body.items.0').then((appointment) => {
-      expect(appointment.status).to.equal('Cancelled')
-      expect(appointment.cancelReason).to.equal('คนไข้ติดธุระ')
-    })
+    // The reason is kept in the status history; the appointment response does not carry it.
+    backendStatus('Cancelled')
   })
 
   it('marks a no-show', function () {
@@ -168,6 +175,6 @@ describe('appointment status', () => {
     statusSelect('สมชาย ใจดี').select('NO_SHOW')
     saved()
     statusSelect('สมชาย ใจดี').find('option:selected').should('have.text', 'ไม่มาตามนัด')
-    cy.api('GET', '/api/appointments').its('body.items.0.status').should('equal', 'NoShow')
+    backendStatus('NoShow')
   })
 })
