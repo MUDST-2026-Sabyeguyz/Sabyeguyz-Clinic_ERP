@@ -3,10 +3,14 @@ package com.sabyeguyz.clinicv2.catalog;
 import com.sabyeguyz.clinicv2.commission.CommissionScheme;
 import com.sabyeguyz.clinicv2.enums.CommissionStatus;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
+import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.sale.Receipt;
+import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.generator.EventType;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -51,7 +55,7 @@ public class Course {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "course_status", nullable = false)
+    @Column(name = "course_status", nullable = false, columnDefinition = "course_status_enum")
     private CourseStatus courseStatus;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -75,6 +79,7 @@ public class Course {
     private Receipt receipt;
 
     /** yyyy-mm, used to aggregate monthly sales for Tier calc. */
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "sale_month", length = 7, nullable = false)
     private String saleMonth;
 
@@ -89,7 +94,7 @@ public class Course {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "commission_status", nullable = false)
+    @Column(name = "commission_status", nullable = false, columnDefinition = "commission_status_enum")
     private CommissionStatus commissionStatus;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -138,7 +143,28 @@ public class Course {
     @Column(name = "commission_outstanding", precision = 12, scale = 2, nullable = false)
     private BigDecimal commissionOutstanding = BigDecimal.ZERO;
 
+    /** Original course buyer and initial owner, independent of shared members. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "purchaser_patient_id")
+    private Patient purchaserPatient;
+
+    /** The one sale line that created this course (one course per sale line). */
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "sale_transaction_id", unique = true)
+    private SalesTransaction saleTransaction;
+
+    /** total_visits + bonus_visits (null bonus counts as 0); a GENERATED ALWAYS column, so never written. */
+    @Generated(event = {EventType.INSERT, EventType.UPDATE})
+    @Column(name = "entitled_visits", insertable = false, updatable = false)
+    private int entitledVisits;
+
     public Course() {}
+
+    @PrePersist
+    @PreUpdate
+    void syncEntitledVisits() {
+        this.entitledVisits = totalVisits + (bonusVisits == null ? 0 : bonusVisits);
+    }
 
     public Long getId() { return id; }
     public String getCourseNo() { return courseNo; }
@@ -150,9 +176,9 @@ public class Course {
     public BigDecimal getCoursePrice() { return coursePrice; }
     public void setCoursePrice(BigDecimal coursePrice) { this.coursePrice = coursePrice; }
     public int getTotalVisits() { return totalVisits; }
-    public void setTotalVisits(int totalVisits) { this.totalVisits = totalVisits; }
+    public void setTotalVisits(int totalVisits) { this.totalVisits = totalVisits; syncEntitledVisits(); }
     public Integer getBonusVisits() { return bonusVisits; }
-    public void setBonusVisits(Integer bonusVisits) { this.bonusVisits = bonusVisits; }
+    public void setBonusVisits(Integer bonusVisits) { this.bonusVisits = bonusVisits; syncEntitledVisits(); }
     public LocalDate getExpiryDate() { return expiryDate; }
     public void setExpiryDate(LocalDate expiryDate) { this.expiryDate = expiryDate; }
     public CourseStatus getCourseStatus() { return courseStatus; }
@@ -203,4 +229,9 @@ public class Course {
     public void setSubstituteTreatmentFeeTotal(BigDecimal substituteTreatmentFeeTotal) { this.substituteTreatmentFeeTotal = substituteTreatmentFeeTotal; }
     public BigDecimal getCommissionOutstanding() { return commissionOutstanding; }
     public void setCommissionOutstanding(BigDecimal commissionOutstanding) { this.commissionOutstanding = commissionOutstanding; }
+    public Patient getPurchaserPatient() { return purchaserPatient; }
+    public void setPurchaserPatient(Patient purchaserPatient) { this.purchaserPatient = purchaserPatient; }
+    public SalesTransaction getSaleTransaction() { return saleTransaction; }
+    public void setSaleTransaction(SalesTransaction saleTransaction) { this.saleTransaction = saleTransaction; }
+    public int getEntitledVisits() { return entitledVisits; }
 }

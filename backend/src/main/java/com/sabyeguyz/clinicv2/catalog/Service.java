@@ -17,7 +17,7 @@ public class Service {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "service_type", nullable = false)
+    @Column(name = "service_type", nullable = false, columnDefinition = "service_type_enum")
     private ServiceType serviceType;
 
     @Column(name = "service_name", length = 150, nullable = false)

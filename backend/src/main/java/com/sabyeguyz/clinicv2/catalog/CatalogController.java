@@ -37,7 +37,7 @@ public class CatalogController {
     @GetMapping("/api/catalog/services")
     public List<ServiceOption> services() {
         return services.findByServiceStatusTrueOrderByServiceName().stream()
-                .filter(s -> s.getServiceType() != ServiceType.Course)
+                .filter(s -> s.getServiceType() == ServiceType.SingleVisit)
                 .map(s -> new ServiceOption(s.getId(), s.getServiceCode(), s.getServiceName(), 0, s.getServicePrice()))
                 .toList();
     }
@@ -54,7 +54,7 @@ public class CatalogController {
     @GetMapping("/api/lookups/services")
     public List<LookupService> lookupServices() {
         return services.findAll().stream()
-                .filter(s -> s.getServiceType() != ServiceType.Course)
+                .filter(s -> s.getServiceType() == ServiceType.SingleVisit)
                 .map(s -> new LookupService(s.getId(), s.getServiceCode(), s.getServiceName(), 0, s.isServiceStatus()))
                 .toList();
     }

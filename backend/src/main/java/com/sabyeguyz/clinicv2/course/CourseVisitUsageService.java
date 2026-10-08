@@ -7,9 +7,13 @@ import com.sabyeguyz.clinicv2.commission.CommissionAllocationLedger;
 import com.sabyeguyz.clinicv2.commission.CommissionAllocationLedgerRepository;
 import com.sabyeguyz.clinicv2.commission.TreatmentFeeRule;
 import com.sabyeguyz.clinicv2.commission.TreatmentFeeRuleResolver;
+import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
 import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
 import com.sabyeguyz.clinicv2.enums.OverflowPolicy;
+import com.sabyeguyz.clinicv2.enums.UsageStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
+import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.sale.TransactionCancellationService;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,21 +45,28 @@ public class CourseVisitUsageService {
     private final CourseRepository courses;
     private final CommissionAllocationLedgerRepository allocationLedger;
     private final TreatmentFeeRuleResolver treatmentFeeRuleResolver;
+    private final CourseEntitlementRepository entitlements;
+    private final TransactionCancellationService cancellations;
 
     public CourseVisitUsageService(CourseVisitUsageRepository usages, CourseLedgerRepository ledger,
                                     CourseRepository courses, CommissionAllocationLedgerRepository allocationLedger,
-                                    TreatmentFeeRuleResolver treatmentFeeRuleResolver) {
+                                    TreatmentFeeRuleResolver treatmentFeeRuleResolver,
+                                    CourseEntitlementRepository entitlements,
+                                    TransactionCancellationService cancellations) {
         this.usages = usages;
         this.ledger = ledger;
         this.courses = courses;
         this.allocationLedger = allocationLedger;
         this.treatmentFeeRuleResolver = treatmentFeeRuleResolver;
+        this.entitlements = entitlements;
+        this.cancellations = cancellations;
     }
 
     @Transactional
     public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
                                  LocalDate visitDate, Long actorId) {
         require(course != null, "ต้องระบุคอร์ส");
+        require(visit != null, "ต้องมีการเช็คอินก่อนจึงจะใช้สิทธิ์คอร์สได้");
         require(usingPatient != null, "ต้องระบุผู้ป่วยที่ใช้สิทธิ์");
         require(treatingStaff != null, "ต้องระบุผู้รักษา");
         require(visitDate != null, "ต้องระบุวันที่ใช้บริการ");
@@ -99,8 +110,10 @@ public class CourseVisitUsageService {
         usage.setPatient(usingPatient);
         usage.setTreatingStaff(treatingStaff);
         usage.setCaseOwnerStaff(caseOwner);
-        usage.setVisitDate(visitDate);
+        usage.setVisitDate(visitDate.atStartOfDay());
         usage.setVisitQty(1);
+        usage.setUsageStatus(UsageStatus.Completed);
+        usage.setPrintRequired(true);
         usage.setCommissionAllocationPerVisit(allocationPerVisit);
         usage.setGrossCommissionAllocation(gross);
         usage.setTreatmentFeeRule(appliedRule);
@@ -112,6 +125,7 @@ public class CourseVisitUsageService {
 
         CommissionAllocationLedger allocation = new CommissionAllocationLedger();
         allocation.setVisitUsage(savedUsage);
+        allocation.setEntryType(AllocationEntryType.Allocation);
         allocation.setCourse(course);
         allocation.setPatient(usingPatient);
         allocation.setCaseOwnerStaff(caseOwner);
@@ -137,11 +151,14 @@ public class CourseVisitUsageService {
         treatmentEntry.setEntryType(CourseLedgerEntryType.Treatment);
         treatmentEntry.setQtyChange(-1);
         treatmentEntry.setBalanceAfter((int) newPatientBalance);
-        treatmentEntry.setReferenceType("VISIT");
-        treatmentEntry.setReferenceId(visit == null ? null : visit.getId());
+        treatmentEntry.setVisitUsage(savedUsage);
         treatmentEntry.setLedgerCreateAt(Instant.now());
         treatmentEntry.setLedgerCreateBy(actorId);
         ledger.save(treatmentEntry);
+
+        CourseEntitlement entitlement = entitlementOf(course, usingPatient, patientBalance);
+        entitlement.adjustUsed(1);
+        entitlements.save(entitlement);
 
         course.setVisitsUsed(course.getVisitsUsed() + 1);
         course.setRemainingVisits(course.getRemainingVisits() - 1);
@@ -155,6 +172,83 @@ public class CourseVisitUsageService {
         courses.save(course);
 
         return savedUsage;
+    }
+
+    /**
+     * Reverses a Completed usage: the session goes back to the patient and the
+     * commission allocation is reversed (never edited). Everything that was
+     * added to the Course's running totals is taken off again.
+     */
+    @Transactional
+    public CourseVisitUsage reverse(CourseVisitUsage usage, Permission permission, String reason, Long actorId) {
+        require(usage != null, "ต้องระบุรายการใช้สิทธิ์คอร์ส");
+        require(usage.getUsageStatus() == UsageStatus.Completed, "รายการใช้สิทธิ์นี้ถูกย้อนไปแล้ว");
+        cancellations.recordUsageReversal(usage, permission, reason, actorId);
+        Course course = usage.getCourse();
+        Patient patient = usage.getPatient();
+
+        CourseLedger treatment = ledger.findByVisitUsageId(usage.getId()).stream()
+                .filter(l -> l.getEntryType() == CourseLedgerEntryType.Treatment).findFirst()
+                .orElseThrow(() -> new IllegalStateException("ไม่พบรายการหักสิทธิ์ใน Ledger ของการใช้สิทธิ์นี้"));
+        long balance = ledger.sumQtyChangeByCourseAndPatient(course.getId(), patient.getId());
+        ledger.save(CourseLedgerEntries.reversalOf(treatment, balance, reason.trim(), actorId));
+
+        CommissionAllocationLedger original = allocationLedger
+                .findByVisitUsageIdAndEntryType(usage.getId(), AllocationEntryType.Allocation)
+                .orElseThrow(() -> new IllegalStateException("ไม่พบรายการจัดสรรคอมมิชชันของการใช้สิทธิ์นี้"));
+        CommissionAllocationLedger reversal = new CommissionAllocationLedger();
+        reversal.setEntryType(AllocationEntryType.Reversal);
+        reversal.setAdjustmentReference(original);
+        reversal.setReversalReason(reason.trim());
+        reversal.setVisitUsage(usage);
+        reversal.setCourse(course);
+        reversal.setPatient(patient);
+        reversal.setCaseOwnerStaff(original.getCaseOwnerStaff());
+        reversal.setTreatingStaff(original.getTreatingStaff());
+        reversal.setVisitDate(original.getVisitDate());
+        reversal.setGrossCommissionAllocation(original.getGrossCommissionAllocation().negate());
+        reversal.setTreatmentFeeRule(original.getTreatmentFeeRule());
+        reversal.setTreatmentFeeType(original.getTreatmentFeeType());
+        reversal.setTreatmentFeeRateOrAmount(original.getTreatmentFeeRateOrAmount());
+        reversal.setTreatmentFeeCalculationBase(original.getTreatmentFeeCalculationBase());
+        reversal.setTreatmentFeeAmount(original.getTreatmentFeeAmount().negate());
+        reversal.setOwnerNetCommission(original.getOwnerNetCommission().negate());
+        reversal.setCompanyTopUpAmount(original.getCompanyTopUpAmount() == null ? null
+                : original.getCompanyTopUpAmount().negate());
+        reversal.setOverflowPolicyUsed(original.getOverflowPolicyUsed());
+        reversal.setAllocationCreateAt(Instant.now());
+        reversal.setAllocationCreateBy(actorId);
+        allocationLedger.save(reversal);
+
+        usage.setUsageStatus(UsageStatus.Reversed);
+        usage.setUsageUpdateAt(Instant.now());
+        usage.setUsageUpdateBy(actorId);
+        usages.save(usage);
+
+        course.setVisitsUsed(course.getVisitsUsed() - 1);
+        course.setRemainingVisits(course.getRemainingVisits() + 1);
+        course.setGrossCommissionAllocatedTotal(
+                course.getGrossCommissionAllocatedTotal().subtract(original.getGrossCommissionAllocation()));
+        course.setOwnerNetCommissionReleasedTotal(
+                course.getOwnerNetCommissionReleasedTotal().subtract(original.getOwnerNetCommission()));
+        course.setSubstituteTreatmentFeeTotal(
+                course.getSubstituteTreatmentFeeTotal().subtract(original.getTreatmentFeeAmount()));
+        if (course.getTotalCourseCommissionPool() != null) {
+            course.setCommissionOutstanding(
+                    course.getTotalCourseCommissionPool().subtract(course.getGrossCommissionAllocatedTotal()));
+        }
+        courses.save(course);
+
+        CourseEntitlement entitlement = entitlementOf(course, patient, balance);
+        entitlement.adjustUsed(-1);
+        entitlements.save(entitlement);
+        return usage;
+    }
+
+    /** The patient's entitlement row, created from their current ledger balance when it does not exist yet. */
+    private CourseEntitlement entitlementOf(Course course, Patient patient, long balanceBefore) {
+        return entitlements.findById(new CourseEntitlementId(course.getId(), patient.getId()))
+                .orElseGet(() -> new CourseEntitlement(course, patient, (int) balanceBefore));
     }
 
     /** Locked rate if Monthly Closing has run; otherwise a provisional estimate (see class Javadoc). */
