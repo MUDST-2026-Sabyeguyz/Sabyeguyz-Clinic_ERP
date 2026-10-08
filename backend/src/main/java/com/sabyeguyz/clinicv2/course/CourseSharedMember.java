@@ -24,7 +24,7 @@ public class CourseSharedMember {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "member_role", nullable = false)
+    @Column(name = "member_role", nullable = false, columnDefinition = "course_member_role_enum")
     private CourseMemberRole memberRole;
 
     @Column(name = "member_status", nullable = false)
