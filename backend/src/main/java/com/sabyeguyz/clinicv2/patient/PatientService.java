@@ -38,10 +38,24 @@ public class PatientService {
         patient.setPatientFname(requireText(input.patientFname(), "patientFname"));
         patient.setPatientLname(requireText(input.patientLname(), "patientLname"));
         patient.setGender(require(input.gender(), "gender"));
-        patient.setPhone(requireText(input.phone(), "phone"));
+        // Thai patients must give a phone number and a 13-digit national id; foreigners may give neither
+        // (they rarely carry documents), so only a provided national id is format-checked for them.
+        boolean thai = input.customerType() == com.sabyeguyz.clinicv2.enums.CustomerType.Thai;
+        String phone = input.phone() == null || input.phone().isBlank() ? null : input.phone().trim();
+        String nationalId = input.nationalId() == null || input.nationalId().isBlank() ? null : input.nationalId().trim();
+        if (thai && phone == null) {
+            throw new IllegalArgumentException("phone ห้ามว่าง");
+        }
+        if (thai && nationalId == null) {
+            throw new IllegalArgumentException("ผู้ป่วยชาวไทยต้องระบุเลขบัตรประชาชน");
+        }
+        if (nationalId != null && !nationalId.matches("[0-9]{13}")) {
+            throw new IllegalArgumentException("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
+        }
+        patient.setPhone(phone);
         patient.setGenderDetail(input.genderDetail());
         patient.setPatientNickname(input.patientNickname());
-        patient.setNationalId(input.nationalId());
+        patient.setNationalId(nationalId);
         patient.setPassportNo(input.passportNo());
         patient.setBirthdate(input.birthdate());
         patient.setBloodGroup(input.bloodGroup());
