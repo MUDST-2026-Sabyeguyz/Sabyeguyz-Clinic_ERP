@@ -83,6 +83,7 @@ public class CoursePurchaseController {
     private final PatientVisitRepository visits;
     private final PatientVisitService visitService;
     private final AppUserRepository users;
+    private final com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository;
     private final CurrentActor actor;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
@@ -92,7 +93,8 @@ public class CoursePurchaseController {
                                      SalesTransactionService salesTransactionService,
                                      PatientRepository patients, BranchRepository branches, ServiceRepository services,
                                      PatientVisitRepository visits, PatientVisitService visitService,
-                                     AppUserRepository users, CurrentActor actor) {
+                                     AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
+                                     CurrentActor actor) {
         this.courses = courses;
         this.ledger = ledger;
         this.usages = usages;
@@ -108,11 +110,19 @@ public class CoursePurchaseController {
         this.visits = visits;
         this.visitService = visitService;
         this.users = users;
+        this.staffRepository = staffRepository;
         this.actor = actor;
     }
 
+    /** A sale credit split: {@code percent} of the course price is credited to {@code staffId}. */
+    public record ShareRequest(Long staffId, BigDecimal percent) {}
+    /**
+     * {@code shares} (optional) splits the sale credit between up to two PTs and must add up to 100%;
+     * without it the seller (the signed-in user's staff record) gets 100%. {@code caseOwnerStaffId}
+     * (optional) names the PT who owns the course's commission, the seller by default.
+     */
     public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
-                                   BigDecimal discountValue) {}
+                                   BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares) {}
     public record UseRequest(Long coursePurchaseId, Long appointmentId, String note) {}
     public record ReasonRequest(String reason) {}
 
@@ -144,12 +154,16 @@ public class CoursePurchaseController {
         Service courseTemplate = services.findById(request.courseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Staff seller = resolveActorStaff();
+        Staff caseOwner = request.caseOwnerStaffId() == null ? null : staffById(request.caseOwnerStaffId());
+        List<com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare> shares = request.shares() == null ? null
+                : request.shares().stream().map(share -> new com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare(
+                        staffById(share.staffId()), share.percent())).toList();
 
         Receipt receipt = receiptService.create(receiptService.nextReceiptNo(), patient, branch, LocalDate.now(),
                 actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
-                seller, null, null, null, null, Discount.of(request.discountType(), request.discountValue()), null,
-                LocalDate.now(), actor.currentId());
+                seller, caseOwner, null, null, null, Discount.of(request.discountType(), request.discountValue()),
+                shares, LocalDate.now(), actor.currentId());
         receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
         return toResponse(purchase.course(), patient.getId());
     }
@@ -213,6 +227,10 @@ public class CoursePurchaseController {
         PatientVisit visit = visitService.checkInWalkIn(owner, course.getReceipt().getBranch(),
                 course.getCaseOwnerStaff(), actor.currentId());
         return visitService.complete(visit.getId(), actor.currentId());
+    }
+
+    private Staff staffById(Long id) {
+        return staffRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงาน"));
     }
 
     private Staff resolveActorStaff() {
