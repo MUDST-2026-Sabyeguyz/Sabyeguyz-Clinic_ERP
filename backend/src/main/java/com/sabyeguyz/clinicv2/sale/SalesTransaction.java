@@ -2,7 +2,6 @@ package com.sabyeguyz.clinicv2.sale;
 
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
@@ -64,11 +63,6 @@ public class SalesTransaction {
     @Column(name = "transaction_date", nullable = false)
     private Instant transactionDate;
 
-    /** Course created by this transaction (if CoursePurchase). */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_id")
-    private Course course;
-
     /** false = Cancelled, true = Completed. */
     @Column(name = "transaction_status", nullable = false)
     private boolean transactionStatus = true;
@@ -84,6 +78,37 @@ public class SalesTransaction {
 
     @Column(name = "transaction_update_by")
     private Long transactionUpdateBy;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "receipt_id")
+    private Receipt receipt;
+
+    @Column(name = "line_no", nullable = false)
+    private int lineNo;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "line_discount_type")
+    private DiscountType lineDiscountType;
+
+    @Column(name = "line_discount_value", precision = 12, scale = 4)
+    private BigDecimal lineDiscountValue;
+
+    @Column(name = "line_discount_amount", precision = 12, scale = 2, nullable = false)
+    private BigDecimal lineDiscountAmount = BigDecimal.ZERO;
+
+    @Column(name = "allocated_bill_discount_amount", precision = 12, scale = 2, nullable = false)
+    private BigDecimal allocatedBillDiscountAmount = BigDecimal.ZERO;
+
+    /** Price after the line discount and before any bill discount; this is what Tier calculation uses. */
+    @Column(name = "commissionable_amount", precision = 12, scale = 2, nullable = false)
+    private BigDecimal commissionableAmount = BigDecimal.ZERO;
+
+    @Column(name = "item_name_snapshot", length = 200, nullable = false)
+    private String itemNameSnapshot;
+
+    @Column(name = "unit_name_snapshot", length = 30, nullable = false)
+    private String unitNameSnapshot;
 
     public SalesTransaction() {}
 
@@ -110,8 +135,6 @@ public class SalesTransaction {
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public Instant getTransactionDate() { return transactionDate; }
     public void setTransactionDate(Instant transactionDate) { this.transactionDate = transactionDate; }
-    public Course getCourse() { return course; }
-    public void setCourse(Course course) { this.course = course; }
     public boolean isTransactionStatus() { return transactionStatus; }
     public void setTransactionStatus(boolean transactionStatus) { this.transactionStatus = transactionStatus; }
     public Instant getTransactionCreateAt() { return transactionCreateAt; }
@@ -122,4 +145,22 @@ public class SalesTransaction {
     public void setTransactionUpdateAt(Instant transactionUpdateAt) { this.transactionUpdateAt = transactionUpdateAt; }
     public Long getTransactionUpdateBy() { return transactionUpdateBy; }
     public void setTransactionUpdateBy(Long transactionUpdateBy) { this.transactionUpdateBy = transactionUpdateBy; }
+    public Receipt getReceipt() { return receipt; }
+    public void setReceipt(Receipt receipt) { this.receipt = receipt; }
+    public int getLineNo() { return lineNo; }
+    public void setLineNo(int lineNo) { this.lineNo = lineNo; }
+    public DiscountType getLineDiscountType() { return lineDiscountType; }
+    public void setLineDiscountType(DiscountType lineDiscountType) { this.lineDiscountType = lineDiscountType; }
+    public BigDecimal getLineDiscountValue() { return lineDiscountValue; }
+    public void setLineDiscountValue(BigDecimal lineDiscountValue) { this.lineDiscountValue = lineDiscountValue; }
+    public BigDecimal getLineDiscountAmount() { return lineDiscountAmount; }
+    public void setLineDiscountAmount(BigDecimal lineDiscountAmount) { this.lineDiscountAmount = lineDiscountAmount; }
+    public BigDecimal getAllocatedBillDiscountAmount() { return allocatedBillDiscountAmount; }
+    public void setAllocatedBillDiscountAmount(BigDecimal allocatedBillDiscountAmount) { this.allocatedBillDiscountAmount = allocatedBillDiscountAmount; }
+    public BigDecimal getCommissionableAmount() { return commissionableAmount; }
+    public void setCommissionableAmount(BigDecimal commissionableAmount) { this.commissionableAmount = commissionableAmount; }
+    public String getItemNameSnapshot() { return itemNameSnapshot; }
+    public void setItemNameSnapshot(String itemNameSnapshot) { this.itemNameSnapshot = itemNameSnapshot; }
+    public String getUnitNameSnapshot() { return unitNameSnapshot; }
+    public void setUnitNameSnapshot(String unitNameSnapshot) { this.unitNameSnapshot = unitNameSnapshot; }
 }
