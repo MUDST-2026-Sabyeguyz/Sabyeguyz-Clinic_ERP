@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.staff;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * so this only exposes Staff's own columns. Prefer {@code /api/users} for
  * anything that needs the account fields together with Staff.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/staff")
 public class StaffController {
