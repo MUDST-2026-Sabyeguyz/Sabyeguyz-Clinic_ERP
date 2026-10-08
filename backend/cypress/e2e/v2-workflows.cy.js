@@ -24,6 +24,32 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
     value('appointment', 'book').its('status').should('equal', 'Confirmed')
   })
   it('rejectsBookingWhenStaffAlreadyBooked', () => rejected('appointment', 'conflict'))
+  it('booksAnUnconfirmedAppointment', () => {
+    value('appointment', 'book-unconfirmed').should('include', { status: 'Unconfirmed', patientType: 'CURRENT', hasPatient: true, historySaves: 0 })
+  })
+  it('rejectsAnInitialStatusOtherThanUnconfirmedOrConfirmed', () => rejected('appointment', 'book-bad-initial-status'))
+  it('booksANewPatientByNameWithoutAPatientRecord', () => {
+    value('appointment', 'book-new-patient').should('include', {
+      status: 'Unconfirmed', patientType: 'NEW', hasPatient: false, contactName: 'สมชาย ใจดี',
+    })
+  })
+  it('booksANewPatientByNicknameWithPhone', () => {
+    value('appointment', 'new-nickname-with-phone').should('include', {
+      status: 'Confirmed', patientType: 'NEW', contactName: 'แบงค์', contactPhone: '0812345678',
+    })
+  })
+  it('rejectsANewPatientNicknameWithoutPhone', () => rejected('appointment', 'new-nickname-without-phone', 'เบอร์โทร'))
+  it('rejectsANewPatientWithoutAName', () => rejected('appointment', 'new-without-name'))
+  it('confirmMovesUnconfirmedToConfirmedAndRecordsHistory', () => {
+    value('appointment', 'confirm').should('include', { status: 'Confirmed', historySaves: 1 })
+  })
+  it('rejectsConfirmingAnAppointmentThatIsNotUnconfirmed', () => rejected('appointment', 'confirm-already-confirmed'))
+  it('registeringANewPatientMakesTheAppointmentCurrent', () => {
+    value('appointment', 'link-patient').should('include', { patientType: 'CURRENT', hasPatient: true })
+  })
+  it('rejectsLinkingAPatientToAnAppointmentThatAlreadyHasOne', () => rejected('appointment', 'link-patient-already-linked'))
+  it('rejectsCheckInOfAnUnconfirmedAppointment', () => rejected('appointment', 'arrive-unconfirmed', 'ยืนยัน'))
+  it('rejectsCheckInOfANewPatientWhoIsNotRegistered', () => rejected('appointment', 'arrive-new-patient', 'ลงทะเบียน'))
   it('cancelRecordsStatusHistory', () => {
     value('appointment', 'cancel').should('include', { status: 'Cancelled', historySaves: 1 })
   })
@@ -65,6 +91,29 @@ describe('clinicv2 CourseTransferServiceTest migrated assertions', () => {
   it('transfersVisitsAndWritesBothLedgerEntries', () => {
     value('transfer', 'success').should('include', { qtyTransferred: 4, ledgerSaves: 2, memberSaves: 1 })
   })
+  it('transferLinksBothLedgerEntriesToTheTransferAndMovesTheEntitlements', () => {
+    value('transfer', 'success').should('include', {
+      status: 'Completed', ledgerLinked: true, entitlementSaves: 2, fromAllocated: 2, toAllocated: 4,
+    })
+    value('transfer', 'success').then((body) => {
+      expect(body.ledgerTypes).to.deep.equal(['TransferOut', 'TransferIn'])
+    })
+  })
+  it('reversingATransferWritesTwoReversalEntriesAndRecordsTheCancellation', () => {
+    value('transfer', 'reverse').then((body) => {
+      expect(body.status).to.equal('Reversed')
+      expect(body.ledgerTypes).to.deep.equal(['Reversal', 'Reversal'])
+      expect(body.qtyChanges).to.deep.equal([4, -4])
+      expect(body.balancesAfter).to.deep.equal([6, 0])
+      expect(body.reversalsLinked).to.equal(true)
+      expect(body.cancellationType).to.equal('TransferReversal')
+      expect(body.cancellationTargetsTransfer).to.equal(true)
+      expect(body.entitlementSaves).to.equal(2)
+    })
+  })
+  it('rejectsReversingATransferWhoseSessionsTheReceiverAlreadyUsed', () => rejected('transfer', 'reverse-receiver-used', 'ใช้สิทธิ์ไปแล้ว'))
+  it('rejectsReversingATransferTwice', () => rejected('transfer', 'reverse-twice'))
+  it('rejectsReversingATransferWithoutAReason', () => rejected('transfer', 'reverse-no-reason'))
   it('rejectsTransferExceedingTheBalance', () => rejected('transfer', 'insufficient', 'ไม่พอ'))
   it('rejectsTransferringToOneself', () => rejected('transfer', 'self'))
 })
@@ -82,7 +131,57 @@ describe('clinicv2 CourseVisitUsageServiceTest migrated assertions', () => {
   it('feeExceedingAllocationIsCappedAndOwnerNetNeverGoesNegative', () => {
     value('usage', 'capped').should('include', { fee: 40, ownerNet: 0 })
   })
+  it('usageIsCompletedNeedsAPrintLinksTheLedgerAndUpdatesTheEntitlement', () => {
+    value('usage', 'owner').should('include', {
+      usageStatus: 'Completed', printRequired: true, allocationType: 'Allocation', ledgerLinkedToUsage: true,
+      entitlementUsed: 1, entitlementRemaining: 9,
+    })
+  })
+  it('reversingAUsageRestoresTheSessionAndReversesTheCommissionExactly', () => {
+    value('usage', 'reverse').then((body) => {
+      expect(body.usageStatus).to.equal('Reversed')
+      expect(body.allocationTypes).to.deep.equal(['Allocation', 'Reversal'])
+      expect(body.reversalGross).to.equal(-70)
+      expect(body.reversalFee).to.equal(0)
+      expect(body.reversalOwnerNet).to.equal(-70)
+      expect(body.reversalLinked).to.equal(true)
+      expect(body.ledgerTypes).to.deep.equal(['Treatment', 'Reversal'])
+      expect(body.ledgerReversalLinked).to.equal(true)
+      expect(body.reversalQty).to.equal(1)
+      expect(body.visitsUsed).to.equal(0)
+      expect(body.remainingVisits).to.equal(10)
+      expect(body.grossAllocatedTotal).to.equal(0)
+      expect(body.ownerNetTotal).to.equal(0)
+      expect(body.feeTotal).to.equal(0)
+      expect(body.outstanding).to.equal(700)
+      expect(body.entitlementUsed).to.equal(0)
+      expect(body.cancellationType).to.equal('UsageReversal')
+    })
+  })
+  it('reversingASubstituteUsageReversesTheTreatmentFeeToo', () => {
+    value('usage', 'reverse-substitute').should('include', {
+      reversalGross: -70, reversalFee: -45, reversalOwnerNet: -25, feeTotal: 0, ownerNetTotal: 0, outstanding: 700,
+    })
+  })
+  it('rejectsReversingAUsageTwice', () => rejected('usage', 'reverse-twice'))
+  it('rejectsReversingAUsageWithoutAReason', () => rejected('usage', 'reverse-no-reason'))
   it('rejectsUsageOnAnExpiredCourse', () => rejected('usage', 'expired', 'หมดอายุ'))
   it('rejectsUsageWhenCourseHasNoRemainingVisits', () => rejected('usage', 'exhausted'))
   it('rejectsUsageWhenThisPatientHasNoBalanceEvenIfCourseDoes', () => rejected('usage', 'no-balance'))
+})
+
+describe('clinicv2 CourseUsagePrintService assertions', () => {
+  it('issuingCreatesVersionOneWithAFrozenSnapshotAndAnIssuedEvent', () => {
+    value('print', 'issue').should('include', {
+      version: 1, eventType: 'Issued', issuedBy: 9, sameUsage: true, snapshotHasCourseNo: true,
+    })
+  })
+  it('issuingAgainCreatesTheNextVersion', () => {
+    value('print', 'issue-second-version').should('include', { version: 2, eventType: 'Issued' })
+  })
+  it('rejectsPrintingAReversedUsage', () => rejected('print', 'issue-reversed-usage'))
+  it('reprintingAddsAReprintEventToTheSameDocument', () => {
+    value('print', 'reprint').should('include', { eventType: 'Reprint', printedBy: 9, sameDocument: true })
+  })
+  it('rejectsReprintingAMissingDocument', () => rejected('print', 'reprint-missing'))
 })
