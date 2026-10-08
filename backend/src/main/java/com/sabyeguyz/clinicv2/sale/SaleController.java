@@ -8,6 +8,8 @@ import com.sabyeguyz.clinicv2.catalog.ServiceRepository;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
+import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.role.PermissionService;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.math.BigDecimal;
@@ -23,38 +25,26 @@ import org.springframework.web.bind.annotation.*;
  * Matches frontend/src/api/client.ts's salesApi (/api/payments,
  * /api/receipts/{id}).
  *
- * <p>Known gap, flagged for the team: old "Sale" = one Receipt with many
- * line items and a shared pool of payments; v2's Payment_transaction FKs a
- * single Sales_transaction, not a Receipt. This controller only supports
- * (and enforces) exactly one item per create call - the "id" this API
- * returns/accepts is a SalesTransaction id, standing in for "the sale".
- * Multi-item receipts with one combined payment set are not representable
- * with the current v2 schema; the frontend already only ever sends one
- * item per call (services view), so this matches real usage today.</p>
+ * <p>The schema now supports a receipt with several lines and payments on the
+ * receipt, but this API still takes exactly one item per create call (the
+ * frontend only ever sends one), and the "id" it returns/accepts is that
+ * line's SalesTransaction id standing in for "the sale". Payments listed for
+ * a sale are the whole receipt's payments.</p>
  *
- * <p>Bigger gap, also flagged for the team: Sales_transaction has NO
- * receipt_id column in the data dictionary at all - only Course does (via
- * Course.receipt). So the Receipt this controller creates on every call is
- * only ever reachable back from a CoursePurchase transaction; for
- * Assessment/SingleVisit sales it is effectively orphaned, and
- * {@code receiptNo} in the response below is a placeholder (the
- * transaction id) rather than the real Receipt.receipt_no, since there is
- * no FK to look it up from. This needs a schema decision (add
- * Sales_transaction.receipt_id, or drop the receipt-per-sale concept for
- * non-course sales) before this is correct.</p>
- *
- * <p>Receipt numbering also has no dedicated sequence table yet (same gap
- * noted on ReceiptService) - the number generated here is a placeholder,
- * not safe under concurrent requests.</p>
+ * <p>Receipts are real now: Sales_transaction carries receipt_id, so the
+ * receiptNo returned here is the Receipt's own number, and a bill discount
+ * on the request is totalled onto the Receipt and allocated to the line.
+ * Receipt numbering is still max-plus-one (see ReceiptService).</p>
  */
 @RestController
 public class SaleController {
     private final ReceiptService receiptService;
     private final SalesTransactionService salesTransactionService;
     private final PaymentTransactionService paymentTransactionService;
+    private final TransactionCancellationService cancellations;
+    private final PermissionService permissions;
     private final SalesTransactionRepository transactions;
     private final PaymentTransactionRepository payments;
-    private final ReceiptRepository receipts;
     private final PatientRepository patients;
     private final BranchRepository branches;
     private final StaffRepository staff;
@@ -63,16 +53,19 @@ public class SaleController {
     private final CurrentActor actor;
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
-                           PaymentTransactionService paymentTransactionService, SalesTransactionRepository transactions,
+                           PaymentTransactionService paymentTransactionService,
+                           TransactionCancellationService cancellations, PermissionService permissions,
+                           SalesTransactionRepository transactions,
                            PaymentTransactionRepository payments, ReceiptRepository receipts,
                            PatientRepository patients, BranchRepository branches, StaffRepository staff,
                            ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor) {
         this.receiptService = receiptService;
         this.salesTransactionService = salesTransactionService;
         this.paymentTransactionService = paymentTransactionService;
+        this.cancellations = cancellations;
+        this.permissions = permissions;
         this.transactions = transactions;
         this.payments = payments;
-        this.receipts = receipts;
         this.patients = patients;
         this.branches = branches;
         this.staff = staff;
@@ -85,7 +78,8 @@ public class SaleController {
                                BigDecimal discountValue) {}
     public record PaymentRequest(String paymentMethodCode, BigDecimal amount) {}
     public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note,
-                                 List<ItemRequest> items, List<PaymentRequest> payments) {}
+                                 List<ItemRequest> items, List<PaymentRequest> payments, String billDiscountType,
+                                 BigDecimal billDiscountValue) {}
     public record ReverseRequest(String reason) {}
 
     public record PatientSummary(Long id, String hn, String fullName) {}
@@ -134,25 +128,27 @@ public class SaleController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส"));
 
         Discount discount = Discount.of(item.discountType(), item.discountValue());
-        String receiptNo = generateReceiptNo(branch);
+        String receiptNo = receiptService.nextReceiptNo();
         Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
 
         SalesTransaction transaction;
         if ("COURSE".equalsIgnoreCase(item.type())) {
-            transaction = salesTransactionService.recordCoursePurchase(patient, branch, receipt, svc, salesperson,
-                    null, null, null, null, discount, LocalDate.now(), actor.currentId());
+            transaction = salesTransactionService.recordCoursePurchase(receipt, patient, branch, svc, salesperson,
+                    null, null, null, null, discount, null, LocalDate.now(), actor.currentId()).transaction();
         } else {
             TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
                     ? TransactionType.Assessment : TransactionType.SingleVisit;
-            transaction = salesTransactionService.recordVisitSale(patient, branch, svc, type, null, salesperson,
-                    Math.max(1, item.quantity()), null, null, discount, actor.currentId());
+            transaction = salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, null,
+                    salesperson, Math.max(1, item.quantity()), null, null, discount, actor.currentId());
         }
+        receiptService.finalizeTotals(receipt, List.of(transaction),
+                Discount.of(request.billDiscountType(), request.billDiscountValue()), actor.currentId());
 
         if (request.payments() != null) {
             for (PaymentRequest paymentRequest : request.payments()) {
                 PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(paymentRequest.paymentMethodCode())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode()));
-                paymentTransactionService.record(patient, branch, transaction, paymentRequest.amount(), method, actor.currentId());
+                paymentTransactionService.record(patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
             }
         }
 
@@ -161,12 +157,9 @@ public class SaleController {
 
     @PostMapping("/api/payments/{id}/reverse")
     public Detail reverse(@PathVariable Long id, @RequestBody ReverseRequest request) {
-        for (PaymentTransaction payment : payments.findByTransactionIdOrderByIdAsc(id)) {
-            if (payment.isPaymentStatus()) {
-                paymentTransactionService.voidPayment(payment.getId(), actor.currentId());
-            }
-        }
-        salesTransactionService.voidTransaction(id, actor.currentId());
+        SalesTransaction transaction = findTransaction(id);
+        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        cancellations.voidSale(transaction, permission, request.reason(), actor.currentId());
         return toDetail(findTransaction(id));
     }
 
@@ -179,21 +172,16 @@ public class SaleController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode));
     }
 
-    /** Placeholder until a real receipt-numbering sequence table exists (see class Javadoc). */
-    private String generateReceiptNo(Branch branch) {
-        long next = receipts.count() + 1;
-        return "RE%s%06d".formatted(branch.getBranchCode(), next);
-    }
-
     private Summary toSummary(SalesTransaction t) {
         Staff seller = t.getSalespersonStaff();
-        return new Summary(t.getId(), t.getId() + "", // receiptNo lives on Receipt, not directly reachable from a line item here
+        return new Summary(t.getId(), t.getReceipt().getReceiptNo(),
                 new PatientSummary(t.getPatient().getId(), t.getPatient().getPatientHn(),
                         t.getPatient().getPatientFname() + " " + t.getPatient().getPatientLname()),
                 t.getBranch().getBranchCode(),
                 seller == null ? null : new SalespersonSummary(seller.getId(), seller.getStaffCode(),
                         seller.getStaffFname() + " " + seller.getStaffLname()),
-                t.getAmount(), payments.paidAmountOf(t.getId()), t.isTransactionStatus() ? "PAID" : "VOIDED",
+                t.getAmount().subtract(t.getAllocatedBillDiscountAmount()), payments.paidAmountOf(t.getReceipt().getId()),
+                t.isTransactionStatus() ? "PAID" : "VOIDED",
                 t.getTransactionDate(), null, null, null);
     }
 
@@ -201,7 +189,7 @@ public class SaleController {
         Summary s = toSummary(t);
         List<ItemResponse> items = List.of(new ItemResponse(t.getId(), t.getTransactionType().name(),
                 t.getService().getServiceName(), t.getQuantity(), t.getAmount()));
-        List<PaymentResponse> paymentList = payments.findByTransactionIdOrderByIdAsc(t.getId()).stream()
+        List<PaymentResponse> paymentList = payments.findByReceiptIdOrderByIdAsc(t.getReceipt().getId()).stream()
                 .map(p -> new PaymentResponse(p.getId(), p.isPaymentStatus() ? "PAYMENT" : "REFUND",
                         p.getPaymentMethod().getMethodName(), p.getAmount()))
                 .toList();
