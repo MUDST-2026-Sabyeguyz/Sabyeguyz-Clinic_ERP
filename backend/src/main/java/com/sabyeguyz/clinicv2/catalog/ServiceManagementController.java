@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.catalog;
 
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.enums.ServiceType;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
  * templates go through {@link CourseTemplateController} (/api/courses)
  * even though both are the same v2 Service entity underneath.
  */
+@Transactional
 @PreAuthorize("hasRole('MANAGER')")
 @RestController
 @RequestMapping("/api/services")
