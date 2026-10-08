@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import com.sabyeguyz.clinicv2.course.CourseTransfer;
+import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
 import com.sabyeguyz.clinicv2.enums.CancellationType;
 import com.sabyeguyz.clinicv2.role.Permission;
 import java.time.Instant;
@@ -81,6 +83,26 @@ public class TransactionCancellationService {
         require(payment != null, "ต้องระบุรายการชำระเงิน");
         TransactionCancellation cancellation = newCancellation(permission, reason, CancellationType.Refund, actorId);
         cancellation.setPayment(payment);
+        return cancellations.save(cancellation);
+    }
+
+    @Transactional
+    public TransactionCancellation recordUsageReversal(CourseVisitUsage usage, Permission permission, String reason,
+                                                        Long actorId) {
+        requireReasonAndPermission(permission, reason);
+        require(usage != null, "ต้องระบุรายการใช้สิทธิ์คอร์ส");
+        TransactionCancellation cancellation = newCancellation(permission, reason, CancellationType.UsageReversal, actorId);
+        cancellation.setVisitUsage(usage);
+        return cancellations.save(cancellation);
+    }
+
+    @Transactional
+    public TransactionCancellation recordTransferReversal(CourseTransfer transfer, Permission permission,
+                                                           String reason, Long actorId) {
+        requireReasonAndPermission(permission, reason);
+        require(transfer != null, "ต้องระบุรายการโอน");
+        TransactionCancellation cancellation = newCancellation(permission, reason, CancellationType.TransferReversal, actorId);
+        cancellation.setTransfer(transfer);
         return cancellations.save(cancellation);
     }
 
