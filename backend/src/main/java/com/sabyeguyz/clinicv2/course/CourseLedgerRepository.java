@@ -17,4 +17,8 @@ public interface CourseLedgerRepository extends JpaRepository<CourseLedger, Long
     Long sumQtyChangeByCourseAndPatient(@Param("courseId") Long courseId, @Param("patientId") Long patientId);
 
     List<CourseLedger> findByCourseIdOrderByIdDesc(Long courseId);
+
+    List<CourseLedger> findByVisitUsageId(Long visitUsageId);
+
+    List<CourseLedger> findByTransferId(Long transferId);
 }
