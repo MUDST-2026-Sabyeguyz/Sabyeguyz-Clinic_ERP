@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.staff;
 
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
@@ -68,6 +69,33 @@ public class StaffController {
         StaffPosition position = resolvePosition(request.position());
         Staff staff = service.update(id, names[0], names[1], position, branch, actor.currentId());
         return toResponse(staff);
+    }
+
+    /** Switches the staff member off; use {@code /terminate} when the commission policy must be recorded. */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deactivate(@PathVariable Long id) {
+        service.deactivate(id, actor.currentId());
+    }
+
+    public record TerminateRequest(LocalDate terminationDate, String commissionAfterTerminationPolicy) {}
+
+    /** Records a resignation: the date and what happens to the outstanding commission (policy name). */
+    @PostMapping("/{id}/terminate")
+    @PreAuthorize("hasRole('MANAGER')")
+    public Response terminate(@PathVariable Long id, @RequestBody TerminateRequest request) {
+        if (request.commissionAfterTerminationPolicy() == null) {
+            throw new IllegalArgumentException("ต้องระบุ commissionAfterTerminationPolicy");
+        }
+        com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy policy;
+        try {
+            policy = com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy
+                    .valueOf(request.commissionAfterTerminationPolicy());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("commissionAfterTerminationPolicy ไม่ถูกต้อง");
+        }
+        return toResponse(service.terminate(id, request.terminationDate(), policy, actor.currentId()));
     }
 
     private Branch resolveBranch(String branchCode) {
