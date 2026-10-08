@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinicv2.patient;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,6 +87,45 @@ public class PatientService {
         patient.setAddress(address);
         patient.setBloodGroup(bloodGroup);
         patient.setNationality(nationality);
+        patient.setPatientUpdateAt(Instant.now());
+        patient.setPatientUpdateBy(actorId);
+        return repository.save(patient);
+    }
+
+    /**
+     * Edits a registered patient. A null argument leaves that field as it is; identity numbers, phone and names
+     * follow the same rules as registration (a Thai patient keeps a phone number and a 13-digit national id).
+     */
+    @Transactional
+    public Patient updateDetails(Long id, String title, String fname, String lname,
+                                  com.sabyeguyz.clinicv2.enums.Gender gender, String phone, String nickname,
+                                  String nationalId, String passportNo, LocalDate birthdate,
+                                  com.sabyeguyz.clinicv2.enums.BloodGroup bloodGroup, String nationality,
+                                  String address, Long actorId) {
+        Patient patient = find(id);
+        if (title != null && !title.isBlank()) patient.setTitle(title.trim());
+        if (fname != null && !fname.isBlank()) patient.setPatientFname(fname.trim());
+        if (lname != null && !lname.isBlank()) patient.setPatientLname(lname.trim());
+        if (gender != null) patient.setGender(gender);
+        if (phone != null) patient.setPhone(phone.isBlank() ? null : phone.trim());
+        if (nickname != null) patient.setPatientNickname(nickname.isBlank() ? null : nickname.trim());
+        if (nationalId != null && !nationalId.isBlank()) {
+            if (!nationalId.trim().matches("[0-9]{13}")) {
+                throw new IllegalArgumentException("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
+            }
+            patient.setNationalId(nationalId.trim());
+        }
+        if (passportNo != null && !passportNo.isBlank()) patient.setPassportNo(passportNo.trim());
+        if (birthdate != null) patient.setBirthdate(birthdate);
+        if (bloodGroup != null) patient.setBloodGroup(bloodGroup);
+        if (nationality != null && !nationality.isBlank()) patient.setNationality(nationality.trim());
+        if (address != null) patient.setAddress(address);
+        if (patient.getCustomerType() == com.sabyeguyz.clinicv2.enums.CustomerType.Thai) {
+            if (patient.getPhone() == null) throw new IllegalArgumentException("phone ห้ามว่าง");
+            if (patient.getNationalId() == null) {
+                throw new IllegalArgumentException("ผู้ป่วยชาวไทยต้องระบุเลขบัตรประชาชน");
+            }
+        }
         patient.setPatientUpdateAt(Instant.now());
         patient.setPatientUpdateBy(actorId);
         return repository.save(patient);
