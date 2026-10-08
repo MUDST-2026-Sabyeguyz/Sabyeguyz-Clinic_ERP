@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinicv2.sale;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -102,6 +103,17 @@ public class ReceiptService {
         receipt.setTaxableAmount(taxable);
         receipt.setTaxAmount(BigDecimal.ZERO.setScale(2));
         receipt.setNetAmount(taxable);
+        receipt.setReceiptUpdateAt(Instant.now());
+        receipt.setReceiptUpdateBy(actorId);
+        return repository.save(receipt);
+    }
+
+    @Transactional
+    public Receipt markVoided(Receipt receipt, Long actorId) {
+        if (receipt.getReceiptStatus() != ReceiptStatus.Issued) {
+            throw new IllegalArgumentException("ใบเสร็จนี้ไม่ได้อยู่ในสถานะออกแล้ว");
+        }
+        receipt.setReceiptStatus(ReceiptStatus.Voided);
         receipt.setReceiptUpdateAt(Instant.now());
         receipt.setReceiptUpdateBy(actorId);
         return repository.save(receipt);
