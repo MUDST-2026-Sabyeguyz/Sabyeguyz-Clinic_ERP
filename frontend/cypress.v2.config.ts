@@ -13,7 +13,7 @@ export default defineConfig({
     baseUrl: process.env.CYPRESS_BASE_URL ?? 'http://localhost:5173',
     specPattern: 'cypress/e2e-v2/**/*.cy.js',
     supportFile: 'cypress/support-v2/e2e.js',
-    env: { apiUrl: process.env.CYPRESS_API_URL ?? 'http://127.0.0.1:18080' },
+    expose: { apiUrl: process.env.CYPRESS_API_URL ?? 'http://127.0.0.1:18080' },
     setupNodeEvents(on) {
       // The default reporter hides the reason of a failure in CI logs that are long; print it in a searchable form.
       on('after:spec', (spec, results) => {
