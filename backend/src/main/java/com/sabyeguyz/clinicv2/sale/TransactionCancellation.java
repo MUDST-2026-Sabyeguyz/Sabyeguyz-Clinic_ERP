@@ -2,8 +2,11 @@ package com.sabyeguyz.clinicv2.sale;
 
 import com.sabyeguyz.clinicv2.course.CourseTransfer;
 import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
+import com.sabyeguyz.clinicv2.enums.CancellationType;
 import com.sabyeguyz.clinicv2.role.Permission;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
@@ -43,9 +46,10 @@ public class TransactionCancellation {
     @Column(name = "cancelled_at", nullable = false)
     private Instant cancelledAt;
 
-    /** Adjustment record created to reverse the effect. */
-    @Column(name = "reversal_reference_id")
-    private Long reversalReferenceId;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "cancellation_type", nullable = false)
+    private CancellationType cancellationType;
 
     public TransactionCancellation() {}
 
@@ -66,6 +70,6 @@ public class TransactionCancellation {
     public void setCancelledBy(Long cancelledBy) { this.cancelledBy = cancelledBy; }
     public Instant getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
-    public Long getReversalReferenceId() { return reversalReferenceId; }
-    public void setReversalReferenceId(Long reversalReferenceId) { this.reversalReferenceId = reversalReferenceId; }
+    public CancellationType getCancellationType() { return cancellationType; }
+    public void setCancellationType(CancellationType cancellationType) { this.cancellationType = cancellationType; }
 }
