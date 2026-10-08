@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.commission;
 
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
+import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
 import com.sabyeguyz.clinicv2.enums.FeeType;
 import com.sabyeguyz.clinicv2.enums.OverflowPolicy;
 import com.sabyeguyz.clinicv2.patient.Patient;
@@ -95,6 +96,24 @@ public class CommissionAllocationLedger {
     @Column(name = "allocation_update_by")
     private Long allocationUpdateBy;
 
+    /** Allocation books the commission; Reversal (negative amounts) undoes one Allocation; Adjustment is an approved correction. */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "entry_type", nullable = false)
+    private AllocationEntryType entryType = AllocationEntryType.Allocation;
+
+    @Column(name = "adjustment_reason", length = 255)
+    private String adjustmentReason;
+
+    @Column(name = "adjustment_approved_by")
+    private Long adjustmentApprovedBy;
+
+    @Column(name = "adjustment_approved_at")
+    private Instant adjustmentApprovedAt;
+
+    @Column(name = "reversal_reason", length = 255)
+    private String reversalReason;
+
     public CommissionAllocationLedger() {}
 
     public Long getId() { return id; }
@@ -138,4 +157,14 @@ public class CommissionAllocationLedger {
     public void setAllocationUpdateAt(Instant allocationUpdateAt) { this.allocationUpdateAt = allocationUpdateAt; }
     public Long getAllocationUpdateBy() { return allocationUpdateBy; }
     public void setAllocationUpdateBy(Long allocationUpdateBy) { this.allocationUpdateBy = allocationUpdateBy; }
+    public AllocationEntryType getEntryType() { return entryType; }
+    public void setEntryType(AllocationEntryType entryType) { this.entryType = entryType; }
+    public String getAdjustmentReason() { return adjustmentReason; }
+    public void setAdjustmentReason(String adjustmentReason) { this.adjustmentReason = adjustmentReason; }
+    public Long getAdjustmentApprovedBy() { return adjustmentApprovedBy; }
+    public void setAdjustmentApprovedBy(Long adjustmentApprovedBy) { this.adjustmentApprovedBy = adjustmentApprovedBy; }
+    public Instant getAdjustmentApprovedAt() { return adjustmentApprovedAt; }
+    public void setAdjustmentApprovedAt(Instant adjustmentApprovedAt) { this.adjustmentApprovedAt = adjustmentApprovedAt; }
+    public String getReversalReason() { return reversalReason; }
+    public void setReversalReason(String reversalReason) { this.reversalReason = reversalReason; }
 }

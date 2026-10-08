@@ -141,10 +141,56 @@ describe('Clinic v2 core service scenarios', () => {
     })
   })
 
+  it('CourseService: creditsTheSaleToTheSellerAtOneHundredPercentByDefault', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/creditsTheSaleToTheSellerAtOneHundredPercentByDefault').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body).not.to.have.property('error')
+      expect(body.sharesSaved).to.equal(1)
+      expect(body.percent).to.equal(100)
+      expect(body.credit).to.equal(10000)
+      expect(body.salesSeenByTier).to.equal(10000)
+    })
+  })
+
+  it('CourseService: splitsTheSaleCreditBetweenTwoStaff', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/splitsTheSaleCreditBetweenTwoStaff').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body).not.to.have.property('error')
+      expect(body.sharesSaved).to.equal(2)
+      expect(body.firstCredit).to.equal(6000)
+      expect(body.secondCredit).to.equal(4000)
+      expect(body.salesSeenByTier).to.equal(6000)
+    })
+  })
+
+  it('CourseService: createsTheOwnerMemberAndEntitlementForThePurchaser', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/createsTheOwnerMemberAndEntitlementForThePurchaser').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.memberRole).to.equal('Owner')
+      expect(body.memberIsPurchaser).to.equal(true)
+      expect(body.allocatedVisits).to.equal(13)
+      expect(body.usedVisits).to.equal(0)
+      expect(body.remainingVisits).to.equal(13)
+    })
+  })
+
+  it('CourseService: recordsThePurchaseLedgerEntryAgainstTheSaleLine', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/recordsThePurchaseLedgerEntryAgainstTheSaleLine').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.entryType).to.equal('Purchase')
+      expect(body.qtyChange).to.equal(13)
+      expect(body.balanceAfter).to.equal(13)
+      expect(body.sourceIsTheSaleLine).to.equal(true)
+      expect(body.hasOtherSource).to.equal(false)
+    })
+  })
+
   const rejectedPurchases = [
     'rejectsASaleLineThatIsNotACoursePurchase',
     'rejectsASaleLineThatAlreadyHasACourse',
     'rejectsAPurchaserThatDiffersFromTheReceiptPatient',
+    'rejectsSaleSharesThatDoNotTotalOneHundred',
+    'rejectsTheSameStaffTwiceInTheSaleShares',
   ]
   rejectedPurchases.forEach((scenario) => {
     it(`CourseService: ${scenario}`, () => {
@@ -338,6 +384,27 @@ describe('Clinic v2 core service scenarios', () => {
       expect(body.staffStatus).to.equal(false)
       expect(body.terminationDate).to.equal("2026-06-30")
       expect(body.commissionAfterTerminationPolicy).to.equal("CONTINUE_UNTIL_COMPLETE")
+    })
+  })
+
+  it('StaffService: terminateStampsThePolicyLockTime', () => {
+    cy.api('POST', '/__cypress/v2/core/StaffService/terminateStampsThePolicyLockTime').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.locked).to.equal(true)
+    })
+  })
+
+  it('StaffService: rejectsChangingALockedTerminationPolicy', () => {
+    cy.api('POST', '/__cypress/v2/core/StaffService/rejectsChangingALockedTerminationPolicy').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.error).to.equal('IllegalArgumentException')
+    })
+  })
+
+  it('StaffService: repeatingTheSameLockedPolicyKeepsTheOriginalLockTime', () => {
+    cy.api('POST', '/__cypress/v2/core/StaffService/repeatingTheSameLockedPolicyKeepsTheOriginalLockTime').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.lockedAtUnchanged).to.equal(true)
     })
   })
 
