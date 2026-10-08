@@ -40,6 +40,9 @@ public class V2FinanceScenarios {
             if (scenario.startsWith("fee-")) return fee(scenario);
             if (scenario.startsWith("payment-")) return payment(scenario);
             if (scenario.startsWith("receipt-")) return receipt(scenario);
+            if (scenario.startsWith("cancel-")) return cancellation(scenario);
+            if (scenario.startsWith("refund-")) return refund(scenario);
+            if (scenario.startsWith("revenue-")) return revenue(scenario);
             if (scenario.startsWith("sale-")) return sale(scenario);
             if (scenario.startsWith("discount-")) return discount(scenario);
             if (scenario.startsWith("preview-")) return preview(scenario);
@@ -181,8 +184,8 @@ public class V2FinanceScenarios {
     }
     private Object payment(String scenario) {
         var repository = new V2RepositoryStub<>(PaymentTransactionRepository.class);
-        var transaction = new SalesTransaction(); transaction.setTransactionStatus(!scenario.equals("payment-void"));
-        var result = new PaymentTransactionService(repository.proxy()).record(new Patient(),new Branch(),transaction,
+        var receipt = new Receipt(); receipt.setReceiptStatus(scenario.equals("payment-void") ? ReceiptStatus.Voided : ReceiptStatus.Issued);
+        var result = new PaymentTransactionService(repository.proxy()).record(new Patient(),new Branch(),receipt,
                 scenario.equals("payment-zero") ? BigDecimal.ZERO : decimal("1200.00"),new PaymentMethod(),1L);
         return Map.of("amount",result.getAmount(),"status",result.isPaymentStatus());
     }
@@ -298,5 +301,84 @@ public class V2FinanceScenarios {
         var result = service.previewCourse(template, staff(), null, Discount.of("BAHT", decimal("500")), LocalDate.of(2026,8,18));
         return Map.of("net",result.netPrice(),"rate",result.commissionRate(),"pool",result.commissionPool(),
                 "perVisit",result.commissionPerVisit(),"monthlySales",result.monthlySalesToDate());
+    }
+
+    private static PaymentTransaction payment(String amount, boolean active) {
+        var payment = new PaymentTransaction(); payment.setAmount(decimal(amount)); payment.setPaymentStatus(active);
+        return payment;
+    }
+    private static SalesTransaction line(TransactionType type, String amount, String allocatedBill) {
+        var line = new SalesTransaction(); line.setTransactionType(type); line.setAmount(decimal(amount));
+        line.setAllocatedBillDiscountAmount(decimal(allocatedBill)); line.setTransactionStatus(true);
+        return line;
+    }
+    private Object cancellation(String scenario) {
+        var cancellations = new V2RepositoryStub<>(TransactionCancellationRepository.class);
+        var salesRepo = new V2RepositoryStub<>(SalesTransactionRepository.class);
+        var paymentRepo = new V2RepositoryStub<>(PaymentTransactionRepository.class);
+        var receiptRepo = new V2RepositoryStub<>(ReceiptRepository.class);
+        var service = new TransactionCancellationService(cancellations.proxy(), salesRepo.proxy(),
+                new SalesTransactionService(salesRepo.proxy(), null), paymentRepo.proxy(),
+                new PaymentTransactionService(paymentRepo.proxy()), new ReceiptService(receiptRepo.proxy()));
+        var receipt = new Receipt(); receipt.setReceiptStatus(ReceiptStatus.Issued);
+        var sale = line(TransactionType.CoursePurchase, "1500.00", "0.00"); sale.setReceipt(receipt);
+        sale.setTransactionStatus(!scenario.equals("cancel-already-void-sale"));
+        var paid = payment("1500.00", true);
+        var other = line(TransactionType.SingleVisit, "500.00", "0.00");
+        List<SalesTransaction> lines = scenario.equals("cancel-void-one-of-two-lines") ? List.of(sale, other) : List.of(sale);
+        salesRepo.on("findById", a -> Optional.of(sale)).on("findByReceiptId", a -> lines);
+        paymentRepo.on("findByReceiptIdOrderByIdAsc", a -> List.of(paid)).on("findById", a -> Optional.of(paid));
+        var permission = scenario.equals("cancel-requires-permission") ? null : new Permission();
+        String reason = scenario.equals("cancel-requires-reason") ? "  " : "ลูกค้าขอยกเลิก";
+        if (scenario.equals("cancel-void-payment")) {
+            var result = service.voidPayment(paid, permission, reason, 9L);
+            return Map.of("paymentStatus", paid.isPaymentStatus(), "type", result.getCancellationType(),
+                    "targetsPayment", result.getPayment() == paid, "reason", result.getReason());
+        }
+        var result = service.voidSale(sale, permission, reason, 9L);
+        List<TransactionCancellation> saved = cancellations.arguments("save").stream()
+                .map(a -> (TransactionCancellation) a[0]).toList();
+        return Map.of("saleStatus", sale.isTransactionStatus(), "paymentStatus", paid.isPaymentStatus(),
+                "receiptStatus", receipt.getReceiptStatus(), "cancellations", saved.size(),
+                "types", saved.stream().map(c -> c.getCancellationType().name()).toList(),
+                "targets", saved.stream().map(c -> c.getPayment() != null ? "payment" : "transaction").toList(),
+                "cancelledBy", result.getCancelledBy());
+    }
+    private Object refund(String scenario) {
+        var refunds = new V2RepositoryStub<>(RefundTransactionRepository.class);
+        var cancellations = new V2RepositoryStub<>(TransactionCancellationRepository.class);
+        var service = new RefundService(refunds.proxy(),
+                new TransactionCancellationService(cancellations.proxy(), null, null, null, null, null));
+        var paid = payment("1000.00", !scenario.equals("refund-voided-payment"));
+        refunds.on("refundedOrPendingAmountOf", a -> scenario.equals("refund-over") ? decimal("700.00") : BigDecimal.ZERO);
+        var pending = new RefundTransaction();
+        pending.setRefundStatus(scenario.equals("refund-complete-twice") ? RefundStatus.Completed : RefundStatus.Pending);
+        refunds.on("findById", a -> Optional.of(pending));
+        if (scenario.startsWith("refund-complete")) {
+            var done = service.complete(1L, 9L);
+            return Map.of("status", done.getRefundStatus(), "refundedBy", done.getRefundedBy(), "hasRefundedAt", done.getRefundedAt() != null);
+        }
+        if (scenario.equals("refund-fail")) {
+            var failed = service.fail(1L);
+            return Map.of("status", failed.getRefundStatus(), "hasRefundedAt", failed.getRefundedAt() != null);
+        }
+        var refund = service.request(paid, decimal("400.00"), new PaymentMethod(), new Permission(), "คืนเงินตามคำขอ", 9L);
+        var cancellation = (TransactionCancellation) cancellations.arguments("save").get(0)[0];
+        return Map.of("status", refund.getRefundStatus(), "amount", refund.getRefundAmount(),
+                "requestedBy", refund.getRequestedBy(), "hasRefundedAt", refund.getRefundedAt() != null,
+                "cancellationType", cancellation.getCancellationType(), "sameCancellation", refund.getCancellation() == cancellation);
+    }
+    private Object revenue(String scenario) {
+        return switch (scenario) {
+            case "revenue-single-line" -> com.sabyeguyz.clinicv2.report.RevenueSplit.split(decimal("1500.00"),
+                    List.of(line(TransactionType.CoursePurchase, "1500.00", "0.00")));
+            case "revenue-mixed" -> com.sabyeguyz.clinicv2.report.RevenueSplit.split(decimal("1800.00"),
+                    List.of(line(TransactionType.CoursePurchase, "1500.00", "150.00"), line(TransactionType.SingleVisit, "500.00", "50.00")));
+            case "revenue-rounding" -> com.sabyeguyz.clinicv2.report.RevenueSplit.split(decimal("100.00"),
+                    List.of(line(TransactionType.SingleVisit, "100.00", "0.00"), line(TransactionType.SingleVisit, "100.00", "0.00"),
+                            line(TransactionType.CoursePurchase, "100.00", "0.00")));
+            case "revenue-no-lines" -> com.sabyeguyz.clinicv2.report.RevenueSplit.split(decimal("250.00"), List.of());
+            default -> throw new IllegalArgumentException("Unknown revenue scenario: " + scenario);
+        };
     }
 }

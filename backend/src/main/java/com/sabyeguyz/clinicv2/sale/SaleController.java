@@ -8,6 +8,8 @@ import com.sabyeguyz.clinicv2.catalog.ServiceRepository;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
+import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.role.PermissionService;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.math.BigDecimal;
@@ -23,14 +25,11 @@ import org.springframework.web.bind.annotation.*;
  * Matches frontend/src/api/client.ts's salesApi (/api/payments,
  * /api/receipts/{id}).
  *
- * <p>Known gap, flagged for the team: old "Sale" = one Receipt with many
- * line items and a shared pool of payments; v2's Payment_transaction FKs a
- * single Sales_transaction, not a Receipt. This controller only supports
- * (and enforces) exactly one item per create call - the "id" this API
- * returns/accepts is a SalesTransaction id, standing in for "the sale".
- * Multi-item receipts with one combined payment set are not representable
- * with the current v2 schema; the frontend already only ever sends one
- * item per call (services view), so this matches real usage today.</p>
+ * <p>The schema now supports a receipt with several lines and payments on the
+ * receipt, but this API still takes exactly one item per create call (the
+ * frontend only ever sends one), and the "id" it returns/accepts is that
+ * line's SalesTransaction id standing in for "the sale". Payments listed for
+ * a sale are the whole receipt's payments.</p>
  *
  * <p>Receipts are real now: Sales_transaction carries receipt_id, so the
  * receiptNo returned here is the Receipt's own number, and a bill discount
@@ -42,6 +41,8 @@ public class SaleController {
     private final ReceiptService receiptService;
     private final SalesTransactionService salesTransactionService;
     private final PaymentTransactionService paymentTransactionService;
+    private final TransactionCancellationService cancellations;
+    private final PermissionService permissions;
     private final SalesTransactionRepository transactions;
     private final PaymentTransactionRepository payments;
     private final PatientRepository patients;
@@ -52,13 +53,17 @@ public class SaleController {
     private final CurrentActor actor;
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
-                           PaymentTransactionService paymentTransactionService, SalesTransactionRepository transactions,
+                           PaymentTransactionService paymentTransactionService,
+                           TransactionCancellationService cancellations, PermissionService permissions,
+                           SalesTransactionRepository transactions,
                            PaymentTransactionRepository payments, ReceiptRepository receipts,
                            PatientRepository patients, BranchRepository branches, StaffRepository staff,
                            ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor) {
         this.receiptService = receiptService;
         this.salesTransactionService = salesTransactionService;
         this.paymentTransactionService = paymentTransactionService;
+        this.cancellations = cancellations;
+        this.permissions = permissions;
         this.transactions = transactions;
         this.payments = payments;
         this.patients = patients;
@@ -143,7 +148,7 @@ public class SaleController {
             for (PaymentRequest paymentRequest : request.payments()) {
                 PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(paymentRequest.paymentMethodCode())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode()));
-                paymentTransactionService.record(patient, branch, transaction, paymentRequest.amount(), method, actor.currentId());
+                paymentTransactionService.record(patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
             }
         }
 
@@ -152,12 +157,9 @@ public class SaleController {
 
     @PostMapping("/api/payments/{id}/reverse")
     public Detail reverse(@PathVariable Long id, @RequestBody ReverseRequest request) {
-        for (PaymentTransaction payment : payments.findByTransactionIdOrderByIdAsc(id)) {
-            if (payment.isPaymentStatus()) {
-                paymentTransactionService.voidPayment(payment.getId(), actor.currentId());
-            }
-        }
-        salesTransactionService.voidTransaction(id, actor.currentId());
+        SalesTransaction transaction = findTransaction(id);
+        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        cancellations.voidSale(transaction, permission, request.reason(), actor.currentId());
         return toDetail(findTransaction(id));
     }
 
@@ -178,7 +180,7 @@ public class SaleController {
                 t.getBranch().getBranchCode(),
                 seller == null ? null : new SalespersonSummary(seller.getId(), seller.getStaffCode(),
                         seller.getStaffFname() + " " + seller.getStaffLname()),
-                t.getAmount().subtract(t.getAllocatedBillDiscountAmount()), payments.paidAmountOf(t.getId()),
+                t.getAmount().subtract(t.getAllocatedBillDiscountAmount()), payments.paidAmountOf(t.getReceipt().getId()),
                 t.isTransactionStatus() ? "PAID" : "VOIDED",
                 t.getTransactionDate(), null, null, null);
     }
@@ -187,7 +189,7 @@ public class SaleController {
         Summary s = toSummary(t);
         List<ItemResponse> items = List.of(new ItemResponse(t.getId(), t.getTransactionType().name(),
                 t.getService().getServiceName(), t.getQuantity(), t.getAmount()));
-        List<PaymentResponse> paymentList = payments.findByTransactionIdOrderByIdAsc(t.getId()).stream()
+        List<PaymentResponse> paymentList = payments.findByReceiptIdOrderByIdAsc(t.getReceipt().getId()).stream()
                 .map(p -> new PaymentResponse(p.getId(), p.isPaymentStatus() ? "PAYMENT" : "REFUND",
                         p.getPaymentMethod().getMethodName(), p.getAmount()))
                 .toList();
