@@ -24,6 +24,32 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
     value('appointment', 'book').its('status').should('equal', 'Confirmed')
   })
   it('rejectsBookingWhenStaffAlreadyBooked', () => rejected('appointment', 'conflict'))
+  it('booksAnUnconfirmedAppointment', () => {
+    value('appointment', 'book-unconfirmed').should('include', { status: 'Unconfirmed', patientType: 'CURRENT', hasPatient: true, historySaves: 0 })
+  })
+  it('rejectsAnInitialStatusOtherThanUnconfirmedOrConfirmed', () => rejected('appointment', 'book-bad-initial-status'))
+  it('booksANewPatientByNameWithoutAPatientRecord', () => {
+    value('appointment', 'book-new-patient').should('include', {
+      status: 'Unconfirmed', patientType: 'NEW', hasPatient: false, contactName: 'สมชาย ใจดี',
+    })
+  })
+  it('booksANewPatientByNicknameWithPhone', () => {
+    value('appointment', 'new-nickname-with-phone').should('include', {
+      status: 'Confirmed', patientType: 'NEW', contactName: 'แบงค์', contactPhone: '0812345678',
+    })
+  })
+  it('rejectsANewPatientNicknameWithoutPhone', () => rejected('appointment', 'new-nickname-without-phone', 'เบอร์โทร'))
+  it('rejectsANewPatientWithoutAName', () => rejected('appointment', 'new-without-name'))
+  it('confirmMovesUnconfirmedToConfirmedAndRecordsHistory', () => {
+    value('appointment', 'confirm').should('include', { status: 'Confirmed', historySaves: 1 })
+  })
+  it('rejectsConfirmingAnAppointmentThatIsNotUnconfirmed', () => rejected('appointment', 'confirm-already-confirmed'))
+  it('registeringANewPatientMakesTheAppointmentCurrent', () => {
+    value('appointment', 'link-patient').should('include', { patientType: 'CURRENT', hasPatient: true })
+  })
+  it('rejectsLinkingAPatientToAnAppointmentThatAlreadyHasOne', () => rejected('appointment', 'link-patient-already-linked'))
+  it('rejectsCheckInOfAnUnconfirmedAppointment', () => rejected('appointment', 'arrive-unconfirmed', 'ยืนยัน'))
+  it('rejectsCheckInOfANewPatientWhoIsNotRegistered', () => rejected('appointment', 'arrive-new-patient', 'ลงทะเบียน'))
   it('cancelRecordsStatusHistory', () => {
     value('appointment', 'cancel').should('include', { status: 'Cancelled', historySaves: 1 })
   })
