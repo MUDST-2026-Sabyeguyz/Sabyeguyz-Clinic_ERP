@@ -36,6 +36,7 @@ public class V2CoreController {
             case "ServiceCatalogService/createsASingleVisitService" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().createsASingleVisitService();
             case "ServiceCatalogService/courseRequiresADefaultTotalVisits" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().courseRequiresADefaultTotalVisits();
             case "ServiceCatalogService/rejectsNegativePrice" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().rejectsNegativePrice();
+            case "ServiceCatalogService/rejectsAnAssessmentService" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().rejectsAnAssessmentService();
             case "MasterDataService/createsAType" -> new com.sabyeguyz.clinicv2.masterdata.MasterDataServiceScenarios().createsAType();
             case "MasterDataService/rejectsDuplicateTypeName" -> new com.sabyeguyz.clinicv2.masterdata.MasterDataServiceScenarios().rejectsDuplicateTypeName();
             case "MasterDataService/createsAValueUnderAType" -> new com.sabyeguyz.clinicv2.masterdata.MasterDataServiceScenarios().createsAValueUnderAType();
