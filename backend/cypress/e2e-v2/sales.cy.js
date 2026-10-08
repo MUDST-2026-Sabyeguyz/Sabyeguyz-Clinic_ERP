@@ -89,6 +89,42 @@ describe('v2 sales and payments', () => {
     })
   })
 
+  it('sells several items on one receipt and totals them', function () {
+    cy.registerPatient().then((patient) => {
+      sale(this.fixtures, patient, {
+        items: [
+          { type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 },
+          { type: 'SERVICE', referenceId: this.fixtures.serviceId, quantity: 1 },
+        ],
+        payments: [{ paymentMethodCode: 'Cash', amount: 2000 }],
+      }).then(({ status, body }) => {
+        expect(status).to.equal(201)
+        expect(Number(body.total)).to.equal(2000)
+        expect(Number(body.paid)).to.equal(2000)
+        cy.api('GET', `/api/receipts/${body.id}`).then((detail) => {
+          expect(detail.body.items).to.have.length(2)
+          expect(Number(detail.body.total)).to.equal(2000)
+        })
+      })
+    })
+  })
+
+  it('shares a bill discount over several items without changing the receipt total', function () {
+    cy.registerPatient().then((patient) => {
+      sale(this.fixtures, patient, {
+        items: [
+          { type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 },
+          { type: 'SERVICE', referenceId: this.fixtures.serviceId, quantity: 1 },
+        ],
+        billDiscountType: 'BAHT', billDiscountValue: 100,
+        payments: [{ paymentMethodCode: 'Cash', amount: 1900 }],
+      }).then(({ status, body }) => {
+        expect(status).to.equal(201)
+        expect(Number(body.total)).to.equal(1900)
+      })
+    })
+  })
+
   it('records split payments on one receipt', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, {
