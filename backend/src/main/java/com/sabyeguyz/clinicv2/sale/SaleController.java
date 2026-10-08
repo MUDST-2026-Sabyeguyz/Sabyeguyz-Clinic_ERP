@@ -53,6 +53,7 @@ public class SaleController {
     private final ServiceRepository services;
     private final PaymentMethodRepository paymentMethods;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
                            PaymentTransactionService paymentTransactionService,
@@ -60,7 +61,8 @@ public class SaleController {
                            SalesTransactionRepository transactions,
                            PaymentTransactionRepository payments, ReceiptRepository receipts,
                            PatientRepository patients, BranchRepository branches, StaffRepository staff,
-                           ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor) {
+                           ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.receiptService = receiptService;
         this.salesTransactionService = salesTransactionService;
         this.paymentTransactionService = paymentTransactionService;
@@ -74,6 +76,7 @@ public class SaleController {
         this.services = services;
         this.paymentMethods = paymentMethods;
         this.actor = actor;
+        this.audit = audit;
     }
 
     public record ItemRequest(String type, Long referenceId, int quantity, String discountType,
@@ -155,6 +158,8 @@ public class SaleController {
             }
         }
 
+        audit.record("receipt", String.valueOf(receipt.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
+                receiptNo + " (" + lines.size() + " รายการ)", actor.currentId());
         return toSummary(lines.get(0), lines);
     }
 
@@ -163,6 +168,8 @@ public class SaleController {
         SalesTransaction transaction = findTransaction(id);
         Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
         cancellations.voidSale(transaction, permission, request.reason(), actor.currentId());
+        audit.record("sales_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "PAID", "VOIDED: " + request.reason(),
+                actor.currentId());
         return toDetail(findTransaction(id));
     }
 
