@@ -51,9 +51,9 @@ const filteredAppointments = computed(() => {
 // and rescheduled are displayed when current, but cannot be selected directly.
 const statusActionOptions: AppointmentStatus[] = ['ARRIVED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW']
 const timeOptions = ['09:00', '10:00', '11:00', '14:00']
-const statusLabels: Record<AppointmentStatus, string> = { CONFIRMED: 'ยืนยันแล้ว', ARRIVED: 'มาถึงคลินิก', IN_SERVICE: 'กำลังรับบริการ', COMPLETED: 'เสร็จสิ้น', CANCELLED: 'ยกเลิก', RESCHEDULED: 'เลื่อนนัด', NO_SHOW: 'ไม่มาตามนัด' }
+const statusLabels: Record<AppointmentStatus, string> = { UNCONFIRMED: 'รอยืนยัน', CONFIRMED: 'ยืนยันแล้ว', ARRIVED: 'มาถึงคลินิก', IN_SERVICE: 'กำลังรับบริการ', COMPLETED: 'เสร็จสิ้น', CANCELLED: 'ยกเลิก', RESCHEDULED: 'เลื่อนนัด', NO_SHOW: 'ไม่มาตามนัด' }
 const formatStatus = (status: AppointmentStatus) => statusLabels[status]
-const statusOptionsFor = (item: Appointment) => [...new Set([item.status, ...statusActionOptions])]
+const statusOptionsFor = (item: Appointment): AppointmentStatus[] => [...new Set<AppointmentStatus>([item.status, ...(item.status === 'UNCONFIRMED' ? ['CONFIRMED' as const] : []), ...statusActionOptions])]
 const formatThaiDate = (value: string) => new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
 const formatTime = (value: string) => new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
 const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
@@ -116,7 +116,7 @@ async function save() {
     savingAppointment.value = false
   }
 }
-async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') { savingStatusId.value = item.id; statusNotice.value = 'กำลังบันทึก...'; try { const result = status === 'ARRIVED' ? await appointmentApi.checkIn(item.id) : status === 'IN_SERVICE' ? await appointmentApi.startService(item.id) : status === 'COMPLETED' ? await appointmentApi.complete(item.id) : status === 'NO_SHOW' ? await appointmentApi.noShow(item.id) : status === 'CANCELLED' ? await appointmentApi.cancel(item.id, reason) : null; if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น'); Object.assign(item, result); statusNotice.value = 'บันทึกแล้ว' } catch (error) { statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' } finally { savingStatusId.value = null; window.setTimeout(() => (statusNotice.value = ''), 2200) } }
+async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') { savingStatusId.value = item.id; statusNotice.value = 'กำลังบันทึก...'; try { const result = status === 'CONFIRMED' ? await appointmentApi.confirm(item.id) : status === 'ARRIVED' ? await appointmentApi.checkIn(item.id) : status === 'IN_SERVICE' ? await appointmentApi.startService(item.id) : status === 'COMPLETED' ? await appointmentApi.complete(item.id) : status === 'NO_SHOW' ? await appointmentApi.noShow(item.id) : status === 'CANCELLED' ? await appointmentApi.cancel(item.id, reason) : null; if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น'); Object.assign(item, result); statusNotice.value = 'บันทึกแล้ว' } catch (error) { statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' } finally { savingStatusId.value = null; window.setTimeout(() => (statusNotice.value = ''), 2200) } }
 function changeStatus(event: Event, item: Appointment) { const status = (event.target as HTMLSelectElement).value as AppointmentStatus; if (status === item.status) return; if (status === 'CANCELLED') { pendingCancellation.value = { item }; cancellationReason.value = ''; return } void saveStatus(item, status) }
 function confirmCancellation() { if (!pendingCancellation.value || !cancellationReason.value.trim()) return; const { item } = pendingCancellation.value; pendingCancellation.value = null; void saveStatus(item, 'CANCELLED', cancellationReason.value.trim()) }
 </script>
@@ -234,6 +234,7 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
           <ThaiDatePicker v-model="selectedDate" class="appointment-date-filter" show-calendar-icon numeric-month hide-caret aria-label="กรองตามวันที่นัด" />
           <select v-model="selectedStatus" class="appointment-status-filter" aria-label="กรองตามสถานะนัดหมาย">
             <option value="ทั้งหมด">สถานะทั้งหมด</option>
+            <option value="UNCONFIRMED">รอยืนยัน</option>
             <option value="CONFIRMED">ยืนยันแล้ว</option>
             <option value="ARRIVED">มาถึงคลินิก</option>
             <option value="IN_SERVICE">กำลังรับบริการ</option>
