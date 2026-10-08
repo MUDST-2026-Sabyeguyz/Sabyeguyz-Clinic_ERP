@@ -67,7 +67,7 @@ onMounted(async () => {
     if (current) {
       Object.assign(scheme,current)
       const backendTiers = await commissionApi.tiers(current.id) as Array<{ minimum: number; maximum: number | null; rate: number; order: number }>
-      tiers.splice(0, tiers.length, ...backendTiers.map((tier) => ({ order: tier.order, min: tier.minimum, max: tier.maximum, rate: tier.rate * 100, active: true })))
+      tiers.splice(0, tiers.length, ...backendTiers.map((tier) => ({ order: tier.order, min: tier.minimum, max: tier.maximum, rate: Math.round(tier.rate * 10000) / 100, active: true })))
     }
   } catch (caught) { error.value = caught instanceof Error ? caught.message : 'โหลดเกณฑ์คอมมิชชันไม่สำเร็จ' }
   finally { loading.value = false }
