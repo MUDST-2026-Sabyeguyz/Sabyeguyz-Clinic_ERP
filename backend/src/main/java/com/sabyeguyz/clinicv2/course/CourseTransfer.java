@@ -40,7 +40,7 @@ public class CourseTransfer {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "transfer_status", nullable = false)
+    @Column(name = "transfer_status", nullable = false, columnDefinition = "transfer_status_enum")
     private TransferStatus transferStatus = TransferStatus.Completed;
 
     @Column(name = "transfer_create_at", nullable = false, updatable = false)

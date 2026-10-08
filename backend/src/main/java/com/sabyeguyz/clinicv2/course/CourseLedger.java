@@ -35,7 +35,7 @@ public class CourseLedger {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "entry_type", nullable = false)
+    @Column(name = "entry_type", nullable = false, columnDefinition = "entry_type_enum")
     private CourseLedgerEntryType entryType;
 
     /** +/- visit quantity change. */

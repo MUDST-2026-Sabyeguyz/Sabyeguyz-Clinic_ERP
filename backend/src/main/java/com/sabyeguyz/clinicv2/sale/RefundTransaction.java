@@ -37,7 +37,7 @@ public class RefundTransaction {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "refund_status", nullable = false)
+    @Column(name = "refund_status", nullable = false, columnDefinition = "refund_status_enum")
     private RefundStatus refundStatus;
 
     @Column(name = "refunded_at")

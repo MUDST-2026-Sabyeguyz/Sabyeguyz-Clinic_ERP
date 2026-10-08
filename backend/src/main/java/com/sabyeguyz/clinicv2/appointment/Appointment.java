@@ -48,7 +48,7 @@ public class Appointment {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "appointment_status", nullable = false)
+    @Column(name = "appointment_status", nullable = false, columnDefinition = "appointment_status_enum")
     private AppointmentStatus appointmentStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -75,7 +75,7 @@ public class Appointment {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "appointment_patient_type", nullable = false)
+    @Column(name = "appointment_patient_type", nullable = false, columnDefinition = "appointment_patient_type_enum")
     private AppointmentPatientType appointmentPatientType = AppointmentPatientType.CURRENT;
 
     /** NEW: name, or nickname with phone; CURRENT: taken from the Patient. */
@@ -87,7 +87,7 @@ public class Appointment {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "requested_service_type")
+    @Column(name = "requested_service_type", columnDefinition = "requested_service_type_enum")
     private RequestedServiceType requestedServiceType;
 
     /** Calendar integration scope is still pending; nothing writes these two yet. */
@@ -96,7 +96,7 @@ public class Appointment {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "calendar_sync_status")
+    @Column(name = "calendar_sync_status", columnDefinition = "calendar_sync_status_enum")
     private CalendarSyncStatus calendarSyncStatus;
 
     public Appointment() {}
