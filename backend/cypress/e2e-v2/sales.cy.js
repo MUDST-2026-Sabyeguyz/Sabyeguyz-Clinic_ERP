@@ -32,6 +32,24 @@ describe('v2 sales and payments', () => {
     })
   })
 
+  it('never hands the same receipt number to two parallel sales', function () {
+    cy.registerPatient().then((patient) => {
+      const request = {
+        method: 'POST', url: '/api/payments',
+        body: {
+          patientId: patient.id, branchCode: '01',
+          items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
+          payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+        },
+      }
+      cy.parallelApi([request, request]).then((responses) => {
+        const statuses = responses.map((response) => response.status)
+        expect(statuses, JSON.stringify(responses.map((response) => response.body))).to.deep.equal([201, 201])
+        expect(responses[0].body.receiptNo).to.not.equal(responses[1].body.receiptNo)
+      })
+    })
+  })
+
   it('applies a 10% line discount to the total', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, {
