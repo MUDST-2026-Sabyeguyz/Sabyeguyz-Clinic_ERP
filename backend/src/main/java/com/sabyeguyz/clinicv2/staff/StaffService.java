@@ -86,9 +86,15 @@ public class StaffService {
         if (policy == null) {
             throw new IllegalArgumentException("ต้องระบุ commissionAfterTerminationPolicy");
         }
+        if (staff.getTerminationPolicyLockedAt() != null && staff.getCommissionAfterTerminationPolicy() != policy) {
+            throw new IllegalArgumentException("นโยบายคอมมิชชันหลังออกจากงานถูกล็อกแล้ว ไม่สามารถเปลี่ยนได้");
+        }
         staff.setStaffStatus(false);
         staff.setTerminationDate(terminationDate);
         staff.setCommissionAfterTerminationPolicy(policy);
+        if (staff.getTerminationPolicyLockedAt() == null) {
+            staff.setTerminationPolicyLockedAt(Instant.now());
+        }
         staff.setStaffUpdateAt(Instant.now());
         staff.setStaffUpdateBy(actorId);
         return repository.save(staff);
