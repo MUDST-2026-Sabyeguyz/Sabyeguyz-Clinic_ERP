@@ -200,8 +200,12 @@ public class CoursePurchaseController {
             List<com.sabyeguyz.clinicv2.course.CourseLedger> movements = ledger.findByVisitUsageId(usage.getId());
             Long movementId = movements.stream().filter(l -> l.getEntryType() == CourseLedgerEntryType.Treatment)
                     .map(com.sabyeguyz.clinicv2.course.CourseLedger::getId).findFirst().orElse(usage.getId());
-            var reversal = movements.stream().filter(l -> l.getEntryType() == CourseLedgerEntryType.Reversal).findFirst();
             Course course = usage.getCourse();
+            // The reversal row points at the Treatment row it undoes (reverses_ledger), not at the usage.
+            var reversal = ledger.findByCourseIdOrderByIdDesc(course.getId()).stream()
+                    .filter(l -> l.getEntryType() == CourseLedgerEntryType.Reversal && l.getReversesLedger() != null
+                            && l.getReversesLedger().getId().equals(movementId))
+                    .findFirst();
             Patient patient = usage.getPatient();
             return new UsageTransactionResponse(movementId, course.getId(),
                     patient.getPatientFname() + " " + patient.getPatientLname(), patient.getPatientHn(),
