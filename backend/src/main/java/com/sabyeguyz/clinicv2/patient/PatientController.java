@@ -53,7 +53,8 @@ public class PatientController {
     public record RegisterRequest(
             String branchCode, String customerType, String title, String firstName, String lastName,
             String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
-            String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address) {}
+            String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
+            String fullName) {}
 
     public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -101,12 +102,14 @@ public class PatientController {
     public PatientSummary register(@RequestBody RegisterRequest request) {
         Branch branch = branches.findByBranchCode(requireText(request.branchCode(), "branchCode"))
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
+        String[] names = namesOf(request);
+        boolean passport = "PASSPORT".equalsIgnoreCase(request.identityDocumentType());
         PatientRegistration registration = new PatientRegistration(
                 branch,
-                parseCustomerType(request.customerType()),
+                passport ? CustomerType.Foreigner : parseCustomerType(request.customerType()),
                 request.title(),
-                request.firstName(),
-                request.lastName(),
+                names[0],
+                names[1],
                 parseGender(request.gender()),
                 request.phone(),
                 request.genderDetail(),
@@ -124,9 +127,26 @@ public class PatientController {
 
     @PutMapping("/{id}")
     public PatientProfile update(@PathVariable Long id, @RequestBody RegisterRequest request) {
-        Patient patient = service.updateProfile(id, request.nickname(), request.phone(), request.address(),
-                parseBloodGroup(request.bloodGroup()), request.nationality(), actor.currentId());
+        String[] names = namesOf(request);
+        boolean passport = "PASSPORT".equalsIgnoreCase(request.identityDocumentType());
+        Patient patient = service.updateDetails(id, request.title(), names[0], names[1],
+                request.gender() == null || request.gender().isBlank() ? null : parseGender(request.gender()),
+                request.phone(), request.nickname(), passport ? null : request.identityNumber(),
+                passport ? request.identityNumber() : null, request.birthDate(),
+                parseBloodGroup(request.bloodGroup()), request.nationality(), request.address(), actor.currentId());
         return toProfile(patient);
+    }
+
+    /** firstName and lastName when given, otherwise fullName split at its first space (what the web form sends). */
+    private static String[] namesOf(RegisterRequest request) {
+        boolean given = request.firstName() != null && !request.firstName().isBlank();
+        if (given || request.fullName() == null || request.fullName().isBlank()) {
+            return new String[] {request.firstName(), request.lastName()};
+        }
+        String trimmed = request.fullName().trim();
+        int space = trimmed.indexOf(' ');
+        return space < 0 ? new String[] {trimmed, "-"}
+                : new String[] {trimmed.substring(0, space), trimmed.substring(space + 1).trim()};
     }
 
     private static PatientSummary toSummary(Patient patient) {
