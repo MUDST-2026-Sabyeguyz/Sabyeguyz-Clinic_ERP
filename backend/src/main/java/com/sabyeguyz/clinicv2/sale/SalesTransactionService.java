@@ -30,16 +30,17 @@ public class SalesTransactionService {
         this.courseService = courseService;
     }
 
-    /** Assessment or SingleVisit: a plain priced line, no Course involved. */
+    /** SingleVisit: a plain priced line, no Course involved. Assessment is no longer sold. */
     @Transactional
     public SalesTransaction recordVisitSale(Patient patient, Branch branch, Service service, TransactionType type,
                                              Staff treatingStaff, Staff salespersonStaff, int quantity,
-                                             BigDecimal unitPrice, PatientVisit visit, Long actorId) {
-        require(type == TransactionType.Assessment || type == TransactionType.SingleVisit,
-                "recordVisitSale ใช้ได้เฉพาะ Assessment/SingleVisit");
+                                             BigDecimal unitPrice, PatientVisit visit, Discount discount,
+                                             Long actorId) {
+        require(type == TransactionType.SingleVisit, "recordVisitSale ใช้ได้เฉพาะ SingleVisit (ไม่รองรับ Assessment แล้ว)");
         BigDecimal price = unitPrice != null ? unitPrice : service.getServicePrice();
         SalesTransaction transaction = base(patient, branch, service, type, treatingStaff, salespersonStaff,
                 quantity, price, visit, actorId);
+        applyLineDiscount(transaction, discount);
         return transactions.save(transaction);
     }
 
@@ -48,16 +49,25 @@ public class SalesTransactionService {
     public SalesTransaction recordCoursePurchase(Patient patient, Branch branch, Receipt receipt, Service courseTemplate,
                                                   Staff sellerStaff, Staff caseOwnerStaff, BigDecimal priceOverride,
                                                   Integer totalVisitsOverride, Integer bonusVisitsOverride,
-                                                  LocalDate saleDate, Long actorId) {
+                                                  Discount discount, LocalDate saleDate, Long actorId) {
         BigDecimal price = priceOverride != null ? priceOverride : courseTemplate.getServicePrice();
-        SalesTransaction transaction = transactions.save(base(patient, branch, courseTemplate,
-                TransactionType.CoursePurchase, null, sellerStaff, 1, price, null, actorId));
+        SalesTransaction line = base(patient, branch, courseTemplate, TransactionType.CoursePurchase,
+                null, sellerStaff, 1, price, null, actorId);
+        applyLineDiscount(line, discount);
+        SalesTransaction transaction = transactions.save(line);
 
         Course course = courseService.sell(receipt, transaction, courseTemplate, sellerStaff, caseOwnerStaff,
                 totalVisitsOverride, bonusVisitsOverride, saleDate, actorId);
         // transaction is a managed entity here, so dirty checking persists this back-reference at commit.
         transaction.setCourse(course);
         return transaction;
+    }
+
+    /** amount becomes the commissionable price after the line discount; unit_price keeps the list price. */
+    private static void applyLineDiscount(SalesTransaction transaction, Discount discount) {
+        if (discount != null) {
+            transaction.setAmount(discount.apply(transaction.getAmount()));
+        }
     }
 
     private SalesTransaction base(Patient patient, Branch branch, Service service, TransactionType type,
