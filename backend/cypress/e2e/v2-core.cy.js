@@ -303,6 +303,27 @@ describe('Clinic v2 core service scenarios', () => {
     })
   })
 
+  ;[
+    ['thaiPatientNeedsANationalId', 'IllegalArgumentException'],
+    ['thaiNationalIdMustBeThirteenDigits', 'IllegalArgumentException'],
+    ['foreignerNationalIdIsStillFormatChecked', 'IllegalArgumentException'],
+  ].forEach(([scenario, error]) => {
+    it(`PatientService: ${scenario}`, () => {
+      cy.api('POST', `/__cypress/v2/core/PatientService/${scenario}`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body.error).to.equal(error)
+      })
+    })
+  })
+
+  it('PatientService: foreignerMayRegisterWithoutPhoneOrIdentity', () => {
+    cy.api('POST', '/__cypress/v2/core/PatientService/foreignerMayRegisterWithoutPhoneOrIdentity').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body).not.to.have.property('error')
+      expect(body.value).to.equal('2601120001')
+    })
+  })
+
   it('PatientService: rejectsMissingRequiredField', () => {
     cy.api('POST', '/__cypress/v2/core/PatientService/rejectsMissingRequiredField').then(({ status, body }) => {
       expect(status).to.equal(200)
