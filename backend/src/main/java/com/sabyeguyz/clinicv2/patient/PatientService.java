@@ -70,12 +70,10 @@ public class PatientService {
         patient.setRegisteredAt(now);
         patient.setRegisteredBy(actorId);
 
-        // Persist first so the HN sequence's running number and this patient's
-        // creation are committed together — the HN is never generated for a
-        // patient row that could still roll back.
-        Patient saved = repository.save(patient);
-        saved.setPatientHn(hnGenerator.next(input.branch(), now.atZone(java.time.ZoneOffset.UTC).toLocalDate()));
-        return repository.save(saved);
+        // patient_hn is NOT NULL, so the HN is issued before the insert. Both writes share this
+        // transaction: if the insert fails, the sequence increment rolls back with it.
+        patient.setPatientHn(hnGenerator.next(input.branch(), now.atZone(java.time.ZoneOffset.UTC).toLocalDate()));
+        return repository.save(patient);
     }
 
     /** Profile fields only — branchId and patientHn never change after registration. */
