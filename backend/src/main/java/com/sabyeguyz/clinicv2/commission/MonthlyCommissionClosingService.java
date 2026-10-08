@@ -50,7 +50,7 @@ public class MonthlyCommissionClosingService {
         }
 
         LocalDate effectiveDate = LocalDate.parse(saleMonth + "-01");
-        BigDecimal monthlySales = courses.sumCoursePriceBySellerAndSaleMonth(staff.getId(), saleMonth);
+        BigDecimal monthlySales = courses.sumCreditedSalesByStaffAndSaleMonth(staff.getId(), saleMonth);
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveDate);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySales);
 

@@ -55,7 +55,7 @@ public class CommissionPreviewService {
 
         CommissionScheme scheme = schemeResolver.resolveEffective(date);
         BigDecimal monthlySalesToDate = courses
-                .sumCoursePriceBySellerAndSaleMonth(seller.getId(), date.format(SALE_MONTH)).add(net);
+                .sumCreditedSalesByStaffAndSaleMonth(seller.getId(), date.format(SALE_MONTH)).add(net);
         BigDecimal rate = tierResolver.resolve(scheme, monthlySalesToDate).getCommissionRate();
 
         BigDecimal pool = net.multiply(rate).setScale(2, RoundingMode.HALF_UP);
