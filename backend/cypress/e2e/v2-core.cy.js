@@ -132,6 +132,29 @@ describe('Clinic v2 core service scenarios', () => {
     })
   })
 
+  it('CourseService: recordsThePurchaserTheSaleLineAndEntitledVisits', () => {
+    cy.api('POST', '/__cypress/v2/core/CourseService/recordsThePurchaserTheSaleLineAndEntitledVisits').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.samePurchaser).to.equal(true)
+      expect(body.sameSaleLine).to.equal(true)
+      expect(body.entitledVisits).to.equal(13)
+    })
+  })
+
+  const rejectedPurchases = [
+    'rejectsASaleLineThatIsNotACoursePurchase',
+    'rejectsASaleLineThatAlreadyHasACourse',
+    'rejectsAPurchaserThatDiffersFromTheReceiptPatient',
+  ]
+  rejectedPurchases.forEach((scenario) => {
+    it(`CourseService: ${scenario}`, () => {
+      cy.api('POST', `/__cypress/v2/core/CourseService/${scenario}`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body.error).to.equal('IllegalArgumentException')
+      })
+    })
+  })
+
   it('ServiceCatalogService: createsASingleVisitService', () => {
     cy.api('POST', '/__cypress/v2/core/ServiceCatalogService/createsASingleVisitService').then(({ status, body }) => {
       expect(status).to.equal(200)
@@ -142,6 +165,13 @@ describe('Clinic v2 core service scenarios', () => {
 
   it('ServiceCatalogService: courseRequiresADefaultTotalVisits', () => {
     cy.api('POST', '/__cypress/v2/core/ServiceCatalogService/courseRequiresADefaultTotalVisits').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body.error).to.equal('IllegalArgumentException')
+    })
+  })
+
+  it('ServiceCatalogService: rejectsAnAssessmentService', () => {
+    cy.api('POST', '/__cypress/v2/core/ServiceCatalogService/rejectsAnAssessmentService').then(({ status, body }) => {
       expect(status).to.equal(200)
       expect(body.error).to.equal('IllegalArgumentException')
     })
