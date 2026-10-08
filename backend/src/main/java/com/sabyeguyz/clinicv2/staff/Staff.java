@@ -28,7 +28,7 @@ public class Staff {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "staff_position_enum")
     private StaffPosition position;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -43,8 +43,12 @@ public class Staff {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "commission_after_termination_policy")
+    @Column(name = "commission_after_termination_policy", columnDefinition = "commission_after_termination_policy_enum")
     private CommissionAfterTerminationPolicy commissionAfterTerminationPolicy;
+
+    /** When the termination policy was first recorded; from then on it can no longer be changed. */
+    @Column(name = "termination_policy_locked_at")
+    private Instant terminationPolicyLockedAt;
 
     @Column(name = "hire_date", nullable = false)
     private LocalDate hireDate;
@@ -80,6 +84,8 @@ public class Staff {
     public void setTerminationDate(LocalDate terminationDate) { this.terminationDate = terminationDate; }
     public CommissionAfterTerminationPolicy getCommissionAfterTerminationPolicy() { return commissionAfterTerminationPolicy; }
     public void setCommissionAfterTerminationPolicy(CommissionAfterTerminationPolicy policy) { this.commissionAfterTerminationPolicy = policy; }
+    public Instant getTerminationPolicyLockedAt() { return terminationPolicyLockedAt; }
+    public void setTerminationPolicyLockedAt(Instant terminationPolicyLockedAt) { this.terminationPolicyLockedAt = terminationPolicyLockedAt; }
     public LocalDate getHireDate() { return hireDate; }
     public void setHireDate(LocalDate hireDate) { this.hireDate = hireDate; }
     public Instant getStaffCreateAt() { return staffCreateAt; }
