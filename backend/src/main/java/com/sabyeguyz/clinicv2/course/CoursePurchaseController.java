@@ -18,7 +18,6 @@ import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
 import com.sabyeguyz.clinicv2.sale.Discount;
 import com.sabyeguyz.clinicv2.sale.Receipt;
-import com.sabyeguyz.clinicv2.sale.ReceiptRepository;
 import com.sabyeguyz.clinicv2.sale.ReceiptService;
 import com.sabyeguyz.clinicv2.sale.SalesTransactionService;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -66,7 +65,6 @@ public class CoursePurchaseController {
     private final CourseVisitUsageService usageService;
     private final CommissionAllocationLedgerRepository allocationLedger;
     private final ReceiptService receiptService;
-    private final ReceiptRepository receipts;
     private final SalesTransactionService salesTransactionService;
     private final PatientRepository patients;
     private final BranchRepository branches;
@@ -78,7 +76,7 @@ public class CoursePurchaseController {
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
                                      CommissionAllocationLedgerRepository allocationLedger, ReceiptService receiptService,
-                                     ReceiptRepository receipts, SalesTransactionService salesTransactionService,
+                                     SalesTransactionService salesTransactionService,
                                      PatientRepository patients, BranchRepository branches, ServiceRepository services,
                                      PatientVisitRepository visits, AppUserRepository users, CurrentActor actor) {
         this.courses = courses;
@@ -87,7 +85,6 @@ public class CoursePurchaseController {
         this.usageService = usageService;
         this.allocationLedger = allocationLedger;
         this.receiptService = receiptService;
-        this.receipts = receipts;
         this.salesTransactionService = salesTransactionService;
         this.patients = patients;
         this.branches = branches;
@@ -131,12 +128,13 @@ public class CoursePurchaseController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Staff seller = resolveActorStaff();
 
-        String receiptNo = "RE%s%06d".formatted(branch.getBranchCode(), receipts.count() + 1);
-        Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
-        var transaction = salesTransactionService.recordCoursePurchase(patient, branch, receipt, courseTemplate,
-                seller, null, null, null, null, Discount.of(request.discountType(), request.discountValue()),
+        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(), patient, branch, LocalDate.now(),
+                actor.currentId());
+        var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
+                seller, null, null, null, null, Discount.of(request.discountType(), request.discountValue()), null,
                 LocalDate.now(), actor.currentId());
-        return toResponse(transaction.getCourse(), patient.getId());
+        receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
+        return toResponse(purchase.course(), patient.getId());
     }
 
     @GetMapping("/api/course-purchases/{id}")
