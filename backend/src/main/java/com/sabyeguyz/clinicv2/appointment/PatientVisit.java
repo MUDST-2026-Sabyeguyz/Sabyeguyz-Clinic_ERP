@@ -43,7 +43,7 @@ public class PatientVisit {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "visit_status", nullable = false)
+    @Column(name = "visit_status", nullable = false, columnDefinition = "visit_status_enum")
     private VisitStatus visitStatus;
 
     @Column(name = "visit_create_at", nullable = false, updatable = false)

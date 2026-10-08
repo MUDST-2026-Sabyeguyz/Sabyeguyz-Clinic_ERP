@@ -45,7 +45,7 @@ public class TreatmentFeeRule {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "fee_type", nullable = false)
+    @Column(name = "fee_type", nullable = false, columnDefinition = "fee_type_enum")
     private FeeType feeType;
 
     /** THB amount, or percentage depending on feeType. */
@@ -54,7 +54,7 @@ public class TreatmentFeeRule {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "percentage_base")
+    @Column(name = "percentage_base", columnDefinition = "percentage_base_enum")
     private CalculationBase percentageBase;
 
     @Column(name = "effective_from", nullable = false)

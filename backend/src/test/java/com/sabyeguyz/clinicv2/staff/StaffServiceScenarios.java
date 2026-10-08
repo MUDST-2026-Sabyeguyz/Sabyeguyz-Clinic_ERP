@@ -66,4 +66,37 @@ public class StaffServiceScenarios {
         out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(5L, LocalDate.now(), null, 9L); return null; }));
         return out;
     }
+
+    public Map<String, Object> terminateStampsThePolicyLockTime() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        repositoryStub.on("findById", args -> Optional.of(new Staff()));
+        Staff terminated = new StaffService(repository).terminate(
+                5L, LocalDate.of(2026, 6, 30), CommissionAfterTerminationPolicy.FORFEIT, 9L);
+        out.put("locked", terminated.getTerminationPolicyLockedAt() != null);
+        return out;
+    }
+
+    public Map<String, Object> rejectsChangingALockedTerminationPolicy() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Staff locked = new Staff();
+        locked.setCommissionAfterTerminationPolicy(CommissionAfterTerminationPolicy.FORFEIT);
+        locked.setTerminationPolicyLockedAt(java.time.Instant.parse("2026-06-30T00:00:00Z"));
+        repositoryStub.on("findById", args -> Optional.of(locked));
+        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(
+                5L, LocalDate.of(2026, 7, 31), CommissionAfterTerminationPolicy.CONTINUE_UNTIL_COMPLETE, 9L); return null; }));
+        return out;
+    }
+
+    public Map<String, Object> repeatingTheSameLockedPolicyKeepsTheOriginalLockTime() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Staff locked = new Staff();
+        java.time.Instant lockedAt = java.time.Instant.parse("2026-06-30T00:00:00Z");
+        locked.setCommissionAfterTerminationPolicy(CommissionAfterTerminationPolicy.FORFEIT);
+        locked.setTerminationPolicyLockedAt(lockedAt);
+        repositoryStub.on("findById", args -> Optional.of(locked));
+        Staff result = new StaffService(repository).terminate(
+                5L, LocalDate.of(2026, 7, 31), CommissionAfterTerminationPolicy.FORFEIT, 9L);
+        out.put("lockedAtUnchanged", result.getTerminationPolicyLockedAt().equals(lockedAt));
+        return out;
+    }
 }
