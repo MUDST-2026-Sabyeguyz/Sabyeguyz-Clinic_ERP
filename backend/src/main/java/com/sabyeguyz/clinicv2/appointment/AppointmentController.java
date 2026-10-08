@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.appointment;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.*;
  * internally by AppointmentService) - the response's note/cancelReason are
  * always null and CreateRequest.note is accepted but silently dropped.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/appointments")
 public class AppointmentController {
