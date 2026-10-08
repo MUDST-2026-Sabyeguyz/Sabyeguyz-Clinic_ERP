@@ -53,6 +53,7 @@ public class StaffController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
         Branch branch = resolveBranch(request.branchCode());
         String[] names = splitName(request.fullName());
@@ -63,6 +64,7 @@ public class StaffController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Branch branch = resolveBranch(request.branchCode());
         String[] names = splitName(request.fullName());
