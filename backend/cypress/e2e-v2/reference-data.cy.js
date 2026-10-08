@@ -148,6 +148,26 @@ describe('v2 reference data: branches, staff, payment methods, master data, room
     })
   })
 
+  describe('permissions', () => {
+    it('a therapist can read every reference list but change none of them', function () {
+      cy.login('therapist', 'therapist123').then(({ body: auth }) => {
+        const as = (method, url, body) => cy.apiAs(auth.token, method, url, body).its('status')
+        for (const url of ['/api/branches', '/api/staff', '/api/payment-methods', '/api/master-data', '/api/resources']) {
+          as('GET', url).should('equal', 200)
+        }
+        as('POST', '/api/staff', { employeeCode: 'X-1', fullName: 'x y', branchCode: '01', position: 'Therapist' }).should('equal', 403)
+        as('PUT', `/api/staff/${this.fixtures.therapistId}`, { employeeCode: 'THP-001', fullName: 'x y', branchCode: '01', position: 'Therapist' }).should('equal', 403)
+        as('POST', '/api/payment-methods', { code: 'X', name: 'x' }).should('equal', 403)
+        as('DELETE', '/api/payment-methods/1').should('equal', 403)
+        as('POST', '/api/master-data', { category: 'Hobby', name: 'x' }).should('equal', 403)
+        as('DELETE', '/api/master-data/1').should('equal', 403)
+        as('POST', '/api/resources', { branchCode: '01', name: 'x', type: 'Treatment' }).should('equal', 403)
+        as('DELETE', '/api/resources/1').should('equal', 403)
+        as('DELETE', '/api/branches/1').should('equal', 403)
+      })
+    })
+  })
+
   describe('rooms and resources', () => {
     it('creates a room in a branch, renames, deactivates and re-activates it', () => {
       cy.api('POST', '/api/resources', { branchCode: '01', code: 'R-9', name: 'ห้องใหม่', type: 'Treatment' }).then(({ status, body }) => {
