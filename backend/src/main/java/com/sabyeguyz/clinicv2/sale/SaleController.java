@@ -81,7 +81,8 @@ public class SaleController {
         this.actor = actor;
     }
 
-    public record ItemRequest(String type, Long referenceId, int quantity) {}
+    public record ItemRequest(String type, Long referenceId, int quantity, String discountType,
+                               BigDecimal discountValue) {}
     public record PaymentRequest(String paymentMethodCode, BigDecimal amount) {}
     public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note,
                                  List<ItemRequest> items, List<PaymentRequest> payments) {}
@@ -132,18 +133,19 @@ public class SaleController {
         Service svc = services.findById(item.referenceId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส"));
 
+        Discount discount = Discount.of(item.discountType(), item.discountValue());
         String receiptNo = generateReceiptNo(branch);
         Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
 
         SalesTransaction transaction;
         if ("COURSE".equalsIgnoreCase(item.type())) {
             transaction = salesTransactionService.recordCoursePurchase(patient, branch, receipt, svc, salesperson,
-                    null, null, null, null, LocalDate.now(), actor.currentId());
+                    null, null, null, null, discount, LocalDate.now(), actor.currentId());
         } else {
             TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
                     ? TransactionType.Assessment : TransactionType.SingleVisit;
             transaction = salesTransactionService.recordVisitSale(patient, branch, svc, type, null, salesperson,
-                    Math.max(1, item.quantity()), null, null, actor.currentId());
+                    Math.max(1, item.quantity()), null, null, discount, actor.currentId());
         }
 
         if (request.payments() != null) {
