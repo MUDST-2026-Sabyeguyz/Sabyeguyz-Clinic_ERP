@@ -188,6 +188,29 @@ public class CoursePurchaseController {
         return new LedgerResponse(toResponse(course, ownerPatientId), movements, allocations);
     }
 
+    public record UsageTransactionResponse(Long id, Long coursePurchaseId, String patientName, String patientHn,
+                                            String courseName, String branchCode, Instant usedAt, Instant voidedAt,
+                                            String voidReason) {}
+
+    /** Every visit taken from a course (newest first) with its reversal status; id is the Treatment movement. */
+    @GetMapping("/api/course-usages")
+    public List<UsageTransactionResponse> usageTransactions() {
+        return usages.findAll(org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Direction.DESC, "id")).stream().map(usage -> {
+            List<com.sabyeguyz.clinicv2.course.CourseLedger> movements = ledger.findByVisitUsageId(usage.getId());
+            Long movementId = movements.stream().filter(l -> l.getEntryType() == CourseLedgerEntryType.Treatment)
+                    .map(com.sabyeguyz.clinicv2.course.CourseLedger::getId).findFirst().orElse(usage.getId());
+            var reversal = movements.stream().filter(l -> l.getEntryType() == CourseLedgerEntryType.Reversal).findFirst();
+            Course course = usage.getCourse();
+            Patient patient = usage.getPatient();
+            return new UsageTransactionResponse(movementId, course.getId(),
+                    patient.getPatientFname() + " " + patient.getPatientLname(), patient.getPatientHn(),
+                    course.getCourseName(), course.getReceipt().getBranch().getBranchCode(),
+                    usage.getUsageCreateAt(), reversal.map(l -> l.getLedgerCreateAt()).orElse(null),
+                    reversal.map(l -> l.getRemark()).orElse(null));
+        }).toList();
+    }
+
     @PostMapping("/api/course-usages")
     @Transactional
     public Response use(@RequestBody UseRequest request) {
