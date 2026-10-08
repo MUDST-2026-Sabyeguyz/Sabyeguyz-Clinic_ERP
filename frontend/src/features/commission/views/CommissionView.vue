@@ -64,7 +64,7 @@ async function loadReport() {
         branch: row.branchName,
         patient: '-',
         staff: row.staffName || '-',
-        rule: `${row.rate * 100}%`,
+        rule: `${Math.round(row.rate * 10000) / 100}%`,
         amount: Number(row.base),
         commission: Number(row.commission),
       }))
