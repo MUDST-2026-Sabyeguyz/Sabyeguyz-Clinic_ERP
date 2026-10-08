@@ -36,7 +36,7 @@ expect_jq "a patient keeps HN, national id and name" '.hn == "2601010001" and .i
 expect_jq "a patient keeps the customer group text" '.customerType == "VIP"'
 req GET '/api/appointments?size=1'
 expect_jq "all $EXPECTED_APPOINTMENTS appointments are there" ".totalItems == $EXPECTED_APPOINTMENTS"
-req GET '/api/branches';       expect_jq "the branch came across" 'map(.code) | index("01") != null'
+req GET '/api/branches';       expect_jq "the branch came across" 'map(.branchCode) | index("01") != null'
 req GET '/api/staff';          expect_jq "therapists became staff" 'length >= 3'
 req GET '/api/payment-methods'; expect_jq "payment methods are there" 'length >= 4'
 req GET '/api/commission/schemes'; expect_jq "the commission scheme and its tiers" 'length >= 1'
