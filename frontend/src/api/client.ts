@@ -151,7 +151,7 @@ export type Course = {
 export type Therapist = { id: number; code: string; fullName: string; branchCode: string }
 export type PaymentMethod = { id: number; code: string; name: string; active: boolean }
 export type AppointmentStatus =
-  'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
+  'UNCONFIRMED' | 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
 export type Appointment = {
   id: number
   branchCode: string
@@ -353,6 +353,16 @@ export const serviceManagementApi = {
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
 }
 
+// The v2 backend names statuses in PascalCase (Confirmed, InService, NoShow); the screens use UPPER_SNAKE.
+// Either spelling is accepted from the server, so the old backend keeps working too.
+const statusFromServer = (status: string) =>
+  status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() as AppointmentStatus
+const statusToServer: Record<AppointmentStatus, string> = {
+  UNCONFIRMED: 'Unconfirmed', CONFIRMED: 'Confirmed', ARRIVED: 'Arrived', IN_SERVICE: 'InService',
+  COMPLETED: 'Completed', CANCELLED: 'Cancelled', RESCHEDULED: 'Rescheduled', NO_SHOW: 'NoShow',
+}
+const normalizeAppointment = (item: Appointment): Appointment => ({ ...item, status: statusFromServer(item.status) })
+
 export const appointmentApi = {
   search: (
     params: {
@@ -366,11 +376,13 @@ export const appointmentApi = {
   ) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') query.set(key, String(value))
+      if (value !== undefined && value !== '') query.set(key, key === 'status' ? statusToServer[value as AppointmentStatus] : String(value))
     })
-    return api.get<AppointmentPage>(`/api/appointments?${query}`)
+    return api
+      .get<AppointmentPage>(`/api/appointments?${query}`)
+      .then((page) => ({ ...page, items: page.items.map(normalizeAppointment) }))
   },
-  get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
+  get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`).then(normalizeAppointment),
   create: (body: {
     branchCode: string
     patientId: number
@@ -378,15 +390,16 @@ export const appointmentApi = {
     serviceId: number
     startAt: string
     note?: string
-  }) => api.post<Appointment>('/api/appointments', body),
-  checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}),
-  startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}),
-  noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}),
-  complete: (id: number) => api.post<Appointment>(`/api/appointments/${id}/complete`, {}),
+  }) => api.post<Appointment>('/api/appointments', body).then(normalizeAppointment),
+  confirm: (id: number) => api.post<Appointment>(`/api/appointments/${id}/confirm`, {}).then(normalizeAppointment),
+  checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}).then(normalizeAppointment),
+  startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}).then(normalizeAppointment),
+  noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}).then(normalizeAppointment),
+  complete: (id: number) => api.post<Appointment>(`/api/appointments/${id}/complete`, {}).then(normalizeAppointment),
   cancel: (id: number, reason: string) =>
-    api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }),
+    api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }).then(normalizeAppointment),
   reschedule: (id: number, body: { startAt: string; therapistId?: number }) =>
-    api.patch<Appointment>(`/api/appointments/${id}`, body),
+    api.patch<Appointment>(`/api/appointments/${id}`, body).then(normalizeAppointment),
 }
 
 export const treatmentApi = {
