@@ -46,6 +46,20 @@ public class CourseEntitlement {
         this.updatedAt = Instant.now();
     }
 
+    /** Sessions given to (or taken back from) this member; remaining moves with it. */
+    public void adjustAllocated(int delta) {
+        allocatedVisits += delta;
+        remainingVisits += delta;
+        updatedAt = Instant.now();
+    }
+
+    /** Sessions used (+) or restored (-) by this member. */
+    public void adjustUsed(int delta) {
+        usedVisits += delta;
+        remainingVisits -= delta;
+        updatedAt = Instant.now();
+    }
+
     public Course getCourse() { return course; }
     public Patient getPatient() { return patient; }
     public int getAllocatedVisits() { return allocatedVisits; }
