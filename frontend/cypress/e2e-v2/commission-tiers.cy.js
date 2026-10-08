@@ -33,6 +33,7 @@ describe('commission tiers', () => {
     cy.get('tbody tr').eq(0).contains('button', 'แก้ไข').click()
     cy.contains('label', 'อัตราคอมมิชชัน (%)').find('input').clear().type('5.5')
     cy.contains('button', 'บันทึก Tier').click()
+    cy.noAlert()
     cy.get('tbody tr').eq(0).should('contain.text', '5.5%')
     cy.reload()
     cy.get('tbody tr').eq(0).should('contain.text', '5.5%')

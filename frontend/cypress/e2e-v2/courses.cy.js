@@ -2,7 +2,7 @@
 function buyCourse(fx, patient) {
   return cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: fx.courseId, branchCode: '01' })
     .then(({ status, body }) => {
-      expect(status, JSON.stringify(body)).to.equal(200)
+      expect(status, JSON.stringify(body)).to.equal(201)
       return body
     })
 }
@@ -89,9 +89,10 @@ describe('patient courses', () => {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/payments', {
         patientId: patient.id, branchCode: '01',
+        salespersonStaffId: this.fixtures.managerStaffId,
         items: [{ type: 'COURSE', referenceId: this.fixtures.courseId, quantity: 1 }],
         payments: [{ paymentMethodCode: 'Cash', amount: 9000 }],
-      }).its('status').should('equal', 201)
+      }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(201))
       cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`)
     })
     cy.get('.course-manager-card').should('have.length', 1).and('contain.text', 'คงเหลือ 6 ครั้ง')
