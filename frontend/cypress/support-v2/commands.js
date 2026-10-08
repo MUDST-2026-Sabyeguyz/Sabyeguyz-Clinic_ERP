@@ -1,5 +1,5 @@
 /* oxlint-disable vitest/valid-expect -- Cypress assertions use Chai, not Vitest. */
-const apiUrl = () => Cypress.env('apiUrl')
+const apiUrl = () => Cypress.expose('apiUrl')
 
 // Talks to the backend directly (not through the web app) to arrange test data as the manager.
 Cypress.Commands.add('api', (method, url, body, options = {}) => {
