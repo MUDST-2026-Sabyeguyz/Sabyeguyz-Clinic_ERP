@@ -17,7 +17,7 @@ public class PatientServiceScenarios {
 
     private PatientRegistration validRegistration(Branch branch) {
         return new PatientRegistration(branch, CustomerType.Thai, "นาย", "สมชาย", "ใจดี", Gender.Male,
-                "0812345678", null, null, null, null, null, null, null, null, null, null, null, null);
+                "0812345678", null, null, "1100000000101", null, null, null, null, null, null, null, null, null);
     }
 
     public Map<String, Object> registersAPatientAndAssignsAnHn() {
@@ -43,9 +43,33 @@ public class PatientServiceScenarios {
         Map<String, Object> out = new LinkedHashMap<>();
         Branch branch = new Branch();
         PatientRegistration missingPhone = new PatientRegistration(branch, CustomerType.Thai, "นาย", "สมชาย",
-                "ใจดี", Gender.Male, "  ", null, null, null, null, null, null, null, null, null, null, null, null);
+                "ใจดี", Gender.Male, "  ", null, null, "1100000000101", null, null, null, null, null, null, null, null, null);
 
         out.putAll(V2RepositoryStub.outcome(() -> { new PatientService(patients, hnGenerator).register(missingPhone, 1L); return null; }));
         return out;
+    }
+
+    private Map<String, Object> register(CustomerType type, String phone, String nationalId) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        PatientRegistration input = new PatientRegistration(new Branch(), type, "นาย", "สมชาย", "ใจดี", Gender.Male,
+                phone, null, null, nationalId, null, null, null, null, null, null, null, null, null);
+        out.putAll(V2RepositoryStub.outcome(() -> new PatientService(patients, hnGenerator).register(input, 1L).getPatientHn()));
+        return out;
+    }
+
+    public Map<String, Object> thaiPatientNeedsANationalId() {
+        return register(CustomerType.Thai, "0812345678", null);
+    }
+
+    public Map<String, Object> thaiNationalIdMustBeThirteenDigits() {
+        return register(CustomerType.Thai, "0812345678", "12345");
+    }
+
+    public Map<String, Object> foreignerMayRegisterWithoutPhoneOrIdentity() {
+        return register(CustomerType.Foreigner, null, null);
+    }
+
+    public Map<String, Object> foreignerNationalIdIsStillFormatChecked() {
+        return register(CustomerType.Foreigner, null, "ABC");
     }
 }
