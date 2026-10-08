@@ -42,8 +42,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) {
       clearSession()
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/staff/'))
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/staff/')) {
         window.location.assign('/')
+        // The page is being replaced by the login page: do not let the screens that asked report an error.
+        return new Promise<T>(() => {})
+      }
     }
     const errorBody = body as ApiErrorBody | undefined
     throw new ApiError(
@@ -414,6 +417,18 @@ export const treatmentApi = {
   }) => api.post('/api/treatments', body),
 }
 
+type RawMovement = { id: number; type: string; quantity: number; reason?: string; balanceAfter?: number; createdAt: string }
+type LedgerResponse = {
+  purchase: CoursePurchase & {
+    commissionStatus?: string
+    lockedCommissionRate?: number
+    totalCourseCommissionPool?: number
+    commissionAllocationPerVisit?: number
+  }
+  movements: unknown[]
+  allocations: Array<{ visitDate: string; gross: number; fee: number; ownerNet: number }>
+}
+
 export const courseApi = {
   usageTransactions: () => api.get<CourseUsageTransaction[]>('/api/course-usages'),
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
@@ -426,17 +441,19 @@ export const courseApi = {
     api.get<CoursePurchase[]>(`/api/patients/${patientId}/courses`),
   purchase: (body: { patientId: number; courseId: number; branchCode: string }) =>
     api.post<CoursePurchase>('/api/course-purchases', body),
+  // v2 names ledger entries Purchase/Treatment/TransferOut...; the screens use USAGE/TRANSFER_OUT... and show
+  // the balance after each entry, which v2 does not send, so it is rebuilt from the current balance (newest first).
   ledger: (id: number) =>
-    api.get<{
-      purchase: CoursePurchase & {
-        commissionStatus?: string
-        lockedCommissionRate?: number
-        totalCourseCommissionPool?: number
-        commissionAllocationPerVisit?: number
-      }
-      movements: unknown[]
-      allocations: Array<{ visitDate: string; gross: number; fee: number; ownerNet: number }>
-    }>(`/api/course-purchases/${id}`),
+    api.get<LedgerResponse>(`/api/course-purchases/${id}`).then((ledger) => {
+      let balance = ledger.purchase.remaining
+      const movements = (ledger.movements as RawMovement[]).map((movement) => {
+        const type = movement.type === 'Treatment' ? 'USAGE' : movement.type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+        const balanceAfter = movement.balanceAfter ?? balance
+        balance -= movement.quantity
+        return { ...movement, type, balanceAfter }
+      })
+      return { ...ledger, movements }
+    }),
   use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) =>
     api.post<CoursePurchase>('/api/course-usages', body),
   reverse: (movementId: number, reason: string) =>
