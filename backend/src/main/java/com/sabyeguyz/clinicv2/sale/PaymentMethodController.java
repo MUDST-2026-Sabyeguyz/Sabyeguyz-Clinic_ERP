@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 /** Matches frontend/src/api/client.ts's paymentMethodApi (/api/payment-methods). */
+@Transactional
 @RestController
 @RequestMapping("/api/payment-methods")
 public class PaymentMethodController {

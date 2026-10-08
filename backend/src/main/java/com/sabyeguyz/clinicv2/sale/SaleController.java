@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -36,6 +37,7 @@ import org.springframework.web.bind.annotation.*;
  * on the request is totalled onto the Receipt and allocated to the line.
  * Receipt numbering is still max-plus-one (see ReceiptService).</p>
  */
+@Transactional
 @RestController
 public class SaleController {
     private final ReceiptService receiptService;

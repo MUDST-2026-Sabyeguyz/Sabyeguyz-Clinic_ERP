@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.course;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * transferring away from a Shared Member isn't reachable through this
  * endpoint shape.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/course-transfers")
 public class CourseTransferController {
