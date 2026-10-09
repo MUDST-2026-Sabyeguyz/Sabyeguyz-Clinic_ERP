@@ -53,7 +53,7 @@ describe('manager dashboard', () => {
         payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
       }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(201))
     })
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date())
     cy.api('GET', `/api/dashboard/summary?from=${today.slice(0, 8)}01&to=${today}`).then(({ body }) => expect(JSON.stringify(body), 'what the backend reports for the month').to.contain('"totalRevenue":800'))
     cy.visitAs('manager', '/staff/dashboard')
     card('รายได้รวม').should('contain.text', '800 บาท')

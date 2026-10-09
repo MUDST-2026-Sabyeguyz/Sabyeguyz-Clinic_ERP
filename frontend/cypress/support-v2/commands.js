@@ -57,7 +57,7 @@ Cypress.Commands.add('registerPatient', (overrides = {}) => {
 Cypress.Commands.add('noAlert', () => {
   cy.wait(1500)
   cy.get('body').then(($body) => {
-    const shown = [...$body.find('[role="alert"], .validation-error, .settings-error, .error-message, .error')]
+    const shown = [...$body.find('[role="alert"], .validation-error, .settings-error, .form-error, .error-message, .error')]
       .map((element) => element.textContent.trim()).filter(Boolean)
     expect(shown.join(' | '), 'error shown on the page').to.equal('')
   })
