@@ -60,7 +60,7 @@ describe('monthly closing', () => {
     cy.get('tbody tr').should('have.length', 1).and('contain.text', 'รอปิดรอบ').and('contain.text', '฿9,000').and('contain.text', '5%')
     cy.contains('button', 'ปิดรอบทั้งหมด').click()
     cy.contains('h2', 'ต้องการปิดรอบเดือนหรือไม่?').should('be.visible')
-    cy.contains('button', 'ใช่').click()
+    cy.contains('button', /^ใช่$/).click()
     cy.noAlert()
     cy.get('tbody tr').should('contain.text', 'ปิดรอบแล้ว')
     cy.contains('button', 'ปิดรอบทั้งหมด').should('be.disabled')
