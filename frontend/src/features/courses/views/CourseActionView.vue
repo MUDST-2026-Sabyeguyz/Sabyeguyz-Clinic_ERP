@@ -5,12 +5,6 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
 import {
-  previewCourseMovements,
-  previewCoursePatients,
-  previewCoursePurchases,
-  previewCourseStaff,
-} from '@/features/courses/data/coursePreview'
-import {
   branchApi,
   courseApi,
   patientApi,
@@ -55,18 +49,15 @@ const therapists = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
 const courseUsageHistory = ref<CourseMovement[]>([])
 const errorMessage = ref('')
-const usingPreviewData = ref(false)
 const selectedCourse = ref<UiCourse>({} as UiCourse)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
-const usageDate = ref('2026-09-17')
+const usageDate = ref(new Date().toISOString().slice(0, 10))
 const usageReview = ref(false)
 const usageSuccess = ref(false)
 const usageConfirmDialog = ref(false)
 const usageSuccessBalance = computed(() =>
-  usageSuccess.value
-    ? selectedCourse.value.balance
-    : Math.max(0, selectedCourse.value.balance - (usingPreviewData.value ? 1 : 0)),
+  usageSuccess.value ? selectedCourse.value.balance : Math.max(0, selectedCourse.value.balance - 1),
 )
 const printDialog = ref<'confirm' | 'success' | 'error' | null>(null)
 const coursePrintPreview = ref(false)
@@ -92,11 +83,7 @@ const transferredOut = computed(() =>
     .filter((movement) => movement.type === 'TRANSFER_OUT')
     .reduce((total, movement) => total + Math.abs(movement.quantity), 0),
 )
-const historyRemaining = computed(() =>
-  usingPreviewData.value
-    ? Math.max(0, selectedCourse.value.total - usedSessions.value - transferredOut.value)
-    : selectedCourse.value.balance,
-)
+const historyRemaining = computed(() => selectedCourse.value.balance)
 const documentBranch = computed(() => {
   const code = owner.value?.branchCode?.toLocaleLowerCase('th')
   const name = owner.value?.branchName?.replace(/^สาขา/, '').toLocaleLowerCase('th')
@@ -133,15 +120,7 @@ function courseUsagePercent(course: UiCourse) {
   )
 }
 async function loadOwner() {
-  let patientList: Patient[]
-  let staffList: Staff[]
-  try {
-    ;[patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
-  } catch {
-    usingPreviewData.value = true
-    patientList = previewCoursePatients
-    staffList = previewCourseStaff
-  }
+  const [patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
   owners.value = patientList
   therapists.value = staffList.filter((person) => person.role === 'THERAPIST' && person.active)
   try {
@@ -154,13 +133,7 @@ async function loadOwner() {
   if (owner.value) await loadCourses(owner.value.id)
 }
 async function loadCourses(patientId: number) {
-  let purchases: CoursePurchase[]
-  try {
-    purchases = await courseApi.patientCourses(patientId)
-  } catch {
-    usingPreviewData.value = true
-    purchases = previewCoursePurchases.filter((course) => course.patient.id === patientId)
-  }
+  const purchases: CoursePurchase[] = await courseApi.patientCourses(patientId)
   patientCourses.value = purchases.map((course) => ({
     ...course,
     name: course.course.name,
@@ -195,14 +168,11 @@ async function loadCourses(patientId: number) {
     if (route.query.action === 'inactive-history') {
       historyFromInactive.value = true
       action.value = 'history'
-      if (usingPreviewData.value) courseUsageHistory.value = previewCourseMovements
-      else {
-        try {
-          const ledger = await courseApi.ledger(selectedCourse.value.id)
-          courseUsageHistory.value = ledger.movements as CourseMovement[]
-        } catch {
-          courseUsageHistory.value = []
-        }
+      try {
+        const ledger = await courseApi.ledger(selectedCourse.value.id)
+        courseUsageHistory.value = ledger.movements as CourseMovement[]
+      } catch {
+        courseUsageHistory.value = []
       }
       return
     }
@@ -220,14 +190,11 @@ async function loadCourses(patientId: number) {
     }
     if (route.query.action === 'history') {
       action.value = 'history'
-      if (usingPreviewData.value) courseUsageHistory.value = previewCourseMovements
-      else {
-        try {
-          const ledger = await courseApi.ledger(selectedCourse.value.id)
-          courseUsageHistory.value = ledger.movements as CourseMovement[]
-        } catch {
-          courseUsageHistory.value = []
-        }
+      try {
+        const ledger = await courseApi.ledger(selectedCourse.value.id)
+        courseUsageHistory.value = ledger.movements as CourseMovement[]
+      } catch {
+        courseUsageHistory.value = []
       }
       return
     }
@@ -245,14 +212,11 @@ async function loadCourses(patientId: number) {
   if (route.query.action === 'history') {
     action.value = 'history'
     coursePrintPreview.value = route.query.print === '1'
-    if (usingPreviewData.value) courseUsageHistory.value = previewCourseMovements
-    else {
-      try {
-        const ledger = await courseApi.ledger(selectedCourse.value.id)
-        courseUsageHistory.value = ledger.movements as CourseMovement[]
-      } catch {
-        courseUsageHistory.value = []
-      }
+    try {
+      const ledger = await courseApi.ledger(selectedCourse.value.id)
+      courseUsageHistory.value = ledger.movements as CourseMovement[]
+    } catch {
+      courseUsageHistory.value = []
     }
   } else if (route.query.action === 'use') {
     action.value = 'use'
@@ -272,15 +236,6 @@ async function searchRecipients() {
   recipientResults.value = []
   recipientSearchOpen.value = true
   if (!keyword) return
-  if (usingPreviewData.value) {
-    const normalizedKeyword = keyword.toLocaleLowerCase('th')
-    recipientResults.value = previewCoursePatients.filter((patient) =>
-      `${patient.fullName} ${patient.hn} ${patient.phone}`
-        .toLocaleLowerCase('th')
-        .includes(normalizedKeyword),
-    )
-    return
-  }
   try {
     const results = await patientApi.search(keyword, 0, 20)
     recipientResults.value = results.items
@@ -324,10 +279,6 @@ async function start(nextAction: CourseAction, course: UiCourse) {
   transferStep.value = 'form'
   if (nextAction === 'use') usageReview.value = true
   if (nextAction === 'history') {
-    if (usingPreviewData.value) {
-      courseUsageHistory.value = previewCourseMovements
-      return
-    }
     try {
       const ledger = await courseApi.ledger(course.id)
       courseUsageHistory.value = ledger.movements as CourseMovement[]
@@ -433,24 +384,19 @@ async function confirm() {
     const balanceBeforeUse = selectedCourse.value.balance
     if (isCourseUsage) {
       usageConfirmDialog.value = false
-      if (!usingPreviewData.value) {
-        await courseApi.use({
-          coursePurchaseId: selectedCourse.value.id,
-          note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
-        })
-      }
+      await courseApi.use({
+        coursePurchaseId: selectedCourse.value.id,
+        note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
+      })
     } else {
       if (!selectedRecipient.value) return
-      if (usingPreviewData.value) transferReceiptId.value = Date.now()
-      else {
-        const transfer = await courseApi.transfer({
-          sourcePurchaseId: selectedCourse.value.id,
-          destinationPatientId: selectedRecipient.value.id,
-          quantity: transferAmount.value,
-          reason: transferReason.value || 'แชร์คอร์สตามคำขอผู้ป่วย',
-        })
-        transferReceiptId.value = transfer.id
-      }
+      const transfer = await courseApi.transfer({
+        sourcePurchaseId: selectedCourse.value.id,
+        destinationPatientId: selectedRecipient.value.id,
+        quantity: transferAmount.value,
+        reason: transferReason.value || 'แชร์คอร์สตามคำขอผู้ป่วย',
+      })
+      transferReceiptId.value = transfer.id
     }
     await loadCourses(owner.value.id)
     if (isCourseUsage) {
@@ -479,17 +425,6 @@ async function confirm() {
     } else {
       selectedCourse.value =
         patientCourses.value.find((course) => course.id === usedCourseId) ?? selectedCourse.value
-      if (usingPreviewData.value) {
-        const newBalance = Math.max(0, selectedCourse.value.balance - transferAmount.value)
-        selectedCourse.value = {
-          ...selectedCourse.value,
-          balance: newBalance,
-          remaining: newBalance,
-        }
-        patientCourses.value = patientCourses.value.map((course) =>
-          course.id === usedCourseId ? selectedCourse.value : course,
-        )
-      }
       action.value = 'transfer'
       transferStep.value = 'success'
     }
@@ -516,8 +451,7 @@ async function handleTransferPrimaryAction() {
   }
   if (!recipientConfirmed.value) {
     recipientConfirmed.value = true
-    const suggestedTherapist =
-      therapists.value.find((person) => person.fullName.includes('วีระพงษ์')) ?? therapists.value[0]
+    const suggestedTherapist = therapists.value[0]
     coTherapistId.value = suggestedTherapist?.id ?? ''
     primaryShare.value = 70
     secondaryShare.value = 30
@@ -617,7 +551,9 @@ function closePrintSuccess() {
         <h1>ใช้สิทธิ์สำเร็จ</h1>
         <p>บันทึก {{ selectedCourse.name }} จำนวน 1 ครั้งเรียบร้อยแล้ว</p>
         <div class="course-use-success-details">
-          <p><span>เลขอ้างอิง</span><strong>USE-2569-0031</strong></p>
+          <p>
+            <span>รายการคอร์ส</span><strong>#{{ selectedCourse.id }}</strong>
+          </p>
           <p>
             <span>สิทธิ์คงเหลือ</span><strong>{{ usageSuccessBalance }} ครั้ง</strong>
           </p>
@@ -633,8 +569,8 @@ function closePrintSuccess() {
           <h2>{{ owner?.fullName }}　HN {{ owner?.hn }}</h2>
           <h3>{{ selectedCourse.name }}</h3>
           <p>วันที่รับบริการ　{{ formattedUsageDate }}</p>
-          <p>นักกายภาพ　กภ. ศิริพร</p>
-          <p>สาขา　แบริ่ง</p>
+          <p>นักกายภาพ　ผู้ให้บริการตามตาราง</p>
+          <p>สาขา　{{ branchLabel(owner) }}</p>
           <strong>สิทธิ์คงเหลือ</strong>
           <b
             >{{ selectedCourse.balance }} <small>/ {{ selectedCourse.total }} ครั้ง</small></b
@@ -688,11 +624,11 @@ function closePrintSuccess() {
               </div>
               <div>
                 <dt>นักกายภาพ</dt>
-                <dd>กภ. ศิริพร</dd>
+                <dd>ผู้ให้บริการตามตาราง</dd>
               </div>
               <div>
                 <dt>สาขา</dt>
-                <dd>แบริ่ง</dd>
+                <dd>{{ branchLabel(owner) }}</dd>
               </div>
               <div>
                 <dt>จำนวนที่ใช้ครั้งนี้</dt>
@@ -729,7 +665,7 @@ function closePrintSuccess() {
         <h1>ใช้สิทธิ์คอร์ส</h1>
         <section class="course-use-patient">
           <strong>{{ owner?.fullName }}</strong
-          ><span>HN {{ owner?.hn }} · สาขาราชพฤกษ์</span>
+          ><span>HN {{ owner?.hn }} · {{ branchLabel(owner) }}</span>
         </section>
         <section v-if="!patientCourses.length" class="course-use-empty">
           <h2>ยังไม่มีคอร์สที่ใช้สิทธิ์ได้</h2>
@@ -962,7 +898,7 @@ function closePrintSuccess() {
             <div class="course-share-allocation">
               <strong>สัดส่วนยอดขาย</strong>
               <label
-                >กภ. ศิริพร<input
+                >นักกายภาพหลัก<input
                   v-if="coTherapistId"
                   v-model.number="primaryShare"
                   type="number"
@@ -971,7 +907,10 @@ function closePrintSuccess() {
                 /><em v-else>—</em></label
               >
               <label
-                >กภ. วีระพงษ์<input
+                >{{
+                  therapists.find((person) => person.id === coTherapistId)?.fullName ||
+                  'นักกายภาพคนที่ 2'
+                }}<input
                   v-if="coTherapistId"
                   v-model.number="secondaryShare"
                   type="number"
@@ -1044,7 +983,14 @@ function closePrintSuccess() {
           </p>
           <p>
             <span>สัดส่วนยอดขาย</span
-            ><b>กภ. ศิริพร {{ primaryShare }}% · กภ. วีระพงษ์ {{ secondaryShare }}%</b>
+            ><b
+              >นักกายภาพหลัก {{ primaryShare }}% ·
+              {{
+                therapists.find((person) => person.id === coTherapistId)?.fullName ||
+                'นักกายภาพคนที่ 2'
+              }}
+              {{ secondaryShare }}%</b
+            >
           </p>
           <p>
             <span>ผู้รับได้รับสิทธิ์</span><b>{{ transferAmount }} ครั้ง</b>
@@ -1129,7 +1075,7 @@ function closePrintSuccess() {
             <div class="course-cut-table-head" role="row">
               <b>วันที่รับบริการ</b><b>นักกายภาพผู้ให้บริการ</b><b>สาขา</b><b>จำนวน</b>
             </div>
-            <div v-for="(entry, index) in [...usageEntries].reverse()" :key="entry.id" role="row">
+            <div v-for="entry in [...usageEntries].reverse()" :key="entry.id" role="row">
               <span>{{
                 new Date(entry.createdAt).toLocaleDateString('th-TH', {
                   day: 'numeric',
@@ -1137,8 +1083,8 @@ function closePrintSuccess() {
                   year: 'numeric',
                 })
               }}</span>
-              <span>{{ index === 0 ? 'กภ. วีระพงษ์' : 'กภ. ศิริพร' }}</span>
-              <span>{{ index === 0 ? 'พระราม 9' : 'แบริ่ง' }}</span>
+              <span>{{ entry.reason || '—' }}</span>
+              <span>{{ branchLabel(owner) }}</span>
               <span>{{ Math.abs(entry.quantity) }}</span>
             </div>
             <div class="course-cut-total" role="row">
@@ -1282,21 +1228,17 @@ function closePrintSuccess() {
               v-if="transferReceiptId && !historyFromInactive"
               class="course-after-transfer-entry"
             >
-              <strong>โอนสิทธิ์ · TRF-DEMO-0001</strong>
+              <strong>โอนสิทธิ์ · #{{ transferReceiptId }}</strong>
               <span
-                >{{ owner?.fullName }} → {{ selectedRecipient?.fullName || 'นางวรรณา มั่นคง' }} ·
-                สาขาพระราม 9</span
+                >{{ owner?.fullName }} → {{ selectedRecipient?.fullName || 'ไม่ระบุผู้รับ' }} ·
+                {{ branchLabel(owner) }}</span
               >
               <span
                 >โอน {{ transferAmount }} ครั้ง · ผู้โอนคงเหลือ {{ selectedCourse.balance }} ครั้ง ·
                 ผู้รับได้รับ {{ transferAmount }} ครั้ง</span
               >
             </article>
-            <article
-              v-for="(entry, index) in usageEntries"
-              :key="entry.id"
-              class="course-history-entry"
-            >
+            <article v-for="entry in usageEntries" :key="entry.id" class="course-history-entry">
               <strong>{{
                 new Date(entry.createdAt).toLocaleDateString('th-TH', {
                   day: 'numeric',
@@ -1306,16 +1248,7 @@ function closePrintSuccess() {
               }}</strong>
               <div>
                 <b>{{ selectedCourse.name }}</b>
-                <span
-                  >{{
-                    index === 0
-                      ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                      : index === 1
-                        ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                        : 'กภ. วีระพงษ์ · สาขาพระราม 9'
-                  }}
-                  · USE-DEMO-000{{ 3 - index }}</span
-                >
+                <span>{{ entry.reason || 'ไม่มีหมายเหตุ' }} · #{{ entry.id }}</span>
               </div>
               <aside>
                 <b>ใช้ {{ Math.abs(entry.quantity) }} ครั้ง</b
