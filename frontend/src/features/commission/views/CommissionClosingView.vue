@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { commissionApi } from '@/api/client'
@@ -13,7 +14,7 @@ type ClosingRow = {
   status: 'Open' | 'Closed'
 }
 
-const selectedMonth = ref(`${new Date().toISOString().slice(0, 7)}-01`)
+const selectedMonth = ref(`${clinicToday().slice(0, 8)}01`)
 const month = computed(() => selectedMonth.value.slice(0, 7))
 const router = useRouter()
 const branch = ref('ทุกสาขา')
