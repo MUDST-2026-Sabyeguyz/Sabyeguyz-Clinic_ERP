@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { branchApi, patientApi, reportApi } from '@/api/client'
 
 const now = new Date()
@@ -9,6 +10,9 @@ const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, 
 const to = ref(now.toISOString().slice(0, 10))
 const branchCode = ref('')
 const branches = ref<Array<{ code: string; name: string }>>([])
+const branchOptions = computed(() =>
+  branches.value.map((branch) => ({ value: branch.code, label: branch.name })),
+)
 const loading = ref(true)
 const errorMessage = ref('')
 const patients = ref(0)
@@ -18,18 +22,18 @@ const courses = ref(0)
 const genderBreakdown = ref<Array<{ gender: string; patients: number }>>([])
 const appointmentStatuses = ref<Array<{ status: string; appointments: number }>>([])
 const monthlyRevenue = ref<Array<{ label: string; course: number; singleVisit: number }>>([])
-const statusOrder = [
-  'CONFIRMED',
-  'ARRIVED',
-  'IN_SERVICE',
-  'COMPLETED',
-  'CANCELLED',
-  'RESCHEDULED',
-  'NO_SHOW',
-]
+const statusOrder = ['COMPLETED', 'IN_SERVICE', 'NO_SHOW', 'CANCELLED']
 
 const maxMonthlyRevenue = computed(() =>
   Math.max(...monthlyRevenue.value.flatMap((item) => [item.course, item.singleVisit]), 1),
+)
+const chartMaximum = computed(() => {
+  const rawMaximum = maxMonthlyRevenue.value
+  const magnitude = 10 ** Math.max(String(Math.floor(rawMaximum)).length - 1, 0)
+  return Math.ceil(rawMaximum / magnitude) * magnitude
+})
+const chartTicks = computed(() =>
+  Array.from({ length: 6 }, (_, index) => Math.round(chartMaximum.value * (1 - index / 5))),
 )
 const dashboardStatuses = computed(() => {
   const counts = new Map(appointmentStatuses.value.map((item) => [item.status, item.appointments]))
@@ -41,12 +45,9 @@ const maxAppointments = computed(() =>
 const branchName = computed(
   () => branches.value.find((item) => item.code === branchCode.value)?.name ?? 'ทุกสาขา',
 )
-const patientGenderLabel = computed(
-  () =>
-    genderBreakdown.value
-      .map((item) => `${item.gender} ${item.patients.toLocaleString()}`)
-      .join('  ') || 'ยังไม่มีข้อมูลผู้ป่วยในช่วงนี้',
-)
+const genderLabel = (gender: string) =>
+  ({ MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่น ๆ', UNKNOWN: 'ไม่ระบุ' })[gender.toUpperCase()] ??
+  gender
 const money = (value: number) =>
   `${value.toLocaleString('th-TH', { maximumFractionDigits: 0 })} บาท`
 const statusLabel = (status: string) =>
@@ -55,7 +56,7 @@ const statusLabel = (status: string) =>
     ARRIVED: 'Arrived',
     IN_SERVICE: 'In service',
     COMPLETED: 'Complete',
-    CANCELLED: 'Canceled',
+    CANCELLED: 'Cancled',
     RESCHEDULED: 'Rescheduled',
     NO_SHOW: 'No Show',
   })[status] ?? status
@@ -127,27 +128,34 @@ watch([from, to, branchCode], loadDashboard)
   <div class="manager-dashboard">
     <StaffHeader />
     <main class="dashboard-main">
+      <RouterLink class="dashboard-compensation-link" to="/staff/commission">
+        ค่าคอมมิชชันและค่ารักษาแทน
+      </RouterLink>
       <header class="dashboard-heading">
         <div>
           <h1>ภาพรวมแดชบอร์ด</h1>
           <p>ตรวจสอบข้อมูลจาก Treatment และ Sales Transaction</p>
         </div>
         <div class="dashboard-filters" aria-label="ตัวกรองแดชบอร์ด">
-          <label
-            >ช่วงเวลา<ThaiDatePicker v-model="from" numeric-month show-calendar-icon hide-caret
+          <div class="filter-period">
+            <span class="filter-label">ช่วงเวลา</span>
+            <div class="date-range">
+              <ThaiDatePicker v-model="from" numeric-month show-calendar-icon hide-caret />
+              <span>ถึง</span>
+              <div class="date-end">
+                <ThaiDatePicker v-model="to" numeric-month show-calendar-icon hide-caret />
+              </div>
+            </div>
+          </div>
+          <label class="branch-filter"
+            >สาขา<FilterDropdown
+              v-model="branchCode"
+              :options="branchOptions"
+              default-value=""
+              default-label="ทุกสาขา"
+              label="กรองตามสาขา"
+              :clear-on-reselect="false"
           /></label>
-          <span>ถึง</span>
-          <label class="date-end"
-            ><ThaiDatePicker v-model="to" numeric-month show-calendar-icon hide-caret
-          /></label>
-          <label
-            >สาขา<select v-model="branchCode">
-              <option value="">ทุกสาขา</option>
-              <option v-for="branch in branches" :key="branch.code" :value="branch.code">
-                {{ branch.name }}
-              </option>
-            </select></label
-          >
         </div>
       </header>
 
@@ -156,33 +164,43 @@ watch([from, to, branchCode], loadDashboard)
         {{ errorMessage }}
       </p>
 
-      <section class="summary-grid" aria-label="ข้อมูลสรุป">
-        <article class="patient-card">
-          <p>ผู้ป่วยทั้งหมด</p>
-          <b>{{ patients.toLocaleString() }} คน</b>
-          <div class="gender-bar">
-            <span
-              v-for="(gender, index) in genderBreakdown"
-              :key="gender.gender"
-              :style="{ width: `${(gender.patients / Math.max(patients, 1)) * 100}%` }"
-              :class="index ? 'gender-secondary' : ''"
-            ></span>
-          </div>
-          <small>{{ patientGenderLabel }}</small>
-        </article>
-        <article>
-          <p>จำนวนครั้งที่เข้ารับบริการ</p>
-          <b>{{ visits.toLocaleString() }} ครั้ง</b><small>ในช่วงเวลาที่เลือก</small>
-        </article>
-        <article>
-          <p>รายได้รวม</p>
-          <b>{{ money(revenue) }}</b
-          ><small>{{ branchName }}</small>
-        </article>
-        <article>
-          <p>คอร์สที่กำลังใช้งาน</p>
-          <b>{{ courses.toLocaleString() }} คอร์ส</b><small>ซื้อในช่วงเวลาที่เลือก</small>
-        </article>
+      <section class="summary-layout" aria-label="ข้อมูลสรุป">
+        <div class="summary-column">
+          <article class="summary-card patient-card">
+            <p>ผู้ป่วยทั้งหมด</p>
+            <b>{{ patients.toLocaleString() }} คน</b>
+            <div class="gender-bar">
+              <span
+                v-for="(gender, index) in genderBreakdown"
+                :key="gender.gender"
+                :style="{ width: `${(gender.patients / Math.max(patients, 1)) * 100}%` }"
+                :class="index ? 'gender-secondary' : ''"
+              ></span>
+            </div>
+            <div v-if="genderBreakdown.length" class="gender-labels">
+              <small v-for="(gender, index) in genderBreakdown" :key="gender.gender">
+                <i :class="index ? 'secondary' : ''"></i>{{ genderLabel(gender.gender) }}
+                {{ gender.patients.toLocaleString() }} คน
+              </small>
+            </div>
+            <small v-else>ยังไม่มีข้อมูลผู้ป่วยในช่วงนี้</small>
+          </article>
+          <article class="summary-card revenue-summary">
+            <p>รายได้รวม</p>
+            <b>{{ money(revenue) }}</b
+            ><small>{{ branchName }}</small>
+          </article>
+        </div>
+        <div class="summary-column">
+          <article class="summary-card">
+            <p>จำนวนครั้งที่เข้ารับบริการ</p>
+            <b>{{ visits.toLocaleString() }} ครั้ง</b><small>ในช่วงเวลาที่เลือก</small>
+          </article>
+          <article class="summary-card">
+            <p>คอร์สที่กำลังใช้งาน</p>
+            <b>{{ courses.toLocaleString() }} คอร์ส</b><small>ซื้อในช่วงเวลาที่เลือก</small>
+          </article>
+        </div>
       </section>
 
       <section class="revenue-card">
@@ -196,23 +214,28 @@ watch([from, to, branchCode], loadDashboard)
             ><span class="visit">รายได้รายครั้ง (Single Visit)</span>
           </div>
         </header>
-        <div class="monthly-chart" role="img" aria-label="กราฟรายได้แยกตามประเภทในแต่ละเดือน">
-          <div v-for="month in monthlyRevenue" :key="month.label" class="month-group">
-            <div class="bar-area">
-              <i
-                class="course"
-                :style="{ height: `${(month.course / maxMonthlyRevenue) * 100}%` }"
-                :title="`คอร์ส ${money(month.course)}`"
-              ></i>
-              <i
-                class="visit"
-                :style="{ height: `${(month.singleVisit / maxMonthlyRevenue) * 100}%` }"
-                :title="`รายครั้ง ${money(month.singleVisit)}`"
-              ></i>
-            </div>
-            <span>{{ month.label }}</span>
+        <div class="chart-shell" role="img" aria-label="กราฟรายได้แยกตามประเภทในแต่ละเดือน">
+          <div class="chart-axis" aria-hidden="true">
+            <span v-for="tick in chartTicks" :key="tick">{{ tick.toLocaleString() }}</span>
           </div>
-          <p v-if="!monthlyRevenue.length" class="empty-state">ยังไม่มีรายได้ในช่วงเวลานี้</p>
+          <div class="monthly-chart">
+            <div v-for="month in monthlyRevenue" :key="month.label" class="month-group">
+              <div class="bar-area">
+                <i
+                  class="course"
+                  :style="{ height: `${(month.course / chartMaximum) * 100}%` }"
+                  :title="`คอร์ส ${money(month.course)}`"
+                ></i>
+                <i
+                  class="visit"
+                  :style="{ height: `${(month.singleVisit / chartMaximum) * 100}%` }"
+                  :title="`รายครั้ง ${money(month.singleVisit)}`"
+                ></i>
+              </div>
+              <span>{{ month.label }}</span>
+            </div>
+            <p v-if="!monthlyRevenue.length" class="empty-state">ยังไม่มีรายได้ในช่วงเวลานี้</p>
+          </div>
         </div>
       </section>
 
@@ -248,9 +271,39 @@ watch([from, to, branchCode], loadDashboard)
   color: #25372e;
 }
 .dashboard-main {
-  width: min(1420px, calc(100% - 72px));
+  width: min(1420px, calc(100% - 88px));
   margin: auto;
   padding: 43px 0 72px;
+}
+.dashboard-compensation-link {
+  display: flex;
+  width: max-content;
+  min-width: 230px;
+  min-height: 42px;
+  margin: 0 0 24px auto;
+  padding: 0 22px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: #1e918c;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.dashboard-compensation-link:hover {
+  background: #176f6c;
+  box-shadow: 0 6px 16px #1e807c2e;
+  transform: translateY(-1px);
+}
+.dashboard-compensation-link:focus-visible {
+  outline: 3px solid #87c9e8;
+  outline-offset: 3px;
 }
 .dashboard-heading {
   display: flex;
@@ -260,7 +313,7 @@ watch([from, to, branchCode], loadDashboard)
 }
 .dashboard-heading h1 {
   margin: 0;
-  font-size: clamp(2.3rem, 4vw, 3.7rem);
+  font-size: clamp(2.15rem, 3.2vw, 3.25rem);
   line-height: 1.1;
   letter-spacing: -0.05em;
 }
@@ -271,28 +324,44 @@ watch([from, to, branchCode], loadDashboard)
 }
 .dashboard-filters {
   display: flex;
-  align-items: end;
-  gap: 9px;
-  padding: 14px 16px;
-  border-radius: 16px;
+  align-items: stretch;
+  min-width: 570px;
+  padding: 14px 18px;
+  border-radius: 22px;
   background: #fff9f9;
-  box-shadow: 0 7px 18px #25372e14;
+  box-shadow: 0 8px 30px #604f4515;
 }
-.dashboard-filters label {
+.dashboard-filters label,
+.filter-period {
   display: grid;
   gap: 4px;
   color: #56665d;
   font-size: 0.78rem;
   font-weight: 700;
 }
-.dashboard-filters select {
-  min-height: 38px;
-  border: 1px solid #d7dcd6;
-  border-radius: 8px;
-  padding: 0 9px;
-  background: white;
-  color: #25372e;
-  font: inherit;
+.filter-period {
+  flex: 1;
+  padding-right: 18px;
+}
+.filter-label {
+  color: #56665d;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.branch-filter {
+  width: 180px;
+  padding-left: 18px;
+  border-left: 1px solid #e3d9d4;
+}
+.date-range {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.date-range > span {
+  color: #7b847e;
+  font-size: 0.8rem;
 }
 .dashboard-filters :deep(.thai-date-picker) {
   margin-top: 0;
@@ -301,7 +370,7 @@ watch([from, to, branchCode], loadDashboard)
   min-height: 38px;
   padding: 7px 9px;
   border-color: #d7dcd6;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .dashboard-filters :deep(.calendar) {
   z-index: 60;
@@ -309,10 +378,6 @@ watch([from, to, branchCode], loadDashboard)
 .dashboard-filters .date-end :deep(.calendar) {
   right: 0;
   left: auto;
-}
-.dashboard-filters > span {
-  padding-bottom: 9px;
-  color: #56665d;
 }
 .dashboard-feedback {
   margin: 26px 0 0;
@@ -325,46 +390,49 @@ watch([from, to, branchCode], loadDashboard)
   background: #ffebe7;
   color: #a1433b;
 }
-.summary-grid {
+.summary-layout {
   display: grid;
-  grid-template-columns: 1.42fr repeat(3, 1fr);
+  grid-template-columns: 1.45fr 1fr;
   gap: 24px;
   margin-top: 48px;
 }
-.summary-grid article,
-.revenue-card,
-.status-card,
-.period-card {
-  border: 1px solid #fff8f8;
-  border-radius: 26px;
-  background: #fff9f9;
-  box-shadow: 0 4px 25px #00000016;
+.summary-column {
+  display: grid;
+  gap: 24px;
 }
-.summary-grid article {
-  min-height: 142px;
-  padding: 25px 28px;
+.summary-card,
+.revenue-card,
+.status-card {
+  border: 1px solid #fff8f8;
+  border-radius: 32px;
+  background: #fff9f9;
+  box-shadow: 0 8px 30px #604f4515;
+}
+.summary-card {
+  min-height: 158px;
+  padding: 29px 34px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
 }
-.summary-grid p,
-.period-card p {
+.summary-card p {
   margin: 0;
   color: #56665d;
   font-size: 1rem;
 }
-.summary-grid b {
+.summary-card b {
   margin: 10px 0 5px;
   font-size: clamp(1.55rem, 2.35vw, 2.35rem);
   line-height: 1.1;
 }
-.summary-grid small,
-.period-card span {
+.summary-card small {
   color: #56665d;
 }
 .gender-bar {
   display: flex;
   height: 10px;
-  margin: 11px 0 6px;
+  margin: 15px 0 9px;
   overflow: hidden;
   border-radius: 20px;
   background: #1e807c;
@@ -375,9 +443,28 @@ watch([from, to, branchCode], loadDashboard)
 .gender-bar .gender-secondary {
   background: #1e807c;
 }
+.gender-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+}
+.gender-labels small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.gender-labels i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e6d479;
+}
+.gender-labels i.secondary {
+  background: #1e807c;
+}
 .revenue-card {
-  margin-top: 26px;
-  padding: 31px 38px;
+  margin-top: 32px;
+  padding: 34px 42px 30px;
 }
 .revenue-card header,
 .status-card header {
@@ -415,16 +502,31 @@ watch([from, to, branchCode], loadDashboard)
 .bar-area .visit {
   background: #e6d479;
 }
+.chart-shell {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  margin-top: 34px;
+}
+.chart-axis {
+  height: 286px;
+  padding: 0 10px 27px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  color: #7a867e;
+  font-size: 0.75rem;
+  text-align: right;
+}
 .monthly-chart {
   display: flex;
-  min-height: 280px;
+  min-height: 286px;
   align-items: end;
   justify-content: space-around;
   gap: 18px;
-  margin-top: 34px;
-  padding: 0 30px 8px;
+  padding: 0 34px 8px;
   border-bottom: 1px solid #dfe4de;
-  background: repeating-linear-gradient(to bottom, transparent 0 46px, #e8ebe6 47px 48px);
+  background: repeating-linear-gradient(to bottom, transparent 0 49px, #e8ebe6 50px 51px);
 }
 .month-group {
   display: grid;
@@ -438,7 +540,7 @@ watch([from, to, branchCode], loadDashboard)
   display: flex;
   align-items: end;
   gap: 7px;
-  height: 236px;
+  height: 250px;
 }
 .bar-area i {
   display: block;
@@ -452,19 +554,10 @@ watch([from, to, branchCode], loadDashboard)
 }
 .lower-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
-  margin-top: 26px;
+  margin-top: 32px;
 }
-.status-card,
-.period-card {
-  padding: 27px 30px;
-}
-.status-card a,
-.period-card a {
-  color: #1e807c;
-  font-weight: 700;
-  text-decoration: none;
+.status-card {
+  padding: 34px 42px 38px;
 }
 .status-card header p {
   margin: 5px 0 0;
@@ -472,10 +565,10 @@ watch([from, to, branchCode], loadDashboard)
 }
 .status-row {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr) 34px;
-  gap: 10px;
+  grid-template-columns: 110px minmax(0, 1fr) 44px;
+  gap: 16px;
   align-items: center;
-  padding: 7px 0;
+  padding: 12px 0;
   color: #56665d;
 }
 .status-row b {
@@ -484,7 +577,7 @@ watch([from, to, branchCode], loadDashboard)
   text-align: right;
 }
 .status-track {
-  height: 10px;
+  height: 13px;
   overflow: hidden;
   border-radius: 999px;
   background: #c8e6c0;
@@ -495,39 +588,20 @@ watch([from, to, branchCode], loadDashboard)
   min-width: 4px;
   border-radius: inherit;
 }
-.status-track .status-complete,
 .status-track .status-completed {
   background: #1e807c;
 }
-.status-track .status-confirmed,
-.status-track .status-arrived {
-  background: #8faeae;
-}
-.status-track .status-in-service,
-.status-track .status-checked-in {
+.status-track .status-in-service {
   background: #8faeae;
 }
 .status-track .status-no-show {
   background: #e6d479;
 }
-.status-track .status-cancelled,
-.status-track .status-canceled {
+.status-track .status-cancelled {
   background: #e07d96;
 }
 .empty-state {
   color: #56665d;
-}
-.period-card {
-  display: flex;
-  flex-direction: column;
-  align-items: start;
-  gap: 10px;
-}
-.period-card b {
-  font-size: 1.3rem;
-}
-.period-card a {
-  margin-top: auto;
 }
 @media (max-width: 1050px) {
   .dashboard-heading {
@@ -535,10 +609,11 @@ watch([from, to, branchCode], loadDashboard)
   }
   .dashboard-filters {
     width: 100%;
+    min-width: 0;
     box-sizing: border-box;
   }
-  .summary-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .summary-layout {
+    grid-template-columns: 1fr 1fr;
   }
 }
 @media (max-width: 700px) {
@@ -548,10 +623,15 @@ watch([from, to, branchCode], loadDashboard)
   }
   .dashboard-filters {
     display: grid;
-    grid-template-columns: 1fr 22px 1fr;
   }
-  .dashboard-filters label:last-child {
-    grid-column: 1/-1;
+  .filter-period {
+    padding: 0 0 14px;
+  }
+  .branch-filter {
+    width: auto;
+    padding: 14px 0 0;
+    border-top: 1px solid #e3d9d4;
+    border-left: 0;
   }
   .dashboard-filters :deep(.calendar) {
     position: absolute;
@@ -563,14 +643,19 @@ watch([from, to, branchCode], loadDashboard)
     max-width: none;
     padding: 14px;
   }
-  .dashboard-filters .date-end :deep(.calendar) { right: 0; left: auto; }
-  .summary-grid,
-  .lower-grid {
+  .dashboard-filters .date-end :deep(.calendar) {
+    right: 0;
+    left: auto;
+  }
+  .summary-layout {
     grid-template-columns: 1fr;
     gap: 15px;
     margin-top: 28px;
   }
-  .summary-grid article {
+  .summary-column {
+    gap: 15px;
+  }
+  .summary-card {
     min-height: 0;
   }
   .revenue-card {
@@ -582,6 +667,12 @@ watch([from, to, branchCode], loadDashboard)
   .chart-legend {
     flex-wrap: wrap;
   }
+  .chart-shell {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+  .chart-axis {
+    height: 228px;
+  }
   .monthly-chart {
     min-height: 220px;
     padding: 0 8px 8px;
@@ -591,12 +682,11 @@ watch([from, to, branchCode], loadDashboard)
   .bar-area {
     height: 178px;
   }
-  .status-card,
-  .period-card {
+  .status-card {
     padding: 23px 20px;
   }
   .status-row {
-    grid-template-columns: 104px minmax(0, 1fr) 24px;
+    grid-template-columns: 92px minmax(0, 1fr) 28px;
     gap: 7px;
     font-size: 0.88rem;
   }
@@ -605,15 +695,15 @@ watch([from, to, branchCode], loadDashboard)
   }
 }
 @media (max-width: 420px) {
-  .dashboard-filters {
+  .dashboard-compensation-link {
+    width: 100%;
+    min-width: 0;
+  }
+  .date-range {
     grid-template-columns: 1fr;
   }
-  .dashboard-filters > span {
+  .date-range > span {
     display: none;
-  }
-  .dashboard-filters label,
-  .dashboard-filters label:last-child {
-    grid-column: auto;
   }
   .dashboard-heading h1 {
     font-size: 2.25rem;
