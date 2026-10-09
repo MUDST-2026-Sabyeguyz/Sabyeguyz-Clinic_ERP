@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { commissionApi } from '@/api/client'
@@ -23,7 +24,7 @@ const type = ref<TransactionType>(route.query.type === 'Treatment' ? 'Treatment'
 const router = useRouter()
 const branch = ref('ทุกสาขา')
 const today = new Date()
-const defaultEndDate = today.toISOString().slice(0, 10)
+const defaultEndDate = clinicToday()
 const defaultStartDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30)
   .toISOString()
   .slice(0, 10)
