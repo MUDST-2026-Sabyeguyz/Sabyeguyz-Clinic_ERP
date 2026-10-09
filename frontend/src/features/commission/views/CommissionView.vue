@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { commissionApi } from '@/api/client'
 
 type TransactionType = 'Sales' | 'Treatment'
@@ -160,11 +161,19 @@ function selectType(event: Event) {
             <span>ถึง</span>
             <ThaiDatePicker v-model="endDate" show-calendar-icon numeric-month hide-caret />
           </div>
-          <label class="branch-field"
-            ><select v-model="branch" aria-label="สาขา">
-              <option v-for="item in branches" :key="item" :value="item">{{ item }}</option>
-            </select></label
-          >
+          <div class="branch-field">
+            <FilterDropdown
+              v-model="branch"
+              label="สาขา"
+              default-value="ทุกสาขา"
+              default-label="ทุกสาขา"
+              :options="
+                branches
+                  .filter((item) => item !== 'ทุกสาขา')
+                  .map((item) => ({ value: item, label: item }))
+              "
+            />
+          </div>
         </div>
       </section>
       <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
