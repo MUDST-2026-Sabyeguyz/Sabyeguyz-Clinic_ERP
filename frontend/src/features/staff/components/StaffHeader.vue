@@ -11,9 +11,7 @@ const pillReady = ref(false)
 const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0' })
 let readyFrame: number | undefined
 let routeFrame: number | undefined
-let hoverFrame: number | undefined
 let settleFrame: number | undefined
-let hoveredLink: HTMLAnchorElement | null = null
 const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   role?: string
   branchName?: string
@@ -22,6 +20,9 @@ const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
 const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
+const branchLabel = computed(() =>
+  isManager.value ? 'เข้าถึงทุกสาขา' : (storedUser?.branchName ?? 'ยังไม่ได้กำหนดสาขา'),
+)
 const navItems = computed(() =>
   isManager.value
     ? [
@@ -30,7 +31,8 @@ const navItems = computed(() =>
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
-        { to: '/staff/commission', label: 'บุคลากรและค่าคอมมิชชัน' },
+        { to: '/staff/commission', label: 'คอมมิชชัน' },
+        { to: '/staff/personnel', label: 'บุคลากร' },
         { to: '/staff/reports', label: 'รายงาน' },
         { to: '/staff/settings', label: 'ตั้งค่า' },
       ]
@@ -39,6 +41,7 @@ const navItems = computed(() =>
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
+        { to: '/staff/compensation', label: 'คอมมิชชัน' },
       ],
 )
 function movePill(target: HTMLElement | null) {
@@ -69,29 +72,7 @@ function movePillToActive() {
     .sort((a, b) => b.pathname.length - a.pathname.length)[0]
   movePill(matchingLink ?? links[0] ?? null)
 }
-function handleNavHover(event: Event) {
-  const target = event.target
-  if (!(target instanceof Element)) return
-  const link = target.closest<HTMLAnchorElement>('a')
-  if (!link || !navRef.value?.contains(link) || link === hoveredLink) return
-  hoveredLink = link
-  // Device/Responsive mode may report a hover during the resize frame.  Make
-  // the transition available first, then position the pill on the next frame.
-  pillReady.value = true
-  if (hoverFrame) cancelAnimationFrame(hoverFrame)
-  nextTick(() => {
-    hoverFrame = requestAnimationFrame(() => {
-      if (hoveredLink === link) movePill(link)
-    })
-  })
-}
-function resetHoverToActive() {
-  hoveredLink = null
-  if (hoverFrame) cancelAnimationFrame(hoverFrame)
-  movePillToActive()
-}
 function positionPillWithoutAnimation() {
-  hoveredLink = null
   pillReady.value = false
   movePillToActive()
   if (readyFrame) cancelAnimationFrame(readyFrame)
@@ -109,27 +90,17 @@ onMounted(() => {
   })
   document.fonts?.ready.then(positionPillWithoutAnimation)
   window.addEventListener('resize', positionPillWithoutAnimation)
-  navRef.value?.addEventListener('mouseover', handleNavHover)
-  navRef.value?.addEventListener('pointerover', handleNavHover)
-  navRef.value?.addEventListener('pointermove', handleNavHover)
-  navRef.value?.addEventListener('focusin', handleNavHover)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', positionPillWithoutAnimation)
-  navRef.value?.removeEventListener('mouseover', handleNavHover)
-  navRef.value?.removeEventListener('pointerover', handleNavHover)
-  navRef.value?.removeEventListener('pointermove', handleNavHover)
-  navRef.value?.removeEventListener('focusin', handleNavHover)
   if (readyFrame) cancelAnimationFrame(readyFrame)
   if (routeFrame) cancelAnimationFrame(routeFrame)
-  if (hoverFrame) cancelAnimationFrame(hoverFrame)
   if (settleFrame) cancelAnimationFrame(settleFrame)
 })
 watch(
   () => route.fullPath,
   () => {
     menuOpen.value = false
-    hoveredLink = null
     nextTick(() => {
       if (routeFrame) cancelAnimationFrame(routeFrame)
       routeFrame = requestAnimationFrame(movePillToActive)
@@ -140,8 +111,6 @@ function signOut() {
   localStorage.removeItem('authToken')
   localStorage.removeItem('staffRole')
   localStorage.removeItem('staffUsername')
-  localStorage.removeItem('mockStaffRole')
-  localStorage.removeItem('mockStaffEmail')
 }
 </script>
 
@@ -157,12 +126,7 @@ function signOut() {
     >
       <span></span><span></span><span></span>
     </button>
-    <nav
-      ref="navRef"
-      :class="{ 'mobile-open': menuOpen }"
-      aria-label="เมนูเจ้าหน้าที่คลินิก"
-      @mouseleave="() => resetHoverToActive()"
-    >
+    <nav ref="navRef" :class="{ 'mobile-open': menuOpen }" aria-label="เมนูเจ้าหน้าที่คลินิก">
       <div class="mobile-menu-head">
         <button type="button" aria-label="ปิดเมนู" @click="menuOpen = false">×</button>
         <img :src="drawerLogo" alt="SaByeGuyz" />
@@ -192,7 +156,7 @@ function signOut() {
       <div v-if="profileOpen" class="profile-menu">
         <div>
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
-          ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : 'สาขาราชพฤกษ์' }}</span>
+          ><span>{{ branchLabel }}</span>
         </div>
         <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>
