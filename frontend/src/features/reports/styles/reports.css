@@ -39,7 +39,9 @@
   padding: 24px 32px;
   border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
   margin-bottom: 24px;
   transition: all 0.2s ease;
 }
@@ -93,7 +95,9 @@
   padding: 28px 32px;
   border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
   margin-bottom: 24px;
 }
 
@@ -138,6 +142,10 @@
   gap: 16px;
 }
 
+.filter-grid-row1--revenue {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .filter-grid-row2 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -172,7 +180,9 @@
   font: inherit;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .field-group input[type='text']::placeholder {
@@ -200,7 +210,9 @@
   background: #ffffff;
   color: #1f2937;
   font-size: 14px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .field-group :deep(.date-trigger:focus) {
@@ -236,7 +248,9 @@
 .table-card {
   border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
   overflow: hidden;
 }
 
@@ -453,6 +467,10 @@
   .filter-grid-row2 {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .filter-grid-row1--revenue {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -490,7 +508,8 @@
   }
 
   .filter-grid-row1,
-  .filter-grid-row2 {
+  .filter-grid-row2,
+  .filter-grid-row1--revenue {
     grid-template-columns: 1fr;
   }
 
