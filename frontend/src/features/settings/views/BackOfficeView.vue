@@ -456,7 +456,7 @@ async function save() {
   if (section.value === 'services') {
     try {
       const existing = editingIndex.value >= 0 ? services[editingIndex.value] : undefined
-      const code = form.code || existing?.code || `SERVICE-${Date.now()}`
+      const code = form.code || existing?.code || `SV-${Date.now()}`
       const numbers = (form.detail.match(/\d+/g) ?? []).map(Number)
       if (form.type === 'Course') {
         const result = existing?.id
@@ -534,7 +534,8 @@ async function save() {
         formError.value = 'กรุณากรอก Username และรหัสพนักงาน'
         return
       }
-      const branchCode = branches.find((item) => item.name === form.branch)?.code
+      // v2 needs one home branch per user; "ทุกสาขา" (no branch picked) falls back to the first branch.
+      const branchCode = branches.find((item) => item.name === form.branch)?.code ?? branches[0]?.code
       const body = {
         username: form.username,
         email: form.email || undefined,
