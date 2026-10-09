@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -9,7 +9,6 @@ import { branchApi, masterDataApi, patientApi, type Patient } from '@/api/client
 import { type PatientRegistrationForm } from '../data/patientRegistration'
 
 const submitting = ref(false)
-const route = useRoute()
 const router = useRouter()
 const submitted = ref(false)
 const emailFocused = ref(false)
@@ -20,9 +19,9 @@ const duplicateOpen = ref(false)
 const duplicatePatient = ref<Patient | null>(null)
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
-const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
-const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
-const insuranceCompanies = ref(['AIA'])
+const customerGroups = ref<string[]>([])
+const referralChannels = ref<string[]>([])
+const insuranceCompanies = ref<string[]>([])
 const branches = ref<Array<{ code: string; name: string }>>([])
 const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
 const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
@@ -48,10 +47,10 @@ const insuranceCompanyOptions = computed(() =>
   insuranceCompanies.value.map((value) => ({ value, label: value })),
 )
 const form = reactive<PatientRegistrationForm>({
-  branchCode: 'RP',
+  branchCode: '',
   email: '',
   title: 'นาย',
-  customerType: customerGroups.value[0]!,
+  customerType: '',
   firstName: '',
   lastName: '',
   nickname: '',
@@ -64,7 +63,7 @@ const form = reactive<PatientRegistrationForm>({
   address: '',
   bloodGroup: 'ไม่ทราบ',
   nationality: 'ไทย',
-  customerSource: referralChannels.value[0]!,
+  customerSource: '',
   insuranceCompany: '',
   salesChannel: 'หน้าสาขา',
   paymentType: 'ชำระด้วยตนเอง',
@@ -152,27 +151,15 @@ onMounted(async () => {
     if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode))
       form.branchCode = branches.value[0]!.code
     const active = items.filter((item) => item.active)
-    const valuesFor = (category: string, fallback: string[]) => {
-      const values = active.filter((item) => item.category === category).map((item) => item.name)
-      return values.length ? values : fallback
-    }
-    customerGroups.value = valuesFor('Customer Group', customerGroups.value)
-    referralChannels.value = valuesFor('Referral Channel', referralChannels.value)
-    insuranceCompanies.value = valuesFor('Insurance Company', insuranceCompanies.value)
+    const valuesFor = (category: string) =>
+      active.filter((item) => item.category === category).map((item) => item.name)
+    customerGroups.value = valuesFor('Customer Group')
+    referralChannels.value = valuesFor('Referral Channel')
+    insuranceCompanies.value = valuesFor('Insurance Company')
     if (!form.customerType) form.customerType = customerGroups.value[0]!
     if (!form.customerSource) form.customerSource = referralChannels.value[0]!
   } catch {
     errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
-  }
-  if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
-    duplicatePatient.value = {
-      id: 10,
-      hn: '070700000010',
-      fullName: 'ผู้ป่วยสาธิต ชาย 10',
-      phone: '0890000010',
-      active: true,
-    }
-    duplicateOpen.value = true
   }
 })
 async function requestSubmit() {
