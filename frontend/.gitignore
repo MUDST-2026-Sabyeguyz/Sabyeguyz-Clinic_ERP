@@ -22,7 +22,7 @@ coverage/
 
 # Test output
 test-results/
-playwright-report/
 __screenshots__/
 /cypress/videos/
 /cypress/screenshots/
+/cypress/downloads/
