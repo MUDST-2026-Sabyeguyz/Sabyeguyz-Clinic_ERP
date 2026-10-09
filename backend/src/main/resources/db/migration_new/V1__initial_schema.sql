@@ -479,7 +479,7 @@ CREATE TABLE patient (
 
     -- YYBBMMNNNN
     CONSTRAINT chk_patient_hn
-        CHECK (hn ~ '^[0-9]{10}$'),
+        CHECK (patient_hn ~ '^[0-9]{10}$'),
 
     -- x-xxxx-xxxxx-xx-x
     CONSTRAINT chk_patient_national_id
