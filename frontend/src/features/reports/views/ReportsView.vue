@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   branchApi,
   commissionApi,
@@ -27,11 +28,7 @@ type CommissionReportRow = {
 }
 
 type ReportData =
-  | RevenueReport
-  | CourseBalanceReport
-  | CommissionReportRow[]
-  | TransferRecord[]
-  | null
+  RevenueReport | CourseBalanceReport | CommissionReportRow[] | TransferRecord[] | null
 
 const report = ref<ReportKey>('revenue')
 const filters = reactive({
@@ -63,6 +60,22 @@ const REPORTS: Array<[ReportKey, string]> = [
   ['transfer', 'ประวัติการโอนคอร์ส'],
   ['commission', 'ค่าคอมมิชชั่น'],
 ]
+const reportSelection = computed({
+  get: () => report.value,
+  set: (value: string) => {
+    report.value = value as ReportKey
+  },
+})
+const reportOptions = computed(() => REPORTS.map(([value, label]) => ({ value, label })))
+const branchFilterOptions = computed(() =>
+  branches.value.map((branch) => ({
+    value: branch.code,
+    label: `${branch.name} (${branch.code})`,
+  })),
+)
+const courseFilterOptions = computed(() =>
+  courseOptions.value.map((course) => ({ value: course.name, label: course.name })),
+)
 
 const TABLE_HEADERS: Record<ReportKey, string[]> = {
   revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่', 'รายได้รวม', 'สัดส่วน'],
@@ -132,7 +145,11 @@ const formatDate = (value: string) => {
   if (!value) return ''
   const d = new Date(value)
   if (isNaN(d.getTime())) return value
-  return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(d)
+  return new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(d)
 }
 
 const formatMoney = (val: number) => `฿${Number(val).toLocaleString()}`
@@ -142,8 +159,14 @@ const formatPeriod = (from: string, to: string) =>
 
 function updateTimestamp() {
   const now = new Date()
-  const dateStr = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(now)
-  const timeStr = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit' }).format(now)
+  const dateStr = new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(now)
+  const timeStr = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit' }).format(
+    now,
+  )
   lastUpdatedText.value = `${dateStr}, ${timeStr}`
 }
 
@@ -164,9 +187,12 @@ const filteredRevenueCategories = computed(() => {
   if (filters.treatment !== 'ทั้งหมด') {
     list = list.filter((cat) => {
       const typeName = CATEGORY_NAMES[cat.type] ?? cat.type
-      if (filters.treatment === 'Assessment') return cat.type === 'ASSESSMENT' || typeName === 'Assessment'
-      if (filters.treatment === 'Manual Therapy') return cat.type === 'COURSE' || cat.type === 'Course Sales'
-      if (filters.treatment === 'Exercise Therapy') return cat.type === 'SINGLE_VISIT' || cat.type === 'Single Visit'
+      if (filters.treatment === 'Assessment')
+        return cat.type === 'ASSESSMENT' || typeName === 'Assessment'
+      if (filters.treatment === 'Manual Therapy')
+        return cat.type === 'COURSE' || cat.type === 'Course Sales'
+      if (filters.treatment === 'Exercise Therapy')
+        return cat.type === 'SINGLE_VISIT' || cat.type === 'Single Visit'
       return true
     })
   }
@@ -192,10 +218,7 @@ const kpiItems = computed(() => {
       }
     })
 
-  return [
-    { label: 'รายได้รวม', amount: formatMoney(total), share: '100%' },
-    ...items,
-  ]
+  return [{ label: 'รายได้รวม', amount: formatMoney(total), share: '100%' }, ...items]
 })
 
 const activeKpis = computed(() => (report.value === 'revenue' ? kpiItems.value : []))
@@ -291,9 +314,7 @@ const tableRows = computed<string[][]>(() => {
           `${row.sourcePatientName} ${row.sourcePatientHn} ${row.destinationPatientName} ${row.destinationPatientHn}`
             .toLowerCase()
             .includes(q)
-        const matchBranch =
-          filters.branch === 'ทุกสาขา' ||
-          row.branchCode === filters.branch
+        const matchBranch = filters.branch === 'ทุกสาขา' || row.branchCode === filters.branch
         const matchCourse =
           filters.course === 'ทั้งหมด' ||
           getCourseName(row.courseId).toLowerCase().includes(filters.course.toLowerCase())
@@ -337,9 +358,13 @@ const paginatedRows = computed(() => {
 })
 
 // Reset page to 1 when filters or report change
-watch([report, filters], () => {
-  page.value = 1
-}, { deep: true })
+watch(
+  [report, filters],
+  () => {
+    page.value = 1
+  },
+  { deep: true },
+)
 
 // Dynamic Total Row
 const totalRow = computed<string[] | null>(() => {
@@ -389,8 +414,9 @@ async function fetchReport() {
         break
     }
     updateTimestamp()
-  } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'โหลดรายงานไม่สำเร็จ'
+  } catch (error) {
+    reportData.value = null
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดรายงานไม่สำเร็จ'
   } finally {
     loading.value = false
   }
@@ -406,7 +432,14 @@ onMounted(async () => {
     branches.value = branchList
     courseOptions.value = courseList.map((c) => ({ id: c.id, name: c.name }))
   } catch {
-    // Non-critical
+    branches.value = [
+      { code: 'BR', name: 'แบริ่ง' } as Branch,
+      { code: 'R9', name: 'พระราม 9' } as Branch,
+    ]
+    courseOptions.value = [
+      { id: 1, name: 'Manual Therapy' },
+      { id: 2, name: 'Exercise Therapy' },
+    ]
   }
   await fetchReport()
 })
@@ -443,21 +476,26 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
           <h2>{{ currentReportTitle }}</h2>
           <div class="report-select-group">
             <label for="report-select">เลือกรายงาน</label>
-            <div class="select-wrapper">
-              <select id="report-select" v-model="report">
-                <option v-for="[key, label] in REPORTS" :key="key" :value="key">{{ label }}</option>
-              </select>
-              <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
+            <FilterDropdown
+              id="report-select"
+              v-model="reportSelection"
+              :options="reportOptions"
+              default-value="revenue"
+              default-label="รายงานยอดขาย"
+              label="เลือกรายงาน"
+              hide-default-option
+              :clear-on-reselect="false"
+            />
           </div>
         </div>
 
         <!-- Filter Grid -->
         <div class="filter-card-body">
           <!-- ── Row 1 Filters ── -->
-          <div class="filter-grid-row1">
+          <div
+            class="filter-grid-row1"
+            :class="{ 'filter-grid-row1--revenue': report === 'revenue' }"
+          >
             <!-- Balance / Transfer Report Filters -->
             <template v-if="['balance', 'transfer'].includes(report)">
               <div class="field-group">
@@ -467,35 +505,24 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
 
               <div class="field-group">
                 <label>คอร์ส</label>
-                <div class="select-wrapper">
-                  <select v-model="filters.course">
-                    <option>ทั้งหมด</option>
-                    <option v-for="c in courseOptions" :key="c.id" :value="c.name">
-                      {{ c.name }}
-                    </option>
-                  </select>
-                  <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
+                <FilterDropdown
+                  v-model="filters.course"
+                  :options="courseFilterOptions"
+                  default-value="ทั้งหมด"
+                  default-label="ทั้งหมด"
+                  label="กรองตามคอร์ส"
+                  :clear-on-reselect="false"
+                />
               </div>
 
               <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
-                <ThaiDatePicker
-                  v-model="filters.from"
-                  numeric-month
-                  show-calendar-icon
-                />
+                <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
               </div>
 
               <div class="field-group">
                 <label>ถึงวันที่</label>
-                <ThaiDatePicker
-                  v-model="filters.to"
-                  numeric-month
-                  show-calendar-icon
-                />
+                <ThaiDatePicker v-model="filters.to" numeric-month show-calendar-icon />
               </div>
             </template>
 
@@ -503,46 +530,45 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
             <template v-else-if="report === 'revenue'">
               <div class="field-group">
                 <label>สาขา</label>
-                <div class="select-wrapper">
-                  <select v-model="filters.branch">
-                    <option>ทุกสาขา</option>
-                    <option v-for="b in branches" :key="b.code" :value="b.code">
-                      {{ b.name }} ({{ b.code }})
-                    </option>
-                  </select>
-                  <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
+                <FilterDropdown
+                  v-model="filters.branch"
+                  :options="branchFilterOptions"
+                  default-value="ทุกสาขา"
+                  default-label="ทุกสาขา"
+                  label="กรองตามสาขา"
+                  :clear-on-reselect="false"
+                />
               </div>
 
               <div class="field-group">
                 <label>การรักษา</label>
-                <div class="select-wrapper">
-                  <select v-model="filters.treatment">
-                    <option>ทั้งหมด</option>
-                    <option>Assessment</option>
-                    <option>Manual Therapy</option>
-                    <option>Exercise Therapy</option>
-                  </select>
-                  <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
+                <FilterDropdown
+                  v-model="filters.treatment"
+                  :options="[
+                    { value: 'Assessment', label: 'Assessment' },
+                    { value: 'Manual Therapy', label: 'Manual Therapy' },
+                    { value: 'Exercise Therapy', label: 'Exercise Therapy' },
+                  ]"
+                  default-value="ทั้งหมด"
+                  default-label="ทั้งหมด"
+                  label="กรองตามการรักษา"
+                  :clear-on-reselect="false"
+                />
               </div>
 
               <div class="field-group">
                 <label>ประเภทการขาย</label>
-                <div class="select-wrapper">
-                  <select v-model="filters.saleType">
-                    <option>ทั้งหมด</option>
-                    <option>Course Sales</option>
-                    <option>Single Visit Sales</option>
-                  </select>
-                  <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
+                <FilterDropdown
+                  v-model="filters.saleType"
+                  :options="[
+                    { value: 'Course Sales', label: 'Course Sales' },
+                    { value: 'Single Visit Sales', label: 'Single Visit Sales' },
+                  ]"
+                  default-value="ทั้งหมด"
+                  default-label="ทั้งหมด"
+                  label="กรองตามประเภทการขาย"
+                  :clear-on-reselect="false"
+                />
               </div>
             </template>
 
@@ -555,35 +581,24 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
 
               <div class="field-group">
                 <label>สาขา</label>
-                <div class="select-wrapper">
-                  <select v-model="filters.branch">
-                    <option>ทุกสาขา</option>
-                    <option v-for="b in branches" :key="b.code" :value="b.code">
-                      {{ b.name }} ({{ b.code }})
-                    </option>
-                  </select>
-                  <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
+                <FilterDropdown
+                  v-model="filters.branch"
+                  :options="branchFilterOptions"
+                  default-value="ทุกสาขา"
+                  default-label="ทุกสาขา"
+                  label="กรองตามสาขา"
+                  :clear-on-reselect="false"
+                />
               </div>
 
               <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
-                <ThaiDatePicker
-                  v-model="filters.from"
-                  numeric-month
-                  show-calendar-icon
-                />
+                <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
               </div>
 
               <div class="field-group">
                 <label>ถึงวันที่</label>
-                <ThaiDatePicker
-                  v-model="filters.to"
-                  numeric-month
-                  show-calendar-icon
-                />
+                <ThaiDatePicker v-model="filters.to" numeric-month show-calendar-icon />
               </div>
             </template>
           </div>
@@ -591,54 +606,47 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
           <!-- ── Row 2 Filters ── -->
           <div class="filter-grid-row2">
             <!-- Branch for Balance / Transfer -->
-            <div v-if="['balance', 'transfer'].includes(report)" class="field-group field-group--short">
+            <div
+              v-if="['balance', 'transfer'].includes(report)"
+              class="field-group field-group--short"
+            >
               <label>สาขา</label>
-              <div class="select-wrapper">
-                <select v-model="filters.branch">
-                  <option>ทุกสาขา</option>
-                  <option v-for="b in branches" :key="b.code" :value="b.code">
-                    {{ b.name }} ({{ b.code }})
-                  </option>
-                </select>
-                <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                  <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
+              <FilterDropdown
+                v-model="filters.branch"
+                :options="branchFilterOptions"
+                default-value="ทุกสาขา"
+                default-label="ทุกสาขา"
+                label="กรองตามสาขา"
+                :clear-on-reselect="false"
+              />
             </div>
 
             <!-- Commission Type Filter for Commission Report -->
             <div v-if="report === 'commission'" class="field-group field-group--short">
               <label>ประเภทค่าคอมมิชชั่น</label>
-              <div class="select-wrapper">
-                <select v-model="filters.commissionType">
-                  <option>ทั้งหมด</option>
-                  <option>ค่ามือรักษา</option>
-                  <option>ค่าคอมมิชชันการขาย</option>
-                </select>
-                <svg class="select-arrow" viewBox="0 0 20 20" fill="none">
-                  <path d="M5 7.5L10 12.5L15 7.5" stroke="#4B5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
+              <FilterDropdown
+                v-model="filters.commissionType"
+                :options="[
+                  { value: 'ค่ามือรักษา', label: 'ค่ามือรักษา' },
+                  { value: 'ค่าคอมมิชชันการขาย', label: 'ค่าคอมมิชชันการขาย' },
+                ]"
+                default-value="ทั้งหมด"
+                default-label="ทั้งหมด"
+                label="กรองตามประเภทค่าคอมมิชชัน"
+                :clear-on-reselect="false"
+              />
             </div>
 
             <!-- Date Pickers for Revenue Report -->
             <template v-if="report === 'revenue'">
               <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
-                <ThaiDatePicker
-                  v-model="filters.from"
-                  numeric-month
-                  show-calendar-icon
-                />
+                <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
               </div>
 
               <div class="field-group">
                 <label>ถึงวันที่</label>
-                <ThaiDatePicker
-                  v-model="filters.to"
-                  numeric-month
-                  show-calendar-icon
-                />
+                <ThaiDatePicker v-model="filters.to" numeric-month show-calendar-icon />
               </div>
             </template>
           </div>
@@ -695,17 +703,8 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
 
         <!-- ── Pagination Bar & Last Updated ─────────────────────────────── -->
         <div class="table-card-footer">
-          <nav
-            v-if="tableRows.length > 0"
-            class="report-pagination"
-            aria-label="เปลี่ยนหน้ารายการ"
-          >
-            <button
-              type="button"
-              class="btn-prev"
-              :disabled="page === 1"
-              @click="page -= 1"
-            >
+          <nav v-if="tableRows.length > 0" class="report-pagination" aria-label="เปลี่ยนหน้ารายการ">
+            <button type="button" class="btn-prev" :disabled="page === 1" @click="page -= 1">
               ← ก่อนหน้า
             </button>
             <span class="pagination-info">หน้า {{ page }} จาก {{ totalPages }}</span>
