@@ -34,7 +34,22 @@ nav {
   gap: 6px;
 }
 .nav-pill {
-  display: none;
+  position: absolute;
+  z-index: 0;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  border-radius: 10px;
+  background: #d8f296;
+  box-shadow: 0 5px 14px #143f3826;
+  pointer-events: none;
+  transition:
+    width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 150ms ease;
+}
+.nav-pill:not(.is-ready) {
+  transition: none;
 }
 .menu-toggle {
   display: none;
@@ -45,6 +60,7 @@ nav {
 }
 nav a {
   position: relative;
+  z-index: 1;
   padding: 12px 10px;
   border-radius: 10px;
   font-size: 17px;
@@ -68,17 +84,12 @@ nav a:after {
   transition: transform 0.22s ease;
 }
 nav a:hover {
-  background: #ffffff17;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 14px #124c4826;
-}
-nav a:hover:after {
-  transform: scaleX(1);
+  color: #d8f296;
 }
 nav a.router-link-active {
   color: #164f50;
-  background: #d8f296;
-  box-shadow: 0 5px 14px #143f3826;
+  background: transparent;
+  box-shadow: none;
 }
 nav a.router-link-active:after {
   background: #176d68;
@@ -184,6 +195,13 @@ nav a.router-link-active:after {
 .staff-header.manager-header nav a {
   padding-inline: 8px;
   font-size: 17px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-pill,
+  nav a,
+  nav a:after {
+    transition: none;
+  }
 }
 @media (min-width: 1280px) {
   .staff-header.manager-header nav {
