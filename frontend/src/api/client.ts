@@ -1,4 +1,3 @@
-// Vite forwards local /api requests to the backend, so the backend needs no browser CORS changes.
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export type ApiErrorBody = { message?: string; fields?: Record<string, string> }
@@ -28,8 +27,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const token = getToken()
-  // A stale token from another local backend must not be sent with a fresh
-  // login attempt: Spring Security can reject it before checking credentials.
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
@@ -200,7 +197,13 @@ export type SaleSummary = {
 }
 export type SaleReceipt = SaleSummary & { note?: string }
 export type SaleDetail = SaleReceipt & {
-  items: Array<{ id: number; type: string; description: string; quantity: number; lineTotal: number }>
+  items: Array<{
+    id: number
+    type: string
+    description: string
+    quantity: number
+    lineTotal: number
+  }>
   payments: Array<{ id: number; type: string; paymentMethodCode: string; amount: number }>
 }
 export type CourseUsageTransaction = {
@@ -216,6 +219,7 @@ export type CourseUsageTransaction = {
 }
 export type DashboardResponse = {
   uniquePatients: number
+  patientsByGender: Array<{ gender: string; patients: number }>
   visits: number
   totalRevenue: number
   courseRevenue: number
@@ -233,6 +237,11 @@ export type AppointmentReport = {
 export type RevenueReport = {
   totalRevenue: number
   byCategory: Array<{ type: string; amount: number; share: number }>
+  dailyByCategory: Array<{
+    date: string
+    type: 'COURSE' | 'SINGLE_VISIT' | 'ASSESSMENT'
+    amount: number
+  }>
 }
 export type CourseBalanceReport = {
   purchases: number
@@ -442,7 +451,8 @@ export const salesApi = {
   },
   get: (id: number) => api.get<SaleDetail>('/api/receipts/' + id),
   create: (body: unknown) => api.post<SaleReceipt>('/api/payments', body),
-  reverse: (id: number, reason: string) => api.post<SaleDetail>(`/api/payments/${id}/reverse`, { reason }),
+  reverse: (id: number, reason: string) =>
+    api.post<SaleDetail>(`/api/payments/${id}/reverse`, { reason }),
 }
 
 export const paymentMethodApi = {
