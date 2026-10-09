@@ -25,16 +25,6 @@ export interface PatientRegistrationForm {
   privacyConsent: boolean
 }
 
-const hnSequenceKey = 'mockPatientHnSequence'
-
-export function createMockHn() {
-  const nextSequence = Number(localStorage.getItem(hnSequenceKey) ?? '0') + 1
-  localStorage.setItem(hnSequenceKey, String(nextSequence))
-  const now = new Date()
-  const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-  return `HN${dateCode}${String(nextSequence).padStart(4, '0')}`
-}
-
 export function formatPhoneNumber(value: string) {
   const digits = value.replace(/\D/g, '')
   return digits.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
@@ -43,8 +33,18 @@ export function formatPhoneNumber(value: string) {
 export function formatThaiDate(value: string) {
   const date = new Date(`${value}T00:00:00`)
   const months = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+    'มกราคม',
+    'กุมภาพันธ์',
+    'มีนาคม',
+    'เมษายน',
+    'พฤษภาคม',
+    'มิถุนายน',
+    'กรกฎาคม',
+    'สิงหาคม',
+    'กันยายน',
+    'ตุลาคม',
+    'พฤศจิกายน',
+    'ธันวาคม',
   ]
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`
 }
