@@ -73,7 +73,7 @@ const router = createRouter({
     {
       path: '/staff/commission',
       name: 'staff-commission',
-      component: () => import('@/features/commission/views/CommissionView.vue'),
+      component: () => import('@/features/commission/views/CommissionOverviewView.vue'),
       meta: { permission: 'Commission' },
     },
     {
@@ -95,6 +95,18 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
+      path: '/staff/commission/staff/:staffId',
+      name: 'commission-person-detail',
+      component: () => import('@/features/commission/views/CommissionPersonDetailView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/compensation-settings',
+      name: 'commission-compensation-settings',
+      component: () => import('@/features/commission/views/CommissionCompensationSettingsView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/commission/courses/:courseId',
       name: 'commission-course-detail',
       component: () => import('@/features/commission/views/CourseCommissionDetailView.vue'),
@@ -113,6 +125,12 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
+      path: '/staff/personnel',
+      name: 'staff-personnel',
+      component: () => import('@/features/commission/views/PersonnelTransactionsView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/settings',
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
@@ -123,8 +141,11 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (!to.path.startsWith('/staff/')) return true
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
-  const role = authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
+  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+    role?: string
+  } | null
+  const role =
+    authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
   if (role !== 'manager' && role !== 'therapist') {
     localStorage.removeItem('authToken')
     localStorage.removeItem('authUser')
@@ -133,7 +154,10 @@ router.beforeEach((to) => {
   const allowedRoles = to.meta.roles as string[] | undefined
   if (allowedRoles && !allowedRoles.includes(role)) return { name: 'patient-search' }
   const requiredPermission = to.meta.permission as string | undefined
-  const permissions = role === 'manager' ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup' : 'Patient, Visit, Treatment, Course, Transaction'
+  const permissions =
+    role === 'manager'
+      ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup'
+      : 'Patient, Visit, Treatment, Course, Transaction'
   if (role !== 'manager' && requiredPermission && !permissions.includes(requiredPermission)) {
     const destinations: Array<[string, string]> = [
       ['Patient', '/staff/patients'],
@@ -150,12 +174,11 @@ router.beforeEach((to) => {
 })
 
 router.afterEach(() => {
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
+  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+    role?: string
+  } | null
   const usesSharedStaffUi = authUser?.role === 'THERAPIST' || authUser?.role === 'MANAGER'
-  document.body.classList.toggle(
-    'therapist-ui',
-    usesSharedStaffUi,
-  )
+  document.body.classList.toggle('therapist-ui', usesSharedStaffUi)
 })
 
 export default router
