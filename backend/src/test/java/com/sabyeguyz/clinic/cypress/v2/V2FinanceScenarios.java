@@ -101,7 +101,7 @@ public class V2FinanceScenarios {
         var service = new CommissionSchemeService(schemesStub.proxy(), tiersStub.proxy());
 
         List<CommissionSchemeService.TierInput> validTiers = List.of(
-                new CommissionSchemeService.TierInput(decimal("0"), decimal("59999"), decimal("0.05"), 1),
+                new CommissionSchemeService.TierInput(decimal("0"), decimal("59999.99"), decimal("0.05"), 1),
                 new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
 
         if (scenario.equals("schemecrud-create")) {
