@@ -264,7 +264,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Docker Compose
-        run: docker compose -f deploy/docker-compose.yml config --quiet
+        run: docker compose config --quiet
 
       - name: Check Kubernetes manifests
         run: |
