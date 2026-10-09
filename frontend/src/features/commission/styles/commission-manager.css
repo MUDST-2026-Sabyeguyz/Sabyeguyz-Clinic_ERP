@@ -1,0 +1,287 @@
+.commission-manager-page {
+  min-height: 100vh;
+  background: #f8f4ec;
+  color: #25372f;
+}
+.commission-manager-main {
+  width: min(1500px, calc(100% - 80px));
+  margin: auto;
+  padding: 54px 0 72px;
+}
+.commission-title h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  line-height: 1.25;
+}
+.commission-title p {
+  margin: 5px 0 0;
+  color: #667a72;
+}
+.commission-card {
+  border: 1px solid #d9e1dc;
+  border-radius: 12px;
+  background: #fff;
+}
+.commission-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.commission-metrics article {
+  min-height: 112px;
+  padding: 20px;
+  box-sizing: border-box;
+  border: 1px solid #d9e1dc;
+  border-radius: 10px;
+  background: #fff;
+}
+.commission-metrics article.highlight {
+  background: #e7f4ef;
+}
+.commission-metrics article.warning {
+  background: #fff8df;
+}
+.commission-metrics span,
+.commission-metrics small {
+  display: block;
+  color: #667a72;
+}
+.commission-metrics b {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: 1.55rem;
+}
+.commission-metrics .highlight b {
+  color: #16875b;
+}
+.commission-primary,
+.commission-secondary {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.commission-primary {
+  border: 1px solid #1e8b86;
+  background: #1e8b86;
+  color: #fff;
+}
+.commission-secondary {
+  border: 1px solid #d9e1dc;
+  background: #fff;
+  color: #25372f;
+}
+.commission-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #d9e1dc;
+  border-radius: 11px;
+  background: #fff;
+  scrollbar-width: thin;
+  scrollbar-color: #1e8b86 #e8f1ef;
+}
+.commission-table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+.commission-table-wrap::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e8f1ef;
+}
+.commission-table-wrap::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #1e8b86;
+}
+.commission-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #176f6b;
+}
+.commission-table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+.commission-table th {
+  padding: 16px 18px;
+  background: #16877f;
+  color: #fff;
+  text-align: left;
+  white-space: nowrap;
+}
+.commission-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid #e6ebe8;
+  white-space: nowrap;
+}
+.commission-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.commission-status {
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fef3c7;
+  font-size: 0.83rem;
+}
+.commission-status.ready {
+  background: #d9f3e5;
+  color: #286244;
+}
+@media (max-width: 900px) {
+  .commission-manager-main {
+    width: min(100% - 40px, 760px);
+    padding-top: 38px;
+  }
+  .commission-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .commission-manager-main {
+    width: calc(100% - 28px);
+  }
+  .commission-metrics {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .commission-title h1 {
+    font-size: 1.8rem;
+  }
+}
+.rule-drawer-backdrop {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  background: #26342d80;
+}
+
+.rule-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(520px, 100%);
+  height: 100dvh;
+  box-sizing: border-box;
+  padding: 30px;
+  background: #fff;
+  box-shadow: -16px 0 40px #0003;
+  overflow-y: auto;
+  animation: rule-slide-in 0.22s ease-out;
+}
+
+.rule-drawer > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 26px;
+}
+
+.rule-drawer h2 {
+  margin: 0;
+  color: #25372e;
+  font-size: 1.65rem;
+}
+.rule-drawer header p {
+  margin: 7px 0 0;
+  color: #667a72;
+}
+.rule-drawer .drawer-close {
+  border: 0;
+  background: none;
+  color: #667a72;
+  font-size: 2rem;
+  cursor: pointer;
+}
+.rule-drawer .rule-form {
+  display: grid;
+  gap: 16px;
+}
+.rule-drawer .rule-form label {
+  display: grid;
+  gap: 7px;
+  color: #52635b;
+}
+.rule-drawer .rule-form input,
+.rule-drawer .rule-form select {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 10px 13px;
+  border: 1px solid #b7cecc;
+  border-radius: 9px;
+  background: #f7faf9;
+  font: inherit;
+}
+.rule-drawer > footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 26px;
+}
+.rule-drawer > footer button {
+  justify-content: center;
+}
+.rule-drawer .drawer-error {
+  padding: 11px;
+  border-radius: 8px;
+  background: #fff1ef;
+  color: #b42318;
+}
+
+@keyframes rule-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 700px) {
+  .rule-drawer {
+    padding: 22px;
+  }
+  .rule-drawer > footer {
+    grid-template-columns: 1fr;
+  }
+}
+
+.commission-manager-main:has(> .rules-head) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 20px;
+}
+
+.commission-manager-main:has(> .rules-head) > .commission-title,
+.commission-manager-main:has(> .rules-head) > .commission-tabs,
+.commission-manager-main:has(> .rules-head) > .rules {
+  grid-column: 1 / -1;
+}
+
+.commission-manager-main:has(> .rules-head) > .rules-head {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.commission-manager-main:has(> .rules-head) > .add-rule {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: center;
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .commission-manager-main:has(> .rules-head) {
+    grid-template-columns: 1fr;
+  }
+  .commission-manager-main:has(> .rules-head) > .add-rule {
+    grid-column: 1;
+    grid-row: 4;
+    width: 100%;
+    margin: 4px 0 22px;
+  }
+  .commission-manager-main:has(> .rules-head) > .rules {
+    grid-row: 5;
+  }
+}
