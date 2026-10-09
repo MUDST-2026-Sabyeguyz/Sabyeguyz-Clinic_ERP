@@ -15,53 +15,16 @@ type CompensationRow = {
   status: Exclude<CompensationStatus, 'ทุกสถานะ'>
 }
 
-// Preview repository. Replace this array with the therapist compensation API response.
-const rows = ref<CompensationRow[]>([
-  {
-    id: 1,
-    date: '18 ก.ย. 2569',
-    service: 'Manual Therapy',
-    type: 'Commission',
-    base: 1500,
-    compensation: 225,
-    status: 'รอตรวจสอบ',
-  },
-  {
-    id: 2,
-    date: '12 ก.ย. 2569',
-    service: 'Exercise Therapy',
-    type: 'รักษาแทน',
-    base: null,
-    compensation: 600,
-    status: 'รอตรวจสอบ',
-  },
-  {
-    id: 3,
-    date: '8 ก.ย. 2569',
-    service: 'Physical Exam',
-    type: 'Commission',
-    base: 2000,
-    compensation: 300,
-    status: 'จ่ายแล้ว',
-  },
-])
+const rows = ref<CompensationRow[]>([])
 const activeTab = ref('ภาพรวม')
-const selectedPeriod = ref('2026-09')
-const selectedHistoryPeriod = ref('2026-Q3')
+const selectedPeriod = ref(new Date().toISOString().slice(0, 7))
+const selectedHistoryPeriod = ref('')
 const typeFilter = ref<CompensationType>('ทั้งหมด')
 const statusFilter = ref<CompensationStatus>('ทุกสถานะ')
 const latestPeriodStatus = ref<Exclude<CompensationStatus, 'ทุกสถานะ'>>('รอตรวจสอบ')
 const tabs = ['ภาพรวม', 'ค่าคอมมิชชัน', 'ค่ารักษาแทน', 'ประวัติการจ่าย']
-const periodOptions = [
-  { value: '2026-09', label: '1–30 กันยายน 2569' },
-  { value: '2026-08', label: '1–31 สิงหาคม 2569' },
-  { value: '2026-07', label: '1–31 กรกฎาคม 2569' },
-]
-const historyPeriodOptions = [
-  { value: '2026-Q3', label: 'กรกฎาคม–กันยายน 2569' },
-  { value: '2026-Q2', label: 'เมษายน–มิถุนายน 2569' },
-  { value: '2026-Q1', label: 'มกราคม–มีนาคม 2569' },
-]
+const periodOptions: Array<{ value: string; label: string }> = []
+const historyPeriodOptions: Array<{ value: string; label: string }> = []
 const pageHeading = computed(() => {
   if (activeTab.value === 'ค่าคอมมิชชัน')
     return ['รายละเอียดค่าคอมมิชชัน', 'ตรวจสอบที่มาของฐานคำนวณและอัตราที่ถูกล็อกในรอบเดือน']
@@ -71,27 +34,15 @@ const pageHeading = computed(() => {
     return ['ประวัติการจ่าย', 'ตรวจสอบยอดค่าคอมมิชชันและค่ารักษาแทนที่จ่ายในแต่ละรอบ']
   return ['ค่าตอบแทนของฉัน', 'ดูค่าคอมมิชชัน Tier และค่ารักษาแทนของคุณในแต่ละรอบ']
 })
-const commissionDetails = [
-  ['บริการ', 'Manual Therapy', '18 ก.ย. 2569'],
-  ['ยอดบริการก่อนส่วนลด', '฿2,000', 'รายการต้นทาง SAL-2569-0084'],
-  ['ส่วนลดรายรายการ', '−฿500', 'ลดฐานค่าคอมมิชชัน'],
-  ['ฐานค่าคอมมิชชัน', '฿1,500', 'ส่วนลดท้ายบิลไม่กระทบฐาน'],
-  ['Tier และอัตราที่ล็อก', 'Tier 3 · 15%', 'ล็อกตามรอบเดือน'],
-  ['ค่าคอมมิชชันสุทธิ', '฿225', 'สถานะ รอจ่าย'],
-]
-const treatmentDetails = [
-  ['บริการ', 'Exercise Therapy', '12 ก.ย. 2569'],
-  ['เจ้าของเคส', 'กภ. วริศรา', 'ผู้รับค่าคอมมิชชันหลัก'],
-  ['ผู้ให้บริการจริง', 'กภ. กัญญา', 'ผู้ได้รับค่ารักษาแทน'],
-  ['วิธีคำนวณ', 'จำนวนเงินคงที่', 'ตามกฎนักกายภาพทั่วไป'],
-  ['Gross Commission Allocation', '฿600', 'เพดานต่อครั้ง'],
-  ['ค่ารักษาแทนสุทธิ', '฿600', 'สถานะ รอจ่าย'],
-]
-const paymentHistory = [
-  { month: 'กันยายน 2569', commission: 15300, treatment: 2400, net: 17700, paidAt: '30 ก.ย. 2569' },
-  { month: 'สิงหาคม 2569', commission: 12800, treatment: 1800, net: 14600, paidAt: '31 ส.ค. 2569' },
-  { month: 'กรกฎาคม 2569', commission: 10200, treatment: 2100, net: 12300, paidAt: '31 ก.ค. 2569' },
-]
+const commissionDetails: string[][] = []
+const treatmentDetails: string[][] = []
+const paymentHistory: Array<{
+  month: string
+  commission: number
+  treatment: number
+  net: number
+  paidAt: string
+}> = []
 const visibleRows = computed(() =>
   rows.value.filter(
     (row) =>
@@ -101,6 +52,19 @@ const visibleRows = computed(() =>
 )
 const displayedTotal = computed(() =>
   visibleRows.value.reduce((sum, row) => sum + row.compensation, 0),
+)
+const commissionTotal = computed(() =>
+  rows.value
+    .filter((row) => row.type === 'Commission')
+    .reduce((sum, row) => sum + row.compensation, 0),
+)
+const treatmentTotal = computed(() =>
+  rows.value
+    .filter((row) => row.type === 'รักษาแทน')
+    .reduce((sum, row) => sum + row.compensation, 0),
+)
+const commissionBase = computed(() =>
+  rows.value.reduce((sum, row) => sum + Number(row.base || 0), 0),
 )
 const displayedStatus = computed(() =>
   statusFilter.value === 'ทุกสถานะ' ? latestPeriodStatus.value : statusFilter.value,
@@ -141,11 +105,15 @@ const money = (value: number) => `฿${value.toLocaleString('th-TH')}`
       <template v-if="activeTab === 'ภาพรวม'">
         <section class="compensation-summary" aria-label="สรุปค่าตอบแทน">
           <article class="commission-total">
-            <span>ค่าคอมมิชชันสะสม</span><b>฿15,300</b><small>Tier 3 · 15%</small>
+            <span>ค่าคอมมิชชันสะสม</span><b>{{ money(commissionTotal) }}</b>
           </article>
-          <article><span>ค่ารักษาแทน</span><b>฿2,400</b><small>4 รายการ</small></article>
+          <article>
+            <span>ค่ารักษาแทน</span><b>{{ money(treatmentTotal) }}</b
+            ><small>{{ rows.filter((row) => row.type === 'รักษาแทน').length }} รายการ</small>
+          </article>
           <article class="net-total">
-            <span>ยอดสุทธิรอบนี้</span><b>฿17,700</b><small>สถานะ{{ displayedStatus }}</small>
+            <span>ยอดสุทธิรอบนี้</span><b>{{ money(commissionTotal + treatmentTotal) }}</b
+            ><small>สถานะ{{ displayedStatus }}</small>
           </article>
         </section>
 
@@ -190,10 +158,10 @@ const money = (value: number) => `฿${value.toLocaleString('th-TH')}`
           <article class="tier-panel">
             <h2>Tier ของฉัน</h2>
             <div class="tier-card">
-              <header><b>Tier 3</b><strong>15%</strong></header>
-              <p>ยอดฐานเดือนนี้ ฿102,000</p>
+              <header><b>—</b><strong>—</strong></header>
+              <p>ยอดฐานเดือนนี้ {{ money(commissionBase) }}</p>
               <div class="tier-track"><span></span></div>
-              <small>เกินเกณฑ์ Tier 3 แล้ว 12,000 บาท</small>
+              <small>ข้อมูล Tier จะแสดงเมื่อระบบได้รับข้อมูลค่าตอบแทน</small>
             </div>
           </article>
 
