@@ -4,14 +4,6 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
-  previewAppointments,
-  previewBranches,
-  previewPatients,
-  previewRooms,
-  previewServices,
-  previewTherapists,
-} from '@/features/appointments/data/appointmentPreview'
-import {
   appointmentApi,
   branchApi,
   catalogApi,
@@ -55,7 +47,6 @@ const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
 const errorMessage = ref('')
 const appointmentSuccessMessage = ref('')
-const usingPreviewData = ref(false)
 const savingAppointment = ref(false)
 const pendingSaveConfirmation = ref(false)
 const pendingCancellation = ref<{ item: Appointment } | null>(null)
@@ -269,7 +260,6 @@ async function load() {
       resourceApi.list(),
     ])
     appointments.value = a.items
-    usingPreviewData.value = false
     totalPages.value = a.totalPages
     branches.value = b
     patients.value = p
@@ -277,17 +267,15 @@ async function load() {
     therapists.value = t
     rooms.value = r
     if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
-  } catch {
-    usingPreviewData.value = true
-    appointments.value = previewAppointments
-    totalPages.value = 1
-    branches.value = previewBranches
-    patients.value = previewPatients
-    services.value = previewServices
-    therapists.value = previewTherapists
-    rooms.value = previewRooms
-    selectedDate.value = previewAppointments[0]?.startAt.slice(0, 10) ?? ''
-    errorMessage.value = ''
+  } catch (error) {
+    appointments.value = []
+    totalPages.value = 0
+    branches.value = []
+    patients.value = []
+    services.value = []
+    therapists.value = []
+    rooms.value = []
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ'
   }
 }
 onMounted(() => {
@@ -407,29 +395,7 @@ async function save() {
 
     const wasEditing = editingId.value !== null
     let savedAppointment: Appointment
-    if (usingPreviewData.value) {
-      const current = editingAppointment.value
-      const selectedPatient = patients.value.find((item) => item.id === form.value.patientId)
-      const selectedTherapist = therapists.value.find((item) => item.id === form.value.therapistId)
-      const selectedService = services.value.find((item) => item.id === form.value.serviceId)
-      if (!selectedPatient || !selectedTherapist || !selectedService)
-        throw new Error('ข้อมูลนัดหมายไม่ครบถ้วน')
-      savedAppointment = {
-        id: current?.id ?? Math.max(0, ...appointments.value.map((item) => item.id)) + 1,
-        branchCode: form.value.branchCode,
-        patient: {
-          id: selectedPatient.id,
-          hn: selectedPatient.hn,
-          fullName: selectedPatient.fullName,
-        },
-        therapist: { id: selectedTherapist.id, fullName: selectedTherapist.fullName },
-        service: selectedService,
-        startAt: toStartAt(),
-        endAt: toStartAt(),
-        status: current ? 'RESCHEDULED' : 'CONFIRMED',
-        note: form.value.note,
-      }
-    } else if (editingId.value) {
+    if (editingId.value) {
       savedAppointment = await appointmentApi.reschedule(editingId.value, {
         startAt: toStartAt(),
         therapistId: form.value.therapistId,
@@ -452,7 +418,7 @@ async function save() {
     sortOrder.value = 'newest'
     page.value = 0
     viewMode.value = 'list'
-    if (!usingPreviewData.value) await load()
+    await load()
     appointments.value = [
       savedAppointment,
       ...appointments.value.filter((item) => item.id !== savedAppointment.id),
