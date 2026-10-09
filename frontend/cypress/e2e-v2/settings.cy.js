@@ -38,10 +38,10 @@ describe('settings', () => {
 
   it('renames a branch', () => {
     cy.visitAs('manager', '/staff/settings')
-    cy.contains('tbody tr', '02').contains('button', 'แก้ไข').click()
+    cy.contains('tbody tr td b', /^02$/).closest('tr').contains('button', 'แก้ไข').click()
     modal().contains('label', 'ชื่อสาขา').find('input').clear().type('สาขาเปลี่ยนชื่อ')
     save()
-    cy.contains('tbody tr', '02').should('contain.text', 'สาขาเปลี่ยนชื่อ')
+    cy.contains('tbody tr td b', /^02$/).closest('tr').should('contain.text', 'สาขาเปลี่ยนชื่อ')
     cy.api('GET', '/api/branches').its('body').should((branches) => {
       expect(branches.find((branch) => branch.branchCode === '02').name).to.equal('สาขาเปลี่ยนชื่อ')
     })
