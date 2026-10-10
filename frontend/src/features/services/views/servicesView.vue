@@ -4,13 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
-  previewPaymentMethods,
-  previewServiceCourses,
-  previewServiceOptions,
-  previewServicePatients,
-  previewServiceStaff,
-} from '@/features/services/data/servicePreview'
-import {
   branchApi,
   catalogApi,
   patientApi,
@@ -49,7 +42,6 @@ const paymentCode = ref(''),
   note = ref('')
 const searched = ref(false)
 const receiptNo = ref('')
-const usingPreviewData = ref(false)
 const paymentDialogOpen = ref(false)
 const receiptPrintModal = ref<'confirm' | 'success' | 'error' | null>(null)
 const screen = ref<'search' | 'menu' | 'sale' | 'receipt'>(
@@ -81,27 +73,13 @@ const receiptBranchLabel = computed(() => {
   return name ? (name.startsWith('สาขา') ? name : `สาขา ${name}`) : 'สาขา แบริ่ง'
 })
 async function loadMaster() {
-  let s: ServiceOption[]
-  let c: Course[]
-  let p: Patient[]
-  let methods: PaymentMethod[]
-  let staffList: Staff[]
-  try {
-    ;[s, c, p, methods, staffList] = await Promise.all([
-      catalogApi.services(),
-      catalogApi.courses(),
-      patientApi.searchAll(),
-      paymentMethodApi.list(),
-      staffApi.list(),
-    ])
-  } catch {
-    usingPreviewData.value = true
-    s = previewServiceOptions
-    c = previewServiceCourses
-    p = previewServicePatients
-    methods = previewPaymentMethods
-    staffList = previewServiceStaff
-  }
+  const [s, c, p, methods, staffList] = await Promise.all([
+    catalogApi.services(),
+    catalogApi.courses(),
+    patientApi.searchAll(),
+    paymentMethodApi.list(),
+    staffApi.list(),
+  ])
   services.value = s
   courses.value = c
   results.value = p
@@ -136,26 +114,12 @@ watch(query, () => {
     return
   }
   searchTimer = window.setTimeout(async () => {
-    const normalizedKeyword = keyword.toLocaleLowerCase('th')
-    if (usingPreviewData.value) {
-      results.value = previewServicePatients.filter((item) =>
-        `${item.fullName} ${item.hn} ${item.phone}`
-          .toLocaleLowerCase('th')
-          .includes(normalizedKeyword),
-      )
-      searched.value = true
-      return
-    }
     try {
       results.value = (await patientApi.search(keyword, 0, 20)).items
       searched.value = true
-    } catch {
-      usingPreviewData.value = true
-      results.value = previewServicePatients.filter((item) =>
-        `${item.fullName} ${item.hn} ${item.phone}`
-          .toLocaleLowerCase('th')
-          .includes(normalizedKeyword),
-      )
+    } catch (error) {
+      results.value = []
+      errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
       searched.value = true
     }
   }, 250)
@@ -241,12 +205,10 @@ async function choose(p: Patient) {
   patientProfile.value = null
   query.value = `${p.fullName} ${p.hn}`
   screen.value = 'menu'
-  if (!usingPreviewData.value) {
-    try {
-      patientProfile.value = await patientApi.get(p.id)
-    } catch {
-      patientProfile.value = null
-    }
+  try {
+    patientProfile.value = await patientApi.get(p.id)
+  } catch {
+    patientProfile.value = null
   }
 }
 function searchPatients() {
@@ -302,21 +264,17 @@ async function submit() {
       mode.value === 'course'
         ? (courses.value.find((c) => c.id === referenceId)?.price ?? 0)
         : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
-    if (usingPreviewData.value) {
-      receiptNo.value = `PREVIEW-${Date.now().toString().slice(-6)}`
-    } else {
-      const sale = await salesApi.create({
-        patientId: patient.value.id,
-        branchCode: 'RP',
-        salespersonStaffId: selectedStaffId.value,
-        note: note.value,
-        items: [{ type, referenceId, quantity: 1 }],
-        payments: [
-          { paymentMethodCode: paymentCode.value, amount: Math.min(price, netAmount.value) },
-        ],
-      })
-      receiptNo.value = sale.receiptNo
-    }
+    const sale = await salesApi.create({
+      patientId: patient.value.id,
+      branchCode: 'RP',
+      salespersonStaffId: selectedStaffId.value,
+      note: note.value,
+      items: [{ type, referenceId, quantity: 1 }],
+      payments: [
+        { paymentMethodCode: paymentCode.value, amount: Math.min(price, netAmount.value) },
+      ],
+    })
+    receiptNo.value = sale.receiptNo
     confirmed.value = true
     reviewing.value = false
     paymentDialogOpen.value = false
