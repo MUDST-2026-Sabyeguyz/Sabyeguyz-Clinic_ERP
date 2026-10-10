@@ -5,12 +5,6 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
 import {
-  previewCourseMovements,
-  previewCoursePatients,
-  previewCoursePurchases,
-  previewCourseStaff,
-} from '@/features/courses/data/coursePreview'
-import {
   branchApi,
   courseApi,
   patientApi,
@@ -55,7 +49,6 @@ const therapists = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
 const courseUsageHistory = ref<CourseMovement[]>([])
 const errorMessage = ref('')
-const usingPreviewData = ref(false)
 const selectedCourse = ref<UiCourse>({} as UiCourse)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
@@ -63,11 +56,7 @@ const usageDate = ref('2026-09-17')
 const usageReview = ref(false)
 const usageSuccess = ref(false)
 const usageConfirmDialog = ref(false)
-const usageSuccessBalance = computed(() =>
-  usageSuccess.value
-    ? selectedCourse.value.balance
-    : Math.max(0, selectedCourse.value.balance - (usingPreviewData.value ? 1 : 0)),
-)
+const usageSuccessBalance = computed(() => selectedCourse.value.balance)
 const printDialog = ref<'confirm' | 'success' | 'error' | null>(null)
 const coursePrintPreview = ref(false)
 const transferStep = ref<'form' | 'review' | 'success'>('form')
@@ -92,11 +81,7 @@ const transferredOut = computed(() =>
     .filter((movement) => movement.type === 'TRANSFER_OUT')
     .reduce((total, movement) => total + Math.abs(movement.quantity), 0),
 )
-const historyRemaining = computed(() =>
-  usingPreviewData.value
-    ? Math.max(0, selectedCourse.value.total - usedSessions.value - transferredOut.value)
-    : selectedCourse.value.balance,
-)
+const historyRemaining = computed(() => selectedCourse.value.balance)
 const documentBranch = computed(() => {
   const code = owner.value?.branchCode?.toLocaleLowerCase('th')
   const name = owner.value?.branchName?.replace(/^สาขา/, '').toLocaleLowerCase('th')
@@ -133,15 +118,7 @@ function courseUsagePercent(course: UiCourse) {
   )
 }
 async function loadOwner() {
-  let patientList: Patient[]
-  let staffList: Staff[]
-  try {
-    ;[patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
-  } catch {
-    usingPreviewData.value = true
-    patientList = previewCoursePatients
-    staffList = previewCourseStaff
-  }
+  const [patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
   owners.value = patientList
   therapists.value = staffList.filter((person) => person.role === 'THERAPIST' && person.active)
   try {
@@ -154,13 +131,7 @@ async function loadOwner() {
   if (owner.value) await loadCourses(owner.value.id)
 }
 async function loadCourses(patientId: number) {
-  let purchases: CoursePurchase[]
-  try {
-    purchases = await courseApi.patientCourses(patientId)
-  } catch {
-    usingPreviewData.value = true
-    purchases = previewCoursePurchases.filter((course) => course.patient.id === patientId)
-  }
+  const purchases: CoursePurchase[] = await courseApi.patientCourses(patientId)
   patientCourses.value = purchases.map((course) => ({
     ...course,
     name: course.course.name,
@@ -195,14 +166,11 @@ async function loadCourses(patientId: number) {
     if (route.query.action === 'inactive-history') {
       historyFromInactive.value = true
       action.value = 'history'
-      if (usingPreviewData.value) courseUsageHistory.value = previewCourseMovements
-      else {
-        try {
-          const ledger = await courseApi.ledger(selectedCourse.value.id)
-          courseUsageHistory.value = ledger.movements as CourseMovement[]
-        } catch {
-          courseUsageHistory.value = []
-        }
+      try {
+        const ledger = await courseApi.ledger(selectedCourse.value.id)
+        courseUsageHistory.value = ledger.movements as CourseMovement[]
+      } catch {
+        courseUsageHistory.value = []
       }
       return
     }
@@ -220,14 +188,11 @@ async function loadCourses(patientId: number) {
     }
     if (route.query.action === 'history') {
       action.value = 'history'
-      if (usingPreviewData.value) courseUsageHistory.value = previewCourseMovements
-      else {
-        try {
-          const ledger = await courseApi.ledger(selectedCourse.value.id)
-          courseUsageHistory.value = ledger.movements as CourseMovement[]
-        } catch {
-          courseUsageHistory.value = []
-        }
+      try {
+        const ledger = await courseApi.ledger(selectedCourse.value.id)
+        courseUsageHistory.value = ledger.movements as CourseMovement[]
+      } catch {
+        courseUsageHistory.value = []
       }
       return
     }
@@ -245,14 +210,11 @@ async function loadCourses(patientId: number) {
   if (route.query.action === 'history') {
     action.value = 'history'
     coursePrintPreview.value = route.query.print === '1'
-    if (usingPreviewData.value) courseUsageHistory.value = previewCourseMovements
-    else {
-      try {
-        const ledger = await courseApi.ledger(selectedCourse.value.id)
-        courseUsageHistory.value = ledger.movements as CourseMovement[]
-      } catch {
-        courseUsageHistory.value = []
-      }
+    try {
+      const ledger = await courseApi.ledger(selectedCourse.value.id)
+      courseUsageHistory.value = ledger.movements as CourseMovement[]
+    } catch {
+      courseUsageHistory.value = []
     }
   } else if (route.query.action === 'use') {
     action.value = 'use'
@@ -272,15 +234,6 @@ async function searchRecipients() {
   recipientResults.value = []
   recipientSearchOpen.value = true
   if (!keyword) return
-  if (usingPreviewData.value) {
-    const normalizedKeyword = keyword.toLocaleLowerCase('th')
-    recipientResults.value = previewCoursePatients.filter((patient) =>
-      `${patient.fullName} ${patient.hn} ${patient.phone}`
-        .toLocaleLowerCase('th')
-        .includes(normalizedKeyword),
-    )
-    return
-  }
   try {
     const results = await patientApi.search(keyword, 0, 20)
     recipientResults.value = results.items
@@ -324,10 +277,6 @@ async function start(nextAction: CourseAction, course: UiCourse) {
   transferStep.value = 'form'
   if (nextAction === 'use') usageReview.value = true
   if (nextAction === 'history') {
-    if (usingPreviewData.value) {
-      courseUsageHistory.value = previewCourseMovements
-      return
-    }
     try {
       const ledger = await courseApi.ledger(course.id)
       courseUsageHistory.value = ledger.movements as CourseMovement[]
@@ -433,24 +382,19 @@ async function confirm() {
     const balanceBeforeUse = selectedCourse.value.balance
     if (isCourseUsage) {
       usageConfirmDialog.value = false
-      if (!usingPreviewData.value) {
-        await courseApi.use({
-          coursePurchaseId: selectedCourse.value.id,
-          note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
-        })
-      }
+      await courseApi.use({
+        coursePurchaseId: selectedCourse.value.id,
+        note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
+      })
     } else {
       if (!selectedRecipient.value) return
-      if (usingPreviewData.value) transferReceiptId.value = Date.now()
-      else {
-        const transfer = await courseApi.transfer({
-          sourcePurchaseId: selectedCourse.value.id,
-          destinationPatientId: selectedRecipient.value.id,
-          quantity: transferAmount.value,
-          reason: transferReason.value || 'แชร์คอร์สตามคำขอผู้ป่วย',
-        })
-        transferReceiptId.value = transfer.id
-      }
+      const transfer = await courseApi.transfer({
+        sourcePurchaseId: selectedCourse.value.id,
+        destinationPatientId: selectedRecipient.value.id,
+        quantity: transferAmount.value,
+        reason: transferReason.value || 'แชร์คอร์สตามคำขอผู้ป่วย',
+      })
+      transferReceiptId.value = transfer.id
     }
     await loadCourses(owner.value.id)
     if (isCourseUsage) {
@@ -479,17 +423,6 @@ async function confirm() {
     } else {
       selectedCourse.value =
         patientCourses.value.find((course) => course.id === usedCourseId) ?? selectedCourse.value
-      if (usingPreviewData.value) {
-        const newBalance = Math.max(0, selectedCourse.value.balance - transferAmount.value)
-        selectedCourse.value = {
-          ...selectedCourse.value,
-          balance: newBalance,
-          remaining: newBalance,
-        }
-        patientCourses.value = patientCourses.value.map((course) =>
-          course.id === usedCourseId ? selectedCourse.value : course,
-        )
-      }
       action.value = 'transfer'
       transferStep.value = 'success'
     }
