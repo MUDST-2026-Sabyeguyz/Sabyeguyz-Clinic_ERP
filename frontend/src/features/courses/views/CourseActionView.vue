@@ -87,7 +87,7 @@ const documentBranch = computed(() => {
   const name = owner.value?.branchName?.replace(/^สาขา/, '').toLocaleLowerCase('th')
   return branches.value.find(
     (branch) =>
-      (code && branch.code.toLocaleLowerCase('th') === code) ||
+      (code && branch.branchCode.toLocaleLowerCase('th') === code) ||
       (name && branch.name.replace(/^สาขา/, '').toLocaleLowerCase('th') === name),
   )
 })
