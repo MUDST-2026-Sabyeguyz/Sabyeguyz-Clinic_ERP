@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import {
+  branchApi,
+  commissionApi,
+  courseApi,
+  paymentMethodApi,
+  resourceApi,
+  masterDataApi,
+  serviceManagementApi,
+  userManagementApi,
+} from '@/api/client'
 
 type SectionKey = 'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'master'
 type Row = Record<string, any>
@@ -20,12 +30,12 @@ const section = ref<SectionKey>('branches'),
   savedMessage = ref(''),
   saveModalOpen = ref(false)
 const permissions = ['Patient', 'Visit', 'Treatment', 'Course', 'Transaction', 'Commission']
-const selectedPermissions = ref<string[]>(['Treatment'])
 const fieldErrors = reactive<Record<string, boolean>>({})
 const validationMessage = ref('')
+const loadError = ref('')
 const option = (value: string) => ({ value, label: value })
 const statusOptions = computed(() => {
-  if (section.value === 'rooms') return [option('พร้อมใช้งาน'), option('ไม่พร้อมใช้งาน')]
+  if (section.value === 'rooms') return [option('พร้อมใช้งาน'), option('ไม่ว่าง'), option('ซ่อม')]
   if (section.value === 'commission') return [option('เปิดใช้งาน'), option('ปิดใช้งาน')]
   return [option('ใช้งาน'), option('ปิดใช้งาน')]
 })
@@ -37,7 +47,128 @@ const data = reactive<Record<Exclude<SectionKey, 'payments'>, Row[]>>({
   commission: [],
   master: [],
 })
-const paymentMethods = reactive<Array<{ name: string; note: string; active: boolean }>>([])
+const paymentMethods = reactive<Array<{ id: number; name: string; note: string; active: boolean }>>(
+  [],
+)
+const branchOptions = computed(() => data.branches.map((branch) => option(branch.name)))
+const resourceStatuses: Record<string, string> = {
+  AVAILABLE: 'พร้อมใช้งาน',
+  IN_USE: 'ไม่ว่าง',
+  MAINTENANCE: 'ซ่อม',
+}
+const status = (active: boolean) => (active ? 'ใช้งาน' : 'ปิดใช้งาน')
+const branchRow = (item: Awaited<ReturnType<typeof branchApi.create>>) => ({
+  id: item.id,
+  code: item.branchCode,
+  name: item.name,
+  address: item.address,
+  contact: item.phone,
+  status: status(item.active),
+})
+const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => ({
+  ...item,
+  code: item.employeeCode,
+  name: item.fullName,
+  role: item.role === 'MANAGER' ? 'Manager' : 'Therapist',
+  branch: item.branchName ?? 'ทุกสาขา',
+  permission: item.role === 'MANAGER' ? permissions.join(' ') : 'Patient Visit Treatment',
+  status: status(item.active),
+})
+const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>>) => ({
+  ...item,
+  type: 'Single Visit',
+  sessions: String(item.defaultDurationMinutes),
+  status: status(item.active),
+})
+const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
+  ...item,
+  type: 'Course',
+  sessions: String(item.sessions),
+  status: status(Boolean(item.active)),
+})
+const resourceRow = (item: Awaited<ReturnType<typeof resourceApi.create>>) => ({
+  ...item,
+  branch: item.branchName,
+  type: item.type === 'ROOM' ? 'Treatment Room' : 'Resource',
+  status: resourceStatuses[item.status] ?? item.status,
+})
+const masterRow = (item: Awaited<ReturnType<typeof masterDataApi.create>>) => ({
+  ...item,
+  count: 1,
+  examples: item.name,
+  status: status(item.active),
+})
+async function loadBackendSettings() {
+  const [branches, users, services, courses, payments, resources, master] =
+    await Promise.allSettled([
+      branchApi.list(),
+      userManagementApi.list(),
+      serviceManagementApi.list(),
+      courseApi.list(),
+      paymentMethodApi.list(),
+      resourceApi.list(),
+      masterDataApi.list(),
+    ])
+  const failures: string[] = []
+  const results = [branches, users, services, courses, payments, resources, master]
+  const names = [
+    'สาขา',
+    'ผู้ใช้งาน',
+    'บริการ',
+    'คอร์ส',
+    'การชำระเงิน',
+    'Room / Resource',
+    'Master Data',
+  ]
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') failures.push(names[index]!)
+  })
+  if (branches.status === 'fulfilled')
+    data.branches.splice(0, data.branches.length, ...branches.value.map(branchRow))
+  if (users.status === 'fulfilled')
+    data.users.splice(0, data.users.length, ...users.value.map(userRow))
+  data.services.splice(
+    0,
+    data.services.length,
+    ...(services.status === 'fulfilled' ? services.value.map(serviceRow) : []),
+    ...(courses.status === 'fulfilled' ? courses.value.map(courseRow) : []),
+  )
+  if (payments.status === 'fulfilled')
+    paymentMethods.splice(
+      0,
+      paymentMethods.length,
+      ...payments.value.map((item) => ({ ...item, note: 'ช่องทางรับชำระเงิน' })),
+    )
+  if (resources.status === 'fulfilled')
+    data.rooms.splice(0, data.rooms.length, ...resources.value.map(resourceRow))
+  if (master.status === 'fulfilled')
+    data.master.splice(0, data.master.length, ...master.value.map(masterRow))
+  try {
+    const schemes = (await commissionApi.schemes()) as Array<{
+      id: number
+      name: string
+      active: boolean
+    }>
+    if (schemes[0]) {
+      const scheme = schemes[0]
+      const tiers = (await commissionApi.tiers(scheme.id)) as Array<{ order: number; rate: number }>
+      data.commission.splice(
+        0,
+        data.commission.length,
+        ...tiers.map((tier) => ({
+          name: `${scheme.name} Tier ${tier.order}`,
+          recipient: 'ผู้ขาย',
+          calculation: `${tier.rate * 100}% ของยอดขาย`,
+          status: scheme.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน',
+        })),
+      )
+    }
+  } catch {
+    failures.push('Commission Rule')
+  }
+  loadError.value = failures.length ? `ยังโหลดข้อมูลไม่ได้: ${failures.join(', ')}` : ''
+}
+onMounted(loadBackendSettings)
 const copy = computed(
   () =>
     ({
@@ -87,14 +218,22 @@ const keys = computed(() => {
   return values[section.value]
 })
 const form = reactive<Row>({})
+const rolePermissions = computed(() =>
+  form.role === 'Manager' ? permissions : ['Patient', 'Visit', 'Treatment'],
+)
 function defaults() {
   if (section.value === 'branches')
-    Object.assign(form, { code: '', name: '', contact: '', status: 'ใช้งาน' })
+    Object.assign(form, { code: '', name: '', address: '', contact: '', status: 'ใช้งาน' })
   if (section.value === 'users')
     Object.assign(form, {
       name: '',
       role: 'Therapist',
-      branch: 'แบริ่ง',
+      username: '',
+      email: '',
+      password: '',
+      code: '',
+      phone: '',
+      branch: data.branches[0]?.name ?? '',
       permission: '',
       status: 'ใช้งาน',
     })
@@ -103,13 +242,15 @@ function defaults() {
       name: '',
       type: 'Single Visit',
       price: '',
-      sessions: '1 ครั้ง',
+      sessions: '30',
+      bonusSessions: 0,
+      validityDays: 365,
       status: 'ใช้งาน',
     })
   if (section.value === 'rooms')
     Object.assign(form, {
       name: '',
-      branch: 'แบริ่ง',
+      branch: data.branches[0]?.name ?? '',
       type: 'Treatment Room',
       capacity: 1,
       status: 'พร้อมใช้งาน',
@@ -133,19 +274,16 @@ function openDrawer(index: number | null) {
     index === null ? undefined : data[section.value as Exclude<SectionKey, 'payments'>]?.[index]
   if (row) Object.assign(form, row)
   else defaults()
-  selectedPermissions.value = String(form.permission ?? '')
-    .split(' ')
-    .filter(Boolean)
   drawerOpen.value = true
 }
-function save() {
+async function save() {
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
   validationMessage.value = ''
   const required: Record<Exclude<SectionKey, 'payments'>, string[]> = {
-    branches: ['code', 'name', 'contact'],
-    users: ['name', 'role', 'branch'],
+    branches: ['code', 'name', 'address', 'contact'],
+    users: ['name', 'role', 'branch', 'username', 'code'],
     services: ['name', 'type', 'price', 'sessions'],
-    rooms: ['name', 'branch', 'type', 'capacity'],
+    rooms: ['name', 'branch', 'type'],
     commission: ['name', 'recipient', 'calculation'],
     master: ['category', 'examples'],
   }
@@ -158,28 +296,120 @@ function save() {
     fieldErrors.contact =
       !/^[0-9 -]+$/.test(phone) || (phoneDigits.length !== 9 && phoneDigits.length !== 10)
   }
-  if (section.value === 'users' && !selectedPermissions.value.length) fieldErrors.permission = true
+  if (section.value === 'branches') fieldErrors.code = !/^\d{2}$/.test(String(form.code))
+  if (section.value === 'services') {
+    fieldErrors.price = !Number.isFinite(Number(form.price)) || Number(form.price) < 0
+    fieldErrors.sessions = !Number.isFinite(Number(form.sessions)) || Number(form.sessions) <= 0
+  }
   if (Object.values(fieldErrors).some(Boolean)) {
     validationMessage.value = fieldErrors.contact
       ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
       : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }
-  if (section.value === 'master') {
-    form.count = String(form.examples)
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean).length
+  if (
+    section.value === 'users' &&
+    editingIndex.value === null &&
+    String(form.password ?? '').length < 8
+  ) {
+    validationMessage.value = 'ผู้ใช้ใหม่ต้องมีรหัสผ่านอย่างน้อย 8 ตัวอักษร'
+    return
   }
-  if (section.value === 'users') form.permission = selectedPermissions.value.join(' ')
   const rows = data[section.value as Exclude<SectionKey, 'payments'>]
-  if (editingIndex.value === null) rows.push({ ...form })
-  else rows[editingIndex.value] = { ...form }
-  drawerOpen.value = false
-  saveModalOpen.value = true
-  window.setTimeout(() => {
-    saveModalOpen.value = false
-  }, 1800)
+  const existing = editingIndex.value === null ? undefined : rows[editingIndex.value]
+  try {
+    let record: Row
+    if (section.value === 'branches') {
+      const body = {
+        branchCode: existing?.code ?? form.code,
+        name: form.name,
+        address: form.address,
+        phone: form.contact,
+      }
+      record = branchRow(
+        existing?.id ? await branchApi.update(existing.id, body) : await branchApi.create(body),
+      )
+    } else if (section.value === 'users') {
+      const body = {
+        username: form.username,
+        email: form.email || undefined,
+        ...(form.password ? { password: form.password } : {}),
+        role: form.role === 'Manager' ? ('MANAGER' as const) : ('THERAPIST' as const),
+        employeeCode: form.code,
+        fullName: form.name,
+        phone: form.phone || undefined,
+        branchCode: data.branches.find((branch) => branch.name === form.branch)?.code,
+      }
+      record = userRow(
+        existing?.id
+          ? await userManagementApi.update(existing.id, body)
+          : await userManagementApi.create({ ...body, password: form.password }),
+      )
+    } else if (section.value === 'services') {
+      const code = existing?.code || form.code || `SERVICE-${Date.now()}`
+      if (form.type === 'Course') {
+        const body = {
+          code,
+          name: form.name,
+          price: Number(form.price),
+          sessions: Number(form.sessions),
+          bonusSessions: Number(form.bonusSessions ?? 0),
+          validityDays: Number(form.validityDays ?? 365),
+        }
+        record = courseRow(
+          existing?.id ? await courseApi.update(existing.id, body) : await courseApi.create(body),
+        )
+      } else {
+        const body = {
+          code,
+          name: form.name,
+          price: Number(form.price),
+          defaultDurationMinutes: Number(form.sessions),
+        }
+        record = serviceRow(
+          existing?.id
+            ? await serviceManagementApi.update(existing.id, body)
+            : await serviceManagementApi.create(body),
+        )
+      }
+    } else if (section.value === 'rooms') {
+      const body = {
+        branchCode: data.branches.find((branch) => branch.name === form.branch)?.code,
+        code: existing?.code || form.code || `RES-${Date.now()}`,
+        name: form.name,
+        type: form.type === 'Treatment Room' ? 'ROOM' : 'EQUIPMENT',
+        status:
+          Object.keys(resourceStatuses).find((key) => resourceStatuses[key] === form.status) ??
+          'AVAILABLE',
+      }
+      record = resourceRow(
+        existing?.id ? await resourceApi.update(existing.id, body) : await resourceApi.create(body),
+      )
+    } else if (section.value === 'master') {
+      const body = {
+        category: form.category,
+        code: existing?.code || form.code || `ITEM-${Date.now()}`,
+        name: String(form.examples).trim(),
+      }
+      record = masterRow(
+        existing?.id
+          ? await masterDataApi.update(existing.id, body)
+          : await masterDataApi.create(body),
+      )
+    } else {
+      validationMessage.value = 'ยังไม่มี API สำหรับบันทึกเกณฑ์คอมมิชชัน'
+      return
+    }
+    if (editingIndex.value === null) rows.push(record)
+    else rows[editingIndex.value] = record
+    drawerOpen.value = false
+    saveModalOpen.value = true
+    window.setTimeout(() => {
+      saveModalOpen.value = false
+    }, 1800)
+  } catch (error) {
+    validationMessage.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ'
+  }
 }
 function notify(message: string) {
   savedMessage.value = message
@@ -187,11 +417,30 @@ function notify(message: string) {
     savedMessage.value = ''
   }, 2200)
 }
-function togglePayment(index: number) {
+async function togglePayment(index: number) {
   const method = paymentMethods[index]
-  if (!method) return
-  method.active = !method.active
-  notify(`บันทึก ${method.name} อัตโนมัติแล้ว`)
+  if (!method || (method.active && !window.confirm(`ยืนยันการปิดใช้งาน ${method.name} หรือไม่?`)))
+    return
+  try {
+    if (method.active) await paymentMethodApi.deactivate(method.id)
+    else await paymentMethodApi.activate(method.id)
+    method.active = !method.active
+    notify(`บันทึก ${method.name} อัตโนมัติแล้ว`)
+  } catch (error) {
+    notify(error instanceof Error ? error.message : 'เปลี่ยนสถานะไม่สำเร็จ')
+  }
+}
+async function toggleUser(user: Row) {
+  const active = user.status === 'ใช้งาน'
+  if (active && !window.confirm(`ยืนยันการปิดใช้งาน ${user.username} หรือไม่?`)) return
+  try {
+    if (active) await userManagementApi.deactivate(user.id)
+    else await userManagementApi.activate(user.id)
+    user.status = active ? 'ปิดใช้งาน' : 'ใช้งาน'
+    notify('บันทึกสถานะผู้ใช้แล้ว')
+  } catch (error) {
+    notify(error instanceof Error ? error.message : 'เปลี่ยนสถานะไม่สำเร็จ')
+  }
 }
 const drawerTitle = computed(() => {
   const labels: Record<SectionKey, string> = {
@@ -240,6 +489,7 @@ const drawerTitle = computed(() => {
               {{ savedMessage || 'การเปลี่ยนแปลงจะบันทึกอัตโนมัติ' }}
             </p>
           </header>
+          <p v-if="loadError" class="validation-message" role="alert">{{ loadError }}</p>
           <div v-if="section === 'payments'" class="payment-list">
             <button
               v-for="(method, index) in paymentMethods"
@@ -280,7 +530,17 @@ const drawerTitle = computed(() => {
                       >{{ row[key] }}</span
                     ><template v-else>{{ row[key] }}</template>
                   </td>
-                  <td><button class="edit" @click="openDrawer(index)">แก้ไข</button></td>
+                  <td>
+                    <button v-if="section !== 'commission'" class="edit" @click="openDrawer(index)">
+                      แก้ไข</button
+                    ><button
+                      v-if="section === 'users'"
+                      class="edit user-toggle"
+                      @click="toggleUser(row)"
+                    >
+                      {{ row.status === 'ใช้งาน' ? 'ปิดใช้งาน' : 'เปิดใช้งาน' }}
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -305,12 +565,19 @@ const drawerTitle = computed(() => {
             >รหัสสาขา<input
               v-model="form.code"
               :class="{ invalid: fieldErrors.code }"
-              placeholder="เช่น BR03" /></label
+              :disabled="editingIndex !== null"
+              maxlength="2"
+              placeholder="เช่น 01" /></label
           ><label
             >ชื่อสาขา<input
               v-model="form.name"
               :class="{ invalid: fieldErrors.name }"
               placeholder="ระบุชื่อสาขา" /></label
+          ><label
+            >ที่อยู่<input
+              v-model="form.address"
+              :class="{ invalid: fieldErrors.address }"
+              placeholder="ที่อยู่สาขา" /></label
           ><label
             >ข้อมูลติดต่อ<input
               v-model="form.contact"
@@ -326,6 +593,20 @@ const drawerTitle = computed(() => {
               v-model="form.name"
               :class="{ invalid: fieldErrors.name }"
               placeholder="ระบุชื่อผู้ใช้งาน" /></label
+          ><label
+            >Username<input
+              v-model="form.username"
+              :class="{ invalid: fieldErrors.username }" /></label
+          ><label>อีเมล<input v-model="form.email" type="email" /></label
+          ><label
+            >รหัสผ่าน<input
+              v-model="form.password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="เว้นว่างได้เมื่อแก้ไข" /></label
+          ><label
+            >รหัสพนักงาน<input v-model="form.code" :class="{ invalid: fieldErrors.code }" /></label
+          ><label>โทรศัพท์<input v-model="form.phone" type="tel" /></label
           ><label :class="{ 'invalid-field': fieldErrors.role }"
             >Role<FilterDropdown
               v-model="form.role"
@@ -338,19 +619,21 @@ const drawerTitle = computed(() => {
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
             >สาขาที่เข้า<FilterDropdown
               v-model="form.branch"
-              :options="[option('แบริ่ง'), option('พระราม 9')]"
-              default-value="แบริ่ง"
-              default-label="แบริ่ง"
+              :options="[option('ทุกสาขา'), ...branchOptions]"
+              :default-value="data.branches[0]?.name ?? ''"
+              :default-label="data.branches[0]?.name ?? 'เลือกสาขา'"
               label="สาขาที่เข้า"
               hide-default-option
               :clear-on-reselect="false"
           /></label>
-          <fieldset :class="{ 'invalid-fieldset': fieldErrors.permission }">
-            <legend>สิทธิ์การเข้าถึง</legend>
+          <fieldset disabled>
+            <legend>สิทธิ์ตามบทบาท</legend>
             <label v-for="permission in permissions" :key="permission" class="check"
-              ><input v-model="selectedPermissions" type="checkbox" :value="permission" />{{
-                permission
-              }}</label
+              ><input
+                :checked="rolePermissions.includes(permission)"
+                type="checkbox"
+                :value="permission"
+              />{{ permission }}</label
             >
           </fieldset></template
         >
@@ -363,7 +646,11 @@ const drawerTitle = computed(() => {
           ><label :class="{ 'invalid-field': fieldErrors.type }"
             >ประเภท<FilterDropdown
               v-model="form.type"
-              :options="[option('Single Visit'), option('Course')]"
+              :options="
+                editingIndex === null
+                  ? [option('Single Visit'), option('Course')]
+                  : [option(form.type)]
+              "
               default-value="Single Visit"
               default-label="Single Visit"
               label="ประเภท"
@@ -375,10 +662,18 @@ const drawerTitle = computed(() => {
               :class="{ invalid: fieldErrors.price }"
               placeholder="ระบุราคา" /></label
           ><label
-            >จำนวนครั้ง<input
+            >{{ form.type === 'Course' ? 'จำนวนครั้ง' : 'ระยะเวลา (นาที)'
+            }}<input
               v-model="form.sessions"
               :class="{ invalid: fieldErrors.sessions }"
               placeholder="ระบุจำนวนครั้ง" /></label
+          ><template v-if="form.type === 'Course'"
+            ><label>Bonus<input v-model="form.bonusSessions" type="number" min="0" /></label
+            ><label
+              >อายุคอร์ส (วัน)<input
+                v-model="form.validityDays"
+                type="number"
+                min="1" /></label></template
         ></template>
         <template v-else-if="section === 'rooms'"
           ><label
@@ -389,9 +684,9 @@ const drawerTitle = computed(() => {
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
             >สาขา<FilterDropdown
               v-model="form.branch"
-              :options="[option('แบริ่ง'), option('พระราม 9')]"
-              default-value="แบริ่ง"
-              default-label="แบริ่ง"
+              :options="branchOptions"
+              :default-value="data.branches[0]?.name ?? ''"
+              :default-label="data.branches[0]?.name ?? 'เลือกสาขา'"
               label="สาขา"
               hide-default-option
               :clear-on-reselect="false" /></label
@@ -404,12 +699,6 @@ const drawerTitle = computed(() => {
               label="ประเภท"
               hide-default-option
               :clear-on-reselect="false" /></label
-          ><label
-            >ความจุ (คน)<input
-              v-model="form.capacity"
-              :class="{ invalid: fieldErrors.capacity }"
-              type="number"
-              min="1" /></label
         ></template>
         <template v-else-if="section === 'commission'"
           ><label
@@ -448,9 +737,9 @@ const drawerTitle = computed(() => {
             >ตัวอย่างรายการ<input
               v-model="form.examples"
               :class="{ invalid: fieldErrors.examples }"
-              placeholder="ระบุรายการตัวอย่าง คั่นด้วยจุลภาค" /></label
+              placeholder="ระบุชื่อรายการ" /></label
         ></template>
-        <label
+        <label v-if="section === 'rooms'"
           >สถานะ<FilterDropdown
             v-model="form.status"
             :options="statusOptions"
