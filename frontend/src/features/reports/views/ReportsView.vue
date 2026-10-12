@@ -69,8 +69,8 @@ const reportSelection = computed({
 const reportOptions = computed(() => REPORTS.map(([value, label]) => ({ value, label })))
 const branchFilterOptions = computed(() =>
   branches.value.map((branch) => ({
-    value: branch.code,
-    label: `${branch.name} (${branch.code})`,
+    value: branch.branchCode,
+    label: `${branch.name} (${branch.branchCode})`,
   })),
 )
 const courseFilterOptions = computed(() =>
@@ -121,12 +121,12 @@ function getTreatmentName(type: string): string {
 
 function getBranchName(branchCode?: string): string {
   if (branchCode) {
-    const found = branches.value.find((b) => b.code === branchCode || b.name === branchCode)
+    const found = branches.value.find((b) => b.branchCode === branchCode || b.name === branchCode)
     if (found) return found.name
     return branchCode
   }
   if (filters.branch !== 'ทุกสาขา') {
-    const found = branches.value.find((b) => b.code === filters.branch)
+    const found = branches.value.find((b) => b.branchCode === filters.branch)
     return found ? found.name : filters.branch
   }
   return 'ทุกสาขา'
@@ -431,15 +431,11 @@ onMounted(async () => {
     const [branchList, courseList] = await Promise.all([branchApi.list(), courseApi.list()])
     branches.value = branchList
     courseOptions.value = courseList.map((c) => ({ id: c.id, name: c.name }))
-  } catch {
-    branches.value = [
-      { code: 'BR', name: 'แบริ่ง' } as Branch,
-      { code: 'R9', name: 'พระราม 9' } as Branch,
-    ]
-    courseOptions.value = [
-      { id: 1, name: 'Manual Therapy' },
-      { id: 2, name: 'Exercise Therapy' },
-    ]
+  } catch (error) {
+    branches.value = []
+    courseOptions.value = []
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดตัวกรองรายงานไม่สำเร็จ'
+    return
   }
   await fetchReport()
 })
