@@ -11,5 +11,5 @@ import org.springframework.web.bind.annotation.*;
  public record TherapistResponse(Long id,String code,String fullName,String branchCode){}
  @GetMapping("/courses") List<Course> courses(){return courses.findByActiveTrueOrderByName();}
  @GetMapping("/services") List<ServiceResponse> services(){return services.findByActiveTrueOrderByName().stream().map(s->new ServiceResponse(s.getId(),s.getCode(),s.getName(),s.getDefaultDurationMinutes(),s.getPrice())).toList();}
- @GetMapping("/therapists") List<TherapistResponse> therapists(){return therapists.findByActiveTrueOrderByFullName().stream().map(t->new TherapistResponse(t.getId(),t.getCode(),t.getFullName(),t.getBranch().getCode())).toList();}
+ @GetMapping("/therapists") List<TherapistResponse> therapists(){return therapists.findByActiveTrueOrderByFullName().stream().map(t->new TherapistResponse(t.getId(),t.getCode(),t.getFullName(),t.getBranch().getBranchCode())).toList();}
 }
