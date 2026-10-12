@@ -128,7 +128,7 @@ watch(sortOrder, () => {
             label="กรองตามสาขา"
             default-value="ทั้งหมด"
             default-label="สาขาทั้งหมด"
-            :options="branches.map((item) => ({ value: item.code, label: item.name }))"
+            :options="branches.map((item) => ({ value: item.branchCode, label: item.name }))"
           />
           <FilterDropdown
             v-model="sortOrder"

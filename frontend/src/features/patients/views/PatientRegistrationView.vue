@@ -23,7 +23,7 @@ const registeredPatientId = ref<number | null>(null)
 const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
 const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
 const insuranceCompanies = ref(['AIA'])
-const branches = ref<Array<{ code: string; name: string }>>([])
+const branches = ref<Array<{ branchCode: string; name: string }>>([])
 const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
 const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
@@ -36,7 +36,7 @@ const identityDocumentOptions = [
   { value: 'PASSPORT', label: 'หนังสือเดินทาง (Passport)' },
 ]
 const branchOptions = computed(() =>
-  branches.value.map((branch) => ({ value: branch.code, label: branch.name })),
+  branches.value.map((branch) => ({ value: branch.branchCode, label: branch.name })),
 )
 const customerGroupOptions = computed(() =>
   customerGroups.value.map((value) => ({ value, label: value })),
@@ -148,9 +148,9 @@ onMounted(async () => {
     const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.list()])
     branches.value = branchList
       .filter((item) => item.active)
-      .map((item) => ({ code: item.code, name: item.name }))
-    if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode))
-      form.branchCode = branches.value[0]!.code
+      .map((item) => ({ branchCode: item.branchCode, name: item.name }))
+    if (branches.value.length && !branches.value.some((item) => item.branchCode === form.branchCode))
+      form.branchCode = branches.value[0]!.branchCode
     const active = items.filter((item) => item.active)
     const valuesFor = (category: string, fallback: string[]) => {
       const values = active.filter((item) => item.category === category).map((item) => item.name)
