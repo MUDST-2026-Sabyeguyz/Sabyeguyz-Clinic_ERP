@@ -59,15 +59,15 @@ const receiptBranch = computed(() => {
   const name = patient.value?.branchName?.replace(/^สาขา/, '').toLocaleLowerCase('th')
   return branches.value.find(
     (branch) =>
-      (code && branch.code.toLocaleLowerCase('th') === code) ||
+      (code && branch.branchCode.toLocaleLowerCase('th') === code) ||
       (name && branch.name.replace(/^สาขา/, '').toLocaleLowerCase('th') === name),
   )
 })
 const receiptClinicAddress = computed(() => receiptBranch.value?.address?.trim() || '—')
 const receiptClinicPhone = computed(() => receiptBranch.value?.phone?.trim() || '—')
-const receiptClinicEmail = computed(() => receiptBranch.value?.email?.trim() || '—')
-const receiptClinicLicense = computed(() => receiptBranch.value?.licenseNumber?.trim() || '—')
-const receiptClinicTaxId = computed(() => receiptBranch.value?.taxId?.trim() || '—')
+const receiptClinicEmail = computed(() => '—')
+const receiptClinicLicense = computed(() => '—')
+const receiptClinicTaxId = computed(() => '—')
 const receiptBranchLabel = computed(() => {
   const name = receiptBranch.value?.name || patient.value?.branchName
   return name ? (name.startsWith('สาขา') ? name : `สาขา ${name}`) : 'สาขา แบริ่ง'
