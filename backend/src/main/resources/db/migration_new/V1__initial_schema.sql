@@ -6,7 +6,7 @@
 
 -- ENUM types
 CREATE TYPE service_type_enum AS ENUM (
-    'Assessment', 'SingleVisit', 'Course'
+    'SingleVisit', 'Course'
 );
 CREATE TYPE staff_position_enum AS ENUM (
     'Therapist', 'Manager'
@@ -27,6 +27,18 @@ CREATE TYPE blood_group_enum AS ENUM (
     'A', 'B', 'O', 'AB'
 );
 CREATE TYPE appointment_status_enum AS ENUM (
+    'Unconfirmed', 'Confirmed', 'Arrived', 'InService', 'Completed', 'Cancelled', 'Rescheduled', 'NoShow'
+);
+CREATE TYPE appointment_patient_type_enum AS ENUM (
+    'NEW', 'CURRENT'
+);
+CREATE TYPE requested_service_type_enum AS ENUM (
+    'SingleVisit', 'Course'
+);
+CREATE TYPE calendar_sync_status_enum AS ENUM (
+    'Pending', 'Synced', 'Failed', 'Deleted'                   -- pending integration scope
+);
+CREATE TYPE appointment_to_status_enum AS ENUM (
     'Confirmed', 'Arrived', 'InService', 'Completed', 'Cancelled', 'Rescheduled', 'NoShow'
 );
 CREATE TYPE visit_status_enum AS ENUM (
@@ -35,8 +47,14 @@ CREATE TYPE visit_status_enum AS ENUM (
 CREATE TYPE fee_type_enum AS ENUM (
     'Fixed', 'Percentage'
 );
-CREATE TYPE calculation_base_enum AS ENUM (
+CREATE TYPE percentage_base_enum AS ENUM (
     'CourseValuePerVisit', 'OtherConfiguredBase'
+);
+CREATE TYPE bill_discount_type_enum AS ENUM (
+    'Fixed', 'Percentage'
+);
+CREATE TYPE receipt_status_enum AS ENUM (
+    'Issued', 'Voided', 'Refunded'
 );
 CREATE TYPE course_status_enum AS ENUM (
     'Active', 'Completed', 'Cancelled', 'Refunded'
@@ -47,11 +65,32 @@ CREATE TYPE commission_status_enum AS ENUM (
 CREATE TYPE course_member_role_enum AS ENUM (
     'Owner', 'SharedMember'
 );
-CREATE TYPE course_ledger_entry_type_enum AS ENUM (
-    'Purchase', 'Treatment', 'TransferOut', 'TransferIn', 'Adjustment'
-);
 CREATE TYPE transaction_type_enum AS ENUM (
-    'Assessment', 'SingleVisit', 'CoursePurchase'
+    'SingleVisit', 'CoursePurchase'
+);
+CREATE TYPE line_discount_type_enum AS ENUM (
+    'Fixed', 'Percentage'
+);
+CREATE TYPE transfer_status_enum AS  ENUM (
+    'Completed', 'Reversed'
+);
+CREATE TYPE usage_status_enum AS ENUM (
+    'Completed', 'Reversed'
+);
+CREATE TYPE entry_type_enum AS ENUM (
+    'Purchase', 'Treatment', 'TransferOut', 'TransferIn', 'Adjustment', 'Reversal'
+);
+CREATE TYPE event_type_enum AS ENUM(
+    'Issued', 'Reprint'
+);
+CREATE TYPE cancellation_type_enum AS ENUM(
+    'Void', 'Refund', 'UsageReversal', 'TransferReversal'
+);
+CREATE TYPE refund_status_enum AS ENUM (
+    'Pending', 'Completed', 'Failed', 'Voided'
+);
+CREATE TYPE commission_allocation_entry_type_enum AS ENUM (
+    'Allocation', 'Reversal', 'Adjustment'
 );
 CREATE TYPE overflow_policy_enum AS ENUM (
     'CapAtCommission', 'CompanyTopUp', 'BlockAndRequireApproval'
@@ -142,7 +181,7 @@ CREATE TABLE permission(
 
 CREATE TABLE payment_method(
     payment_method_id BIGSERIAL PRIMARY KEY,                -- auto-increment
-    payment_method_name VARCHAR(50) NOT NULL,
+    method_name VARCHAR(50) NOT NULL,
     payment_method_status BOOLEAN NOT NULL DEFAULT TRUE,    -- 1 : Enabled, 0 : Disabled
 
     payment_method_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -174,7 +213,7 @@ CREATE TABLE room(
 
 CREATE TABLE master_data_type(
     type_id BIGSERIAL PRIMARY KEY,                  -- auto-increment
-    type_name VARCHAR(50) NOT NULL,
+    type_name VARCHAR(50) NOT NULL UNIQUE,
 
     type_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     type_create_by BIGINT NOT NULL,
@@ -203,6 +242,7 @@ CREATE TABLE staff (
     staff_create_by BIGINT NOT NULL,
     staff_update_at TIMESTAMP,
     staff_update_by BIGINT,
+    termination_policy_locked_at TIMESTAMP,
 
     CONSTRAINT fk_staff_branch
        FOREIGN KEY (branch_id)
@@ -228,7 +268,15 @@ CREATE TABLE app_user (
 
     CONSTRAINT fk_user_staff
       FOREIGN KEY (staff_id)
-          REFERENCES staff(staff_id)
+          REFERENCES staff(staff_id),
+
+    CONSTRAINT fk_app_user_create_by
+        FOREIGN KEY (user_create_by)
+            REFERENCES app_user(user_id),
+
+    CONSTRAINT fk_app_user_update_by
+        FOREIGN KEY (user_update_by)
+            REFERENCES app_user(user_id)
 
     -- Circular Foreign Key : user_create_by, user_update_by
 );
@@ -400,20 +448,20 @@ CREATE TABLE system_setting(
 
 -- Patient tables
 CREATE TABLE patient (
-    patient_id BIGSERIAL PRIMARY KEY,       -- auto-increment
-    hn CHAR(10) NOT NULL UNIQUE,            -- YYBBMMNNNN
+    patient_id BIGSERIAL PRIMARY KEY,               -- auto-increment
+    patient_hn CHAR(10) NOT NULL UNIQUE,            -- YYBBMMNNNN
     customer_type customer_type_enum NOT NULL,
     title title_enum NOT NULL,
     patient_fname VARCHAR(100) NOT NULL,
     patient_lname VARCHAR(100) NOT NULL,
     gender gender_enum NOT NULL,
-    phone VARCHAR(20) NOT NULL,
+    phone VARCHAR(20),                              -- Thai: required; Foreigner: optional
     branch_id BIGINT NOT NULL,
     registered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     gender_detail VARCHAR(50),
     patient_nickname VARCHAR(50),
-    national_id CHAR(13),                   -- x-xxxx-xxxxx-xx-x
+    national_id CHAR(13),                   -- x-xxxx-xxxxx-xx-x ; Thai: 13 digits required; foreigner: optional
     passport_no VARCHAR(20),
     birthdate DATE,
     blood_group blood_group_enum,
@@ -431,7 +479,7 @@ CREATE TABLE patient (
 
     -- YYBBMMNNNN
     CONSTRAINT chk_patient_hn
-        CHECK (hn ~ '^[0-9]{10}$'),
+        CHECK (patient_hn ~ '^[0-9]{10}$'),
 
     -- x-xxxx-xxxxx-xx-x
     CONSTRAINT chk_patient_national_id
@@ -493,10 +541,10 @@ CREATE TABLE hn_sequence (
 -- Appointment tables
 CREATE TABLE appointment (
     appointment_id BIGSERIAL PRIMARY KEY,   -- auto-increment
-    patient_id BIGINT NOT NULL,
+    patient_id BIGINT,                      -- CURRENT: required; NEW: nullable
     branch_id BIGINT NOT NULL,
     staff_id BIGINT NOT NULL,
-    service_id BIGINT NOT NULL,
+    service_id BIGINT,
     appointment_status appointment_status_enum NOT NULL,
     room_id BIGINT,
 
@@ -507,6 +555,19 @@ CREATE TABLE appointment (
     appointment_create_by BIGINT NOT NULL,
     appointment_update_at TIMESTAMP,
     appointment_update_by BIGINT,
+
+    appointment_patient_type appointment_patient_type_enum NOT NULL,
+    contact_name VARCHAR(200),                  -- NEW: ชื่อ–นามสกุล หรือชื่อเล่นพร้อมเบอร์โทร; CURRENT: ใช้ข้อมูล Patient
+    contact_phone VARCHAR(20),                  -- NEW: บังคับเมื่อใช้ชื่อเล่น; ชื่อ–นามสกุลอย่างเดียวรับได้ตาม feedback
+    requested_service_type requested_service_type_enum,
+    external_calendar_event_id VARCHAR(255),    -- Pending integration scope
+    calendar_sync_status calendar_sync_status_enum,
+
+
+    CONSTRAINT chk_appointment_patient_type
+        CHECK (
+            appointment_patient_type <> 'CURRENT' OR patient_id IS NOT NULL     -- CURRENT ต้องระบุ patient_id
+        ),
 
     CONSTRAINT fk_appointment_patient
         FOREIGN KEY (patient_id)
@@ -541,7 +602,7 @@ CREATE TABLE appointment_status_history (
     history_id BIGSERIAL PRIMARY KEY,           -- auto-increment
     appointment_id BIGINT NOT NULL,
     from_status appointment_status_enum,
-    to_status appointment_status_enum NOT NULL,
+    to_status appointment_to_status_enum NOT NULL,
     changed_by BIGINT NOT NULL,
     changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     reason VARCHAR(255),
@@ -564,7 +625,7 @@ CREATE TABLE patient_visit (
     branch_id BIGINT NOT NULL,
     assigned_staff_id BIGINT,
     visit_date TIMESTAMP NOT NULL,
-    completed_at TIMESTAMP,
+    checkout_time TIMESTAMP,
     visit_status visit_status_enum NOT NULL,
 
     visit_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -612,8 +673,12 @@ CREATE TABLE commission_scheme(
     scheme_update_at TIMESTAMP,
     scheme_update_by BIGINT,
 
+
+    -- >=1; historical version immutable once used
     CONSTRAINT chk_commission_scheme_version
         CHECK (scheme_version >= 1),
+    CONSTRAINT chk_commission_scheme_effective_dates
+        CHECK (effective_to IS NULL OR effective_to >= effective_from),
 
     CONSTRAINT fk_commission_scheme_permission
         FOREIGN KEY (permission_id)
@@ -635,7 +700,7 @@ CREATE TABLE commission_tier(
     permission_id BIGINT NOT NULL,
     tier_order INT NOT NULL,                        -- >= 1
 
-    minimum_monthly_sales NUMERIC(12, 2) NOT NULL,  -- >= 0
+    minimum_monthly_sales NUMERIC(12, 2) NOT NULL,  -- >= 0 ; no overlap/gaps
     maximum_monthly_sales NUMERIC(12, 2),           -- >= minimum_monthly_sales
     commission_rate NUMERIC(5, 4) NOT NULL,         -- 0 to 1
     tier_status BOOLEAN NOT NULL DEFAULT TRUE,      -- 1 : Enabled, 0 : Disabled
@@ -687,7 +752,7 @@ CREATE TABLE treatment_fee_rule(
 
     fee_type fee_type_enum NOT NULL,
     fee_value NUMERIC(12, 4) NOT NULL,              -- >= 0
-    calculation_base calculation_base_enum,
+    percentage_base percentage_base_enum,
 
     effective_from DATE NOT NULL,
     effective_to DATE,
@@ -700,6 +765,13 @@ CREATE TABLE treatment_fee_rule(
 
     CONSTRAINT chk_treatment_fee_rule_value
         CHECK (fee_value >= 0),
+
+    -- require percentage_base when fee_type is 'Percentage'
+    CONSTRAINT chk_treatment_fee_rule_percentage_base
+        CHECK (
+            (fee_type = 'Percentage' AND percentage_base IS NOT NULL)
+                OR (fee_type = 'Fixed' AND percentage_base IS NULL)
+            ),
 
     CONSTRAINT fk_treatment_fee_rule_permission
         FOREIGN KEY (permission_id)
@@ -738,16 +810,58 @@ CREATE TABLE receipt (
 
     patient_id BIGINT NOT NULL,
     branch_id BIGINT NOT NULL,
-    sale_date DATE NOT NULL,
+    sale_date TIMESTAMP NOT NULL,
 
     receipt_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     receipt_create_by BIGINT NOT NULL,
     receipt_update_at TIMESTAMP,
     receipt_update_by BIGINT,
 
+    subtotal_before_discount DECIMAL(12,2) NOT NULL,        -- >=0
+    bill_discount_type bill_discount_type_enum,
+    bill_discount_value DECIMAL(12,4),
+    bill_discount_amount DECIMAL(12, 2) NOT NULL,           -- >=0
+    taxable_amount DECIMAL(12,2) NOT NULL,                  -- >=0; tax policy to confirm
+    tax_amount DECIMAL(12,2) NOT NULL,                      -- >=0; tax policy to confirm
+    net_amount DECIMAL(12,2) NOT NULL,                      -- >=0
+    receipt_status receipt_status_enum NOT NULL,
+
+
     -- RE-xxxxxxx
     CONSTRAINT chk_receipt_no
         CHECK (receipt_no ~ '^RE-[0-9]{7}$'),
+
+    CONSTRAINT chk_receipt_subtotal_before_discount
+        CHECK (subtotal_before_discount >= 0),
+
+    -- Fixed >=0; Percentage 0..100
+    CONSTRAINT chk_receipt_bill_discount
+        CHECK (
+            (bill_discount_type IS NULL
+                AND bill_discount_value IS NULL
+                AND bill_discount_amount = 0)
+                OR
+            (bill_discount_type = 'Fixed'
+                AND bill_discount_value IS NOT NULL
+                AND bill_discount_value >= 0)
+                OR
+            (bill_discount_type = 'Percentage'
+                AND bill_discount_value IS NOT NULL
+                AND bill_discount_value BETWEEN 0 AND 100)
+            ),
+
+    CONSTRAINT chk_receipt_bill_discount_amount
+        CHECK (bill_discount_amount >= 0),
+
+    CONSTRAINT chk_receipt_taxable_amount
+        CHECK (taxable_amount >= 0),
+
+    CONSTRAINT chk_receipt_tax_amount
+        CHECK (tax_amount >= 0),
+
+    CONSTRAINT chk_receipt_net_amount
+        CHECK (net_amount >= 0),
+
 
     CONSTRAINT fk_receipt_patient
         FOREIGN KEY (patient_id)
@@ -770,9 +884,9 @@ CREATE TABLE receipt (
 CREATE TABLE course(
     course_id BIGSERIAL PRIMARY KEY,            -- auto-increment for Link Table
     course_no VARCHAR(30) NOT NULL UNIQUE,      -- course id for Business format: RE-xxxxxxx or RE-xxxxxxx-xx
-    course_sequence INT NOT NULL DEFAULT 1,     -- กรณีมีหลาย Course ต่อ Receipt
+    course_sequence INT NOT NULL DEFAULT 1,     -- กรณีมีหลาย Course ต่อ Receipt; >= 1
     course_name VARCHAR(255) NOT NULL,
-    course_price NUMERIC(12, 2) NOT NULL,       -- >=0
+    course_price NUMERIC(12, 2) NOT NULL,       -- >=0; equals commissionable_amount [Sales_transaction]
 
     total_visits INT NOT NULL,                  -- >=1
     bonus_visits INT,                           -- >=0
@@ -805,10 +919,15 @@ CREATE TABLE course(
     visits_used INT NOT NULL DEFAULT 0,             -- >=0
     remaining_visits INT NOT NULL,                  -- >=0
 
-    gross_commission_allocated_total NUMERIC(12, 2),        -- >=0
-    owner_net_commission_released_total NUMERIC(12, 2),     -- >=0
-    substitute_treatment_fee_total NUMERIC(12, 2),          -- >=0
-    commission_outstanding NUMERIC(12, 2),                  -- >=0
+    gross_commission_allocated_total NUMERIC(12, 2) NOT NULL,        -- >=0
+    owner_net_commission_released_total NUMERIC(12, 2) NOT NULL,     -- >=0
+    substitute_treatment_fee_total NUMERIC(12, 2) NOT NULL,          -- >=0
+    commission_outstanding NUMERIC(12, 2) NOT NULL,                  -- >=0
+
+    purchaser_patient_id BIGINT NOT NULL,
+    sale_transaction_id BIGINT NOT NULL UNIQUE,     -- Unique; one course per sale line
+    entitled_visits INT GENERATED ALWAYS AS                 -- >=1; derived; not independently editable
+        (total_visits + COALESCE(bonus_visits, 0)) STORED,
 
     CONSTRAINT chk_course_no
         CHECK (course_no ~ '^RE-[0-9]{7}(-[0-9]{2})?$'),    -- เมื่อมี 2 courses ขึ้นไป ใน 1 RE ใช้เพิ่ม -xx ; ถ้าไม่มี ไม่ต้องเพิ่ม
@@ -819,11 +938,27 @@ CREATE TABLE course(
     CONSTRAINT chk_course_price
         CHECK (course_price >= 0),
 
+    CONSTRAINT chk_course_commission_amounts
+        CHECK (
+            (total_course_commission_pool IS NULL
+                OR total_course_commission_pool >= 0)
+            AND (commission_allocation_per_visit IS NULL
+                OR commission_allocation_per_visit >= 0)
+            AND gross_commission_allocated_total >= 0
+            AND owner_net_commission_released_total >= 0
+            AND substitute_treatment_fee_total >= 0
+            AND commission_outstanding >= 0
+        ),
+
     CONSTRAINT chk_course_total_visits
        CHECK (total_visits >= 1),
 
     CONSTRAINT chk_course_bonus_visits
        CHECK (bonus_visits >= 0),
+
+    -- yyyy-mm
+    CONSTRAINT chk_course_sale_month
+       CHECK (sale_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
 
     CONSTRAINT chk_course_commission_scheme_version
        CHECK (commission_scheme_version >= 1),
@@ -840,9 +975,9 @@ CREATE TABLE course(
     CONSTRAINT chk_course_remaining_visits
        CHECK (remaining_visits >= 0),
 
-    -- yyyy-mm
-    CONSTRAINT chk_course_sale_month
-       CHECK (sale_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+    CONSTRAINT chk_course_entitled_visits
+        CHECK (entitled_visits >= 1),
+
 
     CONSTRAINT fk_course_service
         FOREIGN KEY (service_id)
@@ -870,7 +1005,14 @@ CREATE TABLE course(
 
     CONSTRAINT fk_course_commission_scheme
         FOREIGN KEY (commission_scheme_id)
-            REFERENCES commission_scheme(commission_scheme_id)
+            REFERENCES commission_scheme(commission_scheme_id),
+
+    CONSTRAINT fk_course_purchaser_patient
+        FOREIGN KEY (purchaser_patient_id)
+            REFERENCES patient (patient_id)
+
+    -- Circular Foreign Key : sale_transaction_id
+
 );
 
 CREATE TABLE course_shared_member(
@@ -878,6 +1020,9 @@ CREATE TABLE course_shared_member(
     patient_id BIGINT NOT NULL,
     member_role course_member_role_enum NOT NULL,
     member_status BOOLEAN NOT NULL DEFAULT TRUE,        -- 1 : Active, 0 : Inactive
+
+    joined_at TIMESTAMP NOT NULL DEFAULT  CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP,
 
     CONSTRAINT pk_course_shared_member
         PRIMARY KEY (course_id, patient_id),
@@ -890,42 +1035,210 @@ CREATE TABLE course_shared_member(
         FOREIGN KEY (patient_id)
             REFERENCES patient (patient_id)
 );
+-- member_role; one active Owner per course
+CREATE UNIQUE INDEX uq_course_shared_member_active_owner
+    ON course_shared_member (course_id)
+    WHERE member_role = 'Owner' AND member_status = TRUE;
 
-CREATE TABLE course_ledger(
-    ledger_id BIGSERIAL PRIMARY KEY,                    -- auto-increment
+CREATE TABLE course_entitlement(
     course_id BIGINT NOT NULL,
     patient_id BIGINT NOT NULL,
-    entry_type course_ledger_entry_type_enum NOT NULL,
-    qty_change INT NOT NULL,
-    balance_after INT NOT NULL,         -- >= 0
-    reference_type VARCHAR(30),
-    reference_id BIGINT,
-    remark VARCHAR(255),
 
-    ledger_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ledger_create_by BIGINT NOT NULL,
-    ledger_update_at TIMESTAMP,
-    ledger_update_by BIGINT,
+    allocated_visits INT NOT NULL DEFAULT 0,                -- >=0
+    used_visits INT NOT NULL DEFAULT 0,                     -- >=0
+    remaining_visits INT NOT NULL DEFAULT 0,                -- >=0
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT chk_course_ledger_balance_after
-        CHECK (balance_after >= 0),
+    CONSTRAINT pk_course_entitlement
+        PRIMARY KEY (course_id, patient_id),
 
-    CONSTRAINT fk_course_ledger_course
-        FOREIGN KEY (course_id)
-            REFERENCES course(course_id),
+    CONSTRAINT chk_course_entitlement_visits
+        CHECK (
+            allocated_visits >= 0
+                AND used_visits >= 0
+                AND remaining_visits >= 0
+            ),
 
-    CONSTRAINT fk_course_ledger_patient
+    CONSTRAINT fk_course_entitlement_member
+        FOREIGN KEY (course_id, patient_id)
+            REFERENCES course_shared_member (course_id, patient_id)
+);
+
+CREATE TABLE course_sale_staff_share(
+    course_id BIGINT NOT NULL,
+    staff_id BIGINT NOT NULL,
+    share_percent NUMERIC(5, 2)  NOT NULL,                  -- >0, <=100; per-course total = 100
+    credited_sales_amount NUMERIC(12, 2) NOT NULL,          -- >=0; per-course sum = course_price
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT NOT NULL,
+
+    CONSTRAINT pk_course_sale_staff_share
+        PRIMARY KEY (course_id, staff_id),
+
+    CONSTRAINT chk_course_sale_staff_share_percent
+        CHECK (share_percent > 0 AND share_percent <= 100),
+
+    CONSTRAINT chk_course_sale_staff_share_amount
+        CHECK (credited_sales_amount >= 0),
+
+    CONSTRAINT fk_course_sale_staff_share_course
+        FOREIGN KEY (course_id) REFERENCES course (course_id),
+
+    CONSTRAINT fk_course_sale_staff_share_staff
+        FOREIGN KEY (staff_id) REFERENCES staff (staff_id),
+
+    CONSTRAINT fk_course_sale_staff_share_created_by
+        FOREIGN KEY (created_by) REFERENCES app_user (user_id)
+);
+
+CREATE TABLE sales_transaction
+(
+    transaction_id        BIGSERIAL PRIMARY KEY,                       -- auto-increment
+    visit_id              BIGINT,
+    patient_id            BIGINT                NOT NULL,
+    branch_id             BIGINT                NOT NULL,
+    service_id            BIGINT                NOT NULL,
+    transaction_type      transaction_type_enum NOT NULL,
+    treating_staff_id     BIGINT,
+    salesperson_staff_id  BIGINT,
+
+    quantity              INT                   NOT NULL,              -- >=1; CoursePurchase = 1 per sale line
+    unit_price            NUMERIC(12, 2)        NOT NULL,              -- >=0
+    amount                NUMERIC(12, 2)        NOT NULL,              -- >=0
+    transaction_date      TIMESTAMP             NOT NULL,
+    transaction_status    BOOLEAN               NOT NULL DEFAULT TRUE, -- 1 : Completed, 0 : Cancelled
+
+    transaction_create_at TIMESTAMP             NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    transaction_create_by BIGINT                NOT NULL,
+    transaction_update_at TIMESTAMP,
+    transaction_update_by BIGINT,
+
+    receipt_id BIGINT NOT NULL,
+    line_no INT NOT NULL,                                               -- >=1
+    line_discount_type line_discount_type_enum,
+    line_discount_value NUMERIC(12, 4),                                 -- Fixed >=0; Percentage 0..100
+    line_discount_amount NUMERIC(12, 2) NOT NULL,                       -- >=0
+    allocated_bill_discount_amount NUMERIC(12, 2) NOT NULL,             -- >=0
+    commissionable_amount NUMERIC(12, 2) NOT NULL,                      -- >=0 ; CoursePurchase only for tier
+    item_name_snapshot VARCHAR(200) NOT NULL,
+    unit_name_snapshot VARCHAR(30) NOT NULL,
+
+    -- quantity >= 1; CoursePurchase = 1 per sale line
+    CONSTRAINT chk_sales_transaction_quantity
+        CHECK (
+            quantity >= 1
+                AND (transaction_type <> 'CoursePurchase' OR quantity = 1)
+            ),
+
+    -- line_no >=1; UK(receipt_id, line_no)
+    CONSTRAINT uq_sales_transaction_receipt_line
+        UNIQUE (receipt_id, line_no),
+
+    CONSTRAINT chk_sales_transaction_line_no
+        CHECK (line_no >= 1),
+
+    CONSTRAINT chk_sales_transaction_amounts
+        CHECK (
+            unit_price >= 0
+                AND amount >= 0
+                AND line_discount_amount >= 0
+                AND allocated_bill_discount_amount >= 0
+                AND commissionable_amount >= 0
+            ),
+
+    -- line_discount_value ; Fixed >=0, Percentage 0..100
+    CONSTRAINT chk_sales_transaction_line_discount
+        CHECK (
+            (line_discount_type IS NULL
+                AND line_discount_value IS NULL
+                AND line_discount_amount = 0)
+                OR
+            (line_discount_type = 'Fixed'
+                AND line_discount_value IS NOT NULL
+                AND line_discount_value >= 0)
+                OR
+            (line_discount_type = 'Percentage'
+                AND line_discount_value IS NOT NULL
+                AND line_discount_value BETWEEN 0 AND 100)
+            ),
+
+    CONSTRAINT fk_sales_transaction_visit
+        FOREIGN KEY (visit_id)
+            REFERENCES patient_visit (visit_id),
+
+    CONSTRAINT fk_sales_transaction_patient
         FOREIGN KEY (patient_id)
             REFERENCES patient (patient_id),
 
-    CONSTRAINT fk_course_ledger_create_by
-        FOREIGN KEY (ledger_create_by)
+    CONSTRAINT fk_sales_transaction_branch
+        FOREIGN KEY (branch_id)
+            REFERENCES branch (branch_id),
+
+    CONSTRAINT fk_sales_transaction_service
+        FOREIGN KEY (service_id)
+            REFERENCES service (service_id),
+
+    CONSTRAINT fk_sales_transaction_treating_staff
+        FOREIGN KEY (treating_staff_id)
+            REFERENCES staff (staff_id),
+
+    CONSTRAINT fk_sales_transaction_salesperson_staff
+        FOREIGN KEY (salesperson_staff_id)
+            REFERENCES staff (staff_id),
+
+    CONSTRAINT fk_sales_transaction_create_by
+        FOREIGN KEY (transaction_create_by)
             REFERENCES app_user (user_id),
 
-    CONSTRAINT fk_course_ledger_update_by
-        FOREIGN KEY (ledger_update_by)
+    CONSTRAINT fk_sales_transaction_update_by
+        FOREIGN KEY (transaction_update_by)
+            REFERENCES app_user (user_id),
+
+    CONSTRAINT fk_sales_transaction_receipt
+        FOREIGN KEY (receipt_id)
+            REFERENCES receipt (receipt_id)
+);
+
+
+-- Treatment tables
+CREATE TABLE treatment(
+    treatment_id         BIGSERIAL PRIMARY KEY, -- auto-increment
+    visit_id             BIGINT    NOT NULL,
+    service_id           BIGINT    NOT NULL,
+    treating_staff_id    BIGINT,
+    sales_transaction_id BIGINT,
+    notes                TEXT,
+
+    treatment_create_by  BIGINT    NOT NULL,
+    treatment_create_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    treatment_update_at  TIMESTAMP,
+    treatment_update_by  BIGINT,
+
+    CONSTRAINT fk_treatment_visit
+        FOREIGN KEY (visit_id)
+            REFERENCES patient_visit (visit_id),
+
+    CONSTRAINT fk_treatment_service
+        FOREIGN KEY (service_id)
+            REFERENCES service (service_id),
+
+    CONSTRAINT fk_treatment_treating_staff
+        FOREIGN KEY (treating_staff_id)
+            REFERENCES staff (staff_id),
+
+    CONSTRAINT fk_treatment_sales_transaction
+        FOREIGN KEY (sales_transaction_id)
+            REFERENCES sales_transaction (transaction_id),
+
+    CONSTRAINT fk_treatment_create_by
+        FOREIGN KEY (treatment_create_by)
+            REFERENCES app_user (user_id),
+
+    CONSTRAINT fk_treatment_update_by
+        FOREIGN KEY (treatment_update_by)
             REFERENCES app_user (user_id)
 );
+
 CREATE TABLE course_transfer(
     transfer_id BIGSERIAL PRIMARY KEY,                  -- auto-increment
     course_id BIGINT NOT NULL,
@@ -934,6 +1247,7 @@ CREATE TABLE course_transfer(
     qty_transferred INT NOT NULL,                       -- >=1
     transfer_date TIMESTAMP NOT NULL,
     remark VARCHAR(255),
+    transfer_status transfer_status_enum NOT NULL,
 
     transfer_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     transfer_create_by BIGINT NOT NULL,
@@ -966,6 +1280,7 @@ CREATE TABLE course_transfer(
         FOREIGN KEY (transfer_update_by)
             REFERENCES app_user(user_id)
 );
+
 CREATE TABLE course_visit_usage(
     visit_usage_id BIGSERIAL PRIMARY KEY,           -- auto-increment
     visit_id BIGINT NOT NULL,
@@ -974,22 +1289,26 @@ CREATE TABLE course_visit_usage(
     treating_staff_id BIGINT NOT NULL,
     case_owner_staff_id BIGINT NOT NULL,
 
-    visit_date DATE NOT NULL,
-    visit_qty INT NOT NULL,                                         -- >=1
+    visit_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    visit_qty INT NOT NULL,                                         -- =1
 
-    commission_allocation_per_visit NUMERIC(12, 2) NOT NULL,        -- >=0
-    gross_commission_allocation NUMERIC(12, 2) NOT NULL,            -- >=0
+    commission_allocation_per_visit NUMERIC(12, 2),                 -- >=0
+    gross_commission_allocation NUMERIC(12, 2),                     -- >=0
     treatment_fee_rule_id BIGINT,
-    substitute_treatment_fee_amount NUMERIC(12, 2) NOT NULL,        -- >=0
-    owner_net_commission_released NUMERIC(12, 2) NOT NULL,          -- >=0
+    substitute_treatment_fee_amount NUMERIC(12, 2),                 -- >=0
+    owner_net_commission NUMERIC(12, 2),                   -- >=0
 
     usage_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     usage_create_by BIGINT NOT NULL,
     usage_update_at TIMESTAMP,
     usage_update_by BIGINT,
 
+    treatment_id BIGINT,
+    usage_status usage_status_enum NOT NULL,
+    print_required BOOLEAN NOT NULL,                                -- Completed usage: required = 1
+
     CONSTRAINT chk_course_visit_usage_qty
-        CHECK (visit_qty >= 1),
+        CHECK (visit_qty = 1),
 
     CONSTRAINT chk_course_visit_usage_allocation
         CHECK (commission_allocation_per_visit >= 0),
@@ -1001,7 +1320,11 @@ CREATE TABLE course_visit_usage(
         CHECK (substitute_treatment_fee_amount >= 0),
 
     CONSTRAINT chk_course_visit_usage_owner_commission
-        CHECK (owner_net_commission_released >= 0),
+        CHECK (owner_net_commission >= 0),
+
+    -- Completed usage: required = 1
+    CONSTRAINT chk_course_visit_usage_print_required
+        CHECK (usage_status <> 'Completed' OR print_required = TRUE),
 
     CONSTRAINT fk_course_visit_usage_visit
         FOREIGN KEY (visit_id)
@@ -1033,120 +1356,176 @@ CREATE TABLE course_visit_usage(
 
     CONSTRAINT fk_course_visit_usage_update_by
         FOREIGN KEY (usage_update_by)
-            REFERENCES app_user (user_id)
+            REFERENCES app_user (user_id),
+
+    CONSTRAINT fk_course_visit_usage_treatment
+        FOREIGN KEY (treatment_id)
+            REFERENCES treatment (treatment_id)
 );
 
-CREATE TABLE sales_transaction(
-    transaction_id BIGSERIAL PRIMARY KEY,       -- auto-increment
-    visit_id BIGINT,
-    patient_id BIGINT NOT NULL,
-    branch_id BIGINT NOT NULL,
-    service_id BIGINT NOT NULL,
+CREATE TABLE course_ledger(
+    ledger_id        BIGSERIAL PRIMARY KEY,                     -- auto-increment
+    course_id        BIGINT                        NOT NULL,
+    patient_id       BIGINT                        NOT NULL,
+    entry_type       entry_type_enum NOT NULL,
+    qty_change       INT                           NOT NULL,
+    balance_after    INT                           NOT NULL,    -- >= 0
+    remark           VARCHAR(255),                              -- Required when entry_type=Adjustment
 
-    transaction_type transaction_type_enum NOT NULL,
+    ledger_create_at TIMESTAMP                     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ledger_create_by BIGINT                        NOT NULL,
 
-    treating_staff_id BIGINT,
-    salesperson_staff_id BIGINT,
+    transfer_id BIGINT,                 -- Required for TransferOut/TransferIn
+    visit_usage_id BIGINT,              -- Required for Treatment; one active consumption per usage
+    reverses_ledger_id BIGINT,          -- Required for Reversal; unique when
+    event_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sales_transaction_id BIGINT,        -- Required for Purchase; equals Course.sale_transaction_id
+    adjustment_approved_by BIGINT,      -- Required for Adjustment; approver permission checked by service
+    adjustment_approved_at TIMESTAMP,   -- Required for Adjustment
 
-    quantity INT NOT NULL,                      -- >=1
-    unit_price NUMERIC(12, 2) NOT NULL,         -- >=0
-    amount NUMERIC(12, 2) NOT NULL,             -- >=0
-    transaction_date TIMESTAMP NOT NULL,
+    CONSTRAINT chk_course_ledger_qty_direction
+        CHECK (
+            (entry_type IN ('Purchase', 'TransferIn') AND qty_change > 0)
+                OR (entry_type IN ('Treatment', 'TransferOut') AND qty_change < 0)
+                OR (entry_type IN ('Adjustment', 'Reversal') AND qty_change <> 0)
+        ),
 
-    course_id BIGINT,
-    transaction_status BOOLEAN NOT NULL DEFAULT TRUE,       -- 1 : Completed, 0 : Cancelled
+    CONSTRAINT chk_course_ledger_balance_after
+        CHECK (balance_after >= 0),
 
-    transaction_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    transaction_create_by BIGINT NOT NULL,
-    transaction_update_at TIMESTAMP,
-    transaction_update_by BIGINT,
-
-    CONSTRAINT chk_sales_transaction_quantity
-        CHECK (quantity >= 1),
-
-    CONSTRAINT chk_sales_transaction_unit_price
-        CHECK (unit_price >= 0),
-
-    CONSTRAINT chk_sales_transaction_amount
-        CHECK (amount >= 0),
-
-    CONSTRAINT fk_sales_transaction_visit
-        FOREIGN KEY (visit_id)
-            REFERENCES patient_visit (visit_id),
-
-    CONSTRAINT fk_sales_transaction_patient
-        FOREIGN KEY (patient_id)
-            REFERENCES patient (patient_id),
-
-    CONSTRAINT fk_sales_transaction_branch
-        FOREIGN KEY (branch_id)
-            REFERENCES branch (branch_id),
-
-    CONSTRAINT fk_sales_transaction_service
-        FOREIGN KEY (service_id)
-            REFERENCES service (service_id),
-
-    CONSTRAINT fk_sales_transaction_treating_staff
-        FOREIGN KEY (treating_staff_id)
-            REFERENCES staff (staff_id),
-
-    CONSTRAINT fk_sales_transaction_salesperson_staff
-        FOREIGN KEY (salesperson_staff_id)
-            REFERENCES staff (staff_id),
-
-    CONSTRAINT fk_sales_transaction_course
+    CONSTRAINT fk_course_ledger_course
         FOREIGN KEY (course_id)
             REFERENCES course (course_id),
 
-    CONSTRAINT fk_sales_transaction_create_by
-        FOREIGN KEY (transaction_create_by)
+    -- Required for Reversal; unique when
+    CONSTRAINT uq_course_ledger_reverses_ledger
+        UNIQUE (reverses_ledger_id),
+
+    CONSTRAINT chk_course_ledger_entry_source
+        CHECK (
+            -- transfer_id: Required for TransferOut/TransferIn
+            (entry_type IN ('TransferOut', 'TransferIn')
+                AND transfer_id IS NOT NULL
+                AND visit_usage_id IS NULL
+                AND sales_transaction_id IS NULL
+                AND reverses_ledger_id IS NULL
+                AND adjustment_approved_by IS NULL
+                AND adjustment_approved_at IS NULL)
+                OR
+            -- visit_usage_id: Required for Treatment; one active consumption per usage
+            (entry_type = 'Treatment'
+                AND visit_usage_id IS NOT NULL
+                AND transfer_id IS NULL
+                AND sales_transaction_id IS NULL
+                AND reverses_ledger_id IS NULL
+                AND adjustment_approved_by IS NULL
+                AND adjustment_approved_at IS NULL)
+                OR
+            -- sales_transaction_id: Required for Purchase; equals Course.sale_transaction_id
+            (entry_type = 'Purchase'
+                AND sales_transaction_id IS NOT NULL
+                AND transfer_id IS NULL
+                AND visit_usage_id IS NULL
+                AND reverses_ledger_id IS NULL
+                AND adjustment_approved_by IS NULL
+                AND adjustment_approved_at IS NULL)
+                OR
+            -- adjustment_approved_by, adjustment_approved_at: Required for Adjustment; approver permission checked by service
+            (entry_type = 'Adjustment'
+                AND NULLIF(BTRIM(remark), '') IS NOT NULL
+                AND adjustment_approved_by IS NOT NULL
+                AND adjustment_approved_at IS NOT NULL
+                AND transfer_id IS NULL
+                AND visit_usage_id IS NULL
+                AND sales_transaction_id IS NULL
+                AND reverses_ledger_id IS NULL)
+                OR
+            (entry_type = 'Reversal'
+                AND reverses_ledger_id IS NOT NULL
+                AND transfer_id IS NULL
+                AND visit_usage_id IS NULL
+                AND sales_transaction_id IS NULL
+                AND adjustment_approved_by IS NULL
+                AND adjustment_approved_at IS NULL)
+        ),
+
+    CONSTRAINT fk_course_ledger_patient
+        FOREIGN KEY (patient_id)
+            REFERENCES patient (patient_id),
+
+    CONSTRAINT fk_course_ledger_create_by
+        FOREIGN KEY (ledger_create_by)
             REFERENCES app_user (user_id),
 
-    CONSTRAINT fk_sales_transaction_update_by
-        FOREIGN KEY (transaction_update_by)
+    CONSTRAINT fk_course_ledger_transfer
+        FOREIGN KEY (transfer_id)
+            REFERENCES course_transfer (transfer_id),
+
+    CONSTRAINT fk_course_ledger_visit_usage
+        FOREIGN KEY (visit_usage_id)
+            REFERENCES course_visit_usage (visit_usage_id),
+
+    CONSTRAINT fk_course_ledger_reverses_ledger
+        FOREIGN KEY (reverses_ledger_id)
+            REFERENCES course_ledger (ledger_id),
+
+    CONSTRAINT fk_course_ledger_sales_transaction
+        FOREIGN KEY (sales_transaction_id)
+            REFERENCES sales_transaction (transaction_id),
+
+    CONSTRAINT fk_course_ledger_adjustment_approved_by
+        FOREIGN KEY (adjustment_approved_by)
             REFERENCES app_user (user_id)
 );
 
+CREATE TABLE course_usage_print(
+    print_id          BIGSERIAL PRIMARY KEY,
+    visit_usage_id    BIGINT    NOT NULL,
+    course_id         BIGINT    NOT NULL,
 
--- Treatment tables
-CREATE TABLE treatment (
-    treatment_id BIGSERIAL PRIMARY KEY,             -- auto-increment
-    visit_id BIGINT NOT NULL,
-    service_id BIGINT NOT NULL,
-    treating_staff_id BIGINT,
-    sales_transaction_id BIGINT,
-    notes TEXT,
+    issued_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    issued_by         BIGINT    NOT NULL,
+    document_version  INT       NOT NULL,           -- >=1; UK(visit_usage_id, document_version)
+    document_snapshot JSONB     NOT NULL,
 
-    treatment_create_by BIGINT NOT NULL,
-    treatment_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    treatment_update_at TIMESTAMP,
-    treatment_update_by BIGINT,
+    CONSTRAINT chk_course_usage_print_version
+        CHECK (document_version >= 1),
 
-    CONSTRAINT fk_treatment_visit
-        FOREIGN KEY (visit_id)
-            REFERENCES patient_visit(visit_id),
+    CONSTRAINT uq_course_usage_print_version
+        UNIQUE (visit_usage_id, document_version),
 
-    CONSTRAINT fk_treatment_service
-        FOREIGN KEY (service_id)
-            REFERENCES service(service_id),
+    CONSTRAINT fk_course_usage_print_visit_usage
+        FOREIGN KEY (visit_usage_id)
+            REFERENCES course_visit_usage (visit_usage_id),
 
-    CONSTRAINT fk_treatment_treating_staff
-        FOREIGN KEY (treating_staff_id)
-            REFERENCES staff(staff_id),
+    CONSTRAINT fk_course_usage_print_course
+        FOREIGN KEY (course_id)
+            REFERENCES course (course_id),
 
-    CONSTRAINT fk_treatment_sales_transaction
-        FOREIGN KEY (sales_transaction_id)
-            REFERENCES sales_transaction(transaction_id),
-
-    CONSTRAINT fk_treatment_create_by
-        FOREIGN KEY (treatment_create_by)
-            REFERENCES app_user(user_id),
-
-    CONSTRAINT fk_treatment_update_by
-        FOREIGN KEY (treatment_update_by)
-            REFERENCES app_user(user_id)
-
+    CONSTRAINT fk_course_usage_print_issued_by
+        FOREIGN KEY (issued_by)
+            REFERENCES app_user (user_id)
 );
+
+CREATE TABLE course_usage_print_event(
+    print_event_id BIGSERIAL PRIMARY KEY,
+    print_id       BIGINT                             NOT NULL,
+    printed_at     TIMESTAMP                          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    printed_by     BIGINT                             NOT NULL,
+    event_type     event_type_enum NOT NULL,
+
+    CONSTRAINT fk_course_usage_print_event_print
+        FOREIGN KEY (print_id)
+            REFERENCES course_usage_print (print_id),
+
+    CONSTRAINT fk_course_usage_print_event_printed_by
+        FOREIGN KEY (printed_by)
+            REFERENCES app_user (user_id)
+);
+-- Issued ได้หนึ่งครั้งต่อ print_id; Reprint ได้หลายครั้ง
+CREATE UNIQUE INDEX uq_course_usage_print_event_issued
+    ON course_usage_print_event (print_id)
+    WHERE event_type = 'Issued';
 
 
 -- Transaction Tables
@@ -1154,13 +1533,12 @@ CREATE TABLE payment_transaction(
     payment_id BIGSERIAL PRIMARY KEY,               -- auto-increment
     patient_id BIGINT NOT NULL,
     branch_id BIGINT NOT NULL,
-    transaction_id BIGINT NOT NULL,
 
     amount NUMERIC(12, 2) NOT NULL,                 -- >=0
     payment_method_id BIGINT NOT NULL,
     payment_date TIMESTAMP NOT NULL,
-
     payment_status BOOLEAN NOT NULL DEFAULT TRUE,   -- 1 : Completed, 0 : Voided
+    receipt_id BIGINT NOT NULL,
 
     payment_create_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     payment_create_by BIGINT NOT NULL,
@@ -1178,13 +1556,13 @@ CREATE TABLE payment_transaction(
         FOREIGN KEY (branch_id)
             REFERENCES branch (branch_id),
 
-    CONSTRAINT fk_payment_transaction_transaction
-        FOREIGN KEY (transaction_id)
-            REFERENCES sales_transaction (transaction_id),
-
     CONSTRAINT fk_payment_transaction_payment_method
         FOREIGN KEY (payment_method_id)
             REFERENCES payment_method (payment_method_id),
+
+    CONSTRAINT fk_payment_transaction_receipt
+        FOREIGN KEY (receipt_id)
+            REFERENCES receipt (receipt_id),
 
     CONSTRAINT fk_payment_transaction_create_by
         FOREIGN KEY (payment_create_by)
@@ -1206,7 +1584,21 @@ CREATE TABLE transaction_cancellation(
     reason VARCHAR(255) NOT NULL,
     cancelled_by BIGINT NOT NULL,
     cancelled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    reversal_reference_id BIGINT,
+    cancellation_type cancellation_type_enum NOT NULL,
+
+    -- Required void/refund/reversal reason; exactly one target ID per cancellation
+    CONSTRAINT chk_transaction_cancellation_one_target
+        CHECK (
+            num_nonnulls(
+                    transaction_id,
+                    payment_id,
+                    transfer_id,
+                    visit_usage_id
+            ) = 1
+        ),
+    -- ป้องกันใส่ reason ด้วยช่องว่าง
+    CONSTRAINT chk_transaction_cancellation_reason
+        CHECK (BTRIM(reason) <> ''),
 
     CONSTRAINT fk_transaction_cancellation_permission
         FOREIGN KEY (permission_id)
@@ -1233,6 +1625,53 @@ CREATE TABLE transaction_cancellation(
             REFERENCES app_user(user_id)
 );
 
+CREATE TABLE refund_transaction(
+    refund_id           BIGSERIAL PRIMARY KEY,
+    cancellation_id     BIGINT             NOT NULL,
+    original_payment_id BIGINT             NOT NULL,
+    refund_amount       NUMERIC(12, 2)     NOT NULL,    -- >0
+    payment_method_id   BIGINT             NOT NULL,
+
+    refund_status       refund_status_enum NOT NULL,
+    refunded_at         TIMESTAMP,
+    refunded_by         BIGINT,
+    requested_at        TIMESTAMP          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    requested_by        BIGINT             NOT NULL,
+
+    CONSTRAINT chk_refund_transaction_amount
+        CHECK (refund_amount > 0),
+
+    CONSTRAINT chk_refund_transaction_completion
+        CHECK (
+            (refund_status = 'Completed'
+                AND refunded_at IS NOT NULL
+                AND refunded_by IS NOT NULL)
+                OR
+            (refund_status <> 'Completed'
+                AND refunded_at IS NULL
+                AND refunded_by IS NULL)
+            ),
+
+    CONSTRAINT fk_refund_transaction_cancellation
+        FOREIGN KEY (cancellation_id)
+            REFERENCES transaction_cancellation (cancellation_id),
+
+    CONSTRAINT fk_refund_transaction_original_payment
+        FOREIGN KEY (original_payment_id)
+            REFERENCES payment_transaction (payment_id),
+
+    CONSTRAINT fk_refund_transaction_payment_method
+        FOREIGN KEY (payment_method_id)
+            REFERENCES payment_method (payment_method_id),
+
+    CONSTRAINT fk_refund_transaction_refunded_by
+        FOREIGN KEY (refunded_by)
+            REFERENCES app_user (user_id),
+
+    CONSTRAINT fk_refund_transaction_requested_by
+        FOREIGN KEY (requested_by)
+            REFERENCES app_user (user_id)
+);
 
 -- Commission after course Tables
 CREATE TABLE monthly_commission_closing(
@@ -1249,8 +1688,11 @@ CREATE TABLE monthly_commission_closing(
     locked_commission_rate NUMERIC(5, 4),                   -- 0 to 1
     closing_status BOOLEAN NOT NULL DEFAULT FALSE,          -- 1 : Closed, 0 : Open
 
-    closing_at TIMESTAMP,
+    closed_at TIMESTAMP,
     closed_by BIGINT,
+
+    CONSTRAINT uq_monthly_closing_month_staff
+        UNIQUE (closing_month, staff_id),
 
     -- yyyy-mm
     CONSTRAINT chk_monthly_closing_month
@@ -1295,15 +1737,15 @@ CREATE TABLE commission_allocation_ledger(
 
     visit_date DATE NOT NULL,
 
-    gross_commission_allocation NUMERIC(12, 2) NOT NULL,        -- >=0
+    gross_commission_allocation NUMERIC(12, 2) NOT NULL,
     treatment_fee_rule_id BIGINT,
-    treatment_fee_type fee_type_enum NOT NULL,
+    treatment_fee_type fee_type_enum,
     treatment_fee_rate_or_amount NUMERIC(12, 4),                -- >=0
     treatment_fee_calculation_base VARCHAR(50),
-    treatment_fee_amount NUMERIC(12, 2) NOT NULL,               -- >=0
+    treatment_fee_amount NUMERIC(12, 2) NOT NULL,
 
-    owner_net_commission NUMERIC(12, 2) NOT NULL,               -- >=0
-    company_top_up_amount NUMERIC(12, 2),                       -- >=0
+    owner_net_commission NUMERIC(12, 2) NOT NULL,
+    company_top_up_amount NUMERIC(12, 2),
 
     overflow_policy_used overflow_policy_enum,
     adjustment_reference_id BIGINT,
@@ -1313,20 +1755,52 @@ CREATE TABLE commission_allocation_ledger(
     allocation_update_at TIMESTAMP,
     allocation_update_by BIGINT,
 
-    CONSTRAINT chk_commission_allocation_gross
-        CHECK (gross_commission_allocation >= 0),
+    entry_type commission_allocation_entry_type_enum NOT NULL,
+    adjustment_reason VARCHAR(255),
+    adjustment_approved_by BIGINT,
+    adjustment_approved_at TIMESTAMP,
+    reversal_reason VARCHAR(255),
 
     CONSTRAINT chk_commission_allocation_rate_or_amount
         CHECK (treatment_fee_rate_or_amount >= 0),
 
-    CONSTRAINT chk_commission_allocation_fee_amount
-        CHECK (treatment_fee_amount >= 0),
+    CONSTRAINT chk_commission_allocation_amount_direction
+        CHECK (
+            (entry_type = 'Allocation'
+                AND gross_commission_allocation >= 0
+                AND treatment_fee_amount >= 0
+                AND owner_net_commission >= 0
+                AND (company_top_up_amount IS NULL OR company_top_up_amount >= 0))
+                OR
+            (entry_type = 'Reversal'
+                AND gross_commission_allocation <= 0
+                AND treatment_fee_amount <= 0
+                AND owner_net_commission <= 0
+                AND (company_top_up_amount IS NULL OR company_top_up_amount <= 0))
+                OR entry_type = 'Adjustment'
+        ),
 
-    CONSTRAINT chk_commission_allocation_owner_net
-        CHECK (owner_net_commission >= 0),
-
-    CONSTRAINT chk_commission_allocation_company_top_up
-        CHECK (company_top_up_amount >= 0),
+    CONSTRAINT chk_commission_allocation_entry_details
+        CHECK (
+            (entry_type = 'Allocation'
+                AND adjustment_reason IS NULL
+                AND adjustment_approved_by IS NULL
+                AND adjustment_approved_at IS NULL
+                AND reversal_reason IS NULL)
+                OR
+            (entry_type = 'Adjustment'
+                AND NULLIF(BTRIM(adjustment_reason), '') IS NOT NULL
+                AND adjustment_approved_by IS NOT NULL
+                AND adjustment_approved_at IS NOT NULL
+                AND reversal_reason IS NULL)
+                OR
+            (entry_type = 'Reversal'
+                AND adjustment_reference_id IS NOT NULL
+                AND NULLIF(BTRIM(reversal_reason), '') IS NOT NULL
+                AND adjustment_reason IS NULL
+                AND adjustment_approved_by IS NULL
+                AND adjustment_approved_at IS NULL)
+            ),
 
     CONSTRAINT fk_commission_allocation_visit_usage
         FOREIGN KEY (visit_usage_id)
@@ -1362,8 +1836,20 @@ CREATE TABLE commission_allocation_ledger(
 
     CONSTRAINT fk_commission_allocation_update_by
         FOREIGN KEY (allocation_update_by)
+            REFERENCES app_user (user_id),
+
+    CONSTRAINT fk_commission_allocation_adjustment_approved_by
+        FOREIGN KEY (adjustment_approved_by)
             REFERENCES app_user (user_id)
 );
+-- one Reversal per original allocation entry
+CREATE UNIQUE INDEX uq_commission_allocation_reversal_reference
+    ON commission_allocation_ledger (adjustment_reference_id)
+    WHERE entry_type = 'Reversal';
+-- One initial Allocation per course usage
+CREATE UNIQUE INDEX uq_commission_allocation_initial_usage
+    ON commission_allocation_ledger (visit_usage_id)
+    WHERE entry_type = 'Allocation';
 
 CREATE TABLE commission_rate_override_audit(
     override_id BIGSERIAL PRIMARY KEY,          -- auto-increment
@@ -1377,6 +1863,9 @@ CREATE TABLE commission_rate_override_audit(
     changed_by BIGINT NOT NULL,
     changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     reason VARCHAR(255) NOT NULL,
+
+    CONSTRAINT chk_commission_override_target
+        CHECK (closing_id IS NOT NULL OR course_id IS NOT NULL),
 
     CONSTRAINT chk_commission_override_old_rate
         CHECK (old_rate BETWEEN 0 AND 1),
@@ -1510,12 +1999,18 @@ ALTER TABLE staff
             REFERENCES app_user(user_id);
 
 
-ALTER TABLE app_user
-    ADD CONSTRAINT fk_app_user_create_by
-        FOREIGN KEY (user_create_by)
-            REFERENCES app_user(user_id);
+-- ALTER TABLE app_user
+--     ADD CONSTRAINT fk_app_user_create_by
+--         FOREIGN KEY (user_create_by)
+--             REFERENCES app_user(user_id);
+--
+-- ALTER TABLE app_user
+--     ADD CONSTRAINT fk_app_user_update_by
+--         FOREIGN KEY (user_update_by)
+--             REFERENCES app_user(user_id);
 
-ALTER TABLE app_user
-    ADD CONSTRAINT fk_app_user_update_by
-        FOREIGN KEY (user_update_by)
-            REFERENCES app_user(user_id);
+
+ALTER TABLE course
+    ADD CONSTRAINT fk_course_sale_transaction
+        FOREIGN KEY (sale_transaction_id)
+            REFERENCES sales_transaction(transaction_id);
