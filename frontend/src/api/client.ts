@@ -20,6 +20,7 @@ export function getToken() {
 export function clearSession() {
   localStorage.removeItem('authToken')
   localStorage.removeItem('authUser')
+  localStorage.removeItem('mockStaffPermissions')
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -141,16 +142,13 @@ export type Page<T> = {
 }
 export type Branch = {
   id: number
-  code: string
-  numericCode: string
+  branchCode: string
   name: string
-  address?: string
-  phone?: string
-  email?: string
-  licenseNumber?: string
-  taxId?: string
+  address: string
+  phone: string
   active: boolean
 }
+export type BranchRequest = Pick<Branch, 'branchCode' | 'name' | 'address' | 'phone'>
 export type Staff = {
   id: number
   userId: number
@@ -338,9 +336,9 @@ export const patientApi = {
 export const branchApi = {
   list: () => api.get<Branch[]>('/api/branches'),
   get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
-  create: (body: { code: string; numericCode: string; name: string }) =>
+  create: (body: BranchRequest) =>
     api.post<Branch>('/api/branches', body),
-  update: (id: number, body: { code: string; numericCode: string; name: string }) =>
+  update: (id: number, body: BranchRequest) =>
     api.put<Branch>(`/api/branches/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }

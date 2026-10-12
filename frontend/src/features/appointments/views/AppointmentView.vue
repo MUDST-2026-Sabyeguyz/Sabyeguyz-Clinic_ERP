@@ -124,7 +124,7 @@ function patientTypeFor(item: Appointment): 'NEW' | 'CURRENT' {
 const patientPhone = (item: Appointment) =>
   patients.value.find((patient) => patient.id === item.patient.id)?.phone || '-'
 const branchName = (code: string) =>
-  branches.value.find((branch) => branch.code === code)?.name || code
+  branches.value.find((branch) => branch.branchCode === code)?.name || code
 const roomName = (item: Appointment) =>
   rooms.value.find((room) => room.branchCode === item.branchCode && room.type === 'ROOM')?.name ||
   '-'
@@ -266,7 +266,7 @@ async function load() {
     services.value = s
     therapists.value = t
     rooms.value = r
-    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
+    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].branchCode
   } catch (error) {
     appointments.value = []
     totalPages.value = 0
@@ -305,7 +305,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   patientQuery.value = ''
   showPatientResults.value = false
   const branch = branchOptions.value[0]
-  const branchCode = branch?.code ?? 'RP'
+  const branchCode = branch?.branchCode ?? ''
   form.value = {
     patientId: 0,
     therapistId: therapists.value[0]?.id ?? 0,
@@ -625,8 +625,8 @@ function confirmCancellation() {
                 :clear-on-reselect="false"
                 :options="
                   branchOptions.map((item) => ({
-                    value: item.code,
-                    label: `${item.name} (${item.code})`,
+                    value: item.branchCode,
+                    label: `${item.name} (${item.branchCode})`,
                   }))
                 "
               />
@@ -725,7 +725,7 @@ function confirmCancellation() {
               label="กรองสาขา"
               default-value="ทั้งหมด"
               default-label="สาขา: ทั้งหมด"
-              :options="branchOptions.map((item) => ({ value: item.code, label: item.name }))"
+              :options="branchOptions.map((item) => ({ value: item.branchCode, label: item.name }))"
             />
             <div class="calendar-view-toggle">
               <button
