@@ -15,6 +15,23 @@ describe('Real JWT authentication', () => {
     cy.api('GET', '/api/patients').its('status').should('equal', 200)
   })
 
+  it('returns the assigned branch after logging in a staff user', () => {
+    cy.api('GET', '/api/branches').then(({ body: branches }) => {
+      const branch = branches.find((item) => item.branchCode === '01')
+      cy.api('POST', '/api/users', {
+        username: 'integration-staff', password: 'password123', role: 'THERAPIST',
+        employeeCode: 'INTEGRATION-STAFF', fullName: 'พนักงานทดสอบ', branchCode: branch.branchCode,
+      }).then(() => {
+        cy.request('POST', '/api/auth/login', { username: 'integration-staff', password: 'password123' })
+          .then(({ body }) => {
+            expect(body.branchCode).to.equal('01')
+            expect(body.branchName).to.equal(branch.name)
+            expect(body.token).to.be.a('string').and.not.be.empty
+          })
+      })
+    })
+  })
+
   it('rejects incorrect credentials with the API error', () => {
     cy.request({ method: 'POST', url: '/api/auth/login', body: { username: 'manager', password: 'wrong-password' }, failOnStatusCode: false })
       .then(({ status, body }) => {
