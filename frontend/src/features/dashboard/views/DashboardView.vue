@@ -9,9 +9,9 @@ const now = new Date()
 const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
 const to = ref(now.toISOString().slice(0, 10))
 const branchCode = ref('')
-const branches = ref<Array<{ code: string; name: string }>>([])
+const branches = ref<Array<{ branchCode: string; name: string }>>([])
 const branchOptions = computed(() =>
-  branches.value.map((branch) => ({ value: branch.code, label: branch.name })),
+  branches.value.map((branch) => ({ value: branch.branchCode, label: branch.name })),
 )
 const loading = ref(true)
 const errorMessage = ref('')
@@ -43,7 +43,7 @@ const maxAppointments = computed(() =>
   Math.max(...dashboardStatuses.value.map((item) => item.appointments), 1),
 )
 const branchName = computed(
-  () => branches.value.find((item) => item.code === branchCode.value)?.name ?? 'ทุกสาขา',
+  () => branches.value.find((item) => item.branchCode === branchCode.value)?.name ?? 'ทุกสาขา',
 )
 const genderLabel = (gender: string) =>
   ({ MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่น ๆ', UNKNOWN: 'ไม่ระบุ' })[gender.toUpperCase()] ??
