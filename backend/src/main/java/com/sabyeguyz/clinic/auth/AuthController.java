@@ -7,5 +7,5 @@ import org.springframework.security.access.prepost.PreAuthorize;
  record Request(@NotBlank String username,String email,@NotBlank String password,Role role){} record Response(Long id,String username,String email,Role role,String branchCode,String branchName,String token){}
  @PostMapping("/register") @PreAuthorize("hasRole('MANAGER')") Response register(@RequestBody @jakarta.validation.Valid Request r){AppUser u=service.register(r.username(),r.email(),r.password(),r.role()==null?Role.MANAGER:r.role());return response(u);}
  @PostMapping("/login") @Transactional Response login(@RequestBody @jakarta.validation.Valid Request r){return response(service.login(r.username(),r.password()));}
- private Response response(AppUser user){var branch=staff.findById(user.getId()).map(value->value.getBranch()).orElse(null);return new Response(user.getId(),user.getUsername(),user.getEmail(),user.getRole(),branch==null?null:branch.getCode(),branch==null?null:branch.getName(),tokens.issue(user));}
+ private Response response(AppUser user){var branch=staff.findById(user.getId()).map(value->value.getBranch()).orElse(null);return new Response(user.getId(),user.getUsername(),user.getEmail(),user.getRole(),branch==null?null:branch.getBranchCode(),branch==null?null:branch.getName(),tokens.issue(user));}
 }
