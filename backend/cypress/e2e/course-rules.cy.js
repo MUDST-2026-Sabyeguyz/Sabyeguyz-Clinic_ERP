@@ -132,4 +132,3 @@ describe('CourseLedgerService rules migrated from JUnit', () => {
     cy.api('GET', `/api/patients/${patientId}/courses`).then(ok(200)).should('have.length', 2)
   })
 })
-

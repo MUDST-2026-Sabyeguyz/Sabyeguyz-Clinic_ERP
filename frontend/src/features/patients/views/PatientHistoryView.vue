@@ -201,9 +201,9 @@ onMounted(async () => {
             </h1>
             <p>ที่อยู่: {{ receiptBranch?.address?.trim() || '—' }}</p>
             <p>โทร: {{ receiptBranch?.phone?.trim() || '—' }}</p>
-            <p>เลขที่ใบอนุญาต: {{ receiptBranch?.licenseNumber?.trim() || '—' }}</p>
-            <p>เลขประจำตัวผู้เสียภาษี: {{ receiptBranch?.taxId?.trim() || '—' }}</p>
-            <p>อีเมล: {{ receiptBranch?.email?.trim() || '—' }}</p>
+            <p>เลขที่ใบอนุญาต: {{ '—' }}</p>
+            <p>เลขประจำตัวผู้เสียภาษี: {{ '—' }}</p>
+            <p>อีเมล: {{ '—' }}</p>
           </div>
           <div class="receipt-document">
             <h2>ใบเสร็จรับเงิน</h2>
