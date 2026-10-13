@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -137,15 +138,16 @@ async function saveTier() {
     rate: Number(form.rate),
     active: form.active,
   }
-  if (editingIndex.value >= 0) tiers[editingIndex.value] = record
-  else tiers.push(record)
+  const nextTiers = tiers.map((tier) => ({ ...tier }))
+  if (editingIndex.value >= 0) nextTiers[editingIndex.value] = record
+  else nextTiers.push(record)
   try {
-    await commissionApi.updateScheme(scheme.id, {
+    const created = (await commissionApi.createScheme({
       name: scheme.name,
-      version: scheme.version,
-      effectiveFrom: scheme.effectiveFrom,
-      effectiveTo: scheme.effectiveTo,
-      tiers: tiers
+      version: String(Number(scheme.version) + 1),
+      effectiveFrom: clinicToday(),
+      effectiveTo: null,
+      tiers: nextTiers
         .filter((t) => t.active)
         .sort((a, b) => a.min - b.min)
         .map((t, index) => ({
@@ -154,7 +156,14 @@ async function saveTier() {
           rate: t.rate / 100,
           order: index + 1,
         })),
+    })) as { id: number; version: string | number; effectiveFrom: string }
+    Object.assign(scheme, {
+      id: created.id,
+      version: String(created.version),
+      effectiveFrom: created.effectiveFrom,
+      effectiveTo: null,
     })
+    tiers.splice(0, tiers.length, ...nextTiers)
     editorOpen.value = false
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : 'บันทึก Tier ไม่สำเร็จ'
@@ -179,7 +188,7 @@ onMounted(async () => {
         rate: number
         order: number
       }>
-      if (backendTiers.length) {
+      {
         tiers.splice(
           0,
           tiers.length,
@@ -187,13 +196,14 @@ onMounted(async () => {
             order: tier.order,
             min: tier.minimum,
             max: tier.maximum,
-            rate: tier.rate * 100,
+            rate: Math.round(tier.rate * 10000) / 100,
             active: true,
           })),
         )
       }
     }
-  } catch {
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : 'โหลดเกณฑ์คอมมิชชันไม่สำเร็จ'
   } finally {
     loading.value = false
   }
@@ -254,12 +264,7 @@ onMounted(async () => {
                   }}</span>
                 </td>
                 <td v-if="!schemeLocked">
-                  <button
-                    class="commission-secondary"
-                    @click="openEditor(index)"
-                  >
-                    แก้ไข
-                  </button>
+                  <button class="commission-secondary" @click="openEditor(index)">แก้ไข</button>
                 </td>
               </tr>
             </tbody>

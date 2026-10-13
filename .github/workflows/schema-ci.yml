@@ -1,7 +1,8 @@
 name: Schema CI
 
 # Builds the v2 database from db/migration_new/V1__initial_schema.sql on a real PostgreSQL and checks
-# that every clinicv2 entity matches it (Hibernate validate) and that the whole bean graph wires.
+# that every clinicv2 entity matches it (Hibernate validate) and that the whole bean graph wires; then
+# boots the real v2 application (ClinicV2Application with the demo seed) and smoke-tests the HTTP API.
 
 on:
   push:
@@ -9,6 +10,9 @@ on:
     paths:
       - 'backend/src/main/java/com/sabyeguyz/clinicv2/**'
       - 'backend/src/main/resources/db/migration_new/**'
+      - 'backend/src/main/resources/db/seed_v2/**'
+      - 'backend/src/main/resources/application*.properties'
+      - 'backend/scripts/v2-smoke.sh'
       - 'backend/src/test/java/com/sabyeguyz/schemacheck/**'
       - 'backend/pom.xml'
       - '.github/workflows/schema-ci.yml'
@@ -17,6 +21,9 @@ on:
     paths:
       - 'backend/src/main/java/com/sabyeguyz/clinicv2/**'
       - 'backend/src/main/resources/db/migration_new/**'
+      - 'backend/src/main/resources/db/seed_v2/**'
+      - 'backend/src/main/resources/application*.properties'
+      - 'backend/scripts/v2-smoke.sh'
       - 'backend/src/test/java/com/sabyeguyz/schemacheck/**'
       - 'backend/pom.xml'
       - '.github/workflows/schema-ci.yml'
@@ -80,3 +87,62 @@ jobs:
 
       - name: Check entities against PostgreSQL
         run: java -cp "target/test-classes:target/classes:$(cat target/test-classpath.txt)" com.sabyeguyz.schemacheck.SchemaCheck
+
+  boot-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic
+          POSTGRES_DB: clinic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clinic -d clinic"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: jdbc:postgresql://localhost:5432/clinic
+      DATABASE_USERNAME: clinic
+      DATABASE_PASSWORD: clinic
+      JWT_SECRET: ci-only-secret-ci-only-secret-0123456789
+      APP_V2_FLYWAY_EXTRA_LOCATIONS: ',classpath:db/seed_v2'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Package the backend
+        run: mvn --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Start the v2 application on an empty database
+        run: |
+          nohup java -Dloader.main=com.sabyeguyz.clinicv2.ClinicV2Application             -cp target/clinic-erp-backend-0.0.1-SNAPSHOT.jar             org.springframework.boot.loader.launch.PropertiesLauncher > app.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fs http://localhost:8080/actuator/health > /dev/null; then echo "application is up"; exit 0; fi
+            sleep 2
+          done
+          echo "the application did not start"
+          tail -n 150 app.log
+          exit 1
+
+      - name: Smoke test the API
+        run: bash scripts/v2-smoke.sh
+
+      - name: Application log
+        if: always()
+        run: tail -n 200 app.log
