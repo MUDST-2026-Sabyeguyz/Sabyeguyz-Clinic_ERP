@@ -15,13 +15,18 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
             Long staffId, LocalDate appointmentDate, LocalTime appointmentTime,
             Collection<AppointmentStatus> excludedStatuses);
 
+    /**
+     * PostgreSQL cannot infer the type of an untyped NULL date/enum parameter in "(? is null or x = ?)",
+     * so the optional date and status filters use a boolean flag plus a never-null value instead.
+     */
     @Query("select a from Appointment a where "
             + "(:branchId is null or a.branch.id = :branchId) "
-            + "and (:date is null or a.appointmentDate = :date) "
+            + "and (:hasDate = false or a.appointmentDate = :date) "
             + "and (:staffId is null or a.staff.id = :staffId) "
-            + "and (:status is null or a.appointmentStatus = :status)")
-    Page<Appointment> search(@Param("branchId") Long branchId, @Param("date") LocalDate date,
-                              @Param("staffId") Long staffId, @Param("status") AppointmentStatus status,
+            + "and (:hasStatus = false or a.appointmentStatus = :status)")
+    Page<Appointment> search(@Param("branchId") Long branchId, @Param("hasDate") boolean hasDate,
+                              @Param("date") LocalDate date, @Param("staffId") Long staffId,
+                              @Param("hasStatus") boolean hasStatus, @Param("status") AppointmentStatus status,
                               Pageable pageable);
 
     @Query("select a from Appointment a where a.appointmentDate between :from and :to "
