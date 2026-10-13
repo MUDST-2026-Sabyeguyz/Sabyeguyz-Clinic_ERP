@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 /** Matches frontend/src/api/client.ts's paymentMethodApi (/api/payment-methods). */
+@Transactional
 @RestController
 @RequestMapping("/api/payment-methods")
 public class PaymentMethodController {
@@ -30,6 +32,7 @@ public class PaymentMethodController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
         PaymentMethod method = new PaymentMethod();
         method.setMethodName(request.name());
@@ -40,6 +43,7 @@ public class PaymentMethodController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         PaymentMethod method = find(id);
         method.setMethodName(request.name());
@@ -50,6 +54,7 @@ public class PaymentMethodController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
         PaymentMethod method = find(id);
         method.setPaymentMethodStatus(false);
@@ -57,6 +62,7 @@ public class PaymentMethodController {
     }
 
     @PatchMapping("/{id}/activate")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
         PaymentMethod method = find(id);
         method.setPaymentMethodStatus(true);
