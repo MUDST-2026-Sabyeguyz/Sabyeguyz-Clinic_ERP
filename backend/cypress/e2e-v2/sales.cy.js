@@ -8,11 +8,11 @@ function sale(fx, patient, overrides = {}) {
 }
 
 describe('v2 sales and payments', () => {
-  it('sells a single visit paid in cash and returns an RE- receipt number', function () {
+  it('sells a single visit paid in cash and returns an REYYMMNNNN receipt number', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient).then(({ status, body }) => {
         expect(status).to.equal(201)
-        expect(body.receiptNo).to.match(/^RE-\d{7}$/)
+        expect(body.receiptNo).to.match(/^RE\d{8}$/)
         expect(Number(body.total)).to.equal(800)
         expect(Number(body.paid)).to.equal(800)
         expect(body.status).to.equal('PAID')
@@ -25,7 +25,7 @@ describe('v2 sales and payments', () => {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient).then((first) => {
         sale(this.fixtures, patient).then((second) => {
-          const number = (receiptNo) => Number(receiptNo.replace('RE-', ''))
+          const number = (receiptNo) => Number(receiptNo.slice(6))
           expect(number(second.body.receiptNo)).to.equal(number(first.body.receiptNo) + 1)
         })
       })
@@ -166,6 +166,10 @@ describe('v2 sales and payments', () => {
         cy.api('POST', `/api/payments/${body.id}/reverse`, { reason: 'ลูกค้ายกเลิก' }).then((voided) => {
           expect(voided.status).to.equal(200)
           expect(voided.body.status).to.equal('VOIDED')
+          expect(voided.body.voidReason).to.equal('ลูกค้ายกเลิก')
+          expect(voided.body.voidedAt).to.be.a('string')
+          cy.api('GET', `/api/receipts/${body.id}`).its('body.voidReason').should('equal', 'ลูกค้ายกเลิก')
+          cy.api('GET', '/api/payments').its('body.items.0.voidReason').should('equal', 'ลูกค้ายกเลิก')
         })
       })
     })

@@ -162,7 +162,7 @@ public class CoursePurchaseController {
                 : request.shares().stream().map(share -> new com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare(
                         staffById(share.staffId()), share.percent())).toList();
 
-        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(), patient, branch, LocalDate.now(),
+        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, LocalDate.now()), patient, branch, LocalDate.now(),
                 actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
                 seller, caseOwner, null, null, null, Discount.of(request.discountType(), request.discountValue()),
@@ -178,7 +178,7 @@ public class CoursePurchaseController {
         Course course = findCourse(id);
         Long ownerPatientId = course.getPurchaserPatient().getId();
         List<MovementResponse> movements = ledger.findByCourseIdOrderByIdDesc(id).stream()
-                .map(l -> new MovementResponse(l.getId(), l.getEntryType().name(), l.getQtyChange(), l.getRemark(),
+                .map(l -> new MovementResponse(l.getId(), apiMovementType(l.getEntryType()), l.getQtyChange(), l.getRemark(),
                         l.getLedgerCreateAt()))
                 .toList();
         List<AllocationResponse> allocations = allocationLedger.findByCourseIdOrderByIdDesc(id).stream()
@@ -263,6 +263,15 @@ public class CoursePurchaseController {
         return visitService.complete(visit.getId(), actor.currentId());
     }
 
+    private static String apiMovementType(CourseLedgerEntryType type) {
+        return switch (type) {
+            case Treatment -> "USAGE";
+            case TransferOut -> "TRANSFER_OUT";
+            case TransferIn -> "TRANSFER_IN";
+            default -> type.name().toUpperCase(java.util.Locale.ROOT);
+        };
+    }
+
     private Staff staffById(Long id) {
         return staffRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงาน"));
     }
@@ -290,11 +299,11 @@ public class CoursePurchaseController {
                 patient.getPatientFname() + " " + patient.getPatientLname()),
                 course.getReceipt().getBranch().getBranchCode(),
                 new CourseSummary(course.getService().getId(), course.getCourseNo(), course.getCourseName()),
-                course.getCoursePrice(), course.getTotalVisits(), course.getBonusVisits() == null ? 0 : course.getBonusVisits(),
-                course.getTotalVisits() + (course.getBonusVisits() == null ? 0 : course.getBonusVisits()),
+                course.getCoursePrice(), course.getPaidVisits(), course.getBonusVisits() == null ? 0 : course.getBonusVisits(),
+                course.getTotalVisits(),
                 course.getVisitsUsed(), (int) remaining,
                 course.getCourseCreateAt(), course.getExpiryDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
-                expired, usable, course.getCourseStatus().name(), course.getCommissionStatus().name(),
+                expired, usable, course.getCourseStatus().name().toUpperCase(java.util.Locale.ROOT), course.getCommissionStatus().name().toUpperCase(java.util.Locale.ROOT),
                 course.getLockedCommissionRate(), course.getTotalCourseCommissionPool(),
                 course.getCommissionAllocationPerVisit());
     }
