@@ -51,8 +51,16 @@ public class Service {
     @Column(name = "default_bonus_visits")
     private Integer defaultBonusVisits;
 
-    @Column(name = "default_validity_days")
-    private Integer defaultValidityDays;
+    @Column(name = "default_validity_value")
+    private Integer defaultValidityValue;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "default_validity_unit", columnDefinition = "validity_unit_enum")
+    private com.sabyeguyz.clinicv2.enums.ValidityUnit defaultValidityUnit;
+
+    @Column(name = "unit_name", nullable = false, length = 30)
+    private String unitName = "ครั้ง";
 
     public Service() {}
 
@@ -79,6 +87,27 @@ public class Service {
     public void setDefaultTotalVisits(Integer defaultTotalVisits) { this.defaultTotalVisits = defaultTotalVisits; }
     public Integer getDefaultBonusVisits() { return defaultBonusVisits; }
     public void setDefaultBonusVisits(Integer defaultBonusVisits) { this.defaultBonusVisits = defaultBonusVisits; }
-    public Integer getDefaultValidityDays() { return defaultValidityDays; }
-    public void setDefaultValidityDays(Integer defaultValidityDays) { this.defaultValidityDays = defaultValidityDays; }
+    public Integer getDefaultValidityValue() { return defaultValidityValue; }
+    public void setDefaultValidityValue(Integer value) { this.defaultValidityValue = value; }
+    public com.sabyeguyz.clinicv2.enums.ValidityUnit getDefaultValidityUnit() { return defaultValidityUnit; }
+    public void setDefaultValidityUnit(com.sabyeguyz.clinicv2.enums.ValidityUnit unit) { this.defaultValidityUnit = unit; }
+    public String getUnitName() { return unitName; }
+    public void setUnitName(String value) { this.unitName = value; }
+    /** Compatibility for API clients that specify days; months/years keep their calendar semantics. */
+    public Integer getDefaultValidityDays() {
+        return defaultValidityUnit == com.sabyeguyz.clinicv2.enums.ValidityUnit.Day ? defaultValidityValue : null;
+    }
+    public void setDefaultValidityDays(Integer days) {
+        defaultValidityValue = days;
+        defaultValidityUnit = days == null ? null : com.sabyeguyz.clinicv2.enums.ValidityUnit.Day;
+    }
+    public java.time.LocalDate expiryFrom(java.time.LocalDate date) {
+        if (defaultValidityValue == null || defaultValidityValue < 1 || defaultValidityUnit == null)
+            throw new IllegalArgumentException("คอร์สต้องระบุระยะเวลาใช้งานอย่างน้อย 1");
+        return switch (defaultValidityUnit) {
+            case Day -> date.plusDays(defaultValidityValue);
+            case Month -> date.plusMonths(defaultValidityValue);
+            case Year -> date.plusYears(defaultValidityValue);
+        };
+    }
 }

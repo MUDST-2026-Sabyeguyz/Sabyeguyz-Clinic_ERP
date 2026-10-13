@@ -37,7 +37,9 @@ public class PaymentTransactionService {
         payment.setPaymentStatus(true);
         payment.setPaymentCreateAt(Instant.now());
         payment.setPaymentCreateBy(actorId);
-        return payments.save(payment);
+        PaymentTransaction saved = payments.saveAndFlush(payment);
+        refreshPaymentLabel(receipt);
+        return saved;
     }
 
     /** Voids the payment (does not delete it) - see Clinic ERP Workflow Brief Section 6 "Cancellation/Void". */
@@ -51,7 +53,17 @@ public class PaymentTransactionService {
         payment.setPaymentStatus(false);
         payment.setPaymentUpdateAt(Instant.now());
         payment.setPaymentUpdateBy(actorId);
-        return payments.save(payment);
+        PaymentTransaction saved = payments.saveAndFlush(payment);
+        refreshPaymentLabel(payment.getReceipt());
+        return saved;
+    }
+
+    private void refreshPaymentLabel(Receipt receipt) {
+        BigDecimal paid = payments.paidAmountOf(receipt.getId());
+        receipt.setPaymentLabel(paid.compareTo(receipt.getNetAmount()) >= 0
+                ? com.sabyeguyz.clinicv2.enums.PaymentLabel.FullyPaid
+                : paid.signum() > 0 ? com.sabyeguyz.clinicv2.enums.PaymentLabel.Installment
+                : com.sabyeguyz.clinicv2.enums.PaymentLabel.Deposit);
     }
 
     private static void require(boolean condition, String message) {

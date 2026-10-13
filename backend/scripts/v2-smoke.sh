@@ -73,7 +73,7 @@ req POST /api/payments "$(jq -nc --argjson p "$PATIENT_ID" --argjson s "$SERVICE
   items:[{type:"SERVICE",referenceId:$s,quantity:1,discountType:"PERCENT",discountValue:10}],
   payments:[{paymentMethodCode:"Cash",amount:720}]}')"
 expect_status "create a sale" 201
-expect_jq "receipt number is RE-xxxxxxx" '.receiptNo | test("^RE-[0-9]{7}$")'
+expect_jq "receipt number is REYYMMNNNN" '.receiptNo | test("^RE[0-9]{8}$")'
 expect_jq "total is 720 after the discount and fully paid" '.total == 720 and .paid == 720'
 SALE_ID=$(printf '%s' "$BODY" | jq -r '.id')
 req GET "/api/receipts/$SALE_ID";    expect_status "read the receipt" 200
@@ -90,7 +90,7 @@ req POST /api/course-usages "$(jq -nc --argjson c "$PURCHASE_ID" '{coursePurchas
 expect_status "use one visit (walk-in)" 200
 expect_jq "one visit used, nine left" '.used == 1 and .remaining == 9'
 req GET "/api/course-purchases/$PURCHASE_ID"
-MOVEMENT_ID=$(printf '%s' "$BODY" | jq -r '.movements[] | select(.type=="Treatment") | .id')
+MOVEMENT_ID=$(printf '%s' "$BODY" | jq -r '.movements[] | select(.type=="USAGE") | .id')
 req POST "/api/course-movements/$MOVEMENT_ID/reverse" '{"reason":"smoke test"}'
 expect_status "reverse the usage" 200
 expect_jq "the visit is back" '.used == 0 and .remaining == 10'
@@ -101,11 +101,11 @@ req POST /api/appointments "$(jq -nc --argjson p "$PATIENT_ID" --argjson t "$THE
 expect_status "book a registered patient" 201
 APPOINTMENT_ID=$(printf '%s' "$BODY" | jq -r '.id')
 req POST /api/appointments "$(jq -nc --argjson t "$THERAPIST_ID" \
-  '{branchCode:"01",therapistId:$t,startAt:"2030-01-01T10:00:00+07:00",status:"Unconfirmed",patientType:"NEW",contactName:"สมศรี ใจงาม",contactPhone:"0899999999"}')"
+  '{branchCode:"01",therapistId:$t,startAt:"2030-01-01T10:00:00+07:00",status:"UNCONFIRMED",patientType:"NEW",contactName:"สมศรี ใจงาม",contactPhone:"0899999999"}')"
 expect_status "book a NEW patient as Unconfirmed" 201
-expect_jq "the NEW appointment is Unconfirmed" '.status == "Unconfirmed" and .patientType == "NEW"'
+expect_jq "the NEW appointment is Unconfirmed" '.status == "UNCONFIRMED" and .patientType == "NEW"'
 NEW_APPOINTMENT_ID=$(printf '%s' "$BODY" | jq -r '.id')
-req POST "/api/appointments/$NEW_APPOINTMENT_ID/confirm"; expect_jq "confirm moves it to Confirmed" '.status == "Confirmed"'
+req POST "/api/appointments/$NEW_APPOINTMENT_ID/confirm"; expect_jq "confirm moves it to Confirmed" '.status == "CONFIRMED"'
 req POST "/api/appointments/$APPOINTMENT_ID/check-in";    expect_status "check in the registered patient" 200
 req GET '/api/appointments?date=2030-01-01';              expect_jq "both appointments are listed" '.items | length == 2'
 

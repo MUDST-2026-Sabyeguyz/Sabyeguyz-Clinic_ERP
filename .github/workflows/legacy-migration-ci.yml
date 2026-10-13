@@ -6,7 +6,7 @@ name: Legacy data migration
 
 on:
   push:
-    branches: [develop, dev-backed, 'feat/**', 'feature/**']
+    branches: [develop, dev-backed, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
     paths:
       - 'backend/scripts/legacy-migration/**'
       - 'backend/src/main/resources/db/**'
@@ -76,7 +76,7 @@ jobs:
           def key(path):
               m = re.search(r'V(\d+)(?:_(\d+))?__', path)
               return (int(m.group(1)), int(m.group(2) or 0))
-          for path in sorted(glob.glob('src/main/resources/db/migration/V*__*.sql'), key=key):
+          for path in sorted(glob.glob('src/main/resources/db/migration_old/V*__*.sql'), key=key):
               print('applying', path, flush=True)
               subprocess.run(['psql', '-v', 'ON_ERROR_STOP=1', '-q', '-f', path], check=True)
           PY
@@ -92,18 +92,21 @@ jobs:
             echo "COURSE1_ID=$(psql -Atc "SELECT min(id) FROM course_purchases WHERE course_code = 'CRS10'")"
             echo "COURSE1_REMAINING=$(psql -Atc "SELECT sum(quantity) FROM course_movements WHERE course_purchase_id = (SELECT min(id) FROM course_purchases WHERE course_code = 'CRS10')")"
             echo "FX_PATIENT_ID=$(psql -Atc "SELECT id FROM patients WHERE username = 'fx-thai'")"
-            echo "NEXT_RECEIPT_NO=RE-$(printf '%07d' $(( $(psql -Atc 'SELECT count(*) FROM sales') + 3 )))"
           } >> "$GITHUB_ENV"
 
       - name: Move the old schema aside and create the new one
         run: |
           psql -v ON_ERROR_STOP=1 -q -c 'ALTER SCHEMA public RENAME TO legacy' -c 'CREATE SCHEMA public'
-          psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration_new/V1__initial_schema.sql
-          psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration_new/V1_1__reference_data.sql
+          psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration/V1__initial_schema.sql
+          psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration/V2__integration_runtime_compatibility.sql
+          psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration/V3__reference_data.sql
 
       - name: Run the data migration
         run: psql -v ON_ERROR_STOP=1 -f scripts/legacy-migration/migrate-legacy-to-v2.sql
 
+      - name: Remember the next imported receipt number
+        run: |
+          echo "NEXT_RECEIPT_NO=$(psql -Atc "SELECT 'RE' || to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok','YYMM') || lpad((coalesce((SELECT last_running_no FROM receipt_sequence WHERE branch_id=(SELECT branch_id FROM branch WHERE branch_code='01') AND year_month=to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok','YYMM')),0)+1)::text,4,'0')")" >> "$GITHUB_ENV"
       - name: Rows that needed a decision
         run: psql -c 'SELECT area, old_ref, issue, action FROM legacy.migration_issue ORDER BY id'
 
@@ -113,7 +116,7 @@ jobs:
       - name: Start the v2 app on the migrated database
         env:
           SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-          SPRING_FLYWAY_BASELINE_VERSION: '1.1'
+          SPRING_FLYWAY_BASELINE_VERSION: '3'
         run: |
           nohup java -Dloader.main=com.sabyeguyz.clinicv2.ClinicV2Application -cp target/clinic-erp-backend-0.0.1-SNAPSHOT.jar org.springframework.boot.loader.launch.PropertiesLauncher > app.log 2>&1 &
           for attempt in $(seq 1 60); do

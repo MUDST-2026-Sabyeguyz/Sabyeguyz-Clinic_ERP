@@ -21,7 +21,6 @@ public class Patient {
     private Long id;
 
     /** Format YYBBMMNNNN. */
-    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "patient_hn", length = 10, unique = true)
     private String patientHn;
 

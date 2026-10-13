@@ -22,7 +22,16 @@ const courses = ref(0)
 const genderBreakdown = ref<Array<{ gender: string; patients: number }>>([])
 const appointmentStatuses = ref<Array<{ status: string; appointments: number }>>([])
 const monthlyRevenue = ref<Array<{ label: string; course: number; singleVisit: number }>>([])
-const statusOrder = ['COMPLETED', 'IN_SERVICE', 'NO_SHOW', 'CANCELLED']
+const statusOrder = [
+  'UNCONFIRMED',
+  'CONFIRMED',
+  'ARRIVED',
+  'IN_SERVICE',
+  'COMPLETED',
+  'CANCELLED',
+  'RESCHEDULED',
+  'NO_SHOW',
+]
 
 const maxMonthlyRevenue = computed(() =>
   Math.max(...monthlyRevenue.value.flatMap((item) => [item.course, item.singleVisit]), 1),
@@ -36,7 +45,12 @@ const chartTicks = computed(() =>
   Array.from({ length: 6 }, (_, index) => Math.round(chartMaximum.value * (1 - index / 5))),
 )
 const dashboardStatuses = computed(() => {
-  const counts = new Map(appointmentStatuses.value.map((item) => [item.status, item.appointments]))
+  const counts = new Map(
+    appointmentStatuses.value.map((item) => [
+      item.status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
+      item.appointments,
+    ]),
+  )
   return statusOrder.map((status) => ({ status, appointments: counts.get(status) ?? 0 }))
 })
 const maxAppointments = computed(() =>
@@ -52,14 +66,15 @@ const money = (value: number) =>
   `${value.toLocaleString('th-TH', { maximumFractionDigits: 0 })} บาท`
 const statusLabel = (status: string) =>
   ({
+    UNCONFIRMED: 'Unconfirmed',
     CONFIRMED: 'Confirmed',
     ARRIVED: 'Arrived',
     IN_SERVICE: 'In service',
     COMPLETED: 'Complete',
-    CANCELLED: 'Cancled',
+    CANCELLED: 'Canceled',
     RESCHEDULED: 'Rescheduled',
     NO_SHOW: 'No Show',
-  })[status] ?? status
+  })[status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()] ?? status
 const statusClass = (status: string) => `status-${status.toLowerCase().replaceAll('_', '-')}`
 
 async function loadDashboard() {

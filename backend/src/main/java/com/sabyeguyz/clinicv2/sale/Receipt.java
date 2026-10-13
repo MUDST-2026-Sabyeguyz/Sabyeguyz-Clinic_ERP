@@ -79,6 +79,14 @@ public class Receipt {
     @Column(name = "receipt_status", nullable = false, columnDefinition = "receipt_status_enum")
     private ReceiptStatus receiptStatus = ReceiptStatus.Issued;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "payment_label", nullable = false, columnDefinition = "payment_label_enum")
+    private com.sabyeguyz.clinicv2.enums.PaymentLabel paymentLabel = com.sabyeguyz.clinicv2.enums.PaymentLabel.Deposit;
+
+    public com.sabyeguyz.clinicv2.enums.PaymentLabel getPaymentLabel() { return paymentLabel; }
+    public void setPaymentLabel(com.sabyeguyz.clinicv2.enums.PaymentLabel value) { paymentLabel = value; }
+
     public Receipt() {}
 
     public Long getId() { return id; }

@@ -24,7 +24,8 @@ public final class V2RepositoryStub<T> {
             }
             invocations.computeIfAbsent(method.getName(), ignored -> new ArrayList<>()).add(arguments.clone());
             if (answers.containsKey(method.getName())) return answers.get(method.getName()).apply(arguments);
-            if (method.getName().equals("save")) return arguments[0];
+            if (method.getName().equals("save") || method.getName().equals("saveAndFlush")) return arguments[0];
+            if (method.getName().equals("paidAmountOf")) return java.math.BigDecimal.ZERO;
             Class<?> result = method.getReturnType();
             if (result == Optional.class) return Optional.empty();
             if (result == List.class || result == Iterable.class || result == Collection.class) return List.of();

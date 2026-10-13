@@ -121,3 +121,9 @@ VALUES (DATE '2026-01-01', (SELECT id FROM staff WHERE employee_code = 'MGR-001'
 
 INSERT INTO audit_logs (actor_id, action, entity_type, entity_id)
 VALUES ((SELECT id FROM staff WHERE employee_code = 'MGR-001'), 'COURSE_TRANSFER', 'course_transfers', 1);
+
+-- These generated legacy demo rows are synthetic CI data, not patient records.
+-- Give the pre-existing demo rows valid-shaped test IDs for the latest Thai constraints.
+UPDATE patients SET identity_number = lpad((9000000000000 + id)::text, 13, '0')
+WHERE identity_document_type = 'NATIONAL_ID'
+  AND (identity_number IS NULL OR identity_number !~ '^[0-9]{13}$');

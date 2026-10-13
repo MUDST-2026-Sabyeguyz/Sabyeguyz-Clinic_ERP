@@ -66,6 +66,8 @@ public class CourseVisitUsageService {
     public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
                                  LocalDate visitDate, Long actorId) {
         require(course != null, "ต้องระบุคอร์ส");
+        require(course.getCourseStatus() == com.sabyeguyz.clinicv2.enums.CourseStatus.Active,
+                "คอร์สนี้ไม่อยู่ในสถานะพร้อมใช้งาน");
         require(visit != null, "ต้องมีการเช็คอินก่อนจึงจะใช้สิทธิ์คอร์สได้");
         require(usingPatient != null, "ต้องระบุผู้ป่วยที่ใช้สิทธิ์");
         require(treatingStaff != null, "ต้องระบุผู้รักษา");
@@ -83,6 +85,12 @@ public class CourseVisitUsageService {
 
         BigDecimal allocationPerVisit = commissionAllocationPerVisit(course);
         BigDecimal gross = allocationPerVisit;
+        // Rounded per-visit allocations must never exceed the locked commission pool.
+        if (course.getTotalCourseCommissionPool() != null) {
+            BigDecimal available = course.getTotalCourseCommissionPool()
+                    .subtract(course.getGrossCommissionAllocatedTotal()).max(BigDecimal.ZERO);
+            gross = gross.min(available);
+        }
         Staff caseOwner = course.getCaseOwnerStaff();
         boolean substituted = !treatingStaff.getId().equals(caseOwner.getId());
 

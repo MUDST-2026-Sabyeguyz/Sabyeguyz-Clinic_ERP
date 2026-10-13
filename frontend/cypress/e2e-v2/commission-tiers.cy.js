@@ -12,9 +12,9 @@ describe('commission tiers', () => {
 
   it('saves a changed rate as a new scheme version and keeps it after a reload', () => {
     cy.visitAs('manager', '/staff/commission/tiers')
-    cy.get('tbody tr').eq(0).contains('button', 'แก้ไข').click()
-    cy.contains('label', 'อัตราคอมมิชชัน (%)').find('input').clear().type('5.5')
-    cy.contains('button', 'บันทึก Tier').click()
+    cy.contains('button', '+ เพิ่ม Scheme Version').click()
+    cy.get('.scheme-tier-editor article').first().contains('label', 'อัตรา (%)').find('input').clear().type('5.5')
+    cy.get('.tier-drawer footer').contains('button', 'บันทึก').click()
     cy.noAlert()
     cy.get('tbody tr').eq(0).should('contain.text', '5.5%')
     cy.reload()
@@ -28,20 +28,20 @@ describe('commission tiers', () => {
 
   it('refuses a tier whose range overlaps another', () => {
     cy.visitAs('manager', '/staff/commission/tiers')
-    cy.contains('button', '+ เพิ่ม Tier').click()
-    cy.contains('label', 'ยอดขายขั้นต่ำ').find('input').clear().type('50000')
-    cy.contains('label', 'ยอดขายสูงสุด').find('input').type('65000')
-    cy.contains('button', 'บันทึก Tier').click()
-    cy.contains('.validation-error', 'ช่วงยอดขายซ้อนกับ Tier ที่มีอยู่').should('be.visible')
+    cy.contains('button', '+ เพิ่ม Scheme Version').click()
+    cy.get('.scheme-tier-editor article').first().contains('label', 'สูงสุด').find('input').clear().type('65000')
+    cy.get('.scheme-tier-editor article').eq(1).contains('label', 'ขั้นต่ำ').find('input').should('have.value', '60000')
+    cy.get('.tier-drawer footer').contains('button', 'บันทึก').click()
+    cy.contains('.drawer-error', 'ตรวจช่วงยอดขายและอัตราของ Tier').should('be.visible')
     cy.get('tbody tr').should('have.length', 5)
   })
 
   it('refuses a minimum above the maximum', () => {
     cy.visitAs('manager', '/staff/commission/tiers')
-    cy.contains('button', '+ เพิ่ม Tier').click()
-    cy.contains('label', 'ยอดขายขั้นต่ำ').find('input').clear().type('200000')
-    cy.contains('label', 'ยอดขายสูงสุด').find('input').type('100000')
-    cy.contains('button', 'บันทึก Tier').click()
-    cy.get('.validation-error').should('be.visible')
+    cy.contains('button', '+ เพิ่ม Scheme Version').click()
+    cy.get('.scheme-tier-editor article').first().contains('label', 'ขั้นต่ำ').find('input').clear().type('200000')
+    cy.get('.scheme-tier-editor article').first().contains('label', 'สูงสุด').find('input').clear().type('100000')
+    cy.get('.tier-drawer footer').contains('button', 'บันทึก').click()
+    cy.get('.drawer-error').should('be.visible')
   })
 })

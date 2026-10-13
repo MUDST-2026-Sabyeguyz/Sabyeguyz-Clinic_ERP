@@ -77,7 +77,7 @@ public class V2WorkflowScenariosController {
                         LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), AppointmentStatus.Unconfirmed, 1L);
                 case "book-bad-initial-status" -> service.book(new Patient(), new Branch(), new Staff(), new Service(), null,
                         LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), AppointmentStatus.Completed, 1L);
-                case "book-new-patient" -> service.bookNewPatient("สมชาย ใจดี", null, new Branch(), new Staff(),
+                case "book-new-patient" -> service.bookNewPatient("สมชาย ใจดี", "0812345678", new Branch(), new Staff(),
                         com.sabyeguyz.clinicv2.enums.RequestedServiceType.Course, null, LocalDate.of(2026, 12, 1),
                         LocalTime.of(9, 0), AppointmentStatus.Unconfirmed, 1L);
                 case "new-nickname-with-phone" -> service.bookNewPatient("แบงค์", "0812345678", new Branch(), new Staff(),
@@ -322,7 +322,7 @@ public class V2WorkflowScenariosController {
         var prints = new V2RepositoryStub<>(CourseUsagePrintRepository.class);
         var events = new V2RepositoryStub<>(CourseUsagePrintEventRepository.class);
         var service = new CourseUsagePrintService(prints.proxy(), events.proxy());
-        Course course = lockedCourse(); course.setCourseNo("RE-0000001"); course.setCourseName("คอร์สทดสอบ");
+        Course course = lockedCourse(); course.setCourseNo("RE00000010"); course.setCourseName("คอร์สทดสอบ");
         var usage = new CourseVisitUsage();
         usage.setCourse(course); usage.setVisitDate(LocalDate.of(2026, 9, 1).atStartOfDay());
         usage.setUsageStatus(scenario.equals("issue-reversed-usage") ? UsageStatus.Reversed : UsageStatus.Completed);
@@ -339,7 +339,7 @@ public class V2WorkflowScenariosController {
             var event = (CourseUsagePrintEvent) events.arguments("save").get(0)[0];
             return Map.of("version", print.getDocumentVersion(), "eventType", event.getEventType(),
                     "issuedBy", print.getIssuedBy(), "sameUsage", print.getVisitUsage() == usage,
-                    "snapshotHasCourseNo", print.getDocumentSnapshot().contains("RE-0000001"));
+                    "snapshotHasCourseNo", print.getDocumentSnapshot().contains("RE00000010"));
         });
     }
 

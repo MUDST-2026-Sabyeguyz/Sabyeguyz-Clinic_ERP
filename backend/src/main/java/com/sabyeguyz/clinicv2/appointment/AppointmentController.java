@@ -98,7 +98,7 @@ public class AppointmentController {
                                 @RequestParam(defaultValue = "0") int page,
                                 @RequestParam(defaultValue = "20") int size) {
         Long branchId = branchCode == null || branchCode.isBlank() ? null : resolveBranch(branchCode).getId();
-        AppointmentStatus statusValue = status == null || status.isBlank() ? null : AppointmentStatus.valueOf(status);
+        AppointmentStatus statusValue = status == null || status.isBlank() ? null : parseStatus(status);
         Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date, therapistId,
                 statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
                 PageRequest.of(page, size, Sort.by("appointmentDate").ascending().and(Sort.by("appointmentTime").ascending())));
@@ -187,7 +187,23 @@ public class AppointmentController {
 
     private static AppointmentStatus parseInitialStatus(String status) {
         if (status == null || status.isBlank()) return AppointmentStatus.Confirmed;
-        return AppointmentStatus.valueOf(status.trim());
+        return parseStatus(status);
+    }
+
+    private static String apiStatus(AppointmentStatus status) {
+        return switch (status) {
+            case InService -> "IN_SERVICE";
+            case NoShow -> "NO_SHOW";
+            default -> status.name().toUpperCase(java.util.Locale.ROOT);
+        };
+    }
+
+    private static AppointmentStatus parseStatus(String text) {
+        String value = text.trim();
+        for (AppointmentStatus status : AppointmentStatus.values()) {
+            if (apiStatus(status).equalsIgnoreCase(value) || status.name().equalsIgnoreCase(value)) return status;
+        }
+        throw new IllegalArgumentException("Invalid appointment status: " + text);
     }
 
     private PatientVisit requireVisit(Long appointmentId) {
@@ -216,7 +232,7 @@ public class AppointmentController {
         return new Response(appointment.getId(), appointment.getBranch().getBranchCode(), patientSummary,
                 new TherapistSummary(appointment.getStaff().getId(),
                         appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname()),
-                serviceSummary, startAt, startAt, appointment.getAppointmentStatus().name(), null, null,
+                serviceSummary, startAt, startAt, apiStatus(appointment.getAppointmentStatus()), null, null,
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),
                 appointment.getContactPhone());
     }
