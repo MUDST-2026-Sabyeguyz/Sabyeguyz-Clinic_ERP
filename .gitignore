@@ -2,3 +2,5 @@
 /.env
 /.env.*
 !/.env.example
+/evidence/
+/deploy/k8s/*.rendered.yaml

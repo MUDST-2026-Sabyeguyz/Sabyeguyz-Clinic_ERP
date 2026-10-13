@@ -1,10 +1,7 @@
 name: Frontend CI
 
 on:
-  push:
-    branches: [develop, 'feat/**', 'feature/**']
-  pull_request:
-    branches: [develop]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -44,18 +41,36 @@ jobs:
         run: |
           export POSTGRES_PASSWORD="$(openssl rand -hex 32)"
           export JWT_SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$POSTGRES_PASSWORD"
+          echo "::add-mask::$JWT_SECRET"
+          export COMPOSE_PROJECT_NAME="frontend-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           printf 'POSTGRES_PASSWORD=%s\nJWT_SECRET=%s\n' "$POSTGRES_PASSWORD" "$JWT_SECRET" >> "$GITHUB_ENV"
+          echo "COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME" >> "$GITHUB_ENV"
           docker compose up --build --wait -d postgres backend
 
       - name: Cypress end-to-end tests
         uses: cypress-io/github-action@v6
+        env:
+          CYPRESS_demoUsername: manager
+          # Public synthetic account seeded by the project's V20 migration.
+          CYPRESS_demoPassword: manager123
         with:
           working-directory: frontend
           install: false
           start: npm run dev -- --host localhost
           wait-on: 'http://localhost:5173'
           browser: chrome
-          command: npm run test:e2e -- --browser chrome
+          command: npm run test:e2e -- --browser chrome --reporter junit --reporter-options "mochaFile=cypress/results/results-[hash].xml"
+
+      - name: Upload browser test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-browser-tests-${{ github.sha }}
+          path: |
+            frontend/cypress/screenshots/
+            frontend/cypress/results/
+          if-no-files-found: ignore
 
       - name: Stop backend test services
         if: always()

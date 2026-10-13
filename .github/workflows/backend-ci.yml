@@ -1,10 +1,7 @@
 name: Backend CI
 
 on:
-  push:
-    branches: [develop, 'feat/**', 'feature/**']
-  pull_request:
-    branches: [develop]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -33,3 +30,13 @@ jobs:
 
       - name: Test and package
         run: mvn --batch-mode --no-transfer-progress verify
+
+      - name: Upload backend test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-tests-and-jacoco-${{ github.sha }}
+          path: |
+            backend/target/surefire-reports/*.xml
+            backend/target/site/jacoco/
+          if-no-files-found: error
