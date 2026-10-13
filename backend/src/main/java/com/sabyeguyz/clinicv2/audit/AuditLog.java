@@ -22,7 +22,7 @@ public class AuditLog {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "action_enum")
     private AuditAction action;
 
     @Column(name = "old_value", columnDefinition = "text")

@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.course;
 
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitRepository;
+import com.sabyeguyz.clinicv2.appointment.PatientVisitService;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
@@ -16,8 +17,10 @@ import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
+import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.role.PermissionService;
+import com.sabyeguyz.clinicv2.sale.Discount;
 import com.sabyeguyz.clinicv2.sale.Receipt;
-import com.sabyeguyz.clinicv2.sale.ReceiptRepository;
 import com.sabyeguyz.clinicv2.sale.ReceiptService;
 import com.sabyeguyz.clinicv2.sale.SalesTransactionService;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -26,6 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -46,57 +50,69 @@ import org.springframework.web.bind.annotation.*;
  *   the Case Owner as the Treating PT (substitute-PT usage isn't reachable
  *   through this endpoint); the "using patient" for a Shared Course is
  *   likewise always the Course's original buyer, never a shared member.</li>
- *   <li>{@code reverse}: there is no CourseVisitUsageService method to
- *   properly reverse a usage's commission side effects yet. This only
- *   writes a compensating Course_ledger Adjustment entry to restore the
- *   qty balance - it does NOT reverse the Commission_allocation_ledger
- *   row or the Course's running commission totals.</li>
+ *   <li>{@code use}: Course_visit_usage.visit_id is NOT NULL, so a usage always
+ *   belongs to a visit. With an appointmentId it uses that appointment's
+ *   checked-in visit; without one (what the frontend sends today) it records a
+ *   walk-in visit for the buyer, checked in and completed at the Case Owner.</li>
+ *   <li>{@code reverse}: reverses the usage (Treatment movement) or the
+ *   transfer (TransferOut/TransferIn movement) the given ledger movement
+ *   belongs to, with proper Reversal ledger entries, a reversed commission
+ *   allocation and a cancellation record. Other movement types (Purchase,
+ *   Adjustment, Reversal) cannot be reversed here.</li>
  *   <li>{@code cancel}: only flips course_status to Cancelled. The
  *   Commission_System_Requirement_Dev §22 Refund/Cancellation rules
  *   (stop future allocation, compute adjustment, audit trail) are not
  *   implemented.</li>
  * </ul>
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 public class CoursePurchaseController {
     private final CourseRepository courses;
     private final CourseLedgerRepository ledger;
     private final CourseVisitUsageRepository usages;
     private final CourseVisitUsageService usageService;
+    private final CourseTransferService transferService;
+    private final PermissionService permissions;
     private final CommissionAllocationLedgerRepository allocationLedger;
     private final ReceiptService receiptService;
-    private final ReceiptRepository receipts;
     private final SalesTransactionService salesTransactionService;
     private final PatientRepository patients;
     private final BranchRepository branches;
     private final ServiceRepository services;
     private final PatientVisitRepository visits;
+    private final PatientVisitService visitService;
     private final AppUserRepository users;
     private final CurrentActor actor;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
+                                     CourseTransferService transferService, PermissionService permissions,
                                      CommissionAllocationLedgerRepository allocationLedger, ReceiptService receiptService,
-                                     ReceiptRepository receipts, SalesTransactionService salesTransactionService,
+                                     SalesTransactionService salesTransactionService,
                                      PatientRepository patients, BranchRepository branches, ServiceRepository services,
-                                     PatientVisitRepository visits, AppUserRepository users, CurrentActor actor) {
+                                     PatientVisitRepository visits, PatientVisitService visitService,
+                                     AppUserRepository users, CurrentActor actor) {
         this.courses = courses;
         this.ledger = ledger;
         this.usages = usages;
         this.usageService = usageService;
+        this.transferService = transferService;
+        this.permissions = permissions;
         this.allocationLedger = allocationLedger;
         this.receiptService = receiptService;
-        this.receipts = receipts;
         this.salesTransactionService = salesTransactionService;
         this.patients = patients;
         this.branches = branches;
         this.services = services;
         this.visits = visits;
+        this.visitService = visitService;
         this.users = users;
         this.actor = actor;
     }
 
-    public record PurchaseRequest(Long patientId, Long courseId, String branchCode) {}
+    public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
+                                   BigDecimal discountValue) {}
     public record UseRequest(Long coursePurchaseId, Long appointmentId, String note) {}
     public record ReasonRequest(String reason) {}
 
@@ -129,17 +145,19 @@ public class CoursePurchaseController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Staff seller = resolveActorStaff();
 
-        String receiptNo = "RE%s%06d".formatted(branch.getBranchCode(), receipts.count() + 1);
-        Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
-        var transaction = salesTransactionService.recordCoursePurchase(patient, branch, receipt, courseTemplate,
-                seller, null, null, null, null, LocalDate.now(), actor.currentId());
-        return toResponse(transaction.getCourse(), patient.getId());
+        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, LocalDate.now()), patient, branch, LocalDate.now(),
+                actor.currentId());
+        var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
+                seller, null, null, null, null, Discount.of(request.discountType(), request.discountValue()), null,
+                LocalDate.now(), actor.currentId());
+        receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
+        return toResponse(purchase.course(), patient.getId());
     }
 
     @GetMapping("/api/course-purchases/{id}")
     public LedgerResponse ledger(@PathVariable Long id) {
         Course course = findCourse(id);
-        Long ownerPatientId = course.getReceipt().getPatient().getId();
+        Long ownerPatientId = course.getPurchaserPatient().getId();
         List<MovementResponse> movements = ledger.findByCourseIdOrderByIdDesc(id).stream()
                 .map(l -> new MovementResponse(l.getId(), l.getEntryType().name(), l.getQtyChange(), l.getRemark(),
                         l.getLedgerCreateAt()))
@@ -152,11 +170,13 @@ public class CoursePurchaseController {
     }
 
     @PostMapping("/api/course-usages")
+    @Transactional
     public Response use(@RequestBody UseRequest request) {
         Course course = findCourse(request.coursePurchaseId());
-        Patient owner = course.getReceipt().getPatient();
-        PatientVisit visit = request.appointmentId() == null ? null
-                : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId()).orElse(null);
+        Patient owner = course.getPurchaserPatient();
+        PatientVisit visit = request.appointmentId() == null ? walkInVisit(course, owner)
+                : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
+                        .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
         // Always treats the Case Owner as the Treating PT - see class Javadoc.
         usageService.use(course, visit, owner, course.getCaseOwnerStaff(), LocalDate.now(), actor.currentId());
         return toResponse(courses.findById(course.getId()).orElseThrow(), owner.getId());
@@ -166,21 +186,13 @@ public class CoursePurchaseController {
     public Response reverse(@PathVariable Long movementId, @RequestBody ReasonRequest request) {
         CourseLedger original = ledger.findById(movementId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการ"));
-        // Compensating entry only - does not undo commission side effects (see class Javadoc).
-        CourseLedger compensating = new CourseLedger();
-        compensating.setCourse(original.getCourse());
-        compensating.setPatient(original.getPatient());
-        compensating.setEntryType(CourseLedgerEntryType.Adjustment);
-        compensating.setQtyChange(-original.getQtyChange());
-        long newBalance = ledger.sumQtyChangeByCourseAndPatient(original.getCourse().getId(), original.getPatient().getId())
-                - original.getQtyChange();
-        compensating.setBalanceAfter((int) newBalance);
-        compensating.setReferenceType("REVERSAL");
-        compensating.setReferenceId(original.getId());
-        compensating.setRemark(request.reason());
-        compensating.setLedgerCreateAt(Instant.now());
-        compensating.setLedgerCreateBy(actor.currentId());
-        ledger.save(compensating);
+        Permission permission = permissions.getOrCreate("COURSE_REVERSE", "Course", actor.currentId());
+        switch (original.getEntryType()) {
+            case Treatment -> usageService.reverse(original.getVisitUsage(), permission, request.reason(), actor.currentId());
+            case TransferOut, TransferIn ->
+                    transferService.reverse(original.getTransfer(), permission, request.reason(), actor.currentId());
+            default -> throw new IllegalArgumentException("ไม่รองรับการย้อนรายการประเภท " + original.getEntryType());
+        }
         Course course = findCourse(original.getCourse().getId());
         return toResponse(course, original.getPatient().getId());
     }
@@ -192,7 +204,13 @@ public class CoursePurchaseController {
         course.setCourseUpdateAt(Instant.now());
         course.setCourseUpdateBy(actor.currentId());
         Course saved = courses.save(course);
-        return toResponse(saved, saved.getReceipt().getPatient().getId());
+        return toResponse(saved, saved.getPurchaserPatient().getId());
+    }
+
+    private PatientVisit walkInVisit(Course course, Patient owner) {
+        PatientVisit visit = visitService.checkInWalkIn(owner, course.getReceipt().getBranch(),
+                course.getCaseOwnerStaff(), actor.currentId());
+        return visitService.complete(visit.getId(), actor.currentId());
     }
 
     private Staff resolveActorStaff() {
@@ -213,13 +231,13 @@ public class CoursePurchaseController {
                 : ledger.sumQtyChangeByCourseAndPatient(course.getId(), forPatientId);
         boolean expired = course.getExpiryDate().isBefore(LocalDate.now());
         boolean usable = !expired && course.getCourseStatus() == CourseStatus.Active && remaining > 0;
-        Patient patient = course.getReceipt().getPatient();
+        Patient patient = course.getPurchaserPatient();
         return new Response(course.getId(), new PatientSummary(patient.getId(), patient.getPatientHn(),
                 patient.getPatientFname() + " " + patient.getPatientLname()),
                 course.getReceipt().getBranch().getBranchCode(),
                 new CourseSummary(course.getService().getId(), course.getCourseNo(), course.getCourseName()),
-                course.getCoursePrice(), course.getTotalVisits(), course.getBonusVisits() == null ? 0 : course.getBonusVisits(),
-                course.getTotalVisits() + (course.getBonusVisits() == null ? 0 : course.getBonusVisits()),
+                course.getCoursePrice(), course.getPaidVisits(), course.getBonusVisits() == null ? 0 : course.getBonusVisits(),
+                course.getTotalVisits(),
                 course.getVisitsUsed(), (int) remaining,
                 course.getCourseCreateAt(), course.getExpiryDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
                 expired, usable, course.getCourseStatus().name(), course.getCommissionStatus().name(),

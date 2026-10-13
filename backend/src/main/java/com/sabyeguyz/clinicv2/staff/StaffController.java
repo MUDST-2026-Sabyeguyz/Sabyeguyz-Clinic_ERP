@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
  * so this only exposes Staff's own columns. Prefer {@code /api/users} for
  * anything that needs the account fields together with Staff.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/staff")
 public class StaffController {

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
  * {@link com.sabyeguyz.clinicv2.sale.SalesTransactionController}'s
  * course-purchase endpoints instead.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/courses")
 public class CourseTemplateController {
