@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.catalog;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.enums.ServiceType;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.math.BigDecimal;
@@ -7,6 +8,7 @@ import java.util.List;
 import org.springframework.web.bind.annotation.*;
 
 /** Matches frontend/src/api/client.ts's catalogApi + lookups (read-only). */
+@Transactional
 @RestController
 public class CatalogController {
     private final ServiceRepository services;

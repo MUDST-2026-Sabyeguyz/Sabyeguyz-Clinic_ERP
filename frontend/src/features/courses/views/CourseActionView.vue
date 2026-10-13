@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
@@ -52,7 +53,7 @@ const errorMessage = ref('')
 const selectedCourse = ref<UiCourse>({} as UiCourse)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
-const usageDate = ref('2026-09-17')
+const usageDate = ref(clinicToday())
 const usageReview = ref(false)
 const usageSuccess = ref(false)
 const usageConfirmDialog = ref(false)
