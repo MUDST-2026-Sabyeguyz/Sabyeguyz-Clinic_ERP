@@ -38,8 +38,10 @@ import org.springframework.web.bind.annotation.*;
  *   had, just made explicit.</li>
  * </ul>
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/users")
+@org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
 public class UserManagementController {
     private final AppUserRepository users;
     private final AppUserService appUserService;
@@ -139,7 +141,9 @@ public class UserManagementController {
     }
 
     private Role resolveOrCreateRole(String roleName) {
-        String name = roleName.trim().toUpperCase();
+        String name = "MANAGER".equalsIgnoreCase(roleName.trim()) ? "Manager"
+                : "THERAPIST".equalsIgnoreCase(roleName.trim()) ? "Therapist" : null;
+        if (name == null) throw new IllegalArgumentException("บทบาทต้องเป็น MANAGER หรือ THERAPIST");
         return roles.findByRoleName(name).orElseGet(() -> {
             Role role = new Role();
             role.setRoleName(name);
@@ -162,7 +166,7 @@ public class UserManagementController {
     private Response toResponse(AppUser user) {
         Staff staff = user.getStaff();
         String roleName = userRoles.findByUserId(user.getId()).stream()
-                .map(userRole -> userRole.getRole().getRoleName())
+                .map(userRole -> userRole.getRole().getRoleName().toUpperCase(java.util.Locale.ROOT))
                 .findFirst().orElse(null);
         Branch branch = staff == null ? null : staff.getBranch();
         // Staff has no phone column in the v2 data dictionary (a gap vs. the old API) - always null here.

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
  * templates go through {@link CourseTemplateController} (/api/courses)
  * even though both are the same v2 Service entity underneath.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/services")
 public class ServiceManagementController {
@@ -38,11 +39,12 @@ public class ServiceManagementController {
     @GetMapping
     public List<Response> list() {
         return repository.findAll().stream()
-                .filter(s -> s.getServiceType() != ServiceType.Course)
+                .filter(s -> s.getServiceType() == ServiceType.SingleVisit)
                 .map(ServiceManagementController::toResponse).toList();
     }
 
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
     public Response create(@Valid @RequestBody Request request) {
         Service created = service.create(request.code(), request.name(), ServiceType.SingleVisit, request.price(),
@@ -51,6 +53,7 @@ public class ServiceManagementController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Service existing = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         existing.setServiceName(request.name());
@@ -59,6 +62,7 @@ public class ServiceManagementController {
     }
 
     @DeleteMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deactivate(@PathVariable Long id) {
         service.deactivate(id, actor.currentId());

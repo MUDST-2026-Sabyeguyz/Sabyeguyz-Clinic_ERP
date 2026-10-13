@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.JdbcTypeCode;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import jakarta.persistence.*;
@@ -16,6 +18,7 @@ public class MonthlyCommissionClosing {
     private Long id;
 
     /** yyyy-mm */
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "closing_month", length = 7, nullable = false)
     private String closingMonth;
 
