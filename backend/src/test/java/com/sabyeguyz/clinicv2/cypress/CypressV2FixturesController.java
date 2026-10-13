@@ -72,8 +72,8 @@ public class CypressV2FixturesController {
         jdbc.update("DELETE FROM payment_method WHERE method_name NOT IN ('Cash', 'Transfer', 'QR', 'Credit Card')");
         jdbc.update("DELETE FROM master_data_value WHERE value_name NOT IN ('General', 'VIP', 'Walk-in', 'Facebook', 'Friend', 'None')");
         jdbc.update("DELETE FROM master_data_type WHERE type_name NOT IN ('Customer Group', 'Referral Channel', 'Insurance Type', 'Insurance Company')");
-        jdbc.update("DELETE FROM commission_tier WHERE commission_scheme_id IN (SELECT commission_scheme_id FROM commission_scheme WHERE scheme_name <> 'Default Tier Scheme')");
-        jdbc.update("DELETE FROM commission_scheme WHERE scheme_name <> 'Default Tier Scheme'");
+        jdbc.update("DELETE FROM commission_tier WHERE commission_scheme_id <> (SELECT MIN(commission_scheme_id) FROM commission_scheme)");
+        jdbc.update("DELETE FROM commission_scheme WHERE commission_scheme_id <> (SELECT MIN(commission_scheme_id) FROM commission_scheme)");
         jdbc.update("UPDATE commission_tier SET tier_status = TRUE");
         jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL, commission_after_termination_policy = NULL, termination_policy_locked_at = NULL");
         jdbc.update("UPDATE app_user SET user_status = TRUE WHERE username <> 'system'");

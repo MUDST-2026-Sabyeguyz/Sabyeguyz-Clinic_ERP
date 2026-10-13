@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { commissionApi } from '@/api/client'
 
@@ -56,7 +57,21 @@ async function saveTier() {
   }
   if (editingIndex.value >= 0) tiers[editingIndex.value] = record
   else tiers.push(record)
-  try { await commissionApi.updateScheme(scheme.id,{name:scheme.name,version:scheme.version,effectiveFrom:scheme.effectiveFrom,effectiveTo:scheme.effectiveTo,tiers:tiers.filter(t=>t.active).sort((a,b)=>a.min-b.min).map((t,index)=>({minimum:t.min,maximum:t.max,rate:t.rate/100,order:index+1}))}); editorOpen.value = false }
+  try {
+    // Tiers are never edited in place (requirement 24): a change is saved as a new scheme version that takes
+    // effect today, so courses already locked to an older version keep their rate.
+    const created = (await commissionApi.createScheme({
+      name: scheme.name,
+      version: String(Number(scheme.version) + 1),
+      effectiveFrom: clinicToday(),
+      effectiveTo: null,
+      tiers: tiers.filter((t) => t.active).sort((a, b) => a.min - b.min).map((t, index) => ({ minimum: t.min, maximum: t.max, rate: t.rate / 100, order: index + 1 })),
+    })) as { id: number; version: number; effectiveFrom: string }
+    scheme.id = created.id
+    scheme.version = String(created.version)
+    scheme.effectiveFrom = created.effectiveFrom
+    editorOpen.value = false
+  }
   catch(caught){error.value=caught instanceof Error?caught.message:'บันทึก Tier ไม่สำเร็จ'}
 }
 onMounted(async () => {
@@ -67,7 +82,7 @@ onMounted(async () => {
     if (current) {
       Object.assign(scheme,current)
       const backendTiers = await commissionApi.tiers(current.id) as Array<{ minimum: number; maximum: number | null; rate: number; order: number }>
-      tiers.splice(0, tiers.length, ...backendTiers.map((tier) => ({ order: tier.order, min: tier.minimum, max: tier.maximum, rate: tier.rate * 100, active: true })))
+      tiers.splice(0, tiers.length, ...backendTiers.map((tier) => ({ order: tier.order, min: tier.minimum, max: tier.maximum, rate: Math.round(tier.rate * 10000) / 100, active: true })))
     }
   } catch (caught) { error.value = caught instanceof Error ? caught.message : 'โหลดเกณฑ์คอมมิชชันไม่สำเร็จ' }
   finally { loading.value = false }
