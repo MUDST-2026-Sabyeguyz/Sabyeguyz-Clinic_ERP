@@ -42,8 +42,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     if (response.status === 401) {
       clearSession()
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/staff/'))
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/staff/')) {
         window.location.assign('/')
+        // The page is being replaced by the login page: do not let the screens that asked report an error.
+        return new Promise<T>(() => {})
+      }
     }
     const errorBody = body as ApiErrorBody | undefined
     throw new ApiError(
@@ -151,7 +154,7 @@ export type Course = {
 export type Therapist = { id: number; code: string; fullName: string; branchCode: string }
 export type PaymentMethod = { id: number; code: string; name: string; active: boolean }
 export type AppointmentStatus =
-  'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
+  'UNCONFIRMED' | 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
 export type Appointment = {
   id: number
   branchCode: string
@@ -353,6 +356,16 @@ export const serviceManagementApi = {
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
 }
 
+// The v2 backend names statuses in PascalCase (Confirmed, InService, NoShow); the screens use UPPER_SNAKE.
+// Either spelling is accepted from the server, so the old backend keeps working too.
+const statusFromServer = (status: string) =>
+  status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() as AppointmentStatus
+const statusToServer: Record<AppointmentStatus, string> = {
+  UNCONFIRMED: 'Unconfirmed', CONFIRMED: 'Confirmed', ARRIVED: 'Arrived', IN_SERVICE: 'InService',
+  COMPLETED: 'Completed', CANCELLED: 'Cancelled', RESCHEDULED: 'Rescheduled', NO_SHOW: 'NoShow',
+}
+const normalizeAppointment = (item: Appointment): Appointment => ({ ...item, status: statusFromServer(item.status) })
+
 export const appointmentApi = {
   search: (
     params: {
@@ -366,11 +379,13 @@ export const appointmentApi = {
   ) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') query.set(key, String(value))
+      if (value !== undefined && value !== '') query.set(key, key === 'status' ? statusToServer[value as AppointmentStatus] : String(value))
     })
-    return api.get<AppointmentPage>(`/api/appointments?${query}`)
+    return api
+      .get<AppointmentPage>(`/api/appointments?${query}`)
+      .then((page) => ({ ...page, items: page.items.map(normalizeAppointment) }))
   },
-  get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
+  get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`).then(normalizeAppointment),
   create: (body: {
     branchCode: string
     patientId: number
@@ -378,15 +393,16 @@ export const appointmentApi = {
     serviceId: number
     startAt: string
     note?: string
-  }) => api.post<Appointment>('/api/appointments', body),
-  checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}),
-  startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}),
-  noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}),
-  complete: (id: number) => api.post<Appointment>(`/api/appointments/${id}/complete`, {}),
+  }) => api.post<Appointment>('/api/appointments', body).then(normalizeAppointment),
+  confirm: (id: number) => api.post<Appointment>(`/api/appointments/${id}/confirm`, {}).then(normalizeAppointment),
+  checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}).then(normalizeAppointment),
+  startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}).then(normalizeAppointment),
+  noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}).then(normalizeAppointment),
+  complete: (id: number) => api.post<Appointment>(`/api/appointments/${id}/complete`, {}).then(normalizeAppointment),
   cancel: (id: number, reason: string) =>
-    api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }),
+    api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }).then(normalizeAppointment),
   reschedule: (id: number, body: { startAt: string; therapistId?: number }) =>
-    api.patch<Appointment>(`/api/appointments/${id}`, body),
+    api.patch<Appointment>(`/api/appointments/${id}`, body).then(normalizeAppointment),
 }
 
 export const treatmentApi = {
@@ -401,6 +417,18 @@ export const treatmentApi = {
   }) => api.post('/api/treatments', body),
 }
 
+type RawMovement = { id: number; type: string; quantity: number; reason?: string; balanceAfter?: number; createdAt: string }
+type LedgerResponse = {
+  purchase: CoursePurchase & {
+    commissionStatus?: string
+    lockedCommissionRate?: number
+    totalCourseCommissionPool?: number
+    commissionAllocationPerVisit?: number
+  }
+  movements: unknown[]
+  allocations: Array<{ visitDate: string; gross: number; fee: number; ownerNet: number }>
+}
+
 export const courseApi = {
   usageTransactions: () => api.get<CourseUsageTransaction[]>('/api/course-usages'),
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
@@ -413,17 +441,19 @@ export const courseApi = {
     api.get<CoursePurchase[]>(`/api/patients/${patientId}/courses`),
   purchase: (body: { patientId: number; courseId: number; branchCode: string }) =>
     api.post<CoursePurchase>('/api/course-purchases', body),
+  // v2 names ledger entries Purchase/Treatment/TransferOut...; the screens use USAGE/TRANSFER_OUT... and show
+  // the balance after each entry, which v2 does not send, so it is rebuilt from the current balance (newest first).
   ledger: (id: number) =>
-    api.get<{
-      purchase: CoursePurchase & {
-        commissionStatus?: string
-        lockedCommissionRate?: number
-        totalCourseCommissionPool?: number
-        commissionAllocationPerVisit?: number
-      }
-      movements: unknown[]
-      allocations: Array<{ visitDate: string; gross: number; fee: number; ownerNet: number }>
-    }>(`/api/course-purchases/${id}`),
+    api.get<LedgerResponse>(`/api/course-purchases/${id}`).then((ledger) => {
+      let balance = ledger.purchase.remaining
+      const movements = (ledger.movements as RawMovement[]).map((movement) => {
+        const type = movement.type === 'Treatment' ? 'USAGE' : movement.type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+        const balanceAfter = movement.balanceAfter ?? balance
+        balance -= movement.quantity
+        return { ...movement, type, balanceAfter }
+      })
+      return { ...ledger, movements }
+    }),
   use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) =>
     api.post<CoursePurchase>('/api/course-usages', body),
   reverse: (movementId: number, reason: string) =>
@@ -519,19 +549,38 @@ export const userManagementApi = {
   activate: (id: number) => api.patch<ManagedUser>(`/api/users/${id}/activate`, {}),
 }
 
+// v2 names transaction types and statuses in PascalCase (SingleVisit, CoursePurchase, NoShow); the screens use
+// SINGLE_VISIT / COURSE / NO_SHOW. The old backend's spellings pass through unchanged.
+type RevenueDailyType = 'COURSE' | 'SINGLE_VISIT' | 'ASSESSMENT'
+const revenueTypeFromServer = (type: string) =>
+  type === 'CoursePurchase' ? 'COURSE' : /[a-z]/.test(type) && /^[A-Za-z]+$/.test(type)
+    ? type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+    : type
+
 export const reportApi = {
   dashboard: (from: string, to: string, branchCode?: string) =>
     api.get<DashboardResponse>(
       `/api/dashboard/summary?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
     ),
   appointments: (from: string, to: string, branchCode?: string) =>
-    api.get<AppointmentReport>(
-      `/api/reports/appointments?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
-    ),
+    api
+      .get<AppointmentReport>(
+        `/api/reports/appointments?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
+      )
+      .then((report) => ({
+        ...report,
+        byStatus: report.byStatus.map((item) => ({ ...item, status: statusFromServer(item.status) })),
+      })),
   revenue: (from: string, to: string, branchCode?: string) =>
-    api.get<RevenueReport>(
-      `/api/reports/revenue?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
-    ),
+    api
+      .get<RevenueReport>(
+        `/api/reports/revenue?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
+      )
+      .then((report) => ({
+        ...report,
+        byCategory: report.byCategory.map((item) => ({ ...item, type: revenueTypeFromServer(item.type) })),
+        dailyByCategory: report.dailyByCategory?.map((item) => ({ ...item, type: revenueTypeFromServer(item.type) as RevenueDailyType })),
+      })),
   balances: (from: string, to: string, branchCode?: string, patientId?: number) =>
     api.get<CourseBalanceReport>(
       `/api/reports/course-balances?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}), ...(patientId ? { patientId: String(patientId) } : {}) })}`,
