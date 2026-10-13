@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
  * Room has no "code" column (just room_name/room_type) - code is always
  * null here, a real gap vs. the old ClinicResource type.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/resources")
 public class ResourceController {

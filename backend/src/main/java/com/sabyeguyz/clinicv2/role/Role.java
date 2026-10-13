@@ -11,6 +11,7 @@ public class Role {
     @Column(name = "role_id")
     private Long id;
 
+    @org.hibernate.annotations.ColumnTransformer(read = "cast(role_name as text)", write = "cast(? as role_name_enum)")
     @Column(name = "role_name", length = 50, nullable = false, unique = true)
     private String roleName;
 

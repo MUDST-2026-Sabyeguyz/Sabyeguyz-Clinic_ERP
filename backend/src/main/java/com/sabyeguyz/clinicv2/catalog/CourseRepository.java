@@ -13,22 +13,24 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     long countByReceiptId(Long receiptId);
 
+    boolean existsBySaleTransactionId(Long saleTransactionId);
+
     List<Course> findBySellerStaffIdAndSaleMonth(Long sellerStaffId, String saleMonth);
 
-    /** Sum of course_price sold by a seller within a given sale_month (yyyy-mm), for Commission Tier lookup. */
-    @Query("select coalesce(sum(c.coursePrice), 0) from Course c "
-            + "where c.sellerStaff.id = :sellerStaffId and c.saleMonth = :saleMonth")
-    BigDecimal sumCoursePriceBySellerAndSaleMonth(@Param("sellerStaffId") Long sellerStaffId,
-                                                   @Param("saleMonth") String saleMonth);
+    /** Sales credited to a staff member in a sale_month (yyyy-mm), for Commission Tier lookup. */
+    @Query("select coalesce(sum(s.creditedSalesAmount), 0) from CourseSaleStaffShare s "
+            + "where s.staff.id = :staffId and s.course.saleMonth = :saleMonth")
+    BigDecimal sumCreditedSalesByStaffAndSaleMonth(@Param("staffId") Long staffId,
+                                                    @Param("saleMonth") String saleMonth);
 
-    /** Every Course a patient can use: as the Receipt's buyer (implicit Owner) or as a Shared Member. */
+    /** Every Course a patient can use: as the purchaser (implicit Owner) or as a Shared Member. */
     @Query("select distinct c from Course c left join CourseSharedMember m on m.course = c "
-            + "where c.receipt.patient.id = :patientId or m.patient.id = :patientId")
+            + "where c.purchaserPatient.id = :patientId or m.patient.id = :patientId")
     List<Course> findByPatientId(@Param("patientId") Long patientId);
 
-    @Query("select c from Course c where c.receipt.saleDate between :from and :to")
+    @Query("select c from Course c where cast(c.receipt.saleDate as date) between :from and :to")
     List<Course> findByReceiptSaleDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
-    @Query("select distinct c.sellerStaff.id from Course c where c.saleMonth = :saleMonth")
-    List<Long> findDistinctSellerStaffIdsBySaleMonth(@Param("saleMonth") String saleMonth);
+    @Query("select distinct s.staff.id from CourseSaleStaffShare s where s.course.saleMonth = :saleMonth")
+    List<Long> findDistinctCreditedStaffIdsBySaleMonth(@Param("saleMonth") String saleMonth);
 }

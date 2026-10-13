@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.patient;
 
+import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.JdbcTypeCode;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -15,6 +17,7 @@ public class HnSequence {
     private Branch branch;
 
     @Id
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "year_month", length = 4, nullable = false)
     private String yearMonth;
 
