@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
@@ -27,6 +29,8 @@ import org.springframework.web.bind.annotation.*;
  * the old API grouped Sale totals directly; this is closer to how v2's
  * Tier actually gets picked (see CourseService/MonthlyCommissionClosingService).
  */
+@Transactional
+@PreAuthorize("hasRole('MANAGER')")
 @RestController
 @RequestMapping("/api/commission")
 public class CommissionController {
@@ -42,6 +46,8 @@ public class CommissionController {
     private final StaffRepository staff;
     private final PermissionRepository permissions;
     private final CurrentActor actor;
+    private final CommissionRateOverrideService overrideService;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CommissionController(CommissionSchemeService schemeService, CommissionTierResolver tierResolver,
                                  CommissionSchemeRepository schemes, MonthlyCommissionClosingService closingService,
@@ -49,7 +55,9 @@ public class CommissionController {
                                  CommissionAllocationLedgerRepository allocationLedger,
                                  TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
                                  CourseSaleStaffShareRepository saleShares,
-                                 StaffRepository staff, PermissionRepository permissions, CurrentActor actor) {
+                                 StaffRepository staff, PermissionRepository permissions, CurrentActor actor,
+                                 CommissionRateOverrideService overrideService,
+                                 com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.schemeService = schemeService;
         this.tierResolver = tierResolver;
         this.schemes = schemes;
@@ -62,6 +70,8 @@ public class CommissionController {
         this.staff = staff;
         this.permissions = permissions;
         this.actor = actor;
+        this.overrideService = overrideService;
+        this.audit = audit;
     }
 
     public record TierInput(BigDecimal minimum, BigDecimal maximum, BigDecimal rate, int order) {}
@@ -186,6 +196,23 @@ public class CommissionController {
             }
         }
         return closings(month);
+    }
+
+    public record OverrideRequest(BigDecimal rate, String reason) {}
+    public record OverrideResponse(Long courseId, BigDecimal oldRate, BigDecimal newRate, String reason,
+                                    BigDecimal commissionPool) {}
+
+    /** Manually corrects the locked commission rate of one course (needs a reason; audited). */
+    @PostMapping("/courses/{courseId}/override-rate")
+    public OverrideResponse overrideRate(@PathVariable Long courseId, @RequestBody OverrideRequest request) {
+        Course course = courses.findById(courseId).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        Permission permission = resolveOrCreatePermission("COMMISSION_RATE_OVERRIDE");
+        var saved = overrideService.override(course, request.rate(), permission, request.reason(), actor.currentId());
+        audit.record("course", String.valueOf(courseId), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                "commission rate " + saved.getOldRate(),
+                "commission rate " + saved.getNewRate() + ": " + request.reason(), actor.currentId());
+        return new OverrideResponse(courseId, saved.getOldRate(), saved.getNewRate(), saved.getReason(),
+                courses.findById(courseId).orElseThrow().getTotalCourseCommissionPool());
     }
 
     @GetMapping("/treatment-fees")
