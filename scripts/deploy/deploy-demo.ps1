@@ -16,6 +16,12 @@ if (-not $minikubeExe) { $minikubeExe = (Get-Command minikube -ErrorAction Stop)
 if (-not (Test-Path -LiteralPath $minikubeExe)) { throw 'Configure MINIKUBE_EXE with the installed Minikube path' }
 if (-not $env:SMOKE_USERNAME -or -not $env:SMOKE_PASSWORD) { throw 'Set synthetic Manager smoke credentials' }
 $env:SOURCE_SHA = $SourceSha
+$kubectlProcessExe = (Get-Command kubectl).Source
+if ($kubectlProcessExe -match '[\\/]chocolatey[\\/]bin[\\/]kubectl\.exe$') {
+    $chocoRoot = Split-Path (Split-Path $kubectlProcessExe -Parent) -Parent
+    $nativeKubectl = Join-Path $chocoRoot 'lib/kubernetes-cli/tools/kubernetes/client/bin/kubectl.exe'
+    if (Test-Path -LiteralPath $nativeKubectl) { $kubectlProcessExe = $nativeKubectl }
+}
 
 function Invoke-K {
     & kubectl --context $Context -n $namespace @args
@@ -58,9 +64,13 @@ foreach ($imageRef in @($BackendImage, $FrontendImage)) {
     $taskImageTar = (Resolve-Path (Join-Path $ImageArchiveDirectory "$role.tar")).Path
     if ((Get-FileHash -LiteralPath $taskImageTar -Algorithm SHA256).Hash.ToLowerInvariant() -ne $record.archive_sha256) { throw 'Image archive checksum mismatch' }
     $archiveId = [Guid]::NewGuid().ToString('N')
-    $guestTar = "/tmp/clinic-demo-$archiveId.tar"
+    $guestTar = "/var/lib/clinic-demo-$archiveId.tar"
     try {
-        Invoke-Tool docker @('cp', $taskImageTar, "${Context}:$guestTar")
+        # /tmp in the node is not the filesystem view used by Docker's copy API.
+        # Write through exec into /var, then verify the bytes on the node itself.
+        Invoke-Tool python @((Join-Path $PSScriptRoot 'send-image.py'), '--container', $Context, '--source', $taskImageTar, '--destination', $guestTar)
+        $nodeArchiveHash = & $minikubeExe -p $Context ssh -- "sudo sha256sum $guestTar"
+        if ($LASTEXITCODE -ne 0 -or ($nodeArchiveHash -join "`n") -notmatch '^[a-f0-9]{64}' -or $Matches[0] -ne $record.archive_sha256) { throw 'Archive checksum differs after transfer to node' }
         Invoke-Tool $minikubeExe @('-p', $Context, 'ssh', '--', "sudo ctr -n k8s.io images import --digests $guestTar")
     } finally {
         Invoke-Tool $minikubeExe @('-p', $Context, 'ssh', '--', "sudo rm -f $guestTar")
@@ -112,7 +122,7 @@ Invoke-K apply --dry-run=server -f $manifestPath | Out-Null
 $oldBackend = Invoke-K get deployment clinic-demo-backend --ignore-not-found -o 'jsonpath={.spec.template.spec.containers[0].image}'
 $oldFrontend = Invoke-K get deployment clinic-demo-frontend --ignore-not-found -o 'jsonpath={.spec.template.spec.containers[0].image}'
 $schemaFingerprintSql = "SELECT coalesce(string_agg(coalesce(version,script) || ':' || coalesce(checksum::text,'') || ':' || success::text, ',' ORDER BY installed_rank),'') FROM flyway_schema_history"
-$oldSchema = if ($oldBackend) { Invoke-K exec clinic-demo-postgres-0 -- psql -U clinic -d clinic_erp -Atc $schemaFingerprintSql } else { $null }
+$oldSchema = if ($oldBackend) { Invoke-K exec clinic-demo-postgres-0 '--' psql -U clinic -d clinic_erp -Atc $schemaFingerprintSql } else { $null }
 $forwarder = $null
 try {
     Invoke-K apply -f $manifestPath
@@ -123,7 +133,7 @@ try {
     $actualFrontend = Invoke-K get deployment clinic-demo-frontend -o 'jsonpath={.spec.template.spec.containers[0].image}'
     if ($actualBackend -ne $BackendImage -or $actualFrontend -ne $FrontendImage) { throw 'Deployed image references differ from CI digests' }
 
-    $forwarder = Start-Process -FilePath (Get-Command kubectl).Source -ArgumentList @('--context',$Context,'-n','kube-system','port-forward','svc/traefik','17969:80','--address','127.0.0.1') -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $evidenceDir 'port-forward.log') -RedirectStandardError (Join-Path $evidenceDir 'port-forward-error.log')
+    $forwarder = Start-Process -FilePath $kubectlProcessExe -ArgumentList @('--context',$Context,'-n','kube-system','port-forward','svc/traefik','17969:80','--address','127.0.0.1') -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $evidenceDir 'port-forward.log') -RedirectStandardError (Join-Path $evidenceDir 'port-forward-error.log')
     $baseUrl = 'http://localhost:17969/sabyeguyz'
     $ready = $false
     for ($attempt=0; $attempt -lt 30; $attempt++) {
@@ -144,21 +154,21 @@ try {
     $patient = Get-Content -Raw (Join-Path $evidenceDir 'ingress-create.json') | ConvertFrom-Json
     if ($patient.hn -notmatch '^[A-Za-z0-9-]+$') { throw 'Unexpected HN format in synthetic smoke output' }
     $sqlCount = "SELECT count(*) FROM patients WHERE hn='$($patient.hn)'"
-    $dbCount = Invoke-K exec clinic-demo-postgres-0 -- psql -U clinic -d clinic_erp -Atc $sqlCount
+    $dbCount = Invoke-K exec clinic-demo-postgres-0 '--' psql -U clinic -d clinic_erp -Atc $sqlCount
     if ($dbCount -ne '1') { throw 'HTTP-created patient was not found exactly once in PostgreSQL' }
-    Invoke-K exec clinic-demo-postgres-0 -- psql -U clinic -d clinic_erp -Atc 'SELECT version,success FROM flyway_schema_history ORDER BY installed_rank' | Set-Content (Join-Path $evidenceDir 'flyway-history.txt')
+    Invoke-K exec clinic-demo-postgres-0 '--' psql -U clinic -d clinic_erp -Atc 'SELECT version,success FROM flyway_schema_history ORDER BY installed_rank' | Set-Content (Join-Path $evidenceDir 'flyway-history.txt')
 
     # A restore rehearsal is a separate test from retaining the same PVC.
-    Invoke-K exec clinic-demo-postgres-0 -- pg_dump -U clinic -d clinic_erp -Fc -f /tmp/clinic-demo.dump
+    Invoke-K exec clinic-demo-postgres-0 '--' pg_dump -U clinic -d clinic_erp -Fc -f /tmp/clinic-demo.dump
     $rehearsalDb = 'demo_restore_' + [Guid]::NewGuid().ToString('N').Substring(0,12)
     try {
-        Invoke-K exec clinic-demo-postgres-0 -- createdb -U clinic $rehearsalDb
-        Invoke-K exec clinic-demo-postgres-0 -- pg_restore -U clinic -d $rehearsalDb --exit-on-error --no-owner /tmp/clinic-demo.dump
-        $restoredCount = Invoke-K exec clinic-demo-postgres-0 -- psql -U clinic -d $rehearsalDb -Atc $sqlCount
+        Invoke-K exec clinic-demo-postgres-0 '--' createdb -U clinic $rehearsalDb
+        Invoke-K exec clinic-demo-postgres-0 '--' pg_restore -U clinic -d $rehearsalDb --exit-on-error --no-owner /tmp/clinic-demo.dump
+        $restoredCount = Invoke-K exec clinic-demo-postgres-0 '--' psql -U clinic -d $rehearsalDb -Atc $sqlCount
         if ($restoredCount -ne '1') { throw 'Restore rehearsal readback failed' }
     } finally {
-        Invoke-K exec clinic-demo-postgres-0 -- dropdb -U clinic --if-exists $rehearsalDb
-        Invoke-K exec clinic-demo-postgres-0 -- rm -f /tmp/clinic-demo.dump
+        Invoke-K exec clinic-demo-postgres-0 '--' dropdb -U clinic --if-exists $rehearsalDb
+        Invoke-K exec clinic-demo-postgres-0 '--' rm -f /tmp/clinic-demo.dump
     }
     $pvcBefore = Invoke-K get pvc data-clinic-demo-postgres-0 -o 'jsonpath={.metadata.uid}'
     Invoke-K delete pod clinic-demo-postgres-0 --wait=true
@@ -177,14 +187,38 @@ try {
         boundary='Infrastructure and synthetic patient smoke only; financial acceptance remains separate'
     }
     $checkpoint | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidenceDir 'deployment-checkpoint.json') -Encoding utf8
-    Invoke-K get pods,deployments,statefulsets,services,ingress,pvc -o wide | Set-Content (Join-Path $evidenceDir 'resources.txt')
+    $runUrl = if ($env:GITHUB_RUN_ID) { "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" } else { 'Local verification' }
+    $readableReport = @"
+# ผล deployment ของ Clinic ERP demo
+
+สถานะ: PASS
+
+- Source SHA: $SourceSha
+- Pipeline: $runUrl
+- Context / Namespace: $Context / $namespace
+- Completed UTC: $($checkpoint.completed_at_utc)
+- Backend image: $BackendImage
+- Frontend image: $FrontendImage
+- PVC UID: $pvcAfter
+
+ผ่าน archive SHA256 และ image config identity, server dry-run, readiness,
+Ingress HTML/JavaScript/health, unauthenticated 401, Manager login,
+patient create/profile/search, direct PostgreSQL count = 1,
+restore rehearsal ใน DB แยก และ readback หลัง recreate DB/backend โดยคง PVC เดิม
+
+ขอบเขต: infrastructure และผู้ป่วยสังเคราะห์เท่านั้น ไม่ใช่ financial acceptance
+ดู backend/browser/Compose artifacts ของ run เดียวกันสำหรับจำนวน tests และ coverage
+Restore rehearsal นี้ไม่แทนนโยบาย production/off-cluster backup
+"@
+    Set-Content (Join-Path $evidenceDir 'DEPLOYMENT_REPORT_TH.md') -Value $readableReport -Encoding utf8
+    Invoke-K get 'pods,deployments,statefulsets,services,ingress,pvc' -o wide | Set-Content (Join-Path $evidenceDir 'resources.txt')
     Write-Output "PASS: $SourceSha deployed to $Context/$namespace with authenticated Ingress, restore rehearsal and PVC persistence"
 } catch {
     $failureMessage = $_.Exception.Message
-    Invoke-K get pods,events -o wide | Set-Content (Join-Path $evidenceDir 'failure-resources.txt')
+    Invoke-K get 'pods,events' -o wide | Set-Content (Join-Path $evidenceDir 'failure-resources.txt')
     # Image rollback is safe only when Flyway history is unchanged.
     if ($oldBackend -and $oldFrontend) {
-        $currentSchema = Invoke-K exec clinic-demo-postgres-0 -- psql -U clinic -d clinic_erp -Atc $schemaFingerprintSql
+        $currentSchema = Invoke-K exec clinic-demo-postgres-0 '--' psql -U clinic -d clinic_erp -Atc $schemaFingerprintSql
         if ($currentSchema -eq $oldSchema) {
             Invoke-K set image deployment/clinic-demo-backend "backend=$oldBackend"
             Invoke-K set image deployment/clinic-demo-frontend "frontend=$oldFrontend"

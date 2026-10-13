@@ -53,6 +53,7 @@ flowchart LR
 | `deploy/k8s/clinic-demo.template.yaml` | ConfigMap, Services, Deployments, PostgreSQL StatefulSet/PVC, Traefik Middleware และ Ingress |
 | `scripts/ci/image-provenance.py` | ตรวจ archive config กับ registry descriptor และเก็บ archive SHA256/source identity |
 | `scripts/deploy/deploy-demo.ps1` | ตรวจ archive checksum/config, render/dry-run/import/deploy/Ingress/restore/persistence และ image rollback เมื่อ schema ยังตรงเดิม |
+| `scripts/deploy/send-image.py` | ส่ง archive แบบ binary เข้า `/var/lib` ของ node ผ่าน exec แล้วตรวจ hash บน node; เลี่ยง filesystem view ของ Docker copy ใน `/tmp` |
 | `scripts/deploy/open-demo.ps1` | เปิด Traefik ที่ localhost:16969 สำหรับพรีเซนต์ |
 
 ## GitHub runner คืออะไร และเราใช้แบบไหน
@@ -93,6 +94,7 @@ PR รันการทดสอบบน GitHub-hosted runner ส่วน dep
 - `compose-evidence-<SHA>`: authenticated API, direct PostgreSQL readback, restart persistence และ image digests
 - `clinic-images-<SHA>`: image archives + registry descriptors + config identity + SHA256; เก็บ 7 วันสำหรับ deploy/demo
 - `kubernetes-demo-<SHA>`: image refs ที่ deploy, Ingress, PVC UID, Flyway history, restore และ readback หลัง recreate
+- ใน Kubernetes artifact มี `DEPLOYMENT_REPORT_TH.md` ซึ่งสร้างผลภาษาไทยหลังตรวจผ่านทั้งหมด ใช้ส่งต่อผลของ run ให้เพื่อนได้
 
 Coverage backend ใช้สูตร `covered / (covered + missed) * 100` จาก JaCoCo แยก line, branch, instruction และ method ส่วน E2E ให้รายงานจำนวน scenario/module ที่มีหลักฐาน อย่าพูดว่า “E2E 100%” จากการมี specs ผ่านเพียงบางหน้า
 
@@ -100,11 +102,14 @@ Restore rehearsal ของเดโมใช้ DB สังเคราะห�
 
 Local Docker 29/containerd พบปัญหา export image หลัง pull (manifest อ้างถึง blob ที่ไม่มีใน tar) จึงให้ Linux CI export หลัง build/publish/pull แล้ว Windows download artifact ของ run เดียวกันและ import เข้า containerd โดยตรง โดยตรวจ archive SHA256 และ config digest ก่อน deploy ไม่ต้องเพิ่ม PAT บน Windows และไม่สลับ Docker image-store mode ของเครื่อง
 
+อ้างอิงอาการที่เกี่ยวข้องจากผู้พัฒนา: [Moby #52193](https://github.com/moby/moby/issues/52193), [Docker CLI #7278](https://github.com/docker/cli/issues/7278) ส่วนหลักฐานว่าเกิดกับเครื่องนี้มาจาก deployment log และ tar ที่ export ในการตรวจรอบนี้
+
 ## สิ่งที่ต้องทำก่อนส่ง develop
 
 - Review PR ของ DevOps และ DB แยกกัน แล้วตกลงลำดับรวม
 - ถ้ารวม DB ก่อน ให้ rebase งานนี้และตรวจ reusable workflows/smoke/fixtures บน runtime ใหม่
 - ตรวจ required checks ใน repository settings ให้ตรงกับชื่อ jobs ใหม่ก่อน merge; งานนี้ไม่ได้เปลี่ยน branch protection
+- การอ่าน branch protection ด้วย API รอบนี้ตอบ 403 จึงไม่ได้ยืนยันว่ามี required checks บังคับอัตโนมัติ ให้ทีม review ผล CI ของ PR ก่อนรวม
 - ใช้ CI ที่ SHA หลังรวม และ demo namespace ที่ผูกกับ image digest ของ SHA นั้น
 - Financial acceptance, permission matrix และ feedback business flows ต้องมีหลักฐานเพิ่มจากทีม
 

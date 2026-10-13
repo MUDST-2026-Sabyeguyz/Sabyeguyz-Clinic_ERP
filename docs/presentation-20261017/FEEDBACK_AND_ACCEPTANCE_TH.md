@@ -48,7 +48,7 @@
 | Total Course Commission | ราคาคอร์สที่ใช้คำนวณ commission × Locked Rate |
 | Commission Per Visit | Total Course Commission ÷ Total Sessions รวมครั้งแถม |
 | Owner PT รักษาเอง | รับ Commission Per Visit และหักคอร์ส 1 ครั้ง |
-| PT อื่นรักษาแทน | Owner ได้ 0 สำหรับ visit นั้น; PT ที่รักษาได้ค่ามือตาม rule; หักคอร์ส 1 ครั้ง |
+| PT อื่นรักษาแทน | Owner ได้ 0 สำหรับ visit นั้นและไม่ยกไปจ่ายย้อนหลัง; PT ที่รักษาได้ค่ามือตาม rule; หักคอร์ส 1 ครั้ง |
 | ค่ามือ 100 สูงกว่า commission 70 | จ่ายค่ามือ 100 เต็ม; Owner ได้ 0; ไม่จำกัดค่ามือไว้ที่ commission และไม่จ่ายส่วนที่เหลือให้ Owner |
 | Close | คำนวณ Tier และยอดรอจ่าย; ก่อนจ่ายจริง Admin Reopen/Recalculate ได้ |
 | Finalize | ยืนยันจ่ายจริงและล็อกงวด; การแก้ภายหลังผ่าน Adjustment งวดถัดไปพร้อมเหตุผล |
@@ -83,6 +83,8 @@ COM-01 ถึง COM-08 มาจากสูตร/ตัวอย่าง PDF
 4. Shared-course entitlement, การแบ่งเครดิตยอดขายของ PT สองคน, expiry/extend effects และ termination policy ต้องมีคำตอบชัด ไม่ infer จากคำถามที่ยังไม่มีคำตอบ
 5. HN/receipt running reset/branch scope, rounding, partial-payment และ POST ที่ timeout ยังต้องมี contract/test evidence
 6. สิทธิ์ “ตาม Figma” ต้องให้ทีมระบุ file/version/role matrix ก่อนใช้เป็น gate; งานนี้ไม่มี Figma reference ที่ตรวจได้
+
+ตัวอย่างช่องว่างที่ตรวจ source ได้จริง: `HnGenerator.format` บนฐาน develop ใช้ `%02d%s%02d%04d` คือ YY + branch 2 หลัก + month 2 หลัก + running 4 หลัก รวม 10 หลัก ขณะที่ feedback ระบุ 9 หลัก จึงยังไม่ถือว่าผ่าน HN requirement แม้ integration smoke สร้างและอ่านผู้ป่วยได้
 
 ## สิ่งที่ infra pipeline ยืนยันได้ในรอบนี้
 
