@@ -1,6 +1,8 @@
 package com.sabyeguyz.clinicv2.auth;
 
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
  * returns the first assigned role's name to keep the response shape
  * compatible, which loses information for a multi-role user.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -41,6 +44,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse register(@RequestBody RegisterRequest request) {
         AppUser user = appUserService.register(request.username(), request.password(), null, null);
