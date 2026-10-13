@@ -25,7 +25,8 @@ describe('reports', () => {
   it('offers the four reports', () => {
     cy.visitAs('manager', '/staff/reports')
     cy.contains('h1', 'รายงาน').should('be.visible')
-    cy.get('#report-select option').then((options) => {
+    cy.get('button[aria-label="เลือกรายงาน"]').click()
+    cy.get('[role="listbox"][aria-label="เลือกรายงาน"] [role="option"] span:last-child').then((options) => {
       expect([...options].map((option) => option.textContent.trim())).to.deep.equal(
         ['รายงานยอดขาย', 'ยอดคงเหลือคอร์ส', 'ประวัติการโอนคอร์ส', 'ค่าคอมมิชชั่น'])
     })
@@ -54,18 +55,18 @@ describe('reports', () => {
       sellCourse(this.fixtures, patient)
     })
     cy.visitAs('manager', '/staff/reports')
-    cy.contains('label', 'ประเภทการขาย').parent().find('select').select('Course Sales')
+    cy.chooseDropdown('กรองตามประเภทการขาย', 'Course Sales')
     cy.contains('.kpi-col', 'รายได้จาก Course Sales').should('be.visible')
     cy.contains('.kpi-col', 'รายได้จาก Single Visit').should('not.exist')
-    cy.contains('label', 'ประเภทการขาย').parent().find('select').select('ทั้งหมด')
-    cy.contains('label', 'สาขา').parent().find('select').select('02')
+    cy.chooseDropdown('กรองตามประเภทการขาย', 'ทั้งหมด')
+    cy.chooseBranch('กรองตามสาขา', '02')
     cy.contains('td', 'ไม่พบข้อมูลตามตัวกรองที่เลือก').should('be.visible')
   })
 
   it('shows the balance of a bought course', function () {
     cy.registerPatient().then((patient) => sellCourse(this.fixtures, patient))
     cy.visitAs('manager', '/staff/reports')
-    cy.get('#report-select').select('balance')
+    cy.chooseDropdown('เลือกรายงาน', 'ยอดคงเหลือคอร์ส')
     cy.contains('h2', 'ยอดคงเหลือคอร์ส').should('be.visible')
     cy.get('.report-figma-table tbody tr').first().should('contain.text', 'สมชาย ใจดี').and('contain.text', '6')
   })
@@ -73,7 +74,7 @@ describe('reports', () => {
   it('searches the balance report by patient', function () {
     cy.registerPatient().then((patient) => sellCourse(this.fixtures, patient))
     cy.visitAs('manager', '/staff/reports')
-    cy.get('#report-select').select('balance')
+    cy.chooseDropdown('เลือกรายงาน', 'ยอดคงเหลือคอร์ส')
     cy.get('input[placeholder="ค้นหาชื่อผู้ป่วย"]').type('ไม่มีคนนี้')
     cy.contains('td', 'ไม่พบข้อมูลตามตัวกรองที่เลือก').should('be.visible')
   })
@@ -87,13 +88,13 @@ describe('reports', () => {
         }))).its('status').should('equal', 201)
     })
     cy.visitAs('manager', '/staff/reports')
-    cy.get('#report-select').select('transfer')
+    cy.chooseDropdown('เลือกรายงาน', 'ประวัติการโอนคอร์ส')
     cy.get('.report-figma-table tbody tr').first().should('contain.text', 'สมชาย ใจดี').and('contain.text', 'อรุณ แสงทอง')
   })
 
   it('loads the commission report without an error', () => {
     cy.visitAs('manager', '/staff/reports')
-    cy.get('#report-select').select('commission')
+    cy.chooseDropdown('เลือกรายงาน', 'ค่าคอมมิชชั่น')
     cy.contains('h2', 'รายงานค่าคอมมิชชั่น').should('be.visible')
     cy.get('.report-error').should('not.exist')
   })

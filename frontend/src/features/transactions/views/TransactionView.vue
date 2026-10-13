@@ -278,7 +278,7 @@ async function openDetail(row: Transaction) {
 }
 
 function startCancellation() {
-  reasonType.value = 'ลงรายการหรือเลือกบริการผิด'
+  reasonType.value = ''
   otherReason.value = ''
   internalNote.value = ''
   errorMessage.value = ''
@@ -811,6 +811,10 @@ function toggleOriginal(key: string) {
                 </dd>
               </div>
               <div>
+                <dt>ช่องทาง / ประเภท</dt>
+                <dd>{{ selected.paymentMethod }}</dd>
+              </div>
+              <div>
                 <dt>ยอดสุทธิ</dt>
                 <dd>{{ selected.kind === 'sale' ? selected.quantity : '—' }}</dd>
               </div>
@@ -967,6 +971,10 @@ function toggleOriginal(key: string) {
             <h1>ยกเลิกรายการสำเร็จ</h1>
             <p>รายการถูกบันทึกในประวัติเรียบร้อยแล้ว</p>
             <dl>
+              <div>
+                <dt>เหตุผล</dt>
+                <dd>{{ selected.voidReason || '—' }}</dd>
+              </div>
               <div>
                 <dt>สถานะ</dt>
                 <dd>ยกเลิกแล้ว</dd>

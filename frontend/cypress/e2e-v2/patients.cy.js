@@ -8,7 +8,7 @@ function fillRegistrationForm({ first = 'สมชาย', last = 'ใจดี'
   cy.get('input[placeholder="example@gmail.com"]').type(email)
   cy.get('input[placeholder="xxx-xxx-xxxx"]').type(phone)
   cy.contains('label', 'ที่อยู่').find('textarea').type('99 ถนนทดสอบ กรุงเทพฯ')
-  cy.contains('label', 'ประเภทเอกสารยืนยันตัวตน').find('select').select('NATIONAL_ID')
+  cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประจำตัวประชาชน')
   cy.get('input[placeholder="กรอกเลขบัตรประชาชน 13 หลัก"]').type(identity)
 }
 
@@ -18,8 +18,8 @@ describe('patient registration', () => {
     cy.contains('h1', 'ลงทะเบียนผู้ป่วยใหม่')
     fillRegistrationForm()
     cy.contains('button', 'บันทึก').click()
+    cy.get('.confirmation-modal').contains('button', /^ใช่$/).click()
     cy.location('pathname').should('eq', '/staff/patients')
-    cy.contains('เพิ่มผู้ป่วยใหม่แล้ว').should('be.visible')
     cy.contains('td', 'สมชาย ใจดี').should('be.visible')
     cy.contains('td', '0811111111').should('be.visible')
     cy.get('td.patient-id b').first().invoke('text').should('match', /^\d{10}$/)
@@ -56,8 +56,8 @@ describe('patient registration', () => {
 
   it('switches a foreign patient to a passport', () => {
     cy.visitAs('manager', '/staff/patients/new')
-    cy.contains('label', 'สัญชาติ').find('select').select('ต่างชาติ')
-    cy.contains('label', 'ประเภทเอกสารยืนยันตัวตน').find('select').should('be.disabled').and('have.value', 'PASSPORT')
+    cy.get('input[type=radio][value=ต่างชาติ]').check()
+    cy.get('button[aria-label=ประเภทเอกสารยืนยันตัวตน]').should('be.disabled').and('contain.text', 'หนังสือเดินทาง')
     cy.get('input[placeholder="กรอกเลขหนังสือเดินทาง 10 หลัก"]').should('be.visible')
   })
 
@@ -67,12 +67,13 @@ describe('patient registration', () => {
     cy.get('input[placeholder="นามสกุล"]').type('สมิธ')
     cy.get('input[placeholder="ชื่อเล่น"]').type('จอห์น')
     cy.contains('label', 'วันเกิด').pickDate('1985-02-03')
-    cy.contains('label', 'สัญชาติ').find('select').select('ต่างชาติ')
+    cy.get('input[type=radio][value=ต่างชาติ]').check()
     cy.get('input[placeholder="example@gmail.com"]').type('john@gmail.com')
     cy.get('input[placeholder="xxx-xxx-xxxx"]').type('0899999999')
     cy.contains('label', 'ที่อยู่').find('textarea').type('London')
     cy.get('input[placeholder="กรอกเลขหนังสือเดินทาง 10 หลัก"]').type('1234567890')
     cy.contains('button', 'บันทึก').click()
+    cy.get('.confirmation-modal').contains('button', /^ใช่$/).click()
     cy.location('pathname').should('eq', '/staff/patients')
     cy.api('GET', '/api/patients').its('body.items.0').then((patient) => {
       cy.api('GET', `/api/patients/${patient.id}`).its('body.customerTypeCode').should('equal', 'Foreigner')
@@ -81,10 +82,10 @@ describe('patient registration', () => {
 
   it('keeps title and gender in step', () => {
     cy.visitAs('manager', '/staff/patients/new')
-    cy.contains('label', 'คำนำหน้า').find('select').select('นางสาว')
-    cy.contains('label', 'เพศ').find('select').should('have.value', 'หญิง')
-    cy.contains('label', 'เพศ').find('select').select('ชาย')
-    cy.contains('label', 'คำนำหน้า').find('select').should('have.value', 'นาย')
+    cy.chooseDropdown('คำนำหน้า', 'นางสาว')
+    cy.get('button[aria-label=เพศ]').should('contain.text', 'หญิง')
+    cy.chooseDropdown('เพศ', 'ชาย')
+    cy.get('button[aria-label=คำนำหน้า]').should('contain.text', 'นาย')
   })
 })
 
@@ -121,16 +122,16 @@ describe('patient search', () => {
 
   it('filters by branch', () => {
     cy.visitAs('manager', '/staff/patients')
-    cy.get('select[aria-label="กรองตามสาขา"]').select('01')
+    cy.chooseBranch('กรองตามสาขา', '01')
     cy.contains('พบผู้ป่วยทั้งหมด 2 ราย').should('be.visible')
-    cy.get('select[aria-label="กรองตามสาขา"]').select('02')
+    cy.chooseBranch('กรองตามสาขา', '02')
     cy.contains('พบผู้ป่วยทั้งหมด 1 ราย').should('be.visible')
     cy.contains('td', 'จันทร์ เพ็ญ').should('be.visible')
   })
 
   it('sorts by newest registration first', () => {
     cy.visitAs('manager', '/staff/patients')
-    cy.get('select[aria-label="เรียงลำดับผู้ป่วย"]').select('newest')
+    cy.chooseDropdown('เรียงลำดับผู้ป่วย', 'เพิ่มล่าสุด')
     cy.get('tbody tr').first().should('contain.text', 'จันทร์ เพ็ญ')
   })
 
@@ -161,7 +162,7 @@ describe('patient list paging', () => {
 
 describe('patient profile', () => {
   it('shows the saved details of a patient', () => {
-    cy.registerPatient({ nickname: 'ชาย', bloodGroup: 'O' }).then((patient) => {
+    cy.registerPatient({ nickname: 'ชาย', bloodGroup: 'O', identityNumber: '1100000000101' }).then((patient) => {
       cy.visitAs('therapist', `/staff/patients/${patient.id}`)
       cy.contains('h1', 'สมชาย ใจดี').should('be.visible')
       cy.contains('HN ' + patient.hn).should('be.visible')
@@ -180,7 +181,8 @@ describe('patient profile', () => {
       field(/^เบอร์โทรศัพท์/).find('input').clear().type('0877777777')
       field(/^ที่อยู่/).find('textarea').clear().type('ที่อยู่ใหม่ เชียงใหม่')
       cy.contains('button', 'บันทึกข้อมูล').click()
-      cy.contains('บันทึกข้อมูลผู้ป่วยแล้ว').should('be.visible')
+      cy.get('.patient-confirmation').contains('button', /^ใช่$/).click()
+      cy.contains('แก้ไขข้อมูลสำเร็จ').should('be.visible')
       cy.contains('h1', 'สมหญิง ใจดี').should('be.visible')
       cy.contains('dt', 'เบอร์โทรศัพท์').parent().should('contain.text', '0877777777')
       cy.contains('dt', 'ที่อยู่').parent().should('contain.text', 'ที่อยู่ใหม่ เชียงใหม่')

@@ -1,3 +1,5 @@
+> Runtime หลักใช้ database v2 (db/migration V1 + V2) แล้ว ส่วน suite นี้เปิด legacy H2 profile แยกสำหรับ regression และมี v2 service scenarios ผ่าน repository doubles. PostgreSQL runtime/schema checks อยู่ใน Backend CI ดู [V2 Runtime CI](../../docs/testing/2026-10-13-V2-Runtime-CI.md).
+
 # Backend tests — Cypress only
 
 Run from `backend` with Java 17+ (CI uses 21), Maven, and Node.js 24:
