@@ -143,4 +143,20 @@ describe('v2 commission', () => {
       cy.apiAs(auth.token, 'POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 403)
     })
   })
+
+  it('lists a seller with course sales as OPEN before the month is closed, then as CLOSED', function () {
+    cy.registerPatient().then((patient) => {
+      cy.api('POST', '/api/course-purchases', {
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+      }).its('status').should('equal', 201)
+    })
+    cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+      expect(body).to.have.length(1)
+      expect(body[0].status).to.equal('OPEN')
+      expect(Number(body[0].sales)).to.equal(9000)
+      expect(Number(body[0].rate)).to.equal(0.05)
+    })
+    cy.api('POST', `/api/commission/closings/${month}-01`).its('body.0.status').should('equal', 'CLOSED')
+    cy.api('GET', `/api/commission/closings?month=${month}`).its('body').should('have.length', 1)
+  })
 })
