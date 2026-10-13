@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
  * returns the first assigned role's name to keep the response shape
  * compatible, which loses information for a multi-role user.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -31,7 +32,8 @@ public class AuthController {
 
     public record RegisterRequest(@NotBlank String username, @NotBlank String password) {}
 
-    public record AuthResponse(Long id, String username, String email, String role, String token) {}
+    public record AuthResponse(Long id, String username, String email, String role, String token,
+                               String branchCode, String branchName) {}
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request) {
@@ -41,6 +43,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse register(@RequestBody RegisterRequest request) {
         AppUser user = appUserService.register(request.username(), request.password(), null, null);
@@ -49,10 +52,12 @@ public class AuthController {
 
     private AuthResponse respond(AppUser user) {
         List<String> roleNames = userRoles.findByUserId(user.getId()).stream()
-                .map(userRole -> userRole.getRole().getRoleName())
+                .map(userRole -> userRole.getRole().getRoleName().toUpperCase(java.util.Locale.ROOT))
                 .toList();
         String token = tokenService.issue(user, roleNames);
         String primaryRole = roleNames.isEmpty() ? null : roleNames.get(0);
-        return new AuthResponse(user.getId(), user.getUsername(), null, primaryRole, token);
+        var branch = user.getStaff() == null ? null : user.getStaff().getBranch();
+        return new AuthResponse(user.getId(), user.getUsername(), null, primaryRole, token,
+                branch == null ? null : branch.getBranchCode(), branch == null ? null : branch.getBranchName());
     }
 }

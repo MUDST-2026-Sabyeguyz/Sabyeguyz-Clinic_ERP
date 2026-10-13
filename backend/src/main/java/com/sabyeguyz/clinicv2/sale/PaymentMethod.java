@@ -12,6 +12,7 @@ public class PaymentMethod {
     private Long id;
 
     /** e.g. Cash, Transfer, QR, Credit Card. */
+    @org.hibernate.annotations.ColumnTransformer(write = "cast(? as method_name_enum)")
     @Column(name = "method_name", length = 50, nullable = false)
     private String methodName;
 

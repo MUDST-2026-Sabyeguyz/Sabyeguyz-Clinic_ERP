@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
  * into the old flat {category, code, name} shape. v2's Master_data_value
  * has no "code" column (just value_name) - code is always null here.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/master-data")
 public class MasterDataController {

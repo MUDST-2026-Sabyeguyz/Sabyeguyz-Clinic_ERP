@@ -2,8 +2,11 @@ package com.sabyeguyz.clinicv2.sale;
 
 import com.sabyeguyz.clinicv2.course.CourseTransfer;
 import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
+import com.sabyeguyz.clinicv2.enums.CancellationType;
 import com.sabyeguyz.clinicv2.role.Permission;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
@@ -37,15 +40,24 @@ public class TransactionCancellation {
     @Column(length = 255, nullable = false)
     private String reason;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "reason_code", nullable = false, columnDefinition = "reason_code_enum")
+    private com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode = com.sabyeguyz.clinicv2.enums.ReasonCode.Other;
+
+    public com.sabyeguyz.clinicv2.enums.ReasonCode getReasonCode() { return reasonCode; }
+    public void setReasonCode(com.sabyeguyz.clinicv2.enums.ReasonCode value) { reasonCode = value; }
+
     @Column(name = "cancelled_by", nullable = false)
     private Long cancelledBy;
 
     @Column(name = "cancelled_at", nullable = false)
     private Instant cancelledAt;
 
-    /** Adjustment record created to reverse the effect. */
-    @Column(name = "reversal_reference_id")
-    private Long reversalReferenceId;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "cancellation_type", nullable = false, columnDefinition = "cancellation_type_enum")
+    private CancellationType cancellationType;
 
     public TransactionCancellation() {}
 
@@ -66,6 +78,6 @@ public class TransactionCancellation {
     public void setCancelledBy(Long cancelledBy) { this.cancelledBy = cancelledBy; }
     public Instant getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
-    public Long getReversalReferenceId() { return reversalReferenceId; }
-    public void setReversalReferenceId(Long reversalReferenceId) { this.reversalReferenceId = reversalReferenceId; }
+    public CancellationType getCancellationType() { return cancellationType; }
+    public void setCancellationType(CancellationType cancellationType) { this.cancellationType = cancellationType; }
 }

@@ -20,12 +20,12 @@ public class AppointmentStatusHistory {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "from_status")
+    @Column(name = "from_status", columnDefinition = "appointment_status_enum")
     private AppointmentStatus fromStatus;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "to_status", nullable = false)
+    @Column(name = "to_status", nullable = false, columnDefinition = "appointment_status_enum")
     private AppointmentStatus toStatus;
 
     @Column(name = "changed_by", nullable = false)

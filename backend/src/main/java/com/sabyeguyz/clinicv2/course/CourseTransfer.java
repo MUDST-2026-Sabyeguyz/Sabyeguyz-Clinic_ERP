@@ -2,12 +2,21 @@ package com.sabyeguyz.clinicv2.course;
 
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.patient.Patient;
+import com.sabyeguyz.clinicv2.enums.TransferStatus;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
 @Table(name = "course_transfer")
 public class CourseTransfer {
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "branch_id")
+    private com.sabyeguyz.clinicv2.branch.Branch branch;
+
+    public com.sabyeguyz.clinicv2.branch.Branch getBranch() { return branch; }
+    public void setBranch(com.sabyeguyz.clinicv2.branch.Branch value) { branch = value; }
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "transfer_id")
@@ -34,6 +43,11 @@ public class CourseTransfer {
 
     @Column(length = 255)
     private String remark;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "transfer_status", nullable = false, columnDefinition = "transfer_status_enum")
+    private TransferStatus transferStatus = TransferStatus.Completed;
 
     @Column(name = "transfer_create_at", nullable = false, updatable = false)
     private Instant transferCreateAt;
@@ -70,4 +84,6 @@ public class CourseTransfer {
     public void setTransferUpdateAt(Instant transferUpdateAt) { this.transferUpdateAt = transferUpdateAt; }
     public Long getTransferUpdateBy() { return transferUpdateBy; }
     public void setTransferUpdateBy(Long transferUpdateBy) { this.transferUpdateBy = transferUpdateBy; }
+    public TransferStatus getTransferStatus() { return transferStatus; }
+    public void setTransferStatus(TransferStatus transferStatus) { this.transferStatus = transferStatus; }
 }
