@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.auth;
 
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
@@ -38,6 +40,8 @@ import org.springframework.web.bind.annotation.*;
  *   had, just made explicit.</li>
  * </ul>
  */
+@Transactional
+@PreAuthorize("hasRole('MANAGER')")
 @RestController
 @RequestMapping("/api/users")
 public class UserManagementController {
@@ -48,10 +52,12 @@ public class UserManagementController {
     private final UserRoleRepository userRoles;
     private final BranchRepository branches;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public UserManagementController(AppUserRepository users, AppUserService appUserService,
                                      StaffService staffService, RoleRepository roles, UserRoleRepository userRoles,
-                                     BranchRepository branches, CurrentActor actor) {
+                                     BranchRepository branches, CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.users = users;
         this.appUserService = appUserService;
         this.staffService = staffService;
@@ -59,6 +65,7 @@ public class UserManagementController {
         this.userRoles = userRoles;
         this.branches = branches;
         this.actor = actor;
+        this.audit = audit;
     }
 
     public record Request(
@@ -93,6 +100,8 @@ public class UserManagementController {
         appUserService.assignRole(user.getId(), role.getId());
         appUserService.grantBranchAccess(user.getId(), branch.getId());
 
+        audit.record("app_user", String.valueOf(user.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
+                request.username() + " role " + request.role(), actor.currentId());
         return toResponse(users.findById(user.getId()).orElseThrow());
     }
 
@@ -114,6 +123,8 @@ public class UserManagementController {
         appUserService.assignRole(id, role.getId());
         appUserService.grantBranchAccess(id, branch.getId());
 
+        audit.record("app_user", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, null,
+                "profile updated: " + request.username() + " role " + request.role(), actor.currentId());
         return toResponse(users.findById(id).orElseThrow());
     }
 
@@ -121,11 +132,13 @@ public class UserManagementController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deactivate(@PathVariable Long id) {
         appUserService.deactivate(id);
+        audit.record("app_user", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "active", "inactive", actor.currentId());
     }
 
     @PatchMapping("/{id}/activate")
     public Response activate(@PathVariable Long id) {
         appUserService.activate(id);
+        audit.record("app_user", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "inactive", "active", actor.currentId());
         return toResponse(findUser(id));
     }
 
