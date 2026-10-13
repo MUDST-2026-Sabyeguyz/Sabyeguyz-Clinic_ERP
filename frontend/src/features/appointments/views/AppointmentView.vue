@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
@@ -57,7 +58,7 @@ const form = ref({
   serviceId: 0,
   roomId: 0,
   branchCode: 'RP',
-  date: new Date().toISOString().slice(0, 10),
+  date: clinicToday(),
   time: '09:00',
   note: '',
 })
@@ -148,7 +149,7 @@ const statusFilterOptions: [AppointmentUiStatus, string][] = [
   ['CANCELLED', 'ยกเลิก'],
 ]
 function uiStatusFor(status: AppointmentStatus): AppointmentUiStatus {
-  if (status === 'RESCHEDULED') return 'PENDING'
+  if (status === 'UNCONFIRMED' || status === 'RESCHEDULED') return 'PENDING'
   if (status === 'COMPLETED') return 'COMPLETED'
   if (status === 'CANCELLED' || status === 'NO_SHOW') return 'CANCELLED'
   return 'CONFIRMED'
@@ -214,7 +215,7 @@ const formatTime = (value: string) =>
     minute: '2-digit',
     timeZone: 'Asia/Bangkok',
   })
-const calendarDate = computed(() => selectedDate.value || new Date().toISOString().slice(0, 10))
+const calendarDate = computed(() => selectedDate.value || clinicToday())
 const calendarTherapists = computed(() =>
   therapists.value
     .filter(
@@ -244,7 +245,7 @@ const calendarPatientName = (therapistId: number, time: string) =>
 const calendarTherapistName = (therapistId: number, time: string) =>
   calendarAppointment(therapistId, time)?.therapist.fullName || ''
 function moveCalendarDate(days: number) {
-  const date = new Date(`${calendarDate.value}T00:00:00`)
+  const date = new Date(`${calendarDate.value}T12:00:00+07:00`)
   date.setDate(date.getDate() + days)
   selectedDate.value = date.toISOString().slice(0, 10)
 }
@@ -266,7 +267,8 @@ async function load() {
     services.value = s
     therapists.value = t
     rooms.value = r
-    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].branchCode
+    if (branches.value[0] && !form.value.branchCode)
+      form.value.branchCode = branches.value[0].branchCode
   } catch (error) {
     appointments.value = []
     totalPages.value = 0
@@ -312,7 +314,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
     serviceId: services.value[0]?.id ?? 0,
     roomId: firstRoomId(branchCode),
     branchCode,
-    date: new Date().toISOString().slice(0, 10),
+    date: clinicToday(),
     time: '09:00',
     note: '',
   }
@@ -440,17 +442,19 @@ async function saveStatus(item: Appointment, status: AppointmentStatus, reason =
   statusNotice.value = 'กำลังบันทึก...'
   try {
     const result =
-      status === 'ARRIVED'
-        ? await appointmentApi.checkIn(item.id)
-        : status === 'IN_SERVICE'
-          ? await appointmentApi.startService(item.id)
-          : status === 'COMPLETED'
-            ? await appointmentApi.complete(item.id)
-            : status === 'NO_SHOW'
-              ? await appointmentApi.noShow(item.id)
-              : status === 'CANCELLED'
-                ? await appointmentApi.cancel(item.id, reason)
-                : null
+      status === 'CONFIRMED'
+        ? await appointmentApi.confirm(item.id)
+        : status === 'ARRIVED'
+          ? await appointmentApi.checkIn(item.id)
+          : status === 'IN_SERVICE'
+            ? await appointmentApi.startService(item.id)
+            : status === 'COMPLETED'
+              ? await appointmentApi.complete(item.id)
+              : status === 'NO_SHOW'
+                ? await appointmentApi.noShow(item.id)
+                : status === 'CANCELLED'
+                  ? await appointmentApi.cancel(item.id, reason)
+                  : null
     if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น')
     Object.assign(item, result)
     statusNotice.value = 'บันทึกแล้ว'
@@ -826,7 +830,17 @@ function confirmCancellation() {
                     formatStatus(item.status)
                   }}</span>
                 </td>
-                <td><button class="appointment-edit" @click="openEdit(item)">แก้ไข</button></td>
+                <td>
+                  <button
+                    v-if="item.status === 'UNCONFIRMED'"
+                    class="appointment-edit"
+                    :disabled="savingStatusId === item.id"
+                    @click="saveStatus(item, 'CONFIRMED')"
+                  >
+                    ยืนยันนัด
+                  </button>
+                  <button class="appointment-edit" @click="openEdit(item)">แก้ไข</button>
+                </td>
               </tr>
               <tr v-if="filteredAppointments.length === 0">
                 <td class="appointment-empty" colspan="10">ไม่พบข้อมูลนัดหมาย</td>
