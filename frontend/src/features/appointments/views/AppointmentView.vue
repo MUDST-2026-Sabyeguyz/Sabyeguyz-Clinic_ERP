@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { appointmentApi, branchApi, catalogApi, patientApi, resourceApi, type Appointment, type AppointmentStatus, type Branch, type ClinicResource, type Patient, type ServiceOption, type Therapist } from '@/api/client'
@@ -29,7 +30,7 @@ const savingAppointment = ref(false)
 const pendingSaveConfirmation = ref(false)
 const pendingCancellation = ref<{ item: Appointment } | null>(null)
 const cancellationReason = ref('')
-const form = ref({ patientId: 0, therapistId: 0, serviceId: 0, roomId: 0, branchCode: 'RP', date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' })
+const form = ref({ patientId: 0, therapistId: 0, serviceId: 0, roomId: 0, branchCode: 'RP', date: clinicToday(), time: '09:00', note: '' })
 const branchOptions = computed(() => branches.value.filter((item) => item.active))
 const roomOptions = computed(() => rooms.value.filter((item) => item.active && item.type === 'ROOM' && item.branchCode === form.value.branchCode))
 const isEditing = computed(() => viewMode.value === 'edit')
@@ -51,9 +52,9 @@ const filteredAppointments = computed(() => {
 // and rescheduled are displayed when current, but cannot be selected directly.
 const statusActionOptions: AppointmentStatus[] = ['ARRIVED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW']
 const timeOptions = ['09:00', '10:00', '11:00', '14:00']
-const statusLabels: Record<AppointmentStatus, string> = { CONFIRMED: 'ยืนยันแล้ว', ARRIVED: 'มาถึงคลินิก', IN_SERVICE: 'กำลังรับบริการ', COMPLETED: 'เสร็จสิ้น', CANCELLED: 'ยกเลิก', RESCHEDULED: 'เลื่อนนัด', NO_SHOW: 'ไม่มาตามนัด' }
+const statusLabels: Record<AppointmentStatus, string> = { UNCONFIRMED: 'รอยืนยัน', CONFIRMED: 'ยืนยันแล้ว', ARRIVED: 'มาถึงคลินิก', IN_SERVICE: 'กำลังรับบริการ', COMPLETED: 'เสร็จสิ้น', CANCELLED: 'ยกเลิก', RESCHEDULED: 'เลื่อนนัด', NO_SHOW: 'ไม่มาตามนัด' }
 const formatStatus = (status: AppointmentStatus) => statusLabels[status]
-const statusOptionsFor = (item: Appointment) => [...new Set([item.status, ...statusActionOptions])]
+const statusOptionsFor = (item: Appointment): AppointmentStatus[] => [...new Set<AppointmentStatus>([item.status, ...(item.status === 'UNCONFIRMED' ? ['CONFIRMED' as const] : []), ...statusActionOptions])]
 const formatThaiDate = (value: string) => new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
 const formatTime = (value: string) => new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
 const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
@@ -68,7 +69,7 @@ onMounted(load)
 async function changePage(nextPage: number) { if (nextPage >= 0 && nextPage < totalPages.value) { page.value = nextPage; await load() } }
 function firstRoomId(branchCode: string) { return rooms.value.find((item) => item.active && item.type === 'ROOM' && item.branchCode === branchCode)?.id ?? 0 }
 function syncRoomToBranch() { if (!roomOptions.value.some((item) => item.id === form.value.roomId)) form.value.roomId = firstRoomId(form.value.branchCode) }
-function openCreate() { editingId.value = null; patientQuery.value = ''; showPatientResults.value = false; const branch = branchOptions.value[0]; const branchCode = branch?.branchCode ?? '01'; form.value = { patientId: 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, roomId: firstRoomId(branchCode), branchCode, date: new Date().toISOString().slice(0, 10), time: '09:00', note: '' }; viewMode.value = 'create' }
+function openCreate() { editingId.value = null; patientQuery.value = ''; showPatientResults.value = false; const branch = branchOptions.value[0]; const branchCode = branch?.branchCode ?? '01'; form.value = { patientId: 0, therapistId: therapists.value[0]?.id ?? 0, serviceId: services.value[0]?.id ?? 0, roomId: firstRoomId(branchCode), branchCode, date: clinicToday(), time: '09:00', note: '' }; viewMode.value = 'create' }
 function openEdit(item: Appointment) { editingId.value = item.id; patientQuery.value = item.patient.fullName; showPatientResults.value = false; form.value = { patientId: item.patient.id, therapistId: item.therapist.id, serviceId: item.service.id, roomId: firstRoomId(item.branchCode), branchCode: item.branchCode, date: item.startAt.slice(0, 10), time: new Date(item.startAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }), note: item.note ?? '' }; viewMode.value = 'edit' }
 function choosePatient(patient: Patient) { form.value.patientId = patient.id; patientQuery.value = patient.fullName; showPatientResults.value = false }
 function changePatientQuery() { form.value.patientId = 0; if (patientError.value) errorMessage.value = ''; showPatientResults.value = true }
@@ -116,7 +117,7 @@ async function save() {
     savingAppointment.value = false
   }
 }
-async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') { savingStatusId.value = item.id; statusNotice.value = 'กำลังบันทึก...'; try { const result = status === 'ARRIVED' ? await appointmentApi.checkIn(item.id) : status === 'IN_SERVICE' ? await appointmentApi.startService(item.id) : status === 'COMPLETED' ? await appointmentApi.complete(item.id) : status === 'NO_SHOW' ? await appointmentApi.noShow(item.id) : status === 'CANCELLED' ? await appointmentApi.cancel(item.id, reason) : null; if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น'); Object.assign(item, result); statusNotice.value = 'บันทึกแล้ว' } catch (error) { statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' } finally { savingStatusId.value = null; window.setTimeout(() => (statusNotice.value = ''), 2200) } }
+async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') { savingStatusId.value = item.id; statusNotice.value = 'กำลังบันทึก...'; try { const result = status === 'CONFIRMED' ? await appointmentApi.confirm(item.id) : status === 'ARRIVED' ? await appointmentApi.checkIn(item.id) : status === 'IN_SERVICE' ? await appointmentApi.startService(item.id) : status === 'COMPLETED' ? await appointmentApi.complete(item.id) : status === 'NO_SHOW' ? await appointmentApi.noShow(item.id) : status === 'CANCELLED' ? await appointmentApi.cancel(item.id, reason) : null; if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น'); Object.assign(item, result); statusNotice.value = 'บันทึกแล้ว' } catch (error) { statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ' } finally { savingStatusId.value = null; window.setTimeout(() => (statusNotice.value = ''), 2200) } }
 function changeStatus(event: Event, item: Appointment) { const status = (event.target as HTMLSelectElement).value as AppointmentStatus; if (status === item.status) return; if (status === 'CANCELLED') { pendingCancellation.value = { item }; cancellationReason.value = ''; return } void saveStatus(item, status) }
 function confirmCancellation() { if (!pendingCancellation.value || !cancellationReason.value.trim()) return; const { item } = pendingCancellation.value; pendingCancellation.value = null; void saveStatus(item, 'CANCELLED', cancellationReason.value.trim()) }
 </script>
@@ -234,6 +235,7 @@ function confirmCancellation() { if (!pendingCancellation.value || !cancellation
           <ThaiDatePicker v-model="selectedDate" class="appointment-date-filter" show-calendar-icon numeric-month hide-caret aria-label="กรองตามวันที่นัด" />
           <select v-model="selectedStatus" class="appointment-status-filter" aria-label="กรองตามสถานะนัดหมาย">
             <option value="ทั้งหมด">สถานะทั้งหมด</option>
+            <option value="UNCONFIRMED">รอยืนยัน</option>
             <option value="CONFIRMED">ยืนยันแล้ว</option>
             <option value="ARRIVED">มาถึงคลินิก</option>
             <option value="IN_SERVICE">กำลังรับบริการ</option>
