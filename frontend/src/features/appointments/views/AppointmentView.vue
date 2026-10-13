@@ -41,6 +41,9 @@ const patients = ref<Patient[]>([])
 const services = ref<ServiceOption[]>([])
 const therapists = ref<Therapist[]>([])
 const rooms = ref<ClinicResource[]>([])
+const appointmentMasterReady = computed(
+  () => branches.value.length > 0 && services.value.length > 0 && therapists.value.length > 0,
+)
 const patientQuery = ref('')
 const showPatientResults = ref(false)
 const editingId = ref<number | null>(null)
@@ -334,6 +337,7 @@ function syncRoomToBranch() {
     form.value.roomId = firstRoomId(form.value.branchCode)
 }
 function openCreate(source: 'standard' | 'calendar' = 'standard') {
+  if (!appointmentMasterReady.value) return
   editingId.value = null
   createSource.value = source
   appointmentPatientType.value = 'CURRENT'
@@ -516,7 +520,13 @@ function confirmCancellation() {
         <h1>นัดหมาย</h1>
         <p>ตรวจสอบตารางนัด สร้าง แก้ไข และอัปเดตสถานะการเข้ารับบริการ</p>
         <div class="appointment-hero-actions">
-          <button class="primary hero-action" @click="openCreate()">+ สร้างนัดหมาย</button>
+          <button
+            class="primary hero-action"
+            :disabled="!appointmentMasterReady"
+            @click="openCreate()"
+          >
+            + สร้างนัดหมาย
+          </button>
           <button class="calendar-entry" type="button" @click="scheduleView = 'day'">
             <img src="/calendar-appointment.svg" alt="" /> ดูปฏิทินนัดหมาย
           </button>

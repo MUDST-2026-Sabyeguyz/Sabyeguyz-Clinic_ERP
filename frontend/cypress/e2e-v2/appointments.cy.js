@@ -62,10 +62,15 @@ describe('appointment list', () => {
 })
 
 describe('creating and changing appointments', () => {
-  it('books an appointment through the form', function () {
+  it('books through the form after delayed master data loads', function () {
     cy.registerPatient()
+    cy.intercept('GET', '/api/catalog/therapists', (request) => {
+      request.on('response', (response) => response.setDelay(2000))
+    }).as('therapists')
     cy.visitAs('manager', '/staff/appointments')
-    cy.contains('button', 'สร้างนัดหมาย').click()
+    cy.contains('button', 'สร้างนัดหมาย').should('be.disabled')
+    cy.wait('@therapists')
+    cy.contains('button', 'สร้างนัดหมาย').should('be.enabled').click()
     cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type('สมชาย')
     cy.contains('.patient-search-results button', 'สมชาย ใจดี').click()
     cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
