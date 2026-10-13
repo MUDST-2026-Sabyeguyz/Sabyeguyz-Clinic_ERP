@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import {
@@ -43,7 +44,7 @@ const filters = reactive({
   saleType: 'ทั้งหมด',
   commissionType: 'ทั้งหมด',
   from: `${new Date().getFullYear()}-08-01`,
-  to: new Date().toISOString().slice(0, 10),
+  to: clinicToday(),
 })
 
 // ── Pagination State ──────────────────────────────────────────────────────────

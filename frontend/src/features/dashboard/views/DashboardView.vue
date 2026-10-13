@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { branchApi, patientApi, reportApi } from '@/api/client'
 
-const now = new Date()
-const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
-const to = ref(now.toISOString().slice(0, 10))
+const from = ref(`${clinicToday().slice(0, 8)}01`)
+const to = ref(clinicToday())
 const branchCode = ref('')
 const branches = ref<Array<{ branchCode: string; name: string }>>([])
 const loading = ref(true)

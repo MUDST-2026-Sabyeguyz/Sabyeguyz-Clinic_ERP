@@ -38,6 +38,7 @@ public class CommissionController {
     private final CommissionTierResolver tierResolver;
     private final CommissionSchemeRepository schemes;
     private final MonthlyCommissionClosingService closingService;
+    private final CommissionSchemeResolver schemeResolver;
     private final MonthlyCommissionClosingRepository closings;
     private final CommissionAllocationLedgerRepository allocationLedger;
     private final TreatmentFeeRuleRepository treatmentFeeRules;
@@ -51,6 +52,7 @@ public class CommissionController {
 
     public CommissionController(CommissionSchemeService schemeService, CommissionTierResolver tierResolver,
                                  CommissionSchemeRepository schemes, MonthlyCommissionClosingService closingService,
+                                 CommissionSchemeResolver schemeResolver,
                                  MonthlyCommissionClosingRepository closings,
                                  CommissionAllocationLedgerRepository allocationLedger,
                                  TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
@@ -62,6 +64,7 @@ public class CommissionController {
         this.tierResolver = tierResolver;
         this.schemes = schemes;
         this.closingService = closingService;
+        this.schemeResolver = schemeResolver;
         this.closings = closings;
         this.allocationLedger = allocationLedger;
         this.treatmentFeeRules = treatmentFeeRules;
@@ -173,14 +176,39 @@ public class CommissionController {
         }).toList();
     }
 
+    /**
+     * The closings of a month: the ones already closed, plus an OPEN preview row (sales so far and the tier rate
+     * they reach today) for every seller who sold a course that month and is not closed yet, so the screen can
+     * offer "close the month".
+     */
     @GetMapping("/closings")
     public List<ClosingResponse> closings(@RequestParam String month) {
         String saleMonth = month.length() >= 7 ? month.substring(0, 7) : month;
-        return closings.findByClosingMonth(saleMonth).stream().map(c -> new ClosingResponse(c.getId(),
+        List<ClosingResponse> rows = new ArrayList<>(closings.findByClosingMonth(saleMonth).stream().map(c -> new ClosingResponse(c.getId(),
                 c.getClosingMonth(), c.getStaff().getId(), c.getStaff().getStaffFname() + " " + c.getStaff().getStaffLname(),
                 c.getMonthlyCourseSales(), String.valueOf(c.getCommissionSchemeVersion()),
                 c.getLockedCommissionRate() != null ? c.getLockedCommissionRate() : c.getCalculatedCommissionRate(),
-                c.isClosingStatus() ? "CLOSED" : "OPEN")).toList();
+                c.isClosingStatus() ? "CLOSED" : "OPEN")).toList());
+        if (saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])")) {
+            java.util.Set<Long> listed = new java.util.HashSet<>();
+            rows.forEach(r -> listed.add(r.employeeId()));
+            for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonth(saleMonth)) {
+                if (listed.contains(sellerId)) continue;
+                Staff seller = staff.findById(sellerId).orElse(null);
+                if (seller == null) continue;
+                BigDecimal sales = courses.sumCreditedSalesByStaffAndSaleMonth(sellerId, saleMonth);
+                BigDecimal rate;
+                try {
+                    rate = tierResolver.resolve(schemeResolver.resolveEffective(LocalDate.parse(saleMonth + "-01")), sales)
+                            .getCommissionRate();
+                } catch (RuntimeException noScheme) {
+                    rate = BigDecimal.ZERO;
+                }
+                rows.add(new ClosingResponse(-sellerId, saleMonth, sellerId,
+                        seller.getStaffFname() + " " + seller.getStaffLname(), sales, "", rate, "OPEN"));
+            }
+        }
+        return rows;
     }
 
     @PostMapping("/closings/{month}")
