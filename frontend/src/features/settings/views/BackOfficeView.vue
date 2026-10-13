@@ -55,6 +55,8 @@ const resourceStatuses: Record<string, string> = {
   AVAILABLE: 'พร้อมใช้งาน',
   IN_USE: 'ไม่ว่าง',
   MAINTENANCE: 'ซ่อม',
+  ACTIVE: 'พร้อมใช้งาน',
+  INACTIVE: 'ปิดใช้งาน',
 }
 const status = (active: boolean) => (active ? 'ใช้งาน' : 'ปิดใช้งาน')
 const branchRow = (item: Awaited<ReturnType<typeof branchApi.create>>) => ({
@@ -338,7 +340,9 @@ async function save() {
         employeeCode: form.code,
         fullName: form.name,
         phone: form.phone || undefined,
-        branchCode: data.branches.find((branch) => branch.name === form.branch)?.code,
+        branchCode:
+          data.branches.find((branch) => branch.name === form.branch)?.code ??
+          data.branches[0]?.code,
       }
       record = userRow(
         existing?.id
@@ -346,7 +350,7 @@ async function save() {
           : await userManagementApi.create({ ...body, password: form.password }),
       )
     } else if (section.value === 'services') {
-      const code = existing?.code || form.code || `SERVICE-${Date.now()}`
+      const code = existing?.code || form.code || `SV-${Date.now()}`
       if (form.type === 'Course') {
         const body = {
           code,

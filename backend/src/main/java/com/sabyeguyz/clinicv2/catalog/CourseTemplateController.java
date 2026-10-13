@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.catalog;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.enums.ServiceType;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
  * {@link com.sabyeguyz.clinicv2.sale.SalesTransactionController}'s
  * course-purchase endpoints instead.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/courses")
 public class CourseTemplateController {
