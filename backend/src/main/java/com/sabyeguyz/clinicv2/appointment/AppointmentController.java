@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.appointment;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.*;
  * internally by AppointmentService) - the response's note/cancelReason are
  * always null and CreateRequest.note is accepted but silently dropped.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/appointments")
 public class AppointmentController {
@@ -97,7 +99,8 @@ public class AppointmentController {
                                 @RequestParam(defaultValue = "20") int size) {
         Long branchId = branchCode == null || branchCode.isBlank() ? null : resolveBranch(branchCode).getId();
         AppointmentStatus statusValue = status == null || status.isBlank() ? null : AppointmentStatus.valueOf(status);
-        Page<Appointment> result = repository.search(branchId, date, therapistId, statusValue,
+        Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date, therapistId,
+                statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
                 PageRequest.of(page, size, Sort.by("appointmentDate").ascending().and(Sort.by("appointmentTime").ascending())));
         return new PageResponse(result.getContent().stream().map(AppointmentController::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());

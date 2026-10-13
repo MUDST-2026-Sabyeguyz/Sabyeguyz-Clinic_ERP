@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.masterdata;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
  * into the old flat {category, code, name} shape. v2's Master_data_value
  * has no "code" column (just value_name) - code is always null here.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/master-data")
 public class MasterDataController {
@@ -39,6 +41,7 @@ public class MasterDataController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@RequestBody Request request) {
         MasterDataType type = resolveOrCreateType(request.category());
         MasterDataValue value = service.createValue(type, request.name(), null, actor.currentId());
@@ -46,6 +49,7 @@ public class MasterDataController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @RequestBody Request request) {
         MasterDataValue value = values.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
         value.setValueName(request.name());
@@ -56,11 +60,13 @@ public class MasterDataController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
         service.deactivateValue(id, actor.currentId());
     }
 
     @PatchMapping("/{id}/activate")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
         MasterDataValue value = values.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
         value.setValueStatus(true);
