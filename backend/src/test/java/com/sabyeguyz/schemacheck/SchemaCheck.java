@@ -27,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -156,7 +157,9 @@ public class SchemaCheck {
 
     @Configuration
     @EnableJpaRepositories(basePackages = ENTITY_PACKAGE)
-    @ComponentScan(ENTITY_PACKAGE)
+    @ComponentScan(basePackages = ENTITY_PACKAGE, excludeFilters = @ComponentScan.Filter(
+            type = FilterType.ASSIGNABLE_TYPE,
+            classes = {com.sabyeguyz.clinicv2.ClinicV2Application.class, com.sabyeguyz.clinicv2.config.SecurityConfig.class}))
     static class WiringConfig {
         private static final byte[] SECRET = "schema-check-secret-schema-check-secret".getBytes(StandardCharsets.UTF_8);
 
