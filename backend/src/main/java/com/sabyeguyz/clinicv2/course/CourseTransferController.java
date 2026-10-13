@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.course;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * transferring away from a Shared Member isn't reachable through this
  * endpoint shape.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/course-transfers")
 public class CourseTransferController {
@@ -28,16 +30,19 @@ public class CourseTransferController {
     private final PatientRepository patients;
     private final PermissionService permissions;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CourseTransferController(CourseTransferService service, CourseTransferRepository repository,
                                      CourseRepository courses, PatientRepository patients,
-                                     PermissionService permissions, CurrentActor actor) {
+                                     PermissionService permissions, CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.service = service;
         this.repository = repository;
         this.courses = courses;
         this.patients = patients;
         this.permissions = permissions;
         this.actor = actor;
+        this.audit = audit;
     }
 
     public record Request(Long sourcePurchaseId, Long destinationPatientId, int quantity, String reason) {}
@@ -66,6 +71,9 @@ public class CourseTransferController {
         Patient to = patients.findById(request.destinationPatientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วยปลายทาง"));
         CourseTransfer transfer = service.transfer(course, from, to, request.quantity(), request.reason(), actor.currentId());
+        audit.record("course_transfer", String.valueOf(transfer.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
+                request.quantity() + " visits: course " + course.getId() + " patient " + from.getId() + " -> " + to.getId(),
+                actor.currentId());
         return toResponse(transfer);
     }
 
@@ -74,7 +82,10 @@ public class CourseTransferController {
         CourseTransfer transfer = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการโอน"));
         var permission = permissions.getOrCreate("COURSE_REVERSE", "Course", actor.currentId());
-        return toResponse(service.reverse(transfer, permission, request.reason(), actor.currentId()));
+        CourseTransfer reversed = service.reverse(transfer, permission, request.reason(), actor.currentId());
+        audit.record("course_transfer", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Completed", "Reversed: " + request.reason(),
+                actor.currentId());
+        return toResponse(reversed);
     }
 
     private static Response toResponse(CourseTransfer transfer) {

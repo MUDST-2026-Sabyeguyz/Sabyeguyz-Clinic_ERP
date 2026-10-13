@@ -65,6 +65,7 @@ import org.springframework.web.bind.annotation.*;
  *   implemented.</li>
  * </ul>
  */
+@Transactional
 @RestController
 public class CoursePurchaseController {
     private final CourseRepository courses;
@@ -82,7 +83,9 @@ public class CoursePurchaseController {
     private final PatientVisitRepository visits;
     private final PatientVisitService visitService;
     private final AppUserRepository users;
+    private final com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
@@ -91,7 +94,9 @@ public class CoursePurchaseController {
                                      SalesTransactionService salesTransactionService,
                                      PatientRepository patients, BranchRepository branches, ServiceRepository services,
                                      PatientVisitRepository visits, PatientVisitService visitService,
-                                     AppUserRepository users, CurrentActor actor) {
+                                     AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
+                                     CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.courses = courses;
         this.ledger = ledger;
         this.usages = usages;
@@ -107,11 +112,20 @@ public class CoursePurchaseController {
         this.visits = visits;
         this.visitService = visitService;
         this.users = users;
+        this.staffRepository = staffRepository;
         this.actor = actor;
+        this.audit = audit;
     }
 
+    /** A sale credit split: {@code percent} of the course price is credited to {@code staffId}. */
+    public record ShareRequest(Long staffId, BigDecimal percent) {}
+    /**
+     * {@code shares} (optional) splits the sale credit between up to two PTs and must add up to 100%;
+     * without it the seller (the signed-in user's staff record) gets 100%. {@code caseOwnerStaffId}
+     * (optional) names the PT who owns the course's commission, the seller by default.
+     */
     public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
-                                   BigDecimal discountValue) {}
+                                   BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares) {}
     public record UseRequest(Long coursePurchaseId, Long appointmentId, String note) {}
     public record ReasonRequest(String reason) {}
 
@@ -143,13 +157,19 @@ public class CoursePurchaseController {
         Service courseTemplate = services.findById(request.courseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Staff seller = resolveActorStaff();
+        Staff caseOwner = request.caseOwnerStaffId() == null ? null : staffById(request.caseOwnerStaffId());
+        List<com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare> shares = request.shares() == null ? null
+                : request.shares().stream().map(share -> new com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare(
+                        staffById(share.staffId()), share.percent())).toList();
 
         Receipt receipt = receiptService.create(receiptService.nextReceiptNo(), patient, branch, LocalDate.now(),
                 actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
-                seller, null, null, null, null, Discount.of(request.discountType(), request.discountValue()), null,
-                LocalDate.now(), actor.currentId());
+                seller, caseOwner, null, null, null, Discount.of(request.discountType(), request.discountValue()),
+                shares, LocalDate.now(), actor.currentId());
         receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
+        audit.record("course", String.valueOf(purchase.course().getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
+                purchase.course().getCourseNo() + " price " + purchase.course().getCoursePrice(), actor.currentId());
         return toResponse(purchase.course(), patient.getId());
     }
 
@@ -168,10 +188,39 @@ public class CoursePurchaseController {
         return new LedgerResponse(toResponse(course, ownerPatientId), movements, allocations);
     }
 
+    public record UsageTransactionResponse(Long id, Long coursePurchaseId, String patientName, String patientHn,
+                                            String courseName, String branchCode, Instant usedAt, Instant voidedAt,
+                                            String voidReason) {}
+
+    /** Every visit taken from a course (newest first) with its reversal status; id is the Treatment movement. */
+    @GetMapping("/api/course-usages")
+    public List<UsageTransactionResponse> usageTransactions() {
+        return usages.findAll(org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Direction.DESC, "id")).stream().map(usage -> {
+            List<com.sabyeguyz.clinicv2.course.CourseLedger> movements = ledger.findByVisitUsageId(usage.getId());
+            Long movementId = movements.stream().filter(l -> l.getEntryType() == CourseLedgerEntryType.Treatment)
+                    .map(com.sabyeguyz.clinicv2.course.CourseLedger::getId).findFirst().orElse(usage.getId());
+            Course course = usage.getCourse();
+            // The reversal row points at the Treatment row it undoes (reverses_ledger), not at the usage.
+            var reversal = ledger.findByCourseIdOrderByIdDesc(course.getId()).stream()
+                    .filter(l -> l.getEntryType() == CourseLedgerEntryType.Reversal && l.getReversesLedger() != null
+                            && l.getReversesLedger().getId().equals(movementId))
+                    .findFirst();
+            Patient patient = usage.getPatient();
+            return new UsageTransactionResponse(movementId, course.getId(),
+                    patient.getPatientFname() + " " + patient.getPatientLname(), patient.getPatientHn(),
+                    course.getCourseName(), course.getReceipt().getBranch().getBranchCode(),
+                    usage.getUsageCreateAt(), reversal.map(l -> l.getLedgerCreateAt()).orElse(null),
+                    reversal.map(l -> l.getRemark()).orElse(null));
+        }).toList();
+    }
+
     @PostMapping("/api/course-usages")
     @Transactional
     public Response use(@RequestBody UseRequest request) {
-        Course course = findCourse(request.coursePurchaseId());
+        // Row-lock first: two parallel usages must not both see the last remaining visit.
+        Course course = courses.findByIdForUpdate(request.coursePurchaseId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Patient owner = course.getPurchaserPatient();
         PatientVisit visit = request.appointmentId() == null ? walkInVisit(course, owner)
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
@@ -203,6 +252,8 @@ public class CoursePurchaseController {
         course.setCourseUpdateAt(Instant.now());
         course.setCourseUpdateBy(actor.currentId());
         Course saved = courses.save(course);
+        audit.record("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Active", "Cancelled: " + request.reason(),
+                actor.currentId());
         return toResponse(saved, saved.getPurchaserPatient().getId());
     }
 
@@ -210,6 +261,10 @@ public class CoursePurchaseController {
         PatientVisit visit = visitService.checkInWalkIn(owner, course.getReceipt().getBranch(),
                 course.getCaseOwnerStaff(), actor.currentId());
         return visitService.complete(visit.getId(), actor.currentId());
+    }
+
+    private Staff staffById(Long id) {
+        return staffRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงาน"));
     }
 
     private Staff resolveActorStaff() {
