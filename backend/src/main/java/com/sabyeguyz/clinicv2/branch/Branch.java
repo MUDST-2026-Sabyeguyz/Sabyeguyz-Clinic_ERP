@@ -43,7 +43,14 @@ public class Branch {
     @Column(name = "branch_update_by")
     private Long branchUpdateBy;
 
+    /** Id of this branch's Google Calendar (one calendar per branch); null = no calendar sync for the branch. */
+    @Column(name = "google_calendar_id", length = 255, unique = true)
+    private String googleCalendarId;
+
     public Branch() {}
+
+    public String getGoogleCalendarId() { return googleCalendarId; }
+    public void setGoogleCalendarId(String googleCalendarId) { this.googleCalendarId = googleCalendarId; }
 
     public Long getId() { return id; }
     public String getBranchCode() { return branchCode; }
