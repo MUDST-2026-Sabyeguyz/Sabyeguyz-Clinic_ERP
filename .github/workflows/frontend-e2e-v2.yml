@@ -6,11 +6,11 @@ name: Frontend E2E (v2 backend)
 
 on:
   push:
-    branches: [develop, dev-backed, 'feat/**', 'feature/**']
+    branches: [develop, dev-backed, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
     paths:
       - 'frontend/**'
       - 'backend/src/main/java/com/sabyeguyz/clinicv2/**'
-      - 'backend/src/main/resources/db/migration_new/**'
+      - 'backend/src/main/resources/db/migration/**'
       - 'backend/src/main/resources/db/seed_v2/**'
       - 'backend/src/test/java/com/sabyeguyz/clinicv2/cypress/**'
       - '.github/workflows/frontend-e2e-v2.yml'

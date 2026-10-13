@@ -93,11 +93,11 @@ const identityErrorVisible = computed(
 )
 const thaiOnly = (value: string) => value.replace(/[^\u0E00-\u0E7F\s]/g, '')
 const allowedName = (value: string) =>
-  isForeign.value ? value.replace(/[^\p{L}\s.'-]/gu, '') : thaiOnly(value)
+  isForeign.value ? value.replace(/[^\p{L}\p{M}\s.'-]/gu, '') : thaiOnly(value)
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
 const thaiNameIsValid = (value: string) => /^[\u0E00-\u0E7F\s]+$/.test(value.trim())
 const personNameIsValid = (value: string) =>
-  isForeign.value ? /^[\p{L}\s.'-]+$/u.test(value.trim()) : thaiNameIsValid(value)
+  isForeign.value ? /^[\p{L}\p{M}\s.'-]+$/u.test(value.trim()) : thaiNameIsValid(value)
 const phoneIsValid = computed(() => /^\d{10}$/.test(form.phone))
 const birthDateIsValid = computed(() =>
   Boolean(form.birthDate && form.birthDate < new Date().toISOString().slice(0, 10)),
@@ -111,7 +111,7 @@ const canSubmit = computed(() =>
     (isForeign.value || thaiNameIsValid(form.nickname)) &&
     emailIsValid.value &&
     (isForeign.value || birthDateIsValid.value) &&
-    phoneIsValid.value &&
+    ((isForeign.value && !form.phone.trim()) || phoneIsValid.value) &&
     (isForeign.value || form.identityDocumentType) &&
     identityIsValid.value &&
     (isForeign.value || form.address),
@@ -149,7 +149,10 @@ onMounted(async () => {
     branches.value = branchList
       .filter((item) => item.active)
       .map((item) => ({ branchCode: item.branchCode, name: item.name }))
-    if (branches.value.length && !branches.value.some((item) => item.branchCode === form.branchCode))
+    if (
+      branches.value.length &&
+      !branches.value.some((item) => item.branchCode === form.branchCode)
+    )
       form.branchCode = branches.value[0]!.branchCode
     const active = items.filter((item) => item.active)
     const valuesFor = (category: string, fallback: string[]) => {
@@ -430,8 +433,9 @@ async function submit() {
               >
             </div>
           </section>
-          <section v-if="!isForeign" class="registration-section">
+          <section class="registration-section">
             <h2>ข้อมูลยืนยันตัวตน</h2>
+            <p v-if="isForeign">หนังสือเดินทาง (ไม่บังคับ)</p>
             <div class="form-grid">
               <label :class="{ 'invalid-field': submitted && !form.identityDocumentType }"
                 >ประเภทเอกสารยืนยันตัวตน <em>*</em

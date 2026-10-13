@@ -1,5 +1,5 @@
 /* oxlint-disable vitest/valid-expect -- Cypress assertions use Chai, not Vitest. */
-const card = (title) => cy.contains('.summary-grid article', title)
+const card = (title) => cy.contains('.summary-card', title)
 
 describe('manager dashboard', () => {
   it('shows zeros when nothing has happened', () => {
@@ -57,9 +57,9 @@ describe('manager dashboard', () => {
     cy.api('GET', `/api/dashboard/summary?from=${today.slice(0, 8)}01&to=${today}`).then(({ body }) => expect(JSON.stringify(body), 'what the backend reports for the month').to.contain('"totalRevenue":800'))
     cy.visitAs('manager', '/staff/dashboard')
     card('รายได้รวม').should('contain.text', '800 บาท')
-    cy.contains('label', 'สาขา').find('select').select('02')
+    cy.chooseBranch('กรองตามสาขา', '02')
     card('รายได้รวม').should('contain.text', '0 บาท')
-    cy.contains('label', 'สาขา').find('select').select('01')
+    cy.chooseBranch('กรองตามสาขา', '01')
     card('รายได้รวม').should('contain.text', '800 บาท')
   })
 })

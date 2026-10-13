@@ -27,15 +27,14 @@ import org.springframework.web.bind.annotation.*;
  * /api/receipts/{id}).
  *
  * <p>The schema now supports a receipt with several lines and payments on the
- * receipt, but this API still takes exactly one item per create call (the
- * frontend only ever sends one), and the "id" it returns/accepts is that
+ * receipt, and this API accepts multiple items per create call, and the "id" it returns/accepts is that
  * line's SalesTransaction id standing in for "the sale". Payments listed for
  * a sale are the whole receipt's payments.</p>
  *
  * <p>Receipts are real now: Sales_transaction carries receipt_id, so the
  * receiptNo returned here is the Receipt's own number, and a bill discount
  * on the request is totalled onto the Receipt and allocated to the line.
- * Receipt numbering is still max-plus-one (see ReceiptService).</p>
+ * Receipt numbering uses the atomic branch/month counter (see ReceiptService).</p>
  */
 @Transactional
 @RestController
@@ -44,6 +43,7 @@ public class SaleController {
     private final SalesTransactionService salesTransactionService;
     private final PaymentTransactionService paymentTransactionService;
     private final TransactionCancellationService cancellations;
+    private final TransactionCancellationRepository cancellationRecords;
     private final PermissionService permissions;
     private final SalesTransactionRepository transactions;
     private final PaymentTransactionRepository payments;
@@ -57,7 +57,7 @@ public class SaleController {
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
                            PaymentTransactionService paymentTransactionService,
-                           TransactionCancellationService cancellations, PermissionService permissions,
+                           TransactionCancellationService cancellations, TransactionCancellationRepository cancellationRecords, PermissionService permissions,
                            SalesTransactionRepository transactions,
                            PaymentTransactionRepository payments, ReceiptRepository receipts,
                            PatientRepository patients, BranchRepository branches, StaffRepository staff,
@@ -67,6 +67,7 @@ public class SaleController {
         this.salesTransactionService = salesTransactionService;
         this.paymentTransactionService = paymentTransactionService;
         this.cancellations = cancellations;
+        this.cancellationRecords = cancellationRecords;
         this.permissions = permissions;
         this.transactions = transactions;
         this.payments = payments;
@@ -129,7 +130,7 @@ public class SaleController {
         Staff salesperson = request.salespersonStaffId() == null ? null
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
 
-        String receiptNo = receiptService.nextReceiptNo();
+        String receiptNo = receiptService.nextReceiptNo(branch, LocalDate.now());
         Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
@@ -152,7 +153,7 @@ public class SaleController {
 
         if (request.payments() != null) {
             for (PaymentRequest paymentRequest : request.payments()) {
-                PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(paymentRequest.paymentMethodCode())
+                PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(PaymentMethod.canonicalName(paymentRequest.paymentMethodCode()))
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode()));
                 paymentTransactionService.record(patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
             }
@@ -191,6 +192,8 @@ public class SaleController {
         BigDecimal total = lines.stream().map(l -> l.getAmount().subtract(l.getAllocatedBillDiscountAmount()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         Staff seller = t.getSalespersonStaff();
+        TransactionCancellation cancellation = t.isTransactionStatus() ? null
+                : cancellationRecords.findFirstByTransactionReceiptIdOrderByCancelledAtDesc(t.getReceipt().getId()).orElse(null);
         return new Summary(t.getId(), t.getReceipt().getReceiptNo(),
                 new PatientSummary(t.getPatient().getId(), t.getPatient().getPatientHn(),
                         t.getPatient().getPatientFname() + " " + t.getPatient().getPatientLname()),
@@ -199,7 +202,8 @@ public class SaleController {
                         seller.getStaffFname() + " " + seller.getStaffLname()),
                 total, payments.paidAmountOf(t.getReceipt().getId()),
                 t.isTransactionStatus() ? "PAID" : "VOIDED",
-                t.getTransactionDate(), null, null, null);
+                t.getTransactionDate(), cancellation == null ? null : cancellation.getCancelledAt(),
+                cancellation == null ? null : cancellation.getReason(), null);
     }
 
     private Detail toDetail(SalesTransaction t) {

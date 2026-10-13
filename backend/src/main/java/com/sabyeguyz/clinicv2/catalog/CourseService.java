@@ -95,9 +95,8 @@ public class CourseService {
         BigDecimal price = transaction.getCommissionableAmount();
         Integer totalVisits = totalVisitsOverride != null ? totalVisitsOverride : serviceTemplate.getDefaultTotalVisits();
         Integer bonusVisits = bonusVisitsOverride != null ? bonusVisitsOverride : serviceTemplate.getDefaultBonusVisits();
-        Integer validityDays = serviceTemplate.getDefaultValidityDays();
+        LocalDate expiryDate = serviceTemplate.expiryFrom(effectiveSaleDate);
         require(totalVisits != null && totalVisits >= 1, "ต้องระบุจำนวนครั้งของคอร์ส");
-        require(validityDays != null, "บริการนี้ไม่ได้ตั้งค่าอายุคอร์ส (default_validity_days)");
         require(price != null && price.signum() >= 0, "ราคาคอร์สต้องไม่ติดลบ");
 
         Staff owner = caseOwnerStaff != null ? caseOwnerStaff : sellerStaff;
@@ -125,13 +124,16 @@ public class CourseService {
         int totalUsableVisits = totalVisits + (bonusVisits == null ? 0 : bonusVisits);
 
         Course course = new Course();
+        course.setBranch(transaction.getBranch());
+        course.setValidityValue(serviceTemplate.getDefaultValidityValue());
+        course.setValidityUnit(serviceTemplate.getDefaultValidityUnit());
         course.setCourseNo(courseNo);
         course.setCourseSequence(courseSequence);
         course.setCourseName(serviceTemplate.getServiceName());
         course.setCoursePrice(price);
-        course.setTotalVisits(totalVisits);
+        course.setTotalVisits(totalUsableVisits);
         course.setBonusVisits(bonusVisits);
-        course.setExpiryDate(effectiveSaleDate.plusDays(validityDays));
+        course.setExpiryDate(expiryDate);
         course.setCourseStatus(CourseStatus.Active);
         course.setService(serviceTemplate);
         course.setCourseCreateAt(Instant.now());

@@ -110,6 +110,10 @@ async function review(kind: 'sale' | 'usage' = 'sale') {
   if (kind === 'usage') await click('รายการใช้บริการ')
   await click('ตรวจสอบ')
   await click('ดำเนินการยกเลิก')
+  expect(
+    wrapper.find('.transaction-reason-actions .transaction-primary').attributes('disabled'),
+  ).toBeDefined()
+  await wrapper.find('input[name="void-reason"][value="ลงรายการหรือเลือกบริการผิด"]').setValue()
   await click('ตรวจสอบก่อนยืนยัน')
   await click('ยืนยันการยกเลิก')
 }

@@ -155,6 +155,39 @@ function uiStatusFor(status: AppointmentStatus): AppointmentUiStatus {
   return 'CONFIRMED'
 }
 const formatStatus = (status: AppointmentStatus) => uiStatusLabels[uiStatusFor(status)]
+const actionStatusLabels: Record<AppointmentStatus, string> = {
+  UNCONFIRMED: 'รอยืนยัน',
+  CONFIRMED: 'ยืนยันแล้ว',
+  ARRIVED: 'มาถึงคลินิก',
+  IN_SERVICE: 'กำลังรับบริการ',
+  COMPLETED: 'เสร็จสิ้น',
+  CANCELLED: 'ยกเลิก',
+  RESCHEDULED: 'เลื่อนนัด',
+  NO_SHOW: 'ไม่มาตามนัด',
+}
+const statusOptionsFor = (item: Appointment): AppointmentStatus[] => [
+  ...new Set<AppointmentStatus>([
+    item.status,
+    ...(item.status === 'UNCONFIRMED' ? ['CONFIRMED' as const] : []),
+    'ARRIVED',
+    'IN_SERVICE',
+    'COMPLETED',
+    'CANCELLED',
+    'NO_SHOW',
+  ]),
+]
+function changeStatus(event: Event, item: Appointment) {
+  const select = event.target as HTMLSelectElement
+  const status = select.value as AppointmentStatus
+  select.value = item.status
+  if (status === item.status) return
+  if (status === 'CANCELLED') {
+    pendingCancellation.value = { item }
+    cancellationReason.value = ''
+    return
+  }
+  void saveStatus(item, status)
+}
 const patientFilterModel = computed({
   get: () => selectedPatientType.value,
   set: (value: string) => {
@@ -839,6 +872,17 @@ function confirmCancellation() {
                   >
                     ยืนยันนัด
                   </button>
+                  <select
+                    class="status-select"
+                    :value="item.status"
+                    :disabled="savingStatusId === item.id"
+                    :aria-label="`เปลี่ยนสถานะนัดหมายของ ${item.patient.fullName}`"
+                    @change="changeStatus($event, item)"
+                  >
+                    <option v-for="status in statusOptionsFor(item)" :key="status" :value="status">
+                      {{ actionStatusLabels[status] }}
+                    </option>
+                  </select>
                   <button class="appointment-edit" @click="openEdit(item)">แก้ไข</button>
                 </td>
               </tr>

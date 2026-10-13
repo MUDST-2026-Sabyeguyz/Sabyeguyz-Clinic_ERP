@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Entry point of the application on the v2 schema (db/migration_new). It scans only
+ * Entry point of the application on the v2 schema (db/migration). It scans only
  * com.sabyeguyz.clinicv2, so none of the old com.sabyeguyz.clinic controllers, entities
  * or tables are involved. The v2 profile (application-v2.properties) is active unless
  * another profile is given.

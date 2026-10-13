@@ -110,12 +110,13 @@ async function confirmClosing() {
   isSaving.value = true
   try {
     await commissionApi.closeMonth(month.value)
+    await load()
     isConfirming.value = false
     closedSuccessfully.value = true
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'ปิดรอบไม่สำเร็จ'
     isConfirming.value = false
-    closedSuccessfully.value = true
+    closedSuccessfully.value = false
   } finally {
     isSaving.value = false
   }
@@ -129,6 +130,9 @@ const visible = computed(() => {
   return rows.value.filter((row) => !keyword || row.staff.toLowerCase().includes(keyword))
 })
 const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)
+const totalPool = computed(() =>
+  rows.value.reduce((sum, row) => sum + (row.sales * row.rate) / 100, 0),
+)
 const totalSales = computed(() => rows.value.reduce((sum, row) => sum + row.sales, 0))
 const monthLabel = computed(() => {
   const [year, number] = month.value.split('-').map(Number)
@@ -192,18 +196,41 @@ function selectView(event: Event) {
         </p>
       </header>
       <CommissionTabs active="closing" />
+      <section class="commission-card commission-table-wrap">
+        <table class="commission-table">
+          <thead>
+            <tr>
+              <th>ผู้ขาย</th>
+              <th>ยอดขาย</th>
+              <th>อัตรา</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in visible" :key="row.id">
+              <td>{{ row.staff }}</td>
+              <td>{{ currency(row.sales) }}</td>
+              <td>{{ row.rate }}%</td>
+              <td>{{ row.status === 'Closed' ? 'ปิดรอบแล้ว' : 'รอปิดรอบ' }}</td>
+            </tr>
+            <tr v-if="visible.length === 0">
+              <td colspan="4">ไม่พบข้อมูลตามตัวกรอง</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
       <section v-if="closedSuccessfully" class="closed-success commission-card">
         <i>✓</i>
         <h2>ปิดรอบ{{ fullMonthLabel }} เรียบร้อย</h2>
-        <p>Commission Scheme V1 · อัตราตาม Tier ถูกล็อกกับ 32 Course ID</p>
+        <p>อัตราตาม Tier ถูกล็อกกับคอร์สในรอบเดือนแล้ว</p>
         <dl>
           <div>
             <dt>ยอดฐานที่ล็อก</dt>
-            <dd>฿410,000</dd>
+            <dd>{{ currency(totalSales) }}</dd>
           </div>
           <div>
             <dt>Commission Pool</dt>
-            <dd>฿32,800</dd>
+            <dd>{{ currency(totalPool) }}</dd>
           </div>
           <div>
             <dt>ผู้ดำเนินการ</dt>
@@ -246,10 +273,16 @@ function selectView(event: Event) {
                 /><small>ช่วงวันที่ {{ periodLabel }}</small>
               </div>
             </div>
-            <div><span>ยอดขายคอร์สรวม</span><b>฿428,500.00</b></div>
-            <div><span>ส่วนลดรายการ</span><b>− ฿18,500.00</b></div>
-            <div><span>ฐานคำนวณ Tier</span><b>฿410,000.00</b></div>
-            <div class="pool"><span>Commission Pool ที่จะสร้าง</span><b>฿32,800.00</b></div>
+            <div>
+              <span>ยอดขายคอร์สรวม</span><b>{{ currency(totalSales) }}</b>
+            </div>
+            <div><span>ส่วนลดรายการ</span><b>รวมในฐานคำนวณสุทธิ</b></div>
+            <div>
+              <span>ฐานคำนวณ Tier</span><b>{{ currency(totalSales) }}</b>
+            </div>
+            <div class="pool">
+              <span>Commission Pool ที่จะสร้าง</span><b>{{ currency(totalPool) }}</b>
+            </div>
             <aside>เมื่อปิดรอบ อัตราที่คำนวณแล้วจะถูกล็อกตาม Course ID และแก้ไขไม่ได้โดยตรง</aside>
           </article>
           <article class="commission-card checklist">
@@ -268,7 +301,7 @@ function selectView(event: Event) {
             </template>
             <button
               class="commission-primary"
-              :disabled="validationLoading || hasBlockingIssues"
+              :disabled="validationLoading || hasBlockingIssues || openCount === 0"
               @click="isConfirming = true"
             >
               ยืนยันปิดรอบ

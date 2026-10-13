@@ -2,7 +2,7 @@ name: Frontend CI
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**']
+    branches: [develop, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
   pull_request:
     branches: [develop]
   workflow_dispatch:
@@ -44,6 +44,8 @@ jobs:
         run: |
           export POSTGRES_PASSWORD="$(openssl rand -hex 32)"
           export JWT_SECRET="$(openssl rand -hex 32)"
+          export POSTGRES_DB=clinic_erp_v2_ci
+          echo 'POSTGRES_DB=clinic_erp_v2_ci' >> "$GITHUB_ENV"
           printf 'POSTGRES_PASSWORD=%s\nJWT_SECRET=%s\n' "$POSTGRES_PASSWORD" "$JWT_SECRET" >> "$GITHUB_ENV"
           docker compose up --build --wait -d postgres backend
 

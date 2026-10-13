@@ -28,7 +28,7 @@ public class Staff {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false, columnDefinition = "staff_position_enum")
+    @Column(nullable = false, columnDefinition = "position_enum")
     private StaffPosition position;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
