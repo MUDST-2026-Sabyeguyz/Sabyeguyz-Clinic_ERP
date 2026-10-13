@@ -38,10 +38,11 @@ Cypress.Commands.add('pickDate', { prevSubject: 'element' }, (subject, iso) => {
   cy.wrap(subject).find('.days button').contains(new RegExp(`^\\s*${day}\\s*$`)).click()
 })
 
+let patientSequence = 1000
 export function patientPayload(overrides = {}) {
   return {
     branchCode: '01', customerType: 'Thai', title: 'นาย', firstName: 'สมชาย', lastName: 'ใจดี', gender: 'Male',
-    phone: '0811111111', identityDocumentType: 'NATIONAL_ID', identityNumber: '1100000000101',
+    phone: '0811111111', identityDocumentType: 'NATIONAL_ID', identityNumber: String(1100000000000 + patientSequence++),
     birthDate: '1990-01-01', address: 'กรุงเทพฯ', ...overrides,
   }
 }
@@ -57,8 +58,28 @@ Cypress.Commands.add('registerPatient', (overrides = {}) => {
 Cypress.Commands.add('noAlert', () => {
   cy.wait(1500)
   cy.get('body').then(($body) => {
-    const shown = [...$body.find('[role="alert"], .validation-error, .settings-error, .form-error, .error-message, .error')]
+    const shown = [...$body.find('[role="alert"], .validation-error, .settings-error, .form-error, .error-message, .error, .drawer-error, .validation-message, .transaction-error, .report-error')]
       .map((element) => element.textContent.trim()).filter(Boolean)
     expect(shown.join(' | '), 'error shown on the page').to.equal('')
+  })
+})
+
+// Use the actual accessible FilterDropdown UI rather than assuming native select elements.
+Cypress.Commands.add('chooseDropdown', (label, text) => {
+  cy.get(`button.filter-dropdown__button[aria-label="${label}"]`).should('be.visible').click()
+  cy.get(`[role="listbox"][aria-label="${label}"] [role="option"]`).filter((_, option) =>
+    option.querySelector('span:last-child').textContent.trim() === text,
+  ).should('have.length', 1).click()
+})
+Cypress.Commands.add('chooseBranch', (label, code) => {
+  cy.api('GET', '/api/branches').then(({ status, body }) => {
+    expect(status).to.equal(200)
+    const branch = body.find((item) => item.branchCode === code)
+    expect(branch, `branch ${code}`).to.exist
+    cy.get(`button.filter-dropdown__button[aria-label="${label}"]`).click()
+    cy.get(`[role="listbox"][aria-label="${label}"] [role="option"]`).filter((_, option) => {
+      const text = option.querySelector('span:last-child').textContent.trim()
+      return text === branch.name || text === `${branch.name} (${code})`
+    }).should('have.length', 1).click()
   })
 })

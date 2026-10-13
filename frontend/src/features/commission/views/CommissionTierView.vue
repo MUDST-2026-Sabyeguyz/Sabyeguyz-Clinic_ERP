@@ -108,6 +108,7 @@ async function saveSchemeVersion() {
       effectiveFrom: string
       effectiveTo: string | null
     }
+    tiers.splice(0, tiers.length, ...activeTiers.map((tier) => ({ ...tier })))
     Object.assign(scheme, created)
     editorOpen.value = false
   } catch (caught) {

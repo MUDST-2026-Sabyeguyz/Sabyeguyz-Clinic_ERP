@@ -11,6 +11,12 @@ import java.time.Instant;
 @Entity
 @Table(name = "course_transfer")
 public class CourseTransfer {
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "branch_id")
+    private com.sabyeguyz.clinicv2.branch.Branch branch;
+
+    public com.sabyeguyz.clinicv2.branch.Branch getBranch() { return branch; }
+    public void setBranch(com.sabyeguyz.clinicv2.branch.Branch value) { branch = value; }
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "transfer_id")

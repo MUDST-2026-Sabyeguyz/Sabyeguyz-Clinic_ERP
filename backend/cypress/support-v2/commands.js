@@ -25,10 +25,11 @@ Cypress.Commands.add('parallelApi', (requests) => {
   return cy.get('@token').then((token) => cy.task('parallelRequests', { token, requests }, { log: false }))
 })
 
+let patientSequence = 1000
 export function patientPayload(overrides = {}) {
   return {
     branchCode: '01', customerType: 'Thai', title: 'นาย', firstName: 'สมชาย', lastName: 'ใจดี', gender: 'Male',
-    phone: '0811111111', identityDocumentType: 'NATIONAL_ID', identityNumber: '1100000000101',
+    phone: '0811111111', identityDocumentType: 'NATIONAL_ID', identityNumber: String(1100000000000 + patientSequence++),
     birthDate: '1990-01-01', address: 'กรุงเทพฯ', ...overrides,
   }
 }
