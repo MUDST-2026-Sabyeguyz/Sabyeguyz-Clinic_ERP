@@ -53,9 +53,9 @@ public class AppUserService {
     @Transactional(readOnly = true)
     public AppUser login(String username, String rawPassword) {
         AppUser user = users.findByUsername(requireText(username, "username"))
-                .orElseThrow(() -> new IllegalArgumentException("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"));
+                .orElseThrow(() -> new IllegalArgumentException("ชื่อผู้ใช้ อีเมล หรือรหัสผ่านไม่ถูกต้อง"));
         if (!user.isUserStatus() || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            throw new IllegalArgumentException("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+            throw new IllegalArgumentException("ชื่อผู้ใช้ อีเมล หรือรหัสผ่านไม่ถูกต้อง");
         }
         return user;
     }
@@ -75,6 +75,8 @@ public class AppUserService {
         UserRoleId id = new UserRoleId(userId, roleId);
         Optional<UserRole> existing = userRoles.findById(id);
         if (existing.isEmpty()) {
+            userRoles.deleteAll(userRoles.findByUserId(userId));
+            userRoles.flush();
             userRoles.save(new UserRole(user, role));
         }
     }

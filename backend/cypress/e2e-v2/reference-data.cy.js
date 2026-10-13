@@ -86,12 +86,14 @@ describe('v2 reference data: branches, staff, payment methods, master data, room
   })
 
   describe('payment methods', () => {
-    it('creates, renames, deactivates and re-activates a payment method', () => {
-      cy.api('POST', '/api/payment-methods', { code: 'GIFT', name: 'บัตรของขวัญ' }).then(({ status, body }) => {
-        expect(status).to.equal(201)
-        expect(body.name).to.equal('บัตรของขวัญ')
+    it('rejects duplicate seeded methods, updates, deactivates and re-activates a method', () => {
+      cy.api('POST', '/api/payment-methods', { code: 'CreditCard', name: 'CreditCard' }).its('status').should('equal', 409)
+      cy.api('GET', '/api/payment-methods').then(({ status, body: rows }) => {
+        const body = rows.find((row) => row.code === 'CreditCard')
+        expect(status).to.equal(200)
+        expect(body.name).to.equal('CreditCard')
         expect(body.active).to.equal(true)
-        cy.api('PUT', `/api/payment-methods/${body.id}`, { code: 'GIFT', name: 'บัตรกำนัล' }).its('body.name').should('equal', 'บัตรกำนัล')
+        cy.api('PUT', `/api/payment-methods/${body.id}`, { code: 'CreditCard', name: 'CreditCard' }).its('body.name').should('equal', 'CreditCard')
         cy.api('DELETE', `/api/payment-methods/${body.id}`).its('status').should('equal', 204)
         cy.api('GET', '/api/payment-methods').its('body').then((rows) => {
           expect(rows.find((row) => row.id === body.id).active).to.equal(false)
@@ -100,15 +102,19 @@ describe('v2 reference data: branches, staff, payment methods, master data, room
       })
     })
 
-    it('a new payment method can be used to pay a sale', function () {
-      cy.api('POST', '/api/payment-methods', { code: 'VOUCHER', name: 'บัตรกำนัลพิเศษ' }).its('status').should('equal', 201)
+    it('the seeded PromptPay method can be used to pay a sale', function () {
+      cy.api('POST', '/api/payment-methods', { code: 'PromptPay', name: 'PromptPay' }).its('status').should('equal', 409)
       cy.registerPatient().then((patient) => {
         cy.api('POST', '/api/payments', {
           patientId: patient.id, branchCode: '01',
           items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-          payments: [{ paymentMethodCode: 'บัตรกำนัลพิเศษ', amount: 800 }],
+          payments: [{ paymentMethodCode: 'PromptPay', amount: 800 }],
         }).its('status').should('equal', 201)
       })
+    })
+
+    it('rejects a name outside the latest payment-method enum', () => {
+      cy.api('POST', '/api/payment-methods', { code: 'GIFT', name: 'บัตรของขวัญ' }).its('status').should('equal', 400)
     })
 
     it('rejects a payment method without a name', () => {

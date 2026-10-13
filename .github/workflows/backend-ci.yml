@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
   push:
-    branches: [develop, dev-backed, 'feat/**', 'feature/**']
+    branches: [develop, dev-backed, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
   pull_request:
     branches: [develop, dev-backed]
   workflow_dispatch:
@@ -18,6 +18,26 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic_ci_only
+          POSTGRES_DB: clinic_v2_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clinic -d clinic_v2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DB_URL: jdbc:postgresql://127.0.0.1:5432/clinic_v2_ci
+      DB_USER: clinic
+      DB_PASSWORD: clinic_ci_only
 
     steps:
       - name: Checkout
@@ -47,6 +67,21 @@ jobs:
       - name: Package backend and run all Cypress tests
         run: npm test
 
+      - name: Resolve PostgreSQL runtime test classpath
+        run: >-
+          mvn --batch-mode --no-transfer-progress dependency:build-classpath
+          -Dmdep.outputFile=target/test-classpath.txt -Dmdep.includeScope=test
+
+      - name: Check latest v2 migrations and real HTTP contracts
+        run: |
+          set -o pipefail
+          java -cp "target/classes:target/test-classes:$(cat target/test-classpath.txt)" com.sabyeguyz.schemacheck.RuntimeCheck | tee target/runtime-check.log
+
+      - name: Validate all v2 mappings and wiring against PostgreSQL
+        run: |
+          set -o pipefail
+          java -cp "target/classes:target/test-classes:$(cat target/test-classpath.txt)" com.sabyeguyz.schemacheck.SchemaCheck | tee target/schema-check.log
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,6 +90,8 @@ jobs:
           path: |
             backend/cypress/results/
             backend/cypress/screenshots/
+            backend/target/runtime-check.log
+            backend/target/schema-check.log
           if-no-files-found: ignore
 
       - name: Stop isolated API test server

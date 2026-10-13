@@ -9,20 +9,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Receipts (Clinic ERP Workflow Brief Section 5).
  *
- * <p>Receipt numbers are RE- plus seven digits. The data dictionary has no
- * dedicated receipt-numbering sequence table (unlike HN_sequence for
- * patients), so {@link #nextReceiptNo()} takes the highest number in use plus
- * one. To make that safe under concurrent requests it first takes a
- * transaction-scoped PostgreSQL advisory lock, which the caller's transaction
- * holds until it commits, so two sales can never be given the same number.</p>
+ * <p>Receipt numbers use REYYMMNNNN, allocated atomically per branch/month from receipt_sequence.</p>
  *
  * <p>Tax policy is still to be confirmed with the business, so no tax is
  * charged: taxable_amount is the amount after the bill discount, tax_amount is
@@ -30,42 +23,41 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ReceiptService {
-    private static final String RECEIPT_NO_FORMAT = "^RE-[0-9]{7}$";
-
-    private static final long RECEIPT_NUMBERING_LOCK = 7_001_001L;
+    private static final String RECEIPT_NO_FORMAT = "^RE[0-9]{8}$";
 
     private final ReceiptRepository repository;
-
-    @PersistenceContext
-    private EntityManager entityManager;
 
     public ReceiptService(ReceiptRepository repository) {
         this.repository = repository;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public String nextReceiptNo() {
-        if (entityManager != null) {
-            entityManager.createNativeQuery("select cast(pg_advisory_xact_lock(" + RECEIPT_NUMBERING_LOCK + ") as text)")
-                    .getResultList();
-        }
-        return "RE-%07d".formatted(repository.findMaxReceiptSequence() + 1);
+        return "RE%08d".formatted(repository.findMaxReceiptSequence() + 1);
+    }
+
+    /** Atomic allocation per branch/month, using the latest receipt_sequence table. */
+    @Transactional
+    public String nextReceiptNo(Branch branch, LocalDate date) {
+        String month = date.format(java.time.format.DateTimeFormatter.ofPattern("yyMM"));
+        int running = repository.nextRunningNumber(branch.getId(), month);
+        return "RE%s%04d".formatted(month, running);
     }
 
     @Transactional
     public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, Long actorId) {
         String no = requireText(receiptNo, "receiptNo");
         if (!no.matches(RECEIPT_NO_FORMAT)) {
-            throw new IllegalArgumentException("เลขที่ใบเสร็จต้องอยู่ในรูปแบบ RE-xxxxxxx");
-        }
-        if (repository.findByReceiptNo(no).isPresent()) {
-            throw new IllegalArgumentException("เลขที่ใบเสร็จซ้ำ");
+            throw new IllegalArgumentException("เลขที่ใบเสร็จต้องอยู่ในรูปแบบ REYYMMNNNN");
         }
         if (patient == null) {
             throw new IllegalArgumentException("ต้องระบุผู้ป่วย");
         }
         if (branch == null) {
             throw new IllegalArgumentException("ต้องระบุสาขา");
+        }
+        if (repository.findByReceiptNoAndBranchId(no, branch.getId()).isPresent()) {
+            throw new IllegalArgumentException("เลขที่ใบเสร็จซ้ำในสาขา");
         }
         Receipt receipt = new Receipt();
         receipt.setReceiptNo(no);

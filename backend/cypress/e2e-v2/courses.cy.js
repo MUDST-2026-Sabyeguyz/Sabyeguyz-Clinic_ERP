@@ -14,7 +14,7 @@ describe('v2 courses', () => {
         expect(body.used).to.equal(0)
         expect(body.expired).to.equal(false)
         expect(body.course.id).to.equal(this.fixtures.courseId)
-        expect(body.course.code).to.match(/^RE-\d{7}$/)
+        expect(body.course.code).to.match(/^RE\d{8}$/)
       })
     })
   })
@@ -31,7 +31,7 @@ describe('v2 courses', () => {
   it('leaves the commission provisional until the monthly closing locks the rate', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient).then(({ body }) => {
-        expect(body.commissionStatus).to.equal('Provisional')
+        expect(body.commissionStatus).to.equal('PROVISIONAL')
         expect(Number(body.lockedCommissionRate)).to.equal(0)
         expect(Number(body.totalCourseCommissionPool)).to.equal(0)
       })
@@ -81,7 +81,7 @@ describe('v2 courses', () => {
         })
         cy.api('GET', `/api/course-purchases/${purchase.id}`).then(({ body }) => {
           expect(body.allocations).to.have.length(1)
-          const usage = body.movements.find((movement) => movement.type === 'Treatment')
+          const usage = body.movements.find((movement) => movement.type === 'USAGE')
           expect(usage).to.exist
           cy.api('POST', `/api/course-movements/${usage.id}/reverse`, { reason: 'บันทึกผิด' }).then((reversed) => {
             expect(reversed.status).to.equal(200)
@@ -129,7 +129,7 @@ describe('v2 courses', () => {
       buy(this.fixtures, patient).then(({ body: purchase }) => {
         cy.api('POST', `/api/course-purchases/${purchase.id}/cancel`, { reason: 'ยกเลิก' }).then(({ status, body }) => {
           expect(status).to.equal(200)
-          expect(body.status).to.equal('Cancelled')
+          expect(body.status).to.equal('CANCELLED')
         })
       })
     })

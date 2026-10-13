@@ -3,7 +3,7 @@
 --
 -- Layout when this runs (see docs/legacy-data-migration.md):
 --   schema "legacy" : the old tables, untouched (the old "public" schema renamed)
---   schema "public" : the new empty v2 schema (migration_new V1 + V1_1 applied)
+--   schema "public" : the new empty v2 schema (db/migration V1 + V2 + V3 applied)
 --
 -- The script runs in ONE transaction: any problem rolls everything back and
 -- leaves the database as it was. Nothing in "legacy" is changed or dropped, so
@@ -31,12 +31,22 @@ BEGIN
         RAISE EXCEPTION 'the new schema already contains data; this script only fills an empty v2 schema';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.app_user WHERE username = 'system') THEN
-        RAISE EXCEPTION 'reference data (V1_1: the system user, roles, permissions) is missing in the new schema';
+        RAISE EXCEPTION 'reference data (V3: the system user, roles, permissions) is missing in the new schema';
     END IF;
     IF EXISTS (SELECT 1 FROM legacy.branch WHERE branch_code !~ '^[0-9]{2}$') THEN
         RAISE EXCEPTION 'a branch has a branch_code that is not 2 digits';
     END IF;
-    IF EXISTS (SELECT 1 FROM legacy.app_users WHERE length(username) > 50) THEN
+    IF EXISTS (SELECT 1 FROM legacy.app_users WHERE role NOT IN ('MANAGER', 'THERAPIST')) THEN
+        RAISE EXCEPTION 'a legacy user role has no supported v2 role mapping';
+    END IF;
+    IF EXISTS (SELECT 1 FROM legacy.payment_methods WHERE upper(code) NOT IN ('CASH', 'CARD', 'QR', 'TRANSFER', 'CREDITCARD', 'PROMPTPAY', 'BANKTRANSFER')) THEN
+        RAISE EXCEPTION 'a legacy payment method has no supported v2 mapping; review legacy.payment_methods before importing';
+    END IF;
+    IF EXISTS (SELECT 1 FROM legacy.patients WHERE identity_document_type = 'NATIONAL_ID'
+               AND (identity_number IS NULL OR identity_number !~ '^[0-9]{13}$'
+                    OR phone IS NULL OR btrim(phone) = '')) THEN
+        RAISE EXCEPTION 'Thai patients require a real 13-digit national ID and phone in latest v2; correct legacy.patients before importing';
+    END IF;    IF EXISTS (SELECT 1 FROM legacy.app_users WHERE length(username) > 50) THEN
         RAISE EXCEPTION 'a username is longer than 50 characters (the new column is VARCHAR(50))';
     END IF;
     IF (SELECT count(*) FROM (SELECT left(employee_code, 20) c FROM legacy.staff
@@ -93,9 +103,9 @@ FROM _course_code cc JOIN legacy.courses c ON c.id = cc.old_id WHERE cc.code <> 
 
 INSERT INTO public.service (service_type, service_name, service_price, service_status, service_code,
                             service_create_at, service_create_by, default_total_visits, default_bonus_visits,
-                            default_validity_days)
+                            default_validity_value, default_validity_unit)
 SELECT 'Course', left(c.name, 150), c.price, c.active, cc.code, c.created_at AT TIME ZONE 'UTC',
-       (SELECT sys_user FROM _ctx), c.sessions, c.bonus_sessions, c.validity_days
+       (SELECT sys_user FROM _ctx), c.sessions + c.bonus_sessions, c.bonus_sessions, c.validity_days, 'Day'
 FROM legacy.courses c JOIN _course_code cc ON cc.old_id = c.id;
 
 CREATE TABLE IF NOT EXISTS legacy.map_service (old_service_id BIGINT PRIMARY KEY, new_service_id BIGINT NOT NULL);
@@ -109,18 +119,31 @@ SELECT cc.old_id, n.service_id FROM _course_code cc
 JOIN public.service n ON n.service_code = cc.code AND n.service_type = 'Course';
 
 -- ---------------------------------------------------------------------------
--- 3. Payment methods (matched by name, the rest added)
+-- 3. Payment methods (explicit legacy-code mapping into the canonical enum)
 -- ---------------------------------------------------------------------------
+CREATE TEMP TABLE _payment_method AS
+SELECT m.id, m.active,
+       CASE upper(m.code) WHEN 'CASH' THEN 'Cash' WHEN 'CARD' THEN 'CreditCard'
+            WHEN 'CREDITCARD' THEN 'CreditCard' WHEN 'QR' THEN 'PromptPay'
+            WHEN 'PROMPTPAY' THEN 'PromptPay' WHEN 'TRANSFER' THEN 'BankTransfer'
+            WHEN 'BANKTRANSFER' THEN 'BankTransfer' END::method_name_enum AS method_name
+FROM legacy.payment_methods m;
 INSERT INTO public.payment_method (method_name, payment_method_status, payment_method_create_by)
-SELECT left(m.name, 50), m.active, (SELECT sys_user FROM _ctx)
-FROM legacy.payment_methods m
-WHERE NOT EXISTS (SELECT 1 FROM public.payment_method p WHERE lower(p.method_name) = lower(m.name));
-
+SELECT m.method_name, bool_or(m.active), (SELECT sys_user FROM _ctx)
+FROM _payment_method m
+WHERE NOT EXISTS (SELECT 1 FROM public.payment_method p WHERE p.method_name = m.method_name)
+GROUP BY m.method_name;
 CREATE TABLE IF NOT EXISTS legacy.map_payment_method (old_id BIGINT PRIMARY KEY, new_id BIGINT NOT NULL);
 TRUNCATE legacy.map_payment_method;
 INSERT INTO legacy.map_payment_method
-SELECT m.id, (SELECT min(p.payment_method_id) FROM public.payment_method p WHERE lower(p.method_name) = lower(left(m.name, 50)))
-FROM legacy.payment_methods m;
+SELECT m.id, p.payment_method_id FROM _payment_method m
+JOIN public.payment_method p ON p.method_name = m.method_name;
+INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
+SELECT 'payment method', 'payment_methods.id=' || m.id,
+       'legacy payment label "' || m.name || '" mapped by code ' || m.code,
+       'canonical v2 method ' || p.method_name::text || '; original label retained in legacy.payment_methods'
+FROM legacy.payment_methods m JOIN _payment_method p ON p.id = m.id
+WHERE m.name <> p.method_name::text;
 
 -- ---------------------------------------------------------------------------
 -- 4. Users, staff, roles, branch access
@@ -150,7 +173,7 @@ INSERT INTO public.staff (staff_code, staff_fname, staff_lname, position, branch
 SELECT x.code,
        left(split_part(btrim(x.full_name), ' ', 1), 100),
        left(coalesce(nullif(btrim(substr(btrim(x.full_name), length(split_part(btrim(x.full_name), ' ', 1)) + 1)), ''), '-'), 100),
-       x.position::staff_position_enum,
+       x.position::position_enum,
        coalesce(x.branch_id, (SELECT min(branch_id) FROM public.branch)),
        x.active, (x.created_at AT TIME ZONE 'Asia/Bangkok')::date,
        x.created_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx)
@@ -169,7 +192,7 @@ WHERE a.user_id = mu.new_user_id;
 INSERT INTO public.user_role (user_id, role_id)
 SELECT mu.new_user_id, r.role_id
 FROM legacy.app_users u JOIN legacy.map_user mu ON mu.old_user_id = u.id
-JOIN public.role r ON r.role_name = u.role;
+JOIN public.role r ON r.role_name = CASE u.role WHEN 'MANAGER' THEN 'Manager' WHEN 'THERAPIST' THEN 'Therapist' END::role_name_enum;
 
 INSERT INTO public.user_branch_access (user_id, branch_id)
 SELECT mu.new_user_id, b.branch_id
@@ -246,15 +269,15 @@ SELECT p.id, p.branch_id, p.created_at, p.updated_at, p.active,
        btrim(p.full_name) AS full_name,
        CASE WHEN p.identity_document_type = 'NATIONAL_ID' THEN 'Thai' ELSE 'Foreigner' END AS customer_type,
        CASE
-           WHEN btrim(coalesce(p.title, '')) IN ('นาย', 'นาง', 'นางสาว', 'ด.ช.', 'ด.ญ.') THEN btrim(p.title)
-           WHEN btrim(coalesce(p.title, '')) IN ('เด็กชาย', 'ดช', 'ดช.', 'Master') THEN 'ด.ช.'
-           WHEN btrim(coalesce(p.title, '')) IN ('เด็กหญิง', 'ดญ', 'ดญ.', 'Miss') AND p.gender IN ('หญิง', 'Female', 'FEMALE') THEN 'ด.ญ.'
+           WHEN btrim(coalesce(p.title, '')) IN ('นาย', 'นาง', 'นางสาว', 'Mr.', 'Miss', 'Mrs.', 'Boy', 'Girl') THEN btrim(p.title)
+           WHEN btrim(coalesce(p.title, '')) IN ('เด็กชาย', 'ด.ช.', 'ดช', 'ดช.', 'Master') THEN 'เด็กชาย'
+           WHEN btrim(coalesce(p.title, '')) IN ('เด็กหญิง', 'ด.ญ.', 'ดญ', 'ดญ.') THEN 'เด็กหญิง'
            WHEN p.gender IN ('หญิง', 'Female', 'FEMALE') THEN 'นางสาว'
            ELSE 'นาย' END AS title_new,
        CASE WHEN btrim(coalesce(p.title, '')) IN ('นาย', 'นาง', 'นางสาว', 'ด.ช.', 'ด.ญ.', 'เด็กชาย', 'ดช', 'ดช.', 'Master', 'เด็กหญิง', 'ดญ', 'ดญ.', 'Miss')
             THEN FALSE ELSE TRUE END AS title_guessed,
        CASE WHEN p.gender IN ('ชาย', 'Male', 'MALE') THEN 'Male'
-            WHEN p.gender IN ('หญิง', 'Female', 'FEMALE') THEN 'Female' ELSE 'Other' END AS gender_new,
+            WHEN p.gender IN ('หญิง', 'Female', 'FEMALE') THEN 'Female' ELSE 'NotSpecified' END AS gender_new,
        CASE WHEN p.identity_document_type = 'NATIONAL_ID' AND p.identity_number ~ '^[0-9]{13}$' THEN p.identity_number END AS national_id,
        CASE WHEN p.identity_document_type <> 'NATIONAL_ID' THEN left(p.identity_number, 20) END AS passport_no,
        CASE WHEN upper(btrim(coalesce(p.blood_group, ''))) ~ '^(A|B|O|AB)[+-]?$'
@@ -346,7 +369,7 @@ JOIN legacy.map_therapist mt ON mt.old_therapist_id = x.therapist_id
 JOIN legacy.map_service ms ON ms.old_service_id = x.service_id;
 
 INSERT INTO public.appointment_status_history (appointment_id, from_status, to_status, changed_by, changed_at, reason)
-SELECT x.id, NULL, x.status_new::appointment_to_status_enum, (SELECT sys_user FROM _ctx),
+SELECT x.id, NULL, x.status_new::appointment_status_enum, (SELECT sys_user FROM _ctx),
        coalesce(x.updated_at, x.created_at) AT TIME ZONE 'UTC',
        left('ย้ายข้อมูลจากระบบเดิม' || coalesce(' - เหตุผลยกเลิก: ' || nullif(btrim(x.cancel_reason), ''), ''), 255)
 FROM _appt x;
@@ -397,18 +420,39 @@ FROM _treat t LEFT JOIN legacy.map_staff ms ON ms.old_staff_id = t.staff_id;
 -- ---------------------------------------------------------------------------
 -- 10. Receipts (ids kept = old sale id), sale lines, payments, voids, refunds
 -- ---------------------------------------------------------------------------
+-- Allocate all receipt events together, per branch and Bangkok sale month.
+-- Legacy numbers remain in map_receipt; fail rather than truncate a monthly sequence.
+CREATE TEMP TABLE _receipt_number AS
+SELECT e.*, row_number() OVER (PARTITION BY branch_id, ym ORDER BY event_at, kind, old_id) AS rn
+FROM (
+    SELECT 'sale'::text AS kind, s.id AS old_id, s.branch_id, s.sold_at AS event_at,
+           to_char(s.sold_at AT TIME ZONE 'Asia/Bangkok', 'YYMM') AS ym
+    FROM legacy.sales s
+    UNION ALL
+    SELECT 'orphan', p.id, p.branch_id, p.purchased_at,
+           to_char(p.purchased_at AT TIME ZONE 'Asia/Bangkok', 'YYMM')
+    FROM legacy.course_purchases p
+    WHERE NOT EXISTS (SELECT 1 FROM legacy.sale_items i WHERE i.course_purchase_id = p.id)
+) e;
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM _receipt_number WHERE rn > 9999) THEN
+        RAISE EXCEPTION 'legacy receipt events exceed the v2 9999 receipt monthly branch limit';
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS legacy.map_receipt (old_sale_id BIGINT, new_receipt_id BIGINT NOT NULL, new_receipt_no TEXT NOT NULL, old_receipt_no TEXT);
 TRUNCATE legacy.map_receipt;
 INSERT INTO legacy.map_receipt
-SELECT s.id, s.id, 'RE-' || lpad((row_number() OVER (ORDER BY s.sold_at, s.id))::text, 7, '0'), s.receipt_no
-FROM legacy.sales s;
+SELECT s.id, s.id, 'RE' || n.ym || lpad(n.rn::text, 4, '0'), s.receipt_no
+FROM legacy.sales s JOIN _receipt_number n ON n.kind = 'sale' AND n.old_id = s.id;
 
 INSERT INTO public.receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_at,
                             receipt_create_by, subtotal_before_discount, bill_discount_amount, taxable_amount,
-                            tax_amount, net_amount, receipt_status)
+                            tax_amount, net_amount, receipt_status, payment_label)
 SELECT s.id, mr.new_receipt_no, s.patient_id, s.branch_id, s.sold_at AT TIME ZONE 'UTC', s.created_at AT TIME ZONE 'UTC',
        (SELECT sys_user FROM _ctx), tot.total, 0, tot.total, 0, tot.total,
-       CASE WHEN s.status = 'VOIDED' THEN 'Voided' ELSE 'Issued' END::receipt_status_enum
+       CASE WHEN s.status = 'VOIDED' THEN 'Voided' ELSE 'Issued' END::receipt_status_enum,
+       CASE WHEN coalesce((SELECT sum(p.amount) FROM legacy.sale_payments p WHERE p.sale_id = s.id AND p.type = 'PAYMENT'), 0) >= tot.total
+            THEN 'FullyPaid' ELSE 'Deposit' END::payment_label_enum
 FROM legacy.sales s
 JOIN legacy.map_receipt mr ON mr.old_sale_id = s.id
 CROSS JOIN LATERAL (SELECT coalesce((SELECT sum(i.line_total) FROM legacy.sale_items i WHERE i.sale_id = s.id), s.total) AS total) tot;
@@ -437,8 +481,8 @@ LEFT JOIN legacy.map_service msv ON msv.old_service_id = i.service_id
 LEFT JOIN legacy.map_staff mst ON mst.old_staff_id = s.salesperson_staff_id;
 
 -- a voided sale: one void record per line
-INSERT INTO public.transaction_cancellation (permission_id, transaction_id, reason, cancelled_by, cancelled_at, cancellation_type)
-SELECT (SELECT cancel_perm FROM _ctx), ml.new_transaction_id,
+INSERT INTO public.transaction_cancellation (permission_id, transaction_id, reason_code, reason, cancelled_by, cancelled_at, cancellation_type)
+SELECT (SELECT cancel_perm FROM _ctx), ml.new_transaction_id, 'Other',
        left(coalesce(nullif(btrim(s.void_reason), ''), 'ยกเลิกในระบบเดิม'), 255), (SELECT sys_user FROM _ctx),
        coalesce(s.voided_at, s.sold_at) AT TIME ZONE 'UTC', 'Void'
 FROM legacy.sale_items i JOIN legacy.sales s ON s.id = i.sale_id AND s.status = 'VOIDED'
@@ -469,8 +513,8 @@ INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
 SELECT 'refund', 'sale_payments.id=' || old_id, 'refund has no payment to refer to', 'skipped; the row stays in legacy.sale_payments'
 FROM _refund WHERE payment_id IS NULL;
 
-INSERT INTO public.transaction_cancellation (cancellation_id, permission_id, payment_id, reason, cancelled_by, cancelled_at, cancellation_type)
-SELECT f.cancellation_id, (SELECT cancel_perm FROM _ctx), f.payment_id,
+INSERT INTO public.transaction_cancellation (cancellation_id, permission_id, payment_id, reason_code, reason, cancelled_by, cancelled_at, cancellation_type)
+SELECT f.cancellation_id, (SELECT cancel_perm FROM _ctx), f.payment_id, 'Other',
        left(coalesce(nullif(btrim(f.reason), ''), 'คืนเงินในระบบเดิม'), 255), (SELECT sys_user FROM _ctx),
        f.created_at AT TIME ZONE 'UTC', 'Refund'
 FROM _refund f WHERE f.payment_id IS NOT NULL;
@@ -502,17 +546,18 @@ CREATE TEMP TABLE _orphan AS
 SELECT o.old_id,
        nextval(pg_get_serial_sequence('public.receipt', 'receipt_id')) AS receipt_id,
        nextval(pg_get_serial_sequence('public.sales_transaction', 'transaction_id')) AS txn_id,
-       (SELECT coalesce(max(substr(receipt_no, 4)::int), 0) FROM public.receipt) + (row_number() OVER (ORDER BY o.purchased_at, o.old_id))::int AS rno
-FROM _purchase o WHERE o.sale_id IS NULL;
+       'RE' || n.ym || lpad(n.rn::text, 4, '0') AS receipt_no
+FROM _purchase o JOIN _receipt_number n ON n.kind = 'orphan' AND n.old_id = o.old_id
+WHERE o.sale_id IS NULL;
 
 INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
-SELECT 'course purchase', 'course_purchases.id=' || old_id, 'purchase has no sale line', 'receipt RE-' || lpad(rno::text, 7, '0') || ' created for it'
+SELECT 'course purchase', 'course_purchases.id=' || old_id, 'purchase has no sale line', 'receipt ' || receipt_no || ' created for it'
 FROM _orphan;
 
 INSERT INTO public.receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_at, receipt_create_by,
-                            subtotal_before_discount, bill_discount_amount, taxable_amount, tax_amount, net_amount, receipt_status)
-SELECT o.receipt_id, 'RE-' || lpad(o.rno::text, 7, '0'), p.patient_id, p.branch_id, p.purchased_at AT TIME ZONE 'UTC',
-       p.purchased_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx), p.price, 0, p.price, 0, p.price, 'Issued'
+                            subtotal_before_discount, bill_discount_amount, taxable_amount, tax_amount, net_amount, receipt_status, payment_label)
+SELECT o.receipt_id, o.receipt_no, p.patient_id, p.branch_id, p.purchased_at AT TIME ZONE 'UTC',
+       p.purchased_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx), p.price, 0, p.price, 0, p.price, 'Issued', 'Deposit'
 FROM _orphan o JOIN _purchase p ON p.old_id = o.old_id;
 
 INSERT INTO public.sales_transaction (transaction_id, patient_id, branch_id, service_id, transaction_type, salesperson_staff_id,
@@ -558,17 +603,17 @@ LEFT JOIN legacy.map_staff mss ON mss.old_staff_id = s.salesperson_staff_id
 LEFT JOIN legacy.map_staff mo ON mo.old_staff_id = p.case_owner_employee_id;
 
 INSERT INTO public.course (course_id, course_no, course_sequence, course_name, course_price, total_visits, bonus_visits,
-        expiry_date, course_status, service_id, course_create_at, course_create_by, receipt_id, sale_month,
+        expiry_date, course_status, branch_id, service_id, course_create_at, course_create_by, receipt_id, sale_month,
         seller_staff_id, case_owner_staff_id, commission_status, commission_scheme_id, commission_scheme_version,
         provisional_commission_rate, locked_commission_rate, total_course_commission_pool,
         commission_allocation_per_visit, commission_generated_date, visits_used, remaining_visits,
         gross_commission_allocated_total, owner_net_commission_released_total, substitute_treatment_fee_total,
-        commission_outstanding, purchaser_patient_id, sale_transaction_id)
+        commission_outstanding, purchaser_patient_id, sale_transaction_id, validity_value, validity_unit)
 SELECT p.old_id,
        r.receipt_no || CASE WHEN c.seq > 1 THEN '-' || lpad(c.seq::text, 2, '0') ELSE '' END,
-       c.seq, left(p.course_name, 255), p.price, p.sessions, p.bonus_sessions,
+       c.seq, left(p.course_name, 255), p.price, p.sessions + p.bonus_sessions, p.bonus_sessions,
        (p.expires_at AT TIME ZONE 'Asia/Bangkok')::date,
-       CASE WHEN p.status = 'CANCELLED' THEN 'Cancelled' ELSE 'Active' END::course_status_enum,
+       CASE WHEN p.status = 'CANCELLED' THEN 'Cancelled' ELSE 'Active' END::course_status_enum, p.branch_id,
        mc.new_service_id, p.purchased_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx), c.receipt_id,
        coalesce(to_char(p.sale_month, 'YYYY-MM'), to_char(p.purchased_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM')),
        o.seller_staff_id, o.case_owner_staff_id,
@@ -577,7 +622,8 @@ SELECT p.old_id,
        coalesce(CASE WHEN p.commission_scheme_version ~ '^[0-9]+$' THEN p.commission_scheme_version::int END, 1),
        round(p.provisional_commission_rate, 4), round(p.locked_commission_rate, 4), p.total_course_commission_pool,
        p.commission_allocation_per_visit, p.commission_generated_date::date,
-       0, 0, 0, 0, 0, 0, p.patient_id, c.txn_id
+       0, 0, 0, 0, 0, 0, p.patient_id, c.txn_id,
+       ((p.expires_at AT TIME ZONE 'Asia/Bangkok')::date - (p.purchased_at AT TIME ZONE 'Asia/Bangkok')::date), 'Day'
 FROM _purchase p
 JOIN _course c ON c.old_id = p.old_id
 JOIN _owner o ON o.old_id = p.old_id
@@ -591,6 +637,10 @@ SELECT p.old_id, p.patient_id, 'Owner', TRUE, p.purchased_at AT TIME ZONE 'UTC' 
 INSERT INTO public.course_sale_staff_share (course_id, staff_id, share_percent, credited_sales_amount, created_by)
 SELECT p.old_id, o.seller_staff_id, 100, p.price, (SELECT sys_user FROM _ctx)
 FROM _purchase p JOIN _owner o ON o.old_id = p.old_id;
+
+-- Establish composite entitlement references before visit usages; totals are reconciled below.
+INSERT INTO public.course_entitlement(course_id, patient_id)
+SELECT old_id, patient_id FROM _purchase;
 
 -- visits and visit usages for every USAGE movement
 CREATE TEMP TABLE _usage AS
@@ -719,10 +769,10 @@ FROM _usage u WHERE u.reversed AND EXISTS (SELECT 1 FROM _alloc a WHERE a.moveme
 -- entitlement + per-course totals, derived from the migrated ledger
 INSERT INTO public.course_entitlement (course_id, patient_id, allocated_visits, used_visits, remaining_visits, updated_at)
 SELECT l.course_id, l.patient_id,
-       coalesce(sum(l.qty_change) FILTER (WHERE l.qty_change > 0 AND l.entry_type <> 'Reversal'), 0)::int,
+       (greatest(sum(l.qty_change),0) + (SELECT count(*) FROM public.course_visit_usage u WHERE u.course_id=l.course_id AND u.usage_status='Completed'))::int,
        (SELECT count(*) FROM public.course_visit_usage u WHERE u.course_id = l.course_id AND u.usage_status = 'Completed')::int,
        greatest(sum(l.qty_change), 0)::int, now() AT TIME ZONE 'UTC'
-FROM public.course_ledger l GROUP BY l.course_id, l.patient_id;
+FROM public.course_ledger l GROUP BY l.course_id, l.patient_id ON CONFLICT (course_id, patient_id) DO UPDATE SET allocated_visits=EXCLUDED.allocated_visits, used_visits=EXCLUDED.used_visits, remaining_visits=EXCLUDED.remaining_visits, updated_at=EXCLUDED.updated_at;
 
 UPDATE public.course c SET
     remaining_visits = coalesce((SELECT greatest(sum(l.qty_change), 0) FROM public.course_ledger l WHERE l.course_id = c.course_id), 0),
@@ -758,6 +808,13 @@ SELECT left(a.entity_type, 50), coalesce(a.entity_id::text, '-'), 'INSERT', left
 FROM legacy.audit_logs a LEFT JOIN legacy.map_user mu ON mu.old_user_id = a.actor_id;
 
 -- ---------------------------------------------------------------------------
+-- Receipt counters must continue after imported receipts within each branch/month.
+INSERT INTO public.receipt_sequence (branch_id, year_month, last_running_no)
+SELECT branch_id, substr(receipt_no, 3, 4), max(substr(receipt_no, 7, 4)::int)
+FROM public.receipt GROUP BY branch_id, substr(receipt_no, 3, 4)
+ON CONFLICT (branch_id, year_month) DO UPDATE
+SET last_running_no = greatest(receipt_sequence.last_running_no, EXCLUDED.last_running_no);
+
 -- 13. Sequences follow the explicit ids, and a last consistency check
 -- ---------------------------------------------------------------------------
 DO $$
@@ -803,6 +860,8 @@ BEGIN
     IF old_sum <> new_sum THEN RAISE EXCEPTION 'course balance: % in legacy, % migrated', old_sum, new_sum; END IF;
     SELECT count(*) INTO old_n FROM legacy.app_users;          SELECT count(*) INTO new_n FROM public.app_user WHERE username <> 'system';
     IF old_n <> new_n THEN RAISE EXCEPTION 'users: % in legacy, % migrated', old_n, new_n; END IF;
+    SELECT count(*) INTO new_n FROM public.user_role WHERE user_id IN (SELECT new_user_id FROM legacy.map_user);
+    IF old_n <> new_n THEN RAISE EXCEPTION 'user roles: % in legacy, % migrated', old_n, new_n; END IF;
 END $$;
 
 SELECT area, count(*) AS rows_needing_a_look FROM legacy.migration_issue GROUP BY area ORDER BY area;

@@ -82,7 +82,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> sellsACourseWithAProvisionalTierRate() {
         Map<String, Object> out = new LinkedHashMap<>();
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-2206315");
+        receipt.setReceiptNo("RE22063150");
         CommissionScheme scheme = new CommissionScheme();
         scheme.setSchemeVersion(1);
         CommissionTier tier = new CommissionTier();
@@ -111,7 +111,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> appendsSequenceSuffixWhenMultipleCoursesShareAReceipt() {
         Map<String, Object> out = new LinkedHashMap<>();
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-2206315");
+        receipt.setReceiptNo("RE22063150");
         coursesStub.on("countByReceiptId", args -> 1L);
         coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
@@ -130,7 +130,7 @@ public class CourseServiceScenarios {
         Service template = courseTemplate();
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-3000001");
+        receipt.setReceiptNo("RE30000010");
         CommissionTier tier = new CommissionTier();
         tier.setCommissionRate(new BigDecimal("0.07"));
         coursesStub.on("countByReceiptId", args -> 0L);
@@ -151,7 +151,7 @@ public class CourseServiceScenarios {
         Service template = courseTemplate();
         template.setDefaultValidityDays(null);
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-4000001");
+        receipt.setReceiptNo("RE40000010");
 
         out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, purchaseLine(receipt), template, new Staff(), null, null, null, null,
                 LocalDate.of(2026, 8, 18), 1L); return null; }));
@@ -163,7 +163,7 @@ public class CourseServiceScenarios {
         Service template = courseTemplate();
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-5000001");
+        receipt.setReceiptNo("RE50000010");
         SalesTransaction line = purchaseLine(receipt);
         coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
@@ -181,7 +181,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> rejectsASaleLineThatIsNotACoursePurchase() {
         Map<String, Object> out = new LinkedHashMap<>();
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-5000002");
+        receipt.setReceiptNo("RE50000020");
         SalesTransaction line = purchaseLine(receipt);
         line.setTransactionType(TransactionType.SingleVisit);
 
@@ -193,7 +193,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> rejectsASaleLineThatAlreadyHasACourse() {
         Map<String, Object> out = new LinkedHashMap<>();
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-5000003");
+        receipt.setReceiptNo("RE50000030");
         SalesTransaction line = purchaseLine(receipt);
         coursesStub.on("existsBySaleTransactionId", args -> true);
 
@@ -205,7 +205,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> rejectsAPurchaserThatDiffersFromTheReceiptPatient() {
         Map<String, Object> out = new LinkedHashMap<>();
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-5000004");
+        receipt.setReceiptNo("RE50000040");
         SalesTransaction line = purchaseLine(receipt);
         receipt.setPatient(new Patient());
 
@@ -232,7 +232,7 @@ public class CourseServiceScenarios {
 
     public Map<String, Object> creditsTheSaleToTheSellerAtOneHundredPercentByDefault() {
         Map<String, Object> out = new LinkedHashMap<>();
-        sellWithShares("RE-6000001", null, new Staff(), out);
+        sellWithShares("RE60000010", null, new Staff(), out);
         CourseSaleStaffShare share = (CourseSaleStaffShare) saleSharesStub.arguments("save").get(0)[0];
         out.put("sharesSaved", saleSharesStub.calls("save"));
         out.put("percent", share.getSharePercent());
@@ -244,7 +244,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> splitsTheSaleCreditBetweenTwoStaff() {
         Map<String, Object> out = new LinkedHashMap<>();
         Staff seller = new Staff();
-        sellWithShares("RE-6000002", List.of(new CourseService.SaleShare(seller, new BigDecimal("60")),
+        sellWithShares("RE60000020", List.of(new CourseService.SaleShare(seller, new BigDecimal("60")),
                 new CourseService.SaleShare(new Staff(), new BigDecimal("40"))), seller, out);
         CourseSaleStaffShare first = (CourseSaleStaffShare) saleSharesStub.arguments("save").get(0)[0];
         CourseSaleStaffShare second = (CourseSaleStaffShare) saleSharesStub.arguments("save").get(1)[0];
@@ -257,13 +257,13 @@ public class CourseServiceScenarios {
 
     public Map<String, Object> rejectsSaleSharesThatDoNotTotalOneHundred() {
         Staff seller = new Staff();
-        return sellWithShares("RE-6000003", List.of(new CourseService.SaleShare(seller, new BigDecimal("60")),
+        return sellWithShares("RE60000030", List.of(new CourseService.SaleShare(seller, new BigDecimal("60")),
                 new CourseService.SaleShare(new Staff(), new BigDecimal("30"))), seller, new LinkedHashMap<>());
     }
 
     public Map<String, Object> rejectsTheSameStaffTwiceInTheSaleShares() {
         Staff seller = new Staff();
-        return sellWithShares("RE-6000004", List.of(new CourseService.SaleShare(seller, new BigDecimal("50")),
+        return sellWithShares("RE60000040", List.of(new CourseService.SaleShare(seller, new BigDecimal("50")),
                 new CourseService.SaleShare(seller, new BigDecimal("50"))), seller, new LinkedHashMap<>());
     }
 
@@ -272,7 +272,7 @@ public class CourseServiceScenarios {
         Service template = courseTemplate();
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-6000005");
+        receipt.setReceiptNo("RE60000050");
         SalesTransaction line = purchaseLine(receipt);
         coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
@@ -295,7 +295,7 @@ public class CourseServiceScenarios {
         Service template = courseTemplate();
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
-        receipt.setReceiptNo("RE-6000006");
+        receipt.setReceiptNo("RE60000060");
         SalesTransaction line = purchaseLine(receipt);
         coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();

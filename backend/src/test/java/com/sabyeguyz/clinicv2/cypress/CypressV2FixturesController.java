@@ -28,7 +28,7 @@ public class CypressV2FixturesController {
             "course_usage_print", "commission_allocation_ledger", "course_ledger", "course_visit_usage",
             "course_transfer", "course_entitlement", "course_sale_staff_share", "course_shared_member",
             "commission_rate_override_audit", "monthly_commission_closing", "treatment", "sales_transaction",
-            "course", "receipt", "appointment_status_history", "appointment", "patient_visit", "hn_sequence",
+            "course", "receipt", "receipt_sequence", "appointment_status_history", "appointment", "patient_visit", "hn_sequence",
             "patient", "audit_log");
 
     private final JdbcTemplate jdbc;
@@ -44,8 +44,8 @@ public class CypressV2FixturesController {
         resetReferenceData();
         jdbc.update("""
                 INSERT INTO service (service_type, service_name, service_price, service_code, service_create_by,
-                                     default_total_visits, default_bonus_visits, default_validity_days)
-                SELECT 'Course'::service_type_enum, 'คอร์สทดสอบ API', 9000.00, 'CYPRESS', u.user_id, 5, 1, 60
+                                     default_total_visits, default_bonus_visits, default_validity_value, default_validity_unit)
+                SELECT 'Course'::service_type_enum, 'คอร์สทดสอบ API', 9000.00, 'CYPRESS', u.user_id, 5, 1, 60, 'Day'::validity_unit_enum
                 FROM app_user u WHERE u.username = 'system'
                 """);
         return Map.of(
@@ -69,7 +69,7 @@ public class CypressV2FixturesController {
         jdbc.update("DELETE FROM user_branch_access WHERE branch_id IN (SELECT branch_id FROM branch WHERE branch_code NOT IN " + seedBranches + ")");
         jdbc.update("DELETE FROM room WHERE room_name NOT LIKE 'ห้องกายภาพ%' OR branch_id IN (SELECT branch_id FROM branch WHERE branch_code NOT IN " + seedBranches + ")");
         jdbc.update("DELETE FROM branch WHERE branch_code NOT IN " + seedBranches);
-        jdbc.update("DELETE FROM payment_method WHERE method_name NOT IN ('Cash', 'Transfer', 'QR', 'Credit Card')");
+        jdbc.update("DELETE FROM payment_method WHERE method_name NOT IN ('Cash', 'BankTransfer', 'PromptPay', 'CreditCard')");
         jdbc.update("DELETE FROM master_data_value WHERE value_name NOT IN ('General', 'VIP', 'Walk-in', 'Facebook', 'Friend', 'None')");
         jdbc.update("DELETE FROM master_data_type WHERE type_name NOT IN ('Customer Group', 'Referral Channel', 'Insurance Type', 'Insurance Company')");
         jdbc.update("DELETE FROM commission_tier WHERE commission_scheme_id <> (SELECT MIN(commission_scheme_id) FROM commission_scheme)");
