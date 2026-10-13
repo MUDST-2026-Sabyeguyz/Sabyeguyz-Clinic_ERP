@@ -38,12 +38,13 @@ req GET '/api/appointments?size=1'
 expect_jq "all $EXPECTED_APPOINTMENTS appointments are there" ".totalItems == $EXPECTED_APPOINTMENTS"
 req GET '/api/branches';       expect_jq "the branch came across" 'map(.branchCode) | index("01") != null'
 req GET '/api/staff';          expect_jq "therapists became staff" 'length >= 3'
-req GET '/api/payment-methods'; expect_jq "payment methods are there" 'length >= 4'
+req GET '/api/payment-methods'; expect_jq "legacy payment methods map to canonical v2 codes" 'map(.code) | sort == ["BankTransfer","Cash","CreditCard","PromptPay"]'
 req GET '/api/commission/schemes'; expect_jq "the commission scheme and its tiers" 'length >= 1'
 req GET "/api/course-purchases/$COURSE1_ID"
 expect_jq "the course ledger balance is $COURSE1_REMAINING" ".purchase.remaining == $COURSE1_REMAINING"
 expect_jq "the usage, its reversal and the transfer are in the ledger" '.movements | length == 5'
 expect_jq "commission allocations (with the reversal row) are kept" '.allocations | length == 3'
+expect_jq "paid and bonus visits keep the full entitlement" '.purchase.sessions == 10 and .purchase.bonusSessions == 1'
 expect_jq "the locked commission rate is kept" '(.purchase.lockedCommissionRate | tonumber) == 0.05'
 req GET '/api/course-usages'; expect_jq "the usage list shows the reversed usage" 'map(select(.voidedAt != null)) | length == 1'
 req GET '/api/reports/revenue?from=2020-01-01&to=2099-12-31'; expect_status "revenue report over migrated payments" 200
@@ -57,6 +58,7 @@ expect_jq "the new HN has 10 digits" '.hn | test("^[0-9]{10}$")'
 SERVICE_ID=$(curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/catalog/services" | jq -r '.[] | select(.code=="PHYSIO_30") | .id')
 req POST /api/payments "$(jq -nc --argjson p "$NEW_PATIENT" --argjson s "$SERVICE_ID" '{patientId:$p,branchCode:"01",items:[{type:"SERVICE",referenceId:$s,quantity:1}],payments:[{paymentMethodCode:"Cash",amount:700}]}')"
 expect_status "sell after the migration" 201
+expect_jq "receipt follows REYYMMNNNN" '.receiptNo | test("^RE[0-9]{8}$")'
 expect_jq "the receipt number continues at $NEXT_RECEIPT_NO" ".receiptNo == \"$NEXT_RECEIPT_NO\""
 THERAPIST_ID=$(curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/catalog/therapists" | jq -r '.[0].id')
 req POST /api/appointments "$(jq -nc --argjson p "$NEW_PATIENT" --argjson t "$THERAPIST_ID" --argjson s "$SERVICE_ID" '{branchCode:"01",patientId:$p,therapistId:$t,serviceId:$s,startAt:"2031-01-01T09:00:00+07:00"}')"

@@ -189,7 +189,7 @@ public class ReportController {
                 .filter(c -> patientId == null || c.getPurchaserPatient().getId().equals(patientId))
                 .toList();
         List<BalanceRow> balanceRows = rows.stream().map(c -> {
-            int purchased = c.getTotalVisits() + (c.getBonusVisits() == null ? 0 : c.getBonusVisits());
+            int purchased = c.getTotalVisits();
             var patient = c.getPurchaserPatient();
             return new BalanceRow(patient.getPatientHn(), patient.getPatientFname() + " " + patient.getPatientLname(),
                     c.getReceipt().getBranch().getBranchCode(), c.getCourseName(), purchased, c.getVisitsUsed(),

@@ -2,7 +2,7 @@ name: Compose build
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**']
+    branches: [develop, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
   pull_request:
     branches: [develop]
   workflow_dispatch:

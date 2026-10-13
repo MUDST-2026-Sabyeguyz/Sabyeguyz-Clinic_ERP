@@ -40,6 +40,14 @@ public class TransactionCancellation {
     @Column(length = 255, nullable = false)
     private String reason;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "reason_code", nullable = false, columnDefinition = "reason_code_enum")
+    private com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode = com.sabyeguyz.clinicv2.enums.ReasonCode.Other;
+
+    public com.sabyeguyz.clinicv2.enums.ReasonCode getReasonCode() { return reasonCode; }
+    public void setReasonCode(com.sabyeguyz.clinicv2.enums.ReasonCode value) { reasonCode = value; }
+
     @Column(name = "cancelled_by", nullable = false)
     private Long cancelledBy;
 

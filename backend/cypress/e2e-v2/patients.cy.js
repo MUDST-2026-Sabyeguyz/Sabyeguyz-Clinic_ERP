@@ -63,7 +63,7 @@ describe('v2 patients', () => {
   })
 
   it('reads a patient profile and 404s for an unknown id', () => {
-    cy.registerPatient().then((patient) => {
+    cy.registerPatient({ identityNumber: '1100000000101' }).then((patient) => {
       cy.api('GET', `/api/patients/${patient.id}`).then(({ status, body }) => {
         expect(status).to.equal(200)
         expect(body.hn).to.equal(patient.hn)

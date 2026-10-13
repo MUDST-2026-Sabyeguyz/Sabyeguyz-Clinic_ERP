@@ -49,7 +49,7 @@ describe('v2 commission', () => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
       }).then(({ body: purchase }) => {
-        expect(purchase.commissionStatus).to.equal('Provisional')
+        expect(purchase.commissionStatus).to.equal('PROVISIONAL')
         cy.api('POST', `/api/commission/closings/${month}-01`).then(({ status, body }) => {
           expect(status).to.equal(200)
           expect(body).to.have.length(1)
@@ -58,7 +58,7 @@ describe('v2 commission', () => {
           expect(Number(body[0].rate)).to.equal(0.05)
         })
         cy.api('GET', `/api/patients/${patient.id}/courses`).then(({ body }) => {
-          expect(body[0].commissionStatus).to.equal('Locked')
+          expect(body[0].commissionStatus).to.equal('LOCKED')
           expect(Number(body[0].lockedCommissionRate)).to.equal(0.05)
           expect(Number(body[0].totalCourseCommissionPool)).to.equal(450)
           expect(Number(body[0].commissionAllocationPerVisit)).to.be.greaterThan(0)

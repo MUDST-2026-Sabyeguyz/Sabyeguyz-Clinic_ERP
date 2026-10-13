@@ -12,7 +12,7 @@ describe('v2 appointments', () => {
     cy.registerPatient().then((patient) => {
       book(this.fixtures, patient).then(({ status, body }) => {
         expect(status).to.equal(201)
-        expect(body.status).to.equal('Confirmed')
+        expect(body.status).to.equal('CONFIRMED')
         expect(body.patientType).to.equal('CURRENT')
         expect(body.patient.id).to.equal(patient.id)
         expect(body.patient.hn).to.equal(patient.hn)
@@ -34,7 +34,7 @@ describe('v2 appointments', () => {
       book(this.fixtures, patient).then(({ body }) => {
         cy.api('POST', `/api/appointments/${body.id}/cancel`, { reason: 'ผู้ป่วยขอยกเลิก' }).then((cancelled) => {
           expect(cancelled.status).to.equal(200)
-          expect(cancelled.body.status).to.equal('Cancelled')
+          expect(cancelled.body.status).to.equal('CANCELLED')
         })
       })
       book(this.fixtures, patient).its('status').should('equal', 201)
@@ -54,12 +54,12 @@ describe('v2 appointments', () => {
       status: 'Unconfirmed', patientType: 'NEW', contactName: 'สมศรี ใจงาม', contactPhone: '0899999999',
     }).then(({ status, body }) => {
       expect(status).to.equal(201)
-      expect(body.status).to.equal('Unconfirmed')
+      expect(body.status).to.equal('UNCONFIRMED')
       expect(body.patientType).to.equal('NEW')
       expect(body.contactName).to.equal('สมศรี ใจงาม')
       cy.api('POST', `/api/appointments/${body.id}/confirm`).then((confirmed) => {
         expect(confirmed.status).to.equal(200)
-        expect(confirmed.body.status).to.equal('Confirmed')
+        expect(confirmed.body.status).to.equal('CONFIRMED')
       })
     })
   })
@@ -82,9 +82,9 @@ describe('v2 appointments', () => {
     cy.registerPatient().then((patient) => {
       book(this.fixtures, patient).then(({ body }) => {
         const post = (action) => cy.api('POST', `/api/appointments/${body.id}/${action}`)
-        post('check-in').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('Arrived') })
-        post('start-service').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('InService') })
-        post('complete').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('Completed') })
+        post('check-in').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('ARRIVED') })
+        post('start-service').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('IN_SERVICE') })
+        post('complete').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('COMPLETED') })
         // A completed appointment is final.
         cy.api('POST', `/api/appointments/${body.id}/cancel`, { reason: 'x' }).its('status').should('equal', 400)
       })
@@ -104,7 +104,7 @@ describe('v2 appointments', () => {
       book(this.fixtures, patient).then(({ body }) => {
         cy.api('POST', `/api/appointments/${body.id}/no-show`).then((r) => {
           expect(r.status).to.equal(200)
-          expect(r.body.status).to.equal('NoShow')
+          expect(r.body.status).to.equal('NO_SHOW')
         })
       })
     })

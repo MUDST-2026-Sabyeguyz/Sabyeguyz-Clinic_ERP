@@ -27,7 +27,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -44,7 +43,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * Checks the clinicv2 entities against a database built from db/migration_new/V1__initial_schema.sql.
+ * Checks the clinicv2 entities against a database built from db/migration V1 and V2 via the production Flyway runtime.
  *
  * <p>Step 1 lists every column whose database type Hibernate would reject (so one run shows all
  * problems, not just the first). Step 2 boots the whole clinicv2 bean graph over that database with
@@ -94,12 +93,16 @@ public class SchemaCheck {
                 if (!table.isPhysicalTable()) continue;
                 Map<String, int[]> codes = new HashMap<>();
                 Map<String, String> names = new HashMap<>();
+                var requiredColumns = new java.util.HashSet<String>();
                 for (String candidate : new String[] {table.getName(), table.getName().toUpperCase(Locale.ROOT)}) {
                     try (ResultSet rs = connection.getMetaData().getColumns(null, null, candidate, null)) {
                         while (rs.next()) {
                             String column = rs.getString("COLUMN_NAME").toLowerCase(Locale.ROOT);
                             codes.put(column, new int[] {rs.getInt("DATA_TYPE")});
                             names.put(column, rs.getString("TYPE_NAME"));
+                            if (rs.getInt("NULLABLE") == java.sql.DatabaseMetaData.columnNoNulls
+                                    && rs.getString("COLUMN_DEF") == null
+                                    && !"YES".equals(rs.getString("IS_AUTOINCREMENT"))) requiredColumns.add(column);
                         }
                     }
                 }
@@ -110,6 +113,7 @@ public class SchemaCheck {
                 for (Column column : table.getColumns()) {
                     columns++;
                     String name = column.getName().toLowerCase(Locale.ROOT);
+                    requiredColumns.remove(name);
                     if (!codes.containsKey(name)) {
                         problems.add("MISSING COLUMN " + table.getName() + "." + name);
                         continue;
@@ -125,6 +129,7 @@ public class SchemaCheck {
                                 + " (code " + expectedCode + ")  actual=" + actualType + " (code " + actualCode + ")");
                     }
                 }
+                requiredColumns.forEach(name -> problems.add("UNMAPPED REQUIRED COLUMN " + table.getName() + "." + name));
             }
         } finally {
             StandardServiceRegistryBuilder.destroy(registry);
@@ -157,15 +162,21 @@ public class SchemaCheck {
 
     @Configuration
     @EnableJpaRepositories(basePackages = ENTITY_PACKAGE)
-    @ComponentScan(basePackages = ENTITY_PACKAGE, excludeFilters = @ComponentScan.Filter(
-            type = FilterType.ASSIGNABLE_TYPE,
-            classes = {com.sabyeguyz.clinicv2.ClinicV2Application.class, com.sabyeguyz.clinicv2.config.SecurityConfig.class}))
+    @ComponentScan(basePackages = ENTITY_PACKAGE, excludeFilters = {
+            @ComponentScan.Filter(type = org.springframework.context.annotation.FilterType.ANNOTATION, classes = Configuration.class),
+            @ComponentScan.Filter(type = org.springframework.context.annotation.FilterType.REGEX, pattern = "com\\.sabyeguyz\\.clinicv2\\.cypress\\..*")
+    })
     static class WiringConfig {
         private static final byte[] SECRET = "schema-check-secret-schema-check-secret".getBytes(StandardCharsets.UTF_8);
 
         @Bean
         DataSource dataSource() {
             return new DriverManagerDataSource(env("DB_URL"), env("DB_USER"), env("DB_PASSWORD"));
+        }
+
+        @Bean
+        org.springframework.jdbc.core.JdbcTemplate jdbcTemplate(DataSource dataSource) {
+            return new org.springframework.jdbc.core.JdbcTemplate(dataSource);
         }
 
         @Bean

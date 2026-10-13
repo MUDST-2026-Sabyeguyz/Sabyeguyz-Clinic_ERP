@@ -5,9 +5,9 @@ INSERT INTO app_user (username, password_hash, user_status, last_login_at)
 VALUES ('system', '!login-disabled', FALSE, CURRENT_TIMESTAMP);
 
 INSERT INTO role (role_name, role_create_by)
-SELECT r.role_name, u.user_id
+SELECT r.role_name::role_name_enum, u.user_id
 FROM app_user u
-CROSS JOIN (VALUES ('MANAGER'), ('THERAPIST')) AS r(role_name)
+CROSS JOIN (VALUES ('Manager'), ('Therapist')) AS r(role_name)
 WHERE u.username = 'system';
 
 INSERT INTO permission (permission_name, module_name, permission_create_by)
@@ -26,12 +26,12 @@ INSERT INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM role r
 CROSS JOIN permission p
-WHERE r.role_name = 'MANAGER';
+WHERE r.role_name = 'Manager';
 
 INSERT INTO payment_method (method_name, payment_method_create_by)
-SELECT m.method_name, u.user_id
+SELECT m.method_name::method_name_enum, u.user_id
 FROM app_user u
-CROSS JOIN (VALUES ('Cash'), ('Transfer'), ('QR'), ('Credit Card')) AS m(method_name)
+CROSS JOIN (VALUES ('Cash'), ('BankTransfer'), ('PromptPay'), ('CreditCard')) AS m(method_name)
 WHERE u.username = 'system';
 
 INSERT INTO master_data_type (type_name, type_create_by)
