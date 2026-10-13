@@ -6,6 +6,7 @@ import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.catalog.ServiceRepository;
 import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
+import com.sabyeguyz.clinicv2.enums.RequestedServiceType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.*;
  * internally by AppointmentService) - the response's note/cancelReason are
  * always null and CreateRequest.note is accepted but silently dropped.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/appointments")
 public class AppointmentController {
@@ -62,8 +64,16 @@ public class AppointmentController {
         this.actor = actor;
     }
 
+    /**
+     * patientType NEW books an unregistered patient by contactName (and
+     * contactPhone); status may be Unconfirmed or Confirmed (default). The older
+     * fields keep working unchanged for CURRENT patients.
+     */
     public record CreateRequest(String branchCode, Long patientId, Long therapistId, Long serviceId,
-                                 OffsetDateTime startAt, String note) {}
+                                 OffsetDateTime startAt, String note, String status, String patientType,
+                                 String contactName, String contactPhone, String requestedServiceType) {}
+
+    public record LinkPatientRequest(Long patientId) {}
 
     public record CancelRequest(String reason) {}
 
@@ -75,7 +85,7 @@ public class AppointmentController {
 
     public record Response(Long id, String branchCode, PatientSummary patient, TherapistSummary therapist,
                             ServiceSummary service, Instant startAt, Instant endAt, String status, String note,
-                            String cancelReason) {}
+                            String cancelReason, String patientType, String contactName, String contactPhone) {}
 
     public record PageResponse(java.util.List<Response> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -103,16 +113,35 @@ public class AppointmentController {
     @ResponseStatus(HttpStatus.CREATED)
     public Response create(@RequestBody CreateRequest request) {
         Branch branch = resolveBranch(request.branchCode());
-        Patient patient = patients.findById(request.patientId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         Staff therapist = staff.findById(request.therapistId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ให้บริการ"));
+        OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
+        AppointmentStatus initial = parseInitialStatus(request.status());
+        if ("NEW".equalsIgnoreCase(request.patientType())) {
+            RequestedServiceType requested = request.requestedServiceType() == null || request.requestedServiceType().isBlank()
+                    ? null : RequestedServiceType.valueOf(request.requestedServiceType().trim());
+            return toResponse(service.bookNewPatient(request.contactName(), request.contactPhone(), branch, therapist,
+                    requested, null, local.toLocalDate(), local.toLocalTime(), initial, actor.currentId()));
+        }
+        Patient patient = patients.findById(request.patientId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         Service svc = services.findById(request.serviceId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
-        OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
         Appointment appointment = service.book(patient, branch, therapist, svc, null,
-                local.toLocalDate(), local.toLocalTime(), actor.currentId());
+                local.toLocalDate(), local.toLocalTime(), initial, actor.currentId());
         return toResponse(appointment);
+    }
+
+    @PostMapping("/{id}/confirm")
+    public Response confirm(@PathVariable Long id) {
+        return toResponse(service.confirm(id, actor.currentId()));
+    }
+
+    @PostMapping("/{id}/link-patient")
+    public Response linkPatient(@PathVariable Long id, @RequestBody LinkPatientRequest request) {
+        Patient patient = patients.findById(request.patientId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
+        return toResponse(service.linkRegisteredPatient(id, patient, actor.currentId()));
     }
 
     @PostMapping("/{id}/check-in")
@@ -154,6 +183,11 @@ public class AppointmentController {
                 "เลื่อนนัดผ่าน API", actor.currentId()));
     }
 
+    private static AppointmentStatus parseInitialStatus(String status) {
+        if (status == null || status.isBlank()) return AppointmentStatus.Confirmed;
+        return AppointmentStatus.valueOf(status.trim());
+    }
+
     private PatientVisit requireVisit(Long appointmentId) {
         return visits.findFirstByAppointmentIdOrderByIdDesc(appointmentId)
                 .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
@@ -167,12 +201,21 @@ public class AppointmentController {
     private static Response toResponse(Appointment appointment) {
         Instant startAt = appointment.getAppointmentDate().atTime(appointment.getAppointmentTime())
                 .atZone(CLINIC_ZONE).toInstant();
-        return new Response(appointment.getId(), appointment.getBranch().getBranchCode(),
-                new PatientSummary(appointment.getPatient().getId(), appointment.getPatient().getPatientHn(),
-                        appointment.getPatient().getPatientFname() + " " + appointment.getPatient().getPatientLname()),
+        Patient patient = appointment.getPatient();
+        PatientSummary patientSummary = patient == null
+                ? new PatientSummary(null, null, appointment.getContactName())
+                : new PatientSummary(patient.getId(), patient.getPatientHn(),
+                        patient.getPatientFname() + " " + patient.getPatientLname());
+        Service svc = appointment.getService();
+        ServiceSummary serviceSummary = svc == null
+                ? new ServiceSummary(null, appointment.getRequestedServiceType() == null ? null
+                        : appointment.getRequestedServiceType().name(), 0)
+                : new ServiceSummary(svc.getId(), svc.getServiceName(), 0);
+        return new Response(appointment.getId(), appointment.getBranch().getBranchCode(), patientSummary,
                 new TherapistSummary(appointment.getStaff().getId(),
                         appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname()),
-                new ServiceSummary(appointment.getService().getId(), appointment.getService().getServiceName(), 0),
-                startAt, startAt, appointment.getAppointmentStatus().name(), null, null);
+                serviceSummary, startAt, startAt, appointment.getAppointmentStatus().name(), null, null,
+                appointment.getAppointmentPatientType().name(), appointment.getContactName(),
+                appointment.getContactPhone());
     }
 }
