@@ -54,6 +54,10 @@ public class V2CoreController {
             case "PatientService/registersAPatientAndAssignsAnHn" -> new com.sabyeguyz.clinicv2.patient.PatientServiceScenarios().registersAPatientAndAssignsAnHn();
             case "PatientService/rejectsMissingBranch" -> new com.sabyeguyz.clinicv2.patient.PatientServiceScenarios().rejectsMissingBranch();
             case "PatientService/rejectsMissingRequiredField" -> new com.sabyeguyz.clinicv2.patient.PatientServiceScenarios().rejectsMissingRequiredField();
+            case "PatientService/thaiPatientNeedsANationalId" -> new com.sabyeguyz.clinicv2.patient.PatientServiceScenarios().thaiPatientNeedsANationalId();
+            case "PatientService/thaiNationalIdMustBeThirteenDigits" -> new com.sabyeguyz.clinicv2.patient.PatientServiceScenarios().thaiNationalIdMustBeThirteenDigits();
+            case "PatientService/foreignerMayRegisterWithoutPhoneOrIdentity" -> new com.sabyeguyz.clinicv2.patient.PatientServiceScenarios().foreignerMayRegisterWithoutPhoneOrIdentity();
+            case "PatientService/foreignerNationalIdIsStillFormatChecked" -> new com.sabyeguyz.clinicv2.patient.PatientServiceScenarios().foreignerNationalIdIsStillFormatChecked();
             case "RoleService/createsRole" -> new com.sabyeguyz.clinicv2.role.RoleServiceScenarios().createsRole();
             case "RoleService/rejectsDuplicateRoleName" -> new com.sabyeguyz.clinicv2.role.RoleServiceScenarios().rejectsDuplicateRoleName();
             case "RoleService/grantPermissionIsIdempotent" -> new com.sabyeguyz.clinicv2.role.RoleServiceScenarios().grantPermissionIsIdempotent();

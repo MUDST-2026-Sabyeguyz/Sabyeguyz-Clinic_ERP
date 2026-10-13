@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.branch;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
  * address/phone. The frontend's Branch type and branchApi calls need
  * updating to match this shape.
  */
+@Transactional
 @RestController
 @RequestMapping("/api/branches")
 public class BranchController {
@@ -48,6 +50,7 @@ public class BranchController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
         Branch branch = service.create(request.branchCode(), request.name(), request.address(), request.phone(),
                 actor.currentId());
@@ -55,6 +58,7 @@ public class BranchController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Branch existing = service.get(id);
         if (!existing.getBranchCode().equals(request.branchCode().trim())) {
@@ -66,6 +70,7 @@ public class BranchController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
         service.deactivate(id, actor.currentId());
     }

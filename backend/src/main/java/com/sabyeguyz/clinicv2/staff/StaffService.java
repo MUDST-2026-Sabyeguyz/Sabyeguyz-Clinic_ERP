@@ -72,6 +72,16 @@ public class StaffService {
         return repository.save(staff);
     }
 
+    /** Switches a staff member off without a termination record (no commission policy involved). */
+    @Transactional
+    public Staff deactivate(Long id, Long actorId) {
+        Staff staff = find(id);
+        staff.setStaffStatus(false);
+        staff.setStaffUpdateAt(Instant.now());
+        staff.setStaffUpdateBy(actorId);
+        return repository.save(staff);
+    }
+
     /**
      * Marks the staff as terminated. commissionAfterTerminationPolicy decides whether
      * their outstanding commission pool keeps releasing (CONTINUE_UNTIL_COMPLETE) or is
