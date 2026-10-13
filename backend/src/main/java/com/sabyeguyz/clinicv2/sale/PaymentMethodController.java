@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 /** Matches frontend/src/api/client.ts's paymentMethodApi (/api/payment-methods). */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/payment-methods")
 public class PaymentMethodController {

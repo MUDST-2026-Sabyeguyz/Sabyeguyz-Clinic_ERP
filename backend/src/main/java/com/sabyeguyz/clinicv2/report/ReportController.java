@@ -8,10 +8,12 @@ import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
+import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.enums.VisitStatus;
 import com.sabyeguyz.clinicv2.sale.PaymentTransaction;
 import com.sabyeguyz.clinicv2.sale.PaymentTransactionRepository;
+import com.sabyeguyz.clinicv2.sale.Receipt;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.sale.SalesTransactionRepository;
 import java.math.BigDecimal;
@@ -37,6 +39,7 @@ import org.springframework.web.bind.annotation.*;
  * receipt_id to group by - see SaleController's Javadoc for the same
  * underlying schema gap.</p>
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 public class ReportController {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
@@ -103,18 +106,29 @@ public class ReportController {
 
         List<PaymentTransaction> paid = payments.findByPaymentDateBetween(fromInstant, toInstant, branchId);
         BigDecimal totalRevenue = sum(paid, PaymentTransaction::getAmount);
-        BigDecimal courseRevenue = sum(paid.stream().filter(p -> p.getTransaction().getTransactionType() == TransactionType.CoursePurchase).toList(), PaymentTransaction::getAmount);
-        BigDecimal singleVisitRevenue = sum(paid.stream().filter(p -> p.getTransaction().getTransactionType() == TransactionType.SingleVisit).toList(), PaymentTransaction::getAmount);
-        BigDecimal assessmentRevenue = sum(paid.stream().filter(p -> p.getTransaction().getTransactionType() == TransactionType.Assessment).toList(), PaymentTransaction::getAmount);
+        Map<TransactionType, BigDecimal> revenueByType = new EnumMap<>(TransactionType.class);
+        for (PaymentTransaction p : paid) {
+            revenueSplit(p).forEach((type, amount) -> revenueByType.merge(type, amount, BigDecimal::add));
+        }
+        BigDecimal courseRevenue = revenueByType.getOrDefault(TransactionType.CoursePurchase, BigDecimal.ZERO);
+        BigDecimal singleVisitRevenue = revenueByType.getOrDefault(TransactionType.SingleVisit, BigDecimal.ZERO);
+        BigDecimal assessmentRevenue = revenueByType.getOrDefault(TransactionType.Assessment, BigDecimal.ZERO);
 
-        long receiptsIssued = receipts.findBySaleDateBetween(from, to, branchId).size();
-        long receiptsVoided = transactions.findByTransactionDateBetween(fromInstant, toInstant, branchId).stream()
-                .filter(t -> !t.isTransactionStatus()).count();
+        List<Receipt> receiptsInRange = receipts.findBySaleDateBetween(from, to, branchId);
+        long receiptsIssued = receiptsInRange.size();
+        long receiptsVoided = receiptsInRange.stream()
+                .filter(r -> r.getReceiptStatus() == ReceiptStatus.Voided).count();
 
         return new DashboardResponse(uniquePatients,
                 genderCounts.entrySet().stream().map(e -> new GenderCount(e.getKey(), e.getValue())).toList(),
                 attendedVisits.size(), totalRevenue, courseRevenue, singleVisitRevenue, assessmentRevenue,
                 receiptsIssued, receiptsVoided);
+    }
+
+    private Map<TransactionType, BigDecimal> revenueSplit(PaymentTransaction payment) {
+        List<SalesTransaction> lines = transactions.findByReceiptId(payment.getReceipt().getId()).stream()
+                .filter(SalesTransaction::isTransactionStatus).toList();
+        return RevenueSplit.split(payment.getAmount(), lines);
     }
 
     @GetMapping("/api/reports/appointments")
@@ -144,10 +158,11 @@ public class ReportController {
         Map<TransactionType, BigDecimal> byType = new EnumMap<>(TransactionType.class);
         Map<String, BigDecimal> daily = new LinkedHashMap<>();
         for (PaymentTransaction p : paid) {
-            TransactionType type = p.getTransaction().getTransactionType();
-            byType.merge(type, p.getAmount(), BigDecimal::add);
-            String key = LocalDate.ofInstant(p.getPaymentDate(), CLINIC_ZONE) + "|" + type;
-            daily.merge(key, p.getAmount(), BigDecimal::add);
+            for (var part : revenueSplit(p).entrySet()) {
+                byType.merge(part.getKey(), part.getValue(), BigDecimal::add);
+                String key = LocalDate.ofInstant(p.getPaymentDate(), CLINIC_ZONE) + "|" + part.getKey();
+                daily.merge(key, part.getValue(), BigDecimal::add);
+            }
         }
         List<CategoryAmount> byCategory = byType.entrySet().stream()
                 .map(e -> new CategoryAmount(e.getKey().name(), e.getValue(),
@@ -167,11 +182,11 @@ public class ReportController {
         Long branchId = resolveBranchId(branchCode);
         List<Course> rows = courses.findByReceiptSaleDateBetween(from, to).stream()
                 .filter(c -> branchId == null || c.getReceipt().getBranch().getId().equals(branchId))
-                .filter(c -> patientId == null || c.getReceipt().getPatient().getId().equals(patientId))
+                .filter(c -> patientId == null || c.getPurchaserPatient().getId().equals(patientId))
                 .toList();
         List<BalanceRow> balanceRows = rows.stream().map(c -> {
-            int purchased = c.getTotalVisits() + (c.getBonusVisits() == null ? 0 : c.getBonusVisits());
-            var patient = c.getReceipt().getPatient();
+            int purchased = c.getTotalVisits();
+            var patient = c.getPurchaserPatient();
             return new BalanceRow(patient.getPatientHn(), patient.getPatientFname() + " " + patient.getPatientLname(),
                     c.getReceipt().getBranch().getBranchCode(), c.getCourseName(), purchased, c.getVisitsUsed(),
                     c.getRemainingVisits(), c.getCourseCreateAt(),
