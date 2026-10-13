@@ -155,4 +155,3 @@ describe('SaleService rules migrated from JUnit', () => {
   it('rejectsAnOversizedPage', () => { cy.api('GET', '/api/payments?size=500').then(error(400, 'size')) })
   it('rejectsAnUnknownPatientFilter', () => { cy.api('GET', '/api/payments?patientId=999999').then(error(404)) })
 })
-

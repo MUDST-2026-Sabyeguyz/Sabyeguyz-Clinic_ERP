@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
  * address/phone. The frontend's Branch type and branchApi calls need
  * updating to match this shape.
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/branches")
 public class BranchController {
