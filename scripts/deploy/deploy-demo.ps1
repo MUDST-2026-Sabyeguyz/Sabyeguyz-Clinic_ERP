@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$')][string]$BackendImage,
     [Parameter(Mandatory)][ValidatePattern('^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$')][string]$FrontendImage,
     [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$SourceSha,
+    [Parameter(Mandatory)][string]$ImageArchiveDirectory,
     [ValidateSet('clinic-phase1')][string]$Context = 'clinic-phase1'
 )
 $ErrorActionPreference = 'Stop'
@@ -40,13 +41,48 @@ if ($nsJson) {
 Invoke-K get storageclass standard | Out-Null
 Invoke-K get ingressclass traefik | Out-Null
 
-# Import exactly the digests already pulled by the CI job. Never let the cluster
-# silently use a mutable tag or pull an untested application image.
+# Import archives exported on Linux CI after GHCR pull-by-digest verification.
+# Docker Desktop's containerd store can export incomplete archives after pull;
+# the Windows deployer therefore does not re-export from its daemon.
+$provenance = Get-Content -Raw (Join-Path $ImageArchiveDirectory 'image-provenance.json') | ConvertFrom-Json
+if ($provenance.source_sha -ne $SourceSha) { throw 'Image archive source SHA mismatch' }
+$verifiedImageConfigs = @{}
 foreach ($imageRef in @($BackendImage, $FrontendImage)) {
     $imageRepo = ($imageRef -split '@')[0]
     $sourceTag = "${imageRepo}:sha-$SourceSha"
-    Invoke-Tool docker @('tag', $imageRef, $sourceTag)
-    Invoke-Tool $minikubeExe @('-p', $Context, 'image', 'load', '--daemon=true', $sourceTag)
+    $role = if ($imageRef -eq $BackendImage) { 'backend' } else { 'frontend' }
+    $record = $provenance.images.$role
+    if ($record.image -ne $imageRef -or $record.archive -ne "$role.tar") { throw 'Image provenance reference mismatch' }
+    $expectedConfig = $record.config_digest
+    if ($expectedConfig -notmatch '^sha256:[a-f0-9]{64}$') { throw 'Invalid expected image config' }
+    $taskImageTar = (Resolve-Path (Join-Path $ImageArchiveDirectory "$role.tar")).Path
+    if ((Get-FileHash -LiteralPath $taskImageTar -Algorithm SHA256).Hash.ToLowerInvariant() -ne $record.archive_sha256) { throw 'Image archive checksum mismatch' }
+    $archiveId = [Guid]::NewGuid().ToString('N')
+    $guestTar = "/tmp/clinic-demo-$archiveId.tar"
+    try {
+        Invoke-Tool docker @('cp', $taskImageTar, "${Context}:$guestTar")
+        Invoke-Tool $minikubeExe @('-p', $Context, 'ssh', '--', "sudo ctr -n k8s.io images import --digests $guestTar")
+    } finally {
+        Invoke-Tool $minikubeExe @('-p', $Context, 'ssh', '--', "sudo rm -f $guestTar")
+    }
+    $tagRow = & $minikubeExe -p $Context ssh -- "sudo ctr -n k8s.io images ls 'name==$sourceTag'"
+    if ($LASTEXITCODE -ne 0 -or ($tagRow -join "`n") -notmatch 'sha256:[a-f0-9]{64}') { throw 'Imported image descriptor missing' }
+    $descriptor = $Matches[0]
+    $configMatches = $false
+    for ($depth=0; $depth -lt 3; $depth++) {
+        $descriptorJson = & $minikubeExe -p $Context ssh -- "sudo ctr -n k8s.io content get $descriptor"
+        if ($LASTEXITCODE -ne 0) { throw 'Imported image descriptor unreadable' }
+        $descriptorObject = ($descriptorJson -join "`n") | ConvertFrom-Json
+        if ($descriptorObject.config) {
+            $configMatches = $descriptorObject.config.digest -eq $expectedConfig
+            break
+        }
+        $platform = $descriptorObject.manifests | Where-Object { $_.platform.os -eq 'linux' -and $_.platform.architecture -eq 'amd64' } | Select-Object -First 1
+        if (-not $platform) { throw 'Imported linux/amd64 platform missing' }
+        $descriptor = $platform.digest
+    }
+    if (-not $configMatches) { throw 'Imported image config differs from the pulled CI artifact' }
+    $verifiedImageConfigs[$imageRef] = $expectedConfig
     Invoke-Tool $minikubeExe @('-p', $Context, 'ssh', '--', "sudo ctr -n k8s.io images tag --local --force $sourceTag $imageRef")
     $inventory = & $minikubeExe -p $Context ssh -- 'sudo ctr -n k8s.io images ls'
     if ($LASTEXITCODE -ne 0 -or -not (($inventory -join "`n").Contains($imageRef))) { throw 'Digest alias missing in Minikube containerd' }
@@ -135,6 +171,7 @@ try {
     $checkpoint = @{
         status='PASS';source_sha=$SourceSha;context=$Context;namespace=$namespace
         backend_image=$BackendImage;frontend_image=$FrontendImage;pvc_uid=$pvcAfter
+        verified_image_configs=$verifiedImageConfigs
         ingress_health=200;html=200;javascript=200;postgres_patient_count=1
         restore_rehearsal='PASS';pod_recreation_readback='PASS';completed_at_utc=[DateTime]::UtcNow.ToString('o')
         boundary='Infrastructure and synthetic patient smoke only; financial acceptance remains separate'

@@ -9,7 +9,7 @@
 | `Question_SabyeGuyz_List.pdf` 7 หน้า | คำถามและ annotation เดิม; ประเด็นที่ยังไม่ตอบต้องคงเป็น decision pending |
 | `Feedback_SabyeGuyzzzzzzz.pdf` 4 หน้า | Feedback ล่าสุดของหน้าจอ ข้อมูล สถานะ การรับเงินและสิทธิ์ |
 | `LA_BALANCE_Commission_Treatment.pdf` 7 หน้า | สูตรค่ามือ/ค่าคอมมิชชัน Tier, visit, close/finalize และ adjustment; อ่านจากภาพทุกหน้า |
-| `Lab Week 8 - Kubernetes 101.pdf` 38 หน้า | Concepts และ exercises ของ Pods, probes, volumes, labels, Services |
+| `Lab Week 8 - Kubernetes 101.pdf` 38 หน้า | Concepts และ exercises ของ context/kubectl, Pods, volumes, labels, Services |
 | `Lab Week 9 - Kubernetes 102.pdf` 30 หน้า | Workloads และงานหน้า 29: own project + friend project, DB, namespaces และ Ingress |
 
 ต้นฉบับอยู่ใน Downloads และ path datapacks ที่ผู้ใช้แจ้ง การสรุปไม่ได้คัดลอกข้อมูลผู้ป่วยในภาพเข้ามาใน repository

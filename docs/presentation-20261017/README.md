@@ -5,6 +5,7 @@
 3. [Feedback ล่าสุดและกรณีทดสอบค่าตอบแทน](FEEDBACK_AND_ACCEPTANCE_TH.md)
 4. [เตรียม Google Calendar สองทาง](GOOGLE_CALENDAR_PREPARATION_TH.md)
 5. [ผลตรวจและหลักฐาน](VALIDATION_REPORT_TH.md)
+6. [จุดเชื่อม DB ล่าสุดและ conflict ที่ตรวจพบ](DATABASE_INTEGRATION_NOTES_TH.md)
 
 ฐานงานนี้คือ `develop` ที่ `c62d68b07aae805d9b79492bbd6be8c5eee1cdab` ตรวจจาก GitHub วันที่ 13 ตุลาคม 2026 การเปลี่ยนแปลงอยู่ใน `codex/presentation-devops-20261017` เพื่อ review และนำเข้า `develop` ผ่าน PR
 

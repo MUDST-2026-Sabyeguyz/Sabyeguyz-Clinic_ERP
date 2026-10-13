@@ -35,7 +35,7 @@ flowchart LR
   D --> E[ตรวจข้อมูลหลัง restart]
   E --> F[Push develop หรือ branch เดโมที่กำหนด]
   F --> G[Publish GHCR และตรวจ digest]
-  G --> H[Windows self-hosted runner]
+  G --> H[Verified archives ไป Windows runner]
   H --> I[Deploy namespace เดโม]
   I --> J[Ingress login และ API readback]
   J --> K[Restore rehearsal และ PVC persistence]
@@ -49,9 +49,10 @@ flowchart LR
 | `backend/pom.xml` | เพิ่ม JaCoCo โดยรักษา JVM argument ที่ Mockito ต้องใช้ |
 | `scripts/ci/api-smoke.py` | ตรวจ unauthenticated 401, Manager login, patient create/read/search และ readback หลัง restart |
 | `frontend/cypress/e2e/patient-readback.cy.js` | Login ผ่าน UI, สร้าง patient ผ่าน API จริง แล้วเปิด profile และ reload |
-| `frontend/Dockerfile`, `frontend/vite.config.ts` | รองรับ build prefix `/sabyeguyz/` สำหรับ Ingress; local build ปกติยังใช้ `/` |
+| `frontend/Dockerfile`, `frontend/vite.config.ts`, `frontend/src/api/client.ts` | รองรับ build prefix `/sabyeguyz/` และส่งกลับ login ที่ prefix เดิมเมื่อ token หมดอายุ; local build ปกติยังใช้ `/` |
 | `deploy/k8s/clinic-demo.template.yaml` | ConfigMap, Services, Deployments, PostgreSQL StatefulSet/PVC, Traefik Middleware และ Ingress |
-| `scripts/deploy/deploy-demo.ps1` | Render/dry-run/import digest/deploy/readiness/Ingress/restore/persistence และ image rollback เมื่อมีรุ่นเดิม |
+| `scripts/ci/image-provenance.py` | ตรวจ archive config กับ registry descriptor และเก็บ archive SHA256/source identity |
+| `scripts/deploy/deploy-demo.ps1` | ตรวจ archive checksum/config, render/dry-run/import/deploy/Ingress/restore/persistence และ image rollback เมื่อ schema ยังตรงเดิม |
 | `scripts/deploy/open-demo.ps1` | เปิด Traefik ที่ localhost:16969 สำหรับพรีเซนต์ |
 
 ## GitHub runner คืออะไร และเราใช้แบบไหน
@@ -61,7 +62,7 @@ Runner คือเครื่องที่รับ jobs จาก GitHub Ac
 | Runner | ใช้ทำงานอะไร | สิ่งที่ต้องพร้อม |
 |---|---|---|
 | GitHub-hosted `ubuntu-latest` | Maven, npm, Cypress, Docker build, PostgreSQL integration, publish GHCR | GitHub Actions และสิทธิ์ packages ของ job |
-| Self-hosted Windows `clinic-phase1-windows-x64` | Pull digest, import เข้า Minikube, kubectl deploy และตรวจ Ingress | เครื่องนี้เปิด, Docker พร้อม, Minikube พร้อม, runner online |
+| Self-hosted Windows `clinic-phase1-windows-x64` | ดาวน์โหลด archive ของ run เดียวกัน ตรวจ hash/config แล้ว import เข้า Minikube, kubectl deploy และตรวจ Ingress | เครื่องนี้เปิด, Docker พร้อม, Minikube พร้อม, runner online |
 
 Labels ของ Windows runner คือ `self-hosted`, `Windows`, `X64`, `clinic-phase1`, `powershell7` โดย repo variable `CLINIC_MINIKUBE_EXE` ระบุ executable ในเครื่องนี้
 
@@ -90,11 +91,14 @@ PR รันการทดสอบบน GitHub-hosted runner ส่วน dep
 
 - `backend-tests-and-jacoco-<SHA>`: จำนวน tests และ coverage ที่วัดจริง
 - `compose-evidence-<SHA>`: authenticated API, direct PostgreSQL readback, restart persistence และ image digests
+- `clinic-images-<SHA>`: image archives + registry descriptors + config identity + SHA256; เก็บ 7 วันสำหรับ deploy/demo
 - `kubernetes-demo-<SHA>`: image refs ที่ deploy, Ingress, PVC UID, Flyway history, restore และ readback หลัง recreate
 
 Coverage backend ใช้สูตร `covered / (covered + missed) * 100` จาก JaCoCo แยก line, branch, instruction และ method ส่วน E2E ให้รายงานจำนวน scenario/module ที่มีหลักฐาน อย่าพูดว่า “E2E 100%” จากการมี specs ผ่านเพียงบางหน้า
 
 Restore rehearsal ของเดโมใช้ DB สังเคราะห์แยก และทิ้ง dump หลังตรวจ ไม่ใช่นโยบาย backup รายวันหรือ off-cluster backup สำหรับ production
+
+Local Docker 29/containerd พบปัญหา export image หลัง pull (manifest อ้างถึง blob ที่ไม่มีใน tar) จึงให้ Linux CI export หลัง build/publish/pull แล้ว Windows download artifact ของ run เดียวกันและ import เข้า containerd โดยตรง โดยตรวจ archive SHA256 และ config digest ก่อน deploy ไม่ต้องเพิ่ม PAT บน Windows และไม่สลับ Docker image-store mode ของเครื่อง
 
 ## สิ่งที่ต้องทำก่อนส่ง develop
 

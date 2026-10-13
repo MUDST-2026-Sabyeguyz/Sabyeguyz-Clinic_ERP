@@ -79,7 +79,7 @@ git log origin/develop --format='%h %ad %an %s' --date=short -- .github/workflow
 
 | เนื้อหาใน Lab | ส่วนที่โชว์ใน project | ขอบเขต |
 |---|---|---|
-| Week 8 Pods, labels/selectors, health checks, volumes, ClusterIP/NodePort | Pods/labels/probes, Services/PVC ใน manifest | นำ concept มาใช้กับ project ไม่จำเป็นต้องสร้าง nginx ตัวอย่างทุกตัวซ้ำใน app |
+| Week 8 context/kubectl, Pods, labels/selectors, volumes, ClusterIP/NodePort | explicit context, Pods/labels, Services และการเก็บข้อมูล | นำ concept มาใช้กับ project; readiness/liveness probes เป็นสิ่งที่เพิ่มใน implementation นี้ |
 | Week 9 Deployment และ ReplicaSet | frontend/backend Deployment และ rollout | frontend RollingUpdate; backend Recreate พร้อมอธิบายเหตุผล |
 | Week 9 StatefulSet และ persistent storage | PostgreSQL StatefulSet + headless Service + PVC | ตรวจ DB ด้วย API จริงและ persistence |
 | Week 9 หน้า 29: service + DB, API ใช้ DB, localhost/serviceName ผ่าน Ingress | `/sabyeguyz/` และ `/sabyeguyz/api/` | หลักฐานจาก pipeline/deploy |
