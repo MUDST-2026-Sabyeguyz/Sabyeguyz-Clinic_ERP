@@ -35,7 +35,7 @@ describe('authenticated patient readback with real PostgreSQL backend', () => {
           cy.reload()
           cy.contains('ทดสอบ ระบบเบราว์เซอร์').should('be.visible')
           cy.contains(body.hn).should('be.visible')
-          cy.screenshot('patient-readback-after-reload')
+          cy.screenshot('patient-readback-after-reload', { capture: 'viewport' })
         })
       })
     })
