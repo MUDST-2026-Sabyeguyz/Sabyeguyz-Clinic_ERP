@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
@@ -27,6 +29,8 @@ import org.springframework.web.bind.annotation.*;
  * the old API grouped Sale totals directly; this is closer to how v2's
  * Tier actually gets picked (see CourseService/MonthlyCommissionClosingService).
  */
+@Transactional
+@PreAuthorize("hasRole('MANAGER')")
 @RestController
 @RequestMapping("/api/commission")
 public class CommissionController {
@@ -34,6 +38,7 @@ public class CommissionController {
     private final CommissionTierResolver tierResolver;
     private final CommissionSchemeRepository schemes;
     private final MonthlyCommissionClosingService closingService;
+    private final CommissionSchemeResolver schemeResolver;
     private final MonthlyCommissionClosingRepository closings;
     private final CommissionAllocationLedgerRepository allocationLedger;
     private final TreatmentFeeRuleRepository treatmentFeeRules;
@@ -42,18 +47,24 @@ public class CommissionController {
     private final StaffRepository staff;
     private final PermissionRepository permissions;
     private final CurrentActor actor;
+    private final CommissionRateOverrideService overrideService;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CommissionController(CommissionSchemeService schemeService, CommissionTierResolver tierResolver,
                                  CommissionSchemeRepository schemes, MonthlyCommissionClosingService closingService,
+                                 CommissionSchemeResolver schemeResolver,
                                  MonthlyCommissionClosingRepository closings,
                                  CommissionAllocationLedgerRepository allocationLedger,
                                  TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
                                  CourseSaleStaffShareRepository saleShares,
-                                 StaffRepository staff, PermissionRepository permissions, CurrentActor actor) {
+                                 StaffRepository staff, PermissionRepository permissions, CurrentActor actor,
+                                 CommissionRateOverrideService overrideService,
+                                 com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.schemeService = schemeService;
         this.tierResolver = tierResolver;
         this.schemes = schemes;
         this.closingService = closingService;
+        this.schemeResolver = schemeResolver;
         this.closings = closings;
         this.allocationLedger = allocationLedger;
         this.treatmentFeeRules = treatmentFeeRules;
@@ -62,6 +73,8 @@ public class CommissionController {
         this.staff = staff;
         this.permissions = permissions;
         this.actor = actor;
+        this.overrideService = overrideService;
+        this.audit = audit;
     }
 
     public record TierInput(BigDecimal minimum, BigDecimal maximum, BigDecimal rate, int order) {}
@@ -163,14 +176,39 @@ public class CommissionController {
         }).toList();
     }
 
+    /**
+     * The closings of a month: the ones already closed, plus an OPEN preview row (sales so far and the tier rate
+     * they reach today) for every seller who sold a course that month and is not closed yet, so the screen can
+     * offer "close the month".
+     */
     @GetMapping("/closings")
     public List<ClosingResponse> closings(@RequestParam String month) {
         String saleMonth = month.length() >= 7 ? month.substring(0, 7) : month;
-        return closings.findByClosingMonth(saleMonth).stream().map(c -> new ClosingResponse(c.getId(),
+        List<ClosingResponse> rows = new ArrayList<>(closings.findByClosingMonth(saleMonth).stream().map(c -> new ClosingResponse(c.getId(),
                 c.getClosingMonth(), c.getStaff().getId(), c.getStaff().getStaffFname() + " " + c.getStaff().getStaffLname(),
                 c.getMonthlyCourseSales(), String.valueOf(c.getCommissionSchemeVersion()),
                 c.getLockedCommissionRate() != null ? c.getLockedCommissionRate() : c.getCalculatedCommissionRate(),
-                c.isClosingStatus() ? "CLOSED" : "OPEN")).toList();
+                c.isClosingStatus() ? "CLOSED" : "OPEN")).toList());
+        if (saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])")) {
+            java.util.Set<Long> listed = new java.util.HashSet<>();
+            rows.forEach(r -> listed.add(r.employeeId()));
+            for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonth(saleMonth)) {
+                if (listed.contains(sellerId)) continue;
+                Staff seller = staff.findById(sellerId).orElse(null);
+                if (seller == null) continue;
+                BigDecimal sales = courses.sumCreditedSalesByStaffAndSaleMonth(sellerId, saleMonth);
+                BigDecimal rate;
+                try {
+                    rate = tierResolver.resolve(schemeResolver.resolveEffective(LocalDate.parse(saleMonth + "-01")), sales)
+                            .getCommissionRate();
+                } catch (RuntimeException noScheme) {
+                    rate = BigDecimal.ZERO;
+                }
+                rows.add(new ClosingResponse(-sellerId, saleMonth, sellerId,
+                        seller.getStaffFname() + " " + seller.getStaffLname(), sales, "", rate, "OPEN"));
+            }
+        }
+        return rows;
     }
 
     @PostMapping("/closings/{month}")
@@ -186,6 +224,23 @@ public class CommissionController {
             }
         }
         return closings(month);
+    }
+
+    public record OverrideRequest(BigDecimal rate, String reason) {}
+    public record OverrideResponse(Long courseId, BigDecimal oldRate, BigDecimal newRate, String reason,
+                                    BigDecimal commissionPool) {}
+
+    /** Manually corrects the locked commission rate of one course (needs a reason; audited). */
+    @PostMapping("/courses/{courseId}/override-rate")
+    public OverrideResponse overrideRate(@PathVariable Long courseId, @RequestBody OverrideRequest request) {
+        Course course = courses.findById(courseId).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        Permission permission = resolveOrCreatePermission("COMMISSION_RATE_OVERRIDE");
+        var saved = overrideService.override(course, request.rate(), permission, request.reason(), actor.currentId());
+        audit.record("course", String.valueOf(courseId), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                "commission rate " + saved.getOldRate(),
+                "commission rate " + saved.getNewRate() + ": " + request.reason(), actor.currentId());
+        return new OverrideResponse(courseId, saved.getOldRate(), saved.getNewRate(), saved.getReason(),
+                courses.findById(courseId).orElseThrow().getTotalCourseCommissionPool());
     }
 
     @GetMapping("/treatment-fees")
