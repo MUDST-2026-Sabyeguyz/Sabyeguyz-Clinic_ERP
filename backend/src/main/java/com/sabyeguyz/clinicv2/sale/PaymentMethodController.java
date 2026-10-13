@@ -35,7 +35,7 @@ public class PaymentMethodController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
         PaymentMethod method = new PaymentMethod();
-        method.setMethodName(request.name());
+        method.setMethodName(PaymentMethod.canonicalName(request.name()));
         method.setPaymentMethodStatus(true);
         method.setPaymentMethodCreateAt(Instant.now());
         method.setPaymentMethodCreateBy(actor.currentId());
@@ -46,7 +46,7 @@ public class PaymentMethodController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         PaymentMethod method = find(id);
-        method.setMethodName(request.name());
+        method.setMethodName(PaymentMethod.canonicalName(request.name()));
         method.setPaymentMethodUpdateAt(Instant.now());
         method.setPaymentMethodUpdateBy(actor.currentId());
         return toResponse(repository.save(method));

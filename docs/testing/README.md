@@ -85,7 +85,11 @@ E2E ต้องตรวจอย่างน้อย Success Case, Validation
 - Concurrency ใช้ Node task ส่ง HTTP สองคำขอพร้อมกันและตรวจข้อมูลหลังจบ ส่วน specs รันตามลำดับเพื่อไม่ให้ชนการ reset ฐานข้อมูล
 - `npm test` ใน `backend` เป็นคำสั่งตรวจทั้งหมดพร้อม package; `mvn package`/`mvn verify` ไม่ได้รัน Cypress
 - Deploy มี Backend Dockerfile และ Docker Compose สำหรับ PostgreSQL/Backend แล้ว แต่ยังไม่มี Kubernetes manifest
-- Backend tests เชื่อมฐานข้อมูล H2 ชั่วคราว ใช้ Flyway ถึง V20 และ Hibernate schema update; ยังไม่ยืนยัน migration V21+ หรือ constraint เฉพาะ PostgreSQL
+- Cypress regression profile ใช้ H2 และ legacy migration ถึง V20.1; Backend CI ตรวจ runtime v2 บน PostgreSQL 16 ด้วย production Flyway และ Hibernate validate เพิ่ม ดู [V2 Runtime CI](2026-10-13-V2-Runtime-CI.md)
 - เมื่อมี API Contract ที่ BA/Backend ยืนยันแล้ว ให้เพิ่ม Contract Test ก่อนเชื่อม Frontend กับ Backend
 
 รายละเอียดการรัน การแยกฐานข้อมูล และตารางเทสต์ที่ย้าย: [Backend Cypress API tests](../../backend/cypress/README.md)
+
+## Latest integration trial
+
+หลักฐาน merge dev-backed ล่าสุดก่อน feat/database และการตรวจ v2 runtime/legacy import ดู [Latest Integration Trial Merge](2026-10-13-Latest-Integration-Trial-Merge.md)

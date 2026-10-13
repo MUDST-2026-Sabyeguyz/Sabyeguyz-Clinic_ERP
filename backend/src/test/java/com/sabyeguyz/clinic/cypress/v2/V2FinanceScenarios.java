@@ -190,7 +190,7 @@ public class V2FinanceScenarios {
         return Map.of("amount",result.getAmount(),"status",result.isPaymentStatus());
     }
     private Object receipt(String scenario) {
-        var repository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByReceiptNo",
+        var repository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByReceiptNoAndBranchId",
                 a -> scenario.equals("receipt-duplicate") ? Optional.of(new Receipt()) : Optional.empty());
         var service = new ReceiptService(repository.proxy());
         if (scenario.equals("receipt-next-no")) {
@@ -201,7 +201,7 @@ public class V2FinanceScenarios {
             return service.create("RE2600001",new Patient(),new Branch(),LocalDate.of(2026,8,18),1L);
         }
         if (scenario.startsWith("receipt-totals")) return receiptTotals(scenario, service);
-        var result = service.create("RE-2600001",new Patient(),new Branch(),LocalDate.of(2026,8,18),1L);
+        var result = service.create("RE26000010",new Patient(),new Branch(),LocalDate.of(2026,8,18),1L);
         return Map.of("number",result.getReceiptNo(),"date",result.getSaleDate());
     }
     private Object receiptTotals(String scenario, ReceiptService service) {
@@ -240,7 +240,7 @@ public class V2FinanceScenarios {
         if (scenario.equals("sale-course")) {
             template.setDefaultTotalVisits(10); template.setDefaultBonusVisits(0); template.setDefaultValidityDays(365);
             var patient = new Patient();
-            var receipt = new Receipt(); receipt.setReceiptNo("RE-2600001"); receipt.setPatient(patient);
+            var receipt = new Receipt(); receipt.setReceiptNo("RE26000010"); receipt.setPatient(patient);
             var purchase = service.recordCoursePurchase(receipt,patient,new Branch(),template,staff(),null,
                     decimal("10000.00"),null,null,Discount.none(),null,LocalDate.of(2026,8,18),1L);
             var transaction = purchase.transaction();
@@ -259,7 +259,7 @@ public class V2FinanceScenarios {
             template.setServiceType(ServiceType.Course); template.setServicePrice(decimal("2000.00"));
             template.setDefaultTotalVisits(10); template.setDefaultBonusVisits(0); template.setDefaultValidityDays(365);
             var patient = new Patient();
-            var receipt = new Receipt(); receipt.setReceiptNo("RE-2600002"); receipt.setPatient(patient);
+            var receipt = new Receipt(); receipt.setReceiptNo("RE26000020"); receipt.setPatient(patient);
             var discount = scenario.equals("sale-course-discount-percent")
                     ? Discount.of("PERCENT",decimal("25")) : Discount.of("BAHT",decimal("500"));
             var purchase = service.recordCoursePurchase(receipt,patient,new Branch(),template,staff(),null,null,null,null,
@@ -305,6 +305,7 @@ public class V2FinanceScenarios {
 
     private static PaymentTransaction payment(String amount, boolean active) {
         var payment = new PaymentTransaction(); payment.setAmount(decimal(amount)); payment.setPaymentStatus(active);
+        payment.setReceipt(new Receipt());
         return payment;
     }
     private static SalesTransaction line(TransactionType type, String amount, String allocatedBill) {
@@ -324,6 +325,7 @@ public class V2FinanceScenarios {
         var sale = line(TransactionType.CoursePurchase, "1500.00", "0.00"); sale.setReceipt(receipt);
         sale.setTransactionStatus(!scenario.equals("cancel-already-void-sale"));
         var paid = payment("1500.00", true);
+        paid.setReceipt(receipt);
         var other = line(TransactionType.SingleVisit, "500.00", "0.00");
         List<SalesTransaction> lines = scenario.equals("cancel-void-one-of-two-lines") ? List.of(sale, other) : List.of(sale);
         salesRepo.on("findById", a -> Optional.of(sale)).on("findByReceiptId", a -> lines);

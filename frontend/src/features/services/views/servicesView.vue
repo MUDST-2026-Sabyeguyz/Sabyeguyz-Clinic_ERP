@@ -138,9 +138,9 @@ const rawPrice = computed(() =>
       ? (assessmentService.value?.price ?? 0)
       : (services.value.find((service) => service.id === selectedServiceId.value)?.price ?? 0),
 )
-const itemDiscount = computed(() => Math.min(500, rawPrice.value))
+const itemDiscount = computed(() => 0)
 const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
-const billDiscount = computed(() => Math.min(500, afterItemDiscount.value))
+const billDiscount = computed(() => 0)
 const netAmount = computed(() => Math.max(afterItemDiscount.value - billDiscount.value, 0))
 const commissionAmount = computed(() => afterItemDiscount.value * 0.1)
 const receiptPayable = computed(() => Math.max(rawPrice.value - billDiscount.value, 0))
@@ -514,6 +514,27 @@ async function submit() {
           </section>
           <div class="sales-workspace" :class="{ review: reviewing }">
             <section class="sale-line-card">
+              <div class="sale-tabs" v-if="!reviewing">
+                <button type="button" @click="mode = 'assessment'">Assessment</button>
+                <button type="button" @click="mode = 'single'">Single Visit</button>
+                <button type="button" @click="mode = 'course'">Course</button>
+              </div>
+              <label v-if="mode === 'course' && !reviewing"
+                >รายการคอร์ส
+                <select v-model="selectedCourseId" aria-label="รายการคอร์ส">
+                  <option v-for="course in courses" :key="course.id" :value="course.id">
+                    {{ course.name }}
+                  </option>
+                </select>
+              </label>
+              <label v-if="mode === 'single' && !reviewing"
+                >รายการบริการ
+                <select v-model="selectedServiceId" aria-label="รายการบริการ">
+                  <option v-for="service in services" :key="service.id" :value="service.id">
+                    {{ service.name }}
+                  </option>
+                </select>
+              </label>
               <header>
                 <h2>รายละเอียดรายการ</h2>
                 <small>1 รายการ</small>
@@ -631,7 +652,9 @@ async function submit() {
             </section>
           </div>
           <footer>
-            <button type="button" @click="screen = 'receipt'">ดูและพิมพ์ใบเสร็จ</button
+            <button v-if="mode === 'course'" type="button" @click="openPatientCourses">
+              ดูคอร์สผู้ป่วย</button
+            ><button type="button" @click="screen = 'receipt'">ดูและพิมพ์ใบเสร็จ</button
             ><button type="button" @click="backToServiceMenu">กลับหน้าบริการ</button>
           </footer>
         </section>

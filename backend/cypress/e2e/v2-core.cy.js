@@ -97,7 +97,7 @@ describe('Clinic v2 core service scenarios', () => {
   it('CourseService: sellsACourseWithAProvisionalTierRate', () => {
     cy.api('POST', '/__cypress/v2/core/CourseService/sellsACourseWithAProvisionalTierRate').then(({ status, body }) => {
       expect(status).to.equal(200)
-      expect(body.courseNo).to.equal("RE-2206315")
+      expect(body.courseNo).to.equal("RE22063150")
       expect(body.coursePrice).to.equal(Number("10000.00"))
       expect(body.totalVisits).to.equal(10)
       expect(body.remainingVisits).to.equal(10)
@@ -112,7 +112,7 @@ describe('Clinic v2 core service scenarios', () => {
   it('CourseService: appendsSequenceSuffixWhenMultipleCoursesShareAReceipt', () => {
     cy.api('POST', '/__cypress/v2/core/CourseService/appendsSequenceSuffixWhenMultipleCoursesShareAReceipt').then(({ status, body }) => {
       expect(status).to.equal(200)
-      expect(body.courseNo).to.equal("RE-2206315-02")
+      expect(body.courseNo).to.equal("RE22063150-02")
       expect(body.courseSequence).to.equal(2)
     })
   })
@@ -120,7 +120,7 @@ describe('Clinic v2 core service scenarios', () => {
   it('CourseService: remainingVisitsIncludesBonusButCommissionRateIgnoresIt', () => {
     cy.api('POST', '/__cypress/v2/core/CourseService/remainingVisitsIncludesBonusButCommissionRateIgnoresIt').then(({ status, body }) => {
       expect(status).to.equal(200)
-      expect(body.totalVisits).to.equal(10)
+      expect(body.totalVisits).to.equal(13)
       expect(body.remainingVisits).to.equal(13)
     })
   })
