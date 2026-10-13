@@ -21,6 +21,7 @@
 | Actionlint 1.7.12 | PASS | ทั้ง 3 workflows; ไม่ได้เปิด shellcheck/pyflakes ที่ไม่มีในเครื่อง |
 | PowerShell script parse | PASS | deploy script syntax |
 | Kubernetes server dry-run | PASS | 10 resources, Traefik CRD, isolated namespace; ยังไม่ใช่ rollout PASS |
+| Live Ingress browser E2E | PASS 1/1 | UI login, API-created profile, reload และ invalid-token redirect ใต้ `/sabyeguyz/`; Electron |
 
 รายละเอียดราย class อยู่ใน `BACKEND_TEST_INVENTORY.csv` และรายงาน JaCoCo ที่ `backend/target/site/jacoco/index.html` หลัง verify; folder target เป็น generated evidence ไม่ได้ commit
 
@@ -38,9 +39,17 @@ Logs ในเครื่องอยู่ที่ `../tmp/presentation-20261
 
 ## Pipeline และ deployment รอบใหม่
 
-สถานะส่วนนี้ต้องอัปเดตจาก run ของ branch DevOps ที่ commit แล้ว: CI/CD, GHCR digests, Kubernetes rollout, authenticated Ingress และ PVC/restore proof ยังไม่ใช้ผล local ข้างบนแทน
+CI [38378206935](https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP/actions/runs/38378206935), source `b1a8fedf4a023c2e4738e29b393b8fbbfa91cb8d` ผ่าน backend/frontend/Compose/PostgreSQL/GHCR และตรวจ image archives แล้ว แต่ deployment ของ run นั้นหยุดที่การส่ง archive เข้า node จึงไม่ใช้ run นี้อ้างว่า CI/CD deploy ผ่าน
 
-หลักฐานปลายทางจะอยู่ใน artifact `backend-tests-and-jacoco-<SHA>`, `frontend-browser-tests-<SHA>`, `compose-evidence-<SHA>` และ `kubernetes-demo-<SHA>` โดย `deployment-checkpoint.json` ต้องมี source SHA, image refs, namespace/context และ PVC UID
+หลังแก้ transfer และ PowerShell argument forwarding ได้ทดสอบ script ในเครื่องกับ images ที่ publish จาก SHA เดิมครบแล้ว วันที่ 13 ต.ค. 2026 เวลา 17:07 น. (Bangkok): Ingress/HTML/JavaScript = 200, authenticated create/read/search, direct PostgreSQL count = 1, restore rehearsal และ readback หลัง recreate PostgreSQL/backend ผ่าน โดย PVC UID คงเดิม `404d9d0b-3cfd-4a6f-b403-0c7f3a6f6329`
+
+หลักฐาน local คือ `evidence/k8s/deployment-checkpoint.json` ผูกกับ app image SHA b1a8fed และ deployer fixes ใน working tree ก่อน commit ถัดไป ไม่ใช่ GitHub deployment PASS ของ b1a8fed
+
+**ผล CI/CD deploy ล่าสุดให้ใช้ artifact ของ push run ที่ผ่านบน branch นี้:** [Clinic CI/CD run history](https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP/actions?query=branch%3Acodex%2Fpresentation-devops-20261017)
+
+หลักฐานปลายทางอยู่ใน `backend-tests-and-jacoco-<SHA>`, `frontend-browser-tests-<SHA>`, `compose-evidence-<SHA>`, `clinic-images-<SHA>` และ `kubernetes-demo-<SHA>` โดย `deployment-checkpoint.json` มี source SHA, image refs/config identity, namespace/context และ PVC UID และ `DEPLOYMENT_REPORT_TH.md` เป็นผลภาษาไทยที่สร้างหลัง checks ผ่านทั้งหมด
+
+รายงาน runtime เป็น artifact ของ run จึงแสดง source/image ที่ตรวจจริง ไม่เขียน PASS ล่วงหน้าในเอกสาร repository ซึ่ง commit ก่อนเริ่ม pipeline
 
 ## DB ล่าสุดของทีม
 

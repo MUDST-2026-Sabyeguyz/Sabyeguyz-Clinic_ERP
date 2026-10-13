@@ -32,6 +32,20 @@ Set-Location C:\Users\Natth\Documents\3-1MU\devops\tools\actions-runner
 
 ถ้า runner online อยู่แล้วไม่ต้องเปิดซ้ำ Jobs บน GitHub-hosted runner ทำงานได้แม้เครื่องนี้ปิด แต่ job deploy local cluster จะรอ runner
 
+## สั่ง CI/CD ใน GitHub
+
+1. เปิด repository > Actions > `Clinic CI/CD`
+2. Push เข้า branch ที่กำหนดหรือเปิด PR เข้า develop จะเริ่ม checks อัตโนมัติ
+3. สำหรับเดโมก่อน merge ให้เลือก push run ของ `codex/presentation-devops-20261017`; PR run ตรวจ CI และข้าม publish/deploy ตามที่ออกแบบ
+4. หากใช้ปุ่ม Run workflow ให้เลือก branch `codex/presentation-devops-20261017` ก่อน merge หรือ `develop` หลัง merge งานนี้แล้ว อย่าเลือก default `main` ที่ยังมี workflow อีก version
+5. เปิด job deploy ที่เขียวและดาวน์โหลด `kubernetes-demo-<SHA>` เพื่อดู source/images ที่เปิดอยู่จริง
+
+คำสั่งทางเลือกจาก checkout นี้:
+
+```powershell
+gh workflow run compose-verify.yml --ref codex/presentation-devops-20261017
+```
+
 ## เปิดเว็บเดโมผ่าน Ingress
 
 เปิดอีก PowerShell จาก checkout ที่มี scripts:

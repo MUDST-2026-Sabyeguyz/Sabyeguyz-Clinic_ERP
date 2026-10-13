@@ -35,7 +35,6 @@ describe('authenticated patient readback with real PostgreSQL backend', () => {
           cy.reload()
           cy.contains('ทดสอบ ระบบเบราว์เซอร์').should('be.visible')
           cy.contains(body.hn).should('be.visible')
-          cy.screenshot('patient-readback-after-reload', { capture: 'viewport' })
           // An expired session must return to this application's prefixed login.
           cy.intercept('GET', url(`/api/patients/${body.id}`)).as('expiredSession')
           cy.window().then((win) => win.localStorage.setItem('authToken', 'invalid'))
