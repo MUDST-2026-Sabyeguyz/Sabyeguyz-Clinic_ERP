@@ -31,3 +31,7 @@ This supersedes the earlier local trial `7890900`. The actual integration branch
 - All seven workflow YAML files parse; `git diff --check` passes. GitHub Actions results are reported separately after pushing the trial branch.
 
 Validation used disposable databases on a task-owned PostgreSQL container. No production database was changed. An already populated older v2 snapshot cannot be upgraded by replacing its Flyway V1 checksum; this trial validates a fresh latest schema and the documented legacy import path.
+
+## GitHub CI follow-up
+
+At `cb333ce`, Backend CI, Frontend CI, V2 API, Schema CI, legacy migration and Compose build passed. The browser v2 workflow exposed a slow-loading race: the create form opened before therapist/service lists arrived, leaving IDs at zero. The follow-up disables creation until real master data is ready and adds a delayed-response browser regression; it does not increase retries or suppress assertions.
