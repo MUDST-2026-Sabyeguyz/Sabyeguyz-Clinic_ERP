@@ -56,6 +56,7 @@ public class CourseTransferService {
         }
 
         CourseTransfer record = new CourseTransfer();
+        record.setBranch(course.getBranch());
         record.setCourse(course);
         record.setFromPatient(fromPatient);
         record.setToPatient(toPatient);

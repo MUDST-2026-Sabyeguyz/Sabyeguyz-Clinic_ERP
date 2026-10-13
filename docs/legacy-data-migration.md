@@ -16,8 +16,8 @@
    ```
 3. สร้างตารางใหม่ โดยเลือกอย่างใดอย่างหนึ่ง
    - เปิดแอป v2 หนึ่งครั้งโดยไม่ตั้ง `APP_V2_FLYWAY_EXTRA_LOCATIONS` (Flyway สร้าง schema ใหม่และข้อมูลอ้างอิง) แล้วปิดแอป หรือ
-   - รัน `V1__initial_schema.sql` และ `V1_1__reference_data.sql` ใน `backend/src/main/resources/db/migration_new` ด้วย `psql`
-     แล้วเปิดแอปด้วย `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true` และ `SPRING_FLYWAY_BASELINE_VERSION=1.1`
+   - รัน `V1__initial_schema.sql`, `V2__integration_runtime_compatibility.sql` และ `V3__reference_data.sql` ใน `backend/src/main/resources/db/migration` แยก transaction ตามลำดับ ด้วย `psql`
+     แล้วเปิดแอปด้วย `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true` และ `SPRING_FLYWAY_BASELINE_VERSION=3`
 4. รันสคริปต์ย้ายข้อมูล
    ```bash
    psql -v ON_ERROR_STOP=1 -f backend/scripts/legacy-migration/migrate-legacy-to-v2.sql
@@ -82,3 +82,9 @@ Workflow **Legacy data migration** สร้างฐานข้อมูลแ
 - เวลาในระบบเดิมเป็นเวลาที่มีเขตเวลา: ย้ายเข้า schema ใหม่เป็น UTC (วัน/เวลานัดหมายเป็นเวลาไทย)
 - นัดหมายเดิมไม่มีข้อมูลห้อง/หมายเหตุ/เวลาสิ้นสุด ใน schema ใหม่ (อยู่ใน `legacy.appointments`)
 - สคริปต์ใช้ได้กับฐานข้อมูลเปล่าของ schema ใหม่เท่านั้น (ตรวจก่อนทำงาน)
+
+## เงื่อนไขจาก schema ล่าสุด
+
+ผู้ป่วยไทยต้องมีเบอร์โทรศัพท์และเลขบัตรประชาชนจริง 13 หลักก่อนย้ายข้อมูล หากข้อมูลเดิมไม่ครบ importer จะหยุดทั้ง transaction เพื่อให้แก้ข้อมูลต้นทาง ไม่สร้างเลขบัตรแทนผู้ป่วยจริง ส่วน legacy-fixture.sql เติมเลขรูปแบบทดสอบเฉพาะข้อมูล demo ใน CI เท่านั้น
+
+ใบเสร็จใช้ REYYMMNNNN แยก counter ตามสาขาและเดือน และเก็บการชำระหลายช่องทางต่อใบเสร็จ คอร์สเก็บจำนวนรวมครั้งซื้อและ bonus พร้อม entitlement ที่ตรงกับยอด ledger หลังย้าย

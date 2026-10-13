@@ -21,7 +21,7 @@ CROSS JOIN (VALUES
 WHERE u.username = 'system';
 
 INSERT INTO staff (staff_code, staff_fname, staff_lname, position, branch_id, hire_date, staff_create_by)
-SELECT s.staff_code, s.staff_fname, s.staff_lname, s.staff_position::staff_position_enum, b.branch_id,
+SELECT s.staff_code, s.staff_fname, s.staff_lname, s.staff_position::position_enum, b.branch_id,
        DATE '2025-01-01', u.user_id
 FROM app_user u
 CROSS JOIN (VALUES
@@ -39,7 +39,7 @@ UPDATE app_user SET staff_id = (SELECT staff_id FROM staff WHERE staff_code = 'T
 INSERT INTO user_role (user_id, role_id)
 SELECT u.user_id, r.role_id
 FROM app_user u
-JOIN role r ON r.role_name = CASE WHEN u.username = 'manager' THEN 'MANAGER' ELSE 'THERAPIST' END
+JOIN role r ON r.role_name = (CASE WHEN u.username = 'manager' THEN 'Manager' ELSE 'Therapist' END)::role_name_enum
 WHERE u.username IN ('manager', 'therapist', 'therapist2');
 
 INSERT INTO user_branch_access (user_id, branch_id)
@@ -56,9 +56,9 @@ CROSS JOIN app_user u
 WHERE u.username = 'system';
 
 INSERT INTO service (service_type, service_name, service_price, service_code, service_create_by,
-                     default_total_visits, default_bonus_visits, default_validity_days)
+                     default_total_visits, default_bonus_visits, default_validity_value, default_validity_unit)
 SELECT v.service_type::service_type_enum, v.service_name, v.service_price, v.service_code, u.user_id,
-       v.total_visits, v.bonus_visits, v.validity_days
+       v.total_visits, v.bonus_visits, v.validity_days, CASE WHEN v.validity_days IS NULL THEN NULL ELSE 'Day'::validity_unit_enum END
 FROM app_user u
 CROSS JOIN (VALUES
     ('SingleVisit', 'กายภาพบำบัดทั่วไป 30 นาที', 800.00, 'PHYSIO_30', NULL::int, NULL::int, NULL::int),

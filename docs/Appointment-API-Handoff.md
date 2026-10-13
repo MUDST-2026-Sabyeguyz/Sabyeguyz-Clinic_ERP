@@ -1,3 +1,5 @@
+> หมายเหตุ 13 ต.ค. 2026: เอกสารนี้เก็บรายละเอียด handoff เดิมไว้ ขณะนี้ default runtime เปลี่ยนเป็น clinicv2 และใช้ schema ล่าสุด V1 + V2 แล้ว ดู [รายงาน runtime/CI](testing/2026-10-13-V2-Runtime-CI.md) สำหรับสถานะและผลตรวจปัจจุบัน.
+
 # Appointment Module — Handoff (Frontend + Data)
 
 สรุปทุกอย่างที่ทีม Frontend และ Data ต้องรู้เกี่ยวกับฟีเจอร์ Appointment (APT-1 ถึง APT-6) ตรวจสอบตรงกับซอร์สโค้ดจริงในบรานช์ `feature/appointment-status-brief-v1` (8 ก.ย. 2026)
@@ -214,8 +216,8 @@ INDEX idx_appointments_branch_start    (branch_id, start_at)
 | State machine | `backend/src/main/java/com/sabyeguyz/clinic/appointment/Appointment.java` |
 | Response DTO | `backend/src/main/java/com/sabyeguyz/clinic/appointment/AppointmentResponse.java` |
 | Error handling | `backend/src/main/java/com/sabyeguyz/clinic/api/ApiExceptionHandler.java` |
-| Schema ที่ Appointment API ปัจจุบันใช้งาน | `backend/src/main/resources/db/migration/V4__appointment.sql` |
-| Schema ใหม่จากทีมฐานข้อมูล (ยังไม่ใช่ Flyway location ที่เปิดใช้งาน) | `backend/src/main/resources/db/migration_new/V1__initial_schema.sql` |
+| Schema ที่ Appointment API ปัจจุบันใช้งาน | `../backend/src/main/resources/db/migration` |
+| Schema v2 ล่าสุดจากทีมฐานข้อมูล (เปิดใช้งานแล้ว) | `../backend/src/main/resources/db/migration/V1__initial_schema.sql` |
 | ตัวอย่าง fetch client pattern | `frontend/src/api/patients.ts` |
 
 (path ทั้งหมดอยู่ใต้ `Sabyeguyz-Clinic_ERP/` — repo monorepo ปัจจุบัน)

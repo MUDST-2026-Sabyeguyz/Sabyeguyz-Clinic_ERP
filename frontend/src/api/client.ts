@@ -182,7 +182,14 @@ export type Course = {
 export type Therapist = { id: number; code: string; fullName: string; branchCode: string }
 export type PaymentMethod = { id: number; code: string; name: string; active: boolean }
 export type AppointmentStatus =
-  'UNCONFIRMED' | 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
+  | 'UNCONFIRMED'
+  | 'CONFIRMED'
+  | 'ARRIVED'
+  | 'IN_SERVICE'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'RESCHEDULED'
+  | 'NO_SHOW'
 export type Appointment = {
   id: number
   branchCode: string
@@ -339,10 +346,8 @@ export const patientApi = {
 export const branchApi = {
   list: () => api.get<Branch[]>('/api/branches'),
   get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
-  create: (body: BranchRequest) =>
-    api.post<Branch>('/api/branches', body),
-  update: (id: number, body: BranchRequest) =>
-    api.put<Branch>(`/api/branches/${id}`, body),
+  create: (body: BranchRequest) => api.post<Branch>('/api/branches', body),
+  update: (id: number, body: BranchRequest) => api.put<Branch>(`/api/branches/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }
 
@@ -390,10 +395,19 @@ export const serviceManagementApi = {
 const statusFromServer = (status: string) =>
   status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() as AppointmentStatus
 const statusToServer: Record<AppointmentStatus, string> = {
-  UNCONFIRMED: 'Unconfirmed', CONFIRMED: 'Confirmed', ARRIVED: 'Arrived', IN_SERVICE: 'InService',
-  COMPLETED: 'Completed', CANCELLED: 'Cancelled', RESCHEDULED: 'Rescheduled', NO_SHOW: 'NoShow',
+  UNCONFIRMED: 'Unconfirmed',
+  CONFIRMED: 'Confirmed',
+  ARRIVED: 'Arrived',
+  IN_SERVICE: 'InService',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+  RESCHEDULED: 'Rescheduled',
+  NO_SHOW: 'NoShow',
 }
-const normalizeAppointment = (item: Appointment): Appointment => ({ ...item, status: statusFromServer(item.status) })
+const normalizeAppointment = (item: Appointment): Appointment => ({
+  ...item,
+  status: statusFromServer(item.status),
+})
 
 export const appointmentApi = {
   search: (
@@ -408,7 +422,11 @@ export const appointmentApi = {
   ) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') query.set(key, key === 'status' ? statusToServer[value as AppointmentStatus] : String(value))
+      if (value !== undefined && value !== '')
+        query.set(
+          key,
+          key === 'status' ? statusToServer[value as AppointmentStatus] : String(value),
+        )
     })
     return api
       .get<AppointmentPage>(`/api/appointments?${query}`)
@@ -423,11 +441,16 @@ export const appointmentApi = {
     startAt: string
     note?: string
   }) => api.post<Appointment>('/api/appointments', body).then(normalizeAppointment),
-  confirm: (id: number) => api.post<Appointment>(`/api/appointments/${id}/confirm`, {}).then(normalizeAppointment),
-  checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}).then(normalizeAppointment),
-  startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}).then(normalizeAppointment),
-  noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}).then(normalizeAppointment),
-  complete: (id: number) => api.post<Appointment>(`/api/appointments/${id}/complete`, {}).then(normalizeAppointment),
+  confirm: (id: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/confirm`, {}).then(normalizeAppointment),
+  checkIn: (id: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/check-in`, {}).then(normalizeAppointment),
+  startService: (id: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/start-service`, {}).then(normalizeAppointment),
+  noShow: (id: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/no-show`, {}).then(normalizeAppointment),
+  complete: (id: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/complete`, {}).then(normalizeAppointment),
   cancel: (id: number, reason: string) =>
     api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }).then(normalizeAppointment),
   reschedule: (id: number, body: { startAt: string; therapistId?: number }) =>
@@ -446,7 +469,14 @@ export const treatmentApi = {
   }) => api.post('/api/treatments', body),
 }
 
-type RawMovement = { id: number; type: string; quantity: number; reason?: string; balanceAfter?: number; createdAt: string }
+type RawMovement = {
+  id: number
+  type: string
+  quantity: number
+  reason?: string
+  balanceAfter?: number
+  createdAt: string
+}
 type LedgerResponse = {
   purchase: CoursePurchase & {
     commissionStatus?: string
@@ -476,7 +506,10 @@ export const courseApi = {
     api.get<LedgerResponse>(`/api/course-purchases/${id}`).then((ledger) => {
       let balance = ledger.purchase.remaining
       const movements = (ledger.movements as RawMovement[]).map((movement) => {
-        const type = movement.type === 'Treatment' ? 'USAGE' : movement.type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+        const type =
+          movement.type === 'Treatment'
+            ? 'USAGE'
+            : movement.type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
         const balanceAfter = movement.balanceAfter ?? balance
         balance -= movement.quantity
         return { ...movement, type, balanceAfter }
@@ -525,9 +558,15 @@ export const paymentMethodApi = {
   activate: (id: number) => api.patch<PaymentMethod>(`/api/payment-methods/${id}/activate`, {}),
 }
 
+type StaffResponse = Omit<Staff, 'role'> & { role?: string; position?: string }
+const normalizeStaff = (staff: StaffResponse): Staff => ({
+  ...staff,
+  role: (staff.role ?? staff.position ?? '').toUpperCase() as Staff['role'],
+})
+
 export const staffApi = {
-  list: () => api.get<Staff[]>('/api/staff'),
-  get: (id: number) => api.get<Staff>(`/api/staff/${id}`),
+  list: () => api.get<StaffResponse[]>('/api/staff').then((rows) => rows.map(normalizeStaff)),
+  get: (id: number) => api.get<StaffResponse>(`/api/staff/${id}`).then(normalizeStaff),
   create: (body: { userId: number; employeeCode: string; fullName: string; phone?: string }) =>
     api.post<Staff>('/api/staff', body),
   update: (
@@ -582,9 +621,11 @@ export const userManagementApi = {
 // SINGLE_VISIT / COURSE / NO_SHOW. The old backend's spellings pass through unchanged.
 type RevenueDailyType = 'COURSE' | 'SINGLE_VISIT' | 'ASSESSMENT'
 const revenueTypeFromServer = (type: string) =>
-  type === 'CoursePurchase' ? 'COURSE' : /[a-z]/.test(type) && /^[A-Za-z]+$/.test(type)
-    ? type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
-    : type
+  type === 'CoursePurchase'
+    ? 'COURSE'
+    : /[a-z]/.test(type) && /^[A-Za-z]+$/.test(type)
+      ? type.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+      : type
 
 export const reportApi = {
   dashboard: (from: string, to: string, branchCode?: string) =>
@@ -598,7 +639,10 @@ export const reportApi = {
       )
       .then((report) => ({
         ...report,
-        byStatus: report.byStatus.map((item) => ({ ...item, status: statusFromServer(item.status) })),
+        byStatus: report.byStatus.map((item) => ({
+          ...item,
+          status: statusFromServer(item.status),
+        })),
       })),
   revenue: (from: string, to: string, branchCode?: string) =>
     api
@@ -607,8 +651,14 @@ export const reportApi = {
       )
       .then((report) => ({
         ...report,
-        byCategory: report.byCategory.map((item) => ({ ...item, type: revenueTypeFromServer(item.type) })),
-        dailyByCategory: report.dailyByCategory?.map((item) => ({ ...item, type: revenueTypeFromServer(item.type) as RevenueDailyType })),
+        byCategory: report.byCategory.map((item) => ({
+          ...item,
+          type: revenueTypeFromServer(item.type),
+        })),
+        dailyByCategory: report.dailyByCategory?.map((item) => ({
+          ...item,
+          type: revenueTypeFromServer(item.type) as RevenueDailyType,
+        })),
       })),
   balances: (from: string, to: string, branchCode?: string, patientId?: number) =>
     api.get<CourseBalanceReport>(
