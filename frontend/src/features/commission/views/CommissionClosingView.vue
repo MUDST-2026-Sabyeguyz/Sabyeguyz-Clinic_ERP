@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import CommissionTabs from './CommissionTabs.vue'
@@ -14,7 +15,7 @@ type ClosingRow = {
   status: 'Open' | 'Closed'
 }
 
-const selectedMonth = ref(`${new Date().toISOString().slice(0, 7)}-01`)
+const selectedMonth = ref(`${clinicToday().slice(0, 8)}01`)
 const month = computed(() => selectedMonth.value.slice(0, 7))
 const router = useRouter()
 const branch = ref('ทุกสาขา')
@@ -96,7 +97,7 @@ async function load() {
       id: row.id,
       staff: row.employeeName,
       sales: Number(row.sales),
-      rate: Number(row.rate) * 100,
+      rate: Math.round(Number(row.rate) * 10000) / 100,
       status: row.status === 'CLOSED' ? 'Closed' : 'Open',
     }))
     errorMessage.value = ''
