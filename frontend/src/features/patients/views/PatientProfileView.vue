@@ -225,10 +225,15 @@ onMounted(async () => {
           <p>HN {{ patient.hn }}</p>
         </div>
         <div class="profile-actions">
-          <RouterLink class="history-button" :to="`/staff/patients/${patient.id}/history`"
+          <RouterLink
+            class="profile-action-button"
+            :to="{ path: `/staff/patients/${patient.id}/history`, query: { tab: 'courses' } }"
+            >คอร์ส</RouterLink
+          >
+          <RouterLink class="profile-action-button" :to="`/staff/patients/${patient.id}/history`"
             >ประวัติการรักษา</RouterLink
           >
-          <button class="primary" @click="openEdit">แก้ไขข้อมูล</button>
+          <button class="profile-action-button" type="button" @click="openEdit">แก้ไขข้อมูล</button>
         </div>
       </section>
 
