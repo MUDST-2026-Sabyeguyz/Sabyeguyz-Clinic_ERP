@@ -90,9 +90,17 @@ public class Appointment {
     @Column(name = "requested_service_type", columnDefinition = "requested_service_type_enum")
     private RequestedServiceType requestedServiceType;
 
-    /** Calendar integration scope is still pending; nothing writes these two yet. */
+    /** Google Calendar link, written by {@code CalendarSyncService} (see app.calendar.* settings). */
     @Column(name = "external_calendar_event_id", length = 255)
     private String externalCalendarEventId;
+
+    /** When this appointment was last in step with its calendar event; older than the update time means "dirty". */
+    @Column(name = "calendar_last_synced_at")
+    private Instant calendarLastSyncedAt;
+
+    /** Etag Google returned for the event we last wrote or accepted; an event with this etag has no new change. */
+    @Column(name = "calendar_event_etag", length = 255)
+    private String calendarEventEtag;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -138,4 +146,8 @@ public class Appointment {
     public void setExternalCalendarEventId(String externalCalendarEventId) { this.externalCalendarEventId = externalCalendarEventId; }
     public CalendarSyncStatus getCalendarSyncStatus() { return calendarSyncStatus; }
     public void setCalendarSyncStatus(CalendarSyncStatus calendarSyncStatus) { this.calendarSyncStatus = calendarSyncStatus; }
+    public Instant getCalendarLastSyncedAt() { return calendarLastSyncedAt; }
+    public void setCalendarLastSyncedAt(Instant calendarLastSyncedAt) { this.calendarLastSyncedAt = calendarLastSyncedAt; }
+    public String getCalendarEventEtag() { return calendarEventEtag; }
+    public void setCalendarEventEtag(String calendarEventEtag) { this.calendarEventEtag = calendarEventEtag; }
 }
