@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import logo from '@/assets/sabyeguyz-logo.png'
 import drawerLogo from '@/assets/sabyeguyz-logo2.png'
+import { clearSession } from '@/api/client'
 const profileOpen = ref(false)
 const menuOpen = ref(false)
 const route = useRoute()
@@ -129,7 +130,7 @@ watch(
   },
 )
 function signOut() {
-  localStorage.removeItem('authToken')
+  clearSession()
   localStorage.removeItem('staffRole')
   localStorage.removeItem('staffUsername')
   localStorage.removeItem('mockStaffRole')
