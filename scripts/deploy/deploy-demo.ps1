@@ -75,6 +75,8 @@ Invoke-K apply --dry-run=server -f $manifestPath | Out-Null
 
 $oldBackend = Invoke-K get deployment clinic-demo-backend --ignore-not-found -o 'jsonpath={.spec.template.spec.containers[0].image}'
 $oldFrontend = Invoke-K get deployment clinic-demo-frontend --ignore-not-found -o 'jsonpath={.spec.template.spec.containers[0].image}'
+$schemaFingerprintSql = "SELECT coalesce(string_agg(coalesce(version,script) || ':' || coalesce(checksum::text,'') || ':' || success::text, ',' ORDER BY installed_rank),'') FROM flyway_schema_history"
+$oldSchema = if ($oldBackend) { Invoke-K exec clinic-demo-postgres-0 -- psql -U clinic -d clinic_erp -Atc $schemaFingerprintSql } else { $null }
 $forwarder = $null
 try {
     Invoke-K apply -f $manifestPath
@@ -143,12 +145,17 @@ try {
 } catch {
     $failureMessage = $_.Exception.Message
     Invoke-K get pods,events -o wide | Set-Content (Join-Path $evidenceDir 'failure-resources.txt')
-    # This change has no SQL migrations; image rollback keeps the demo PVC.
+    # Image rollback is safe only when Flyway history is unchanged.
     if ($oldBackend -and $oldFrontend) {
-        Invoke-K set image deployment/clinic-demo-backend "backend=$oldBackend"
-        Invoke-K set image deployment/clinic-demo-frontend "frontend=$oldFrontend"
-        Invoke-K rollout status deployment/clinic-demo-backend --timeout=300s
-        Invoke-K rollout status deployment/clinic-demo-frontend --timeout=180s
+        $currentSchema = Invoke-K exec clinic-demo-postgres-0 -- psql -U clinic -d clinic_erp -Atc $schemaFingerprintSql
+        if ($currentSchema -eq $oldSchema) {
+            Invoke-K set image deployment/clinic-demo-backend "backend=$oldBackend"
+            Invoke-K set image deployment/clinic-demo-frontend "frontend=$oldFrontend"
+            Invoke-K rollout status deployment/clinic-demo-backend --timeout=300s
+            Invoke-K rollout status deployment/clinic-demo-frontend --timeout=180s
+        } else {
+            'Schema history changed. Automatic image rollback skipped; preserve PVC and review schema compatibility.' | Set-Content (Join-Path $evidenceDir 'rollback-blocked.txt')
+        }
     }
     throw $failureMessage
 } finally {

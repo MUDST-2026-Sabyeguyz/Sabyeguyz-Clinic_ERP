@@ -59,8 +59,7 @@ jobs:
           install: false
           start: npm run dev -- --host localhost
           wait-on: 'http://localhost:5173'
-          browser: chrome
-          command: npm run test:e2e -- --browser chrome --reporter junit --reporter-options "mochaFile=cypress/results/results-[hash].xml"
+          command: npm run test:e2e -- --browser chrome
 
       - name: Upload browser test evidence
         if: always()
