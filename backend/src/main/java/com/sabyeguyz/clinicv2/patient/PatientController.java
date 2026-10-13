@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
  *   about yet.</li>
  * </ul>
  */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/patients")
 public class PatientController {

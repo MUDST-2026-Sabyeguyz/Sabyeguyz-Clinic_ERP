@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Matches frontend/src/api/client.ts's auditApi (GET /api/audit-logs). */
+@org.springframework.transaction.annotation.Transactional
 @RestController
 @RequestMapping("/api/audit-logs")
 public class AuditController {
