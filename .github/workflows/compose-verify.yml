@@ -95,6 +95,22 @@ jobs:
           echo "backend_image=$b_ref" >> "$GITHUB_OUTPUT"
           echo "frontend_image=$f_ref" >> "$GITHUB_OUTPUT"
           printf 'source=%s\nbackend=%s\nfrontend=%s\n' "$GITHUB_SHA" "$b_ref" "$f_ref" > evidence/images.txt
+          mkdir -p image-artifacts
+          docker image save "$backend:sha-$GITHUB_SHA" --output image-artifacts/backend.tar
+          docker image save "$frontend:sha-$GITHUB_SHA" --output image-artifacts/frontend.tar
+          export BACKEND_REF="$b_ref" FRONTEND_REF="$f_ref"
+          docker buildx imagetools inspect "$b_ref" --raw > image-artifacts/backend-descriptor.json
+          docker buildx imagetools inspect "$f_ref" --raw > image-artifacts/frontend-descriptor.json
+          python scripts/ci/image-provenance.py --directory image-artifacts
+      - name: Upload verified application image archives
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/codex/presentation-devops-20261017')
+        uses: actions/upload-artifact@v4
+        with:
+          name: clinic-images-${{ github.sha }}
+          path: image-artifacts/
+          retention-days: 7
+          compression-level: 6
+          if-no-files-found: error
       - name: Upload integration and image evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -116,7 +132,6 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
-      packages: read
     env:
       BACKEND_IMAGE: ${{ needs.compose-integration.outputs.backend_image }}
       FRONTEND_IMAGE: ${{ needs.compose-integration.outputs.frontend_image }}
@@ -129,19 +144,13 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-      - name: Pull verified images into the local Docker engine
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $env:GHCR_TOKEN | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
-          if ($LASTEXITCODE -ne 0) { throw 'GHCR login failed' }
-          docker pull $env:BACKEND_IMAGE
-          if ($LASTEXITCODE -ne 0) { throw 'Backend digest pull failed' }
-          docker pull $env:FRONTEND_IMAGE
-          if ($LASTEXITCODE -ne 0) { throw 'Frontend digest pull failed' }
+      - name: Download this run's verified image archives
+        uses: actions/download-artifact@v4
+        with:
+          name: clinic-images-${{ github.sha }}
+          path: ${{ runner.temp }}/clinic-images-${{ github.run_id }}
       - name: Deploy isolated namespace and verify Ingress
-        run: ./scripts/deploy/deploy-demo.ps1 -BackendImage $env:BACKEND_IMAGE -FrontendImage $env:FRONTEND_IMAGE -SourceSha $env:SOURCE_SHA
+        run: ./scripts/deploy/deploy-demo.ps1 -BackendImage $env:BACKEND_IMAGE -FrontendImage $env:FRONTEND_IMAGE -SourceSha $env:SOURCE_SHA -ImageArchiveDirectory "$env:RUNNER_TEMP/clinic-images-$env:GITHUB_RUN_ID"
       - name: Upload Kubernetes evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -149,6 +158,3 @@ jobs:
           name: kubernetes-demo-${{ github.sha }}
           path: evidence/k8s/
           if-no-files-found: ignore
-      - name: Logout registry
-        if: always()
-        run: docker logout ghcr.io
