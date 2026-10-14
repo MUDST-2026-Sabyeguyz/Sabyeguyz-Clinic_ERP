@@ -59,3 +59,7 @@ Remove these process-level overrides before returning to the default ports:
 ```powershell
 Remove-Item Env:FRONTEND_PORT, Env:BACKEND_PORT, Env:POSTGRES_PORT -ErrorAction SilentlyContinue
 ```
+
+## Google Calendar sync (optional)
+
+To turn on the two-way Google Calendar sync, add `compose.calendar.yaml` and a `CALENDAR_KEY_FILE` entry to `.env`; see `docs/deploy-calendar-sync.md`.
