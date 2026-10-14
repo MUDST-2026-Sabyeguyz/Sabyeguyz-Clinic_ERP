@@ -351,6 +351,8 @@ async function refreshAppointments() {
 const refreshWhenVisible = () => {
   if (!document.hidden) void refreshAppointments()
 }
+const googleCalendarUrl = (calendarId: string) =>
+  `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}&ctz=Asia%2FBangkok`
 async function openGoogleCalendar() {
   calendarSyncOpen.value = true
   googleMessage.value = ''
@@ -1056,6 +1058,13 @@ function confirmCancellation() {
                 {{ branch.googleCalendarId ? 'เชื่อมต่อแล้ว' : 'ยังไม่ได้ผูกปฏิทิน' }}
                 <template v-if="branch.googleCalendarId">
                   (รอซิงก์ {{ branch.waiting }}, ล้มเหลว {{ branch.failed }})
+                  <a
+                    :href="googleCalendarUrl(branch.googleCalendarId)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :data-cy="`google-open-${branch.branchCode}`"
+                    >เปิดใน Google Calendar</a
+                  >
                 </template>
               </li>
             </ul>
