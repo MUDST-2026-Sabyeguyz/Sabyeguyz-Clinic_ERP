@@ -37,6 +37,13 @@ public class CypressPaymentPolicyController {
         var payment = payments.record(sale.getPatient(), sale.getBranch(), sale.getReceipt(), request.amount(), method, actor.currentId());
         return Map.of("id", payment.getId());
     }
+    /** Arrange historical data only; new production Assessment sales remain rejected. */
+    @PostMapping("/{saleId}/historical-assessment")
+    @Transactional
+    public Map<String,Object> historicalAssessment(@PathVariable Long saleId) {
+        return Map.of("updated", jdbc.update(
+                "update sales_transaction set transaction_type = 'Assessment' where transaction_id = ?", saleId));
+    }
     /** Runs the real usage handler, holding its transaction until Cypress observes the refund waiting. */
     @PostMapping("/held-usage/{courseId}")
     @Transactional
