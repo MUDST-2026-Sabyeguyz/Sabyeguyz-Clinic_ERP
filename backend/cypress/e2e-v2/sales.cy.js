@@ -125,11 +125,12 @@ describe('v2 sales and payments', () => {
     })
   })
 
-  it('records split payments on one receipt', function () {
+  it('preserves multiple payment records with the same method on one receipt', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, {
-        payments: [{ paymentMethodCode: 'Cash', amount: 300 }, { paymentMethodCode: 'QR', amount: 500 }],
-      }).then(({ body }) => {
+        payments: [{ paymentMethodCode: 'Cash', amount: 300 }, { paymentMethodCode: 'Cash', amount: 500 }],
+      }).then(({ status, body }) => {
+        expect(status).to.equal(201)
         expect(Number(body.paid)).to.equal(800)
         cy.api('GET', `/api/receipts/${body.id}`).then((detail) => {
           expect(detail.status).to.equal(200)

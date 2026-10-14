@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { formatPaymentLabel, formatPaymentMethod } from '@/features/payments/format'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -28,6 +29,7 @@ type Transaction = {
   status: 'ปกติ' | 'ยกเลิก (Void)'
   performedBy: string
   paymentMethod: string
+  paymentLabel?: SaleSummary['paymentLabel']
   voidedAt?: string
   voidReason?: string
   voidNumber?: string
@@ -122,6 +124,7 @@ function saleRow(sale: SaleSummary): Transaction {
     status: sale.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ',
     performedBy: sale.salesperson?.fullName ?? 'ไม่ระบุ',
     paymentMethod: '—',
+    paymentLabel: sale.paymentLabel,
     voidedAt: sale.voidedAt,
     voidReason: sale.voidReason,
   }
@@ -195,8 +198,10 @@ function updateFromDetail(row: Transaction, detail: SaleDetail) {
   row.status = detail.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ'
   row.phone = detail.patient.phone
   row.item = detail.items.map((item) => item.description).join(', ') || row.item
-  row.paymentMethod =
-    detail.payments.find((payment) => payment.type !== 'REFUND')?.paymentMethodCode ?? '—'
+  row.paymentLabel = detail.paymentLabel
+  row.paymentMethod = formatPaymentMethod(
+    detail.payments.find((payment) => payment.type !== 'REFUND')?.paymentMethodCode,
+  )
   row.voidReason = detail.voidReason
   row.voidedAt = detail.voidedAt
 }
@@ -783,6 +788,10 @@ function toggleOriginal(key: string) {
                 <div>
                   <dt>ช่องทางชำระ</dt>
                   <dd>{{ selected.paymentMethod }}</dd>
+                </div>
+                <div v-if="selected.kind === 'sale'">
+                  <dt>ประเภทการชำระเงิน</dt>
+                  <dd>{{ formatPaymentLabel(selected.paymentLabel) }}</dd>
                 </div>
               </dl>
             </section>

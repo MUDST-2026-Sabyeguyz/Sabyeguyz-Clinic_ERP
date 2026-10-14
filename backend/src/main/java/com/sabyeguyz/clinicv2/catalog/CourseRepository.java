@@ -22,6 +22,9 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("select c from Course c where c.id = :id")
     Optional<Course> findByIdForUpdate(@Param("id") Long id);
 
+    @Query("select c.id from Course c where c.receipt.id = :receiptId order by c.id")
+    List<Long> findIdsByReceiptId(@Param("receiptId") Long receiptId);
+
     long countByReceiptId(Long receiptId);
 
     Optional<Course> findBySaleTransactionId(Long saleTransactionId);
