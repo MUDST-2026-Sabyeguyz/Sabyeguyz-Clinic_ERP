@@ -32,15 +32,19 @@ public class CypressV2FixturesController {
             "patient", "audit_log");
 
     private final JdbcTemplate jdbc;
+    private final com.sabyeguyz.clinicv2.calendar.FakeGoogleCalendarClient fakeCalendar;
 
-    public CypressV2FixturesController(JdbcTemplate jdbc) {
+    public CypressV2FixturesController(JdbcTemplate jdbc, com.sabyeguyz.clinicv2.calendar.FakeGoogleCalendarClient fakeCalendar) {
         this.jdbc = jdbc;
+        this.fakeCalendar = fakeCalendar;
     }
 
     @PostMapping("/reset")
     public Map<String, Object> reset() {
         jdbc.execute("TRUNCATE TABLE " + TRANSACTIONAL_TABLES + " RESTART IDENTITY CASCADE");
         jdbc.update("DELETE FROM service WHERE service_code NOT IN ('PHYSIO_30', 'PHYSIO_60', 'COURSE_10', 'COURSE_5')");
+        fakeCalendar.reset();
+        jdbc.update("UPDATE branch SET google_calendar_id = NULL");
         resetReferenceData();
         jdbc.update("""
                 INSERT INTO service (service_type, service_name, service_price, service_code, service_create_by,
