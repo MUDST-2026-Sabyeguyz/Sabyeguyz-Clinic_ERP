@@ -13,8 +13,7 @@
   padding: 18px 24px;
 }
 .appointment-panel .branch-filter,
-.appointment-panel .appointment-sort,
-.appointment-panel .appointment-status-filter {
+.appointment-panel .appointment-sort {
   height: 46px;
   padding: 0 12px;
   border: 1px solid #9ab9b3;
@@ -39,9 +38,6 @@
 }
 .appointment-panel .appointment-sort {
   min-width: 112px;
-}
-.appointment-panel .appointment-status-filter {
-  min-width: 150px;
 }
 .create-card {
   width: min(940px, 100%);
@@ -149,8 +145,7 @@
 }
 .appointment-patient-field,
 .appointment-therapist-field,
-.appointment-time-field,
-.appointment-room-field {
+.appointment-time-field {
   grid-column: 1;
 }
 .appointment-service-field,
@@ -607,7 +602,6 @@
   .appointment-patient-field,
   .appointment-therapist-field,
   .appointment-time-field,
-  .appointment-room-field,
   .appointment-service-field,
   .appointment-date-field,
   .appointment-branch-field,
@@ -648,10 +642,16 @@
 
 /* Therapist appointment list — Figma 5:503 */
 .appointment-page {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
   background: #f9f4ee;
 }
 .appointment-page .staff-main {
   width: min(1230px, calc(100% - 48px));
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .appointment-page .staff-hero {
   min-height: auto;
@@ -700,6 +700,10 @@
   flex: none;
 }
 .appointment-page .appointment-panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   overflow: visible;
   margin: 0 0 36px;
   border: 0;
@@ -709,11 +713,9 @@
 }
 .appointment-panel .appointment-list-filters {
   display: grid;
-  grid-template-columns: minmax(300px, 1.8fr) minmax(160px, 0.9fr) minmax(180px, 1fr) minmax(
-      160px,
-      0.9fr
-    );
-  gap: 12px;
+  grid-template-columns: minmax(300px, 440px) minmax(180px, 252px) minmax(180px, 252px);
+  gap: 40px;
+  align-items: end;
   padding: 0 0 20px;
   background: transparent;
 }
@@ -731,6 +733,25 @@
 .appointment-list-filters .search-box {
   padding-inline: 14px;
 }
+.appointment-date-range {
+  display: grid;
+  grid-template-columns: auto minmax(140px, 1fr);
+  gap: 12px;
+  align-items: center;
+  color: #25372e;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.appointment-date-range :deep(.thai-date-picker) {
+  margin: 0;
+}
+.appointment-date-range :deep(.date-trigger) {
+  min-height: 46px;
+  border-color: #c2ccc9;
+  border-radius: 9px;
+  background: #fff;
+}
 .appointment-list-filters select {
   padding: 0 48px 0 16px;
   appearance: none;
@@ -740,6 +761,8 @@
   font: inherit;
 }
 .appointment-table-scroll {
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid #c2ccc9;
   border-radius: 10px;
   background: #fff;
@@ -796,52 +819,38 @@
   min-width: 100px;
 }
 .appointment-panel .staff-table td:nth-child(8) {
-  width: 110px;
-  min-width: 110px;
+  width: 150px;
+  min-width: 150px;
+  text-align: center;
+}
+.appointment-panel .staff-table th:nth-child(8) {
+  text-align: center;
 }
 .appointment-panel .staff-table td:nth-child(9) {
-  width: 120px;
-  min-width: 120px;
-}
-.appointment-panel .staff-table td:nth-child(10) {
   width: 80px;
   min-width: 80px;
 }
-.appointment-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 12px;
-  border: 1px solid #d9e1dc;
-  border-radius: 999px;
-  color: #1f2937;
-  background: #dbeafe;
+.appointment-status-filter {
+  width: 118px;
+  margin-inline: auto;
   font-size: 13px;
 }
-.appointment-status-badge::before {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #4381c1;
-  content: '';
+.appointment-status-filter :deep(.filter-dropdown__button) {
+  min-height: 36px;
+  padding: 6px 13px;
+  border-color: #d9e1dc;
+  border-radius: 999px;
+  background: #dbeafe;
 }
-.appointment-status-badge[data-status='PENDING'] {
+.appointment-status-filter[data-status='PENDING'] :deep(.filter-dropdown__button) {
   background: #fef3c7;
 }
-.appointment-status-badge[data-status='PENDING']::before {
-  background: #d08a13;
-}
-.appointment-status-badge[data-status='COMPLETED'] {
-  background: #dcfce7;
-}
-.appointment-status-badge[data-status='COMPLETED']::before {
-  background: #279660;
-}
-.appointment-status-badge[data-status='CANCELLED'] {
+.appointment-status-filter[data-status='CANCELLED'] :deep(.filter-dropdown__button) {
   background: #fee2e2;
 }
-.appointment-status-badge[data-status='CANCELLED']::before {
-  background: #c55353;
+.appointment-status-filter :deep(.filter-dropdown__menu) {
+  min-width: 150px;
+  font-size: 14px;
 }
 .appointment-edit {
   border: 0;
