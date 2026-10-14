@@ -65,6 +65,7 @@ public class V2WorkflowScenariosController {
             existing.setPatient(new Patient());
         }
         appointments.on("findById", args -> Optional.of(existing));
+        appointments.on("findByIdForUpdate", args -> Optional.of(existing));
         appointments.on("existsByStaffIdAndAppointmentDateAndAppointmentTimeAndAppointmentStatusNotIn",
                 args -> scenario.equals("conflict"));
         return V2RepositoryStub.outcome(() -> {

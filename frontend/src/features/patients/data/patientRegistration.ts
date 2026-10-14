@@ -4,6 +4,7 @@ export interface PatientRegistrationForm {
   title: string
   customerType: string
   firstName: string
+  middleName: string
   lastName: string
   nickname: string
   fullNameEnglish: string
@@ -24,6 +25,19 @@ export interface PatientRegistrationForm {
   chronicDisease: string
   privacyConsent: boolean
 }
+
+export const patientTitleOptions = [
+  { value: 'นาย', label: 'นาย / Mr.' },
+  { value: 'นางสาว', label: 'นางสาว / Miss' },
+  { value: 'นาง', label: 'นาง / Mrs.' },
+  { value: 'เด็กชาย', label: 'เด็กชาย / Boy' },
+  { value: 'เด็กหญิง', label: 'เด็กหญิง / Girl' },
+]
+export const patientGenderOptions = [
+  { value: 'Male', label: 'ชาย' },
+  { value: 'Female', label: 'หญิง' },
+  { value: 'NotSpecified', label: 'ไม่ระบุ' },
+]
 
 const hnSequenceKey = 'mockPatientHnSequence'
 

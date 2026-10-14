@@ -10,6 +10,7 @@ const sale = {
   total: 2400,
   paid: 2400,
   status: 'PAID',
+  paymentLabel: 'FullyPaid' as string | null,
   soldAt: '2026-10-10T09:00:00',
   salesperson: { id: 2, employeeCode: 'E02', fullName: 'API Staff' },
   itemDescription: 'API Service',
@@ -39,6 +40,9 @@ const calls: Array<{ path: string; init?: RequestInit }> = []
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 
 beforeEach(() => {
+  sale.paymentLabel = 'FullyPaid'
+  detail.paymentLabel = 'FullyPaid'
+  detail.payments[0]!.paymentMethodCode = 'CASH'
   reverseFails = false
   reversePending = false
   empty = false
@@ -119,6 +123,35 @@ async function review(kind: 'sale' | 'usage' = 'sale') {
 }
 
 describe('TransactionView backend integration', () => {
+  it.each([
+    ['FullyPaid', 'ชำระเต็ม'],
+    ['Installment', 'ผ่อน'],
+    ['Deposit', 'มัดจำ'],
+  ])(
+    'shows persisted %s independently of PAID lifecycle and fully paid amount',
+    async (label, thai) => {
+      sale.paymentLabel = label!
+      detail.paymentLabel = label!
+      await render()
+      await click('ตรวจสอบ')
+      expect(wrapper.text()).toContain(thai!)
+    },
+  )
+  it('does not invent a payment label for legacy receipts without one', async () => {
+    sale.paymentLabel = null
+    detail.paymentLabel = null
+    await render()
+    await click('ตรวจสอบ')
+    expect(wrapper.text()).not.toContain('ชำระเต็ม')
+    expect(wrapper.text()).not.toContain('มัดจำ')
+  })
+  it.each(['QR', 'QR_CODE', 'PROMPTPAY', 'PromptPay'])('displays %s as พร้อมเพย์', async (code) => {
+    detail.payments[0]!.paymentMethodCode = code
+    await render()
+    await click('ตรวจสอบ')
+    expect(wrapper.text()).toContain('พร้อมเพย์')
+  })
+
   it('prevents entering internal notes that the reversal API cannot persist', async () => {
     await render()
     await click('ตรวจสอบ')
