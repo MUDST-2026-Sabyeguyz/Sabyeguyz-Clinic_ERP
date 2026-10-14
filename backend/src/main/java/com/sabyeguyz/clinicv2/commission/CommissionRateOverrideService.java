@@ -49,7 +49,7 @@ public class CommissionRateOverrideService {
         course.setTotalCourseCommissionPool(pool);
         course.setCommissionAllocationPerVisit(
                 pool.divide(BigDecimal.valueOf(course.getTotalVisits()), 2, java.math.RoundingMode.HALF_UP));
-        course.setCommissionOutstanding(pool.subtract(course.getGrossCommissionAllocatedTotal()));
+        course.refreshCommissionOutstanding();
         courses.save(course);
 
         return saved;

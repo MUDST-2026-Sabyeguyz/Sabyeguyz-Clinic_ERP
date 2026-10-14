@@ -118,6 +118,7 @@ public class CoursePurchaseController {
     }
 
     /** A sale credit split: {@code percent} of the course price is credited to {@code staffId}. */
+    /** Sale-credit shares were removed: a course has a single Owner PT, its seller. */
     public record ShareRequest(Long staffId, BigDecimal percent) {}
     /**
      * {@code shares} (optional) splits the sale credit between up to two PTs and must add up to 100%;
@@ -156,17 +157,18 @@ public class CoursePurchaseController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
         Service courseTemplate = services.findById(request.courseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Staff seller = resolveActorStaff();
-        Staff caseOwner = request.caseOwnerStaffId() == null ? null : staffById(request.caseOwnerStaffId());
-        List<com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare> shares = request.shares() == null ? null
-                : request.shares().stream().map(share -> new com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare(
-                        staffById(share.staffId()), share.percent())).toList();
+        if (request.shares() != null && !request.shares().isEmpty()) {
+            throw new IllegalArgumentException("ไม่รองรับการแบ่งเครดิตยอดขายแล้ว เจ้าของคอร์สคือผู้ขายคนเดียว");
+        }
+        // The seller is the Owner PT. A manager may record the sale for a PT with caseOwnerStaffId; the signed-in
+        // user's own staff record is the default.
+        Staff seller = request.caseOwnerStaffId() == null ? resolveActorStaff() : staffById(request.caseOwnerStaffId());
 
         Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, LocalDate.now()), patient, branch, LocalDate.now(),
                 actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
-                seller, caseOwner, null, null, null, Discount.of(request.discountType(), request.discountValue()),
-                shares, LocalDate.now(), actor.currentId());
+                seller, null, null, null, Discount.of(request.discountType(), request.discountValue()),
+                LocalDate.now(), actor.currentId());
         receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
         audit.record("course", String.valueOf(purchase.course().getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
                 purchase.course().getCourseNo() + " price " + purchase.course().getCoursePrice(), actor.currentId());
@@ -182,7 +184,7 @@ public class CoursePurchaseController {
                         l.getLedgerCreateAt()))
                 .toList();
         List<AllocationResponse> allocations = allocationLedger.findByCourseIdOrderByIdDesc(id).stream()
-                .map(a -> new AllocationResponse(a.getVisitDate(), a.getGrossCommissionAllocation(),
+                .map(a -> new AllocationResponse(a.getVisitDate(), a.getOwnerNetCommission().add(a.getTreatmentFeeAmount()),
                         a.getTreatmentFeeAmount(), a.getOwnerNetCommission()))
                 .toList();
         return new LedgerResponse(toResponse(course, ownerPatientId), movements, allocations);
@@ -226,7 +228,7 @@ public class CoursePurchaseController {
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
                         .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
         // Always treats the Case Owner as the Treating PT - see class Javadoc.
-        usageService.use(course, visit, owner, course.getCaseOwnerStaff(), LocalDate.now(), actor.currentId());
+        usageService.use(course, visit, owner, course.getOwnerStaff(), LocalDate.now(), actor.currentId());
         return toResponse(courses.findById(course.getId()).orElseThrow(), owner.getId());
     }
 
@@ -259,7 +261,7 @@ public class CoursePurchaseController {
 
     private PatientVisit walkInVisit(Course course, Patient owner) {
         PatientVisit visit = visitService.checkInWalkIn(owner, course.getReceipt().getBranch(),
-                course.getCaseOwnerStaff(), actor.currentId());
+                course.getOwnerStaff(), actor.currentId());
         return visitService.complete(visit.getId(), actor.currentId());
     }
 
