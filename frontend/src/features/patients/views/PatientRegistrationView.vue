@@ -5,7 +5,7 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { registerPatient } from '@/api/patients'
-import { branchApi, masterDataApi, patientApi, type Patient } from '@/api/client'
+import { branchApi, masterDataApi, patientApi, type PatientProfile } from '@/api/client'
 import { type PatientRegistrationForm } from '../data/patientRegistration'
 
 const submitting = ref(false)
@@ -16,24 +16,28 @@ const identityFocused = ref(false)
 const errorMessage = ref('')
 const confirmationOpen = ref(false)
 const duplicateOpen = ref(false)
-const duplicatePatient = ref<Patient | null>(null)
+const successOpen = ref(false)
+const duplicatePatient = ref<PatientProfile | null>(null)
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
+const registeredPatientName = computed(() =>
+  `${form.title}${form.firstName} ${form.lastName}`.trim(),
+)
+const registeredIdentityNumber = computed(() => {
+  const value = form.identityNumber.trim()
+  if (!value || isForeign.value) return value
+  return value.replace(/^(\d)(\d{4})(\d{5})(\d{2})(\d)$/, '$1-$2-$3-$4-$5')
+})
 const customerGroups = ref<string[]>([])
 const referralChannels = ref<string[]>([])
 const insuranceCompanies = ref<string[]>([])
 const branches = ref<Array<{ code: string; name: string }>>([])
-const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
+const titleOptions = ['นาย', 'นางสาว', 'นาง', 'เด็กชาย', 'เด็กหญิง'].map((value) => ({
+  value,
+  label: value,
+}))
 const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
-const nationalityOptions = [
-  { value: 'ไทย', label: 'ไทย' },
-  { value: 'ต่างชาติ', label: 'ชาวต่างชาติ' },
-]
-const identityDocumentOptions = [
-  { value: 'NATIONAL_ID', label: 'บัตรประจำตัวประชาชน' },
-  { value: 'PASSPORT', label: 'หนังสือเดินทาง (Passport)' },
-]
 const branchOptions = computed(() =>
   branches.value.map((branch) => ({ value: branch.code, label: branch.name })),
 )
@@ -58,7 +62,7 @@ const form = reactive<PatientRegistrationForm>({
   birthDate: '',
   gender: 'ชาย',
   phone: '',
-  identityDocumentType: '',
+  identityDocumentType: 'NATIONAL_ID',
   identityNumber: '',
   address: '',
   bloodGroup: 'ไม่ทราบ',
@@ -73,14 +77,15 @@ const form = reactive<PatientRegistrationForm>({
   privacyConsent: false,
 })
 const identityIsValid = computed(() => {
-  if (form.nationality === 'ต่างชาติ') return true
+  if (!form.identityNumber.trim()) return true
+  if (form.nationality === 'ต่างชาติ') return /^[A-Za-z0-9]{6,20}$/.test(form.identityNumber)
   if (form.identityDocumentType === 'NATIONAL_ID') return /^\d{13}$/.test(form.identityNumber)
   if (form.identityDocumentType === 'PASSPORT') return /^\d{10}$/.test(form.identityNumber)
   return false
 })
 const isForeign = computed(() => form.nationality === 'ต่างชาติ')
 const emailIsValid = computed(() =>
-  isForeign.value && !form.email.trim()
+  !form.email.trim()
     ? true
     : /^[a-z0-9](?:[a-z0-9._%+-]*[a-z0-9])?@gmail\.com$/i.test(form.email.trim()),
 )
@@ -97,9 +102,13 @@ const digitsOnly = (value: string) => value.replace(/\D/g, '')
 const thaiNameIsValid = (value: string) => /^[\u0E00-\u0E7F\s]+$/.test(value.trim())
 const personNameIsValid = (value: string) =>
   isForeign.value ? /^[\p{L}\s.'-]+$/u.test(value.trim()) : thaiNameIsValid(value)
-const phoneIsValid = computed(() => /^\d{10}$/.test(form.phone))
+const phoneIsValid = computed(() =>
+  isForeign.value && !form.phone ? true : /^\d{10}$/.test(form.phone),
+)
 const birthDateIsValid = computed(() =>
-  Boolean(form.birthDate && form.birthDate < new Date().toISOString().slice(0, 10)),
+  isForeign.value && !form.birthDate
+    ? true
+    : Boolean(form.birthDate && form.birthDate < new Date().toISOString().slice(0, 10)),
 )
 const canSubmit = computed(() =>
   Boolean(
@@ -107,27 +116,27 @@ const canSubmit = computed(() =>
     branches.value.length &&
     personNameIsValid(form.firstName) &&
     personNameIsValid(form.lastName) &&
-    (isForeign.value || thaiNameIsValid(form.nickname)) &&
+    (!form.nickname || personNameIsValid(form.nickname)) &&
     emailIsValid.value &&
-    (isForeign.value || birthDateIsValid.value) &&
+    birthDateIsValid.value &&
     phoneIsValid.value &&
-    (isForeign.value || form.identityDocumentType) &&
-    identityIsValid.value &&
-    (isForeign.value || form.address),
+    identityIsValid.value,
   ),
 )
 watch(
   () => form.title,
   (title) => {
-    if (title === 'นาย') form.gender = 'ชาย'
-    else if (title === 'นาง' || title === 'นางสาว') form.gender = 'หญิง'
+    if (title === 'นาย' || title === 'เด็กชาย') form.gender = 'ชาย'
+    else if (title === 'นาง' || title === 'นางสาว' || title === 'เด็กหญิง') form.gender = 'หญิง'
   },
 )
 watch(
   () => form.gender,
   (gender) => {
-    if (gender === 'ชาย') form.title = 'นาย'
-    else if (gender === 'หญิง') form.title = 'นางสาว'
+    const maleTitles = ['นาย', 'เด็กชาย']
+    const femaleTitles = ['นางสาว', 'นาง', 'เด็กหญิง']
+    if (gender === 'ชาย' && !maleTitles.includes(form.title)) form.title = 'นาย'
+    else if (gender === 'หญิง' && !femaleTitles.includes(form.title)) form.title = 'นางสาว'
   },
 )
 watch(
@@ -169,18 +178,7 @@ async function requestSubmit() {
     return
   }
   try {
-    const fullName = `${form.firstName} ${form.lastName}`.trim()
-    const [nameCandidates, identityCandidates] = await Promise.all([
-      patientApi.searchAll(fullName),
-      patientApi.searchAll(form.identityNumber),
-    ])
-    duplicatePatient.value =
-      nameCandidates.find(
-        (item) =>
-          item.fullName.trim().toLocaleLowerCase('th-TH') === fullName.toLocaleLowerCase('th-TH'),
-      ) ??
-      identityCandidates[0] ??
-      null
+    duplicatePatient.value = await findDuplicatePatient()
     if (duplicatePatient.value) {
       duplicateOpen.value = true
       return
@@ -194,6 +192,23 @@ function openExistingPatient() {
   if (!duplicatePatient.value) return
   duplicateOpen.value = false
   void router.push(`/staff/patients/${duplicatePatient.value.id}`)
+}
+function openRegisteredPatient() {
+  if (!registeredPatientId.value) return
+  successOpen.value = false
+  void router.push(`/staff/patients/${registeredPatientId.value}`)
+}
+async function findDuplicatePatient() {
+  if (!form.identityNumber.trim()) return null
+  const candidates = await patientApi.searchAll(form.identityNumber)
+  const profiles = await Promise.all(candidates.map((item) => patientApi.get(item.id)))
+  return (
+    profiles.find(
+      (item) =>
+        item.identityNumber.trim().toLocaleLowerCase() ===
+        form.identityNumber.trim().toLocaleLowerCase(),
+    ) ?? null
+  )
 }
 async function submit() {
   confirmationOpen.value = false
@@ -214,7 +229,7 @@ async function submit() {
       phone: form.phone,
       identityDocumentType: form.identityDocumentType,
       identityNumber: form.identityNumber,
-      address: form.address,
+      address: form.address.trim() || 'ไม่ระบุ',
       drugAllergy: form.drugAllergy,
       foodAllergy: form.foodAllergy,
       chronicDisease: form.chronicDisease,
@@ -232,9 +247,15 @@ async function submit() {
     registeredHn.value = result.hn
     registeredPatientId.value = result.id
     localStorage.setItem('patientCreationHn', result.hn)
-    await router.push('/staff/patients')
+    successOpen.value = true
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'เกิดข้อผิดพลาด'
+    try {
+      duplicatePatient.value = await findDuplicatePatient()
+    } catch {
+      duplicatePatient.value = null
+    }
+    if (duplicatePatient.value) duplicateOpen.value = true
+    else errorMessage.value = error instanceof Error ? error.message : 'เกิดข้อผิดพลาด'
   } finally {
     submitting.value = false
   }
@@ -257,7 +278,7 @@ async function submit() {
           <section class="registration-section">
             <h2>ข้อมูลส่วนตัว</h2>
             <fieldset class="patient-type">
-              <legend>ประเภทผู้ป่วย <em>*</em></legend>
+              <legend>สัญชาติ <em>*</em></legend>
               <label :class="{ selected: form.nationality === 'ไทย' }">
                 <input v-model="form.nationality" type="radio" value="ไทย" />ไทย
               </label>
@@ -276,7 +297,8 @@ async function submit() {
                   hide-default-option
               /></label>
               <label
-                >เพศ<FilterDropdown
+                >เพศ <em>*</em
+                ><FilterDropdown
                   v-model="form.gender"
                   :options="genderOptions"
                   default-label="เลือกเพศ"
@@ -314,34 +336,29 @@ async function submit() {
               >
               <label
                 :class="{
-                  'invalid-field': submitted && !isForeign && !thaiNameIsValid(form.nickname),
+                  'invalid-field': submitted && form.nickname && !personNameIsValid(form.nickname),
                 }"
-                >ชื่อเล่น <em v-if="!isForeign">*</em
-                ><input
+                >ชื่อเล่น<input
                   v-model.trim="form.nickname"
                   placeholder="ชื่อเล่น"
                   @input="form.nickname = allowedName(form.nickname)"
-                /><small v-if="submitted && !isForeign && !form.nickname" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ><small
-                  v-else-if="submitted && !isForeign && !thaiNameIsValid(form.nickname)"
+                /><small
+                  v-if="submitted && form.nickname && !personNameIsValid(form.nickname)"
                   class="required-error"
                   >รูปแบบชื่อเล่นไม่ถูกต้อง</small
                 ></label
               >
-              <label :class="{ 'invalid-field': submitted && !isForeign && !birthDateIsValid }"
+              <label :class="{ 'invalid-field': submitted && !birthDateIsValid }"
                 >วันเกิด <em v-if="!isForeign">*</em
                 ><ThaiDatePicker
                   v-model="form.birthDate"
-                  :invalid="submitted && !isForeign && !birthDateIsValid"
+                  :invalid="submitted && !birthDateIsValid"
                   show-calendar-icon
                   numeric-month
                   hide-caret
                 /><small v-if="submitted && !isForeign && !form.birthDate" class="required-error"
                   >กรุณากรอกข้อมูล</small
-                ><small
-                  v-else-if="submitted && !isForeign && !birthDateIsValid"
-                  class="required-error"
+                ><small v-else-if="submitted && !birthDateIsValid" class="required-error"
                   >วันเกิดต้องเป็นวันในอดีต</small
                 ></label
               >
@@ -354,113 +371,56 @@ async function submit() {
                   :clear-on-reselect="false"
                   hide-default-option
               /></label>
-              <label v-if="isForeign"
-                >เลขพาสปอร์ต<input
+              <label :class="{ 'invalid-field': identityErrorVisible }"
+                >{{ isForeign ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน'
+                }}<input
                   v-model.trim="form.identityNumber"
-                  maxlength="20"
-                  placeholder="กรอกเลขพาสปอร์ต (ไม่บังคับ)"
-              /></label>
-              <label v-else
-                >สัญชาติ<FilterDropdown
-                  v-model="form.nationality"
-                  :options="nationalityOptions"
-                  default-label="เลือกสัญชาติ"
-                  label="สัญชาติ"
-                  :clear-on-reselect="false"
-                  hide-default-option
-              /></label>
+                  :inputmode="isForeign ? 'text' : 'numeric'"
+                  :maxlength="isForeign ? 20 : 13"
+                  :placeholder="isForeign ? 'กรอกเลขหนังสือเดินทาง' : 'x-xxxx-xxxxx-xx-x'"
+                  @focus="identityFocused = true"
+                  @blur="identityFocused = false"
+                  @input="
+                    form.identityNumber = isForeign
+                      ? form.identityNumber.replace(/[^A-Za-z0-9]/g, '')
+                      : digitsOnly(form.identityNumber)
+                  "
+                /><small v-if="identityErrorVisible" class="required-error">{{
+                  isForeign ? 'รูปแบบเลขหนังสือเดินทางไม่ถูกต้อง' : 'กรุณากรอกตัวเลข 13 หลัก'
+                }}</small></label
+              >
             </div>
           </section>
           <section class="registration-section">
             <h2>ข้อมูลติดต่อ</h2>
             <div class="form-grid">
-              <label :class="{ 'invalid-field': emailErrorVisible }"
-                >อีเมล <em v-if="!isForeign">*</em
-                ><input
-                  v-model.trim="form.email"
-                  type="text"
-                  inputmode="email"
-                  placeholder="example@gmail.com"
-                  @focus="emailFocused = true"
-                  @blur="emailFocused = false"
-                /><small
-                  v-if="emailErrorVisible && !isForeign && !form.email"
-                  class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ><small v-else-if="emailErrorVisible" class="required-error"
-                  >รูปแบบอีเมลไม่ถูกต้อง</small
-                ></label
-              >
               <label :class="{ 'invalid-field': submitted && !phoneIsValid }"
-                >เบอร์โทร <em>*</em
+                >เบอร์โทร <em v-if="!isForeign">*</em
                 ><input
                   v-model.trim="form.phone"
                   inputmode="numeric"
                   maxlength="10"
                   placeholder="xxx-xxx-xxxx"
                   @input="form.phone = digitsOnly(form.phone)"
-                /><small v-if="submitted && !form.phone" class="required-error"
+                /><small v-if="submitted && !isForeign && !form.phone" class="required-error"
                   >กรุณากรอกข้อมูล</small
                 ><small v-else-if="submitted && !phoneIsValid" class="required-error"
                   >กรุณากรอกตัวเลข 10 หลัก</small
                 ></label
               >
-              <label
-                class="wide"
-                :class="{ 'invalid-field': submitted && !isForeign && !form.address }"
-                >ที่อยู่ <em v-if="!isForeign">*</em
-                ><textarea v-model.trim="form.address" rows="4" /><small
-                  v-if="submitted && !isForeign && !form.address"
-                  class="required-error"
-                  >กรุณากรอกข้อมูล</small
+              <label :class="{ 'invalid-field': emailErrorVisible }"
+                >อีเมล<input
+                  v-model.trim="form.email"
+                  type="text"
+                  inputmode="email"
+                  placeholder="example@gmail.com"
+                  @focus="emailFocused = true"
+                  @blur="emailFocused = false"
+                /><small v-if="emailErrorVisible" class="required-error"
+                  >รูปแบบอีเมลไม่ถูกต้อง</small
                 ></label
               >
-            </div>
-          </section>
-          <section v-if="!isForeign" class="registration-section">
-            <h2>ข้อมูลยืนยันตัวตน</h2>
-            <div class="form-grid">
-              <label :class="{ 'invalid-field': submitted && !form.identityDocumentType }"
-                >ประเภทเอกสารยืนยันตัวตน <em>*</em
-                ><FilterDropdown
-                  v-model="form.identityDocumentType"
-                  :options="identityDocumentOptions"
-                  default-label="เลือกประเภทเอกสาร"
-                  label="ประเภทเอกสารยืนยันตัวตน"
-                  :disabled="form.nationality === 'ต่างชาติ'"
-                  :clear-on-reselect="false"
-                  hide-default-option
-                /><small v-if="submitted && !form.identityDocumentType" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ></label
-              >
-              <label :class="{ 'invalid-field': identityErrorVisible }"
-                >{{
-                  form.identityDocumentType === 'PASSPORT' ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน'
-                }}
-                <em>*</em
-                ><input
-                  v-model.trim="form.identityNumber"
-                  :disabled="!form.identityDocumentType"
-                  inputmode="numeric"
-                  :maxlength="form.identityDocumentType === 'NATIONAL_ID' ? 13 : 10"
-                  :placeholder="
-                    !form.identityDocumentType
-                      ? 'กรุณาเลือกประเภทเอกสารก่อน'
-                      : form.identityDocumentType === 'NATIONAL_ID'
-                        ? 'กรอกเลขบัตรประชาชน 13 หลัก'
-                        : 'กรอกเลขหนังสือเดินทาง 10 หลัก'
-                  "
-                  @focus="identityFocused = true"
-                  @blur="identityFocused = false"
-                  @input="form.identityNumber = digitsOnly(form.identityNumber)"
-                /><small v-if="identityErrorVisible && !form.identityNumber" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ><small v-else-if="identityErrorVisible" class="required-error"
-                  >กรุณากรอกตัวเลข
-                  {{ form.identityDocumentType === 'NATIONAL_ID' ? '13' : '10' }} หลัก</small
-                ></label
-              >
+              <label class="wide">ที่อยู่<textarea v-model.trim="form.address" rows="4" /></label>
             </div>
           </section>
           <section class="registration-section">
@@ -555,21 +515,50 @@ async function submit() {
     <Teleport to="body">
       <div v-if="duplicateOpen" class="registration-modal-backdrop">
         <section class="registration-modal duplicate-modal" role="alertdialog" aria-modal="true">
-          <h2>พบข้อมูลผู้ป่วยซ้ำ</h2>
-          <strong>ไม่สามารถบันทึกข้อมูลได้</strong>
-          <p>มีชื่อนี้อยู่ในระบบแล้ว โปรดตรวจสอบข้อมูลอีกครั้ง</p>
+          <span class="duplicate-warning-icon" aria-hidden="true">!</span>
+          <h2>พบเลขบัตรประชาชน หรือ HN ซ้ำ</h2>
+          <p>ระบบตรวจพบข้อมูลที่ตรงกับผู้ป่วยเดิม จึงไม่สามารถสร้างรายการใหม่ได้</p>
+          <strong>ไม่สามารถบันทึกเป็นผู้ป่วยใหม่ได้</strong>
           <div v-if="duplicatePatient" class="duplicate-patient">
-            <b>{{ duplicatePatient.fullName }}</b>
-            <span>HN {{ duplicatePatient.hn }}</span>
+            <div>
+              <b>{{ duplicatePatient.fullName }}</b>
+              <span>HN {{ duplicatePatient.hn }}</span>
+              <span>เลขบัตรประชาชน {{ duplicatePatient.identityNumber }}</span>
+            </div>
+            <small>ข้อมูลเดิมในระบบ</small>
           </div>
           <div class="registration-modal-actions">
             <button type="button" class="secondary" @click="duplicateOpen = false">
-              กลับไปแก้ไข
+              กลับไปตรวจสอบข้อมูล
             </button>
             <button type="button" class="primary" @click="openExistingPatient">
               เปิดข้อมูลผู้ป่วยเดิม
             </button>
           </div>
+        </section>
+      </div>
+    </Teleport>
+    <Teleport to="body">
+      <div v-if="successOpen" class="registration-modal-backdrop">
+        <section
+          class="registration-modal registration-success-modal"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="registration-success-title"
+        >
+          <span class="registration-success-check" aria-hidden="true">✓</span>
+          <h2 id="registration-success-title">ลงทะเบียนผู้ป่วยสำเร็จ</h2>
+          <div class="registration-success-patient">
+            <b>{{ registeredPatientName }}</b>
+            <span>HN {{ registeredHn }}</span>
+            <span v-if="registeredIdentityNumber">
+              {{ isForeign ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }}
+              {{ registeredIdentityNumber }}
+            </span>
+          </div>
+          <button type="button" class="primary" @click="openRegisteredPatient">
+            เปิดข้อมูลผู้ป่วย
+          </button>
         </section>
       </div>
     </Teleport>
