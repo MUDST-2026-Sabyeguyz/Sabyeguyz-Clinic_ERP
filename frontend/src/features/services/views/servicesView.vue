@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { formatPaymentLabel, formatPaymentMethod } from '@/features/payments/format'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
@@ -16,6 +17,7 @@ import {
   type Patient,
   type PatientProfile,
   type PaymentMethod,
+  type PaymentLabel,
   type ServiceOption,
   type Staff,
 } from '@/api/client'
@@ -43,6 +45,7 @@ const paymentCode = ref(''),
   note = ref('')
 const searched = ref(false)
 const receiptNo = ref('')
+const receiptPaymentLabel = ref<PaymentLabel | null>()
 const paymentDialogOpen = ref(false)
 const receiptPrintModal = ref<'confirm' | 'success' | 'error' | null>(null)
 const screen = ref<'search' | 'menu' | 'sale' | 'receipt'>(
@@ -282,6 +285,7 @@ async function submit() {
       ],
     })
     receiptNo.value = sale.receiptNo
+    receiptPaymentLabel.value = sale.paymentLabel
     confirmed.value = true
     reviewing.value = false
     paymentDialogOpen.value = false
@@ -419,13 +423,18 @@ async function submit() {
               ><strong>ยอดชำระ</strong><strong>{{ money(receiptPayable) }}</strong>
             </div>
             <div>
-              <span>สถานะการชำระเงิน</span><b>ชำระเต็มจำนวน</b><span>ช่องทางการชำระ</span
-              ><b>{{ paymentMethods.find((method) => method.code === paymentCode)?.name || '-' }}</b
+              <span>ประเภทการชำระเงิน</span><b>{{ formatPaymentLabel(receiptPaymentLabel) }}</b
+              ><span>ช่องทางการชำระ</span
+              ><b>{{
+                formatPaymentMethod(
+                  paymentCode,
+                  paymentMethods.find((method) => method.code === paymentCode)?.name,
+                )
+              }}</b
               ><strong>ยอดสุทธิ</strong><strong>{{ money(receiptPayable) }}</strong>
             </div>
           </section>
           <section class="receipt-balance">
-            <p><b>แต้มคงเหลือ: 0</b><b>วงเงินคงเหลือ: ฿0.00</b></p>
             <p>
               <b>หมายเหตุ: {{ note || '-' }}</b>
             </p>
@@ -589,7 +598,7 @@ async function submit() {
                     :class="{ active: paymentCode === method.code }"
                     @click="paymentCode = method.code"
                   >
-                    {{ method.name }}
+                    {{ formatPaymentMethod(method.code, method.name) }}
                   </button>
                 </div>
               </div>
@@ -680,7 +689,10 @@ async function submit() {
                 <span>ยอดที่ลูกค้าชำระ</span><strong>{{ money(netAmount) }}</strong
                 ><small
                   >ช่องทางการชำระเงิน　{{
-                    paymentMethods.find((method) => method.code === paymentCode)?.name || '-'
+                    formatPaymentMethod(
+                      paymentCode,
+                      paymentMethods.find((method) => method.code === paymentCode)?.name,
+                    )
                   }}</small
                 >
               </section>

@@ -15,10 +15,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class RefundService {
     private final RefundTransactionRepository refunds;
     private final TransactionCancellationService cancellationService;
+    private final com.sabyeguyz.clinicv2.catalog.CourseRepository courses;
+    private final com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usages;
 
-    public RefundService(RefundTransactionRepository refunds, TransactionCancellationService cancellationService) {
+    public RefundService(RefundTransactionRepository refunds, TransactionCancellationService cancellationService,
+            com.sabyeguyz.clinicv2.catalog.CourseRepository courses,
+            com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usages) {
         this.refunds = refunds;
         this.cancellationService = cancellationService;
+        this.courses = courses;
+        this.usages = usages;
     }
 
     @Transactional
@@ -28,6 +34,7 @@ public class RefundService {
         require(payment.isPaymentStatus(), "รายการชำระเงินนี้ถูกยกเลิกแล้ว ไม่สามารถคืนเงินได้");
         require(method != null, "ต้องระบุช่องทางคืนเงิน");
         require(amount != null && amount.signum() > 0, "จำนวนเงินที่คืนต้องมากกว่า 0");
+        requireUnusedCourses(payment);
         BigDecimal alreadyRefunded = refunds.refundedOrPendingAmountOf(payment.getId());
         require(alreadyRefunded.add(amount).compareTo(payment.getAmount()) <= 0,
                 "จำนวนเงินที่คืนรวมกันต้องไม่เกินยอดที่ชำระ");
@@ -48,6 +55,7 @@ public class RefundService {
     @Transactional
     public RefundTransaction complete(Long refundId, Long actorId) {
         RefundTransaction refund = pending(refundId);
+        requireUnusedCourses(refund.getOriginalPayment());
         refund.setRefundStatus(RefundStatus.Completed);
         refund.setRefundedAt(Instant.now());
         refund.setRefundedBy(actorId);
@@ -59,6 +67,16 @@ public class RefundService {
         RefundTransaction refund = pending(refundId);
         refund.setRefundStatus(RefundStatus.Failed);
         return refunds.save(refund);
+    }
+
+    /** Take the same course locks as the usage API before observing usage or writing refund state. */
+    private void requireUnusedCourses(PaymentTransaction payment) {
+        for (Long courseId : courses.findIdsByReceiptId(payment.getReceipt().getId())) {
+            courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
+            if (usages.existsByCourseId(courseId)) {
+                throw new IllegalStateException("ใบเสร็จนี้มีประวัติใช้สิทธิ์คอร์สแล้ว ไม่สามารถคืนเงินได้");
+            }
+        }
     }
 
     private RefundTransaction pending(Long refundId) {
