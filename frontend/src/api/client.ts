@@ -229,9 +229,11 @@ export type CoursePurchase = {
   usable: boolean
   status: string
 }
+export type PaymentLabel = 'FullyPaid' | 'Installment' | 'Deposit'
 export type SaleSummary = {
   id: number
   receiptNo: string
+  paymentLabel?: PaymentLabel | null
   patient: Patient
   branchCode: string
   salesperson?: { id: number; employeeCode: string; fullName: string }
