@@ -21,23 +21,28 @@
 
 ระบบเป็นแหล่งข้อมูลหลักเสมอ การเปลี่ยนที่มาจาก Google บันทึกในประวัติสถานะนัดว่า "เลื่อนจาก Google Calendar" / "ยกเลิกจาก Google Calendar"
 
-## สิ่งที่ Manager ต้องเตรียม (ทำครั้งเดียว)
+## สิ่งที่ Manager ต้องเตรียม (ทำครั้งเดียว) — แนะนำ Service account
 1. สร้างบัญชี Gmail ใหม่สำหรับระบบนัดหมายโดยเฉพาะ (เก็บรหัสผ่านเป็นความลับ ผูกเบอร์โทรกู้คืน และมีผู้ดูแลสำรอง 1 คนรู้วิธีกู้บัญชี)
-2. เข้าสู่ระบบบัญชีนั้น แล้วสร้างปฏิทิน 1 อัน ต่อ 1 สาขา จากนั้นเปิด *การตั้งค่าและการแชร์* ของแต่ละปฏิทิน และคัดลอก **Calendar ID** (รูปแบบ `xxxx@group.calendar.google.com`)
+2. เข้าสู่ระบบบัญชีนั้น แล้วสร้างปฏิทิน 1 อัน ต่อ 1 สาขา (พระราม 9, แบริ่ง) จากนั้นเปิด *การตั้งค่าและการแชร์* ของแต่ละปฏิทิน และคัดลอก **Calendar ID** (รูปแบบ `xxxx@group.calendar.google.com`)
 3. สร้างโปรเจกต์ใน [Google Cloud Console](https://console.cloud.google.com) เปิดใช้ **Google Calendar API**
-4. ไปที่ *Google Auth Platform / OAuth consent screen* ตั้งเป็นแอปแบบ External แล้ว **กด Publish app ให้เป็น "In production"** (ถ้าค้างที่ "Testing" สิทธิ์จะหมดอายุทุก 7 วัน และการซิงก์จะหยุดเอง) แอปจะแสดงคำเตือน "ยังไม่ผ่านการตรวจสอบ" ตอนอนุญาตครั้งแรก ซึ่งปกติสำหรับแอปที่ใช้บัญชีของตัวเอง
-5. สร้าง *OAuth client ID* ชนิด **Web application** และเพิ่ม Authorized redirect URI: `https://developers.google.com/oauthplayground`
-6. เปิด [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) กดรูปเฟืองมุมขวาบน ติ๊ก *Use your own OAuth credentials* ใส่ Client ID / Client secret ของข้อ 5 เลือก scope `https://www.googleapis.com/auth/calendar` กด Authorize ด้วยบัญชี Gmail กลาง แล้วกด *Exchange authorization code for tokens* จะได้ **Refresh token**
+4. ไปที่ *IAM & Admin > Service Accounts* กด *Create service account* ตั้งชื่อ `calendar-sync` (ไม่ต้องกำหนด Role) แล้วเข้าไปที่แท็บ *Keys > Add key > Create new key > JSON* จะได้ไฟล์ `.json` ดาวน์โหลดลงเครื่อง **ไฟล์นี้เป็นความลับ** (เหมือนรหัสผ่าน) เก็บไว้ในที่ปลอดภัย ไม่ส่งในแชท/อีเมล และไม่ใส่ในโปรเจกต์
+5. คัดลอกอีเมลของ service account (หน้าตาแบบ `calendar-sync@<โปรเจกต์>.iam.gserviceaccount.com`) แล้วกลับไปที่ Google Calendar ของบัญชี Gmail กลาง เปิด *การตั้งค่าและการแชร์* ของ **แต่ละปฏิทินสาขา** > *แชร์กับบุคคลหรือกลุ่มที่ระบุ* > เพิ่มอีเมลนั้นด้วยสิทธิ์ **"ทำการเปลี่ยนแปลงกิจกรรม" (Make changes to events)**
 
-**ความปลอดภัย:** Client secret และ Refresh token เป็นความลับ ห้ามส่งในแชท/อีเมล หรือใส่ในไฟล์ในโปรเจกต์ ใส่ในตัวแปรสภาพแวดล้อมของเซิร์ฟเวอร์เท่านั้น
+แบบนี้ไม่ต้องผ่านหน้า OAuth consent screen / Publish app และไม่มีสิทธิ์ที่หมดอายุทุก 7 วัน
+
+### ทางเลือกเดิม: OAuth refresh token ของบัญชี Gmail
+ใช้ได้ แต่ต้องกด **Publish app เป็น "In production"** ที่ OAuth consent screen ไม่เช่นนั้นสิทธิ์จะหมดอายุทุก 7 วันและการซิงก์หยุดเอง: สร้าง *OAuth client ID* ชนิด Web application เพิ่ม redirect URI `https://developers.google.com/oauthplayground` แล้วใช้ [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) (Use your own OAuth credentials, scope `https://www.googleapis.com/auth/calendar`) เพื่อขอ Refresh token ถ้าตั้ง `APP_CALENDAR_SERVICE_ACCOUNT_KEY_FILE` ระบบจะใช้ service account และไม่สนใจค่า OAuth
+
+**ความปลอดภัย:** ไฟล์คีย์ service account, Client secret และ Refresh token เป็นความลับ ห้ามส่งในแชท/อีเมล หรือใส่ในไฟล์ในโปรเจกต์ ใส่ในตัวแปรสภาพแวดล้อม/ไฟล์บนเซิร์ฟเวอร์เท่านั้น
 
 ## การตั้งค่าบนเซิร์ฟเวอร์
 | ตัวแปรสภาพแวดล้อม | ความหมาย |
 |---|---|
 | `APP_CALENDAR_ENABLED=true` | เปิดการซิงก์ (ไม่ตั้ง = ปิด ระบบทำงานเหมือนเดิม) |
-| `APP_CALENDAR_CLIENT_ID` | OAuth Client ID |
-| `APP_CALENDAR_CLIENT_SECRET` | OAuth Client secret |
-| `APP_CALENDAR_REFRESH_TOKEN` | Refresh token ของบัญชี Gmail กลาง |
+| `APP_CALENDAR_SERVICE_ACCOUNT_KEY_FILE` | ที่อยู่ของไฟล์คีย์ JSON ของ service account บนเซิร์ฟเวอร์ (แนะนำ) |
+| `APP_CALENDAR_CLIENT_ID` | (ทางเลือกเดิม) OAuth Client ID |
+| `APP_CALENDAR_CLIENT_SECRET` | (ทางเลือกเดิม) OAuth Client secret |
+| `APP_CALENDAR_REFRESH_TOKEN` | (ทางเลือกเดิม) Refresh token ของบัญชี Gmail กลาง |
 | `APP_CALENDAR_DEFAULT_DURATION_MINUTES` | ระยะเวลากิจกรรม (ค่าเริ่มต้น 60) |
 | `APP_CALENDAR_ACTOR_USER_ID` | รหัสผู้ใช้ที่บันทึกเป็นผู้ทำการเลื่อน/ยกเลิกที่มาจาก Google (ค่าเริ่มต้น 1 = ผู้ใช้ `system`) |
 
@@ -58,12 +63,11 @@ POST /api/calendar/sync            สั่งซิงก์ทันที (�
 - ชุดทดสอบ (`backend/cypress/e2e-v2/calendar.cy.js`) ใช้ Google จำลองในหน่วยความจำ **ยังไม่ได้ทดสอบกับ Google จริง** ต้องลองด้วยมือกับปฏิทินทดสอบก่อนใช้งานจริง
 
 ## ตรวจว่าตั้งค่าถูกก่อนเปิดใช้งาน (ไม่ต้องส่งรหัสให้ใคร)
-1. สร้างไฟล์ `.env.calendar` ที่โฟลเดอร์หลักของโปรเจกต์ (ถูก git ละเว้นอยู่แล้ว จะไม่ถูกอัปโหลด) ใส่ 3 บรรทัด วางค่าจริงเอง:
+1. สร้างไฟล์ `.env.calendar` ที่โฟลเดอร์หลักของโปรเจกต์ (ถูก git ละเว้นอยู่แล้ว จะไม่ถูกอัปโหลด) ใส่บรรทัดนี้ (ที่อยู่ไฟล์คีย์ service account; ต้องมี openssl และ curl) วางค่าจริงเอง:
    ```
-   APP_CALENDAR_CLIENT_ID=...
-   APP_CALENDAR_CLIENT_SECRET=...
-   APP_CALENDAR_REFRESH_TOKEN=...
+   APP_CALENDAR_SERVICE_ACCOUNT_KEY_FILE=C:/path/to/calendar-sync-key.json
    ```
+   (แบบ OAuth เดิมใช้ `APP_CALENDAR_CLIENT_ID` / `APP_CALENDAR_CLIENT_SECRET` / `APP_CALENDAR_REFRESH_TOKEN` แทน; สคริปต์ต้องมี `openssl` และ `curl` ซึ่งมีมากับ Git Bash)
 2. รันใน Git Bash ที่โฟลเดอร์หลัก (ใส่ Calendar ID ของแต่ละสาขา คั่นด้วยเว้นวรรค):
    ```
    bash backend/scripts/calendar-check.sh <CalendarID-แบริ่ง> <CalendarID-พระราม9>
