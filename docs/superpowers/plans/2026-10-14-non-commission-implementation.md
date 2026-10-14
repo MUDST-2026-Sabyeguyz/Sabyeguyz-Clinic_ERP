@@ -64,6 +64,17 @@ npm run build
 - [ ] หาก Q9 ยังไม่ตอบ ทำส่วนบังคับสิทธิ์นัดตาม R1–3 ได้ แต่ไม่เดา granular permission จาก Figma; login selector/multi-branch contract รอ Q9
 - [ ] ยืนยัน GREEN scoped suite + auth/appointments/reports/frontend-contract; browser loginเลือกสาขาและ Managerสลับสาขา; commit `feat: enforce branch access outside commission`
 
+### P1 execution scope ที่ยืนยันวันที่ 14 ตุลาคม 2026
+
+นายท่านเลือก “ทำสิทธิ์นัดหมายก่อน พักส่วน Q9 ตามแผน” จึงแบ่ง release นี้เป็น **P1 ส่วน appointment authorization**; ไม่ถือว่าปิด P1 ทั้งหมด
+
+- ใช้ Manager/Therapist ซึ่งมีอยู่จริงเป็น fixtures ทั้งสาขา 01/02; ไม่เพิ่ม STAFF/ADMIN roles หรือแก้ permission matrix ก่อน Q9
+- BranchAccessPolicy อ่าน active user/role/home branch จาก DB และบังคับเฉพาะ appointment endpoints; legacy branch grants ไม่เปิดการนัดข้ามสาขาให้ non-Manager
+- Login/session selector, report/sale/course/catalog enforcement และ browser selection ที่ขึ้นกับ Q9 ยังพักไว้; global patient search คงเดิม
+- RED รอบแรก `branch-access.cy.js`: 18 tests, ผ่าน 2 / ล้ม 16 เพราะขาด branch enforcement และ therapist-branch validation; scoped GREEN หลังแก้ผ่าน 18/18
+- [x] ยืนยัน release เฉพาะ appointment subset: full API 161/161 รวม commission 17/17; browser นัดหมาย 16/16; frontend unit 28/28 และ backend/frontend build ผ่าน; read-only code review ไม่พบ actionable defect ใน scope
+- Checklist P1 ด้านบนคงเปิดสำหรับส่วนที่ยังไม่ครบ; ผลตรวจและรายการที่รับเข้า commit ดู `docs/testing/2026-10-14-P1-Appointment-Branch-Authorization.md`
+
 ## P2: Patient contract และ exact identity lookup (R5–11, T15/16/20/27)
 
 **Modify:** `backend/src/main/java/com/sabyeguyz/clinicv2/patient/{Patient,PatientRegistration,PatientController,PatientService,PatientRepository}.java`, `frontend/src/api/{client,patients}.ts`, `frontend/src/features/patients/views/{PatientRegistrationView,PatientProfileView}.vue`
