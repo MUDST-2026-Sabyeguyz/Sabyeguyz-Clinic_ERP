@@ -123,7 +123,7 @@ describe('creating and changing appointments', () => {
   })
 
   it('moves an appointment to another time', function () {
-    cy.registerPatient().then((patient) => book(this.fixtures, patient))
+    cy.registerPatient().then((patient) => book(this.fixtures, patient, { status: 'Unconfirmed' }))
     cy.visitAs('manager', '/staff/appointments')
     cy.contains('tr', 'สมชาย ใจดี').contains('button', 'แก้ไข').click()
     cy.contains('h1', 'เลื่อนนัดหมาย').should('be.visible')
