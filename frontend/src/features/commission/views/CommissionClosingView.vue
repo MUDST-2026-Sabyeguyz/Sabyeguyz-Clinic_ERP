@@ -18,7 +18,6 @@ type ClosingRow = {
 const selectedMonth = ref(`${clinicToday().slice(0, 8)}01`)
 const month = computed(() => selectedMonth.value.slice(0, 7))
 const router = useRouter()
-const branch = ref('ทุกสาขา')
 const search = ref('')
 const rows = ref<ClosingRow[]>([])
 const errorMessage = ref('')
@@ -173,12 +172,6 @@ const closeChecks = computed(() =>
   })),
 )
 const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result === false))
-
-function selectView(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
-  if (value === 'Sales') void router.push('/staff/commission')
-  if (value === 'Treatment') void router.push('/staff/commission?type=Treatment')
-}
 </script>
 
 <template>
