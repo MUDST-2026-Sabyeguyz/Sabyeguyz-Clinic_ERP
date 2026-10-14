@@ -47,7 +47,7 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
   it('registeringANewPatientMakesTheAppointmentCurrent', () => {
     value('appointment', 'link-patient').should('include', { patientType: 'CURRENT', hasPatient: true })
   })
-  it('rejectsLinkingAPatientToAnAppointmentThatAlreadyHasOne', () => rejected('appointment', 'link-patient-already-linked'))
+  it('rejectsLinkingAPatientToAnAppointmentThatAlreadyHasOne', () => rejected('appointment', 'link-patient-already-linked', 'ลงทะเบียนแล้ว'))
   it('rejectsCheckInOfAnUnconfirmedAppointment', () => rejected('appointment', 'arrive-unconfirmed', 'ยืนยัน'))
   it('rejectsCheckInOfANewPatientWhoIsNotRegistered', () => rejected('appointment', 'arrive-new-patient', 'ลงทะเบียน'))
   it('cancelRecordsStatusHistory', () => {
