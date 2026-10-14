@@ -1,28 +1,39 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { commissionApi } from '@/api/client'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
 
 type Rule = { title: string; detail: string; amount: string }
-const rules = ref<Rule[]>([
-  {
-    title: 'นักกายภาพทั่วไป · Fixed',
-    detail: 'ทุกบริการ · เกินเพดาน: จำกัดยอดอัตโนมัติ',
-    amount: '฿45 / ครั้ง',
-  },
-  {
-    title: 'Senior Therapist · Percentage',
-    detail: 'มูลค่าคอร์สต่อครั้ง · เกินเพดาน: จำกัดยอดอัตโนมัติ',
-    amount: '3%',
-  },
-  {
-    title: 'Manual Therapy · Fixed',
-    detail: 'บริการ Manual Therapy · เกินเพดาน: รอ Manager อนุมัติ',
-    amount: '฿60 / ครั้ง',
-  },
-])
+const rules = ref<Rule[]>([])
+const loading = ref(true)
+onMounted(async () => {
+  try {
+    const rows = (await commissionApi.treatmentFees()) as Array<{
+      id: number
+      employeeId: number
+      feeType: string
+      feeValue: number
+      active: boolean
+    }>
+    rules.value = rows
+      .filter((row) => row.active)
+      .map((row) => ({
+        title: `พนักงาน #${row.employeeId} · ${row.feeType === 'PERCENTAGE' ? 'Percentage' : 'Fixed'}`,
+        detail: 'ค่าตอบแทนผู้รักษาแทน',
+        amount:
+          row.feeType === 'PERCENTAGE'
+            ? `${row.feeValue}%`
+            : `฿${Number(row.feeValue).toLocaleString('th-TH')} / ครั้ง`,
+      }))
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : 'โหลดกฎค่ามือไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
+})
 const drawerOpen = ref(false)
 const error = ref('')
 const form = reactive({
@@ -30,9 +41,9 @@ const form = reactive({
   recipient: 'GENERAL',
   service: 'ALL',
   calculation: 'FIXED',
-  value: 45,
+  value: 0,
   overflow: 'CAP_AT_COMMISSION',
-  effectiveFrom: '2026-10-08',
+  effectiveFrom: new Date().toLocaleDateString('en-CA'),
   effectiveTo: '',
 })
 function openDrawer() {
@@ -42,9 +53,9 @@ function openDrawer() {
     recipient: 'GENERAL',
     service: 'ALL',
     calculation: 'FIXED',
-    value: 45,
+    value: 0,
     overflow: 'CAP_AT_COMMISSION',
-    effectiveFrom: '2026-10-08',
+    effectiveFrom: new Date().toLocaleDateString('en-CA'),
     effectiveTo: '',
   })
   drawerOpen.value = true
@@ -55,21 +66,7 @@ function saveRule() {
     error.value = 'กรุณากรอกชื่อ อัตรา และวันที่เริ่มใช้งาน'
     return
   }
-  const type = form.calculation === 'FIXED' ? 'Fixed' : 'Percentage'
-  const service = form.service === 'ALL' ? 'ทุกบริการ' : `บริการ ${form.service}`
-  const overflow =
-    form.overflow === 'CAP_AT_COMMISSION'
-      ? 'เกินเพดาน: จำกัดยอดอัตโนมัติ'
-      : 'เกินเพดาน: รอ Manager อนุมัติ'
-  rules.value.push({
-    title: `${form.name.trim()} · ${type}`,
-    detail: `${service} · ${overflow}`,
-    amount:
-      form.calculation === 'FIXED'
-        ? `฿${form.value.toLocaleString('th-TH')} / ครั้ง`
-        : `${form.value}%`,
-  })
-  drawerOpen.value = false
+  error.value = 'ยังไม่ได้เชื่อมการบันทึกกฎกับข้อมูลพนักงานจริง'
 }
 </script>
 
@@ -78,31 +75,38 @@ function saveRule() {
     <StaffHeader />
     <main class="commission-manager-main">
       <header class="commission-title">
-        <h1>ตั้งค่าค่ารักษาแทน</h1>
+        <h1>ตั้งค่าค่ามือ</h1>
         <p>กำหนดค่าตอบแทนนักกายภาพผู้รักษาแทนแบบจำนวนเงินหรือเปอร์เซ็นต์</p>
       </header>
       <CommissionTabs active="compensation" />
-      <section class="rules-head">
-        <h2>กฎค่ารักษาแทน</h2>
-        <p>ใช้เมื่อผู้รักษาไม่ใช่ Case Owner และต้องไม่เกิน Gross Commission Allocation ต่อครั้ง</p>
+      <section class="commission-card compensation-panel">
+        <header class="rules-head">
+          <h2>กฎค่ามือ</h2>
+          <p>
+            ใช้เมื่อผู้รักษาไม่ใช่ Case Owner และต้องไม่เกิน Gross Commission Allocation ต่อครั้ง
+          </p>
+        </header>
+        <p v-if="loading">กำลังโหลดข้อมูล…</p>
+        <p v-else-if="error" class="drawer-error">{{ error }}</p>
+        <p v-else-if="!rules.length">ยังไม่มีกฎค่ามือ</p>
+        <section class="rules">
+          <article v-for="rule in rules" :key="rule.title" class="commission-card">
+            <div>
+              <b>{{ rule.title }}</b
+              ><small>{{ rule.detail }}</small>
+            </div>
+            <strong>{{ rule.amount }}</strong>
+          </article>
+        </section>
+        <button class="commission-primary add-rule" @click="openDrawer">+ เพิ่มกฎค่ามือ</button>
       </section>
-      <section class="rules">
-        <article v-for="rule in rules" :key="rule.title" class="commission-card">
-          <div>
-            <b>{{ rule.title }}</b
-            ><small>{{ rule.detail }}</small>
-          </div>
-          <strong>{{ rule.amount }}</strong>
-        </article>
-      </section>
-      <button class="commission-primary add-rule" @click="openDrawer">+ เพิ่มกฎค่ารักษาแทน</button>
     </main>
     <Teleport to="body"
       ><div v-if="drawerOpen" class="rule-drawer-backdrop" @click.self="drawerOpen = false">
         <aside class="rule-drawer" role="dialog" aria-modal="true">
           <header>
             <div>
-              <h2>เพิ่มกฎค่ารักษาแทน</h2>
+              <h2>เพิ่มกฎค่ามือ</h2>
               <p>กำหนดผู้รับ บริการ และวิธีคำนวณ</p>
             </div>
             <button class="drawer-close" @click="drawerOpen = false">×</button>
@@ -188,7 +192,18 @@ function saveRule() {
 
 <style scoped>
 @import '../styles/commission-manager.css';
+.compensation-panel {
+  padding: 28px;
+  min-height: 800px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border-color: #dde6e1;
+  border-radius: 14px;
+  gap: 0;
+}
 .rules-head h2 {
+  font-size: 23px;
   margin: 0;
 }
 .rules-head p {
@@ -197,10 +212,11 @@ function saveRule() {
 }
 .rules {
   display: grid;
-  gap: 22px;
+  gap: 24px;
 }
 .rules article {
-  min-height: 86px;
+  min-height: 88px;
+  box-sizing: border-box;
   padding: 18px;
   display: flex;
   align-items: center;
@@ -216,14 +232,25 @@ function saveRule() {
 }
 .rules strong {
   min-width: 180px;
-  color: #16877f;
-  text-align: center;
+  margin-right: 19%;
+  color: #176c68;
+  text-align: left;
 }
 .add-rule {
   display: block;
-  margin: 60px 0 0 auto;
+  margin: auto 0 0 auto;
+  min-height: 48px;
+  min-width: 240px;
+  background: #1f8883;
 }
 @media (max-width: 700px) {
+  .compensation-panel {
+    min-height: 0;
+    padding: 20px;
+  }
+  .rules strong {
+    margin-right: 0;
+  }
   .rules article {
     align-items: start;
     flex-direction: column;

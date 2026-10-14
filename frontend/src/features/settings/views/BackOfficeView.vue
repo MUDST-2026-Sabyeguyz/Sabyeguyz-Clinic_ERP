@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -15,7 +16,9 @@ const sections: Array<{ key: SectionKey; label: string }> = [
   { key: 'commission', label: 'Commission Rule' },
   { key: 'master', label: 'Master Data' },
 ]
-const section = ref<SectionKey>('branches'),
+const route = useRoute()
+const initialSection = sections.find((item) => item.key === route.query.section)?.key ?? 'branches'
+const section = ref<SectionKey>(initialSection),
   drawerOpen = ref(false),
   editingIndex = ref<number | null>(null),
   savedMessage = ref(''),
