@@ -18,7 +18,7 @@ module.exports = defineConfig({
       if (config.baseUrl !== 'http://127.0.0.1:18080') {
         throw new Error('The v2 backend Cypress tests require the isolated server on 127.0.0.1:18080')
       }
-      on('task', { parallelRequests })
+      on('task', { parallelRequests, courseRefundRace: require('./cypress/tasks/course-refund-race.cjs') })
       // The junit reporter writes failures to XML only; print them so they show up in the CI log.
       on('after:spec', (spec, results) => {
         for (const test of results?.tests ?? []) {
