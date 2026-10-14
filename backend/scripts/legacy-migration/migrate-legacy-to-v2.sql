@@ -468,7 +468,7 @@ INSERT INTO public.sales_transaction (transaction_id, patient_id, branch_id, ser
         allocated_bill_discount_amount, commissionable_amount, item_name_snapshot, unit_name_snapshot)
 SELECT ml.new_transaction_id, s.patient_id, s.branch_id,
        CASE WHEN i.item_type = 'COURSE' THEN mc.new_service_id ELSE msv.new_service_id END,
-       CASE WHEN i.item_type = 'COURSE' THEN 'CoursePurchase' ELSE 'SingleVisit' END::transaction_type_enum,
+       CASE WHEN i.item_type = 'COURSE' THEN 'CoursePurchase' WHEN i.item_type = 'ASSESSMENT' THEN 'Assessment' ELSE 'SingleVisit' END::transaction_type_enum,
        mst.new_staff_id, i.quantity, i.unit_price, i.line_total, s.sold_at AT TIME ZONE 'UTC', s.status <> 'VOIDED',
        i.created_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx), s.id,
        (row_number() OVER (PARTITION BY i.sale_id ORDER BY i.id))::int, 0, 0, i.line_total,

@@ -152,11 +152,12 @@ P4 Q5/Q6: นายท่านยืนยันให้พักใน chat; 
 
 **Interfaces proposed:** patient historyกรอง `patientId` จาก serverไม่กรองแค่current pageในbrowser; responseคงreceiptId/receiptNo; printนำreceipt detailที่persistแล้วมาใช้
 
-- [ ] RED: ผู้ป่วยA/Bซื้อคนละบิลและมากกว่าหนึ่งpage; historyAไม่ปนBและมีpagination; paidresponseนำไปreceiptถูกใบ; reload receiptแสดงยอด/วิธีชำระถูก; tax0และnetหลังลดถูก
-- [ ] เพิ่มpatientId filterและbranch policyของhistoryตามสิทธิ์ที่ยืนยัน; ผูกbuttonเปิดreceipt printหลังPOSTสำเร็จ ไม่สร้างreceiptซ้ำเมื่อrefresh; errorไม่เปิดหน้าพิมพ์
-- [ ] แก้คอมเมนต์ ReceiptService จากtaxยังรอยืนยันเป็นtax0ตามR32; ซ่อนAssessmentจากการขายใหม่แต่ไม่ลบประวัติและenumย้อนหลัง
-- [ ] ไม่เปลี่ยนpersistedreceiptNoก่อนP6; displayเลขเอกสารและหน่วยครั้งต้องอิงQ4 ไม่แก้quantitycourseที่ราคาเป็นต่อคอร์สให้กลายเป็นต่อครั้ง
-- [ ] scoped API + browser history/print + frontend build; commit `feat: complete patient receipt history and printing`
+- [x] RED: ผู้ป่วยA/Bซื้อคนละบิลและมากกว่าหนึ่งpage; historyAไม่ปนBและมีpagination; paidresponseนำไปreceiptถูกใบ; reload receiptแสดงยอด/วิธีชำระถูก; tax0และnetหลังลดถูก
+- [x] ใช้patientId filterฝั่งserverที่มีอยู่ร่วมกับreceiptsOnly/pagination; ผูกการเปิดreceiptหลังPOSTสำเร็จ ไม่สร้างreceiptซ้ำเมื่อrefresh; errorไม่เปิดหน้าพิมพ์
+- [ ] Q9: branch policy ของ history ตาม permission matrix ที่ยังไม่ยืนยัน; P5 คง global patient/sales access เดิม
+- [x] แก้คอมเมนต์ ReceiptService จากtaxยังรอยืนยันเป็นtax0ตามR32; ซ่อนAssessmentจากการขายใหม่แต่ไม่ลบประวัติและenumย้อนหลัง โดยเพิ่ม V1001 และ legacy mapping
+- [x] ไม่เปลี่ยนpersistedreceiptNoก่อนP6; displayเลขเอกสารและหน่วยครั้งต้องอิงQ4 ไม่แก้quantitycourseที่ราคาเป็นต่อคอร์สให้กลายเป็นต่อครั้ง
+- [x] scoped API + browser history/print + frontend build; final backend v2 204/204 และ `npm test` 400/400 ผ่าน; commit `feat: complete patient receipt history and printing`
 
 ## P6: HN / Receipt numbering และความเข้ากันได้ของข้อมูล (R14/29, T13–14)
 
