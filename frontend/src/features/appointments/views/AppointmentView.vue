@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   appointmentApi,
+  ApiError,
   branchApi,
+  calendarApi,
   catalogApi,
   patientApi,
   resourceApi,
   type Appointment,
   type AppointmentStatus,
   type Branch,
+  type CalendarStatus,
   type ClinicResource,
   type Patient,
   type ServiceOption,
@@ -24,6 +27,16 @@ const createSource = ref<'standard' | 'calendar'>('standard')
 const appointmentPatientType = ref<'CURRENT' | 'NEW'>('CURRENT')
 const scheduleView = ref<'list' | 'day' | 'week'>('list')
 const calendarSyncOpen = ref(false)
+const googleStatus = ref<CalendarStatus | null>(null)
+const googleMessage = ref('')
+const googleBusy = ref(false)
+const isManagerUser = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+  } catch {
+    return false
+  }
+})()
 const query = ref('')
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
@@ -261,12 +274,18 @@ const calendarTherapists = computed(() =>
     )
     .slice(0, 3),
 )
+// An appointment sits in the last slot that starts at or before it, so one moved to an off-grid time
+// (for example 09:45 from Google Calendar) still shows instead of disappearing.
+const slotFor = (startAt: string) => {
+  const time = formatTime(startAt)
+  return [...timeOptions].reverse().find((slot) => slot <= time) ?? timeOptions[0]
+}
 const calendarAppointment = (therapistId: number, time: string) =>
   appointments.value.find(
     (item) =>
       item.therapist.id === therapistId &&
       item.startAt.slice(0, 10) === calendarDate.value &&
-      formatTime(item.startAt) === time &&
+      slotFor(item.startAt) === time &&
       (selectedBranch.value === 'ทั้งหมด' || item.branchCode === selectedBranch.value),
   )
 const calendarSlotState = (item?: Appointment) => {
@@ -316,8 +335,86 @@ async function load() {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ'
   }
 }
+// Appointments can change outside this page (moved or cancelled in Google Calendar), so refresh the list quietly.
+const refreshIntervalMs = 15000
+let refreshTimer: ReturnType<typeof setInterval> | undefined
+async function refreshAppointments() {
+  if (document.hidden) return
+  try {
+    const a = await appointmentApi.search({ page: page.value, size: 20 })
+    appointments.value = a.items
+    totalPages.value = a.totalPages
+  } catch {
+    // keep what is on screen; the next tick tries again
+  }
+}
+const refreshWhenVisible = () => {
+  if (!document.hidden) void refreshAppointments()
+}
+const googleCalendarUrl = (calendarId: string) =>
+  `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}&ctz=Asia%2FBangkok`
+// The main button opens the calendar of the branch picked in the filter, or all connected branches side by side.
+const googleTargets = computed(() =>
+  (googleStatus.value?.branches ?? []).filter(
+    (branch) =>
+      branch.googleCalendarId &&
+      (selectedBranch.value === 'ทั้งหมด' || branch.branchCode === selectedBranch.value),
+  ),
+)
+const googleOpenUrl = computed(
+  () =>
+    'https://calendar.google.com/calendar/embed?' +
+    googleTargets.value
+      .map((branch) => `src=${encodeURIComponent(branch.googleCalendarId ?? '')}`)
+      .join('&') +
+    '&ctz=Asia%2FBangkok',
+)
+const googleOpenLabel = computed(() =>
+  selectedBranch.value === 'ทั้งหมด' ? 'ทุกสาขา' : (googleTargets.value[0]?.branchName ?? 'ทุกสาขา'),
+)
+async function openGoogleCalendar() {
+  calendarSyncOpen.value = true
+  googleMessage.value = ''
+  if (!isManagerUser) return
+  try {
+    googleStatus.value = await calendarApi.status()
+  } catch (error) {
+    googleMessage.value = error instanceof ApiError ? error.message : 'ตรวจสถานะ Google Calendar ไม่สำเร็จ'
+  }
+}
+async function syncGoogleNow() {
+  googleBusy.value = true
+  googleMessage.value = ''
+  try {
+    const result = await calendarApi.syncNow()
+    googleMessage.value =
+      `ซิงก์แล้ว: ส่งไป Google ${result.pushed}, เลื่อนจาก Google ${result.movedFromGoogle}, ` +
+      `ยกเลิกจาก Google ${result.cancelledFromGoogle}, ล้มเหลว ${result.failed}`
+    googleStatus.value = await calendarApi.status()
+    await refreshAppointments()
+  } catch (error) {
+    googleMessage.value = error instanceof ApiError ? error.message : 'ซิงก์ไม่สำเร็จ'
+  } finally {
+    googleBusy.value = false
+  }
+}
+async function loadGoogleStatus() {
+  if (!isManagerUser) return
+  try {
+    googleStatus.value = await calendarApi.status()
+  } catch {
+    // the main button simply stays hidden when the status cannot be read
+  }
+}
 onMounted(() => {
   void load()
+  void loadGoogleStatus()
+  refreshTimer = setInterval(() => void refreshAppointments(), refreshIntervalMs)
+  document.addEventListener('visibilitychange', refreshWhenVisible)
+})
+onBeforeUnmount(() => {
+  clearInterval(refreshTimer)
+  document.removeEventListener('visibilitychange', refreshWhenVisible)
 })
 async function changePage(nextPage: number) {
   if (nextPage >= 0 && nextPage < totalPages.value) {
@@ -790,8 +887,17 @@ function confirmCancellation() {
                 รายสัปดาห์
               </button>
             </div>
-            <button class="calendar-google" type="button" @click="calendarSyncOpen = true">
-              เชื่อมต่อ Google Calendar
+            <a
+              v-if="isManagerUser && googleStatus?.enabled && googleTargets.length"
+              class="calendar-google"
+              :href="googleOpenUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-cy="google-open-main"
+              >เปิด Google Calendar ({{ googleOpenLabel }})</a
+            >
+            <button class="calendar-google" type="button" @click="openGoogleCalendar">
+              สถานะ Google Calendar
             </button>
           </div>
           <div class="calendar-legend">
@@ -823,7 +929,10 @@ function confirmCancellation() {
                   @click="openCalendarSlot(therapist, time)"
                 >
                   <template v-if="calendarAppointment(therapist.id, time)">
-                    <strong>{{ time }} {{ calendarPatientName(therapist.id, time) }}</strong>
+                    <strong
+                      >{{ formatTime(calendarAppointment(therapist.id, time)!.startAt) }}
+                      {{ calendarPatientName(therapist.id, time) }}</strong
+                    >
                     <small>นก. {{ calendarTherapistName(therapist.id, time) }}</small>
                   </template>
                   <template v-else
@@ -971,15 +1080,48 @@ function confirmCancellation() {
       @click.self="calendarSyncOpen = false"
     >
       <section class="status-modal calendar-sync-modal" role="dialog" aria-modal="true">
-        <h2>เชื่อมต่อ Google Calendar</h2>
-        <div class="calendar-sync-description">
-          <p>เมื่อเชื่อมต่อ ระบบจะแสดงนัดหมายจากสบายกายใน Google Calendar</p>
+        <h2>สถานะ Google Calendar</h2>
+        <div class="calendar-sync-description" data-cy="google-sync-info">
+          <p>ระบบซิงก์นัดหมายกับ Google Calendar 2 ทาง แยก 1 ปฏิทินต่อสาขา เลื่อนหรือยกเลิกนัดใน Google แล้วระบบจะตามให้เอง</p>
+          <p v-if="!isManagerUser">การตั้งค่าและการซิงก์ทันทีทำได้เฉพาะผู้จัดการ</p>
+          <template v-else-if="googleStatus">
+            <p v-if="!googleStatus.enabled">
+              ยังไม่ได้เปิดใช้งานการซิงก์บนเซิร์ฟเวอร์ ให้ผู้ดูแลระบบตั้งค่า APP_CALENDAR_ENABLED ก่อน
+            </p>
+            <ul v-else class="calendar-sync-branches">
+              <li v-for="branch in googleStatus.branches" :key="branch.branchCode">
+                {{ branch.branchName }}:
+                {{ branch.googleCalendarId ? 'เชื่อมต่อแล้ว' : 'ยังไม่ได้ผูกปฏิทิน' }}
+                <template v-if="branch.googleCalendarId">
+                  (รอซิงก์ {{ branch.waiting }}, ล้มเหลว {{ branch.failed }})
+                  <a
+                    :href="googleCalendarUrl(branch.googleCalendarId)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :data-cy="`google-open-${branch.branchCode}`"
+                    >เปิดใน Google Calendar</a
+                  >
+                </template>
+              </li>
+            </ul>
+          </template>
+          <p v-if="googleMessage" data-cy="google-sync-message">{{ googleMessage }}</p>
         </div>
         <div class="calendar-sync-actions">
-          <button type="button" class="secondary" @click="calendarSyncOpen = false">ยกเลิก</button
-          ><button type="button" class="primary" @click="calendarSyncOpen = false">
-            เชื่อมต่อ
-          </button>
+          <button type="button" class="secondary" @click="calendarSyncOpen = false">ปิด</button
+          ><template v-if="isManagerUser"
+            ><router-link class="secondary" to="/staff/calendar" @click="calendarSyncOpen = false"
+              >ตั้งค่าปฏิทิน</router-link
+            ><button
+              type="button"
+              class="primary"
+              data-cy="google-sync-now"
+              :disabled="googleBusy || !googleStatus?.enabled"
+              @click="syncGoogleNow"
+            >
+              {{ googleBusy ? 'กำลังซิงก์...' : 'ซิงก์ทันที' }}
+            </button></template
+          >
         </div>
       </section>
     </div>
