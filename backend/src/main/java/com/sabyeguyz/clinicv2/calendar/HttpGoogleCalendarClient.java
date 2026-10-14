@@ -22,7 +22,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Google Calendar REST API over plain HTTP, authorised by a refresh token (OAuth of the clinic's own Gmail
+ * Google Calendar REST API over plain HTTP, authorised by a service account key file (recommended) or by a refresh token (OAuth of the clinic's own Gmail
  * account). Only created when {@code app.calendar.enabled=true}.
  */
 @Component
@@ -35,6 +35,7 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private String accessToken;
     private Instant accessTokenExpiresAt = Instant.EPOCH;
+    private ServiceAccountCredentials serviceAccount;
 
     public HttpGoogleCalendarClient(CalendarProperties properties, ObjectMapper json) {
         this.properties = properties;
@@ -137,9 +138,21 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
 
     private synchronized String token() throws IOException, InterruptedException {
         if (accessToken != null && Instant.now().isBefore(accessTokenExpiresAt.minusSeconds(60))) return accessToken;
-        String form = "client_id=" + encode(properties.getClientId()) + "&client_secret=" + encode(properties.getClientSecret())
-                + "&refresh_token=" + encode(properties.getRefreshToken()) + "&grant_type=refresh_token";
-        HttpRequest request = HttpRequest.newBuilder(URI.create(properties.getTokenUrl())).timeout(Duration.ofSeconds(20))
+        String form;
+        String tokenUrl = properties.getTokenUrl();
+        if (!properties.getServiceAccountKeyFile().isBlank()) {
+            // Service account: sign a JWT with the key from the JSON file (no consent screen, nothing that expires).
+            if (serviceAccount == null) {
+                serviceAccount = ServiceAccountCredentials.load(java.nio.file.Path.of(properties.getServiceAccountKeyFile()), json);
+            }
+            tokenUrl = serviceAccount.tokenUri();
+            form = "grant_type=" + encode("urn:ietf:params:oauth:grant-type:jwt-bearer")
+                    + "&assertion=" + encode(serviceAccount.assertion("https://www.googleapis.com/auth/calendar", Instant.now()));
+        } else {
+            form = "client_id=" + encode(properties.getClientId()) + "&client_secret=" + encode(properties.getClientSecret())
+                    + "&refresh_token=" + encode(properties.getRefreshToken()) + "&grant_type=refresh_token";
+        }
+        HttpRequest request = HttpRequest.newBuilder(URI.create(tokenUrl)).timeout(Duration.ofSeconds(20))
                 .header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build();
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() / 100 != 2) {
