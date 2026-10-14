@@ -34,8 +34,8 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     List<Course> findBySellerStaffIdAndSaleMonth(Long sellerStaffId, String saleMonth);
 
     /** Sales credited to a staff member in a sale_month (yyyy-mm), for Commission Tier lookup. */
-    @Query("select coalesce(sum(s.creditedSalesAmount), 0) from CourseSaleStaffShare s "
-            + "where s.staff.id = :staffId and s.course.saleMonth = :saleMonth")
+    @Query("select coalesce(sum(c.coursePrice), 0) from Course c "
+            + "where c.sellerStaff.id = :staffId and c.saleMonth = :saleMonth")
     BigDecimal sumCreditedSalesByStaffAndSaleMonth(@Param("staffId") Long staffId,
                                                     @Param("saleMonth") String saleMonth);
 
@@ -47,6 +47,6 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("select c from Course c where cast(c.receipt.saleDate as date) between :from and :to")
     List<Course> findByReceiptSaleDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
-    @Query("select distinct s.staff.id from CourseSaleStaffShare s where s.course.saleMonth = :saleMonth")
+    @Query("select distinct c.sellerStaff.id from Course c where c.saleMonth = :saleMonth")
     List<Long> findDistinctCreditedStaffIdsBySaleMonth(@Param("saleMonth") String saleMonth);
 }

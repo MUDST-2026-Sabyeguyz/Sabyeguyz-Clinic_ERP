@@ -65,7 +65,7 @@ describe('Clinic v2 commission and sale services', () => {
     'schemecrud-update-keeps-tiers': 'updateOnlyTouchesNameAndDatesNeverTiers',
   }
   const cases = [
-    ['override-applies', { oldRate: 0.07, newRate: 0.10, rate: 0.10, pool: 1000, outstanding: 790 }],
+    ['override-applies', { oldRate: 0.07, newRate: 0.10, rate: 0.10, pool: 1000, outstanding: 1000 }],
     ['scheme-covers', { sameV1: true, sameV2: false }],
     ['scheme-newest', { sameV1: false, sameV2: true }],
     ['tier-example', 0.07],

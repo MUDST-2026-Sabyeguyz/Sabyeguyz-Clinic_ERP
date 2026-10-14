@@ -38,15 +38,20 @@ describe('v2 courses', () => {
     })
   })
 
-  it('credits a course sale to two PTs when shares add up to 100%', function () {
+  it('no longer splits a course sale between two PTs: the seller is the single Owner', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient, {
         shares: [
           { staffId: this.fixtures.managerStaffId, percent: 60 },
           { staffId: this.fixtures.therapistId, percent: 40 },
         ],
-        caseOwnerStaffId: this.fixtures.therapistId,
-      }).then(({ status, body }) => {
+      }).its('status').should('equal', 400)
+    })
+  })
+
+  it('records the sale for the PT named in caseOwnerStaffId, who becomes the Owner', function () {
+    cy.registerPatient().then((patient) => {
+      buy(this.fixtures, patient, { caseOwnerStaffId: this.fixtures.therapistId }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.price)).to.equal(9000)
       })
