@@ -6,13 +6,16 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   appointmentApi,
+  ApiError,
   branchApi,
+  calendarApi,
   catalogApi,
   patientApi,
   resourceApi,
   type Appointment,
   type AppointmentStatus,
   type Branch,
+  type CalendarStatus,
   type ClinicResource,
   type Patient,
   type ServiceOption,
@@ -24,6 +27,16 @@ const createSource = ref<'standard' | 'calendar'>('standard')
 const appointmentPatientType = ref<'CURRENT' | 'NEW'>('CURRENT')
 const scheduleView = ref<'list' | 'day' | 'week'>('list')
 const calendarSyncOpen = ref(false)
+const googleStatus = ref<CalendarStatus | null>(null)
+const googleMessage = ref('')
+const googleBusy = ref(false)
+const isManagerUser = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+  } catch {
+    return false
+  }
+})()
 const query = ref('')
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
@@ -337,6 +350,33 @@ async function refreshAppointments() {
 }
 const refreshWhenVisible = () => {
   if (!document.hidden) void refreshAppointments()
+}
+async function openGoogleCalendar() {
+  calendarSyncOpen.value = true
+  googleMessage.value = ''
+  googleStatus.value = null
+  if (!isManagerUser) return
+  try {
+    googleStatus.value = await calendarApi.status()
+  } catch (error) {
+    googleMessage.value = error instanceof ApiError ? error.message : 'ตรวจสถานะ Google Calendar ไม่สำเร็จ'
+  }
+}
+async function syncGoogleNow() {
+  googleBusy.value = true
+  googleMessage.value = ''
+  try {
+    const result = await calendarApi.syncNow()
+    googleMessage.value =
+      `ซิงก์แล้ว: ส่งไป Google ${result.pushed}, เลื่อนจาก Google ${result.movedFromGoogle}, ` +
+      `ยกเลิกจาก Google ${result.cancelledFromGoogle}, ล้มเหลว ${result.failed}`
+    googleStatus.value = await calendarApi.status()
+    await refreshAppointments()
+  } catch (error) {
+    googleMessage.value = error instanceof ApiError ? error.message : 'ซิงก์ไม่สำเร็จ'
+  } finally {
+    googleBusy.value = false
+  }
 }
 onMounted(() => {
   void load()
@@ -818,7 +858,7 @@ function confirmCancellation() {
                 รายสัปดาห์
               </button>
             </div>
-            <button class="calendar-google" type="button" @click="calendarSyncOpen = true">
+            <button class="calendar-google" type="button" @click="openGoogleCalendar">
               เชื่อมต่อ Google Calendar
             </button>
           </div>
@@ -1003,14 +1043,40 @@ function confirmCancellation() {
     >
       <section class="status-modal calendar-sync-modal" role="dialog" aria-modal="true">
         <h2>เชื่อมต่อ Google Calendar</h2>
-        <div class="calendar-sync-description">
-          <p>เมื่อเชื่อมต่อ ระบบจะแสดงนัดหมายจากสบายกายใน Google Calendar</p>
+        <div class="calendar-sync-description" data-cy="google-sync-info">
+          <p>ระบบซิงก์นัดหมายกับ Google Calendar 2 ทาง แยก 1 ปฏิทินต่อสาขา เลื่อนหรือยกเลิกนัดใน Google แล้วระบบจะตามให้เอง</p>
+          <p v-if="!isManagerUser">การตั้งค่าและการซิงก์ทันทีทำได้เฉพาะผู้จัดการ</p>
+          <template v-else-if="googleStatus">
+            <p v-if="!googleStatus.enabled">
+              ยังไม่ได้เปิดใช้งานการซิงก์บนเซิร์ฟเวอร์ ให้ผู้ดูแลระบบตั้งค่า APP_CALENDAR_ENABLED ก่อน
+            </p>
+            <ul v-else class="calendar-sync-branches">
+              <li v-for="branch in googleStatus.branches" :key="branch.branchCode">
+                {{ branch.branchName }}:
+                {{ branch.googleCalendarId ? 'เชื่อมต่อแล้ว' : 'ยังไม่ได้ผูกปฏิทิน' }}
+                <template v-if="branch.googleCalendarId">
+                  (รอซิงก์ {{ branch.waiting }}, ล้มเหลว {{ branch.failed }})
+                </template>
+              </li>
+            </ul>
+          </template>
+          <p v-if="googleMessage" data-cy="google-sync-message">{{ googleMessage }}</p>
         </div>
         <div class="calendar-sync-actions">
-          <button type="button" class="secondary" @click="calendarSyncOpen = false">ยกเลิก</button
-          ><button type="button" class="primary" @click="calendarSyncOpen = false">
-            เชื่อมต่อ
-          </button>
+          <button type="button" class="secondary" @click="calendarSyncOpen = false">ปิด</button
+          ><template v-if="isManagerUser"
+            ><router-link class="secondary" to="/staff/calendar" @click="calendarSyncOpen = false"
+              >ตั้งค่าปฏิทิน</router-link
+            ><button
+              type="button"
+              class="primary"
+              data-cy="google-sync-now"
+              :disabled="googleBusy || !googleStatus?.enabled"
+              @click="syncGoogleNow"
+            >
+              {{ googleBusy ? 'กำลังซิงก์...' : 'ซิงก์ทันที' }}
+            </button></template
+          >
         </div>
       </section>
     </div>
