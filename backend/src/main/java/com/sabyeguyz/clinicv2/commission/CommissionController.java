@@ -5,8 +5,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
-import com.sabyeguyz.clinicv2.course.CourseSaleStaffShare;
-import com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.role.PermissionRepository;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -43,7 +41,6 @@ public class CommissionController {
     private final CommissionAllocationLedgerRepository allocationLedger;
     private final TreatmentFeeRuleRepository treatmentFeeRules;
     private final CourseRepository courses;
-    private final CourseSaleStaffShareRepository saleShares;
     private final StaffRepository staff;
     private final PermissionRepository permissions;
     private final CurrentActor actor;
@@ -56,7 +53,6 @@ public class CommissionController {
                                  MonthlyCommissionClosingRepository closings,
                                  CommissionAllocationLedgerRepository allocationLedger,
                                  TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
-                                 CourseSaleStaffShareRepository saleShares,
                                  StaffRepository staff, PermissionRepository permissions, CurrentActor actor,
                                  CommissionRateOverrideService overrideService,
                                  com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
@@ -69,7 +65,6 @@ public class CommissionController {
         this.allocationLedger = allocationLedger;
         this.treatmentFeeRules = treatmentFeeRules;
         this.courses = courses;
-        this.saleShares = saleShares;
         this.staff = staff;
         this.permissions = permissions;
         this.actor = actor;
@@ -136,17 +131,16 @@ public class CommissionController {
     @GetMapping("/report")
     public List<ReportRow> report(@RequestParam LocalDate from, @RequestParam LocalDate to) {
         if (to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
-        Map<Long, List<CourseSaleStaffShare>> byStaff = new LinkedHashMap<>();
+        // A course sale is credited entirely to its seller (the Owner PT).
+        Map<Long, List<Course>> bySeller = new LinkedHashMap<>();
         for (Course course : courses.findByReceiptSaleDateBetween(from, to)) {
-            for (CourseSaleStaffShare share : saleShares.findByCourseId(course.getId())) {
-                byStaff.computeIfAbsent(share.getStaff().getId(), k -> new ArrayList<>()).add(share);
-            }
+            bySeller.computeIfAbsent(course.getSellerStaff().getId(), k -> new ArrayList<>()).add(course);
         }
         List<ReportRow> rows = new ArrayList<>();
-        for (List<CourseSaleStaffShare> group : byStaff.values()) {
-            Course first = group.get(0).getCourse();
-            Staff seller = group.get(0).getStaff();
-            BigDecimal base = group.stream().map(CourseSaleStaffShare::getCreditedSalesAmount)
+        for (List<Course> group : bySeller.values()) {
+            Course first = group.get(0);
+            Staff seller = first.getSellerStaff();
+            BigDecimal base = group.stream().map(Course::getCoursePrice)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             CommissionScheme scheme = first.getCommissionScheme();
             CommissionTier tier = tierResolver.resolve(scheme, base);
@@ -164,7 +158,7 @@ public class CommissionController {
             Course course = row.getCourse();
             var patient = row.getPatient();
             Staff treating = row.getTreatingStaff();
-            Staff owner = row.getCaseOwnerStaff();
+            Staff owner = row.getOwnerStaff();
             return new TreatmentReportRow(row.getId(), row.getVisitDate(), course.getId(), course.getCourseNo(),
                     patient.getId(), patient.getPatientHn(), patient.getPatientFname() + " " + patient.getPatientLname(),
                     course.getReceipt().getBranch().getBranchCode(), course.getReceipt().getBranch().getBranchName(),
@@ -172,7 +166,8 @@ public class CommissionController {
                     treating == null ? "ไม่ระบุ" : treating.getStaffFname() + " " + treating.getStaffLname(),
                     owner == null ? null : owner.getId(),
                     owner == null ? "ไม่ระบุ" : owner.getStaffFname() + " " + owner.getStaffLname(),
-                    row.getGrossCommissionAllocation(), row.getTreatmentFeeAmount(), row.getOwnerNetCommission());
+                    row.getOwnerNetCommission().add(row.getTreatmentFeeAmount()), row.getTreatmentFeeAmount(),
+                    row.getOwnerNetCommission());
         }).toList();
     }
 
@@ -188,7 +183,7 @@ public class CommissionController {
                 c.getClosingMonth(), c.getStaff().getId(), c.getStaff().getStaffFname() + " " + c.getStaff().getStaffLname(),
                 c.getMonthlyCourseSales(), String.valueOf(c.getCommissionSchemeVersion()),
                 c.getLockedCommissionRate() != null ? c.getLockedCommissionRate() : c.getCalculatedCommissionRate(),
-                c.isClosingStatus() ? "CLOSED" : "OPEN")).toList());
+                c.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT))).toList());
         if (saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])")) {
             java.util.Set<Long> listed = new java.util.HashSet<>();
             rows.forEach(r -> listed.add(r.employeeId()));
@@ -218,7 +213,7 @@ public class CommissionController {
         for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonth(saleMonth)) {
             Staff seller = staff.findById(sellerId).orElseThrow();
             boolean alreadyClosed = closings.findByClosingMonthAndStaffId(saleMonth, sellerId)
-                    .map(MonthlyCommissionClosing::isClosingStatus).orElse(false);
+                    .map(MonthlyCommissionClosing::isClosed).orElse(false);
             if (!alreadyClosed) {
                 closingService.closeMonth(saleMonth, seller, permission, actor.currentId());
             }
@@ -246,9 +241,8 @@ public class CommissionController {
     @GetMapping("/treatment-fees")
     public List<TreatmentFeeResponse> treatmentFees() {
         return treatmentFeeRules.findAll().stream()
-                .map(r -> new TreatmentFeeResponse(r.getId(), r.getStaff() == null ? null : r.getStaff().getId(),
-                        r.getFeeType().name(), r.getFeeValue(),
-                        r.getPercentageBase() == null ? null : r.getPercentageBase().name()))
+                // staffId / percentageBase stay in the response for the screens but are always null: one clinic-wide rule
+                .map(r -> new TreatmentFeeResponse(r.getId(), null, r.getFeeType().name(), r.getFeeValue(), null))
                 .toList();
     }
 

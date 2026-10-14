@@ -8,8 +8,6 @@ import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedger;
 import com.sabyeguyz.clinicv2.course.CourseLedgerRepository;
-import com.sabyeguyz.clinicv2.course.CourseSaleStaffShare;
-import com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository;
 import com.sabyeguyz.clinicv2.course.CourseSharedMember;
 import com.sabyeguyz.clinicv2.course.CourseSharedMemberRepository;
 import com.sabyeguyz.clinicv2.enums.CommissionStatus;
@@ -51,33 +49,30 @@ public class CourseService {
 
     private final CourseRepository courses;
     private final CourseLedgerRepository ledger;
-    private final CourseSaleStaffShareRepository saleShares;
     private final CourseSharedMemberRepository sharedMembers;
     private final CourseEntitlementRepository entitlements;
     private final CommissionSchemeResolver schemeResolver;
     private final CommissionTierResolver tierResolver;
 
     public CourseService(CourseRepository courses, CourseLedgerRepository ledger,
-                          CourseSaleStaffShareRepository saleShares, CourseSharedMemberRepository sharedMembers,
+                          CourseSharedMemberRepository sharedMembers,
                           CourseEntitlementRepository entitlements, CommissionSchemeResolver schemeResolver,
                           CommissionTierResolver tierResolver) {
         this.courses = courses;
         this.ledger = ledger;
-        this.saleShares = saleShares;
         this.sharedMembers = sharedMembers;
         this.entitlements = entitlements;
         this.schemeResolver = schemeResolver;
         this.tierResolver = tierResolver;
     }
 
-    /** One staff member's percentage of a course sale's credit (percents of a sale must total 100). */
-    public record SaleShare(Staff staff, BigDecimal percent) {}
-
-    /** The course price is the sale line's amount (Course.course_price must equal the sale line). */
+    /**
+     * The course price is the sale line's commissionable amount (Course.course_price must equal the sale line). The
+     * seller is the Owner PT and gets the whole sale credit (Course.seller_staff_id is the single field for both).
+     */
     @Transactional
     public Course sell(Receipt receipt, SalesTransaction transaction, Service serviceTemplate, Staff sellerStaff,
-                        Staff caseOwnerStaff, Integer totalVisitsOverride, Integer bonusVisitsOverride,
-                        List<SaleShare> shares, LocalDate saleDate, Long actorId) {
+                        Integer totalVisitsOverride, Integer bonusVisitsOverride, LocalDate saleDate, Long actorId) {
         require(receipt != null, "ต้องระบุใบเสร็จ");
         require(transaction != null, "ต้องระบุรายการขาย");
         require(serviceTemplate != null, "ต้องระบุบริการ/คอร์สต้นแบบ");
@@ -99,7 +94,6 @@ public class CourseService {
         require(totalVisits != null && totalVisits >= 1, "ต้องระบุจำนวนครั้งของคอร์ส");
         require(price != null && price.signum() >= 0, "ราคาคอร์สต้องไม่ติดลบ");
 
-        Staff owner = caseOwnerStaff != null ? caseOwnerStaff : sellerStaff;
         String saleMonth = effectiveSaleDate.format(SALE_MONTH);
 
         long existingOnReceipt = courses.countByReceiptId(receipt.getId());
@@ -108,17 +102,8 @@ public class CourseService {
                 : "%s-%02d".formatted(receipt.getReceiptNo(), courseSequence);
 
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveSaleDate);
-        List<SaleShare> effectiveShares = shares == null || shares.isEmpty()
-                ? List.of(new SaleShare(sellerStaff, HUNDRED)) : shares;
-        List<BigDecimal> credits = creditedAmounts(effectiveShares, price);
-        BigDecimal sellerCredit = BigDecimal.ZERO;
-        for (int i = 0; i < effectiveShares.size(); i++) {
-            if (samePerson(effectiveShares.get(i).staff(), sellerStaff)) {
-                sellerCredit = credits.get(i);
-            }
-        }
         BigDecimal monthlySalesToDate = courses.sumCreditedSalesByStaffAndSaleMonth(sellerStaff.getId(), saleMonth)
-                .add(sellerCredit);
+                .add(price);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySalesToDate);
 
         int totalUsableVisits = totalVisits + (bonusVisits == null ? 0 : bonusVisits);
@@ -143,24 +128,19 @@ public class CourseService {
         course.setSaleTransaction(transaction);
         course.setSaleMonth(saleMonth);
         course.setSellerStaff(sellerStaff);
-        course.setCaseOwnerStaff(owner);
         course.setCommissionStatus(CommissionStatus.Provisional);
         course.setCommissionScheme(scheme);
         course.setCommissionSchemeVersion(scheme.getSchemeVersion());
         course.setProvisionalCommissionRate(tier.getCommissionRate());
         course.setVisitsUsed(0);
         course.setRemainingVisits(totalUsableVisits);
-        course.setGrossCommissionAllocatedTotal(BigDecimal.ZERO);
         course.setOwnerNetCommissionReleasedTotal(BigDecimal.ZERO);
         course.setSubstituteTreatmentFeeTotal(BigDecimal.ZERO);
-        course.setCommissionOutstanding(BigDecimal.ZERO);
+        // The commission rate of the sale month is not known until the month is closed: no outstanding amount yet.
+        course.setCommissionOutstanding(null);
+        course.setTreatmentFeeBaseAmount(transaction.getAmount().subtract(transaction.getAllocatedBillDiscountAmount()));
         Course saved = courses.save(course);
 
-        for (int i = 0; i < effectiveShares.size(); i++) {
-            SaleShare share = effectiveShares.get(i);
-            saleShares.save(new CourseSaleStaffShare(saved, share.staff(), share.percent().setScale(2, RoundingMode.HALF_UP),
-                    credits.get(i), actorId));
-        }
         sharedMembers.save(new CourseSharedMember(saved, purchaser, CourseMemberRole.Owner));
         entitlements.save(new CourseEntitlement(saved, purchaser, totalUsableVisits));
 
@@ -179,35 +159,6 @@ public class CourseService {
     }
 
     private static boolean samePatient(Patient a, Patient b) {
-        return a == b || (a != null && b != null && a.getId() != null && a.getId().equals(b.getId()));
-    }
-
-    /** Percents must be positive, distinct per staff and total 100; credits total the price, the last taking the remainder. */
-    private static List<BigDecimal> creditedAmounts(List<SaleShare> shares, BigDecimal price) {
-        Set<Object> seen = new HashSet<>();
-        BigDecimal totalPercent = BigDecimal.ZERO;
-        for (SaleShare share : shares) {
-            require(share.staff() != null, "ต้องระบุพนักงานที่ได้รับเครดิตยอดขาย");
-            require(share.percent() != null && share.percent().signum() > 0 && share.percent().compareTo(HUNDRED) <= 0,
-                    "สัดส่วนยอดขายต้องมากกว่า 0 และไม่เกิน 100");
-            Object key = share.staff().getId() != null ? share.staff().getId() : share.staff();
-            require(seen.add(key), "พนักงานคนเดียวกันซ้ำในสัดส่วนยอดขาย");
-            totalPercent = totalPercent.add(share.percent());
-        }
-        require(totalPercent.compareTo(HUNDRED) == 0, "สัดส่วนยอดขายรวมกันต้องเท่ากับ 100");
-
-        List<BigDecimal> credits = new ArrayList<>();
-        BigDecimal remaining = price;
-        for (int i = 0; i < shares.size(); i++) {
-            BigDecimal credit = i == shares.size() - 1 ? remaining
-                    : price.multiply(shares.get(i).percent()).divide(HUNDRED, 2, RoundingMode.HALF_UP);
-            credits.add(credit);
-            remaining = remaining.subtract(credit);
-        }
-        return credits;
-    }
-
-    private static boolean samePerson(Staff a, Staff b) {
         return a == b || (a != null && b != null && a.getId() != null && a.getId().equals(b.getId()));
     }
 

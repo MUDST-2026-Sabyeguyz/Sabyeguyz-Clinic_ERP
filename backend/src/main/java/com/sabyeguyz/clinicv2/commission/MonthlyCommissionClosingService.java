@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.commission;
 
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.enums.ClosingStatus;
 import com.sabyeguyz.clinicv2.enums.CommissionStatus;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -45,7 +46,7 @@ public class MonthlyCommissionClosingService {
         require(saleMonth != null && saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])"), "closingMonth ต้องเป็นรูปแบบ yyyy-mm");
         require(staff != null, "ต้องระบุพนักงาน");
         if (closings.findByClosingMonthAndStaffId(saleMonth, staff.getId())
-                .filter(MonthlyCommissionClosing::isClosingStatus).isPresent()) {
+                .filter(MonthlyCommissionClosing::isClosed).isPresent()) {
             throw new IllegalStateException("ปิดยอดเดือนนี้ของพนักงานคนนี้ไปแล้ว");
         }
 
@@ -63,7 +64,7 @@ public class MonthlyCommissionClosingService {
         closing.setCommissionSchemeVersion(scheme.getSchemeVersion());
         closing.setCalculatedCommissionRate(tier.getCommissionRate());
         closing.setLockedCommissionRate(tier.getCommissionRate());
-        closing.setClosingStatus(true);
+        closing.setClosingStatus(ClosingStatus.Closed);
         closing.setClosedAt(Instant.now());
         closing.setClosedBy(actorId);
         MonthlyCommissionClosing saved = closings.save(closing);
@@ -86,7 +87,7 @@ public class MonthlyCommissionClosingService {
         course.setTotalCourseCommissionPool(pool);
         course.setCommissionAllocationPerVisit(perVisit);
         course.setCommissionGeneratedDate(LocalDate.now());
-        course.setCommissionOutstanding(pool.subtract(course.getGrossCommissionAllocatedTotal()));
+        course.refreshCommissionOutstanding();
         courses.save(course);
     }
 
