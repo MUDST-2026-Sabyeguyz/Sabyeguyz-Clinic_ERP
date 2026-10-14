@@ -89,6 +89,9 @@ export type Patient = {
   branchName?: string
 }
 export type PatientProfile = Patient & {
+  firstName?: string
+  lastName?: string
+  middleName?: string | null
   branch: { id: number; code: string; name: string; active: boolean }
   title: string
   birthDate: string
@@ -112,6 +115,9 @@ export type PatientProfile = Patient & {
   insuranceCompany?: string
 }
 export type PatientUpdatePayload = {
+  firstName?: string
+  lastName?: string
+  middleName?: string | null
   title: string
   fullName: string
   birthDate: string
@@ -324,6 +330,10 @@ export const authApi = {
 }
 
 export const patientApi = {
+  identityLookup: (nationalId: string) =>
+    api.get<{ exists: boolean; patient: Pick<Patient, 'id' | 'hn' | 'fullName'> | null }>(
+      `/api/patients/identity-lookup?${new URLSearchParams({ nationalId })}`,
+    ),
   search: (query = '', page = 0, size = 20, branchCode = '', sort = 'nameAsc') =>
     api.get<Page<Patient>>(
       `/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), sort, ...(branchCode ? { branchCode } : {}) })}`,

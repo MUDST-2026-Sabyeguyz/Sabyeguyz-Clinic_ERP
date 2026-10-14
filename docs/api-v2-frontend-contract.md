@@ -75,11 +75,25 @@ Open Question Q9 ยังไม่ปิด: ระบบปัจจุบั�
 
 ข้อจำกัดของการตรวจ DB roles ในรอบนี้: ใช้กับ appointment endpoints เท่านั้น ส่วน management endpoints เดิม เช่น `/api/users` ยังใช้ JWT role claims; จึงยังไม่ใช่การเพิกถอนสิทธิ์ Manager/token แบบครอบคลุมทั้งระบบ
 
-## 5. Audit log
+## 5. P2 patient contract (14 ตุลาคม 2026)
+
+- Register/update รับ `firstName`, `lastName`, `middleName: string|null`; profile เพิ่มทั้งสาม field เพื่อให้แก้ชื่อหลายคำโดยไม่ split จาก display name; `fullName` ใน patient summary/profile รวมชื่อกลางที่มีอยู่โดยไม่รวมไว้ใน firstName
+- `middleName` ใช้คอลัมน์ `patient_middle_name` เดิม, สูงสุด 100 ตัวอักษร, trim และ blank→null; update ไม่ส่ง field นี้คงค่าเดิม ส่ง null/blank เพื่อล้าง; ชนิดอื่นที่ไม่ใช่ string/null ได้ 400
+- Client เก่าที่ส่งเฉพาะ fullName ยังใช้ได้เมื่อไม่มีชื่อกลาง; การบันทึก fullName เดิมที่มีชื่อกลางไม่ split ซ้ำ เมื่อแก้ชื่อที่กำกวมหรือเพิ่มชื่อกลางให้ส่ง firstName/lastName แยก มิฉะนั้นได้ 400 เพื่อไม่เดาองค์ประกอบชื่อ
+- คำนำหน้า 5 canonical values: นาย, นางสาว, นาง, เด็กชาย, เด็กหญิง; รับ English aliases Mr./Miss/Mrs./Boy/Girl และบันทึก canonical ไทยสำหรับ create/update ใหม่ ไม่ backfill ข้อมูลเก่า
+- UI แสดง labels ไทย/อังกฤษและเพศ ชาย/หญิง/ไม่ระบุ; ส่ง Male/Female/NotSpecified และยังรับคำไทย; title กับ gender เลือกแยกกันโดยไม่เขียนทับกันอัตโนมัติ; Other เดิมยังอ่าน/รับได้เพื่อ compatibility
+- Thai/Foreigner ส่งใน customerType โดยแยกจาก customer group; address ไม่บังคับทั้ง API/UI; foreigner ไม่บังคับ phone/birthDate/passport ตามเดิม ส่วนกฎ phone คนไทยยังคงไว้ระหว่างรอ Q1
+- `GET /api/patients/identity-lookup?nationalId=<13 ASCII digits>` ต้อง login (และ active user); equality กับ national_id เท่านั้น ข้ามสาขาได้ตาม global patient directory ไม่ค้น passport/phone/ชื่อ ไม่ใช้ partial/fuzzy match
+- พบ: `{exists:true, patient:{id,hn,fullName}}`; ไม่พบ: `{exists:false,patient:null}`; malformed/partial ได้ 400, unauthenticated ได้ 401; ไม่ส่ง nationalId/address/phone/birthDate กลับจาก endpoint นี้
+- `patientApi.identityLookup` เป็น browser adapter ที่ UI ตรวจเลขบัตรใช้ร่วมได้กับ reader integration ภายนอก; ยังไม่ได้เชื่อมเครื่องอ่านบัตรจริงหรือสร้าง hardware daemon
+- คง logic name warning เดิมขณะ Q2 ยังเปิด แต่เปลี่ยน identity check จาก broad patient search เป็น exact endpoint; ไม่อ้างว่าการเตือนชื่อซ้ำครอบคลุมเพราะ repository เดิมค้น first/last แยก ไม่ได้ค้น display name ทั้งก้อน
+- Allergy/consent/emergency (T27/Q10) ยังไม่ implement/backfill; placeholder fields เดิมใน profile ไม่ใช่หลักฐานว่าข้อมูลเหล่านี้ถูกบันทึกแล้ว
+
+## 6. Audit log
 
 `GET /api/audit-logs` บันทึกเมื่อ: ขาย, ยกเลิกบิล, ขอ/จบ/ล้มเหลวการคืนเงิน, ซื้อ/ยกเลิกคอร์ส, โอน/ย้อนการโอนคอร์ส,
 สร้าง/แก้/ปิด/เปิดผู้ใช้ (ตาราง, id, ผู้ทำ, เวลา, ค่าเดิม/ใหม่)
 
-## 6. สิ่งที่ยังไม่ได้ตัดสินใจ (รอ manager)
+## 7. สิ่งที่ยังไม่ได้ตัดสินใจ (รอ manager)
 
 ข้อมูลเก่าเก็บหรือทิ้ง, คอมมิชชันโบนัส, คอร์สหมดอายุ, กฎสัดส่วน PT 2 คน, ภาษี, ขอบเขต Google Calendar, สถานะนัดเริ่มต้น
