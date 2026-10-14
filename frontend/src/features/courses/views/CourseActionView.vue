@@ -663,7 +663,7 @@ function closePrintSuccess() {
         <h1>ใช้สิทธิ์คอร์ส</h1>
         <section class="course-use-patient">
           <strong>{{ owner?.fullName }}</strong
-          ><span>HN {{ owner?.hn }} · สาขาราชพฤกษ์</span>
+          ><span>HN {{ owner?.hn }} · {{ branchLabel(owner) }}</span>
         </section>
         <section v-if="!patientCourses.length" class="course-use-empty">
           <h2>ยังไม่มีคอร์สที่ใช้สิทธิ์ได้</h2>
