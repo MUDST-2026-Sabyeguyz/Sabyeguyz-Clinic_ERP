@@ -13,6 +13,7 @@ import {
   type Branch,
   type Patient,
   type Staff,
+  type TransferRecord,
 } from '@/api/client'
 
 type CourseAction = 'manage' | 'transfer' | 'history' | 'use'
@@ -44,6 +45,7 @@ type CourseMovement = {
 const owner = ref<Patient | null>(null)
 const owners = ref<Patient[]>([])
 const patientCourses = ref<UiCourse[]>([])
+const courseTransfers = ref<TransferRecord[]>([])
 const recipientResults = ref<Patient[]>([])
 const therapists = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
@@ -107,6 +109,10 @@ const inactiveCourses = computed(() =>
     (course) => course.status === 'ACTIVE' && (course.expired || course.used >= course.purchased),
   ),
 )
+const managerCourseTab = ref<'active' | 'inactive'>('active')
+const managerCourses = computed(() =>
+  managerCourseTab.value === 'active' ? activeCourses.value : inactiveCourses.value,
+)
 const historyFromInactive = ref(false)
 function branchLabel(patient: Patient | null) {
   const name = patient?.branchName || patient?.branchCode
@@ -118,6 +124,30 @@ function courseUsagePercent(course: UiCourse) {
     100,
     Math.max(0, Math.round(((course.total - course.balance) / course.total) * 100)),
   )
+}
+function incomingTransfer(course: UiCourse) {
+  return courseTransfers.value.find(
+    (transfer) =>
+      transfer.destinationPatientId === owner.value?.id && transfer.courseId === course.course.id,
+  )
+}
+function courseBranchLabel(course: UiCourse) {
+  const branch = branches.value.find((item) => item.code === course.branchCode)
+  return branch?.name || course.branchCode
+}
+function fullThaiDate(value: string) {
+  return new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(value))
+}
+function daysUntilExpiry(course: UiCourse) {
+  const milliseconds = new Date(course.expiresAt).getTime() - Date.now()
+  return Math.max(0, Math.ceil(milliseconds / 86_400_000))
+}
+function courseDisplayName(course: UiCourse) {
+  return course.name.replace(/\s*(?:\(คอร์ส\s*)?\d+\s*ครั้ง\)?$/u, '').trim()
 }
 async function loadOwner() {
   const [patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
@@ -141,6 +171,11 @@ async function loadCourses(patientId: number) {
     balance: course.remaining,
     total: course.purchased,
   }))
+  try {
+    courseTransfers.value = await courseApi.transferHistory(patientId)
+  } catch {
+    courseTransfers.value = []
+  }
   const requestedCourseId = Number(route.query.courseId)
   const requestedCourse = patientCourses.value.find((course) => course.id === requestedCourseId)
   selectedCourseId.value = requestedCourse?.id ?? patientCourses.value[0]?.id ?? 0
@@ -289,22 +324,10 @@ async function start(nextAction: CourseAction, course: UiCourse) {
     }
   }
 }
-async function openInactiveHistory() {
-  historyFromInactive.value = true
-  const course = inactiveCourses.value[0]
+async function openCourseUsageHistory() {
+  const course = activeCourses.value[0] ?? inactiveCourses.value[0]
   if (course) {
     await start('history', course)
-    historyFromInactive.value = true
-    await router.replace({
-      path: '/staff/courses',
-      query: {
-        patientId: owner.value?.id,
-        view: 'after-transfer',
-        action: 'inactive-history',
-        courseId: course.id,
-        balance: course.balance,
-      },
-    })
   } else {
     action.value = 'history'
     selectedCourse.value = {} as UiCourse
@@ -1057,7 +1080,10 @@ function closePrintSuccess() {
             <p>ที่อยู่: {{ documentClinicAddress }}</p>
             <p>โทรศัพท์: {{ documentClinicPhone }}</p>
           </header>
-          <p class="course-cut-issued">ออก ณ วันที่ : 29/06/2569</p>
+          <div class="course-cut-meta">
+            <strong>เจ้าของคอร์ส: {{ owner?.fullName }} HN {{ owner?.hn }}</strong>
+            <span>ออก ณ วันที่ : {{ new Date().toLocaleDateString('th-TH') }}</span>
+          </div>
           <section class="course-cut-summary">
             <p>
               วันที่ซื้อคอร์ส {{ new Date(selectedCourse.purchasedAt).toLocaleDateString('th-TH') }}
@@ -1065,17 +1091,22 @@ function closePrintSuccess() {
             <p>จำนวน: {{ selectedCourse.total }} ครั้ง</p>
             <p>ใช้ไปแล้ว: {{ usedSessions }} ครั้ง</p>
             <p>คงเหลือ: {{ selectedCourse.total - usedSessions }} ครั้ง</p>
-            <strong>ชื่อคอร์ส : {{ selectedCourse.name }}</strong>
+            <strong
+              >ชื่อคอร์ส: {{ courseDisplayName(selectedCourse) }} (คอร์ส
+              {{ selectedCourse.total }} ครั้ง)</strong
+            >
             <strong
               >วันหมดอายุ:
-              {{ new Date(selectedCourse.expiresAt).toLocaleDateString('th-TH') }}</strong
+              {{
+                selectedCourse.expiresAt ? fullThaiDate(selectedCourse.expiresAt) : 'ไม่จำกัด'
+              }}</strong
             >
           </section>
           <div class="course-cut-table" role="table" aria-label="รายการใช้สิทธิ์คอร์ส">
             <div class="course-cut-table-head" role="row">
               <b>วันที่รับบริการ</b><b>นักกายภาพผู้ให้บริการ</b><b>สาขา</b><b>จำนวน</b>
             </div>
-            <div v-for="entry in [...usageEntries].reverse()" :key="entry.id" role="row">
+            <div v-for="entry in usageEntries" :key="entry.id" role="row">
               <span>{{
                 new Date(entry.createdAt).toLocaleDateString('th-TH', {
                   day: 'numeric',
@@ -1307,8 +1338,8 @@ function closePrintSuccess() {
         :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
         >← กลับไปหน้าบริการ</RouterLink
       >
-      <h1>จัดการคอร์สผู้ป่วย</h1>
-      <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ ใช้สิทธิ์ ดูประวัติ และแชร์คอร์ส</p>
+      <h1>คอร์สของผู้ป่วย</h1>
+      <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการการต่ออายุ</p>
       <section v-if="transferReceiptId" class="course-after-patient">
         <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
         <span>HN {{ owner?.hn || '-' }}</span>
@@ -1322,14 +1353,31 @@ function closePrintSuccess() {
         <em>{{ branchLabel(owner) }}</em>
       </section>
       <div class="course-status-tabs">
-        <button class="active" type="button">ใช้งานได้</button
-        ><button type="button" @click="openInactiveHistory">หมดอายุ / ใช้สิทธิ์ครบ</button>
+        <button
+          :class="{ active: managerCourseTab === 'active' }"
+          type="button"
+          @click="managerCourseTab = 'active'"
+        >
+          คอร์สที่ใช้งานได้</button
+        ><button
+          :class="{ active: managerCourseTab === 'inactive' }"
+          type="button"
+          @click="managerCourseTab = 'inactive'"
+        >
+          หมดอายุ / ใช้สิทธิ์ครบ</button
+        ><button type="button" @click="openCourseUsageHistory">ประวัติการใช้คอร์ส</button>
       </div>
-      <section v-if="!activeCourses.length" class="course-use-empty">
-        <h2>ยังไม่มีคอร์สที่ใช้งานได้</h2>
-        <p>ผู้ป่วยรายนี้ยังไม่มีคอร์สคงเหลือสำหรับใช้บริการ</p>
+      <section v-if="!managerCourses.length" class="course-use-empty">
+        <h2>{{ managerCourseTab === 'active' ? 'ยังไม่มีคอร์สที่ใช้งานได้' : 'ไม่พบคอร์ส' }}</h2>
+        <p>
+          {{
+            managerCourseTab === 'active'
+              ? 'ผู้ป่วยรายนี้ยังไม่มีคอร์สคงเหลือสำหรับใช้บริการ'
+              : 'ผู้ป่วยรายนี้ยังไม่มีคอร์สที่หมดอายุหรือใช้สิทธิ์ครบ'
+          }}
+        </p>
       </section>
-      <template v-for="course in activeCourses" :key="course.id">
+      <template v-for="course in managerCourses" :key="course.id">
         <section v-if="transferReceiptId" class="course-after-share-card">
           <header>
             <div>
@@ -1389,32 +1437,39 @@ function closePrintSuccess() {
             ← ดูรายการแชร์ล่าสุด
           </button>
         </section>
-        <section v-else class="course-manager-card">
-          <span>ใช้งานได้ · {{ course.course.code }}</span>
-          <h2>{{ course.name }}</h2>
-          <p>
-            ซื้อเมื่อ
-            {{
-              new Date(course.purchasedAt).toLocaleDateString('th-TH', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })
-            }}
-            · Bonus {{ course.bonusSessions }} ครั้ง
+        <section
+          v-else
+          class="course-manager-card course-patient-card"
+          :class="{ 'shared-course': incomingTransfer(course) }"
+        >
+          <span
+            >{{ incomingTransfer(course) ? 'แชร์คอร์ส' : 'ใช้งานได้' }} ·
+            {{ course.course.code }}</span
+          >
+          <h2>{{ courseDisplayName(course) }} (คอร์ส {{ course.total }} ครั้ง)</h2>
+          <p v-if="incomingTransfer(course)">
+            ได้รับจาก {{ incomingTransfer(course)?.sourcePatientName }} ·
+            {{ courseBranchLabel(course) }}
           </p>
-          <div class="course-manager-metrics" :class="{ transferred: transferReceiptId }">
+          <p v-else>
+            ซื้อเมื่อ {{ fullThaiDate(course.purchasedAt) }} {{ courseBranchLabel(course) }}
+          </p>
+          <div class="course-manager-metrics">
             <article>
               <small>ทั้งหมด</small><strong>{{ course.total }} ครั้ง</strong>
             </article>
             <article>
               <small>ใช้แล้ว</small><strong>{{ course.total - course.balance }} ครั้ง</strong>
             </article>
-            <article v-if="transferReceiptId">
-              <small>แชร์ออก</small><strong>{{ transferAmount }} ครั้ง</strong>
-            </article>
             <article>
               <small>คงเหลือ</small><strong>{{ course.balance }} ครั้ง</strong>
+            </article>
+            <article class="course-expiry-panel">
+              <small>{{
+                incomingTransfer(course) ? 'วันหมดอายุสิทธิ์ของผู้รับ' : 'วันหมดอายุคอร์ส'
+              }}</small>
+              <strong>{{ fullThaiDate(course.expiresAt) }}</strong>
+              <b>วันที่คงเหลือ {{ daysUntilExpiry(course) }} วัน</b>
             </article>
           </div>
           <div
@@ -1428,15 +1483,15 @@ function closePrintSuccess() {
             <i :style="{ width: `${courseUsagePercent(course)}%` }" />
           </div>
           <p class="course-manager-used">
-            ใช้ไปแล้ว <strong>{{ courseUsagePercent(course) }}%</strong> ของคอร์ส
+            ใช้แล้ว {{ course.total - course.balance }} จาก {{ course.total }} ครั้ง
+          </p>
+          <p v-if="incomingTransfer(course)" class="shared-renewal-note">
+            การต่ออายุมีผลเฉพาะสิทธิ์ของผู้รับ ไม่เปลี่ยนวันหมดอายุของเจ้าของคอร์ส
           </p>
           <div class="course-manager-actions">
-            <button type="button" :disabled="!course.usable" @click="start('use', course)">
-              ใช้สิทธิ์</button
-            ><button type="button" @click="start('history', course)">ดูประวัติการใช้</button
-            ><button type="button" @click="start('transfer', course)">แชร์คอร์ส</button>
+            <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
+            <button type="button" title="รอเชื่อมต่อระบบต่ออายุคอร์ส">ต่ออายุคอร์ส</button>
           </div>
-          <small class="course-manager-expiry">หมดอายุ {{ course.expiry }}</small>
           <button
             v-if="transferReceiptId"
             class="course-manager-latest-transfer"
@@ -2572,7 +2627,7 @@ function closePrintSuccess() {
 .course-cut-document {
   box-sizing: border-box;
   width: min(1020px, 100%);
-  min-height: 920px;
+  min-height: 1024px;
   margin: 76px auto 0;
   padding: 26px 33px;
   border: 1px solid #d8e1de;
@@ -2594,11 +2649,20 @@ function closePrintSuccess() {
   color: #52635c;
   font-size: 14px;
 }
-.course-cut-issued {
-  margin: 12px 0 8px;
-  color: #66766f;
+.course-cut-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 16px 0 8px;
   font-size: 14px;
-  text-align: right;
+}
+.course-cut-meta strong {
+  color: #1f2e29;
+  font-size: 15px;
+}
+.course-cut-meta span {
+  color: #66766f;
 }
 .course-cut-summary {
   display: grid;
@@ -2633,10 +2697,12 @@ function closePrintSuccess() {
 }
 .course-cut-table-head {
   min-height: 48px !important;
+  margin-bottom: 34px;
   background: #e8f5f0;
 }
 .course-cut-total {
   grid-template-columns: 1fr 80px !important;
+  margin-top: 16px;
 }
 .course-cut-total b:first-child {
   text-align: right;
@@ -2726,6 +2792,11 @@ function closePrintSuccess() {
   }
   .course-cut-summary {
     grid-template-columns: 1fr;
+  }
+  .course-cut-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
   }
   .course-cut-summary strong:first-of-type {
     grid-column: auto;
@@ -3186,31 +3257,48 @@ function closePrintSuccess() {
 }
 .course-status-tabs {
   display: grid;
-  grid-template-columns: 225px 225px;
+  grid-template-columns: repeat(3, minmax(0, 225px));
   gap: 0;
-  width: fit-content;
+  width: min(668px, 100%);
   margin: 14px 0;
   overflow: hidden;
-  border-radius: 8px;
+  background: #eef6f0;
+  border-radius: 9px;
 }
 .course-status-tabs button {
-  min-height: 44px;
+  position: relative;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
   border-radius: 0;
-  background: #fff;
+  color: #667a72;
+  background: transparent;
+  font-size: 14px;
   font-weight: 500;
+  text-align: left;
 }
 .course-status-tabs button.active {
   color: #25372e;
-  background: #eef6f0;
+  background: transparent;
   font-weight: 700;
+}
+.course-status-tabs button.active::after {
+  position: absolute;
+  bottom: 0;
+  left: 4px;
+  width: 122px;
+  height: 4px;
+  border-radius: 4px;
+  background: #34724c;
+  content: '';
 }
 .course-manager-card {
   position: relative;
   gap: 5px;
   align-content: start;
-  min-height: 420px;
+  min-height: 440px;
   box-sizing: border-box;
-  margin-top: 0;
+  margin: 0 0 48px;
   padding: 20px;
   border: 1px solid #dde6e1;
   border-radius: 12px;
@@ -3227,7 +3315,7 @@ function closePrintSuccess() {
 }
 .course-manager-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 250px));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(280px, 1.45fr);
   gap: 18px;
   margin-top: 17px;
 }
@@ -3254,6 +3342,20 @@ function closePrintSuccess() {
   border-radius: 9px;
   background: #f2f6f3;
 }
+.course-manager-metrics .course-expiry-panel {
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 20px;
+  background: #fff4d6;
+}
+.course-expiry-panel small {
+  grid-column: 1 / -1;
+}
+.course-expiry-panel b {
+  align-self: center;
+  font-size: 14px;
+  text-align: right;
+}
 .course-manager-metrics small {
   color: #667a72;
   font-size: 13px;
@@ -3270,7 +3372,7 @@ function closePrintSuccess() {
 }
 .course-manager-used {
   margin-top: 5px !important;
-  margin-bottom: 72px !important;
+  margin-bottom: 86px !important;
   color: #667a72 !important;
   font-size: 13px !important;
 }
@@ -3280,20 +3382,39 @@ function closePrintSuccess() {
 }
 .course-manager-actions {
   position: absolute;
-  left: 20px;
-  bottom: 40px;
+  right: 20px;
+  bottom: 20px;
   gap: 12px;
 }
 .course-manager-actions button {
-  min-width: 184px;
-  min-height: 44px;
+  min-width: 190px;
+  min-height: 48px;
   border: 1px solid #d8e1de;
   background: #fff;
   font-weight: 600;
 }
 .course-manager-actions button:first-child {
-  border-color: #76a36d;
-  background: #76a36d;
+  color: #25372e;
+  border-color: #dde6e1;
+  background: #fff;
+}
+.course-manager-actions button:last-child {
+  color: #fff;
+  border-color: #218b84;
+  background: #218b84;
+}
+.shared-renewal-note {
+  position: absolute;
+  bottom: 26px;
+  left: 20px;
+  width: min(720px, calc(100% - 440px));
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 14px;
+  border-radius: 8px;
+  color: #38658a !important;
+  background: #eaf2ff;
+  font-size: 13px !important;
 }
 .course-manager-expiry {
   position: absolute;
@@ -3530,8 +3651,10 @@ function closePrintSuccess() {
     justify-self: start;
   }
   .course-status-tabs {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(190px, 1fr));
     width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
   .course-manager-card {
     min-height: auto;
@@ -3541,6 +3664,15 @@ function closePrintSuccess() {
     grid-template-columns: 1fr;
     gap: 8px;
   }
+  .course-manager-metrics .course-expiry-panel {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .course-expiry-panel small,
+  .course-expiry-panel b {
+    grid-column: 1;
+    text-align: left;
+  }
   .course-manager-metrics.transferred {
     grid-template-columns: 1fr;
   }
@@ -3548,6 +3680,11 @@ function closePrintSuccess() {
     position: static;
     display: grid;
     margin-top: 22px;
+  }
+  .shared-renewal-note {
+    position: static;
+    width: 100%;
+    margin-top: 16px !important;
   }
   .course-manager-actions button {
     width: 100%;
@@ -4454,8 +4591,8 @@ function closePrintSuccess() {
   background: #eff4ed;
 }
 .course-manager-main.after-transfer .course-status-tabs button.active {
-  color: #fff;
-  background: #1e8883;
+  color: #25372e;
+  background: transparent;
 }
 .course-after-share-card {
   display: grid;
