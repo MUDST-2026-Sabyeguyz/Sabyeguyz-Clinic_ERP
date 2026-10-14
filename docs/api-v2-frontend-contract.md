@@ -109,3 +109,12 @@ Open Question Q9 ยังไม่ปิด: ระบบปัจจุบั�
 ## 8. สิ่งที่ยังไม่ได้ตัดสินใจ (รอ manager)
 
 ข้อมูลเก่าเก็บหรือทิ้ง, คอมมิชชันโบนัส, คอร์สหมดอายุ, กฎสัดส่วน PT 2 คน, ภาษี, ขอบเขต Google Calendar, สถานะนัดเริ่มต้น
+
+## P4 payment policy (14 ตุลาคม 2026)
+
+- POST /api/payments คง payments[] แต่ canonical methods ต่างกันในบิลเดียวได้400ก่อนสร้างreceipt/line/payment; QR aliases รวมเป็นPromptPay วิธีหลัก Cash/BankTransfer/CreditCard/PromptPay
+- PaymentTransactionService ถือ receipt row lock ก่อนตรวจ active payment methods ป้องกันคำขอ concurrent คนละวิธีทั้งสองcommit; วิธีต่างจาก active เดิมได้400 หลายrecordsวิธีเดียวคง behavior เดิมระหว่างรอQ6 ไม่ถือว่าอนุมัติ policy งวดแล้ว
+- Sale summary/detail เพิ่ม paymentLabel เป็น FullyPaid/Installment/Deposit จาก Receipt ที่persistแล้ว ไม่ deriveจากstatusPAID/VOIDED; UIแสดงชำระเต็ม/ผ่อน/มัดจำแยก lifecycle พร้อมเพย์เป็นdisplayของQR/PromptPay
+- POST /api/payments/{paymentId}/refunds และ POST /api/refunds/{id}/complete ได้409ถ้าcourseในreceiptเคยมีusage (รวมreversedusage); lockcoursesเรียงIDโดยใช้ lockเดียวกับcourseusageAPI แล้วอ่านusageก่อนเขียนfinancialrows
+- Completeที่ถูกปฏิเสธคงrefundPending และอ่านhistoricalrefundsได้ตามเดิม ไม่เปลี่ยนvoid/commission reversal rules
+- Q5/Q6นายท่านให้พัก: ไม่มีdiscountprecision/ceiling changes, ไม่มีpaymentlabelselector/deriveใหม่, ไม่มีcredit/loanengine; ตัดแต้ม/วงเงินสมมติจากUI

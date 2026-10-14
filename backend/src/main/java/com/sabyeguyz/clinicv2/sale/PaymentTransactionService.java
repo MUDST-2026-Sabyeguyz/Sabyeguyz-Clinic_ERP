@@ -12,9 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PaymentTransactionService {
     private final PaymentTransactionRepository payments;
+    private final ReceiptRepository receipts;
 
-    public PaymentTransactionService(PaymentTransactionRepository payments) {
+    public PaymentTransactionService(PaymentTransactionRepository payments, ReceiptRepository receipts) {
         this.payments = payments;
+        this.receipts = receipts;
     }
 
     @Transactional
@@ -23,9 +25,17 @@ public class PaymentTransactionService {
         require(patient != null, "ต้องระบุผู้ป่วย");
         require(branch != null, "ต้องระบุสาขา");
         require(receipt != null, "ต้องระบุใบเสร็จ");
+        receipt = receipts.findByIdForUpdate(receipt.getId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบใบเสร็จ"));
         require(receipt.getReceiptStatus() == ReceiptStatus.Issued, "ใบเสร็จนี้ถูกยกเลิกแล้ว ไม่สามารถรับชำระได้");
         require(paymentMethod != null, "ต้องระบุช่องทางชำระเงิน");
         require(amount != null && amount.signum() > 0, "จำนวนเงินต้องมากกว่า 0");
+
+        String method = PaymentMethod.canonicalName(paymentMethod.getMethodName());
+        require(payments.findByReceiptIdOrderByIdAsc(receipt.getId()).stream()
+                .filter(PaymentTransaction::isPaymentStatus)
+                .allMatch(existing -> method.equals(PaymentMethod.canonicalName(existing.getPaymentMethod().getMethodName()))),
+                "หนึ่งใบเสร็จรับชำระได้เพียงช่องทางเดียว");
 
         PaymentTransaction payment = new PaymentTransaction();
         payment.setPatient(patient);
@@ -47,6 +57,8 @@ public class PaymentTransactionService {
     public PaymentTransaction voidPayment(Long paymentId, Long actorId) {
         PaymentTransaction payment = payments.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการชำระเงิน"));
+        receipts.findByIdForUpdate(payment.getReceipt().getId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบใบเสร็จ"));
         if (!payment.isPaymentStatus()) {
             throw new IllegalArgumentException("รายการนี้ถูกยกเลิกไปแล้ว");
         }
