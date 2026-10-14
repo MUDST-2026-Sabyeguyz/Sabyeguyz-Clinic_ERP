@@ -62,6 +62,7 @@ public class PatientVisitService {
     public PatientVisit startService(Long visitId, Long actorId) {
         PatientVisit visit = find(visitId);
         requireNotTerminal(visit);
+        ensureTreatingStaff(visit);
         visit.setVisitStatus(VisitStatus.InService);
         touch(visit, actorId);
         if (visit.getAppointment() != null) {
@@ -74,6 +75,7 @@ public class PatientVisitService {
     public PatientVisit complete(Long visitId, Long actorId) {
         PatientVisit visit = find(visitId);
         requireNotTerminal(visit);
+        ensureTreatingStaff(visit);
         visit.setVisitStatus(VisitStatus.Completed);
         visit.setCheckoutTime(Instant.now());
         touch(visit, actorId);
@@ -90,6 +92,16 @@ public class PatientVisitService {
         visit.setVisitStatus(VisitStatus.Cancelled);
         touch(visit, actorId);
         return visits.save(visit);
+    }
+
+    /** A started visit needs the PT who treats it: the one set on it, else the assigned PT. */
+    private static void ensureTreatingStaff(PatientVisit visit) {
+        if (visit.getTreatingStaff() == null) {
+            visit.setTreatingStaff(visit.getAssignedStaff());
+        }
+        if (visit.getTreatingStaff() == null) {
+            throw new IllegalArgumentException("ต้องระบุนักกายภาพผู้รักษาก่อนเริ่มหรือจบการรักษา");
+        }
     }
 
     private PatientVisit save(PatientVisit visit, Long actorId) {

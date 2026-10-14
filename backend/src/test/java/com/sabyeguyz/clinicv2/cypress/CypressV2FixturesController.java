@@ -24,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional
 public class CypressV2FixturesController {
     private static final String TRANSACTIONAL_TABLES = String.join(", ",
-            "refund_transaction", "transaction_cancellation", "payment_transaction", "course_usage_print_event",
+            "adjustment_application", "staff_pay_adjustment", "single_visit_fee_ledger", "staff_monthly_payment",
+            "course_refund_item", "refund_transaction", "transaction_cancellation", "payment_transaction", "course_usage_print_event",
             "course_usage_print", "commission_allocation_ledger", "course_ledger", "course_visit_usage",
             "course_transfer", "course_entitlement", "course_sale_staff_share", "course_shared_member",
             "commission_rate_override_audit", "monthly_commission_closing", "treatment", "sales_transaction",
@@ -79,7 +80,7 @@ public class CypressV2FixturesController {
         jdbc.update("DELETE FROM commission_tier WHERE commission_scheme_id <> (SELECT MIN(commission_scheme_id) FROM commission_scheme)");
         jdbc.update("DELETE FROM commission_scheme WHERE commission_scheme_id <> (SELECT MIN(commission_scheme_id) FROM commission_scheme)");
         jdbc.update("UPDATE commission_tier SET tier_status = TRUE");
-        jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL, commission_after_termination_policy = NULL, termination_policy_locked_at = NULL");
+        jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL");
         jdbc.update("UPDATE app_user SET user_status = TRUE WHERE username <> 'system'");
         jdbc.update("UPDATE branch SET branch_status = TRUE");
         jdbc.update("UPDATE payment_method SET payment_method_status = TRUE");

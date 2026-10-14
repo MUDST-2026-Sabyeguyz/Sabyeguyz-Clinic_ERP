@@ -73,7 +73,7 @@ public class StaffController {
         return toResponse(staff);
     }
 
-    /** Switches the staff member off; use {@code /terminate} when the commission policy must be recorded. */
+    /** Switches the staff member off; use {@code /terminate} to record the resignation date. */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -81,23 +81,14 @@ public class StaffController {
         service.deactivate(id, actor.currentId());
     }
 
+    /** commissionAfterTerminationPolicy is no longer used (there is no per-person policy); it is accepted and ignored. */
     public record TerminateRequest(LocalDate terminationDate, String commissionAfterTerminationPolicy) {}
 
-    /** Records a resignation: the date and what happens to the outstanding commission (policy name). */
+    /** Records a resignation date; the staff member becomes Inactive. */
     @PostMapping("/{id}/terminate")
     @PreAuthorize("hasRole('MANAGER')")
     public Response terminate(@PathVariable Long id, @RequestBody TerminateRequest request) {
-        if (request.commissionAfterTerminationPolicy() == null) {
-            throw new IllegalArgumentException("ต้องระบุ commissionAfterTerminationPolicy");
-        }
-        com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy policy;
-        try {
-            policy = com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy
-                    .valueOf(request.commissionAfterTerminationPolicy());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("commissionAfterTerminationPolicy ไม่ถูกต้อง");
-        }
-        return toResponse(service.terminate(id, request.terminationDate(), policy, actor.currentId()));
+        return toResponse(service.terminate(id, request.terminationDate(), actor.currentId()));
     }
 
     private Branch resolveBranch(String branchCode) {

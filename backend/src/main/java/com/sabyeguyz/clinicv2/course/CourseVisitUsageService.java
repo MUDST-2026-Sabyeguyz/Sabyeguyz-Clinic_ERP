@@ -9,7 +9,7 @@ import com.sabyeguyz.clinicv2.commission.TreatmentFeeRule;
 import com.sabyeguyz.clinicv2.commission.TreatmentFeeRuleResolver;
 import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
 import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
-import com.sabyeguyz.clinicv2.enums.OverflowPolicy;
+import com.sabyeguyz.clinicv2.enums.FeeType;
 import com.sabyeguyz.clinicv2.enums.UsageStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.role.Permission;
@@ -19,6 +19,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,47 +86,37 @@ public class CourseVisitUsageService {
             throw new IllegalArgumentException("ผู้ป่วยรายนี้ไม่มีสิทธิ์คงเหลือในคอร์สนี้");
         }
 
+        // The Owner PT is the course's seller. The Owner earns the per-visit commission only when treating the visit
+        // personally (and before leaving); a substitute earns the full treatment fee of the rule in force that day,
+        // never limited by the commission, and the Owner then gets 0.
+        Staff owner = course.getOwnerStaff();
+        boolean substituted = !treatingStaff.getId().equals(owner.getId());
+        boolean ownerLeft = owner.getTerminationDate() != null && visitDate.isAfter(owner.getTerminationDate());
         BigDecimal allocationPerVisit = commissionAllocationPerVisit(course);
-        BigDecimal gross = allocationPerVisit;
-        // Rounded per-visit allocations must never exceed the locked commission pool.
-        if (course.getTotalCourseCommissionPool() != null) {
-            BigDecimal available = course.getTotalCourseCommissionPool()
-                    .subtract(course.getGrossCommissionAllocatedTotal()).max(BigDecimal.ZERO);
-            gross = gross.min(available);
-        }
-        Staff caseOwner = course.getCaseOwnerStaff();
-        boolean substituted = !treatingStaff.getId().equals(caseOwner.getId());
 
         BigDecimal treatmentFee = BigDecimal.ZERO;
         TreatmentFeeRule appliedRule = null;
-        OverflowPolicy overflowPolicyUsed = null;
         if (substituted) {
-            appliedRule = treatmentFeeRuleResolver.resolve(treatingStaff, visitDate)
+            appliedRule = treatmentFeeRuleResolver.resolve(visitDate)
                     .orElseThrow(() -> new IllegalStateException(
-                            "ไม่พบ Treatment Fee Rule สำหรับผู้รักษาแทนในวันที่ " + visitDate));
-            BigDecimal rawFee = treatmentFeeRuleResolver.calculateFee(appliedRule, course);
-            if (rawFee.compareTo(gross) > 0) {
-                // Default policy per §15.2: CAP_AT_COMMISSION.
-                overflowPolicyUsed = OverflowPolicy.CapAtCommission;
-                treatmentFee = gross;
-            } else {
-                treatmentFee = rawFee;
-            }
+                            "ไม่พบ Treatment Fee Rule ที่ใช้ได้ในวันที่ " + visitDate));
+            treatmentFee = treatmentFeeRuleResolver.calculateFee(appliedRule, course);
         }
-        BigDecimal ownerNet = gross.subtract(treatmentFee);
+        BigDecimal ownerNet = substituted || ownerLeft ? BigDecimal.ZERO : allocationPerVisit;
 
         CourseVisitUsage usage = new CourseVisitUsage();
         usage.setVisit(visit);
         usage.setCourse(course);
         usage.setPatient(usingPatient);
         usage.setTreatingStaff(treatingStaff);
-        usage.setCaseOwnerStaff(caseOwner);
+        if (visit.getTreatingStaff() == null) {
+            visit.setTreatingStaff(treatingStaff);
+        }
         usage.setVisitDate(visitDate.atStartOfDay());
         usage.setVisitQty(1);
         usage.setUsageStatus(UsageStatus.Completed);
-        usage.setPrintRequired(true);
         usage.setCommissionAllocationPerVisit(allocationPerVisit);
-        usage.setGrossCommissionAllocation(gross);
+        placeInCourse(usage, course);
         usage.setTreatmentFeeRule(appliedRule);
         usage.setSubstituteTreatmentFeeAmount(treatmentFee);
         usage.setOwnerNetCommission(ownerNet);
@@ -136,18 +129,17 @@ public class CourseVisitUsageService {
         allocation.setEntryType(AllocationEntryType.Allocation);
         allocation.setCourse(course);
         allocation.setPatient(usingPatient);
-        allocation.setCaseOwnerStaff(caseOwner);
+        allocation.setOwnerStaff(owner);
         allocation.setTreatingStaff(treatingStaff);
         allocation.setVisitDate(visitDate);
-        allocation.setGrossCommissionAllocation(gross);
+        allocation.setAllocationVersion(1);
         allocation.setTreatmentFeeRule(appliedRule);
         allocation.setTreatmentFeeType(appliedRule == null ? null : appliedRule.getFeeType());
         allocation.setTreatmentFeeRateOrAmount(appliedRule == null ? null : appliedRule.getFeeValue());
-        allocation.setTreatmentFeeCalculationBase(appliedRule == null || appliedRule.getPercentageBase() == null
-                ? null : appliedRule.getPercentageBase().name());
+        allocation.setTreatmentFeeCalculationBase(appliedRule == null || appliedRule.getFeeType() == FeeType.Fixed
+                ? null : treatmentFeeRuleResolver.perVisitBase(course));
         allocation.setTreatmentFeeAmount(treatmentFee);
         allocation.setOwnerNetCommission(ownerNet);
-        allocation.setOverflowPolicyUsed(overflowPolicyUsed);
         allocation.setAllocationCreateAt(Instant.now());
         allocation.setAllocationCreateBy(actorId);
         allocationLedger.save(allocation);
@@ -170,16 +162,36 @@ public class CourseVisitUsageService {
 
         course.setVisitsUsed(course.getVisitsUsed() + 1);
         course.setRemainingVisits(course.getRemainingVisits() - 1);
-        course.setGrossCommissionAllocatedTotal(course.getGrossCommissionAllocatedTotal().add(gross));
         course.setOwnerNetCommissionReleasedTotal(course.getOwnerNetCommissionReleasedTotal().add(ownerNet));
         course.setSubstituteTreatmentFeeTotal(course.getSubstituteTreatmentFeeTotal().add(treatmentFee));
-        if (course.getTotalCourseCommissionPool() != null) {
-            course.setCommissionOutstanding(
-                    course.getTotalCourseCommissionPool().subtract(course.getGrossCommissionAllocatedTotal()));
-        }
+        course.refreshCommissionOutstanding();
         courses.save(course);
 
         return savedUsage;
+    }
+
+    /**
+     * Position of the usage inside the course (all users together): the lowest position not held by a Completed usage,
+     * so a position freed by a reversal is reused. A usage that fills a Reversed position replaces that usage.
+     */
+    private void placeInCourse(CourseVisitUsage usage, Course course) {
+        List<CourseVisitUsage> existing = usages.findByCourseIdOrderByIdDesc(course.getId());
+        Set<Integer> taken = new HashSet<>();
+        for (CourseVisitUsage other : existing) {
+            if (other.getUsageStatus() == UsageStatus.Completed) taken.add(other.getUsageSequence());
+        }
+        int position = 1;
+        while (taken.contains(position)) position++;
+        usage.setUsageSequence(position);
+        final int chosen = position;
+        Set<Long> alreadyReplaced = new HashSet<>();
+        for (CourseVisitUsage other : existing) {
+            if (other.getReplacesUsage() != null) alreadyReplaced.add(other.getReplacesUsage().getId());
+        }
+        existing.stream() // newest first
+                .filter(other -> other.getUsageStatus() == UsageStatus.Reversed && other.getUsageSequence() == chosen
+                        && !alreadyReplaced.contains(other.getId()))
+                .findFirst().ifPresent(usage::setReplacesUsage);
     }
 
     /**
@@ -206,24 +218,21 @@ public class CourseVisitUsageService {
                 .orElseThrow(() -> new IllegalStateException("ไม่พบรายการจัดสรรคอมมิชชันของการใช้สิทธิ์นี้"));
         CommissionAllocationLedger reversal = new CommissionAllocationLedger();
         reversal.setEntryType(AllocationEntryType.Reversal);
-        reversal.setAdjustmentReference(original);
+        reversal.setReversesAllocation(original);
+        reversal.setAllocationVersion(original.getAllocationVersion());
         reversal.setReversalReason(reason.trim());
         reversal.setVisitUsage(usage);
         reversal.setCourse(course);
         reversal.setPatient(patient);
-        reversal.setCaseOwnerStaff(original.getCaseOwnerStaff());
+        reversal.setOwnerStaff(original.getOwnerStaff());
         reversal.setTreatingStaff(original.getTreatingStaff());
         reversal.setVisitDate(original.getVisitDate());
-        reversal.setGrossCommissionAllocation(original.getGrossCommissionAllocation().negate());
         reversal.setTreatmentFeeRule(original.getTreatmentFeeRule());
         reversal.setTreatmentFeeType(original.getTreatmentFeeType());
         reversal.setTreatmentFeeRateOrAmount(original.getTreatmentFeeRateOrAmount());
         reversal.setTreatmentFeeCalculationBase(original.getTreatmentFeeCalculationBase());
         reversal.setTreatmentFeeAmount(original.getTreatmentFeeAmount().negate());
         reversal.setOwnerNetCommission(original.getOwnerNetCommission().negate());
-        reversal.setCompanyTopUpAmount(original.getCompanyTopUpAmount() == null ? null
-                : original.getCompanyTopUpAmount().negate());
-        reversal.setOverflowPolicyUsed(original.getOverflowPolicyUsed());
         reversal.setAllocationCreateAt(Instant.now());
         reversal.setAllocationCreateBy(actorId);
         allocationLedger.save(reversal);
@@ -235,16 +244,11 @@ public class CourseVisitUsageService {
 
         course.setVisitsUsed(course.getVisitsUsed() - 1);
         course.setRemainingVisits(course.getRemainingVisits() + 1);
-        course.setGrossCommissionAllocatedTotal(
-                course.getGrossCommissionAllocatedTotal().subtract(original.getGrossCommissionAllocation()));
         course.setOwnerNetCommissionReleasedTotal(
                 course.getOwnerNetCommissionReleasedTotal().subtract(original.getOwnerNetCommission()));
         course.setSubstituteTreatmentFeeTotal(
                 course.getSubstituteTreatmentFeeTotal().subtract(original.getTreatmentFeeAmount()));
-        if (course.getTotalCourseCommissionPool() != null) {
-            course.setCommissionOutstanding(
-                    course.getTotalCourseCommissionPool().subtract(course.getGrossCommissionAllocatedTotal()));
-        }
+        course.refreshCommissionOutstanding();
         courses.save(course);
 
         CourseEntitlement entitlement = entitlementOf(course, patient, balance);

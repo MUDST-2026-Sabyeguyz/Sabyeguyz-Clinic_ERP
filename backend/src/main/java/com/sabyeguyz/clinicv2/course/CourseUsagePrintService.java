@@ -67,7 +67,7 @@ public class CourseUsagePrintService {
         snapshot.put("visitDate", String.valueOf(usage.getVisitDate().toLocalDate()));
         snapshot.put("visitQty", usage.getVisitQty());
         snapshot.put("treatingStaffId", usage.getTreatingStaff() == null ? null : usage.getTreatingStaff().getId());
-        snapshot.put("caseOwnerStaffId", usage.getCaseOwnerStaff() == null ? null : usage.getCaseOwnerStaff().getId());
+        snapshot.put("caseOwnerStaffId", usage.getOwnerStaff() == null ? null : usage.getOwnerStaff().getId());
         snapshot.put("visitsUsed", usage.getCourse().getVisitsUsed());
         snapshot.put("remainingVisits", usage.getCourse().getRemainingVisits());
         try {
