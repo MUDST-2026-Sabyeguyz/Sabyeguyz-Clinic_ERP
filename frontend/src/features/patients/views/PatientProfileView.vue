@@ -5,6 +5,7 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import { patientTitleOptions, patientGenderOptions } from '../data/patientRegistration'
 
 const route = useRoute()
 type UiPatientProfile = PatientProfile & {
@@ -22,8 +23,8 @@ const errorMessage = ref('')
 const editing = ref(false)
 const saved = ref(false)
 const confirmationOpen = ref(false)
-const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
-const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
+const titleOptions = patientTitleOptions
+const genderOptions = patientGenderOptions
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const nationalityOptions = ['ไทย', 'ต่างชาติ'].map((value) => ({ value, label: value }))
 const customerSourceOptions = ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'].map((value) => ({
@@ -81,6 +82,7 @@ const draft = reactive({
   customerSource: 'หน้าสาขา',
   insuranceCompany: '',
   firstName: '',
+  middleName: '',
   lastName: '',
   birthDateInput: '',
 })
@@ -103,20 +105,6 @@ watch(
     }
   },
 )
-watch(
-  () => draft.title,
-  (title) => {
-    if (title === 'นาย') draft.gender = 'ชาย'
-    else if (title === 'นาง' || title === 'นางสาว') draft.gender = 'หญิง'
-  },
-)
-watch(
-  () => draft.gender,
-  (gender) => {
-    if (gender === 'ชาย') draft.title = 'นาย'
-    else if (gender === 'หญิง') draft.title = 'นางสาว'
-  },
-)
 function normalizeProfile(profile: PatientProfile): UiPatientProfile {
   return {
     ...profile,
@@ -132,6 +120,9 @@ function normalizeProfile(profile: PatientProfile): UiPatientProfile {
 function assignDraft(profile: UiPatientProfile) {
   const foreignPatient = isForeignNationalityValue(profile.nationality)
   Object.assign(draft, profile, splitFullName(profile.fullName), {
+    firstName: profile.firstName ?? splitFullName(profile.fullName).firstName,
+    lastName: profile.lastName ?? splitFullName(profile.fullName).lastName,
+    middleName: profile.middleName ?? '',
     nationality: foreignPatient ? 'ต่างชาติ' : profile.nationality,
     identityDocumentType:
       foreignPatient || profile.identityDocumentType === 'PASSPORT'
@@ -155,7 +146,10 @@ async function saveEdit() {
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
-      fullName: `${draft.firstName} ${draft.lastName}`.trim(),
+      firstName: draft.firstName,
+      lastName: draft.lastName,
+      middleName: draft.middleName || null,
+      fullName: [draft.firstName, draft.middleName, draft.lastName].filter(Boolean).join(' '),
       birthDate: draft.birthDateInput,
       gender: draft.gender,
       phone: draft.phone,
@@ -253,6 +247,7 @@ onMounted(async () => {
           </label>
           <label>อีเมล <input v-model="draft.email" type="text" inputmode="email" /></label>
           <label>ชื่อ <em>*</em><input v-model="draft.firstName" required /></label>
+          <label>ชื่อกลาง<input v-model.trim="draft.middleName" maxlength="100" /></label>
           <label>นามสกุล <em>*</em><input v-model="draft.lastName" required /></label>
           <label>ชื่อเล่น <input v-model="draft.nickname" /></label>
           <label
@@ -373,7 +368,7 @@ onMounted(async () => {
           </div>
           <div>
             <dt>เพศ</dt>
-            <dd>{{ patient.gender }}</dd>
+            <dd>{{ genderOptions.find((option) => option.value === patient?.gender)?.label ?? patient.gender }}</dd>
           </div>
           <div>
             <dt>เบอร์โทรศัพท์</dt>

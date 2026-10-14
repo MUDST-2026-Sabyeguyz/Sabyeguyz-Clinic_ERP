@@ -44,7 +44,7 @@ describe('v2 appointments', () => {
   it('allows the same time for a different therapist', function () {
     cy.registerPatient().then((patient) => {
       book(this.fixtures, patient).its('status').should('equal', 201)
-      book(this.fixtures, patient, { therapistId: this.fixtures.therapist2Id }).its('status').should('equal', 201)
+      book(this.fixtures, patient, { branchCode: '02', therapistId: this.fixtures.therapist2Id }).its('status').should('equal', 201)
     })
   })
 
@@ -124,7 +124,7 @@ describe('v2 appointments', () => {
   it('lists and filters appointments by date, therapist and status', function () {
     cy.registerPatient().then((patient) => {
       book(this.fixtures, patient).its('status').should('equal', 201)
-      book(this.fixtures, patient, { therapistId: this.fixtures.therapist2Id }).its('status').should('equal', 201)
+      book(this.fixtures, patient, { branchCode: '02', therapistId: this.fixtures.therapist2Id }).its('status').should('equal', 201)
       cy.api('GET', `/api/appointments?date=${this.fixtures.tomorrow}`).its('body.items').should('have.length', 2)
       cy.api('GET', `/api/appointments?date=${this.fixtures.tomorrow}&therapistId=${this.fixtures.therapistId}`)
         .its('body.items').should('have.length', 1)
