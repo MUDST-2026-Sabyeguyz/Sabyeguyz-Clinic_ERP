@@ -9,6 +9,7 @@ const props = withDefaults(
     showCalendarIcon?: boolean
     numericMonth?: boolean
     hideCaret?: boolean
+    placeholder?: string
   }>(),
   {
     disabled: false,
@@ -16,6 +17,7 @@ const props = withDefaults(
     showCalendarIcon: false,
     numericMonth: false,
     hideCaret: false,
+    placeholder: 'เลือกวันที่',
   },
 )
 
@@ -47,7 +49,7 @@ const years = Array.from(
 )
 
 const displayValue = computed(() => {
-  if (!props.modelValue) return 'เลือกวันที่'
+  if (!props.modelValue) return props.placeholder
   const date = new Date(`${props.modelValue}T00:00:00`)
   return props.numericMonth
     ? `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear() + 543}`
