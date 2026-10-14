@@ -14,6 +14,8 @@ import {
 } from '@/api/client'
 
 type SectionKey = 'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'master'
+// Rows are edited generically from form fields of different shapes, so their values stay loosely typed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
 const sections: Array<{ key: SectionKey; label: string }> = [
   { key: 'branches', label: 'สาขา' },

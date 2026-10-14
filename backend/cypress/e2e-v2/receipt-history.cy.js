@@ -87,13 +87,12 @@ describe('v2 patient receipt history', () => {
     }))
   })
   it('keeps the sold item name on a printed receipt after the catalogue name changes', function () {
-    const serviceId = this.fixtures.singleVisitServiceId
     cy.registerPatient().then(patient => {
-      cy.api('GET', '/api/services').then(({ body: services }) => {
-        const service = services.find(item => item.id === serviceId)
-        expect(service).to.exist
-        sale(this.fixtures, patient).then(created => {
-          cy.api('PUT', `/api/services/${serviceId}`, {
+      cy.api('POST', '/api/services', { code: 'SNAPSHOT_TEST', name: 'Sold item snapshot', price: 800, defaultDurationMinutes: 30 })
+        .then(({ status, body: service }) => {
+        expect(status).to.equal(201)
+        sale(this.fixtures, patient, { items: [{ type: 'SERVICE', referenceId: service.id, quantity: 1 }] }).then(created => {
+          cy.api('PUT', `/api/services/${service.id}`, {
             code: service.code, name: 'Renamed after sale', defaultDurationMinutes: 30, price: service.price,
           }).its('status').should('equal', 200)
           cy.api('GET', `/api/receipts/${created.id}`).then(({ body }) => {

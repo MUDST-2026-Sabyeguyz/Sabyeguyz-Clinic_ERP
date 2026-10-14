@@ -155,7 +155,9 @@ function openPatientCourses() {
   if (patient.value) router.push({ path: '/staff/courses', query: { patientId: patient.value.id } })
 }
 function clearPatient() {
-  const { appointmentId: _appointmentId, patientId: _patientId, ...remainingQuery } = route.query
+  const remainingQuery = { ...route.query }
+  delete remainingQuery.appointmentId
+  delete remainingQuery.patientId
   void router.replace({ query: remainingQuery })
   patient.value = null
   patientProfile.value = null
