@@ -261,12 +261,18 @@ const calendarTherapists = computed(() =>
     )
     .slice(0, 3),
 )
+// An appointment sits in the last slot that starts at or before it, so one moved to an off-grid time
+// (for example 09:45 from Google Calendar) still shows instead of disappearing.
+const slotFor = (startAt: string) => {
+  const time = formatTime(startAt)
+  return [...timeOptions].reverse().find((slot) => slot <= time) ?? timeOptions[0]
+}
 const calendarAppointment = (therapistId: number, time: string) =>
   appointments.value.find(
     (item) =>
       item.therapist.id === therapistId &&
       item.startAt.slice(0, 10) === calendarDate.value &&
-      formatTime(item.startAt) === time &&
+      slotFor(item.startAt) === time &&
       (selectedBranch.value === 'ทั้งหมด' || item.branchCode === selectedBranch.value),
   )
 const calendarSlotState = (item?: Appointment) => {
@@ -823,7 +829,10 @@ function confirmCancellation() {
                   @click="openCalendarSlot(therapist, time)"
                 >
                   <template v-if="calendarAppointment(therapist.id, time)">
-                    <strong>{{ time }} {{ calendarPatientName(therapist.id, time) }}</strong>
+                    <strong
+                      >{{ formatTime(calendarAppointment(therapist.id, time)!.startAt) }}
+                      {{ calendarPatientName(therapist.id, time) }}</strong
+                    >
                     <small>นก. {{ calendarTherapistName(therapist.id, time) }}</small>
                   </template>
                   <template v-else
