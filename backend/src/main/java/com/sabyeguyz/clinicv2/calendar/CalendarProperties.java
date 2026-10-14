@@ -13,6 +13,8 @@ public class CalendarProperties {
     private String clientId = "";
     private String clientSecret = "";
     private String refreshToken = "";
+    /** Path of the service account JSON key file; when set it is used instead of the OAuth refresh token. */
+    private String serviceAccountKeyFile = "";
     /** The schema keeps no appointment end time yet, so every calendar event lasts this long. */
     private int defaultDurationMinutes = 60;
     private String timeZone = "Asia/Bangkok";
@@ -31,6 +33,8 @@ public class CalendarProperties {
     public void setClientId(String clientId) { this.clientId = clientId; }
     public String getClientSecret() { return clientSecret; }
     public void setClientSecret(String clientSecret) { this.clientSecret = clientSecret; }
+    public String getServiceAccountKeyFile() { return serviceAccountKeyFile; }
+    public void setServiceAccountKeyFile(String serviceAccountKeyFile) { this.serviceAccountKeyFile = serviceAccountKeyFile; }
     public String getRefreshToken() { return refreshToken; }
     public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
     public int getDefaultDurationMinutes() { return defaultDurationMinutes; }
