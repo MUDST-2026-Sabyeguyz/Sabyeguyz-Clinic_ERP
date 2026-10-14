@@ -9,7 +9,6 @@ import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.commission.*;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedgerRepository;
-import com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository;
 import com.sabyeguyz.clinicv2.course.CourseSharedMemberRepository;
 import com.sabyeguyz.clinicv2.enums.*;
 import com.sabyeguyz.clinicv2.patient.Patient;
@@ -53,7 +52,7 @@ public class V2FinanceScenarios {
     private static BigDecimal decimal(String value) { return new BigDecimal(value); }
     private static Course course() {
         Course c = new Course(); c.setCoursePrice(decimal("10000.00")); c.setTotalVisits(10);
-        c.setGrossCommissionAllocatedTotal(BigDecimal.ZERO); return c;
+        c.setTreatmentFeeBaseAmount(decimal("10000.00")); return c;
     }
     private static Staff staff() {
         Staff s = new Staff();
@@ -84,7 +83,7 @@ public class V2FinanceScenarios {
     private Object override(String scenario) {
         var audits = new V2RepositoryStub<>(CommissionRateOverrideAuditRepository.class);
         var courses = new V2RepositoryStub<>(CourseRepository.class);
-        Course c = course(); c.setGrossCommissionAllocatedTotal(decimal("210.00"));
+        Course c = course(); c.setRemainingVisits(10);
         if (!scenario.equals("override-unlocked")) c.setLockedCommissionRate(decimal("0.07"));
         var audit = new CommissionRateOverrideService(audits.proxy(), courses.proxy()).override(c, decimal("0.10"),
                 new Permission(), scenario.equals("override-reason") ? " " : "แก้ตามคำสั่งผู้บริหาร", 1L);
@@ -155,7 +154,7 @@ public class V2FinanceScenarios {
     }
     private Object closing(String scenario) {
         var closings = new V2RepositoryStub<>(MonthlyCommissionClosingRepository.class);
-        var existing = new MonthlyCommissionClosing(); existing.setClosingStatus(true);
+        var existing = new MonthlyCommissionClosing(); existing.setClosingStatus(com.sabyeguyz.clinicv2.enums.ClosingStatus.Closed);
         closings.on("findByClosingMonthAndStaffId", a -> scenario.equals("closing-duplicate") ? Optional.of(existing) : Optional.empty());
         Course c = course();
         var courses = new V2RepositoryStub<>(CourseRepository.class)
@@ -163,7 +162,7 @@ public class V2FinanceScenarios {
                 .on("findBySellerStaffIdAndSaleMonth", a -> List.of(c));
         var result = new MonthlyCommissionClosingService(closings.proxy(),courses.proxy(),schemeResolver(),tierResolver())
                 .closeMonth(scenario.equals("closing-malformed") ? "August-2026" : "2026-08",staff(),null,9L);
-        return Map.of("rate",result.getLockedCommissionRate(),"status",result.isClosingStatus(),
+        return Map.of("rate",result.getLockedCommissionRate(),"status",result.isClosed(),
                 "courseStatus",c.getCommissionStatus(),"courseRate",c.getLockedCommissionRate(),
                 "pool",c.getTotalCourseCommissionPool(),"perVisit",c.getCommissionAllocationPerVisit());
     }
@@ -171,14 +170,16 @@ public class V2FinanceScenarios {
         var repository = new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
         var rule = new TreatmentFeeRule(); rule.setFeeType(FeeType.Fixed); rule.setFeeValue(decimal("45"));
         if (scenario.equals("fee-specific")) {
-            var s = staff(); rule.setStaff(s);
-            var generic = new TreatmentFeeRule(); generic.setFeeType(FeeType.Fixed); generic.setFeeValue(decimal("40"));
-            repository.on("findActiveOn", a -> List.of(generic,rule));
-            var resolved = new TreatmentFeeRuleResolver(repository.proxy()).resolve(s,LocalDate.of(2026,8,20));
+            // one clinic-wide rule: when two rules are in force the one that took effect last is used
+            var older = new TreatmentFeeRule(); older.setFeeType(FeeType.Fixed); older.setFeeValue(decimal("40"));
+            older.setEffectiveFrom(LocalDate.of(2026,1,1));
+            rule.setEffectiveFrom(LocalDate.of(2026,6,1));
+            repository.on("findActiveOn", a -> List.of(older,rule));
+            var resolved = new TreatmentFeeRuleResolver(repository.proxy()).resolve(LocalDate.of(2026,8,20));
             return Map.of("present",resolved.isPresent(),"fee",resolved.map(TreatmentFeeRule::getFeeValue).orElse(BigDecimal.ZERO));
         }
         if (scenario.equals("fee-percentage")) {
-            rule.setFeeType(FeeType.Percentage); rule.setFeeValue(decimal("0.03")); rule.setPercentageBase(CalculationBase.CourseValuePerVisit);
+            rule.setFeeType(FeeType.Percentage); rule.setFeeValue(decimal("3"));
         }
         return new TreatmentFeeRuleResolver(repository.proxy()).calculateFee(rule,course());
     }
@@ -194,7 +195,7 @@ public class V2FinanceScenarios {
     private Object receipt(String scenario) {
         var repository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByReceiptNoAndBranchId",
                 a -> scenario.equals("receipt-duplicate") ? Optional.of(new Receipt()) : Optional.empty());
-        var service = new ReceiptService(repository.proxy());
+        var service = new ReceiptService(repository.proxy(), new V2RepositoryStub<>(CourseRepository.class).proxy());
         if (scenario.equals("receipt-next-no")) {
             repository.on("findMaxReceiptSequence", a -> 41);
             return service.nextReceiptNo();
@@ -231,7 +232,6 @@ public class V2FinanceScenarios {
         courses.on("save", a -> { saveOrder.add("course"); return a[0]; });
         transactions.on("save", a -> { saveOrder.add("transaction"); return a[0]; });
         var service = new SalesTransactionService(transactions.proxy(),new CourseService(courses.proxy(),ledger.proxy(),
-                new V2RepositoryStub<>(CourseSaleStaffShareRepository.class).proxy(),
                 new V2RepositoryStub<>(CourseSharedMemberRepository.class).proxy(),
                 new V2RepositoryStub<>(CourseEntitlementRepository.class).proxy(),schemeResolver(),tierResolver()));
         Service template = new Service(); template.setServiceType(ServiceType.SingleVisit); template.setServicePrice(decimal("1200.00"));
@@ -243,8 +243,8 @@ public class V2FinanceScenarios {
             template.setDefaultTotalVisits(10); template.setDefaultBonusVisits(0); template.setDefaultValidityDays(365);
             var patient = new Patient();
             var receipt = new Receipt(); receipt.setReceiptNo("RE26000010"); receipt.setPatient(patient);
-            var purchase = service.recordCoursePurchase(receipt,patient,new Branch(),template,staff(),null,
-                    decimal("10000.00"),null,null,Discount.none(),null,LocalDate.of(2026,8,18),1L);
+            var purchase = service.recordCoursePurchase(receipt,patient,new Branch(),template,staff(),
+                    decimal("10000.00"),null,null,Discount.none(),LocalDate.of(2026,8,18),1L);
             var transaction = purchase.transaction();
             return Map.of("sameCourse",purchase.course() == courses.arguments("save").get(0)[0],
                     "sameLine",purchase.course().getSaleTransaction() == transaction,
@@ -264,8 +264,8 @@ public class V2FinanceScenarios {
             var receipt = new Receipt(); receipt.setReceiptNo("RE26000020"); receipt.setPatient(patient);
             var discount = scenario.equals("sale-course-discount-percent")
                     ? Discount.of("PERCENT",decimal("25")) : Discount.of("BAHT",decimal("500"));
-            var purchase = service.recordCoursePurchase(receipt,patient,new Branch(),template,staff(),null,null,null,null,
-                    discount,null,LocalDate.of(2026,8,18),1L);
+            var purchase = service.recordCoursePurchase(receipt,patient,new Branch(),template,staff(),null,null,null,
+                    discount,LocalDate.of(2026,8,18),1L);
             return Map.of("unitPrice",purchase.transaction().getUnitPrice(),"amount",purchase.transaction().getAmount(),
                     "commissionable",purchase.transaction().getCommissionableAmount(),
                     "coursePrice",purchase.course().getCoursePrice());
@@ -322,7 +322,8 @@ public class V2FinanceScenarios {
         var receiptRepo = new V2RepositoryStub<>(ReceiptRepository.class);
         var service = new TransactionCancellationService(cancellations.proxy(), salesRepo.proxy(),
                 new SalesTransactionService(salesRepo.proxy(), null), paymentRepo.proxy(),
-                new PaymentTransactionService(paymentRepo.proxy(), receiptRepo.proxy()), new ReceiptService(receiptRepo.proxy()));
+                new PaymentTransactionService(paymentRepo.proxy(), receiptRepo.proxy()),
+                new ReceiptService(receiptRepo.proxy(), new V2RepositoryStub<>(CourseRepository.class).proxy()));
         var receipt = new Receipt(); receipt.setReceiptStatus(ReceiptStatus.Issued);
         var sale = line(TransactionType.CoursePurchase, "1500.00", "0.00"); sale.setReceipt(receipt);
         sale.setTransactionStatus(!scenario.equals("cancel-already-void-sale"));
