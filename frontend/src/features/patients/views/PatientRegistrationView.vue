@@ -5,7 +5,7 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { registerPatient } from '@/api/patients'
-import { branchApi, masterDataApi, patientApi } from '@/api/client'
+import { appointmentApi, branchApi, masterDataApi, patientApi, type Appointment } from '@/api/client'
 import { type PatientRegistrationForm, patientTitleOptions, patientGenderOptions } from '../data/patientRegistration'
 
 const submitting = ref(false)
@@ -20,6 +20,8 @@ const duplicateOpen = ref(false)
 const duplicatePatient = ref<{ id: number; hn: string; fullName: string } | null>(null)
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
+const sourceAppointment = ref<Appointment | null>(null)
+const appointmentId = computed(() => Number(route.query.appointmentId) || null)
 const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
 const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
 const insuranceCompanies = ref(['AIA'])
@@ -153,6 +155,17 @@ onMounted(async () => {
   } catch {
     errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
   }
+  if (appointmentId.value) {
+    try {
+      const appointment = await appointmentApi.get(appointmentId.value)
+      if (appointment.patientType !== 'NEW' || appointment.status !== 'CONFIRMED') throw new Error('นัดหมายนี้ไม่อยู่ในขั้นตอนลงทะเบียนผู้ป่วยใหม่')
+      sourceAppointment.value = appointment
+      form.phone = appointment.contactPhone ?? ''
+      form.branchCode = appointment.branchCode
+    } catch (error) {
+      errorMessage.value = error instanceof Error ? error.message : 'โหลดนัดหมายไม่สำเร็จ'
+    }
+  }
   if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
     duplicatePatient.value = {
       id: 10,
@@ -200,8 +213,9 @@ async function submit() {
   submitting.value = true
   errorMessage.value = ''
   try {
+    if (appointmentId.value && !sourceAppointment.value) throw new Error('กรุณาตรวจสอบนัดหมายก่อนลงทะเบียน')
     const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
-    const result = await registerPatient({
+    const result = registeredPatientId.value ? await patientApi.get(registeredPatientId.value) : await registerPatient({
       branchCode: form.branchCode,
       username: `patient-${Date.now()}`,
       password: `Temp${form.identityNumber.slice(-6)}!`,
@@ -231,8 +245,19 @@ async function submit() {
       customerSource: form.customerSource,
       insuranceCompany: form.insuranceCompany,
     })
-    registeredHn.value = result.hn
     registeredPatientId.value = result.id
+    if (appointmentId.value) {
+      try {
+        await appointmentApi.linkPatient(appointmentId.value, result.id)
+      } catch (error) {
+        // A committed link whose response was lost can be safely recognized by exact patient ID.
+        const current = await appointmentApi.get(appointmentId.value)
+        if (current.patient.id !== result.id) throw error
+      }
+      await router.push({ path: '/staff/services', query: { patientId: result.id, appointmentId: appointmentId.value } })
+      return
+    }
+    registeredHn.value = result.hn
     localStorage.setItem('patientCreationHn', result.hn)
     await router.push('/staff/patients')
   } catch (error) {
@@ -255,6 +280,8 @@ async function submit() {
           <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
           <p>กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p>
         </div>
+        <p v-if="sourceAppointment">ลงทะเบียนสำหรับนัดหมาย #{{ sourceAppointment.id }} — {{ sourceAppointment.contactName }}</p>
+        <button v-if="appointmentId && registeredPatientId" type="button" :disabled="submitting" @click="submit">ลองเชื่อมนัดหมายอีกครั้ง</button>
         <form class="form-card" novalidate @submit.prevent="requestSubmit">
           <section class="registration-section">
             <h2>ข้อมูลส่วนตัว</h2>
