@@ -4,7 +4,7 @@ const tabs = [
   { key: 'overview', label: 'ภาพรวม', to: '/staff/commission' },
   { key: 'closing', label: 'ปิดรอบรายเดือน', to: '/staff/commission/closing' },
   { key: 'tiers', label: 'ตั้งค่า Tier', to: '/staff/commission/tiers' },
-  { key: 'compensation', label: 'ค่ารักษาแทน', to: '/staff/commission/compensation-settings' },
+  { key: 'compensation', label: 'ค่ามือ', to: '/staff/commission/compensation-settings' },
 ] as const
 </script>
 <template>
