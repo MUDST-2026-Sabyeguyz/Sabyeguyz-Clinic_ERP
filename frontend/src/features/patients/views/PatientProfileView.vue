@@ -17,6 +17,72 @@ type UiPatientProfile = PatientProfile & {
   insuranceCompany: string
 }
 const patient = ref<UiPatientProfile | null>(null)
+const profileName = computed(() => splitFullName(patient.value?.fullName ?? ''))
+const profileInitials = computed(
+  () =>
+    patient.value?.fullName
+      .trim()
+      .split(/\s+/)
+      .map((part) => part.slice(0, 1))
+      .slice(0, 2)
+      .join('') ?? '',
+)
+const profileBranch = computed(
+  () => patient.value?.branch?.name || patient.value?.branchName || '-',
+)
+const profileBirthDate = computed(() => {
+  const raw = patient.value?.birthDate ?? ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || '-'
+  const date = new Date(`${raw}T12:00:00`)
+  return Number.isNaN(date.getTime())
+    ? raw
+    : new Intl.DateTimeFormat('th-TH', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }).format(date)
+})
+const profileSections = computed(() => {
+  const p = patient.value
+  if (!p) return []
+  const passport = ['PASSPORT', 'หนังสือเดินทาง'].includes(p.identityDocumentType)
+  return [
+    {
+      title: 'ข้อมูลยืนยันตัวตน',
+      columns: 'identity-grid',
+      fields: [
+        { label: 'คำนำหน้า', value: p.title },
+        { label: 'ชื่อ', value: profileName.value.firstName },
+        { label: 'นามสกุล', value: profileName.value.lastName },
+        { label: 'ชื่อเล่น', value: p.nickname },
+        { label: 'เพศ', value: p.gender },
+        { label: 'วันเกิด', value: profileBirthDate.value },
+        { label: 'กรุ๊ปเลือด', value: p.bloodGroup },
+        { label: 'สัญชาติ', value: p.nationality },
+        { label: passport ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน', value: p.identityNumber },
+      ],
+    },
+    {
+      title: 'ข้อมูลติดต่อ',
+      columns: 'contact-grid',
+      fields: [
+        { label: 'เบอร์โทรศัพท์', value: p.phone },
+        { label: 'อีเมล', value: p.email },
+        { label: 'ที่อยู่', value: p.address, wide: true },
+      ],
+    },
+    {
+      title: 'ข้อมูลคลินิก',
+      columns: 'contact-grid',
+      fields: [
+        { label: 'สาขาที่ลงทะเบียน', value: profileBranch.value },
+        { label: 'กลุ่มลูกค้า', value: p.customerType },
+        { label: 'ช่องทางแนะนำ', value: p.customerSource },
+        { label: 'บริษัทประกัน', value: p.insuranceCompany },
+      ],
+    },
+  ]
+})
 const loading = ref(true)
 const errorMessage = ref('')
 const editing = ref(false)
@@ -217,25 +283,33 @@ onMounted(async () => {
       <RouterLink v-else class="back-link" to="/staff/patients">← กลับไปค้นหาผู้ป่วย</RouterLink>
       <p v-if="loading" class="status-feedback">กำลังโหลดข้อมูลผู้ป่วย...</p>
       <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-      <section v-if="patient && !editing" class="profile-heading">
-        <div class="avatar">{{ patient.fullName.slice(0, 1) }}</div>
-        <div>
-          <small>PATIENT PROFILE</small>
-          <h1>{{ patient.title }}{{ patient.fullName }}</h1>
-          <p>HN {{ patient.hn }}</p>
+      <template v-if="patient && !editing">
+        <div class="patient-profile-title">
+          <h1>ข้อมูลผู้ป่วย</h1>
+          <button class="patient-profile-edit" type="button" @click="openEdit">แก้ไขข้อมูล</button>
         </div>
-        <div class="profile-actions">
+        <section class="patient-profile-summary" aria-label="สรุปข้อมูลผู้ป่วย">
+          <div class="patient-profile-avatar" aria-hidden="true">{{ profileInitials }}</div>
+          <div class="patient-profile-info">
+            <h2>{{ patient.title }}{{ patient.fullName }}</h2>
+            <p>
+              <span>HN {{ patient.hn }}</span
+              ><span>{{ patient.phone || '-' }}</span>
+            </p>
+          </div>
+          <span class="patient-profile-branch">{{ profileBranch }}</span>
+        </section>
+        <nav class="patient-profile-tabs" aria-label="ข้อมูลผู้ป่วย">
+          <RouterLink :to="`/staff/patients/${patient.id}`" aria-current="page" class="active"
+            >ข้อมูลส่วนตัว</RouterLink
+          >
+          <RouterLink :to="`/staff/patients/${patient.id}/history`">ประวัติการรักษา</RouterLink>
           <RouterLink
-            class="profile-action-button"
             :to="{ path: `/staff/patients/${patient.id}/history`, query: { tab: 'courses' } }"
             >คอร์ส</RouterLink
           >
-          <RouterLink class="profile-action-button" :to="`/staff/patients/${patient.id}/history`"
-            >ประวัติการรักษา</RouterLink
-          >
-          <button class="profile-action-button" type="button" @click="openEdit">แก้ไขข้อมูล</button>
-        </div>
-      </section>
+        </nav>
+      </template>
 
       <h1 v-if="patient && editing" class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
       <form
@@ -357,76 +431,28 @@ onMounted(async () => {
           ><button class="primary">บันทึกข้อมูล</button>
         </footer>
       </form>
-      <section v-else-if="patient" class="profile-sheet">
-        <div class="section-title">
-          <div>
-            <h2>ข้อมูลส่วนตัว</h2>
-          </div>
-        </div>
-        <dl class="details four-columns">
-          <div>
-            <dt>ชื่อ–นามสกุล</dt>
-            <dd>{{ patient.title }}{{ patient.fullName }}</dd>
-          </div>
-          <div>
-            <dt>ชื่อเล่น</dt>
-            <dd>{{ patient.nickname || '-' }}</dd>
-          </div>
-          <div>
-            <dt>อีเมล</dt>
-            <dd>{{ patient.email || '-' }}</dd>
-          </div>
-          <div>
-            <dt>เพศ</dt>
-            <dd>{{ patient.gender }}</dd>
-          </div>
-          <div>
-            <dt>เบอร์โทรศัพท์</dt>
-            <dd>{{ patient.phone }}</dd>
-          </div>
-          <div>
-            <dt>วันเกิด</dt>
-            <dd>{{ patient.birthDate }}</dd>
-          </div>
-          <div>
-            <dt>กรุ๊ปเลือด</dt>
-            <dd>{{ patient.bloodGroup }}</dd>
-          </div>
-          <div>
-            <dt>ประเภทเอกสารยืนยันตัวตน</dt>
-            <dd>{{ patient.identityDocumentType }}</dd>
-          </div>
-          <div>
-            <dt>
-              {{
-                patient.identityDocumentType === 'หนังสือเดินทาง'
-                  ? 'เลขหนังสือเดินทาง'
-                  : 'เลขบัตรประชาชน'
-              }}
-            </dt>
-            <dd>{{ patient.identityNumber }}</dd>
-          </div>
-          <div>
-            <dt>สัญชาติ</dt>
-            <dd>{{ patient.nationality }}</dd>
-          </div>
-          <div>
-            <dt>กลุ่มลูกค้า</dt>
-            <dd>{{ patient.customerType }}</dd>
-          </div>
-          <div>
-            <dt>ช่องทางแนะนำ</dt>
-            <dd>{{ patient.customerSource }}</dd>
-          </div>
-          <div>
-            <dt>บริษัทประกัน</dt>
-            <dd>{{ patient.insuranceCompany || 'ไม่มีประกัน' }}</dd>
-          </div>
-          <div class="span-all">
-            <dt>ที่อยู่</dt>
-            <dd>{{ patient.address }}</dd>
-          </div>
-        </dl>
+      <section
+        v-else-if="patient"
+        class="patient-profile-details"
+        aria-label="ข้อมูลส่วนตัวผู้ป่วย"
+      >
+        <section
+          v-for="section in profileSections"
+          :key="section.title"
+          class="patient-profile-section"
+        >
+          <h2>{{ section.title }}</h2>
+          <dl :class="['patient-profile-grid', section.columns]">
+            <div
+              v-for="field in section.fields"
+              :key="field.label"
+              :class="{ 'span-all': 'wide' in field && field.wide }"
+            >
+              <dt>{{ field.label }}</dt>
+              <dd>{{ field.value || '-' }}</dd>
+            </div>
+          </dl>
+        </section>
       </section>
       <Teleport to="body">
         <Transition name="save-success">
@@ -454,3 +480,4 @@ onMounted(async () => {
 
 <style scoped src="../styles/patients.css"></style>
 <style src="../styles/therapist.css"></style>
+<style scoped src="../styles/patient-profile.css"></style>

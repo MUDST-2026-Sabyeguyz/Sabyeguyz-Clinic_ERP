@@ -40,6 +40,8 @@ type CourseMovement = {
   balanceAfter: number
   reason: string
   appointmentId?: number | null
+  therapistName?: string | null
+  branchName?: string | null
   createdAt: string
 }
 const owner = ref<Patient | null>(null)
@@ -139,6 +141,13 @@ function fullThaiDate(value: string) {
   return new Intl.DateTimeFormat('th-TH', {
     day: 'numeric',
     month: 'long',
+    year: 'numeric',
+  }).format(new Date(value))
+}
+function numericThaiDate(value: string | Date) {
+  return new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit',
+    month: '2-digit',
     year: 'numeric',
   }).format(new Date(value))
 }
@@ -1082,12 +1091,10 @@ function closePrintSuccess() {
           </header>
           <div class="course-cut-meta">
             <strong>เจ้าของคอร์ส: {{ owner?.fullName }} HN {{ owner?.hn }}</strong>
-            <span>ออก ณ วันที่ : {{ new Date().toLocaleDateString('th-TH') }}</span>
+            <span>ออก ณ วันที่ : {{ numericThaiDate(new Date()) }}</span>
           </div>
           <section class="course-cut-summary">
-            <p>
-              วันที่ซื้อคอร์ส {{ new Date(selectedCourse.purchasedAt).toLocaleDateString('th-TH') }}
-            </p>
+            <p>วันที่ซื้อคอร์ส {{ numericThaiDate(selectedCourse.purchasedAt) }}</p>
             <p>จำนวน: {{ selectedCourse.total }} ครั้ง</p>
             <p>ใช้ไปแล้ว: {{ usedSessions }} ครั้ง</p>
             <p>คงเหลือ: {{ selectedCourse.total - usedSessions }} ครั้ง</p>
@@ -1114,8 +1121,8 @@ function closePrintSuccess() {
                   year: 'numeric',
                 })
               }}</span>
-              <span>{{ entry.reason || '—' }}</span>
-              <span>{{ branchLabel(owner) }}</span>
+              <span>{{ entry.therapistName || '—' }}</span>
+              <span>{{ entry.branchName || courseBranchLabel(selectedCourse) }}</span>
               <span>{{ Math.abs(entry.quantity) }}</span>
             </div>
             <div class="course-cut-total" role="row">
@@ -2629,7 +2636,7 @@ function closePrintSuccess() {
   width: min(1020px, 100%);
   min-height: 1024px;
   margin: 76px auto 0;
-  padding: 26px 33px;
+  padding: 26px 34px;
   border: 1px solid #d8e1de;
   border-radius: 2px;
   color: #25372f;
@@ -2689,6 +2696,14 @@ function closePrintSuccess() {
   border: 1px solid #25372f;
   border-bottom: 0;
 }
+.course-cut-table > div:not(.course-cut-table-head):not(.course-cut-total) {
+  border-bottom: 1px solid #25372f;
+}
+.course-cut-table
+  > div:not(.course-cut-table-head):not(.course-cut-total)
+  + div:not(.course-cut-total) {
+  margin-top: -1px;
+}
 .course-cut-table > div:last-child {
   border-bottom: 1px solid #25372f;
 }
@@ -2698,6 +2713,7 @@ function closePrintSuccess() {
 .course-cut-table-head {
   min-height: 48px !important;
   margin-bottom: 34px;
+  border-bottom: 1px solid #25372f !important;
   background: #e8f5f0;
 }
 .course-cut-total {
@@ -5101,6 +5117,22 @@ function closePrintSuccess() {
     overflow: hidden;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+  .course-cut-meta {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .course-cut-summary {
+    grid-template-columns: 1.3fr 0.7fr 0.8fr 0.8fr;
+    gap: 14px 20px;
+  }
+  .course-cut-summary strong:first-of-type {
+    grid-column: 1 / 4;
+  }
+  .course-cut-table {
+    min-width: 0;
   }
 }
 </style>
