@@ -5,8 +5,8 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { registerPatient } from '@/api/patients'
-import { branchApi, masterDataApi, patientApi, type Patient } from '@/api/client'
-import { type PatientRegistrationForm } from '../data/patientRegistration'
+import { appointmentApi, branchApi, masterDataApi, patientApi, type Appointment } from '@/api/client'
+import { type PatientRegistrationForm, patientTitleOptions, patientGenderOptions } from '../data/patientRegistration'
 
 const submitting = ref(false)
 const route = useRoute()
@@ -17,15 +17,17 @@ const identityFocused = ref(false)
 const errorMessage = ref('')
 const confirmationOpen = ref(false)
 const duplicateOpen = ref(false)
-const duplicatePatient = ref<Patient | null>(null)
+const duplicatePatient = ref<{ id: number; hn: string; fullName: string } | null>(null)
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
+const sourceAppointment = ref<Appointment | null>(null)
+const appointmentId = computed(() => Number(route.query.appointmentId) || null)
 const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
 const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
 const insuranceCompanies = ref(['AIA'])
 const branches = ref<Array<{ branchCode: string; name: string }>>([])
-const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
-const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
+const titleOptions = patientTitleOptions
+const genderOptions = patientGenderOptions
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const nationalityOptions = [
   { value: 'ไทย', label: 'ไทย' },
@@ -53,11 +55,12 @@ const form = reactive<PatientRegistrationForm>({
   title: 'นาย',
   customerType: customerGroups.value[0]!,
   firstName: '',
+  middleName: '',
   lastName: '',
   nickname: '',
   fullNameEnglish: '',
   birthDate: '',
-  gender: 'ชาย',
+  gender: 'Male',
   phone: '',
   identityDocumentType: '',
   identityNumber: '',
@@ -113,23 +116,8 @@ const canSubmit = computed(() =>
     (isForeign.value || birthDateIsValid.value) &&
     ((isForeign.value && !form.phone.trim()) || phoneIsValid.value) &&
     (isForeign.value || form.identityDocumentType) &&
-    identityIsValid.value &&
-    (isForeign.value || form.address),
+    identityIsValid.value,
   ),
-)
-watch(
-  () => form.title,
-  (title) => {
-    if (title === 'นาย') form.gender = 'ชาย'
-    else if (title === 'นาง' || title === 'นางสาว') form.gender = 'หญิง'
-  },
-)
-watch(
-  () => form.gender,
-  (gender) => {
-    if (gender === 'ชาย') form.title = 'นาย'
-    else if (gender === 'หญิง') form.title = 'นางสาว'
-  },
 )
 watch(
   () => form.identityDocumentType,
@@ -167,13 +155,22 @@ onMounted(async () => {
   } catch {
     errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
   }
+  if (appointmentId.value) {
+    try {
+      const appointment = await appointmentApi.get(appointmentId.value)
+      if (appointment.patientType !== 'NEW' || appointment.status !== 'CONFIRMED') throw new Error('นัดหมายนี้ไม่อยู่ในขั้นตอนลงทะเบียนผู้ป่วยใหม่')
+      sourceAppointment.value = appointment
+      form.phone = appointment.contactPhone ?? ''
+      form.branchCode = appointment.branchCode
+    } catch (error) {
+      errorMessage.value = error instanceof Error ? error.message : 'โหลดนัดหมายไม่สำเร็จ'
+    }
+  }
   if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
     duplicatePatient.value = {
       id: 10,
       hn: '070700000010',
       fullName: 'ผู้ป่วยสาธิต ชาย 10',
-      phone: '0890000010',
-      active: true,
     }
     duplicateOpen.value = true
   }
@@ -185,18 +182,17 @@ async function requestSubmit() {
     return
   }
   try {
-    const fullName = `${form.firstName} ${form.lastName}`.trim()
-    const [nameCandidates, identityCandidates] = await Promise.all([
+    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
+    const [nameCandidates, identity] = await Promise.all([
       patientApi.searchAll(fullName),
-      patientApi.searchAll(form.identityNumber),
+      form.identityDocumentType === 'NATIONAL_ID' && /^[0-9]{13}$/.test(form.identityNumber)
+        ? patientApi.identityLookup(form.identityNumber)
+        : Promise.resolve({ patient: null }),
     ])
-    duplicatePatient.value =
-      nameCandidates.find(
-        (item) =>
-          item.fullName.trim().toLocaleLowerCase('th-TH') === fullName.toLocaleLowerCase('th-TH'),
-      ) ??
-      identityCandidates[0] ??
-      null
+    // Preserve the existing name warning while Q2 is open; exact identity takes precedence.
+    duplicatePatient.value = identity.patient ?? nameCandidates.find(
+      (item) => item.fullName.trim().toLocaleLowerCase('th-TH') === fullName.toLocaleLowerCase('th-TH'),
+    ) ?? null
     if (duplicatePatient.value) {
       duplicateOpen.value = true
       return
@@ -217,13 +213,17 @@ async function submit() {
   submitting.value = true
   errorMessage.value = ''
   try {
-    const fullName = `${form.firstName} ${form.lastName}`.trim()
-    const result = await registerPatient({
+    if (appointmentId.value && !sourceAppointment.value) throw new Error('กรุณาตรวจสอบนัดหมายก่อนลงทะเบียน')
+    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
+    const result = registeredPatientId.value ? await patientApi.get(registeredPatientId.value) : await registerPatient({
       branchCode: form.branchCode,
       username: `patient-${Date.now()}`,
       password: `Temp${form.identityNumber.slice(-6)}!`,
       email: form.email,
       title: form.title,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      middleName: form.middleName || null,
       fullName,
       birthDate: form.birthDate,
       gender: form.gender,
@@ -241,12 +241,23 @@ async function submit() {
       nickname: form.nickname,
       bloodGroup: form.bloodGroup,
       nationality: form.nationality,
-      customerType: form.customerType,
+      customerType: isForeign.value ? 'Foreigner' : 'Thai',
       customerSource: form.customerSource,
       insuranceCompany: form.insuranceCompany,
     })
-    registeredHn.value = result.hn
     registeredPatientId.value = result.id
+    if (appointmentId.value) {
+      try {
+        await appointmentApi.linkPatient(appointmentId.value, result.id)
+      } catch (error) {
+        // A committed link whose response was lost can be safely recognized by exact patient ID.
+        const current = await appointmentApi.get(appointmentId.value)
+        if (current.patient.id !== result.id) throw error
+      }
+      await router.push({ path: '/staff/services', query: { patientId: result.id, appointmentId: appointmentId.value } })
+      return
+    }
+    registeredHn.value = result.hn
     localStorage.setItem('patientCreationHn', result.hn)
     await router.push('/staff/patients')
   } catch (error) {
@@ -269,6 +280,8 @@ async function submit() {
           <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
           <p>กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p>
         </div>
+        <p v-if="sourceAppointment">ลงทะเบียนสำหรับนัดหมาย #{{ sourceAppointment.id }} — {{ sourceAppointment.contactName }}</p>
+        <button v-if="appointmentId && registeredPatientId" type="button" :disabled="submitting" @click="submit">ลองเชื่อมนัดหมายอีกครั้ง</button>
         <form class="form-card" novalidate @submit.prevent="requestSubmit">
           <section class="registration-section">
             <h2>ข้อมูลส่วนตัว</h2>
@@ -314,6 +327,7 @@ async function submit() {
                   >รูปแบบชื่อไม่ถูกต้อง</small
                 ></label
               >
+              <label>ชื่อกลาง<input v-model.trim="form.middleName" placeholder="ชื่อกลาง" maxlength="100" /></label>
               <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.lastName) }"
                 >นามสกุล <em>*</em
                 ><input
@@ -421,16 +435,7 @@ async function submit() {
                   >กรุณากรอกตัวเลข 10 หลัก</small
                 ></label
               >
-              <label
-                class="wide"
-                :class="{ 'invalid-field': submitted && !isForeign && !form.address }"
-                >ที่อยู่ <em v-if="!isForeign">*</em
-                ><textarea v-model.trim="form.address" rows="4" /><small
-                  v-if="submitted && !isForeign && !form.address"
-                  class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ></label
-              >
+              <label class="wide">ที่อยู่<textarea v-model.trim="form.address" rows="4" /></label>
             </div>
           </section>
           <section class="registration-section">

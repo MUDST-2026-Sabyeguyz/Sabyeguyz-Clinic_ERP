@@ -35,6 +35,11 @@ public class AppointmentService {
         return find(id);
     }
 
+    @Transactional
+    public Appointment getForUpdate(Long id) {
+        return appointments.findByIdForUpdate(id).orElseThrow(AppointmentNotFoundException::new);
+    }
+
     /** Books a registered (CURRENT) patient as Confirmed. */
     @Transactional
     public Appointment book(Patient patient, Branch branch, Staff staff, Service service, Room room,
@@ -84,6 +89,7 @@ public class AppointmentService {
         String name = contactName == null ? "" : contactName.trim();
         String phone = contactPhone == null || contactPhone.isBlank() ? null : contactPhone.trim();
         require(!name.isEmpty(), "ต้องระบุชื่อ-นามสกุล หรือชื่อเล่นของผู้ป่วยใหม่");
+        require(phone != null, "ต้องระบุเบอร์โทรผู้ป่วยใหม่");
         require(name.contains(" ") || phone != null, "หากระบุเพียงชื่อเล่นต้องระบุเบอร์โทรด้วย");
         require(branch != null, "ต้องระบุสาขา");
         require(staff != null, "ต้องระบุผู้ให้บริการ");
@@ -121,7 +127,7 @@ public class AppointmentService {
     /** After a NEW patient registers: the appointment becomes a CURRENT one for that patient. */
     @Transactional
     public Appointment linkRegisteredPatient(Long id, Patient patient, Long actorId) {
-        Appointment appointment = find(id);
+        Appointment appointment = getForUpdate(id);
         requireNotTerminal(appointment);
         require(patient != null, "ต้องระบุผู้ป่วย");
         require(appointment.getAppointmentPatientType() == AppointmentPatientType.NEW && appointment.getPatient() == null,
@@ -221,8 +227,11 @@ public class AppointmentService {
     }
 
     private void requireNoConflict(Long staffId, LocalDate date, LocalTime time, Long excludingAppointmentId) {
-        boolean conflict = appointments.existsByStaffIdAndAppointmentDateAndAppointmentTimeAndAppointmentStatusNotIn(
-                staffId, date, time, AppointmentStatus.slotReleasing());
+        boolean conflict = excludingAppointmentId == null
+                ? appointments.existsByStaffIdAndAppointmentDateAndAppointmentTimeAndAppointmentStatusNotIn(
+                    staffId, date, time, AppointmentStatus.slotReleasing())
+                : appointments.existsByStaffIdAndAppointmentDateAndAppointmentTimeAndIdNotAndAppointmentStatusNotIn(
+                    staffId, date, time, excludingAppointmentId, AppointmentStatus.slotReleasing());
         if (conflict) {
             throw new IllegalArgumentException("ผู้ให้บริการไม่ว่างในวันเวลาที่เลือก");
         }
