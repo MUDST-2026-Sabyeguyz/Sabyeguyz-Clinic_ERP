@@ -35,6 +35,7 @@ const navItems = computed(() =>
         { to: '/staff/commission', label: 'คอมมิชชัน' },
         { to: '/staff/personnel', label: 'บุคลากร' },
         { to: '/staff/reports', label: 'รายงาน' },
+        { to: '/staff/calendar', label: 'ปฏิทิน Google' },
         { to: '/staff/settings', label: 'ตั้งค่า' },
       ]
     : [

@@ -2,3 +2,7 @@
 /.env
 /.env.*
 !/.env.example
+
+# Google service account keys must never be committed
+calendar-sync-key*.json
+/secrets/

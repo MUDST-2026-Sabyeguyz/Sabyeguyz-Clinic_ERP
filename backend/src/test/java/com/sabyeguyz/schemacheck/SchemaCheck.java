@@ -170,6 +170,11 @@ public class SchemaCheck {
         private static final byte[] SECRET = "schema-check-secret-schema-check-secret".getBytes(StandardCharsets.UTF_8);
 
         @Bean
+        com.sabyeguyz.clinicv2.calendar.CalendarProperties calendarProperties() {
+            return new com.sabyeguyz.clinicv2.calendar.CalendarProperties();
+        }
+
+        @Bean
         DataSource dataSource() {
             return new DriverManagerDataSource(env("DB_URL"), env("DB_USER"), env("DB_PASSWORD"));
         }

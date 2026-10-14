@@ -143,6 +143,12 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
+      path: '/staff/calendar',
+      name: 'staff-calendar',
+      component: () => import('@/features/settings/views/CalendarSettingsView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/settings',
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
