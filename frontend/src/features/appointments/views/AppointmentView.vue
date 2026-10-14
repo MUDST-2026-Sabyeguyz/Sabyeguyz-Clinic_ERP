@@ -859,7 +859,7 @@ function confirmCancellation() {
               </button>
             </div>
             <button class="calendar-google" type="button" @click="openGoogleCalendar">
-              เชื่อมต่อ Google Calendar
+              สถานะ Google Calendar
             </button>
           </div>
           <div class="calendar-legend">
@@ -1042,7 +1042,7 @@ function confirmCancellation() {
       @click.self="calendarSyncOpen = false"
     >
       <section class="status-modal calendar-sync-modal" role="dialog" aria-modal="true">
-        <h2>เชื่อมต่อ Google Calendar</h2>
+        <h2>สถานะ Google Calendar</h2>
         <div class="calendar-sync-description" data-cy="google-sync-info">
           <p>ระบบซิงก์นัดหมายกับ Google Calendar 2 ทาง แยก 1 ปฏิทินต่อสาขา เลื่อนหรือยกเลิกนัดใน Google แล้วระบบจะตามให้เอง</p>
           <p v-if="!isManagerUser">การตั้งค่าและการซิงก์ทันทีทำได้เฉพาะผู้จัดการ</p>
