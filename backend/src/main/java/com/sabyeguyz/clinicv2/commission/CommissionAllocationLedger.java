@@ -96,6 +96,16 @@ public class CommissionAllocationLedger {
     @Column(name = "reversal_reason", length = 255)
     private String reversalReason;
 
+    /** Payout of the Owner (staff must equal owner_staff_id); NULL until the month is arranged. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_monthly_payment_id")
+    private StaffMonthlyPayment ownerMonthlyPayment;
+
+    /** Payout of the treating PT for the treatment fee (staff must equal treating_staff_id). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "treating_monthly_payment_id")
+    private StaffMonthlyPayment treatingMonthlyPayment;
+
     public CommissionAllocationLedger() {}
 
     public Long getId() { return id; }
@@ -137,6 +147,10 @@ public class CommissionAllocationLedger {
     public void setAllocationUpdateBy(Long allocationUpdateBy) { this.allocationUpdateBy = allocationUpdateBy; }
     public AllocationEntryType getEntryType() { return entryType; }
     public void setEntryType(AllocationEntryType entryType) { this.entryType = entryType; }
+    public StaffMonthlyPayment getOwnerMonthlyPayment() { return ownerMonthlyPayment; }
+    public void setOwnerMonthlyPayment(StaffMonthlyPayment ownerMonthlyPayment) { this.ownerMonthlyPayment = ownerMonthlyPayment; }
+    public StaffMonthlyPayment getTreatingMonthlyPayment() { return treatingMonthlyPayment; }
+    public void setTreatingMonthlyPayment(StaffMonthlyPayment treatingMonthlyPayment) { this.treatingMonthlyPayment = treatingMonthlyPayment; }
     public String getReversalReason() { return reversalReason; }
     public void setReversalReason(String reversalReason) { this.reversalReason = reversalReason; }
 }
