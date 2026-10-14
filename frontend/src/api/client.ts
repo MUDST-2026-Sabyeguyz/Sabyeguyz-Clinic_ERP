@@ -272,6 +272,7 @@ export type CourseUsageTransaction = {
   usedAt: string
   voidedAt?: string | null
   voidReason?: string | null
+  therapistName?: string | null
 }
 export type DashboardResponse = {
   uniquePatients: number
