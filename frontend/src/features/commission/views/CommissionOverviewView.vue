@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -21,7 +22,9 @@ const errorMessage = ref('')
 const search = ref('')
 const branch = ref('')
 const status = ref('')
-const date = ref(new Date().toISOString().slice(0, 10))
+const route = useRoute()
+const selectedMonth = String(route.query.month ?? '')
+const date = ref(/^\d{4}-(0[1-9]|1[0-2])$/.test(selectedMonth) ? `${selectedMonth}-01` : new Date().toISOString().slice(0, 10))
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
@@ -36,7 +39,7 @@ const sales = computed(() => visible.value.reduce((s, r) => s + r.base, 0))
 const pool = computed(() => visible.value.reduce((s, r) => s + r.commission, 0))
 const treatment = computed(() => visible.value.reduce((s, r) => s + r.treatment, 0))
 const money = (value: number) => `฿${value.toLocaleString('th-TH')}`
-onMounted(async () => {
+async function loadOverview() {
   try {
     const period = date.value.slice(0, 7)
     const [year, month] = period.split('-').map(Number)
@@ -63,7 +66,9 @@ onMounted(async () => {
     rows.value = []
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลคอมมิชชันไม่สำเร็จ'
   }
-})
+}
+onMounted(loadOverview)
+watch(date, loadOverview)
 </script>
 <template>
   <div class="commission-manager-page">
@@ -152,7 +157,12 @@ onMounted(async () => {
                 }}</span>
               </td>
               <td>
-                <RouterLink class="detail-button" :to="`/staff/commission/staff/${row.id}`"
+                <RouterLink
+                  class="detail-button"
+                  :to="{
+                    path: `/staff/commission/staff/${row.id}`,
+                    query: { month: date.slice(0, 7) },
+                  }"
                   >ดูรายละเอียด</RouterLink
                 >
               </td>
