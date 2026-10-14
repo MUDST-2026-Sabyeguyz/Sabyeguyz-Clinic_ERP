@@ -17,8 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Receipt numbers use REYYMMNNNN, allocated atomically per branch/month from receipt_sequence.</p>
  *
- * <p>Tax policy is still to be confirmed with the business, so no tax is
- * charged: taxable_amount is the amount after the bill discount, tax_amount is
+ * <p>R32 confirms zero tax: taxable_amount is the amount after the bill discount, tax_amount is
  * zero and net_amount equals taxable_amount.</p>
  */
 @Service

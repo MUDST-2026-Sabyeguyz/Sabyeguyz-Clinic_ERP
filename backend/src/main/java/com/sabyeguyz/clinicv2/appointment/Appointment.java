@@ -85,6 +85,9 @@ public class Appointment {
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
 
+    @Column(name = "notes", columnDefinition = "text")
+    private String notes;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "requested_service_type", columnDefinition = "requested_service_type_enum")
@@ -132,6 +135,8 @@ public class Appointment {
     public void setContactName(String contactName) { this.contactName = contactName; }
     public String getContactPhone() { return contactPhone; }
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
     public RequestedServiceType getRequestedServiceType() { return requestedServiceType; }
     public void setRequestedServiceType(RequestedServiceType requestedServiceType) { this.requestedServiceType = requestedServiceType; }
     public String getExternalCalendarEventId() { return externalCalendarEventId; }

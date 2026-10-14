@@ -33,8 +33,11 @@ public class RuntimeCheck {
                 "--app.bootstrap.manager-password=runtime-test-password")) {
             base = "http://127.0.0.1:" + context.getWebServer().getPort();
             JdbcTemplate db = context.getBean(JdbcTemplate.class);
-            check(db.queryForObject("select count(*) from flyway_schema_history where success", Integer.class) == 3,
-                    "latest V1, integration V2 and reference V3 must migrate");
+            check(db.queryForObject("select count(*) from flyway_schema_history where success", Integer.class) == 4,
+                    "V1, integration V2, reference V3 and historical Assessment V1001 must migrate");
+            check(db.queryForObject("select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid "
+                    + "where t.typname='transaction_type_enum' and e.enumlabel='Assessment'", Integer.class) == 1,
+                    "historical Assessment enum must exist on a fresh production database");
             check(context.getBeansOfType(com.sabyeguyz.clinic.appointment.AppointmentController.class).isEmpty(),
                     "legacy controller must not be scanned");
             check(context.getBeansOfType(com.sabyeguyz.clinicv2.appointment.AppointmentController.class).size() == 1,

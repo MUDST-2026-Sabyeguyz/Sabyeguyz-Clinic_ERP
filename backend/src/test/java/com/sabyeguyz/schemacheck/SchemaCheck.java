@@ -43,7 +43,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * Checks the clinicv2 entities against a database built from db/migration V1 and V2 via the production Flyway runtime.
+ * Checks the clinicv2 entities against a database built from production Flyway migrations.
  *
  * <p>Step 1 lists every column whose database type Hibernate would reject (so one run shows all
  * problems, not just the first). Step 2 boots the whole clinicv2 bean graph over that database with
