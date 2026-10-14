@@ -197,6 +197,11 @@ const selectedStaffName = computed(
 const staffFilterOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
 )
+const requiredSalePaymentMethods = [
+  { code: 'BANK_TRANSFER', name: 'โอนเงินผ่านธนาคาร' },
+  { code: 'PROMPTPAY', name: 'พร้อมเพย์' },
+  { code: 'CARD', name: 'บัตรเครดิต/เดบิต' },
+]
 function paymentMethodCategory(code: string, name = '') {
   const value = `${code} ${name}`.toLocaleLowerCase('th')
   if (value.includes('bank') || value.includes('transfer') || value.includes('ธนาคาร'))
@@ -206,8 +211,7 @@ function paymentMethodCategory(code: string, name = '') {
   return 'other'
 }
 const salePaymentMethods = computed(() => {
-  const fallback = previewPaymentMethods.filter((method) => method.code !== 'CLINIC')
-  return fallback.map((defaultMethod) => {
+  return requiredSalePaymentMethods.map((defaultMethod) => {
     const category = paymentMethodCategory(defaultMethod.code, defaultMethod.name)
     return (
       paymentMethods.value.find(
