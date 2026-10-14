@@ -108,7 +108,7 @@ Open Question Q9 ยังไม่ปิด: ระบบปัจจุบั�
 
 ## 8. สิ่งที่ยังไม่ได้ตัดสินใจ (รอ manager)
 
-ข้อมูลเก่าเก็บหรือทิ้ง, คอมมิชชันโบนัส, คอร์สหมดอายุ, กฎสัดส่วน PT 2 คน, ภาษี, ขอบเขต Google Calendar, สถานะนัดเริ่มต้น
+ข้อมูลเก่าเก็บหรือทิ้ง, คอมมิชชันโบนัส, คอร์สหมดอายุ, กฎสัดส่วน PT 2 คน, ขอบเขต Google Calendar, สถานะนัดเริ่มต้น (ภาษี 0 ยืนยันใน R32 แล้ว)
 
 ## P4 payment policy (14 ตุลาคม 2026)
 
@@ -118,3 +118,17 @@ Open Question Q9 ยังไม่ปิด: ระบบปัจจุบั�
 - POST /api/payments/{paymentId}/refunds และ POST /api/refunds/{id}/complete ได้409ถ้าcourseในreceiptเคยมีusage (รวมreversedusage); lockcoursesเรียงIDโดยใช้ lockเดียวกับcourseusageAPI แล้วอ่านusageก่อนเขียนfinancialrows
 - Completeที่ถูกปฏิเสธคงrefundPending และอ่านhistoricalrefundsได้ตามเดิม ไม่เปลี่ยนvoid/commission reversal rules
 - Q5/Q6นายท่านให้พัก: ไม่มีdiscountprecision/ceiling changes, ไม่มีpaymentlabelselector/deriveใหม่, ไม่มีcredit/loanengine; ตัดแต้ม/วงเงินสมมติจากUI
+
+## P5 receipt history / print contract (14 ตุลาคม 2026)
+
+- GET /api/payments?patientId=...&receiptsOnly=true&page=0&size=20 ใช้serverpatient/branchfilterและเลือกlegacylineIDแรกต่อreceiptก่อนpagination จึงไม่ซ้ำmulti-line bill; เรียงtransactionDateและidDESCเพื่อให้pageเสถียร
+- receiptsOnlyไม่ส่งหรือfalseคงtransaction-line modeเดิมรวมline totalเดิม; receiptmode totalเป็นReceipt.netAmount ทั้งบิล; size1–100/page>=0
+- Summary/detailเพิ่ม receiptId(nativeReceipt.id), subtotalBeforeDiscount(หลังส่วนลดlineก่อนbill), billDiscountAmount,taxableAmount,taxAmount,netAmount จากreceiptที่persistแล้ว; paidยังเป็นยอดactivepayments แยกจากnet ไม่ใช้paid deriveส่วนลด
+- สำคัญ: idเดิมยังเป็นSalesTransaction.id และ GET /api/receipts/{id} รับlegacytransactionID ไม่ใช่nativeReceipt.id; หลายlineทำให้เลขสองชุดต่างกันได้ Frontendroute /staff/receipts/:id ใช้sale.idเดิมเช่นกัน
+- หลังPOSTpaymentสำเร็จ frontendเปิดหน้าreceiptที่GETข้อมูลจริง; refresh/retryreceiptเป็นGET ไม่สร้างsaleซ้ำ หากPOSTล้มเหลวไม่เปิดหน้าพิมพ์; หากPOSTcommitแต่navigation/GETผิดพลาดเก็บsaleIDแล้วเปิดอ่านซ้ำ ไม่POSTซ้ำอัตโนมัติ
+- หน้าประวัติขอreceiptmodeเฉพาะpatientก่อนแบ่งหน้า20records มีnext/prev; ตัวกรองlocalอื่นระบุว่าครอบคลุมหน้าปัจจุบัน ไม่อ้างเป็นการค้นทั้งประวัติ
+- หน้าพิมพ์แสดงreceiptNo/date/items/ส่วนลด/tax/net/paid/paymentLabel/methodจากserver และดึงสาขาของreceipt ไม่เดาจากpatienthomebranch; ไม่ใช้วันที่/BLอ้างอิงสมมติ ไม่รับรองสถานะพิมพ์สำเร็จจากwindow.print
+- `items[].description` ของ receipt detail อ่าน `item_name_snapshot` ณ วันขาย จึงไม่เปลี่ยนตามการแก้ชื่อ service ใน catalog; ชื่อผู้ป่วยและรายละเอียดสาขายังอ่านจากระเบียนปัจจุบัน เพราะยังไม่มี snapshot ของสองส่วนนี้
+- V1001 เพิ่ม `Assessment` ใน PostgreSQL transaction enum เพื่อเก็บประวัติเก่า; การขายใหม่ยัง reject. Legacy migration คงชนิด Assessment และเลขใบเสร็จเดิมถูก map เป็นเลขใหม่ตามกติกา migration เดิม
+- Tax0เป็นนโยบายที่ยืนยันในR32 ไม่มีการเปลี่ยนสูตร/ข้อมูลย้อนหลัง; ซ่อนAssessmentในUIการขายใหม่ คงAPIenum/ประวัติเดิมให้อ่านและพิมพ์ได้
+- Q4formatเลข/หน่วยcourseและQ9permissionmatrixยังไม่ปิด; ไม่เปลี่ยนreceiptNoหรือquantity/price semantics และคงglobalpatient/salesaccessเดิม เช่นเดียวกับAPIก่อนP5

@@ -734,6 +734,7 @@ function toggleOriginal(key: string) {
         </template>
 
         <template v-else-if="step === 'detail'">
+          <RouterLink v-if="selected.kind === 'sale'" :to="`/staff/receipts/${selected.id}`">ดูใบเสร็จ</RouterLink>
           <div class="transaction-progress" aria-label="ขั้นตอนการยกเลิกรายการ">
             <div class="active"><b>1</b><span>ตรวจสอบรายการ</span></div>
             <i></i>
