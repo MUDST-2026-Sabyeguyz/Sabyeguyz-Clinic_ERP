@@ -100,6 +100,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration/V1__initial_schema.sql
           psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration/V2__integration_runtime_compatibility.sql
           psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration/V3__reference_data.sql
+          psql -v ON_ERROR_STOP=1 -q -f src/main/resources/db/migration/V1001__historical_assessment_transaction_type.sql
 
       - name: Run the data migration
         run: psql -v ON_ERROR_STOP=1 -f scripts/legacy-migration/migrate-legacy-to-v2.sql
@@ -107,6 +108,7 @@ jobs:
       - name: Remember the next imported receipt number
         run: |
           echo "NEXT_RECEIPT_NO=$(psql -Atc "SELECT 'RE' || to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok','YYMM') || lpad((coalesce((SELECT last_running_no FROM receipt_sequence WHERE branch_id=(SELECT branch_id FROM branch WHERE branch_code='01') AND year_month=to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok','YYMM')),0)+1)::text,4,'0')")" >> "$GITHUB_ENV"
+          echo "ASSESSMENT_RECEIPT_NO=$(psql -Atc "SELECT new_receipt_no FROM legacy.map_receipt WHERE old_receipt_no='RC2601010003'")" >> "$GITHUB_ENV"
       - name: Rows that needed a decision
         run: psql -c 'SELECT area, old_ref, issue, action FROM legacy.migration_issue ORDER BY id'
 

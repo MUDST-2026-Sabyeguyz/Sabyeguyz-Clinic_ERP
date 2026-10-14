@@ -232,6 +232,7 @@ export type CoursePurchase = {
 export type PaymentLabel = 'FullyPaid' | 'Installment' | 'Deposit'
 export type SaleSummary = {
   id: number
+  receiptId?: number
   receiptNo: string
   paymentLabel?: PaymentLabel | null
   patient: Patient
@@ -247,6 +248,11 @@ export type SaleSummary = {
 }
 export type SaleReceipt = SaleSummary & { note?: string }
 export type SaleDetail = SaleReceipt & {
+  subtotalBeforeDiscount?: number
+  billDiscountAmount?: number
+  taxableAmount?: number
+  taxAmount?: number
+  netAmount?: number
   items: Array<{
     id: number
     type: string
@@ -465,7 +471,9 @@ export const appointmentApi = {
   confirm: (id: number) =>
     api.post<Appointment>(`/api/appointments/${id}/confirm`, {}).then(normalizeAppointment),
   linkPatient: (id: number, patientId: number) =>
-    api.post<Appointment>(`/api/appointments/${id}/link-patient`, { patientId }).then(normalizeAppointment),
+    api
+      .post<Appointment>(`/api/appointments/${id}/link-patient`, { patientId })
+      .then(normalizeAppointment),
   checkIn: (id: number) =>
     api.post<Appointment>(`/api/appointments/${id}/check-in`, {}).then(normalizeAppointment),
   startService: (id: number) =>
@@ -557,7 +565,13 @@ export const courseApi = {
 
 export const salesApi = {
   list: (
-    params: { patientId?: number; branchCode?: string; page?: number; size?: number } = {},
+    params: {
+      patientId?: number
+      branchCode?: string
+      page?: number
+      size?: number
+      receiptsOnly?: boolean
+    } = {},
   ) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
