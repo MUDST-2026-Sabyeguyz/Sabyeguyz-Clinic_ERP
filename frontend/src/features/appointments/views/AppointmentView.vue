@@ -353,10 +353,28 @@ const refreshWhenVisible = () => {
 }
 const googleCalendarUrl = (calendarId: string) =>
   `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}&ctz=Asia%2FBangkok`
+// The main button opens the calendar of the branch picked in the filter, or all connected branches side by side.
+const googleTargets = computed(() =>
+  (googleStatus.value?.branches ?? []).filter(
+    (branch) =>
+      branch.googleCalendarId &&
+      (selectedBranch.value === 'ทั้งหมด' || branch.branchCode === selectedBranch.value),
+  ),
+)
+const googleOpenUrl = computed(
+  () =>
+    'https://calendar.google.com/calendar/embed?' +
+    googleTargets.value
+      .map((branch) => `src=${encodeURIComponent(branch.googleCalendarId ?? '')}`)
+      .join('&') +
+    '&ctz=Asia%2FBangkok',
+)
+const googleOpenLabel = computed(() =>
+  selectedBranch.value === 'ทั้งหมด' ? 'ทุกสาขา' : (googleTargets.value[0]?.branchName ?? 'ทุกสาขา'),
+)
 async function openGoogleCalendar() {
   calendarSyncOpen.value = true
   googleMessage.value = ''
-  googleStatus.value = null
   if (!isManagerUser) return
   try {
     googleStatus.value = await calendarApi.status()
@@ -380,8 +398,17 @@ async function syncGoogleNow() {
     googleBusy.value = false
   }
 }
+async function loadGoogleStatus() {
+  if (!isManagerUser) return
+  try {
+    googleStatus.value = await calendarApi.status()
+  } catch {
+    // the main button simply stays hidden when the status cannot be read
+  }
+}
 onMounted(() => {
   void load()
+  void loadGoogleStatus()
   refreshTimer = setInterval(() => void refreshAppointments(), refreshIntervalMs)
   document.addEventListener('visibilitychange', refreshWhenVisible)
 })
@@ -860,6 +887,15 @@ function confirmCancellation() {
                 รายสัปดาห์
               </button>
             </div>
+            <a
+              v-if="isManagerUser && googleStatus?.enabled && googleTargets.length"
+              class="calendar-google"
+              :href="googleOpenUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-cy="google-open-main"
+              >เปิด Google Calendar ({{ googleOpenLabel }})</a
+            >
             <button class="calendar-google" type="button" @click="openGoogleCalendar">
               สถานะ Google Calendar
             </button>
