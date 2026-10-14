@@ -3,9 +3,16 @@ name: Backend CI
 on:
   push:
     branches: [develop, dev-backed, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [develop, dev-backed]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
