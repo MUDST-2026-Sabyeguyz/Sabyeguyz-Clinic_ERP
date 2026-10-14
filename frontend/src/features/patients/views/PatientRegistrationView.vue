@@ -5,8 +5,8 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { registerPatient } from '@/api/patients'
-import { branchApi, masterDataApi, patientApi, type Patient } from '@/api/client'
-import { type PatientRegistrationForm } from '../data/patientRegistration'
+import { branchApi, masterDataApi, patientApi } from '@/api/client'
+import { type PatientRegistrationForm, patientTitleOptions, patientGenderOptions } from '../data/patientRegistration'
 
 const submitting = ref(false)
 const route = useRoute()
@@ -17,15 +17,15 @@ const identityFocused = ref(false)
 const errorMessage = ref('')
 const confirmationOpen = ref(false)
 const duplicateOpen = ref(false)
-const duplicatePatient = ref<Patient | null>(null)
+const duplicatePatient = ref<{ id: number; hn: string; fullName: string } | null>(null)
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
 const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
 const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
 const insuranceCompanies = ref(['AIA'])
 const branches = ref<Array<{ branchCode: string; name: string }>>([])
-const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
-const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
+const titleOptions = patientTitleOptions
+const genderOptions = patientGenderOptions
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const nationalityOptions = [
   { value: 'ไทย', label: 'ไทย' },
@@ -53,11 +53,12 @@ const form = reactive<PatientRegistrationForm>({
   title: 'นาย',
   customerType: customerGroups.value[0]!,
   firstName: '',
+  middleName: '',
   lastName: '',
   nickname: '',
   fullNameEnglish: '',
   birthDate: '',
-  gender: 'ชาย',
+  gender: 'Male',
   phone: '',
   identityDocumentType: '',
   identityNumber: '',
@@ -113,23 +114,8 @@ const canSubmit = computed(() =>
     (isForeign.value || birthDateIsValid.value) &&
     ((isForeign.value && !form.phone.trim()) || phoneIsValid.value) &&
     (isForeign.value || form.identityDocumentType) &&
-    identityIsValid.value &&
-    (isForeign.value || form.address),
+    identityIsValid.value,
   ),
-)
-watch(
-  () => form.title,
-  (title) => {
-    if (title === 'นาย') form.gender = 'ชาย'
-    else if (title === 'นาง' || title === 'นางสาว') form.gender = 'หญิง'
-  },
-)
-watch(
-  () => form.gender,
-  (gender) => {
-    if (gender === 'ชาย') form.title = 'นาย'
-    else if (gender === 'หญิง') form.title = 'นางสาว'
-  },
 )
 watch(
   () => form.identityDocumentType,
@@ -172,8 +158,6 @@ onMounted(async () => {
       id: 10,
       hn: '070700000010',
       fullName: 'ผู้ป่วยสาธิต ชาย 10',
-      phone: '0890000010',
-      active: true,
     }
     duplicateOpen.value = true
   }
@@ -185,18 +169,17 @@ async function requestSubmit() {
     return
   }
   try {
-    const fullName = `${form.firstName} ${form.lastName}`.trim()
-    const [nameCandidates, identityCandidates] = await Promise.all([
+    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
+    const [nameCandidates, identity] = await Promise.all([
       patientApi.searchAll(fullName),
-      patientApi.searchAll(form.identityNumber),
+      form.identityDocumentType === 'NATIONAL_ID' && /^[0-9]{13}$/.test(form.identityNumber)
+        ? patientApi.identityLookup(form.identityNumber)
+        : Promise.resolve({ patient: null }),
     ])
-    duplicatePatient.value =
-      nameCandidates.find(
-        (item) =>
-          item.fullName.trim().toLocaleLowerCase('th-TH') === fullName.toLocaleLowerCase('th-TH'),
-      ) ??
-      identityCandidates[0] ??
-      null
+    // Preserve the existing name warning while Q2 is open; exact identity takes precedence.
+    duplicatePatient.value = identity.patient ?? nameCandidates.find(
+      (item) => item.fullName.trim().toLocaleLowerCase('th-TH') === fullName.toLocaleLowerCase('th-TH'),
+    ) ?? null
     if (duplicatePatient.value) {
       duplicateOpen.value = true
       return
@@ -217,13 +200,16 @@ async function submit() {
   submitting.value = true
   errorMessage.value = ''
   try {
-    const fullName = `${form.firstName} ${form.lastName}`.trim()
+    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
     const result = await registerPatient({
       branchCode: form.branchCode,
       username: `patient-${Date.now()}`,
       password: `Temp${form.identityNumber.slice(-6)}!`,
       email: form.email,
       title: form.title,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      middleName: form.middleName || null,
       fullName,
       birthDate: form.birthDate,
       gender: form.gender,
@@ -241,7 +227,7 @@ async function submit() {
       nickname: form.nickname,
       bloodGroup: form.bloodGroup,
       nationality: form.nationality,
-      customerType: form.customerType,
+      customerType: isForeign.value ? 'Foreigner' : 'Thai',
       customerSource: form.customerSource,
       insuranceCompany: form.insuranceCompany,
     })
@@ -314,6 +300,7 @@ async function submit() {
                   >รูปแบบชื่อไม่ถูกต้อง</small
                 ></label
               >
+              <label>ชื่อกลาง<input v-model.trim="form.middleName" placeholder="ชื่อกลาง" maxlength="100" /></label>
               <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.lastName) }"
                 >นามสกุล <em>*</em
                 ><input
@@ -421,16 +408,7 @@ async function submit() {
                   >กรุณากรอกตัวเลข 10 หลัก</small
                 ></label
               >
-              <label
-                class="wide"
-                :class="{ 'invalid-field': submitted && !isForeign && !form.address }"
-                >ที่อยู่ <em v-if="!isForeign">*</em
-                ><textarea v-model.trim="form.address" rows="4" /><small
-                  v-if="submitted && !isForeign && !form.address"
-                  class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ></label
-              >
+              <label class="wide">ที่อยู่<textarea v-model.trim="form.address" rows="4" /></label>
             </div>
           </section>
           <section class="registration-section">

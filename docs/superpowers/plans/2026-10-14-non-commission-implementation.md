@@ -83,7 +83,7 @@ npm run build
 
 **Interfaces proposed:** register/update/profile เพิ่ม `middleName: string|null`; แยก Thai/Foreigner ออกจาก customer group ตาม API เดิม; `GET /api/patients/identity-lookup?nationalId=<13 digits>` คืน `{exists:boolean, patient:PatientSummary|null}`; query exact equality เท่านั้น ใช้ auth และจำกัดข้อมูลตอบให้เท่าที่จำเป็น
 
-- [ ] เพิ่ม test ชื่อกลางที่ต้อง persist/read back จริง:
+- [x] เพิ่ม test ชื่อกลางที่ต้อง persist/read back จริง:
 
 ```javascript
 it('persists middleName across registration and profile reads', () => {
@@ -99,12 +99,14 @@ it('persists middleName across registration and profile reads', () => {
 })
 ```
 
-- [ ] รัน scoped patients/update/frontend-contract เพื่อบันทึก RED; เพิ่ม cases clearกลางเป็นnull, ไทย/อังกฤษ title ทั้ง5, gender3, foreignerไม่มีโทร/วันเกิด/พาสปอร์ต, addressว่าง
-- [ ] Map `@Column(name="patient_middle_name")` ใน Patient และเดินค่า DTO→service→entity→response; ไม่เพิ่มคอลัมน์ซ้ำ; title canonical value + UI label ไทย/อังกฤษ; อย่า normalizeชื่อกลางไปใส่ firstName
-- [ ] เพิ่ม lookup cases พบตรง, ไม่พบ, เลขบางส่วน, non-digit/lengthผิด, unauthenticated; implement repository exact nationalId query และ response; browser card-reader adapter ส่งเลขมา endpoint นี้ ไม่อ่าน hardware ใน JVM
+- [x] เพิ่ม P2 scoped RED และ full patients/update/frontend-contract regression; clearกลางเป็นnull, ไทย/อังกฤษ title ทั้ง5, gender3, foreignerไม่มีโทร/วันเกิด/พาสปอร์ต, addressว่าง; ผลจริงในรายงาน P2
+- [x] Map `@Column(name="patient_middle_name")` ใน Patient และเดินค่า DTO→service→entity→response; ไม่เพิ่มคอลัมน์ซ้ำ; title canonical value + UI label ไทย/อังกฤษ; ไม่รวมชื่อกลางใน firstName
+- [x] lookup cases พบตรง, ไม่พบ, เลขบางส่วน, non-digit/lengthผิด, unauthenticated; repository equality nationalId + minimal response; browser adapter ใช้ endpoint นี้ ยังไม่เชื่อม hardware จริง
 - [ ] Q1/Q2 ยังไม่ตอบให้คงกฎโทรไทยและไม่เพิ่ม hard-block ชื่อซ้ำ; F3 ระบุโทร/วันเกิดไม่บังคับในการลงทะเบียน แต่ R10 ขัดกันเรื่องคนไทย จึงอย่าเปลี่ยน validation ทั้งระบบก่อนคำตอบ; เมื่อคำตอบพร้อมเพิ่มตาราง tests แยก Thai/Foreignerและ create/updateให้เหมือนกัน; การเตือนชื่อซ้ำต้องไม่ mergeผู้ป่วยอัตโนมัติ
 - [ ] T27 เป็นแพ็กเกจเพิ่มต่างหากหลัง Q10: ออก field contract, forward migration, round-trip test และ backfillรายfield; ห้ามส่ง false/null แล้วแสดงเหมือนข้อมูลเดิมถูกเก็บครบ
-- [ ] GREEN scoped tests + unit mapping + full frontend build; commit `feat: complete patient fields and identity lookup`
+- [x] GREEN ของส่วนไม่ติด gate: API 176/176 (P2 15/15, P1 18/18, commission 17/17), frontend unit 30/30, browser 26/26, builds และ SchemaCheck 490 columns/0 problems ผ่าน; commit `feat: complete patient fields and identity lookup`
+
+P2 release นี้ทำเฉพาะส่วนที่ไม่ติด Q1/Q2/Q10; mapping พิสูจน์ด้วย API/DB readback + SchemaCheck, frontend adapter unit และ browser แทนการถือว่า compile อย่างเดียวคือ persist สำเร็จ รายงาน `docs/testing/2026-10-14-P2-Patient-Fields-Identity-Lookup.md` ระบุผล/ข้อจำกัด; checklist gated ข้างต้นยังไม่ปิด
 
 ## P3: Appointment New/Current, search และข้อมูลที่ไม่ persist (R12/15–22/24–25, T17–19)
 
