@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface PatientRepository extends JpaRepository<Patient, Long> {
     Optional<Patient> findByPatientHn(String patientHn);
+    Optional<Patient> findByNationalId(String nationalId);
 
     @Query("select p from Patient p where "
             + "(:query is null or :query = '' "

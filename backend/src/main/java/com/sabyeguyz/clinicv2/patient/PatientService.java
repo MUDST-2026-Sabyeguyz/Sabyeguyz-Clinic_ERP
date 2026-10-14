@@ -35,9 +35,10 @@ public class PatientService {
         Patient patient = new Patient();
         patient.setBranch(input.branch());
         patient.setCustomerType(require(input.customerType(), "customerType"));
-        patient.setTitle(requireText(input.title(), "title"));
+        patient.setTitle(normalizeTitle(requireText(input.title(), "title")));
         patient.setPatientFname(requireText(input.patientFname(), "patientFname"));
         patient.setPatientLname(requireText(input.patientLname(), "patientLname"));
+        patient.setPatientMiddleName(normalizeMiddleName(input.middleName()));
         patient.setGender(require(input.gender(), "gender"));
         // Thai patients must give a phone number and a 13-digit national id; foreigners may give neither
         // (they rarely carry documents), so only a provided national id is format-checked for them.
@@ -95,15 +96,17 @@ public class PatientService {
     /**
      * Edits a registered patient. A null argument leaves that field as it is; identity numbers, phone and names
      * follow the same rules as registration (a Thai patient keeps a phone number and a 13-digit national id).
+     * middleName is changed, including cleared to null, only when updateMiddleName is true.
      */
     @Transactional
     public Patient updateDetails(Long id, String title, String fname, String lname,
                                   com.sabyeguyz.clinicv2.enums.Gender gender, String phone, String nickname,
                                   String nationalId, String passportNo, LocalDate birthdate,
                                   com.sabyeguyz.clinicv2.enums.BloodGroup bloodGroup, String nationality,
-                                  String address, Long actorId) {
+                                  String address, String middleName, boolean updateMiddleName, Long actorId) {
         Patient patient = find(id);
-        if (title != null && !title.isBlank()) patient.setTitle(title.trim());
+        if (title != null && !title.isBlank()) patient.setTitle(normalizeTitle(title));
+        if (updateMiddleName) patient.setPatientMiddleName(normalizeMiddleName(middleName));
         if (fname != null && !fname.isBlank()) patient.setPatientFname(fname.trim());
         if (lname != null && !lname.isBlank()) patient.setPatientLname(lname.trim());
         if (gender != null) patient.setGender(gender);
@@ -133,6 +136,24 @@ public class PatientService {
 
     private Patient find(Long id) {
         return repository.findById(id).orElseThrow(PatientNotFoundException::new);
+    }
+
+    private static String normalizeMiddleName(String value) {
+        if (value == null || value.isBlank()) return null;
+        String name = value.trim();
+        if (name.length() > 100) throw new IllegalArgumentException("ชื่อกลางต้องไม่เกิน 100 ตัวอักษร");
+        return name;
+    }
+
+    private static String normalizeTitle(String value) {
+        return switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "นาย", "mr.", "mr" -> "นาย";
+            case "นางสาว", "miss" -> "นางสาว";
+            case "นาง", "mrs.", "mrs" -> "นาง";
+            case "เด็กชาย", "boy" -> "เด็กชาย";
+            case "เด็กหญิง", "girl" -> "เด็กหญิง";
+            default -> value.trim();
+        };
     }
 
     private static <T> T require(T value, String field) {

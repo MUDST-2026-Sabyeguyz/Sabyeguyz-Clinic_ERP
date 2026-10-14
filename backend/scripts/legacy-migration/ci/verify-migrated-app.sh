@@ -47,6 +47,11 @@ expect_jq "commission allocations (with the reversal row) are kept" '.allocation
 expect_jq "paid and bonus visits keep the full entitlement" '.purchase.sessions == 10 and .purchase.bonusSessions == 1'
 expect_jq "the locked commission rate is kept" '(.purchase.lockedCommissionRate | tonumber) == 0.05'
 req GET '/api/course-usages'; expect_jq "the usage list shows the reversed usage" 'map(select(.voidedAt != null)) | length == 1'
+req GET "/api/payments?patientId=$FX_PATIENT_ID&receiptsOnly=true&size=100"
+expect_jq "historical Assessment receipt is listed" ".items | map(select(.receiptNo == \"$ASSESSMENT_RECEIPT_NO\")) | length == 1"
+ASSESSMENT_LINE_ID=$(printf '%s' "$BODY" | jq -r ".items[] | select(.receiptNo == \"$ASSESSMENT_RECEIPT_NO\") | .id")
+req GET "/api/receipts/$ASSESSMENT_LINE_ID"
+expect_jq "historical Assessment item keeps its type and totals" ".receiptNo == \"$ASSESSMENT_RECEIPT_NO\" and .items[0].type == \"Assessment\" and (.netAmount | tonumber) == 600"
 req GET '/api/reports/revenue?from=2020-01-01&to=2099-12-31'; expect_status "revenue report over migrated payments" 200
 req GET '/api/dashboard/summary?from=2020-01-01&to=2099-12-31'; expect_status "dashboard over migrated data" 200
 
