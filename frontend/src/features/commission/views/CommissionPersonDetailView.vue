@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import CommissionTabs from './CommissionTabs.vue'
-import { commissionApi } from '@/api/client'
+import { commissionApi, staffApi } from '@/api/client'
 type TreatmentRow = Awaited<ReturnType<typeof commissionApi.treatmentReport>>[number]
 const route = useRoute(),
   router = useRouter()
@@ -27,6 +27,20 @@ const base = ref(0),
   rate = ref(0),
   commission = ref(0),
   saleCount = ref(0)
+type Tier = { minimum: number; maximum: number | null; rate: number; order: number }
+const tiers = ref<Tier[]>([])
+const employeeCode = ref('')
+const tierNotice = ref('')
+const currentTier = computed(() =>
+  tiers.value.find(
+    (t) =>
+      base.value >= Number(t.minimum) && (t.maximum === null || base.value <= Number(t.maximum)),
+  ),
+)
+const nextTier = computed(() => tiers.value.find((t) => Number(t.minimum) > base.value))
+const tierProgress = computed(() =>
+  nextTier.value ? Math.min(100, (base.value / Number(nextTier.value.minimum)) * 100) : 100,
+)
 const treatments = ref<TreatmentRow[]>([]),
   closingId = ref<number | null>(null),
   approved = ref(false)
@@ -63,10 +77,38 @@ async function load() {
     rate.value = Number(person.rate) * 100
     commission.value = Number(person.commission)
     saleCount.value = Number(person.saleCount)
-    treatments.value = treatmentReport.filter((item) => item.treatingStaffId === staffId.value)
+    treatments.value = treatmentReport.filter(
+      (item) =>
+        item.treatingStaffId === staffId.value && item.ownerStaffId !== item.treatingStaffId,
+    )
     const closing = closings.find((item) => item.employeeId === staffId.value)
     closingId.value = closing?.id ?? null
     approved.value = closing?.status === 'CLOSED'
+    const staff = await staffApi.get(staffId.value).catch(() => null)
+    employeeCode.value = staff?.employeeCode ?? String(staffId.value)
+    tiers.value = []
+    tierNotice.value = ''
+    try {
+      const schemes = (await commissionApi.schemes()) as Array<{
+        id: number
+        version: string
+        active: boolean
+        effectiveFrom: string
+        effectiveTo: string | null
+      }>
+      const scheme = schemes.find((s) =>
+        closing
+          ? s.version === closing.version
+          : s.active && s.effectiveFrom <= to.value && (!s.effectiveTo || s.effectiveTo > to.value),
+      )
+      if (scheme)
+        tiers.value = ((await commissionApi.tiers(scheme.id)) as Tier[]).sort(
+          (a, b) => a.order - b.order,
+        )
+      if (!tiers.value.length) tierNotice.value = 'ยังไม่มีข้อมูลช่วง Tier ของรอบนี้'
+    } catch {
+      tierNotice.value = 'โหลดข้อมูลช่วง Tier ไม่สำเร็จ'
+    }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลค่าตอบแทนไม่สำเร็จ'
   } finally {
@@ -87,7 +129,7 @@ async function confirm() {
     await commissionApi.closeClosing(closingId.value)
     approved.value = true
     confirmOpen.value = false
-    await router.push('/staff/commission')
+    await router.push({ path: '/staff/commission', query: { month: month.value } })
   } catch (error) {
     validationMessage.value = error instanceof Error ? error.message : 'อนุมัติยอดไม่สำเร็จ'
   } finally {
@@ -95,6 +137,7 @@ async function confirm() {
   }
 }
 onMounted(load)
+watch([staffId, month], load)
 </script>
 <template>
   <div class="commission-manager-page">
@@ -102,9 +145,11 @@ onMounted(load)
     <main class="commission-manager-main">
       <header class="detail-head">
         <div>
-          <button @click="router.push('/staff/commission')">← กลับหน้าภาพรวม</button>
+          <button @click="router.push({ path: '/staff/commission', query: { month: month } })">
+            ← กลับหน้าภาพรวม
+          </button>
           <h1>รายละเอียดค่าตอบแทนรายบุคคล</h1>
-          <p v-if="name">{{ name }} · รหัส {{ staffId }} · {{ branchName }}</p>
+          <p v-if="name">{{ name }} · รหัส {{ employeeCode }} · {{ branchName }}</p>
         </div>
         <span
           v-if="!loading && !errorMessage"
@@ -120,11 +165,14 @@ onMounted(load)
         ><section class="commission-metrics">
           <article>
             <span>ฐานคำนวณ</span><b>{{ money(base) }}</b
-            ><small>{{ saleCount }} รายการขาย</small>
+            ><small>หลังส่วนลดรายรายการ · {{ saleCount }} รายการขาย</small>
           </article>
           <article class="highlight">
             <span>ค่าคอมมิชชัน</span><b>{{ money(commission) }}</b
-            ><small>อัตรา {{ rate.toLocaleString('th-TH') }}%</small>
+            ><small
+              >{{ currentTier ? `Tier ${currentTier.order} · ` : ''
+              }}{{ rate.toLocaleString('th-TH') }}%</small
+            >
           </article>
           <article>
             <span>ค่ารักษาแทน</span><b>{{ money(treatmentTotal) }}</b
@@ -137,26 +185,55 @@ onMounted(load)
         </section>
         <section class="detail-columns">
           <article class="commission-card tier-detail">
-            <h2>ค่าคอมมิชชัน</h2>
+            <h2>Tier Commission</h2>
             <div class="tier-box">
               <b
-                >อัตราตามรอบ <em>{{ rate.toLocaleString('th-TH') }}%</em></b
-              ><small>ฐานคำนวณ {{ money(base) }}</small>
+                >{{ currentTier ? `Tier ${currentTier.order}` : 'อัตราตามรอบ'
+                }}<em>{{ rate.toLocaleString('th-TH') }}%</em></b
+              >
+              <small>ยอดขายเดือนนี้ {{ money(base) }}</small>
+              <div
+                v-if="currentTier"
+                class="tier-progress"
+                role="progressbar"
+                :aria-valuenow="Math.round(tierProgress)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-label="ความคืบหน้ายอดขาย"
+              >
+                <span :style="{ width: `${tierProgress}%` }"></span>
+              </div>
+              <small v-if="nextTier"
+                >อีก {{ money(Number(nextTier.minimum) - base) }} ถึง Tier
+                {{ nextTier.order }}</small
+              >
+              <small v-else-if="currentTier">อยู่ใน Tier สูงสุด</small>
+              <small v-if="tierNotice">{{ tierNotice }}</small>
             </div>
+            <h3>ที่มาของฐานคำนวณ</h3>
             <dl>
               <div>
-                <dt>จำนวนรายการขาย</dt>
-                <dd>{{ saleCount }}</dd>
+                <dt>ยอดบริการก่อนส่วนลด</dt>
+                <dd>—</dd>
+              </div>
+              <div>
+                <dt>ส่วนลดรายรายการ</dt>
+                <dd>—</dd>
               </div>
               <div class="total">
-                <dt>ค่าคอมมิชชัน</dt>
-                <dd>{{ money(commission) }}</dd>
+                <dt>ฐานค่าคอมมิชชัน</dt>
+                <dd>{{ money(base) }}</dd>
+              </div>
+              <div>
+                <dt>ส่วนลดท้ายบิล (ไม่หักฐาน)</dt>
+                <dd>—</dd>
               </div>
             </dl>
+            <p class="breakdown-note">ระบบยังไม่ส่งยอดก่อนส่วนลดและยอดส่วนลดแยกรายบุคคล</p>
           </article>
           <article class="commission-card treatment-detail">
             <h2>ค่ารักษาแทน</h2>
-            <p>รายการจากรอบคำนวณจริง</p>
+            <p>รายการที่เข้ารักษาแทนนักกายภาพเจ้าของเคส</p>
             <p v-if="!treatments.length" class="empty-treatment">ไม่มีรายการรักษาแทนในรอบนี้</p>
             <div v-for="item in treatments" :key="item.id" class="treatment-row">
               <span>{{ thaiDate(item.visitDate) }} · {{ item.courseCode }}</span
@@ -166,6 +243,9 @@ onMounted(load)
               <b>รวมค่ารักษาแทน</b><b>{{ money(treatmentTotal) }}</b>
             </div>
             <footer v-if="!approved">
+              <button class="commission-secondary" disabled title="ระบบยังไม่รองรับการส่งกลับแก้ไข">
+                ส่งกลับแก้ไข
+              </button>
               <button
                 class="commission-primary"
                 :disabled="closingId === null"
@@ -174,6 +254,7 @@ onMounted(load)
                 อนุมัติยอด
               </button>
             </footer>
+            <p v-if="!approved" class="breakdown-note">การส่งกลับแก้ไขยังไม่เปิดให้บริการ</p>
             <p v-else class="approved-note">✓ อนุมัติยอดเรียบร้อยแล้ว</p>
           </article>
         </section></template
@@ -232,6 +313,8 @@ onMounted(load)
   margin: 0 0 18px;
 }
 .tier-box {
+  max-width: 390px;
+  box-sizing: border-box;
   display: grid;
   gap: 12px;
   padding: 18px;
@@ -245,6 +328,30 @@ onMounted(load)
 .tier-box em {
   color: #1e8b86;
   font-style: normal;
+}
+.tier-progress {
+  height: 7px;
+  border-radius: 99px;
+  background: #e2ebe6;
+  overflow: hidden;
+}
+.tier-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1e807c;
+}
+.breakdown-note {
+  font-size: 12px;
+  color: #667a72;
+}
+.tier-detail h3 {
+  margin: 20px 0 8px;
+  font-size: 18px;
+}
+.tier-detail dd {
+  margin: 0;
+  text-align: right;
 }
 .tier-detail dl {
   display: grid;
