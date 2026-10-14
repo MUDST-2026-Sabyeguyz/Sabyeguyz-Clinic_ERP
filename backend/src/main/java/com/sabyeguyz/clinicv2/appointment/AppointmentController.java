@@ -29,10 +29,7 @@ import org.springframework.web.bind.annotation.*;
  * Service catalog dict has none either), so {@code endAt} in the response
  * always equals {@code startAt} - the frontend calendar/list views that
  * show an appointment's span will need a real fix once a duration source
- * exists, not just this API shape. Also: Appointment has no note/
- * cancel-reason columns (only Appointment_status_history.reason, written
- * internally by AppointmentService) - the response's note/cancelReason are
- * always null and CreateRequest.note is accepted but silently dropped.
+ * exists (Q8). Notes use appointment.notes; cancellation reasons are read from status history.
  */
 @Transactional
 @RestController
@@ -49,11 +46,13 @@ public class AppointmentController {
     private final ServiceRepository services;
     private final CurrentActor actor;
     private final BranchAccessPolicy branchAccess;
+    private final AppointmentStatusHistoryRepository history;
 
     public AppointmentController(AppointmentService service, AppointmentRepository repository,
                                   PatientVisitService visitService, PatientVisitRepository visits,
                                   PatientRepository patients, StaffRepository staff,
-                                  ServiceRepository services, CurrentActor actor, BranchAccessPolicy branchAccess) {
+                                  ServiceRepository services, CurrentActor actor, BranchAccessPolicy branchAccess,
+                                  AppointmentStatusHistoryRepository history) {
         this.service = service;
         this.repository = repository;
         this.visitService = visitService;
@@ -63,6 +62,7 @@ public class AppointmentController {
         this.services = services;
         this.actor = actor;
         this.branchAccess = branchAccess;
+        this.history = history;
     }
 
     /**
@@ -78,9 +78,9 @@ public class AppointmentController {
 
     public record CancelRequest(String reason) {}
 
-    public record RescheduleRequest(OffsetDateTime startAt, Long therapistId) {}
+    public record RescheduleRequest(OffsetDateTime startAt, Long therapistId, com.fasterxml.jackson.databind.JsonNode note) {}
 
-    public record PatientSummary(Long id, String hn, String fullName) {}
+    public record PatientSummary(Long id, String hn, String fullName, String phone) {}
     public record TherapistSummary(Long id, String fullName) {}
     public record ServiceSummary(Long id, String name, int durationMinutes) {}
 
@@ -92,6 +92,7 @@ public class AppointmentController {
 
     @GetMapping
     public PageResponse search(@RequestParam(required = false) String branchCode,
+                                @RequestParam(defaultValue = "") String query,
                                 @RequestParam(required = false) LocalDate date,
                                 @RequestParam(required = false) Long therapistId,
                                 @RequestParam(required = false) String status,
@@ -100,10 +101,13 @@ public class AppointmentController {
         Branch scope = branchAccess.scope(branchCode);
         Long branchId = scope == null ? null : scope.getId();
         AppointmentStatus statusValue = status == null || status.isBlank() ? null : parseStatus(status);
+        if (page < 0 || size < 1 || size > 100) throw new IllegalArgumentException("Invalid pagination");
+        String keyword = query.trim().toLowerCase(java.util.Locale.ROOT);
         Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date, therapistId,
                 statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
+                keyword, "%" + keyword + "%",
                 PageRequest.of(page, size, Sort.by("appointmentDate").ascending().and(Sort.by("appointmentTime").ascending())));
-        return new PageResponse(result.getContent().stream().map(AppointmentController::toResponse).toList(),
+        return new PageResponse(result.getContent().stream().map(this::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
@@ -119,6 +123,9 @@ public class AppointmentController {
             throw new IllegalArgumentException("ต้องระบุสาขา");
         }
         Branch branch = branchAccess.scope(request.branchCode());
+        if (request.therapistId() == null || request.startAt() == null) {
+            throw new IllegalArgumentException("ต้องระบุนักกายภาพและเวลานัด");
+        }
         Staff therapist = staff.findById(request.therapistId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ให้บริการ"));
         if (!branch.getId().equals(therapist.getBranch().getId())) {
@@ -129,8 +136,8 @@ public class AppointmentController {
         if ("NEW".equalsIgnoreCase(request.patientType())) {
             RequestedServiceType requested = request.requestedServiceType() == null || request.requestedServiceType().isBlank()
                     ? null : RequestedServiceType.valueOf(request.requestedServiceType().trim());
-            return toResponse(service.bookNewPatient(request.contactName(), request.contactPhone(), branch, therapist,
-                    requested, null, local.toLocalDate(), local.toLocalTime(), initial, actor.currentId()));
+            return createdResponse(service.bookNewPatient(request.contactName(), request.contactPhone(), branch, therapist,
+                    requested, null, local.toLocalDate(), local.toLocalTime(), initial, actor.currentId()), request.note());
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
@@ -138,7 +145,7 @@ public class AppointmentController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         Appointment appointment = service.book(patient, branch, therapist, svc, null,
                 local.toLocalDate(), local.toLocalTime(), initial, actor.currentId());
-        return toResponse(appointment);
+        return createdResponse(appointment, request.note());
     }
 
     @PostMapping("/{id}/confirm")
@@ -149,7 +156,8 @@ public class AppointmentController {
 
     @PostMapping("/{id}/link-patient")
     public Response linkPatient(@PathVariable Long id, @RequestBody LinkPatientRequest request) {
-        requireAppointmentAccess(id);
+        // Lock before the first entity load: otherwise a waiting transaction could keep a stale NEW snapshot.
+        branchAccess.requireAccess(service.getForUpdate(id).getBranch());
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         return toResponse(service.linkRegisteredPatient(id, patient, actor.currentId()));
@@ -193,11 +201,19 @@ public class AppointmentController {
     @PatchMapping("/{id}")
     public Response reschedule(@PathVariable Long id, @RequestBody RescheduleRequest request) {
         requireAppointmentAccess(id);
+        if (request.startAt() == null) throw new IllegalArgumentException("ต้องระบุเวลานัดใหม่");
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
         // Reassigning the therapist on reschedule is not supported yet (AppointmentService.reschedule
         // only moves date/time) - request.therapistId() is accepted but ignored, flagged for the team.
-        return toResponse(service.reschedule(id, local.toLocalDate(), local.toLocalTime(),
-                "เลื่อนนัดผ่าน API", actor.currentId()));
+        Appointment appointment = service.reschedule(id, local.toLocalDate(), local.toLocalTime(),
+                "เลื่อนนัดผ่าน API", actor.currentId());
+        if (request.note() != null) {
+            if (!request.note().isNull() && !request.note().isTextual()) {
+                throw new IllegalArgumentException("หมายเหตุต้องเป็นข้อความหรือ null");
+            }
+            appointment.setNotes(request.note().isNull() ? null : request.note().textValue());
+        }
+        return toResponse(appointment);
     }
 
     private static AppointmentStatus parseInitialStatus(String status) {
@@ -232,14 +248,21 @@ public class AppointmentController {
         return appointment;
     }
 
-    private static Response toResponse(Appointment appointment) {
+    private Response createdResponse(Appointment appointment, String note) {
+        appointment.setNotes(note);
+        return toResponse(repository.save(appointment));
+    }
+
+    private Response toResponse(Appointment appointment) {
         Instant startAt = appointment.getAppointmentDate().atTime(appointment.getAppointmentTime())
                 .atZone(CLINIC_ZONE).toInstant();
         Patient patient = appointment.getPatient();
         PatientSummary patientSummary = patient == null
-                ? new PatientSummary(null, null, appointment.getContactName())
+                ? new PatientSummary(null, null, appointment.getContactName(), appointment.getContactPhone())
                 : new PatientSummary(patient.getId(), patient.getPatientHn(),
-                        patient.getPatientFname() + " " + patient.getPatientLname());
+                        java.util.stream.Stream.of(patient.getPatientFname(), patient.getPatientMiddleName(), patient.getPatientLname())
+                            .filter(value -> value != null && !value.isBlank()).collect(java.util.stream.Collectors.joining(" ")),
+                        patient.getPhone());
         Service svc = appointment.getService();
         ServiceSummary serviceSummary = svc == null
                 ? new ServiceSummary(null, appointment.getRequestedServiceType() == null ? null
@@ -248,7 +271,9 @@ public class AppointmentController {
         return new Response(appointment.getId(), appointment.getBranch().getBranchCode(), patientSummary,
                 new TherapistSummary(appointment.getStaff().getId(),
                         appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname()),
-                serviceSummary, startAt, startAt, apiStatus(appointment.getAppointmentStatus()), null, null,
+                serviceSummary, startAt, startAt, apiStatus(appointment.getAppointmentStatus()), appointment.getNotes(),
+                history.findFirstByAppointmentIdAndToStatusOrderByChangedAtDescIdDesc(appointment.getId(), AppointmentStatus.Cancelled)
+                        .map(AppointmentStatusHistory::getReason).orElse(null),
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),
                 appointment.getContactPhone());
     }

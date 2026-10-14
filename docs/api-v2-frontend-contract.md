@@ -33,10 +33,10 @@
 - HN รูปแบบ `ปี(2) + สาขา(2) + เดือน(2) + ลำดับ(4)` ออกพร้อมการบันทึกผู้ป่วย
 
 ### นัดหมาย (`/api/appointments`)
-- schema ใหม่ไม่มีเวลาสิ้นสุดและไม่มี note/cancelReason: `endAt` เท่ากับ `startAt`, `note` และ `cancelReason` เป็น null เสมอ
+- ยังไม่มีเวลาสิ้นสุด: `endAt` เท่ากับ `startAt` ระหว่างรอ Q8; P3 map `note` ไป `appointment.notes` เดิม และอ่าน `cancelReason` จากประวัติ Cancelled ล่าสุด
 - มี `patientType` = `CURRENT` หรือ `NEW`; `NEW` จองด้วย `contactName`/`contactPhone` แล้ว `link-patient` เมื่อลงทะเบียน
 - `status` เริ่มต้นได้ `Unconfirmed` หรือ `Confirmed`; จอง therapist เวลาเดียวกันซ้ำจะได้ 400
-- `PATCH` เลื่อนนัดเปลี่ยนได้เฉพาะวัน/เวลา (`therapistId` ถูกเมินในตอนนี้)
+- `PATCH` เลื่อนนัดเปลี่ยนวัน/เวลาและ `note` ได้ (`therapistId` ยังถูกเมินระหว่างรอ Q8); ไม่ส่ง note คงเดิม, ส่ง null ล้างค่า
 
 ### ผู้ใช้และ role
 - `AuthResponse.email` เป็น null (ไม่มีคอลัมน์ email); `role` คือ role แรกของผู้ใช้ (v2 รองรับหลาย role)
@@ -89,11 +89,23 @@ Open Question Q9 ยังไม่ปิด: ระบบปัจจุบั�
 - คง logic name warning เดิมขณะ Q2 ยังเปิด แต่เปลี่ยน identity check จาก broad patient search เป็น exact endpoint; ไม่อ้างว่าการเตือนชื่อซ้ำครอบคลุมเพราะ repository เดิมค้น first/last แยก ไม่ได้ค้น display name ทั้งก้อน
 - Allergy/consent/emergency (T27/Q10) ยังไม่ implement/backfill; placeholder fields เดิมใน profile ไม่ใช่หลักฐานว่าข้อมูลเหล่านี้ถูกบันทึกแล้ว
 
-## 6. Audit log
+## 6. P3 appointment workflow (14 ตุลาคม 2026)
+
+- NEW ต้องมี contactName/contactPhone/branchCode/therapistId/startAt; room ไม่บังคับ และไม่สร้าง Patient ก่อนลงทะเบียน; requestedServiceType รับ SingleVisit/Course ตาม enum เดิม
+- `GET /api/appointments?query=...` ค้นชื่อจริง/กลาง/นามสกุล/ชื่อเต็ม/ชื่อเล่น/HN/โทรของ CURRENT และชื่อ/โทรของ NEW ใน repository ก่อนแบ่งหน้า ภายใต้ขอบเขตสาขา P1; page ต้องไม่ติดลบและ size 1–100
+- response เพิ่ม patient.phone, patientType และ contact fields ให้ client แยก NEW/CURRENT จริง; NEW patient.id/hn เป็น null ไม่ใช่ทะเบียนผู้ป่วยที่สร้างล่วงหน้า
+- POST link-patient ล็อก appointment ก่อนโหลดครั้งแรกและตรวจประเภทใน transaction เดียว; คำขอพร้อมกันสำเร็จได้หนึ่งคำขอ อีกคำขอได้ 400 ไม่เปลี่ยนไปเป็นคนอื่นโดยเงียบ
+- หน้า NEW ยืนยันแล้วไปลงทะเบียนพร้อม appointmentId จากนั้น link และไปบริการพร้อม patientId/appointmentId; retry หลัง link ล้มเหลวใช้ patient ที่สร้างแล้ว ไม่ลงทะเบียนซ้ำภายในหน้าปัจจุบัน; response ของ link สูญหายตรวจยืนยันด้วย patient ID เดิมได้
+- CURRENT ยืนยันแล้วเปิดบริการของผู้ป่วยคนนั้นโดยไม่ค้นซ้ำ; หน้าบริการตรวจความสัมพันธ์ patient/appointment และล้าง query context เมื่อเปลี่ยนผู้ป่วย ไม่เปลี่ยน sale/payment/commission rules
+- UI ถอดห้องและตัวกรองบริการ แสดงเบอร์บนรายการ/ปฏิทิน จำกัด branch selector ให้ Manager; นัดรอยืนยันยังแก้ได้ นัด Confirmed แสดงบริการ/ลงทะเบียนแทน
+- คง enum/transition เดิม: Unconfirmed/Rescheduled แสดงกลุ่มรอยืนยัน, Confirmed/Arrived/InService กลุ่มยืนยัน, Completed ใช้บริการแล้ว, Cancelled/NoShow กลุ่มยกเลิก; action selector ยังแสดงสถานะจริง ไม่ลบประวัติ enum
+- Q8 ยังเปิดเรื่อง duration/endAt, ความหมายใช้บริการแล้วกับ receipt และการย้าย therapist; Q9 ยังพักตาม P1; ไม่ปิด Google Calendar integration หรือ Assessment sales scope ของ P5 ด้วยงานนี้
+
+## 7. Audit log
 
 `GET /api/audit-logs` บันทึกเมื่อ: ขาย, ยกเลิกบิล, ขอ/จบ/ล้มเหลวการคืนเงิน, ซื้อ/ยกเลิกคอร์ส, โอน/ย้อนการโอนคอร์ส,
 สร้าง/แก้/ปิด/เปิดผู้ใช้ (ตาราง, id, ผู้ทำ, เวลา, ค่าเดิม/ใหม่)
 
-## 7. สิ่งที่ยังไม่ได้ตัดสินใจ (รอ manager)
+## 8. สิ่งที่ยังไม่ได้ตัดสินใจ (รอ manager)
 
 ข้อมูลเก่าเก็บหรือทิ้ง, คอมมิชชันโบนัส, คอร์สหมดอายุ, กฎสัดส่วน PT 2 คน, ภาษี, ขอบเขต Google Calendar, สถานะนัดเริ่มต้น
