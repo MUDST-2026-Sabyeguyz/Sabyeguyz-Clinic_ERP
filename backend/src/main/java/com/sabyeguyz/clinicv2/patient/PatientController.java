@@ -54,7 +54,7 @@ public class PatientController {
             String branchCode, String customerType, String title, String firstName, String lastName,
             String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
             String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
-            String fullName) {}
+            String fullName, com.fasterxml.jackson.databind.JsonNode middleName) {}
 
     public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -69,7 +69,23 @@ public class PatientController {
             String address, boolean drugAllergy, boolean foodAllergy, String chronicDisease,
             String emergencyContactName, String emergencyContactRelationship, String emergencyContactPhone,
             boolean privacyConsent, String nickname, String bloodGroup, String nationality,
-            String customerType, String customerSource, String insuranceCompany, String customerTypeCode) {}
+            String customerType, String customerSource, String insuranceCompany, String customerTypeCode,
+            String firstName, String lastName, String middleName) {}
+
+    public record IdentityPatientSummary(Long id, String hn, String fullName) {}
+    public record IdentityLookupResponse(boolean exists, IdentityPatientSummary patient) {}
+
+    @GetMapping("/identity-lookup")
+    public IdentityLookupResponse identityLookup(@RequestParam String nationalId) {
+        actor.requireId();
+        if (!nationalId.matches("[0-9]{13}")) {
+            throw new IllegalArgumentException("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
+        }
+        return repository.findByNationalId(nationalId)
+                .map(patient -> new IdentityLookupResponse(true,
+                        new IdentityPatientSummary(patient.getId(), patient.getPatientHn(), fullName(patient))))
+                .orElseGet(() -> new IdentityLookupResponse(false, null));
+    }
 
     @GetMapping
     public PageResponse<PatientSummary> search(
@@ -102,6 +118,12 @@ public class PatientController {
     public PatientSummary register(@RequestBody RegisterRequest request) {
         Branch branch = branches.findByBranchCode(requireText(request.branchCode(), "branchCode"))
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
+        String middleName = middleNameOf(request);
+        if (middleName != null && !middleName.isBlank()
+                && (request.firstName() == null || request.firstName().isBlank()
+                    || request.lastName() == null || request.lastName().isBlank())) {
+            throw new IllegalArgumentException("กรุณาส่ง firstName และ lastName แยกกันเมื่อระบุชื่อกลาง");
+        }
         String[] names = namesOf(request);
         boolean passport = "PASSPORT".equalsIgnoreCase(request.identityDocumentType());
         PatientRegistration registration = new PatientRegistration(
@@ -120,7 +142,7 @@ public class PatientController {
                 parseBloodGroup(request.bloodGroup()),
                 request.nationality(),
                 request.address(),
-                null, null, null, null);
+                null, null, null, null, middleName);
         Patient patient = service.register(registration, actor.currentId());
         return toSummary(patient);
     }
@@ -128,18 +150,32 @@ public class PatientController {
     @PutMapping("/{id}")
     public PatientProfile update(@PathVariable Long id, @RequestBody RegisterRequest request) {
         String[] names = namesOf(request);
+        String middleName = middleNameOf(request);
+        if ((request.firstName() == null || request.firstName().isBlank())
+                && (request.lastName() == null || request.lastName().isBlank())
+                && request.fullName() != null && !request.fullName().isBlank()) {
+            Patient existing = service.get(id);
+            if (request.fullName().trim().equals(fullName(existing))) {
+                // An unchanged legacy display name must not be split and duplicate the stored middle name.
+                names = new String[] {null, null};
+            } else if (existing.getPatientMiddleName() != null || (middleName != null && !middleName.isBlank())) {
+                throw new IllegalArgumentException("กรุณาส่ง firstName และ lastName แยกกันเมื่อแก้ชื่อผู้ป่วยที่มีชื่อกลาง");
+            }
+        }
         boolean passport = "PASSPORT".equalsIgnoreCase(request.identityDocumentType());
         Patient patient = service.updateDetails(id, request.title(), names[0], names[1],
                 request.gender() == null || request.gender().isBlank() ? null : parseGender(request.gender()),
                 request.phone(), request.nickname(), passport ? null : request.identityNumber(),
                 passport ? request.identityNumber() : null, request.birthDate(),
-                parseBloodGroup(request.bloodGroup()), request.nationality(), request.address(), actor.currentId());
+                parseBloodGroup(request.bloodGroup()), request.nationality(), request.address(),
+                middleName, request.middleName() != null, actor.currentId());
         return toProfile(patient);
     }
 
     /** firstName and lastName when given, otherwise fullName split at its first space (what the web form sends). */
     private static String[] namesOf(RegisterRequest request) {
-        boolean given = request.firstName() != null && !request.firstName().isBlank();
+        boolean given = (request.firstName() != null && !request.firstName().isBlank())
+                || (request.lastName() != null && !request.lastName().isBlank());
         if (given || request.fullName() == null || request.fullName().isBlank()) {
             return new String[] {request.firstName(), request.lastName()};
         }
@@ -152,7 +188,7 @@ public class PatientController {
     private static PatientSummary toSummary(Patient patient) {
         Branch branch = patient.getBranch();
         return new PatientSummary(patient.getId(), patient.getPatientHn(),
-                patient.getPatientFname() + " " + patient.getPatientLname(), patient.getPhone(), true,
+                fullName(patient), patient.getPhone(), true,
                 branch == null ? null : branch.getId(), branch == null ? null : branch.getBranchCode(),
                 branch == null ? null : branch.getBranchName());
     }
@@ -163,7 +199,7 @@ public class PatientController {
                 : patient.getPassportNo() != null ? "PASSPORT" : null;
         String identityNumber = patient.getNationalId() != null ? patient.getNationalId() : patient.getPassportNo();
         return new PatientProfile(
-                patient.getId(), patient.getPatientHn(), patient.getPatientFname() + " " + patient.getPatientLname(),
+                patient.getId(), patient.getPatientHn(), fullName(patient),
                 patient.getPhone(), true,
                 branch == null ? null : new BranchSummary(branch.getId(), branch.getBranchCode(), branch.getBranchName(), branch.isBranchStatus()),
                 patient.getTitle(), patient.getBirthdate(), patient.getGender() == null ? null : patient.getGender().name(),
@@ -174,7 +210,20 @@ public class PatientController {
                 patient.getCustomerGroup() == null ? null : patient.getCustomerGroup().getValueName(),
                 patient.getReferralChannel() == null ? null : patient.getReferralChannel().getValueName(),
                 patient.getInsuranceCompany() == null ? null : patient.getInsuranceCompany().getValueName(),
-                patient.getCustomerType() == null ? null : patient.getCustomerType().name());
+                patient.getCustomerType() == null ? null : patient.getCustomerType().name(),
+                patient.getPatientFname(), patient.getPatientLname(), patient.getPatientMiddleName());
+    }
+
+    private static String middleNameOf(RegisterRequest request) {
+        var value = request.middleName();
+        if (value == null || value.isNull()) return null;
+        if (!value.isTextual()) throw new IllegalArgumentException("ชื่อกลางต้องเป็นข้อความหรือ null");
+        return value.textValue();
+    }
+
+    private static String fullName(Patient patient) {
+        return java.util.stream.Stream.of(patient.getPatientFname(), patient.getPatientMiddleName(), patient.getPatientLname())
+                .filter(value -> value != null && !value.isBlank()).collect(java.util.stream.Collectors.joining(" "));
     }
 
     private static CustomerType parseCustomerType(String value) {
@@ -194,6 +243,7 @@ public class PatientController {
             return switch (value) {
                 case "ชาย" -> Gender.Male;
                 case "หญิง" -> Gender.Female;
+                case "ไม่ระบุ" -> Gender.NotSpecified;
                 default -> Gender.Other;
             };
         }

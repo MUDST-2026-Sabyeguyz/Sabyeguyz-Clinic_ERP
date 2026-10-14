@@ -13,6 +13,62 @@ function fillRegistrationForm({ first = 'สมชาย', last = 'ใจดี'
 }
 
 describe('patient registration', () => {
+  it('registers a foreigner without phone, birthday, passport or address', () => {
+    cy.visitAs('manager', '/staff/patients/new')
+    cy.get('input[type=radio][value=ต่างชาติ]').check()
+    cy.get('input[placeholder="ชื่อ"]').type('Alex')
+    cy.get('input[placeholder="นามสกุล"]').type('NoDocuments')
+    cy.contains('button', 'บันทึก').click()
+    cy.get('.confirmation-modal').contains('button', /^ใช่$/).click()
+    cy.location('pathname').should('eq', '/staff/patients')
+    cy.api('GET', '/api/patients').then(({ body }) => {
+      expect(body.totalItems).to.equal(1)
+      cy.api('GET', `/api/patients/${body.items[0].id}`).then(({ body: profile }) => {
+        expect(profile.customerTypeCode).to.equal('Foreigner')
+        expect(profile.phone).to.equal(null)
+        expect(profile.birthDate).to.equal(null)
+        expect(profile.identityNumber).to.be.oneOf([null, ''])
+      })
+    })
+  })
+  it('persists middle name, bilingual child title and unspecified gender without requiring an address', () => {
+    cy.visitAs('manager', '/staff/patients/new')
+    fillRegistrationForm()
+    cy.get('input[placeholder="ชื่อกลาง"]').type('อนันต์')
+    cy.chooseDropdown('คำนำหน้า', 'เด็กชาย / Boy')
+    cy.chooseDropdown('เพศ', 'ไม่ระบุ')
+    cy.contains('label', 'ที่อยู่').find('textarea').clear()
+    cy.intercept('POST', '**/api/patients').as('registration')
+    cy.contains('button', 'บันทึก').click()
+    cy.get('.confirmation-modal').contains('button', /^ใช่$/).click()
+    cy.wait('@registration').then(({ request, response }) => {
+      expect(request.body.middleName).to.equal('อนันต์')
+      expect(request.body.firstName).to.equal('สมชาย')
+      expect(response.statusCode).to.equal(201)
+      cy.api('GET', `/api/patients/${response.body.id}`).then(({ body }) => {
+        expect(body.middleName).to.equal('อนันต์')
+        expect(body.fullName).to.equal('สมชาย อนันต์ ใจดี')
+        expect(body.title).to.equal('เด็กชาย')
+        expect(body.gender).to.equal('NotSpecified')
+        expect(body.address).to.equal('')
+      })
+    })
+    cy.contains('td', 'สมชาย อนันต์ ใจดี').should('be.visible')
+  })
+
+  it('uses exact identity lookup and never treats a matching phone as an existing national ID', () => {
+    cy.registerPatient({ firstName: 'บุคคลอื่น', identityNumber: '1100000000939', phone: '1103700000011' })
+    cy.visitAs('manager', '/staff/patients/new')
+    fillRegistrationForm()
+    cy.intercept('GET', '**/api/patients/identity-lookup?*').as('identityLookup')
+    cy.contains('button', 'บันทึก').click()
+    cy.wait('@identityLookup').then(({ response }) => {
+      expect(response.statusCode).to.equal(200)
+      expect(response.body).to.deep.equal({ exists: false, patient: null })
+    })
+    cy.get('.confirmation-modal').should('be.visible')
+  })
+
   it('registers a Thai patient through the form and shows them in the list', () => {
     cy.visitAs('manager', '/staff/patients/new')
     cy.contains('h1', 'ลงทะเบียนผู้ป่วยใหม่')
@@ -80,12 +136,12 @@ describe('patient registration', () => {
     })
   })
 
-  it('keeps title and gender in step', () => {
+  it('keeps title independent from gender and supports unspecified gender', () => {
     cy.visitAs('manager', '/staff/patients/new')
-    cy.chooseDropdown('คำนำหน้า', 'นางสาว')
-    cy.get('button[aria-label=เพศ]').should('contain.text', 'หญิง')
-    cy.chooseDropdown('เพศ', 'ชาย')
-    cy.get('button[aria-label=คำนำหน้า]').should('contain.text', 'นาย')
+    cy.chooseDropdown('คำนำหน้า', 'เด็กหญิง / Girl')
+    cy.chooseDropdown('เพศ', 'ไม่ระบุ')
+    cy.get('button[aria-label=เพศ]').should('contain.text', 'ไม่ระบุ')
+    cy.get('button[aria-label=คำนำหน้า]').should('contain.text', 'เด็กหญิง / Girl')
   })
 })
 
@@ -161,6 +217,35 @@ describe('patient list paging', () => {
 })
 
 describe('patient profile', () => {
+  it('edits and clears middleName without splitting compound first and last names', () => {
+    cy.registerPatient({ customerType: 'Foreigner', firstName: 'John Paul', lastName: 'Smith Jones',
+      middleName: 'Existing', title: 'Mrs.', nationality: 'ต่างชาติ', identityDocumentType: 'PASSPORT', identityNumber: '1234567890' })
+      .then((patient) => {
+        cy.visitAs('manager', `/staff/patients/${patient.id}`)
+        cy.contains('button', 'แก้ไขข้อมูล').click()
+        const field = (pattern) => cy.get('.patient-edit label').filter((_, el) => pattern.test(el.textContent.trim())).find('input')
+        field(/^ชื่อ\s*\*/).should('have.value', 'John Paul')
+        field(/^นามสกุล/).should('have.value', 'Smith Jones')
+        field(/^ชื่อกลาง/).should('have.value', 'Existing').clear().type('New Middle')
+        cy.chooseDropdown('เพศ', 'ไม่ระบุ')
+        cy.get('button[aria-label=คำนำหน้า]').should('contain.text', 'นาง / Mrs.')
+        cy.contains('button', 'บันทึกข้อมูล').click()
+        cy.get('.patient-confirmation').contains('button', /^ใช่$/).click()
+        cy.contains('h1', 'John Paul New Middle Smith Jones').should('be.visible')
+        cy.contains('button', 'แก้ไขข้อมูล').click()
+        field(/^ชื่อกลาง/).clear()
+        cy.contains('button', 'บันทึกข้อมูล').click()
+        cy.get('.patient-confirmation').contains('button', /^ใช่$/).click()
+        cy.contains('h1', 'John Paul Smith Jones').should('be.visible')
+        cy.api('GET', `/api/patients/${patient.id}`).then(({ body }) => {
+          expect(body.firstName).to.equal('John Paul')
+          expect(body.lastName).to.equal('Smith Jones')
+          expect(body.middleName).to.equal(null)
+          expect(body.title).to.equal('นาง')
+          expect(body.gender).to.equal('NotSpecified')
+        })
+      })
+  })
   it('shows the saved details of a patient', () => {
     cy.registerPatient({ nickname: 'ชาย', bloodGroup: 'O', identityNumber: '1100000000101' }).then((patient) => {
       cy.visitAs('therapist', `/staff/patients/${patient.id}`)
