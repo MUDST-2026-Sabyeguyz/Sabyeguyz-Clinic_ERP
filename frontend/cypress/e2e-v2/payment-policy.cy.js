@@ -10,7 +10,7 @@ describe('P4 persisted payment labels and method display', () => {
         }).then(({ status, body }) => {
           expect(status).to.equal(201)
           cy.visitAs('therapist', `/staff/patients/${patient.id}/history`)
-          cy.contains('tr', body.receiptNo).contains('button', 'ดูใบเสร็จ').click()
+          cy.contains('tr', body.receiptNo).contains('a', 'ดูใบเสร็จ').click()
           cy.get('.printable-receipt').should('be.visible').and('contain.text', label)
           if (amount) cy.get('.printable-receipt').should('contain.text', 'พร้อมเพย์')
           cy.get('.printable-receipt').should('not.contain.text', 'แต้มคงเหลือ').and('not.contain.text', 'วงเงินคงเหลือ')

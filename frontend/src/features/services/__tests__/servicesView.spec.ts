@@ -1,15 +1,19 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import ServicesView from '../views/servicesView.vue'
+const push = vi.hoisted(() => vi.fn())
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: { patientId: '1' } }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
 }))
 const patient = { id: 1, hn: 'HN1', fullName: 'Patient', phone: '', active: true, branchCode: '01' }
 let wrapper: VueWrapper
 let label: string | null
 let posted: unknown
+let failedPost = false
 beforeEach(() => {
+  push.mockReset()
+  failedPost = false
   label = 'Deposit'
   posted = undefined
   localStorage.clear()
@@ -19,7 +23,7 @@ beforeEach(() => {
       const path = String(input)
       let body: unknown = []
       if (path === '/api/catalog/services')
-        body = [{ id: 1, code: 'ASSESS', name: 'Assessment', price: 100 }]
+        body = [{ id: 1, code: 'MANUAL', name: 'Manual', price: 100 }]
       else if (path === '/api/patients/1') body = patient
       else if (path.startsWith('/api/patients')) body = { items: [patient], totalPages: 1 }
       else if (path === '/api/branches')
@@ -30,6 +34,8 @@ beforeEach(() => {
           { id: 2, code: 'QR', name: 'QR code' },
         ]
       else if (path === '/api/payments') {
+        if (failedPost)
+          return new Response(JSON.stringify({ message: 'Payment rejected' }), { status: 400 })
         posted = JSON.parse(String(init?.body))
         body = {
           id: 3,
@@ -66,21 +72,41 @@ async function pay() {
   await click('ตรวจสอบและชำระเงิน')
   await click('ยืนยันรับชำระเงิน')
   await click('ยืนยันการชำระเงิน')
-  await click('ดูและพิมพ์ใบเสร็จ')
 }
 it('keeps one selected payment code in the request while showing QR as พร้อมเพย์', async () => {
   await pay()
   expect(posted).toMatchObject({ payments: [{ paymentMethodCode: 'QR', amount: 100 }] })
   expect((posted as { payments: unknown[] }).payments).toHaveLength(1)
-  expect(wrapper.text()).toContain('พร้อมเพย์')
 })
-it('shows persisted payment label instead of inventing FullyPaid from the paid amount', async () => {
+it('opens the persisted receipt automatically after successful payment', async () => {
   await pay()
-  expect(wrapper.find('.printable-receipt').text()).toContain('มัดจำ')
-  expect(wrapper.find('.printable-receipt').text()).not.toContain('ชำระเต็ม')
+  expect(push).toHaveBeenCalledWith('/staff/receipts/3')
 })
-it('omits unsupported points and credit balances from the receipt', async () => {
+it('hides Assessment for new sales', async () => {
+  wrapper = mount(ServicesView, { global: { stubs: { StaffHeader: true, FilterDropdown: true } } })
+  await flushPromises()
+  await click('เริ่มขายบริการ')
+  expect(wrapper.findAll('.sale-tabs button').map((b) => b.text())).not.toContain('Assessment')
+})
+
+it('keeps a failed POST on the form without opening a receipt', async () => {
+  failedPost = true
   await pay()
-  expect(wrapper.find('.printable-receipt').text()).not.toContain('แต้มคงเหลือ')
-  expect(wrapper.find('.printable-receipt').text()).not.toContain('วงเงินคงเหลือ')
+  expect(push).not.toHaveBeenCalled()
+  expect(wrapper.text()).not.toContain('บันทึกการขายสำเร็จ')
+  expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+})
+it('keeps a successful POST locked when navigation fails and offers the saved receipt', async () => {
+  push.mockRejectedValueOnce(new Error('Navigation failed'))
+  await pay()
+  expect(wrapper.text()).toContain('บันทึกการขายสำเร็จ')
+  await click('ดูและพิมพ์ใบเสร็จ')
+  expect(push).toHaveBeenLastCalledWith('/staff/receipts/3')
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) => String(url) === '/api/payments' && init?.method === 'POST',
+      ),
+  ).toHaveLength(1)
 })
