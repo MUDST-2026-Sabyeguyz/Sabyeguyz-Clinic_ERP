@@ -3,7 +3,7 @@
 module.exports = async function parallelRequests({ token, requests }) {
   if (!Array.isArray(requests) || requests.length !== 2) throw new Error('A race requires exactly two requests')
   for (const request of requests) {
-    if (!/^\/api\/[a-zA-Z0-9/-]+$/.test(request.url) || !['POST', 'PATCH'].includes(request.method)) {
+    if (!(/^\/api\/[a-zA-Z0-9/-]+$/.test(request.url) || /^\/__cypress\/payment-policy\/\d+\/record$/.test(request.url)) || !['POST', 'PATCH'].includes(request.method)) {
       throw new Error('Concurrency task only supports local API mutation routes')
     }
   }

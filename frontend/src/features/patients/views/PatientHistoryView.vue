@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { formatPaymentLabel, formatPaymentMethod } from '@/features/payments/format'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -82,7 +83,9 @@ const paymentDescription = (item: SaleSummary) =>
   paymentDetails.value[item.id]?.items.map((entry) => entry.description).join(', ') ||
   '-'
 const paymentMethod = (item: SaleSummary) =>
-  paymentDetails.value[item.id]?.payments.map((entry) => entry.paymentMethodCode).join(', ') || '-'
+  paymentDetails.value[item.id]?.payments
+    .map((entry) => formatPaymentMethod(entry.paymentMethodCode))
+    .join(', ') || '-'
 const paymentStatus = (status: string) => {
   const labels: Record<string, string> = {
     PAID: 'ชำระแล้ว',
@@ -264,10 +267,13 @@ onMounted(async () => {
             >
           </div>
           <div>
-            <span>สถานะการชำระเงิน</span><b>{{ paymentStatus(selectedReceipt.status) }}</b>
+            <span>ประเภทการชำระเงิน</span
+            ><b>{{ formatPaymentLabel(selectedReceipt.paymentLabel) }}</b>
             <span>ช่องทางการชำระ</span
             ><b>{{
-              selectedReceipt.payments.map((entry) => entry.paymentMethodCode).join(', ')
+              selectedReceipt.payments
+                .map((entry) => formatPaymentMethod(entry.paymentMethodCode))
+                .join(', ')
             }}</b>
             <strong>ยอดสุทธิ</strong
             ><strong
@@ -278,7 +284,6 @@ onMounted(async () => {
           </div>
         </section>
         <section class="receipt-balance">
-          <p><b>แต้มคงเหลือ: 0</b><b>วงเงินคงเหลือ: ฿0.00</b></p>
           <p>
             <b>หมายเหตุ: {{ selectedReceipt.note || '-' }}</b>
           </p>
