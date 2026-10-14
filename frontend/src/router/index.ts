@@ -55,6 +55,12 @@ const router = createRouter({
       meta: { permission: 'Treatment' },
     },
     {
+      path: '/staff/receipts/:id',
+      name: 'staff-receipt',
+      component: () => import('@/features/receipts/views/ReceiptView.vue'),
+      meta: { permission: 'Treatment' },
+    },
+    {
       path: '/staff/billing',
       redirect: '/staff/services',
     },

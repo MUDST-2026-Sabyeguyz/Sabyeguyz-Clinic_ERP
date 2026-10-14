@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -95,21 +96,33 @@ public class SaleController {
 
     public record Summary(Long id, String receiptNo, PatientSummary patient, String branchCode,
                            SalespersonSummary salesperson, BigDecimal total, BigDecimal paid, String status,
-                           Instant soldAt, Instant voidedAt, String voidReason, String note, String paymentLabel) {}
+                           Instant soldAt, Instant voidedAt, String voidReason, String note, String paymentLabel,
+                           Long receiptId, BigDecimal subtotalBeforeDiscount, BigDecimal billDiscountAmount,
+                           BigDecimal taxableAmount, BigDecimal taxAmount, BigDecimal netAmount) {}
     public record Detail(Long id, String receiptNo, PatientSummary patient, String branchCode,
                           SalespersonSummary salesperson, BigDecimal total, BigDecimal paid, String status,
                           Instant soldAt, Instant voidedAt, String voidReason, String note,
-                          List<ItemResponse> items, List<PaymentResponse> payments, String paymentLabel) {}
+                          List<ItemResponse> items, List<PaymentResponse> payments, String paymentLabel,
+                          Long receiptId, BigDecimal subtotalBeforeDiscount, BigDecimal billDiscountAmount,
+                           BigDecimal taxableAmount, BigDecimal taxAmount, BigDecimal netAmount) {}
     public record PageResponse(List<Summary> items, int page, int size, long totalItems, int totalPages) {}
 
     @GetMapping("/api/payments")
     public PageResponse list(@RequestParam(required = false) Long patientId,
                               @RequestParam(required = false) String branchCode,
                               @RequestParam(defaultValue = "0") int page,
-                              @RequestParam(defaultValue = "20") int size) {
+                              @RequestParam(defaultValue = "20") int size,
+                              @RequestParam(defaultValue = "false") boolean receiptsOnly) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("page must be nonnegative and size must be between 1 and 100");
+        }
         Long branchId = branchCode == null || branchCode.isBlank() ? null : resolveBranch(branchCode).getId();
-        Page<SalesTransaction> result = transactions.search(patientId, branchId, PageRequest.of(page, size));
-        return new PageResponse(result.getContent().stream().map(this::toSummary).toList(),
+        PageRequest paging = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "transactionDate", "id"));
+        Page<SalesTransaction> result = receiptsOnly
+                ? transactions.searchReceipts(patientId, branchId, paging)
+                : transactions.search(patientId, branchId, paging);
+        return new PageResponse(result.getContent().stream().map(t -> receiptsOnly
+                ? toSummary(t, t.getReceipt().getNetAmount()) : toSummary(t)).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
@@ -195,6 +208,11 @@ public class SaleController {
     private Summary toSummary(SalesTransaction t, List<SalesTransaction> lines) {
         BigDecimal total = lines.stream().map(l -> l.getAmount().subtract(l.getAllocatedBillDiscountAmount()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return toSummary(t, total);
+    }
+
+    private Summary toSummary(SalesTransaction t, BigDecimal total) {
+        Receipt receipt = t.getReceipt();
         Staff seller = t.getSalespersonStaff();
         TransactionCancellation cancellation = t.isTransactionStatus() ? null
                 : cancellationRecords.findFirstByTransactionReceiptIdOrderByCancelledAtDesc(t.getReceipt().getId()).orElse(null);
@@ -207,19 +225,21 @@ public class SaleController {
                 total, payments.paidAmountOf(t.getReceipt().getId()),
                 t.isTransactionStatus() ? "PAID" : "VOIDED",
                 t.getTransactionDate(), cancellation == null ? null : cancellation.getCancelledAt(),
-                cancellation == null ? null : cancellation.getReason(), null, t.getReceipt().getPaymentLabel().name());
+                cancellation == null ? null : cancellation.getReason(), null, receipt.getPaymentLabel().name(), receipt.getId(), receipt.getSubtotalBeforeDiscount(),
+                receipt.getBillDiscountAmount(), receipt.getTaxableAmount(), receipt.getTaxAmount(), receipt.getNetAmount());
     }
 
     private Detail toDetail(SalesTransaction t) {
         List<SalesTransaction> lines = transactions.findByReceiptId(t.getReceipt().getId());
-        Summary s = toSummary(t, lines);
+        Summary s = toSummary(t, t.getReceipt().getNetAmount());
         List<ItemResponse> items = lines.stream().map(l -> new ItemResponse(l.getId(), l.getTransactionType().name(),
-                l.getService().getServiceName(), l.getQuantity(), l.getAmount())).toList();
+                l.getItemNameSnapshot(), l.getQuantity(), l.getAmount())).toList();
         List<PaymentResponse> paymentList = payments.findByReceiptIdOrderByIdAsc(t.getReceipt().getId()).stream()
                 .map(p -> new PaymentResponse(p.getId(), p.isPaymentStatus() ? "PAYMENT" : "REFUND",
                         p.getPaymentMethod().getMethodName(), p.getAmount()))
                 .toList();
         return new Detail(s.id(), s.receiptNo(), s.patient(), s.branchCode(), s.salesperson(), s.total(), s.paid(),
-                s.status(), s.soldAt(), s.voidedAt(), s.voidReason(), s.note(), items, paymentList, s.paymentLabel());
+                s.status(), s.soldAt(), s.voidedAt(), s.voidReason(), s.note(), items, paymentList, s.paymentLabel(),
+                s.receiptId(), s.subtotalBeforeDiscount(), s.billDiscountAmount(), s.taxableAmount(), s.taxAmount(), s.netAmount());
     }
 }
