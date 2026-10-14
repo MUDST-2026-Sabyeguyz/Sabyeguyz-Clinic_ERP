@@ -15,8 +15,8 @@ INSERT INTO branch (branch_code, branch_name, address, phone, branch_create_by)
 SELECT b.branch_code, b.branch_name, b.address, b.phone, u.user_id
 FROM app_user u
 CROSS JOIN (VALUES
-    ('01', 'สาขาราชพฤกษ์', '99 ถนนราชพฤกษ์ จังหวัดนนทบุรี', '02-000-0001'),
-    ('02', 'สาขาสุขุมวิท', '123 ถนนสุขุมวิท กรุงเทพฯ', '02-000-0002')
+    ('01', 'สาขาพระราม 9', 'สาขาพระราม 9 (ที่อยู่ตัวอย่าง)', '02-000-0001'),
+    ('02', 'สาขาแบริ่ง', 'สาขาแบริ่ง (ที่อยู่ตัวอย่าง)', '02-000-0002')
 ) AS b(branch_code, branch_name, address, phone)
 WHERE u.username = 'system';
 
