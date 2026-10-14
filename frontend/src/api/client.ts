@@ -764,3 +764,35 @@ export const masterDataApi = {
 export const auditApi = {
   list: (page = 0, size = 50) => api.get(`/api/audit-logs?page=${page}&size=${size}`),
 }
+
+export type CalendarBranchStatus = {
+  branchCode: string
+  branchName: string
+  googleCalendarId: string | null
+  waiting: number
+  failed: number
+}
+export type CalendarSyncResult = {
+  pushed: number
+  removed: number
+  failed: number
+  movedFromGoogle: number
+  cancelledFromGoogle: number
+  revertedInGoogle: number
+}
+export type CalendarStatus = {
+  enabled: boolean
+  defaultDurationMinutes: number
+  lastRunAt: string | null
+  lastResult: CalendarSyncResult | null
+  branches: CalendarBranchStatus[]
+}
+
+export const calendarApi = {
+  status: () => api.get<CalendarStatus>('/api/calendar/status'),
+  setBranchCalendar: (branchCode: string, googleCalendarId: string) =>
+    api.put<CalendarBranchStatus>(`/api/calendar/branches/${encodeURIComponent(branchCode)}`, {
+      googleCalendarId,
+    }),
+  syncNow: () => api.post<CalendarSyncResult>('/api/calendar/sync', {}),
+}
