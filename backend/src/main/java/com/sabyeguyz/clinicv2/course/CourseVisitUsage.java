@@ -45,11 +45,6 @@ public class CourseVisitUsage {
     @JoinColumn(name = "treating_staff_id")
     private Staff treatingStaff;
 
-    /** Commission pool owner, copied from Course — not re-selected by the user. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "case_owner_staff_id")
-    private Staff caseOwnerStaff;
-
     @Column(name = "visit_date", nullable = false)
     private LocalDateTime visitDate;
 
@@ -57,11 +52,8 @@ public class CourseVisitUsage {
     private int visitQty = 1;
 
     /** Frozen per-visit rate copied from Course. */
-    @Column(name = "commission_allocation_per_visit", precision = 12, scale = 2, nullable = false)
+    @Column(name = "commission_allocation_per_visit", precision = 12, scale = 2)
     private BigDecimal commissionAllocationPerVisit;
-
-    @Column(name = "gross_commission_allocation", precision = 12, scale = 2, nullable = false)
-    private BigDecimal grossCommissionAllocation;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "treatment_fee_rule_id")
@@ -70,8 +62,8 @@ public class CourseVisitUsage {
     @Column(name = "substitute_treatment_fee_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal substituteTreatmentFeeAmount = BigDecimal.ZERO;
 
-    /** gross_commission_allocation - substitute_treatment_fee_amount. */
-    @Column(name = "owner_net_commission", precision = 12, scale = 2, nullable = false)
+    /** What the Owner earns for this usage: the per-visit amount when the Owner treated, 0 for a substitute. */
+    @Column(name = "owner_net_commission", precision = 12, scale = 2)
     private BigDecimal ownerNetCommission;
 
     @Enumerated(EnumType.STRING)
@@ -79,9 +71,14 @@ public class CourseVisitUsage {
     @Column(name = "usage_status", nullable = false, columnDefinition = "usage_status_enum")
     private UsageStatus usageStatus = UsageStatus.Completed;
 
-    /** A Completed usage always needs its printed usage document. */
-    @Column(name = "print_required", nullable = false)
-    private boolean printRequired = true;
+    /** Position of the usage inside its course, all users together; a Reversed position is reused by the next usage. */
+    @Column(name = "usage_sequence", nullable = false)
+    private int usageSequence;
+
+    /** The Reversed usage (same course and position) this one replaces. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "replaces_usage_id")
+    private CourseVisitUsage replacesUsage;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "treatment_id")
@@ -110,16 +107,14 @@ public class CourseVisitUsage {
     public void setPatient(Patient patient) { this.patient = patient; }
     public Staff getTreatingStaff() { return treatingStaff; }
     public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
-    public Staff getCaseOwnerStaff() { return caseOwnerStaff; }
-    public void setCaseOwnerStaff(Staff caseOwnerStaff) { this.caseOwnerStaff = caseOwnerStaff; }
+    /** The Owner PT of the usage is the course's seller. */
+    public Staff getOwnerStaff() { return course.getOwnerStaff(); }
     public LocalDateTime getVisitDate() { return visitDate; }
     public void setVisitDate(LocalDateTime visitDate) { this.visitDate = visitDate; }
     public int getVisitQty() { return visitQty; }
     public void setVisitQty(int visitQty) { this.visitQty = visitQty; }
     public BigDecimal getCommissionAllocationPerVisit() { return commissionAllocationPerVisit; }
     public void setCommissionAllocationPerVisit(BigDecimal commissionAllocationPerVisit) { this.commissionAllocationPerVisit = commissionAllocationPerVisit; }
-    public BigDecimal getGrossCommissionAllocation() { return grossCommissionAllocation; }
-    public void setGrossCommissionAllocation(BigDecimal grossCommissionAllocation) { this.grossCommissionAllocation = grossCommissionAllocation; }
     public TreatmentFeeRule getTreatmentFeeRule() { return treatmentFeeRule; }
     public void setTreatmentFeeRule(TreatmentFeeRule treatmentFeeRule) { this.treatmentFeeRule = treatmentFeeRule; }
     public BigDecimal getSubstituteTreatmentFeeAmount() { return substituteTreatmentFeeAmount; }
@@ -136,8 +131,10 @@ public class CourseVisitUsage {
     public void setUsageUpdateBy(Long usageUpdateBy) { this.usageUpdateBy = usageUpdateBy; }
     public UsageStatus getUsageStatus() { return usageStatus; }
     public void setUsageStatus(UsageStatus usageStatus) { this.usageStatus = usageStatus; }
-    public boolean isPrintRequired() { return printRequired; }
-    public void setPrintRequired(boolean printRequired) { this.printRequired = printRequired; }
+    public int getUsageSequence() { return usageSequence; }
+    public void setUsageSequence(int usageSequence) { this.usageSequence = usageSequence; }
+    public CourseVisitUsage getReplacesUsage() { return replacesUsage; }
+    public void setReplacesUsage(CourseVisitUsage replacesUsage) { this.replacesUsage = replacesUsage; }
     public Treatment getTreatment() { return treatment; }
     public void setTreatment(Treatment treatment) { this.treatment = treatment; }
 }

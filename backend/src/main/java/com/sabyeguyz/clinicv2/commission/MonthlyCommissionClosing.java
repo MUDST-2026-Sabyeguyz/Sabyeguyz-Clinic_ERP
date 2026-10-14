@@ -2,13 +2,14 @@ package com.sabyeguyz.clinicv2.commission;
 
 import org.hibernate.type.SqlTypes;
 import org.hibernate.annotations.JdbcTypeCode;
+import com.sabyeguyz.clinicv2.enums.ClosingStatus;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/** Once closingStatus = true (Closed), the locked rate must not change except via an Admin Override + audit row. */
+/** Once the closing is Closed or Finalized, the locked rate must not change except via an Admin Override + audit row. */
 @Entity
 @Table(name = "monthly_commission_closing")
 public class MonthlyCommissionClosing {
@@ -46,15 +47,22 @@ public class MonthlyCommissionClosing {
     @Column(name = "locked_commission_rate", precision = 5, scale = 4)
     private BigDecimal lockedCommissionRate;
 
-    /** false = Open, true = Closed. */
-    @Column(name = "closing_status", nullable = false)
-    private boolean closingStatus = false;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "closing_status", nullable = false, columnDefinition = "closing_status_enum")
+    private ClosingStatus closingStatus = ClosingStatus.Open;
 
     @Column(name = "closed_at")
     private Instant closedAt;
 
     @Column(name = "closed_by")
     private Long closedBy;
+
+    @Column(name = "finalized_at")
+    private Instant finalizedAt;
+
+    @Column(name = "finalized_by")
+    private Long finalizedBy;
 
     public MonthlyCommissionClosing() {}
 
@@ -75,8 +83,14 @@ public class MonthlyCommissionClosing {
     public void setCalculatedCommissionRate(BigDecimal calculatedCommissionRate) { this.calculatedCommissionRate = calculatedCommissionRate; }
     public BigDecimal getLockedCommissionRate() { return lockedCommissionRate; }
     public void setLockedCommissionRate(BigDecimal lockedCommissionRate) { this.lockedCommissionRate = lockedCommissionRate; }
-    public boolean isClosingStatus() { return closingStatus; }
-    public void setClosingStatus(boolean closingStatus) { this.closingStatus = closingStatus; }
+    public ClosingStatus getClosingStatus() { return closingStatus; }
+    public void setClosingStatus(ClosingStatus closingStatus) { this.closingStatus = closingStatus; }
+    /** True once the month was closed (Closed or Finalized). */
+    public boolean isClosed() { return closingStatus != ClosingStatus.Open; }
+    public Instant getFinalizedAt() { return finalizedAt; }
+    public void setFinalizedAt(Instant finalizedAt) { this.finalizedAt = finalizedAt; }
+    public Long getFinalizedBy() { return finalizedBy; }
+    public void setFinalizedBy(Long finalizedBy) { this.finalizedBy = finalizedBy; }
     public Instant getClosedAt() { return closedAt; }
     public void setClosedAt(Instant closedAt) { this.closedAt = closedAt; }
     public Long getClosedBy() { return closedBy; }

@@ -57,6 +57,8 @@ public class RefundService {
         RefundTransaction refund = pending(refundId);
         requireUnusedCourses(refund.getOriginalPayment());
         refund.setRefundStatus(RefundStatus.Completed);
+        refund.setApprovedAt(Instant.now());
+        refund.setApprovedBy(actorId);
         refund.setRefundedAt(Instant.now());
         refund.setRefundedBy(actorId);
         return refunds.save(refund);

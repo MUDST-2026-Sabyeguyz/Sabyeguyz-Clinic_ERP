@@ -55,6 +55,8 @@ public class SaleController {
     private final PaymentMethodRepository paymentMethods;
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
+    private final com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService;
+    private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
                            PaymentTransactionService paymentTransactionService,
@@ -63,7 +65,11 @@ public class SaleController {
                            PaymentTransactionRepository payments, ReceiptRepository receipts,
                            PatientRepository patients, BranchRepository branches, StaffRepository staff,
                            ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                                     com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
+                                     com.sabyeguyz.clinicv2.auth.AppUserRepository users) {
+        this.visitService = visitService;
+        this.users = users;
         this.receiptService = receiptService;
         this.salesTransactionService = salesTransactionService;
         this.paymentTransactionService = paymentTransactionService;
@@ -84,10 +90,24 @@ public class SaleController {
     public record ItemRequest(String type, Long referenceId, int quantity, String discountType,
                                BigDecimal discountValue) {}
     public record PaymentRequest(String paymentMethodCode, BigDecimal amount) {}
+    /** treatingStaffId (optional) is the PT who treated the single-visit lines; default: the salesperson, else the signed-in staff. */
     public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note,
                                  List<ItemRequest> items, List<PaymentRequest> payments, String billDiscountType,
-                                 BigDecimal billDiscountValue) {}
+                                 BigDecimal billDiscountValue, Long treatingStaffId) {}
     public record ReverseRequest(String reason) {}
+
+    private Staff singleVisitTreatingStaff(CreateRequest request, Staff salesperson) {
+        if (request.treatingStaffId() != null) {
+            return staff.findById(request.treatingStaffId())
+                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบนักกายภาพผู้รักษา"));
+        }
+        if (salesperson != null) return salesperson;
+        Staff own = users.findById(actor.requireId()).map(user -> user.getStaff()).orElse(null);
+        if (own == null) {
+            throw new IllegalArgumentException("ต้องระบุนักกายภาพผู้รักษา (treatingStaffId) สำหรับการรักษารายครั้ง");
+        }
+        return own;
+    }
 
     public record PatientSummary(Long id, String hn, String fullName) {}
     public record SalespersonSummary(Long id, String employeeCode, String fullName) {}
@@ -157,12 +177,16 @@ public class SaleController {
             Discount discount = Discount.of(item.discountType(), item.discountValue());
             if ("COURSE".equalsIgnoreCase(item.type())) {
                 lines.add(salesTransactionService.recordCoursePurchase(receipt, patient, branch, svc, salesperson,
-                        null, null, null, null, discount, null, LocalDate.now(), actor.currentId()).transaction());
+                        null, null, null, discount, LocalDate.now(), actor.currentId()).transaction());
             } else {
                 TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
                         ? TransactionType.Assessment : TransactionType.SingleVisit;
-                lines.add(salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, null,
-                        salesperson, Math.max(1, item.quantity()), null, null, discount, actor.currentId()));
+                // A single visit is treated by one PT, and the sale is tied to that visit.
+                Staff treating = singleVisitTreatingStaff(request, salesperson);
+                var visit = visitService.checkInWalkIn(patient, branch, treating, actor.currentId());
+                visit = visitService.complete(visit.getId(), actor.currentId());
+                lines.add(salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, treating,
+                        salesperson, Math.max(1, item.quantity()), null, visit, discount, actor.currentId()));
             }
         }
         receiptService.finalizeTotals(receipt, lines,

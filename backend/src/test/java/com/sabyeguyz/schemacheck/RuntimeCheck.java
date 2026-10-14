@@ -33,8 +33,8 @@ public class RuntimeCheck {
                 "--app.bootstrap.manager-password=runtime-test-password")) {
             base = "http://127.0.0.1:" + context.getWebServer().getPort();
             JdbcTemplate db = context.getBean(JdbcTemplate.class);
-            check(db.queryForObject("select count(*) from flyway_schema_history where success", Integer.class) == 4,
-                    "V1, integration V2, reference V3 and historical Assessment V1001 must migrate");
+            check(db.queryForObject("select count(*) from flyway_schema_history where success", Integer.class) == 5,
+                    "V1, integration V2, reference V3, historical Assessment V1001 and commission V1002 must migrate");
             check(db.queryForObject("select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid "
                     + "where t.typname='transaction_type_enum' and e.enumlabel='Assessment'", Integer.class) == 1,
                     "historical Assessment enum must exist on a fresh production database");
@@ -75,8 +75,12 @@ public class RuntimeCheck {
             JsonNode template = request("POST", "/api/courses", Map.of("code", "DAYS", "name", "Day course", "price", 1000,
                     "sessions", 5, "bonusSessions", 1, "validityDays", 30), 201);
             request("GET", "/api/courses", null, 200);
+            // A single visit is treated by one PT: create the staff member first and name them in the sale.
+            request("POST", "/api/users", Map.of("username", "runtime-seller", "password", "runtime-test-password",
+                    "role", "MANAGER", "employeeCode", "RUNTIME001", "fullName", "Runtime Seller", "branchCode", "01"), 201);
+            Long treatingStaffId = db.queryForObject("select staff_id from staff where staff_code='RUNTIME001'", Long.class);
             JsonNode sale = request("POST", "/api/payments", Map.of(
-                    "patientId", patient.path("id").asLong(), "branchCode", "01",
+                    "patientId", patient.path("id").asLong(), "branchCode", "01", "treatingStaffId", treatingStaffId,
                     "items", java.util.List.of(Map.of("type", "SERVICE", "referenceId", singleService.path("id").asLong(),
                             "quantity", 1, "unitPrice", 500)),
                     "payments", java.util.List.of(Map.of("paymentMethodCode", "PromptPay", "amount", 500))), 201);
@@ -86,8 +90,6 @@ public class RuntimeCheck {
                     "full payment label must persist");
             request("GET", "/api/receipts/" + sale.path("id").asLong(), null, 200);
             request("GET", "/api/payments", null, 200);
-            request("POST", "/api/users", Map.of("username", "runtime-seller", "password", "runtime-test-password",
-                    "role", "MANAGER", "employeeCode", "RUNTIME001", "fullName", "Runtime Seller", "branchCode", "01"), 201);
             token = request("POST", "/api/auth/login", Map.of("username", "runtime-seller", "password", "runtime-test-password"), 200)
                     .path("token").asText();
             db.update("insert into permission(permission_name,permission_create_by) values ('RUNTIME_COMMISSION',?)", userId);
@@ -102,7 +104,7 @@ public class RuntimeCheck {
             long purchaseId = purchase.path("id").asLong();
             check(purchase.path("purchased").asInt() == 6 && purchase.path("sessions").asInt() == 5,
                     "latest total includes bonus while paid sessions remain five");
-            check(db.queryForObject("select entitled_visits from course where course_id=?", Integer.class, purchaseId) == 6,
+            check(db.queryForObject("select total_visits from course where course_id=?", Integer.class, purchaseId) == 6,
                     "generated entitlement must equal purchased balance after reload");
             request("POST", "/api/commission/closings/" + java.time.YearMonth.now(), Map.of(), 200);
             for (int visit = 0; visit < 6; visit++) {

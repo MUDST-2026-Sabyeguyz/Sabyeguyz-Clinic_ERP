@@ -93,7 +93,7 @@ describe('clinicv2 CourseTransferServiceTest migrated assertions', () => {
   })
   it('transferLinksBothLedgerEntriesToTheTransferAndMovesTheEntitlements', () => {
     value('transfer', 'success').should('include', {
-      status: 'Completed', ledgerLinked: true, entitlementSaves: 2, fromAllocated: 2, toAllocated: 4,
+      status: 'Completed', ledgerLinked: true, entitlementSaves: 3, fromAllocated: 2, toAllocated: 4,
     })
     value('transfer', 'success').then((body) => {
       expect(body.ledgerTypes).to.deep.equal(['TransferOut', 'TransferIn'])
@@ -123,17 +123,17 @@ describe('clinicv2 CourseVisitUsageServiceTest migrated assertions', () => {
     value('usage', 'owner').should('include', { gross: 70, fee: 0, ownerNet: 70, remainingVisits: 9, visitsUsed: 1 })
   })
   it('substituteFixedFeeMatchesCase3And9', () => {
-    value('usage', 'fixed').should('include', { gross: 70, fee: 45, ownerNet: 25 })
+    value('usage', 'fixed').should('include', { gross: 45, fee: 45, ownerNet: 0 })
   })
   it('substitutePercentageFeeMatchesCase10', () => {
-    value('usage', 'percentage').should('include', { fee: 30, ownerNet: 40 })
+    value('usage', 'percentage').should('include', { fee: 30, ownerNet: 0 })
   })
-  it('feeExceedingAllocationIsCappedAndOwnerNetNeverGoesNegative', () => {
-    value('usage', 'capped').should('include', { fee: 40, ownerNet: 0 })
+  it('feeExceedingTheAllocationIsPaidInFullAndTheOwnerGetsNothing', () => {
+    value('usage', 'capped').should('include', { fee: 60, ownerNet: 0 })
   })
   it('usageIsCompletedNeedsAPrintLinksTheLedgerAndUpdatesTheEntitlement', () => {
     value('usage', 'owner').should('include', {
-      usageStatus: 'Completed', printRequired: true, allocationType: 'Allocation', ledgerLinkedToUsage: true,
+      usageStatus: 'Completed', allocationType: 'Allocation', ledgerLinkedToUsage: true,
       entitlementUsed: 1, entitlementRemaining: 9,
     })
   })
@@ -150,7 +150,6 @@ describe('clinicv2 CourseVisitUsageServiceTest migrated assertions', () => {
       expect(body.reversalQty).to.equal(1)
       expect(body.visitsUsed).to.equal(0)
       expect(body.remainingVisits).to.equal(10)
-      expect(body.grossAllocatedTotal).to.equal(0)
       expect(body.ownerNetTotal).to.equal(0)
       expect(body.feeTotal).to.equal(0)
       expect(body.outstanding).to.equal(700)
@@ -160,7 +159,7 @@ describe('clinicv2 CourseVisitUsageServiceTest migrated assertions', () => {
   })
   it('reversingASubstituteUsageReversesTheTreatmentFeeToo', () => {
     value('usage', 'reverse-substitute').should('include', {
-      reversalGross: -70, reversalFee: -45, reversalOwnerNet: -25, feeTotal: 0, ownerNetTotal: 0, outstanding: 700,
+      reversalGross: -45, reversalFee: -45, reversalOwnerNet: 0, feeTotal: 0, ownerNetTotal: 0, outstanding: 700,
     })
   })
   it('rejectsReversingAUsageTwice', () => rejected('usage', 'reverse-twice'))
