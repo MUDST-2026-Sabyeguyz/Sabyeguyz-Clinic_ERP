@@ -112,17 +112,19 @@ P2 release นี้ทำเฉพาะส่วนที่ไม่ติด
 
 **Modify:** `backend/src/main/java/com/sabyeguyz/clinicv2/appointment/{Appointment,AppointmentController,AppointmentService,AppointmentRepository,AppointmentStatusHistoryRepository}.java`, `frontend/src/features/appointments/views/AppointmentView.vue`, `frontend/src/features/patients/views/PatientRegistrationView.vue`, `frontend/src/features/services/views/servicesView.vue`, `frontend/src/api/client.ts`
 
-**Test:** `backend/cypress/e2e-v2/{appointments,frontend-contract}.cy.js`; create `frontend/cypress/e2e/appointment-registration.cy.js`; schema migration สำหรับ note/timing เฉพาะคอลัมน์ที่ยังขาดจริง
+**Test:** `backend/cypress/e2e-v2/{appointment-workflow,appointments,frontend-contract}.cy.js`; create `frontend/cypress/e2e-v2/appointment-registration.cy.js`; schema migration สำหรับ note/timing เฉพาะคอลัมน์ที่ยังขาดจริง
 
 **Interfaces proposed:** list เพิ่ม `query` ค้น registered name และ contactName/contactPhone; response noteจาก persisted field, cancelReasonจากล่าสุดใน status history; branchCodeเป็นสาขาที่ server ตรวจ; NEW ไม่สร้าง Patientล่วงหน้า; link-patient ต้อง atomicและไม่ relinkไปคนอื่นโดยเงียบ
 
-- [ ] RED matrix: NEWไม่มีชื่อ/โทรได้400; no therapist/timeได้400; ไม่ส่งroomยัง201; queryชื่อจริง/ชื่อเล่น/โทรพบเฉพาะสาขาที่อนุญาต; noteเขียนแล้วGETกลับเท่าเดิม; cancel(reason)แล้วGETคืนreason; NEW confirm→register→link→serviceไม่มีPatientซ้ำ; CURRENT confirm→serviceไม่ต้องค้นใหม่
-- [ ] scoped `npm run test:v2 -- --spec cypress/e2e-v2/appointments.cy.js,cypress/e2e-v2/frontend-contract.cy.js`; inspect schema notesที่มีอยู่ก่อนเพิ่มmigration
-- [ ] ย้าย query filteringไป repository; validate contact/name/phone สำหรับNEW; ใช้ P1 policy; persist noteในคอลัมน์ที่มีหรือmigrationใหม่; read cancel reasonจากstatus historyโดยไม่คาดว่าเป็นfieldเดิม
+- [x] RED matrix: API ใหม่ 7 ข้อ fail 6 ก่อนแก้ (รวม concurrent link), browser 3 ข้อเดิม fail ทั้งหมดก่อน implement; GREEN พิสูจน์ validation/no room/search/notes/cancel reason/link/navigation ตามรายงาน P3
+- [x] scoped appointment-workflow 7/7 และ full API รวม appointments/frontend-contract 183/183; schema มี appointment.notes TEXT อยู่แล้ว จึง map โดยไม่เพิ่ม migration
+- [x] ย้าย query filteringไป repositoryก่อน pagination; validate contact/name/phone สำหรับNEW; ใช้ P1 policy; persist noteในคอลัมน์เดิม; read cancel reasonจากstatus historyล่าสุด
 - [ ] timingรอQ8: ถ้าเลือกdurationบนappointment บันทึกstart/endที่ตรวจend>startและใช้Asia/Bangkok; ถ้าเลือกcatalog ให้snapshotdurationตอนจอง; ไม่คืนendAt=startAtพร้อมอ้างว่าช่วงนัดครบ
-- [ ] browser: ไม่มีroom/selectorสำหรับSTAFF, fieldบังคับมี*, แสดงphone, ค้นชื่อ/โทร, navigationส่งpatientId/appointmentId; ระบุ status display mapping กับ enumเดิม ไม่ลบ InService/NoShow ในDB
+- [x] browser: ถอด room และ service filter; branch selector เฉพาะ Manager, fieldบังคับมี*, phoneในรายการ/ปฏิทิน, queryผ่านAPI, navigationส่งpatientId/appointmentId; status display mappingระบุในcontract ไม่ลบ InService/NoShow ในDB
 - [ ] นิยามใช้บริการแล้วและreschedule therapistต้องได้คำตอบQ8ก่อนเปลี่ยน; ไม่ผูกออกreceiptกับcompletedโดยอนุมาน
-- [ ] GREEN + browser test + appointment frontend regression/build; commit `feat: complete non-commission appointment workflow`
+- [x] GREEN: API183/183, unit30/30, browser57/57 และ final appointment21/21 หลังแก้ R22/calendar dispatch; builds/SchemaCheck491 columnsผ่าน; commit `feat: complete non-commission appointment workflow`
+
+P3 รอบนี้เฉพาะส่วนไม่ติด Q8; NEW retry link ใช้ patient เดิมภายในหน้าลงทะเบียน ไม่รับรอง retry ข้าม reload/response register สูญหายว่า idempotent; Q9 ยังพักตามคำสั่งนายท่าน และ Google Calendar สองทาง/Assessment sale scope อยู่ขั้นอื่น รายงาน `docs/testing/2026-10-14-P3-Appointment-Workflow.md`
 
 ## P4: Payment method, label, discount validation และ refund guard (R26บางส่วน/30–33, T6–10)
 

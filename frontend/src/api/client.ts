@@ -199,7 +199,7 @@ export type AppointmentStatus =
 export type Appointment = {
   id: number
   branchCode: string
-  patient: { id: number; hn: string; fullName: string }
+  patient: { id: number | null; hn: string | null; fullName: string; phone?: string | null }
   therapist: { id: number; fullName: string }
   service: { id: number; name: string; durationMinutes: number }
   startAt: string
@@ -207,6 +207,9 @@ export type Appointment = {
   status: AppointmentStatus
   note?: string
   cancelReason?: string
+  patientType?: 'NEW' | 'CURRENT'
+  contactName?: string | null
+  contactPhone?: string | null
 }
 export type AppointmentPage = Page<Appointment>
 export type CoursePurchase = {
@@ -423,6 +426,7 @@ export const appointmentApi = {
   search: (
     params: {
       branchCode?: string
+      query?: string
       date?: string
       therapistId?: number
       status?: AppointmentStatus
@@ -445,14 +449,21 @@ export const appointmentApi = {
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`).then(normalizeAppointment),
   create: (body: {
     branchCode: string
-    patientId: number
+    patientId?: number
     therapistId: number
-    serviceId: number
+    serviceId?: number
     startAt: string
     note?: string
+    patientType?: 'NEW' | 'CURRENT'
+    contactName?: string
+    contactPhone?: string
+    requestedServiceType?: 'SingleVisit' | 'Course'
+    status?: string
   }) => api.post<Appointment>('/api/appointments', body).then(normalizeAppointment),
   confirm: (id: number) =>
     api.post<Appointment>(`/api/appointments/${id}/confirm`, {}).then(normalizeAppointment),
+  linkPatient: (id: number, patientId: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/link-patient`, { patientId }).then(normalizeAppointment),
   checkIn: (id: number) =>
     api.post<Appointment>(`/api/appointments/${id}/check-in`, {}).then(normalizeAppointment),
   startService: (id: number) =>
@@ -463,7 +474,7 @@ export const appointmentApi = {
     api.post<Appointment>(`/api/appointments/${id}/complete`, {}).then(normalizeAppointment),
   cancel: (id: number, reason: string) =>
     api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }).then(normalizeAppointment),
-  reschedule: (id: number, body: { startAt: string; therapistId?: number }) =>
+  reschedule: (id: number, body: { startAt: string; therapistId?: number; note?: string | null }) =>
     api.patch<Appointment>(`/api/appointments/${id}`, body).then(normalizeAppointment),
 }
 
