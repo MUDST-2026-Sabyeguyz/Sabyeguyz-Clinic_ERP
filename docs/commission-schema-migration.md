@@ -40,8 +40,31 @@ V3 ต้นฉบับ **ล้มบนฐานที่มีข้อม�
 - `refund_transaction.chk_refund_transaction_completed_approval`: การคืนเงินที่ Completed เก่าไม่มีผู้อนุมัติ
 - `staff_monthly_payment.chk_staff_monthly_payment_amounts`: แถวที่ไม่ใช่ Open เก่าไม่มียอดแยกประเภท
 
+## T2: โค้ดตามสคีมาใหม่ (entity และ API)
+หลัง V1002 แอปบูตด้วย Hibernate validate ได้แล้ว (SchemaCheck: 44 entities ผ่าน) การเปลี่ยนที่มีผลต่อ API และข้อมูล
+
+| เรื่อง | เดิม | ตอนนี้ (ตาม Data Dictionary) |
+|---|---|---|
+| เจ้าของคอร์ส (Owner PT) | `case_owner_staff_id` แยกจากผู้ขาย | `Course.seller_staff_id` ฟิลด์เดียว ผู้ขายคือ Owner |
+| `POST /api/course-purchases` | `caseOwnerStaffId` เลือกเจ้าของ, `shares` แบ่งเครดิต 2 PT | `caseOwnerStaffId` = PT ที่บันทึกการขายให้ (เป็นผู้ขาย/Owner), ไม่ส่งใช้ผู้ใช้ที่ล็อกอิน ; `shares` ถูกปฏิเสธ 400 (เลิกแบ่งเครดิต, ตาราง `course_sale_staff_share` ไม่ใช้แล้ว) |
+| ยอดขายสำหรับ Tier และรายงานยอดขายต่อพนักงาน | รวมจากสัดส่วนเครดิต | รวมราคาคอร์สของผู้ขายตามเดือนขาย |
+| ค่ามือผู้รักษาแทน | จำกัดไม่เกิน commission ต่อครั้ง Owner ได้ส่วนต่าง | จ่ายเต็มตามกฎ ไม่จำกัด Owner ได้ 0 ; Owner ที่ลาออกแล้ว (Visit หลังวันลาออก) ได้ 0 |
+| กฎค่ามือ | ผูกพนักงาน/บริการ/กลุ่ม, ฐาน CourseValuePerVisit | กฎส่วนกลางเดียว เลือกตัวที่มีผลล่าสุดในวันนั้น ; % = ยอดสุทธิของคอร์ส x % / (ครั้งรวม x 100) ปัดครั้งเดียว ; `GET /api/commission/treatment-fees` ยังคืน `staffId`/`percentageBase` เป็น null |
+| ฐานค่ามือของคอร์ส | - | `treatment_fee_base_amount` = ยอดรายการขาย หลังหักส่วนลดท้ายบิล (ตั้งตอนกระจายส่วนลดในใบเสร็จ) ; `course_price` ยังเป็นฐาน commission ก่อนส่วนลดท้ายบิล |
+| การใช้สิทธิ์ | - | `usage_sequence` (ตำแหน่งต่อคอร์ส ใช้ตำแหน่งว่างจากการย้อน) และ `replaces_usage_id` ; allocation มี `allocation_version` ; ledger เปลี่ยนชื่อเป็น `owner_staff_id` / `reverses_allocation_id` |
+| `commission_outstanding` | pool - gross ที่จัดสรรแล้ว | ต่อครั้ง x ครั้งที่เหลือ ; NULL ก่อนปิดยอด (ยังไม่ทราบอัตรา) |
+| ผู้รักษาของ Visit | - | `patient_visit.treating_staff_id` ต้องมีเมื่อ InService/Completed (ค่าเริ่มต้น = ผู้ที่มอบหมาย) ; การใช้คอร์สตั้งค่าให้ถ้ายังว่าง |
+| ขายรายครั้ง `POST /api/payments` | ไม่ผูก Visit | สร้าง Visit ที่เสร็จแล้วพร้อมผู้รักษา: `treatingStaffId` (ใหม่, ไม่บังคับ) ถ้าไม่ส่งใช้ผู้ขาย ถ้าไม่มีใช้พนักงานของผู้ล็อกอิน ถ้ายังไม่มีตอบ 400 |
+| คืนเงินที่เสร็จ | - | บันทึก `approved_by/approved_at` |
+| โอนคอร์ส | สร้างสิทธิ์ผู้รับหลังบันทึกรายการโอน | สร้างสมาชิกและสิทธิ์ของผู้รับก่อน (foreign key ใหม่) |
+| ปิดยอดรายเดือน | boolean | enum `Open/Closed/Finalized` (API ยังคืน OPEN/CLOSED, เพิ่ม FINALIZED) |
+| `POST /api/staff/{id}/terminate` | ต้องส่ง `commissionAfterTerminationPolicy` | ส่งแค่ `terminationDate` (ฟิลด์เดิมรับแต่ไม่ใช้) และต้องไม่ก่อนวันเริ่มงาน |
+| สรุปรายงานค่ามือ `gross` | gross ของ allocation | = owner net + ค่ามือ |
+
+ผลทดสอบ (15 ต.ค. 2026): backend HTTP v2 **218/218**, ชุดเก่า `test:api` **395/395**, `SchemaCheck` และ `RuntimeCheck` ผ่าน, frontend unit/type check/build/ESLint ผ่าน, frontend บนเบราว์เซอร์ **117/117** (รอบแรกบน worktree ใหม่ล้มเกือบหมดเพราะ Vite รอบแรกยังไม่อุ่น รันซ้ำผ่าน) นอกจากนี้ตรวจข้อมูลที่เขียนลง DB จริง: ผู้รักษาของ Visit, ฐานค่ามือ 8,100 เมื่อมีส่วนลดท้ายบิล 900, ลำดับการใช้สิทธิ์/แทนที่, ผู้อนุมัติคืนเงิน, การขายรายครั้งผูก Visit
+ยังไม่ได้ทำ (งานถัดไป): การคำนวณตามกติกาเศษ commission ครั้งสุดท้าย (T8), ผู้รักษาที่เลือกเอง/Owner ต่างจากผู้รักษาของนัด (T9/T10), ค่ามือรายครั้ง (T11), Reopen/Finalize/ชำระ (T13-T16), Adjustment (T17)
+
 ## ข้อควรรู้ก่อนรวมเข้า branch หลัก
-- **แอปปัจจุบันบูตไม่ขึ้นหลัง V1002** เพราะ Hibernate `validate` ไม่ตรงกับ entity เดิม (ทดสอบแล้ว) ต้องทำ **T2 (ปรับ entity)** ให้เสร็จก่อนหรือพร้อมกัน ห้ามรวม V1002 เดี่ยวๆ เข้า branch ที่มี CI เปิดอยู่
-- constraint `NOT VALID` บังคับกับแถวใหม่ทันที เช่น รายการขาย SingleVisit ใหม่ต้องมีผู้รักษาและ Visit ซึ่งโค้ดปัจจุบันยังไม่ทำ (เป็นส่วนของ T2/T10)
-- seed `V1000__demo_data.sql` รันก่อน V1002 จึงไม่ต้องแก้สำหรับ migration นี้ (ตรวจแล้ว) แต่ legacy importer และ test fixture ที่อ้างคอลัมน์ที่ถูกลบต้องแก้ใน T2/T18
+- constraint `NOT VALID` บังคับกับแถวใหม่ทันที (ดูตารางด้านบน) ฐานเดิมที่รันบน V1001 อัปเกรดได้ตามที่ทดสอบ
+- seed `V1000__demo_data.sql` รันก่อน V1002 จึงไม่ต้องแก้ ; legacy importer ที่อ้างคอลัมน์ที่ถูกลบต้องแก้ในงานของฝั่ง P9
 - ยังไม่ได้เทียบ V3 กับ Data Dictionary ทีละคอลัมน์ ตรวจเฉพาะตารางหลักด้านค่าคอมมิชชัน

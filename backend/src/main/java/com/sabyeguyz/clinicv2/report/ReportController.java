@@ -52,13 +52,11 @@ public class ReportController {
     private final AppointmentRepository appointments;
     private final CourseRepository courses;
     private final BranchRepository branches;
-    private final com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository saleShares;
 
     public ReportController(PatientVisitRepository visits, PaymentTransactionRepository payments,
                              com.sabyeguyz.clinicv2.sale.ReceiptRepository receipts,
                              SalesTransactionRepository transactions, AppointmentRepository appointments,
-                             CourseRepository courses, BranchRepository branches,
-                             com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository saleShares) {
+                             CourseRepository courses, BranchRepository branches) {
         this.visits = visits;
         this.payments = payments;
         this.receipts = receipts;
@@ -66,7 +64,6 @@ public class ReportController {
         this.appointments = appointments;
         this.courses = courses;
         this.branches = branches;
-        this.saleShares = saleShares;
     }
 
     public record GenderCount(String gender, long patients) {}
@@ -209,23 +206,14 @@ public class ReportController {
         List<SalesTransaction> rows = transactions.findByTransactionDateBetween(fromInstant, toInstant, branchId).stream()
                 .filter(SalesTransaction::isTransactionStatus).toList();
 
-        // Sales are credited to staff: a course sale follows its sale-credit shares (two PTs can split it),
-        // every other line goes to its salesperson in full.
+        // Sales are credited to staff: a course sale goes to its seller (the Owner PT), every other line to its
+        // salesperson, in full.
         Map<Long, String> names = new LinkedHashMap<>();
         Map<Long, Long> counts = new LinkedHashMap<>();
         Map<Long, BigDecimal> amounts = new LinkedHashMap<>();
         List<SalesTransaction> unassigned = new ArrayList<>();
         for (SalesTransaction t : rows) {
-            List<com.sabyeguyz.clinicv2.course.CourseSaleStaffShare> shares = t.getTransactionType()
-                    == com.sabyeguyz.clinicv2.enums.TransactionType.CoursePurchase
-                    ? courses.findBySaleTransactionId(t.getId()).map(c -> saleShares.findByCourseId(c.getId()))
-                            .orElse(List.of())
-                    : List.of();
-            if (!shares.isEmpty()) {
-                for (var share : shares) {
-                    credit(names, counts, amounts, share.getStaff(), share.getCreditedSalesAmount());
-                }
-            } else if (t.getSalespersonStaff() == null) {
+            if (t.getSalespersonStaff() == null) {
                 unassigned.add(t);
             } else {
                 credit(names, counts, amounts, t.getSalespersonStaff(), t.getAmount());
