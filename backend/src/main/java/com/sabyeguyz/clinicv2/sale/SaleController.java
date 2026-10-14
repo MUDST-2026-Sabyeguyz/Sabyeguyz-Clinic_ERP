@@ -95,11 +95,11 @@ public class SaleController {
 
     public record Summary(Long id, String receiptNo, PatientSummary patient, String branchCode,
                            SalespersonSummary salesperson, BigDecimal total, BigDecimal paid, String status,
-                           Instant soldAt, Instant voidedAt, String voidReason, String note) {}
+                           Instant soldAt, Instant voidedAt, String voidReason, String note, String paymentLabel) {}
     public record Detail(Long id, String receiptNo, PatientSummary patient, String branchCode,
                           SalespersonSummary salesperson, BigDecimal total, BigDecimal paid, String status,
                           Instant soldAt, Instant voidedAt, String voidReason, String note,
-                          List<ItemResponse> items, List<PaymentResponse> payments) {}
+                          List<ItemResponse> items, List<PaymentResponse> payments, String paymentLabel) {}
     public record PageResponse(List<Summary> items, int page, int size, long totalItems, int totalPages) {}
 
     @GetMapping("/api/payments")
@@ -123,6 +123,10 @@ public class SaleController {
     public Summary create(@RequestBody CreateRequest request) {
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("ต้องมีรายการขายอย่างน้อย 1 รายการ");
+        }
+        if (request.payments() != null && request.payments().stream()
+                .map(payment -> PaymentMethod.canonicalName(payment.paymentMethodCode())).distinct().count() > 1) {
+            throw new IllegalArgumentException("หนึ่งใบเสร็จรับชำระได้เพียงช่องทางเดียว");
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
@@ -203,7 +207,7 @@ public class SaleController {
                 total, payments.paidAmountOf(t.getReceipt().getId()),
                 t.isTransactionStatus() ? "PAID" : "VOIDED",
                 t.getTransactionDate(), cancellation == null ? null : cancellation.getCancelledAt(),
-                cancellation == null ? null : cancellation.getReason(), null);
+                cancellation == null ? null : cancellation.getReason(), null, t.getReceipt().getPaymentLabel().name());
     }
 
     private Detail toDetail(SalesTransaction t) {
@@ -216,6 +220,6 @@ public class SaleController {
                         p.getPaymentMethod().getMethodName(), p.getAmount()))
                 .toList();
         return new Detail(s.id(), s.receiptNo(), s.patient(), s.branchCode(), s.salesperson(), s.total(), s.paid(),
-                s.status(), s.soldAt(), s.voidedAt(), s.voidReason(), s.note(), items, paymentList);
+                s.status(), s.soldAt(), s.voidedAt(), s.voidReason(), s.note(), items, paymentList, s.paymentLabel());
     }
 }
