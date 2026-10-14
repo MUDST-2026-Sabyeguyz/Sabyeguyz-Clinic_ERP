@@ -3,6 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import paymentBankIcon from '@/assets/payment-bank.svg'
+import paymentQrIcon from '@/assets/payment-qr.svg'
+import paymentCardIcon from '@/assets/payment-card.svg'
+import saleSuccessCheck from '@/assets/sale-success-check.svg'
 import {
   branchApi,
   catalogApi,
@@ -40,6 +44,7 @@ const selectedServiceId = ref(0),
   selectedStaffId = ref<number | undefined>()
 const paymentCode = ref(''),
   note = ref('')
+const paymentStatus = ref<'INSTALLMENT' | 'DEPOSIT' | 'PAID'>('PAID')
 const searched = ref(false)
 const receiptNo = ref('')
 const paymentDialogOpen = ref(false)
@@ -67,7 +72,6 @@ const receiptClinicAddress = computed(() => receiptBranch.value?.address?.trim()
 const receiptClinicPhone = computed(() => receiptBranch.value?.phone?.trim() || '—')
 const receiptClinicEmail = computed(() => receiptBranch.value?.email?.trim() || '—')
 const receiptClinicLicense = computed(() => receiptBranch.value?.licenseNumber?.trim() || '—')
-const receiptClinicTaxId = computed(() => receiptBranch.value?.taxId?.trim() || '—')
 const receiptBranchLabel = computed(() => {
   const name = receiptBranch.value?.name || patient.value?.branchName
   return name ? (name.startsWith('สาขา') ? name : `สาขา ${name}`) : 'ไม่ระบุสาขา'
@@ -138,12 +142,12 @@ const rawPrice = computed(() =>
       ? (assessmentService.value?.price ?? 0)
       : (services.value.find((service) => service.id === selectedServiceId.value)?.price ?? 0),
 )
-const itemDiscount = computed(() => Math.min(500, rawPrice.value))
+const itemDiscount = computed(() => 0)
 const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
-const billDiscount = computed(() => Math.min(500, afterItemDiscount.value))
+const billDiscount = computed(() => 0)
 const netAmount = computed(() => Math.max(afterItemDiscount.value - billDiscount.value, 0))
 const commissionAmount = computed(() => afterItemDiscount.value * 0.1)
-const receiptPayable = computed(() => Math.max(rawPrice.value - billDiscount.value, 0))
+const receiptPayable = computed(() => netAmount.value)
 const money = (value: number) =>
   new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(value)
 const printReceipt = () => {
@@ -192,6 +196,55 @@ const selectedStaffName = computed(
 )
 const staffFilterOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
+)
+function paymentMethodCategory(code: string, name = '') {
+  const value = `${code} ${name}`.toLocaleLowerCase('th')
+  if (value.includes('bank') || value.includes('transfer') || value.includes('ธนาคาร'))
+    return 'bank'
+  if (value.includes('prompt') || value.includes('qr') || value.includes('พร้อมเพย์')) return 'qr'
+  if (value.includes('card') || value.includes('บัตร')) return 'card'
+  return 'other'
+}
+const salePaymentMethods = computed(() => {
+  const fallback = previewPaymentMethods.filter((method) => method.code !== 'CLINIC')
+  return fallback.map((defaultMethod) => {
+    const category = paymentMethodCategory(defaultMethod.code, defaultMethod.name)
+    return (
+      paymentMethods.value.find(
+        (method) => paymentMethodCategory(method.code, method.name) === category,
+      ) ?? defaultMethod
+    )
+  })
+})
+function paymentMethodIcon(code: string, name = '') {
+  const category = paymentMethodCategory(code, name)
+  if (category === 'bank') return paymentBankIcon
+  if (category === 'qr') return paymentQrIcon
+  if (category === 'card') return paymentCardIcon
+  return ''
+}
+function paymentMethodLabel(code: string, name = '') {
+  const category = paymentMethodCategory(code, name)
+  if (category === 'bank') return 'โอนเงินผ่านธนาคาร'
+  if (category === 'qr') return 'พร้อมเพย์'
+  if (category === 'card') return 'บัตรเครดิต/เดบิต'
+  return name
+}
+const selectedPaymentLabel = computed(() => {
+  const method = salePaymentMethods.value.find((item) => item.code === paymentCode.value)
+  return method ? paymentMethodLabel(method.code, method.name) : '-'
+})
+const paymentStatusLabel = computed(() => {
+  if (paymentStatus.value === 'INSTALLMENT') return 'ผ่อนชำระ'
+  if (paymentStatus.value === 'DEPOSIT') return 'มัดจำ'
+  return 'ชำระเต็มจำนวน'
+})
+const receiptIssuedAt = computed(() =>
+  new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date()),
 )
 const initials = computed(
   () =>
@@ -365,15 +418,14 @@ async function submit() {
               <h1>สบายกาย คลินิกกายภาพบำบัด {{ receiptBranchLabel }}</h1>
               <p>ที่อยู่: {{ receiptClinicAddress }}</p>
               <p>โทร: {{ receiptClinicPhone }}</p>
-              <p>เลขที่ใบอนุญาต: {{ receiptClinicLicense }}</p>
-              <p>เลขประจำตัวผู้เสียภาษี: {{ receiptClinicTaxId }}</p>
-              <p>อีเมล: {{ receiptClinicEmail }}</p>
+              <p>เลขที่ใบอนุญาต: {{ receiptClinicLicense }}　 อีเมล: {{ receiptClinicEmail }}</p>
             </div>
             <div class="receipt-document">
               <h2>ใบเสร็จรับเงิน</h2>
-              <p>เลขที่เอกสาร: {{ receiptNo }}</p>
-              <p>เอกสารอ้างอิง: BL260910424</p>
-              <p>วันที่ออกเอกสาร: 22/09/2569</p>
+              <div>
+                <p>เลขที่เอกสาร: {{ receiptNo }}</p>
+                <p>วันที่ออกเอกสาร: {{ receiptIssuedAt }}</p>
+              </div>
             </div>
           </header>
           <section class="receipt-customer">
@@ -388,7 +440,7 @@ async function submit() {
             <thead>
               <tr>
                 <th>รายการ</th>
-                <th>จำนวน</th>
+                <th>จำนวน / หน่วย</th>
                 <th>ราคา</th>
                 <th>ยอดรวม</th>
               </tr>
@@ -396,7 +448,7 @@ async function submit() {
             <tbody>
               <tr>
                 <td>1. {{ item }}</td>
-                <td>1</td>
+                <td>ครั้ง</td>
                 <td>{{ money(rawPrice) }}</td>
                 <td>{{ money(rawPrice) }}</td>
               </tr>
@@ -406,18 +458,15 @@ async function submit() {
             <div>
               <span>ยอดทั้งหมด</span><b>{{ money(rawPrice) }}</b
               ><span>ส่วนลดท้ายบิล</span><b>{{ money(billDiscount) }}</b
-              ><span>มูลค่าก่อนภาษี</span><b>{{ money(receiptPayable) }}</b
-              ><span>ภาษีมูลค่าเพิ่ม (ไม่มีภาษี)</span><b>{{ money(0) }}</b
-              ><strong>ยอดชำระ</strong><strong>{{ money(receiptPayable) }}</strong>
+              ><strong>ยอดสุทธิที่ชำระ</strong><strong>{{ money(receiptPayable) }}</strong>
             </div>
             <div>
-              <span>สถานะการชำระเงิน</span><b>ชำระเต็มจำนวน</b><span>ช่องทางการชำระ</span
-              ><b>{{ paymentMethods.find((method) => method.code === paymentCode)?.name || '-' }}</b
+              <span>สถานะการชำระเงิน</span><b>{{ paymentStatusLabel }}</b
+              ><span>ช่องทางการชำระ</span><b>{{ selectedPaymentLabel }}</b
               ><strong>ยอดสุทธิ</strong><strong>{{ money(receiptPayable) }}</strong>
             </div>
           </section>
           <section class="receipt-balance">
-            <p><b>แต้มคงเหลือ: 0</b><b>วงเงินคงเหลือ: ฿0.00</b></p>
             <p>
               <b>หมายเหตุ: {{ note || '-' }}</b>
             </p>
@@ -550,17 +599,40 @@ async function submit() {
                     @update:model-value="selectedStaffId = Number($event)"
                 /></label>
               </div>
+              <fieldset class="payment-status-group">
+                <legend>สถานะการชำระเงิน</legend>
+                <div>
+                  <button
+                    v-for="status in [
+                      { value: 'INSTALLMENT', label: 'ผ่อนชำระ' },
+                      { value: 'DEPOSIT', label: 'มัดจำ' },
+                      { value: 'PAID', label: 'ชำระเต็มจำนวน' },
+                    ] as const"
+                    :key="status.value"
+                    type="button"
+                    :class="{ active: paymentStatus === status.value }"
+                    @click="paymentStatus = status.value"
+                  >
+                    {{ status.label }}
+                  </button>
+                </div>
+              </fieldset>
               <div class="payment-group">
                 <span>ช่องทางชำระเงิน</span>
                 <div class="payment-options">
                   <button
-                    v-for="method in paymentMethods"
+                    v-for="method in salePaymentMethods"
                     :key="method.code"
                     type="button"
                     :class="{ active: paymentCode === method.code }"
                     @click="paymentCode = method.code"
                   >
-                    {{ method.name }}
+                    <img
+                      v-if="paymentMethodIcon(method.code, method.name)"
+                      :src="paymentMethodIcon(method.code, method.name)"
+                      alt=""
+                    />
+                    <span>{{ paymentMethodLabel(method.code, method.name) }}</span>
                   </button>
                 </div>
               </div>
@@ -593,10 +665,10 @@ async function submit() {
               </p>
               <div class="commission">
                 <p>
-                  <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
+                  <span>ค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
                 </p>
                 <p>
-                  <span>ค่าคอมมิชชัน 10%</span><b>{{ money(commissionAmount) }}</b>
+                  <span>10%</span><b>{{ money(commissionAmount) }}</b>
                 </p>
               </div>
               <button
@@ -611,19 +683,18 @@ async function submit() {
         </template>
 
         <section v-else class="sale-success-card">
-          <i>✓</i>
+          <i><img :src="saleSuccessCheck" alt="" /><span>✓</span></i>
           <h1>บันทึกการขายสำเร็จ</h1>
           <p>เลขรายการ {{ receiptNo }}</p>
           <div>
             <section>
               <b>{{ patient.fullName }}　HN {{ patient.hn }}</b
               ><span
-                >{{ item }} ·
+                >{{ item }}
                 {{ patient.branchName ? `สาขา${patient.branchName}` : 'สาขาแบริ่ง' }}</span
-              ><small>ฐานค่าคอมมิชชัน {{ money(afterItemDiscount) }}</small
+              ><small>ฐานค่าคอมมิชชัน　{{ money(afterItemDiscount) }}</small
               ><small
-                >ผู้ได้รับ Commission กภ. {{ selectedStaffName }} · ประมาณการ
-                {{ money(commissionAmount) }}</small
+                >ผู้ได้รับค่าคอมมิชชัน　<b>{{ selectedStaffName }}</b></small
               >
             </section>
             <section>
@@ -647,11 +718,7 @@ async function submit() {
             <div>
               <section>
                 <span>ยอดที่ลูกค้าชำระ</span><strong>{{ money(netAmount) }}</strong
-                ><small
-                  >ช่องทางการชำระเงิน　{{
-                    paymentMethods.find((method) => method.code === paymentCode)?.name || '-'
-                  }}</small
-                >
+                ><small>ช่องทางการชำระเงิน　{{ selectedPaymentLabel }}</small>
               </section>
               <section>
                 <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b
