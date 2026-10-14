@@ -1341,3 +1341,35 @@
     margin-inline: 8px;
   }
 }
+.calendar-sync-modal .calendar-sync-branches {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.calendar-sync-modal .calendar-sync-actions a.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.calendar-sync-modal .calendar-sync-actions {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+.calendar-sync-modal .calendar-sync-actions a.secondary {
+  min-height: 46px;
+  padding: 10px 18px;
+  border: 1px solid #d1d6d1;
+  border-radius: 10px;
+  color: #1a241f;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.calendar-sync-modal .calendar-sync-description p {
+  white-space: normal;
+  line-height: 1.7;
+}
+.calendar-sync-modal .calendar-sync-description {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
