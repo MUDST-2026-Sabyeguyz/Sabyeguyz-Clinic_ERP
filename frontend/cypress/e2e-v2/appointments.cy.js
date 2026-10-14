@@ -108,10 +108,14 @@ describe('creating and changing appointments', () => {
   })
 
   it('refuses a second booking of the same therapist at the same time', function () {
-    cy.registerPatient().then((patient) => book(this.fixtures, patient))
+    cy.registerPatient().then((patient) => book(this.fixtures, patient)).as('existingAppointment')
     cy.registerPatient({ firstName: 'อรุณ', lastName: 'แสงทอง', identityNumber: '1100000000102', phone: '0822222222' })
     cy.visitAs('manager', '/staff/appointments')
     cy.contains('button', 'สร้างนัดหมาย').click()
+    cy.chooseBranch('เลือกสาขา', '01')
+    cy.get('@existingAppointment').then((appointment) => {
+      cy.chooseDropdown('เลือกนักกายภาพ', appointment.therapist.fullName)
+    })
     cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type('อรุณ')
     cy.contains('.patient-search-results button', 'อรุณ แสงทอง').click()
     cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
