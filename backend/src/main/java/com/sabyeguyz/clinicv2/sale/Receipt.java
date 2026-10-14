@@ -64,7 +64,7 @@ public class Receipt {
     @Column(name = "bill_discount_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal billDiscountAmount = BigDecimal.ZERO;
 
-    /** Tax policy is still to be confirmed with the business; no tax is charged yet. */
+    /** R32 confirms zero tax: taxable amount is the net after bill discount, with tax amount zero. */
     @Column(name = "taxable_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal taxableAmount = BigDecimal.ZERO;
 

@@ -106,6 +106,18 @@ INSERT INTO sale_payments (sale_id, payment_method_id, payment_method_code, type
 VALUES ((SELECT id FROM sales WHERE receipt_no = 'RC2601010002'), (SELECT id FROM payment_methods WHERE code = 'CASH'), 'CASH', 'REFUND', -700,
         'บันทึกผิด', (SELECT id FROM sale_payments WHERE sale_id = (SELECT id FROM sales WHERE receipt_no = 'RC2601010002') AND type = 'PAYMENT'));
 
+-- a historical Assessment remains readable after migration; new v2 sales cannot create one
+INSERT INTO sales (receipt_no, patient_id, branch_id, salesperson_staff_id, total, status, note, sold_at)
+VALUES ('RC2601010003', (SELECT id FROM patients WHERE username = 'fx-thai'),
+        (SELECT branch_id FROM branch WHERE branch_code = '01'),
+        (SELECT id FROM staff WHERE employee_code = 'MGR-001'), 600, 'PAID', 'historical assessment',
+        TIMESTAMPTZ '2026-02-03 10:00+07');
+INSERT INTO sale_items (sale_id, item_type, service_id, description, unit_price, quantity, line_total)
+VALUES ((SELECT id FROM sales WHERE receipt_no = 'RC2601010003'), 'ASSESSMENT',
+        (SELECT id FROM services WHERE code = 'PHYSIO_30'), 'ประเมินย้อนหลัง', 600, 1, 600);
+INSERT INTO sale_payments (sale_id, payment_method_id, payment_method_code, type, amount)
+VALUES ((SELECT id FROM sales WHERE receipt_no = 'RC2601010003'),
+        (SELECT id FROM payment_methods WHERE code = 'CASH'), 'CASH', 'PAYMENT', 600);
 -- treatments: one tied to an appointment, one with a service text that matches nothing
 INSERT INTO treatments (patient_id, appointment_id, staff_id, service, note)
 VALUES ((SELECT patient_id FROM appointments WHERE note = 'ข้อมูลนัดหมายจำลอง 4'), (SELECT id FROM appointments WHERE note = 'ข้อมูลนัดหมายจำลอง 4'),
