@@ -134,13 +134,15 @@ P3 รอบนี้เฉพาะส่วนไม่ติด Q8; NEW retry
 
 **Interfaces:** คงpayments[]เพื่อcompatible แต่ rejectหลายวิธี; payment label mapping FullyPaid/Installment/Deposit→ชำระเต็ม/ผ่อน/มัดจำ; qr aliasยังacceptแต่UIแสดงพร้อมเพย์; ไม่เปิดinstallment credit engine
 
-- [ ] RED: requestบิล Cash+PromptPayได้400และไม่ทิ้งreceipt/transaction/payment; หนึ่งวิธีทุก4แบบสำเร็จ; QR aliasตอบcanonical; เปลี่ยนmethodภายหลังขัดวิธีเดิมไม่ได้; concurrency requestคนละmethodบนreceiptเดียวเหลือวิธีเดียวที่commit
-- [ ] Validateก่อนสร้างsale; receipt-level lockก่อนrecordpaymentและตรวจexistingactive methodในtransactionเดียว; ไม่ใช้แค่frontendvalidation; one method≠one record ต้องรอQ6เรื่องงวด
+- [x] RED: requestบิล Cash+PromptPayได้400และไม่ทิ้งreceipt/transaction/payment; หนึ่งวิธีทุก4แบบสำเร็จ; QR aliasตอบcanonical; เปลี่ยนmethodภายหลังขัดวิธีเดิมไม่ได้; concurrency requestคนละmethodบนreceiptเดียวเหลือวิธีเดียวที่commit
+- [x] Validateก่อนสร้างsale; receipt-level lockก่อนrecordpaymentและตรวจexistingactive methodในtransactionเดียว; ไม่ใช้แค่frontendvalidation; one method≠one record ต้องรอQ6เรื่องงวด
 - [ ] Q6พร้อมแล้วเพิ่ม label tests: fullpaid, deposit, installment, zero, void/repaymentตามpolicyที่ตอบ; อ่านlabelในdetail/list/historyไม่ deriveจากbooleanแทนenumที่มีแล้ว; F1 ระบุ Payment เป็นการบันทึกสิ่งที่ลูกค้าชำระ จึงไม่สร้าง credit/loan flow จากคำว่า “ผ่อน”
 - [ ] ส่วนลด RED cases: percentage/fixedคนละคำขอ, payloadกำกวม, 0, negative, 2digits, >2digitsและoversizeตามQ5; ใช้ BigDecimalและscale policyเดียว line/bill; ห้ามเปลี่ยนcommissionable amount/formula; หากทำไม่แยกได้ให้พักส่วนนั้น
-- [ ] Refund R33: หลังมีusageของcourseในreceipt request/complete refundต้องปฏิเสธและไม่มีrefund/cancellation/commission rowใหม่; ป้องกันrequestก่อนใช้แต่completeหลังใช้; transaction guardต้อง serializeกับcourse usage หรือใช้ lockเดียวกับusage path; หากต้องเปลี่ยนค่ามือ/reversal algorithmให้พักและแยกงานcommission
-- [ ] เก็บhistorical refundsอ่านได้; ไม่ปิดvoidบิลที่ยังไม่ใช้โดยอนุมาน; ใช้HTTP conflict409เป็นข้อเสนอcontractสำหรับrefundหลังใช้ และระบุในdoc
-- [ ] รัน sales/refunds/frontend-contract RED→GREEN พร้อม existing commission suites เพื่อพิสูจน์ไม่ได้เปลี่ยนพฤติกรรมเดิม; commit `feat: align payment rules without commission changes`
+- [x] Refund R33: หลังมีusageของcourseในreceipt request/complete refundต้องปฏิเสธและไม่มีrefund/cancellation/commission rowใหม่; ป้องกันrequestก่อนใช้แต่completeหลังใช้; transaction guardต้อง serializeกับcourse usage หรือใช้ lockเดียวกับusage path; หากต้องเปลี่ยนค่ามือ/reversal algorithmให้พักและแยกงานcommission
+- [x] เก็บhistorical refundsอ่านได้; ไม่ปิดvoidบิลที่ยังไม่ใช้โดยอนุมาน; ใช้HTTP conflict409เป็นข้อเสนอcontractสำหรับrefundหลังใช้ และระบุในdoc
+- [x] รัน sales/refunds/frontend-contract RED→GREEN พร้อม existing commission suites เพื่อพิสูจน์ไม่ได้เปลี่ยนพฤติกรรมเดิม; commit `feat: align payment rules without commission changes`
+
+P4 Q5/Q6: นายท่านยืนยันให้พักใน chat; คง discount/label derivation/งวดเดิม เพิ่มเฉพาะการอ่าน persisted paymentLabel และ display ไม่ปิด checklist gated ข้างต้น
 
 ## P5: Patient receipt history, print และ tax policy (R13/24–25/28–29บางส่วน/32, T11)
 
