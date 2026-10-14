@@ -2,8 +2,8 @@ package com.sabyeguyz.clinicv2.appointment;
 
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
+import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.catalog.ServiceRepository;
 import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
@@ -45,24 +45,24 @@ public class AppointmentController {
     private final PatientVisitService visitService;
     private final PatientVisitRepository visits;
     private final PatientRepository patients;
-    private final BranchRepository branches;
     private final StaffRepository staff;
     private final ServiceRepository services;
     private final CurrentActor actor;
+    private final BranchAccessPolicy branchAccess;
 
     public AppointmentController(AppointmentService service, AppointmentRepository repository,
                                   PatientVisitService visitService, PatientVisitRepository visits,
-                                  PatientRepository patients, BranchRepository branches, StaffRepository staff,
-                                  ServiceRepository services, CurrentActor actor) {
+                                  PatientRepository patients, StaffRepository staff,
+                                  ServiceRepository services, CurrentActor actor, BranchAccessPolicy branchAccess) {
         this.service = service;
         this.repository = repository;
         this.visitService = visitService;
         this.visits = visits;
         this.patients = patients;
-        this.branches = branches;
         this.staff = staff;
         this.services = services;
         this.actor = actor;
+        this.branchAccess = branchAccess;
     }
 
     /**
@@ -97,7 +97,8 @@ public class AppointmentController {
                                 @RequestParam(required = false) String status,
                                 @RequestParam(defaultValue = "0") int page,
                                 @RequestParam(defaultValue = "20") int size) {
-        Long branchId = branchCode == null || branchCode.isBlank() ? null : resolveBranch(branchCode).getId();
+        Branch scope = branchAccess.scope(branchCode);
+        Long branchId = scope == null ? null : scope.getId();
         AppointmentStatus statusValue = status == null || status.isBlank() ? null : parseStatus(status);
         Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date, therapistId,
                 statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
@@ -108,15 +109,21 @@ public class AppointmentController {
 
     @GetMapping("/{id}")
     public Response get(@PathVariable Long id) {
-        return toResponse(service.get(id));
+        return toResponse(requireAppointmentAccess(id));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Response create(@RequestBody CreateRequest request) {
-        Branch branch = resolveBranch(request.branchCode());
+        if (request.branchCode() == null || request.branchCode().isBlank()) {
+            throw new IllegalArgumentException("ต้องระบุสาขา");
+        }
+        Branch branch = branchAccess.scope(request.branchCode());
         Staff therapist = staff.findById(request.therapistId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ให้บริการ"));
+        if (!branch.getId().equals(therapist.getBranch().getId())) {
+            throw new IllegalArgumentException("ผู้ให้บริการต้องอยู่สาขาเดียวกับนัดหมาย");
+        }
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
         AppointmentStatus initial = parseInitialStatus(request.status());
         if ("NEW".equalsIgnoreCase(request.patientType())) {
@@ -136,11 +143,13 @@ public class AppointmentController {
 
     @PostMapping("/{id}/confirm")
     public Response confirm(@PathVariable Long id) {
+        requireAppointmentAccess(id);
         return toResponse(service.confirm(id, actor.currentId()));
     }
 
     @PostMapping("/{id}/link-patient")
     public Response linkPatient(@PathVariable Long id, @RequestBody LinkPatientRequest request) {
+        requireAppointmentAccess(id);
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         return toResponse(service.linkRegisteredPatient(id, patient, actor.currentId()));
@@ -148,12 +157,14 @@ public class AppointmentController {
 
     @PostMapping("/{id}/check-in")
     public Response checkIn(@PathVariable Long id) {
+        requireAppointmentAccess(id);
         visitService.checkInFromAppointment(id, actor.currentId());
         return toResponse(service.get(id));
     }
 
     @PostMapping("/{id}/start-service")
     public Response startService(@PathVariable Long id) {
+        requireAppointmentAccess(id);
         PatientVisit visit = requireVisit(id);
         visitService.startService(visit.getId(), actor.currentId());
         return toResponse(service.get(id));
@@ -161,6 +172,7 @@ public class AppointmentController {
 
     @PostMapping("/{id}/complete")
     public Response complete(@PathVariable Long id) {
+        requireAppointmentAccess(id);
         PatientVisit visit = requireVisit(id);
         visitService.complete(visit.getId(), actor.currentId());
         return toResponse(service.get(id));
@@ -168,16 +180,19 @@ public class AppointmentController {
 
     @PostMapping("/{id}/no-show")
     public Response noShow(@PathVariable Long id) {
+        requireAppointmentAccess(id);
         return toResponse(service.markNoShow(id, actor.currentId()));
     }
 
     @PostMapping("/{id}/cancel")
     public Response cancel(@PathVariable Long id, @RequestBody CancelRequest request) {
+        requireAppointmentAccess(id);
         return toResponse(service.cancel(id, request.reason(), actor.currentId()));
     }
 
     @PatchMapping("/{id}")
     public Response reschedule(@PathVariable Long id, @RequestBody RescheduleRequest request) {
+        requireAppointmentAccess(id);
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
         // Reassigning the therapist on reschedule is not supported yet (AppointmentService.reschedule
         // only moves date/time) - request.therapistId() is accepted but ignored, flagged for the team.
@@ -211,9 +226,10 @@ public class AppointmentController {
                 .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
     }
 
-    private Branch resolveBranch(String branchCode) {
-        return branches.findByBranchCode(branchCode.trim())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode));
+    private Appointment requireAppointmentAccess(Long id) {
+        Appointment appointment = service.get(id);
+        branchAccess.requireAccess(appointment.getBranch());
+        return appointment;
     }
 
     private static Response toResponse(Appointment appointment) {

@@ -1,7 +1,7 @@
 # API v2 กับ frontend: เอกสารเทียบสัญญา (contract)
 
 สร้างจากการเทียบ `frontend/src/api/client.ts` กับ controller ใน `backend/src/main/java/com/sabyeguyz/clinicv2`
-อัปเดตล่าสุดตามบั้นปลายของ branch `feat/v2-cutover` (PR #43)
+ฐานเอกสารเดิมจาก branch `feat/v2-cutover` (PR #43); เพิ่มขอบเขตสิทธิ์นัดหมาย P1 วันที่ 14 ตุลาคม 2026 ตามรายละเอียดด้านล่าง
 
 ## 1. ความครอบคลุมของ endpoint
 
@@ -54,10 +54,26 @@
 | กลุ่ม | สิทธิ์ |
 |---|---|
 | MANAGER เท่านั้น | `/api/users` (ทุก method), `/api/auth/register`, จัดการบริการ/แม่แบบคอร์ส, คอมมิชชัน, คืนเงิน, ปิดพนักงาน |
-| ผู้ใช้ที่ล็อกอินแล้ว | อ่านข้อมูลทั่วไป, นัดหมาย, ขาย, ใช้คอร์ส |
+| ผู้ใช้ที่ล็อกอินแล้ว | อ่านข้อมูลทั่วไป, ขาย, ใช้คอร์ส; นัดหมายจำกัดสาขาตาม P1 ด้านล่าง |
 | ไม่ต้องล็อกอิน | `/api/auth/login`, `/actuator/health` |
 
 ไม่มี token หรือ token เสีย = 401; ไม่มีสิทธิ์ = 403
+
+### P1 ส่วนสิทธิ์นัดหมาย (R1–R3, 14 ตุลาคม 2026)
+
+ใช้เฉพาะ `/api/appointments` และทุก action ใต้ path นี้; ยังไม่เปลี่ยน login/session contract หรือสิทธิ์ report/sale/course/catalog ตามที่นายท่านเลือกพัก Q9
+
+- Server อ่าน active AppUser, roles และ `Staff.branch` จาก DB; Manager เท่านั้นที่เข้าถึงนัดได้ทุกสาขา บัญชีอื่นที่มี staff ใช้สาขาประจำของตน ไม่ใช้ branch grant เดิมเป็นสิทธิ์ข้ามสาขาใน P1 นี้
+- `GET /api/appointments` ไม่ส่งหรือส่ง branchCode ว่าง: non-Manager ได้เฉพาะสาขาประจำ รวมถึง `totalItems/totalPages`; Manager ได้ทุกสาขา ส่ง branchCode ต่างสาขาสำหรับ non-Manager ได้ 403 และ therapist/date/status/page ไม่ข้ามขอบเขตนี้
+- `POST /api/appointments` ต้องระบุ branchCode; non-Manager ต้องตรงสาขาประจำ ฝืนส่งต่างสาขาได้ 403; therapist ต้องอยู่สาขาเดียวกับนัด ไม่ตรงได้ 400 ทั้ง CURRENT/NEW และ Manager
+- `GET /{id}`, `PATCH /{id}` และ POST confirm/link-patient/check-in/start-service/complete/no-show/cancel ตรวจสาขาของนัดที่บันทึกไว้ก่อนอ่านข้อมูลหรือประมวลผล action/payload; ต่างสาขาได้ 403, ID ไม่มีได้ 404
+- ไม่มี staff/สาขาประจำและไม่มีบทบาท Manager ได้ 403; AppUser ปิดใช้งานได้ 401 สำหรับ appointment endpoints แม้ JWT ยังไม่หมดอายุ
+- ผู้ป่วยยังค้นและอ่าน profile รวมข้ามสาขาได้; `patientId` ไม่ใช่สิทธิ์ในการเข้าถึงนัด จองให้ผู้ป่วยจากสาขาอื่นในสาขาประจำของผู้ใช้งานได้
+- รูป JSON, query names, statuses และ JWT เดิมไม่เปลี่ยน; reschedule ยังไม่ย้าย therapist ตามข้อจำกัดเดิม/Q8
+
+Open Question Q9 ยังไม่ปิด: ระบบปัจจุบันมี Manager/Therapist; ไม่เพิ่ม STAFF/ADMIN หรือเดา Figma permissions/login selector ในรอบนี้ สิทธิ์ข้ามสาขาของ reports/sale/course และ session branch selection ยังต้องทำแยกตามคำตอบที่ยืนยัน
+
+ข้อจำกัดของการตรวจ DB roles ในรอบนี้: ใช้กับ appointment endpoints เท่านั้น ส่วน management endpoints เดิม เช่น `/api/users` ยังใช้ JWT role claims; จึงยังไม่ใช่การเพิกถอนสิทธิ์ Manager/token แบบครอบคลุมทั้งระบบ
 
 ## 5. Audit log
 
