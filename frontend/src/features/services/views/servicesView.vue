@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
+  appointmentApi,
   branchApi,
   catalogApi,
   patientApi,
@@ -96,6 +97,10 @@ async function loadMaster() {
   }
   const patientId = Number(route.query.patientId)
   const selectedPatient = p.find((item) => item.id === patientId)
+  if (route.query.appointmentId) {
+    const appointment = await appointmentApi.get(Number(route.query.appointmentId))
+    if (appointment.patient.id !== patientId) throw new Error('ผู้ป่วยไม่ตรงกับนัดหมาย')
+  }
   if (selectedPatient) await choose(selectedPatient)
 }
 onMounted(async () => {
@@ -218,6 +223,8 @@ function openPatientCourses() {
   if (patient.value) router.push({ path: '/staff/courses', query: { patientId: patient.value.id } })
 }
 function clearPatient() {
+  const { appointmentId: _appointmentId, patientId: _patientId, ...remainingQuery } = route.query
+  void router.replace({ query: remainingQuery })
   patient.value = null
   patientProfile.value = null
   query.value = ''
@@ -289,6 +296,7 @@ async function submit() {
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
+      <p v-if="route.query.appointmentId && patient">อ้างอิงนัดหมาย #{{ route.query.appointmentId }}</p>
       <template v-if="screen === 'search'">
         <h1>บริการและคอร์ส</h1>
         <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
