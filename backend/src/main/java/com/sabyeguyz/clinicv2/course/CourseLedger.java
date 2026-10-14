@@ -4,6 +4,7 @@ import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
+import com.sabyeguyz.clinicv2.sale.TransactionCancellation;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -73,6 +74,15 @@ public class CourseLedger {
     @JoinColumn(name = "sales_transaction_id")
     private SalesTransaction salesTransaction;
 
+    /** Cancellation entries (entitlement cut by a refund): exactly one of the refund item or the cancellation. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_refund_item_id")
+    private CourseRefundItem courseRefundItem;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cancellation_id")
+    private TransactionCancellation cancellation;
+
     @Column(name = "adjustment_approved_by")
     private Long adjustmentApprovedBy;
 
@@ -108,6 +118,10 @@ public class CourseLedger {
     public void setEventAt(Instant eventAt) { this.eventAt = eventAt; }
     public SalesTransaction getSalesTransaction() { return salesTransaction; }
     public void setSalesTransaction(SalesTransaction salesTransaction) { this.salesTransaction = salesTransaction; }
+    public CourseRefundItem getCourseRefundItem() { return courseRefundItem; }
+    public void setCourseRefundItem(CourseRefundItem courseRefundItem) { this.courseRefundItem = courseRefundItem; }
+    public TransactionCancellation getCancellation() { return cancellation; }
+    public void setCancellation(TransactionCancellation cancellation) { this.cancellation = cancellation; }
     public Long getAdjustmentApprovedBy() { return adjustmentApprovedBy; }
     public void setAdjustmentApprovedBy(Long adjustmentApprovedBy) { this.adjustmentApprovedBy = adjustmentApprovedBy; }
     public Instant getAdjustmentApprovedAt() { return adjustmentApprovedAt; }

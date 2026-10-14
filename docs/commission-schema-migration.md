@@ -64,6 +64,23 @@ V3 ต้นฉบับ **ล้มบนฐานที่มีข้อม�
 ผลทดสอบ (15 ต.ค. 2026): backend HTTP v2 **218/218**, ชุดเก่า `test:api` **395/395**, `SchemaCheck` และ `RuntimeCheck` ผ่าน, frontend unit/type check/build/ESLint ผ่าน, frontend บนเบราว์เซอร์ **117/117** (รอบแรกบน worktree ใหม่ล้มเกือบหมดเพราะ Vite รอบแรกยังไม่อุ่น รันซ้ำผ่าน) นอกจากนี้ตรวจข้อมูลที่เขียนลง DB จริง: ผู้รักษาของ Visit, ฐานค่ามือ 8,100 เมื่อมีส่วนลดท้ายบิล 900, ลำดับการใช้สิทธิ์/แทนที่, ผู้อนุมัติคืนเงิน, การขายรายครั้งผูก Visit
 ยังไม่ได้ทำ (งานถัดไป): การคำนวณตามกติกาเศษ commission ครั้งสุดท้าย (T8), ผู้รักษาที่เลือกเอง/Owner ต่างจากผู้รักษาของนัด (T9/T10), ค่ามือรายครั้ง (T11), Reopen/Finalize/ชำระ (T13-T16), Adjustment (T17)
 
+## T3: entity ใหม่ของตารางค่าคอมมิชชัน
+เพิ่ม entity และ repository สำหรับตารางที่ V1002 สร้างขึ้น พร้อม `StaffMonthlyPayment` (ตารางใหม่อ้างถึง และเดิมไม่มี entity)
+
+| Entity | ตาราง | หมายเหตุ |
+|---|---|---|
+| `CourseRefundItem` | `course_refund_item` | รายการคอร์สในการคืนเงิน (ยอดคืน, จำนวนครั้งที่ตัดสิทธิ์) หนึ่งคอร์สต่อหนึ่งการคืนเงิน |
+| `SingleVisitFeeLedger` | `single_visit_fee_ledger` | ค่ามือรักษารายครั้ง Allocation/Reversal ต่อเวอร์ชัน (ใช้ enum `AllocationEntryType` เดิม) |
+| `StaffMonthlyPayment` | `staff_monthly_payment` | สรุปจ่ายรายคนรายเดือน (เดือนที่รักษา) สถานะ `PaymentStatus` Open/Closed/Paid |
+| `StaffPayAdjustment` | `staff_pay_adjustment` | ใบปรับยอดหลัง Finalize `AdjustmentStatus` |
+| `AdjustmentApplication` | `adjustment_application` | การนำใบปรับยอดไปใช้ในงวด `ApplicationStatus` Draft/Applied/Cancelled |
+
+เชื่อมกับของเดิม: `CourseLedger` มี `courseRefundItem` และ `cancellation` กับค่า enum `Cancellation` ; `CommissionAllocationLedger` มี `ownerMonthlyPayment` และ `treatingMonthlyPayment`
+ตรรกะทางธุรกิจของตารางเหล่านี้ (ใครสร้างแถว เมื่อไหร่) ยังไม่ได้ทำ: คือ T10-T17
+
+ทดสอบ: `backend/cypress/e2e-v2/commission-entities.cy.js` (4 ข้อ) ใช้ endpoint ทดสอบ `CypressCommissionEntitiesController` (เฉพาะโปรไฟล์ `cypress-v2`) เตรียมข้อมูลจริงผ่าน API (ผู้ป่วย, ขายรายครั้ง, คืนเงิน, ซื้อคอร์ส) แล้วบันทึก-อ่านกลับ และยืนยันว่า DB ปฏิเสธข้อมูลผิดกติกา (ชื่อ constraint อยู่ในผลที่ตรวจ): รายการคืนเงินซ้ำ/ยอด 0, ค่ามือกลับรายการซ้ำหรือไม่มีเหตุผล, จ่ายสถานะ Paid ที่ไม่มียอด/ยอดรวมไม่ตรง/ไม่มีวันที่จ่าย, ใบปรับยอด (เดือนที่ใช้ไม่หลังเดือนเดิม, ยอด 0, ไม่มีต้นทาง, ไม่มีเหตุผล, ยอดคงเหลือไม่ตรง, สถานะอนุมัติแต่ไม่มีผู้อนุมัติ) และการนำไปใช้ที่ Applied โดยไม่มีผู้อนุมัติหรือการหักที่ไม่มีเลขอ้างอิง
+ผล: backend HTTP v2 222/222 (218 เดิม + 4 ใหม่), `SchemaCheck` 49 entities ผ่าน, `RuntimeCheck` ผ่าน
+
 ## ข้อควรรู้ก่อนรวมเข้า branch หลัก
 - constraint `NOT VALID` บังคับกับแถวใหม่ทันที (ดูตารางด้านบน) ฐานเดิมที่รันบน V1001 อัปเกรดได้ตามที่ทดสอบ
 - seed `V1000__demo_data.sql` รันก่อน V1002 จึงไม่ต้องแก้ ; legacy importer ที่อ้างคอลัมน์ที่ถูกลบต้องแก้ในงานของฝั่ง P9
