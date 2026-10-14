@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 
 type SectionKey = 'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'master'
 type Row = Record<string, any>
@@ -87,12 +88,30 @@ const keys = computed(() => {
   return values[section.value]
 })
 const form = reactive<Row>({})
+type CommissionTier = { minimum: string; maximum: string; rate: string }
+const commissionTiers = ref<CommissionTier[]>([])
+const defaultTiers = (): CommissionTier[] => [
+  { minimum: '0', maximum: '49,999', rate: '4%' },
+  { minimum: '50,000', maximum: '79,999', rate: '6%' },
+  { minimum: '80,000', maximum: '119,999', rate: '8%' },
+  { minimum: '120,000', maximum: 'ไม่จำกัด', rate: '12%' },
+]
+function changeCompensationType() {
+  form.rateFormat = form.compensationType === 'course' ? 'เปอร์เซ็นต์ (%)' : 'บาท / ครั้ง'
+  form.basis =
+    form.compensationType === 'course' ? 'ยอดขายคอร์สหลังส่วนลดรายการ' : 'จำนวนครั้งที่ให้บริการ'
+}
 function defaults() {
   if (section.value === 'branches')
-    Object.assign(form, { code: '', name: '', contact: '', status: 'ใช้งาน' })
+    Object.assign(form, { code: '', name: '', contact: '', address: '', status: 'ใช้งาน' })
   if (section.value === 'users')
     Object.assign(form, {
       name: '',
+      firstName: '',
+      lastName: '',
+      email: '',
+      username: '',
+      password: '',
       role: 'Therapist',
       branch: 'แบริ่ง',
       permission: '',
@@ -104,6 +123,8 @@ function defaults() {
       type: 'Single Visit',
       price: '',
       sessions: '1 ครั้ง',
+      unit: 'ครั้ง',
+      expiry: '365 วัน',
       status: 'ใช้งาน',
     })
   if (section.value === 'rooms')
@@ -117,8 +138,16 @@ function defaults() {
   if (section.value === 'commission')
     Object.assign(form, {
       name: '',
-      recipient: 'นักกายภาพบำบัด',
+      schemeName: '',
+      recipient: 'รายพนักงาน',
       calculation: '',
+      compensationType: 'course',
+      basis: 'ยอดขายคอร์สหลังส่วนลดรายการ',
+      rateFormat: 'เปอร์เซ็นต์ (%)',
+      calculationMethod: '',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      amount: '300',
       status: 'เปิดใช้งาน',
     })
   if (section.value === 'master')
@@ -133,8 +162,21 @@ function openDrawer(index: number | null) {
     index === null ? undefined : data[section.value as Exclude<SectionKey, 'payments'>]?.[index]
   if (row) Object.assign(form, row)
   else defaults()
+  if (section.value === 'users') {
+    const [firstName = '', ...lastName] = String(form.name ?? '')
+      .trim()
+      .split(/\s+/)
+    form.firstName = form.firstName ?? firstName
+    form.lastName = form.lastName ?? lastName.join(' ')
+    form.password = ''
+  }
+  if (section.value === 'commission') {
+    commissionTiers.value = form.tiers
+      ? form.tiers.map((tier: CommissionTier) => ({ ...tier }))
+      : defaultTiers()
+  }
   selectedPermissions.value = String(form.permission ?? '')
-    .split(' ')
+    .split(/[,\s]+/)
     .filter(Boolean)
   drawerOpen.value = true
 }
@@ -143,10 +185,17 @@ function save() {
   validationMessage.value = ''
   const required: Record<Exclude<SectionKey, 'payments'>, string[]> = {
     branches: ['code', 'name', 'contact'],
-    users: ['name', 'role', 'branch'],
-    services: ['name', 'type', 'price', 'sessions'],
+    users: ['firstName', 'lastName', 'email', 'username', 'role', 'branch'],
+    services: ['name', 'type', 'price', 'unit', 'sessions', 'expiry'],
     rooms: ['name', 'branch', 'type', 'capacity'],
-    commission: ['name', 'recipient', 'calculation'],
+    commission: [
+      'schemeName',
+      'recipient',
+      'basis',
+      'rateFormat',
+      'calculationMethod',
+      'startDate',
+    ],
     master: ['category', 'examples'],
   }
   required[section.value as Exclude<SectionKey, 'payments'>].forEach((key) => {
@@ -159,6 +208,53 @@ function save() {
       !/^[0-9 -]+$/.test(phone) || (phoneDigits.length !== 9 && phoneDigits.length !== 10)
   }
   if (section.value === 'users' && !selectedPermissions.value.length) fieldErrors.permission = true
+  if (section.value === 'users') {
+    if (!fieldErrors.email)
+      fieldErrors.email = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(form.email))
+    if (editingIndex.value === null && !String(form.password ?? '').trim())
+      fieldErrors.password = true
+  }
+  if (section.value === 'commission') {
+    if (form.endDate && form.endDate < form.startDate) {
+      validationMessage.value = 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มมีผล'
+      return
+    }
+    const number = (value: string) => Number(value.replace(/[,\s%]/g, ''))
+    if (form.compensationType === 'course') {
+      let next = 0
+      for (const [index, tier] of commissionTiers.value.entries()) {
+        const minimum = number(tier.minimum)
+        const unlimited = tier.maximum.trim() === 'ไม่จำกัด'
+        const maximum = unlimited ? Infinity : number(tier.maximum)
+        const rate = number(tier.rate)
+        if (
+          !tier.minimum.trim() ||
+          !tier.maximum.trim() ||
+          !tier.rate.trim() ||
+          !Number.isFinite(minimum) ||
+          minimum !== next ||
+          maximum < minimum ||
+          Number.isNaN(maximum) ||
+          !Number.isFinite(rate) ||
+          rate <= 0 ||
+          rate > 100 ||
+          (unlimited && index !== commissionTiers.value.length - 1)
+        ) {
+          validationMessage.value =
+            'กรุณากำหนด Tier ให้ต่อเนื่อง ไม่ซ้อนทับ และอัตรามากกว่า 0 ถึง 100%'
+          return
+        }
+        next = maximum + 1
+      }
+    } else if (
+      !String(form.amount).trim() ||
+      !Number.isFinite(number(String(form.amount))) ||
+      number(String(form.amount)) <= 0
+    ) {
+      validationMessage.value = 'กรุณาระบุค่าตอบแทนต่อครั้งให้มากกว่า 0'
+      return
+    }
+  }
   if (Object.values(fieldErrors).some(Boolean)) {
     validationMessage.value = fieldErrors.contact
       ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
@@ -171,7 +267,18 @@ function save() {
       .map((item) => item.trim())
       .filter(Boolean).length
   }
-  if (section.value === 'users') form.permission = selectedPermissions.value.join(' ')
+  if (section.value === 'users') {
+    form.permission = selectedPermissions.value.join(', ')
+    form.name = `${String(form.firstName).trim()} ${String(form.lastName).trim()}`
+    delete form.password
+  }
+  if (section.value === 'commission') {
+    form.tiers = commissionTiers.value.map((tier) => ({ ...tier }))
+    form.calculation =
+      form.compensationType === 'course'
+        ? `Tier ${commissionTiers.value.map((t) => `${t.rate.replace(/%/g, '').trim()}%`).join(' / ')}`
+        : `${form.amount} บาท / ครั้ง`
+  }
   const rows = data[section.value as Exclude<SectionKey, 'payments'>]
   if (editingIndex.value === null) rows.push({ ...form })
   else rows[editingIndex.value] = { ...form }
@@ -181,18 +288,6 @@ function save() {
     saveModalOpen.value = false
   }, 1800)
 }
-function notify(message: string) {
-  savedMessage.value = message
-  window.setTimeout(() => {
-    savedMessage.value = ''
-  }, 2200)
-}
-function togglePayment(index: number) {
-  const method = paymentMethods[index]
-  if (!method) return
-  method.active = !method.active
-  notify(`บันทึก ${method.name} อัตโนมัติแล้ว`)
-}
 const drawerTitle = computed(() => {
   const labels: Record<SectionKey, string> = {
     branches: 'สาขา',
@@ -200,7 +295,7 @@ const drawerTitle = computed(() => {
     services: 'คอร์ส',
     payments: 'การชำระเงิน',
     rooms: 'ห้อง/ทรัพยากร',
-    commission: 'เกณฑ์คอมมิชชัน',
+    commission: form.compensationType === 'course' ? 'Commission Tier' : 'Commission Rule',
     master: 'Master Data',
   }
   return `${editingIndex.value === null ? 'เพิ่ม' : 'แก้ไข'} ${labels[section.value]}`
@@ -236,21 +331,20 @@ const drawerTitle = computed(() => {
             <button v-if="actionLabel" class="settings-add" @click="openDrawer(null)">
               {{ actionLabel }}
             </button>
-            <p v-else-if="section === 'payments'" class="auto-save-note">
-              {{ savedMessage || 'การเปลี่ยนแปลงจะบันทึกอัตโนมัติ' }}
-            </p>
           </header>
           <div v-if="section === 'payments'" class="payment-list">
             <button
-              v-for="(method, index) in paymentMethods"
+              v-for="method in paymentMethods"
               :key="method.name"
               class="payment-option"
               :class="{ selected: method.active }"
-              @click="togglePayment(index)"
+              disabled
             >
               <span class="radio" aria-hidden="true"></span
               ><span
-                ><b>{{ method.name }}</b
+                ><span class="payment-title"
+                  ><b>{{ method.name }}</b
+                  ><span class="payment-unavailable">ยังไม่เปิดให้บริการ</span></span
                 ><small>{{ method.note }}</small></span
               ><i v-if="method.active">✓</i>
             </button>
@@ -278,6 +372,12 @@ const drawerTitle = computed(() => {
                           String(row[key]).startsWith('ไม่พร้อม'),
                       }"
                       >{{ row[key] }}</span
+                    ><template v-else-if="key === 'permission'">{{
+                      String(row[key] ?? '')
+                        .split(/[,\s]+/)
+                        .filter(Boolean)
+                        .join(', ')
+                    }}</template
                     ><template v-else>{{ row[key] }}</template>
                   </td>
                   <td><button class="edit" @click="openDrawer(index)">แก้ไข</button></td>
@@ -295,7 +395,7 @@ const drawerTitle = computed(() => {
       <div class="save-success-modal" role="status">บันทึกเรียบร้อยแล้ว</div>
     </div>
     <div v-if="drawerOpen" class="drawer-backdrop" @click.self="drawerOpen = false">
-      <aside class="drawer">
+      <aside class="drawer" :class="{ 'commission-drawer': section === 'commission' }">
         <header>
           <h2>{{ drawerTitle }}</h2>
           <button aria-label="ปิด" @click="drawerOpen = false">×</button>
@@ -319,13 +419,45 @@ const drawerTitle = computed(() => {
               maxlength="12"
               :class="{ invalid: fieldErrors.contact }"
               placeholder="เบอร์โทรศัพท์สาขา" /></label
+          ><label>ที่อยู่<input v-model="form.address" placeholder="ระบุที่อยู่สาขา" /></label
         ></template>
         <template v-else-if="section === 'users'"
+          ><div class="user-name-fields">
+            <label
+              >ชื่อ<input
+                v-model="form.firstName"
+                :class="{ invalid: fieldErrors.firstName }"
+                placeholder="ระบุชื่อ"
+                autocomplete="given-name"
+            /></label>
+            <label
+              >นามสกุล<input
+                v-model="form.lastName"
+                :class="{ invalid: fieldErrors.lastName }"
+                placeholder="ระบุนามสกุล"
+                autocomplete="family-name"
+            /></label>
+          </div>
+          <label
+            >Email<input
+              v-model="form.email"
+              type="email"
+              :class="{ invalid: fieldErrors.email }"
+              placeholder="ระบุ email ของผู้ใช้งาน"
+              autocomplete="email" /></label
           ><label
-            >ชื่อผู้ใช้งาน<input
-              v-model="form.name"
-              :class="{ invalid: fieldErrors.name }"
-              placeholder="ระบุชื่อผู้ใช้งาน" /></label
+            >username<input
+              v-model="form.username"
+              :class="{ invalid: fieldErrors.username }"
+              placeholder="ระบุ username"
+              autocomplete="off" /></label
+          ><label
+            >รหัสผ่าน<input
+              v-model="form.password"
+              type="password"
+              :class="{ invalid: fieldErrors.password }"
+              placeholder="ระบุรหัสผ่าน"
+              autocomplete="new-password" /></label
           ><label :class="{ 'invalid-field': fieldErrors.role }"
             >Role<FilterDropdown
               v-model="form.role"
@@ -336,7 +468,7 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false" /></label
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
-            >สาขาที่เข้า<FilterDropdown
+            >สาขา<FilterDropdown
               v-model="form.branch"
               :options="[option('แบริ่ง'), option('พระราม 9')]"
               default-value="แบริ่ง"
@@ -375,10 +507,20 @@ const drawerTitle = computed(() => {
               :class="{ invalid: fieldErrors.price }"
               placeholder="ระบุราคา" /></label
           ><label
-            >จำนวนครั้ง<input
+            >หน่วย<input
+              v-model="form.unit"
+              :class="{ invalid: fieldErrors.unit }"
+              placeholder="เช่น ครั้ง" /></label
+          ><label
+            >จำนวน<input
               v-model="form.sessions"
               :class="{ invalid: fieldErrors.sessions }"
               placeholder="ระบุจำนวนครั้ง" /></label
+          ><label
+            >วันหมดอายุ<input
+              v-model="form.expiry"
+              :class="{ invalid: fieldErrors.expiry }"
+              placeholder="เช่น 365 วัน" /></label
         ></template>
         <template v-else-if="section === 'rooms'"
           ><label
@@ -411,25 +553,75 @@ const drawerTitle = computed(() => {
               type="number"
               min="1" /></label
         ></template>
-        <template v-else-if="section === 'commission'"
-          ><label
-            >ชื่อเกณฑ์คอมมิชชัน<input
-              v-model="form.name"
-              :class="{ invalid: fieldErrors.name }" /></label
-          ><label :class="{ 'invalid-field': fieldErrors.recipient }"
+        <template v-else-if="section === 'commission'">
+          <fieldset class="compensation-types">
+            <legend>ประเภทค่าตอบแทน</legend>
+            <label
+              ><input
+                v-model="form.compensationType"
+                type="radio"
+                value="course"
+                @change="changeCompensationType"
+              />คอมมิชชันการขายคอร์ส</label
+            >
+            <label
+              ><input
+                v-model="form.compensationType"
+                type="radio"
+                value="service"
+                @change="changeCompensationType"
+              />บริการรายครั้ง</label
+            >
+          </fieldset>
+          <label
+            >ชื่อ Scheme<input
+              v-model="form.schemeName"
+              :class="{ invalid: fieldErrors.schemeName }"
+              placeholder="ระบุชื่อ Scheme"
+          /></label>
+          <label
             >ผู้ได้รับค่าคอมมิชชัน<FilterDropdown
               v-model="form.recipient"
               :options="[option('นักกายภาพบำบัด'), option('รายพนักงาน')]"
-              default-value="นักกายภาพบำบัด"
-              default-label="นักกายภาพบำบัด"
               label="ผู้ได้รับค่าคอมมิชชัน"
+              default-label="เลือกผู้ได้รับค่าคอมมิชชัน"
               hide-default-option
-              :clear-on-reselect="false" /></label
-          ><label
+              :clear-on-reselect="false"
+          /></label>
+          <label
+            >ฐานคำนวณ<input v-model="form.basis" :class="{ invalid: fieldErrors.basis }"
+          /></label>
+          <label>รูปแบบอัตรา<input v-model="form.rateFormat" readonly /></label>
+          <label
             >วิธีคำนวณ<input
-              v-model="form.calculation"
-              :class="{ invalid: fieldErrors.calculation }" /></label
-        ></template>
+              v-model="form.calculationMethod"
+              :class="{ invalid: fieldErrors.calculationMethod }"
+              placeholder="วิธีคำนวณ"
+          /></label>
+          <div v-if="form.compensationType === 'course'" class="commission-tier-fields">
+            <div class="commission-tier-head">
+              <span>ยอดขายขั้นต่ำ</span><span>ยอดขายสูงสุด</span><span>อัตรา (%)</span>
+            </div>
+            <div v-for="(tier, index) in commissionTiers" :key="index" class="commission-tier-row">
+              <input
+                v-model="tier.minimum"
+                :aria-label="`Tier ${index + 1} ยอดขายขั้นต่ำ`"
+                inputmode="decimal"
+              />
+              <input v-model="tier.maximum" :aria-label="`Tier ${index + 1} ยอดขายสูงสุด`" />
+              <input v-model="tier.rate" :aria-label="`Tier ${index + 1} อัตรา`" />
+            </div>
+          </div>
+          <label v-else
+            >ค่าตอบแทนต่อครั้ง (บาท)<input v-model="form.amount" inputmode="decimal"
+          /></label>
+          <div class="commission-dates">
+            <label
+              >วันที่เริ่มมีผล<ThaiDatePicker v-model="form.startDate" show-calendar-icon
+            /></label>
+            <label>วันที่สิ้นสุด<ThaiDatePicker v-model="form.endDate" show-calendar-icon /></label>
+          </div>
+        </template>
         <template v-else-if="section === 'master'"
           ><label :class="{ 'invalid-field': fieldErrors.category }"
             >ประเภทข้อมูล<FilterDropdown
