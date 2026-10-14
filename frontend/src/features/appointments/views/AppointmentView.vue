@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -322,8 +322,30 @@ async function load() {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ'
   }
 }
+// Appointments can change outside this page (moved or cancelled in Google Calendar), so refresh the list quietly.
+const refreshIntervalMs = 15000
+let refreshTimer: ReturnType<typeof setInterval> | undefined
+async function refreshAppointments() {
+  if (document.hidden) return
+  try {
+    const a = await appointmentApi.search({ page: page.value, size: 20 })
+    appointments.value = a.items
+    totalPages.value = a.totalPages
+  } catch {
+    // keep what is on screen; the next tick tries again
+  }
+}
+const refreshWhenVisible = () => {
+  if (!document.hidden) void refreshAppointments()
+}
 onMounted(() => {
   void load()
+  refreshTimer = setInterval(() => void refreshAppointments(), refreshIntervalMs)
+  document.addEventListener('visibilitychange', refreshWhenVisible)
+})
+onBeforeUnmount(() => {
+  clearInterval(refreshTimer)
+  document.removeEventListener('visibilitychange', refreshWhenVisible)
 })
 async function changePage(nextPage: number) {
   if (nextPage >= 0 && nextPage < totalPages.value) {
