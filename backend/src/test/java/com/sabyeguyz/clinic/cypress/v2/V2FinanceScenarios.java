@@ -185,8 +185,10 @@ public class V2FinanceScenarios {
     private Object payment(String scenario) {
         var repository = new V2RepositoryStub<>(PaymentTransactionRepository.class);
         var receipt = new Receipt(); receipt.setReceiptStatus(scenario.equals("payment-void") ? ReceiptStatus.Voided : ReceiptStatus.Issued);
-        var result = new PaymentTransactionService(repository.proxy()).record(new Patient(),new Branch(),receipt,
-                scenario.equals("payment-zero") ? BigDecimal.ZERO : decimal("1200.00"),new PaymentMethod(),1L);
+        var receiptRepository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByIdForUpdate", a -> Optional.of(receipt));
+        var method = new PaymentMethod(); method.setMethodName("Cash");
+        var result = new PaymentTransactionService(repository.proxy(), receiptRepository.proxy()).record(new Patient(),new Branch(),receipt,
+                scenario.equals("payment-zero") ? BigDecimal.ZERO : decimal("1200.00"),method,1L);
         return Map.of("amount",result.getAmount(),"status",result.isPaymentStatus());
     }
     private Object receipt(String scenario) {
@@ -320,10 +322,11 @@ public class V2FinanceScenarios {
         var receiptRepo = new V2RepositoryStub<>(ReceiptRepository.class);
         var service = new TransactionCancellationService(cancellations.proxy(), salesRepo.proxy(),
                 new SalesTransactionService(salesRepo.proxy(), null), paymentRepo.proxy(),
-                new PaymentTransactionService(paymentRepo.proxy()), new ReceiptService(receiptRepo.proxy()));
+                new PaymentTransactionService(paymentRepo.proxy(), receiptRepo.proxy()), new ReceiptService(receiptRepo.proxy()));
         var receipt = new Receipt(); receipt.setReceiptStatus(ReceiptStatus.Issued);
         var sale = line(TransactionType.CoursePurchase, "1500.00", "0.00"); sale.setReceipt(receipt);
         sale.setTransactionStatus(!scenario.equals("cancel-already-void-sale"));
+        receiptRepo.on("findByIdForUpdate", a -> Optional.of(receipt));
         var paid = payment("1500.00", true);
         paid.setReceipt(receipt);
         var other = line(TransactionType.SingleVisit, "500.00", "0.00");
@@ -350,10 +353,14 @@ public class V2FinanceScenarios {
         var refunds = new V2RepositoryStub<>(RefundTransactionRepository.class);
         var cancellations = new V2RepositoryStub<>(TransactionCancellationRepository.class);
         var service = new RefundService(refunds.proxy(),
-                new TransactionCancellationService(cancellations.proxy(), null, null, null, null, null));
+                new TransactionCancellationService(cancellations.proxy(), null, null, null, null, null),
+                new V2RepositoryStub<>(com.sabyeguyz.clinicv2.catalog.CourseRepository.class).proxy(),
+                new V2RepositoryStub<>(com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository.class).proxy());
         var paid = payment("1000.00", !scenario.equals("refund-voided-payment"));
+        paid.setReceipt(new Receipt());
         refunds.on("refundedOrPendingAmountOf", a -> scenario.equals("refund-over") ? decimal("700.00") : BigDecimal.ZERO);
         var pending = new RefundTransaction();
+        pending.setOriginalPayment(paid);
         pending.setRefundStatus(scenario.equals("refund-complete-twice") ? RefundStatus.Completed : RefundStatus.Pending);
         refunds.on("findById", a -> Optional.of(pending));
         if (scenario.startsWith("refund-complete")) {
