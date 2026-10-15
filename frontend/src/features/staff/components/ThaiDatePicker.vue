@@ -10,6 +10,7 @@ const props = withDefaults(
     showCalendarIcon?: boolean
     numericMonth?: boolean
     hideCaret?: boolean
+    placeholder?: string
   }>(),
   {
     disabled: false,
@@ -18,6 +19,7 @@ const props = withDefaults(
     showCalendarIcon: false,
     numericMonth: false,
     hideCaret: false,
+    placeholder: 'เลือกวันที่',
   },
 )
 
@@ -49,7 +51,7 @@ const years = Array.from(
 )
 
 const displayValue = computed(() => {
-  if (!props.modelValue) return 'เลือกวันที่'
+  if (!props.modelValue) return props.placeholder
   const date = new Date(`${props.modelValue}T00:00:00`)
   return props.numericMonth
     ? `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear() + 543}`
@@ -237,10 +239,13 @@ function isSelected(day: number) {
 
 .calendar {
   position: absolute;
-  z-index: 30;
+  z-index: 1000;
   top: calc(100% + 7px);
   left: 0;
-  width: 330px;
+  box-sizing: border-box;
+  width: min(330px, calc(100vw - 32px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   padding: 14px;
   border: 1px solid #c7d7d0;
   border-radius: 12px;
@@ -335,17 +340,77 @@ function isSelected(day: number) {
     position: fixed;
     top: auto;
     right: 16px;
-    bottom: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
     left: 16px;
     width: auto;
-    max-width: 520px;
-    padding: 18px;
+    max-width: 420px;
+    max-height: calc(100dvh - 32px);
+    margin-inline: auto;
+    padding: 14px;
+    border-radius: 14px;
+    overscroll-behavior: contain;
   }
 
   .days button,
   .blank {
     width: 100%;
+    height: clamp(34px, 9vw, 42px);
+    min-height: 34px;
+  }
+
+  .calendar-head {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .calendar-head button {
+    flex: 0 0 30px;
+  }
+
+  .period-select select {
     height: 38px;
+    min-height: 38px;
+    padding: 4px 6px;
+  }
+
+  .weekdays {
+    margin-bottom: 3px;
+  }
+}
+
+@media (max-width: 380px), (max-height: 620px) {
+  .calendar {
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    max-height: calc(100dvh - 20px);
+    padding: 10px;
+  }
+
+  .calendar-head {
+    margin-bottom: 5px;
+  }
+
+  .calendar-head button {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+
+  .period-select select {
+    height: 34px;
+    min-height: 34px;
+    font-size: 13px;
+  }
+
+  .days {
+    gap: 1px;
+  }
+
+  .days button,
+  .blank {
+    height: 32px;
+    min-height: 32px;
   }
 }
 </style>
