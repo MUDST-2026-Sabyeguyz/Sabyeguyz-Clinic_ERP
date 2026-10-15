@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinicv2.sale;
 
 import com.sabyeguyz.clinicv2.commission.SingleVisitFeeService;
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -39,7 +40,7 @@ public class SingleVisitFeeAccrual {
         for (SalesTransaction line : lines) {
             if (line.getTransactionType() == TransactionType.SingleVisit && line.isTransactionStatus()
                     && line.getVisit() != null && line.getTreatingStaff() != null) {
-                LocalDate serviceDate = line.getVisit().getVisitDate().atZone(ZoneId.systemDefault()).toLocalDate();
+                LocalDate serviceDate = ClinicTime.dateOf(line.getVisit().getVisitDate());
                 if (fees.accrue(line.getVisit(), line.getTreatingStaff(),
                         line.getAmount().subtract(line.getAllocatedBillDiscountAmount()), serviceDate, actorId).isPresent()) {
                     recorded++;
@@ -52,7 +53,7 @@ public class SingleVisitFeeAccrual {
     /** Records the fees that are still missing for paid single visits of the period (for example after a rule was added). */
     @Transactional
     public int backfill(LocalDate from, LocalDate to, Long actorId) {
-        ZoneId zone = ZoneId.systemDefault();
+        ZoneId zone = ClinicTime.ZONE;
         Instant start = from.atStartOfDay(zone).toInstant();
         Instant end = to.plusDays(1).atStartOfDay(zone).toInstant();
         int recorded = 0;
