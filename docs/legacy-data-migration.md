@@ -1,6 +1,6 @@
 # ย้ายข้อมูลเดิมเข้า schema ใหม่ (v2)
 
-ข้อมูลที่ใช้งานอยู่ในระบบเดิม **เก็บไว้ทั้งหมด** และย้ายเข้า schema ใหม่ด้วยสคริปต์เดียว:
+ข้อมูลเดิมเก็บใน schema `legacy`; เฉพาะ field และ behavior ที่ mapping รองรับจะใช้งานผ่าน v2 ได้ ย้ายด้วยสคริปต์:
 [`backend/scripts/legacy-migration/migrate-legacy-to-v2.sql`](../backend/scripts/legacy-migration/migrate-legacy-to-v2.sql)
 
 สคริปต์ทำงานในธุรกรรมเดียว: ถ้าบางส่วนผิดพลาด ทุกอย่างจะถูกย้อนกลับและฐานข้อมูลเหลือเหมือนเดิม
@@ -16,8 +16,7 @@
    ```
 3. สร้างตารางใหม่ โดยเลือกอย่างใดอย่างหนึ่ง
    - เปิดแอป v2 หนึ่งครั้งโดยไม่ตั้ง `APP_V2_FLYWAY_EXTRA_LOCATIONS` (Flyway สร้าง schema ใหม่และข้อมูลอ้างอิง) แล้วปิดแอป หรือ
-   - รัน `V1__initial_schema.sql`, `V2__integration_runtime_compatibility.sql` และ `V3__reference_data.sql` ใน `backend/src/main/resources/db/migration` แยก transaction ตามลำดับ ด้วย `psql`
-     แล้วเปิดแอปด้วย `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true` และ `SPRING_FLYWAY_BASELINE_VERSION=3`
+   - หากสร้างด้วย SQL โดยตรง ต้องรัน **ทุก migration ปัจจุบันตาม numeric Flyway order** (ขณะตรวจมี V1/V2/V3/V1001) แล้ว baseline เป็น version สุดท้ายที่ apply ครบจริง ไม่ใช้เลข 3 คงที่. วิธีเปิดผ่าน Flyway ในข้อแรกช่วยบันทึก checksums จริงและลดความคลาดเคลื่อน
 4. รันสคริปต์ย้ายข้อมูล
    ```bash
    psql -v ON_ERROR_STOP=1 -f backend/scripts/legacy-migration/migrate-legacy-to-v2.sql
@@ -49,7 +48,7 @@ Workflow **Legacy data migration** สร้างฐานข้อมูลแ
 | `hn_counters` | `hn_sequence` | รวมกับเลข HN สูงสุดที่ใช้แล้ว |
 | `appointments` | `appointment` + `appointment_status_history` + `patient_visit` | สถานะแปลงชื่อ; เวลาเป็นเวลาไทย; เหตุผลยกเลิกเข้าประวัติสถานะ; นัดที่มาถึงแล้วมี visit |
 | `treatments` | `treatment` + `patient_visit` | การรักษาที่ไม่มีนัดสร้าง visit แบบ walk-in |
-| `sales`, `sale_items` | `receipt`, `sales_transaction` | id ใบเสร็จ = id ใบขายเดิม; เลขใบเสร็จใหม่ `RE-xxxxxxx` เรียงตามเวลา (เลขเดิมอยู่ใน `legacy.map_receipt`) |
+| `sales`, `sale_items` | `receipt`, `sales_transaction` | id ใบเสร็จ = id ใบขายเดิม; เลขใหม่ `REYYMMNNNN` ต่อสาขา/เดือน (เลขเดิมอยู่ใน `legacy.map_receipt`) |
 | `sale_payments` (PAYMENT) | `payment_transaction` | |
 | `sale_payments` (REFUND) | `transaction_cancellation` + `refund_transaction` (Completed) | |
 | ใบขายที่ VOIDED | `receipt` Voided + `transaction_cancellation` (Void) ต่อรายการ | |
@@ -80,7 +79,7 @@ Workflow **Legacy data migration** สร้างฐานข้อมูลแ
 ## จุดที่ต้องรู้
 - ผู้สร้างรายการที่ไม่มีข้อมูลในระบบเดิม (เช่น ผู้ลงทะเบียนผู้ป่วย) ใช้ผู้ใช้ `system`
 - เวลาในระบบเดิมเป็นเวลาที่มีเขตเวลา: ย้ายเข้า schema ใหม่เป็น UTC (วัน/เวลานัดหมายเป็นเวลาไทย)
-- นัดหมายเดิมไม่มีข้อมูลห้อง/หมายเหตุ/เวลาสิ้นสุด ใน schema ใหม่ (อยู่ใน `legacy.appointments`)
+- ตรวจ field นัดหมายเทียบ SQL ปัจจุบันเป็นราย field; อย่าสรุปว่าห้อง/หมายเหตุ/เวลาสิ้นสุดใช้งานใน v2 ครบเพียงเพราะต้นฉบับอยู่ใน `legacy.appointments`
 - สคริปต์ใช้ได้กับฐานข้อมูลเปล่าของ schema ใหม่เท่านั้น (ตรวจก่อนทำงาน)
 
 ## เงื่อนไขจาก schema ล่าสุด
@@ -88,3 +87,15 @@ Workflow **Legacy data migration** สร้างฐานข้อมูลแ
 ผู้ป่วยไทยต้องมีเบอร์โทรศัพท์และเลขบัตรประชาชนจริง 13 หลักก่อนย้ายข้อมูล หากข้อมูลเดิมไม่ครบ importer จะหยุดทั้ง transaction เพื่อให้แก้ข้อมูลต้นทาง ไม่สร้างเลขบัตรแทนผู้ป่วยจริง ส่วน legacy-fixture.sql เติมเลขรูปแบบทดสอบเฉพาะข้อมูล demo ใน CI เท่านั้น
 
 ใบเสร็จใช้ REYYMMNNNN แยก counter ตามสาขาและเดือน และเก็บการชำระหลายช่องทางต่อใบเสร็จ คอร์สเก็บจำนวนรวมครั้งซื้อและ bonus พร้อม entitlement ที่ตรงกับยอด ledger หลังย้าย
+
+## P9 rehearsal และขอบเขตผลตรวจ (15 ตุลาคม 2026)
+
+จาก `backend` รัน `node --test scripts/legacy-migration/ci/rehearse.test.cjs` แล้ว `node scripts/legacy-migration/ci/rehearse.cjs --container <ชื่อ PostgreSQL container ทดสอบ>` หรือไม่ใส่ `--container` เมื่อมี psql/pg_dump และ PGHOST/PGUSER/PGPASSWORD. ต้องใช้บัญชีที่สร้าง disposable databases ได้; ใช้เฉพาะเครื่อง/ฐานทดสอบ. โปรแกรมสร้างชื่อฐานใหม่เอง ไม่ drop/overwrite ฐานที่มีอยู่ และเก็บฐานไว้ให้ตรวจ.
+
+เครื่องมือสร้าง legacy demo+fixture snapshot เดียว แล้ว restore ลง target ใหม่สองฐาน, apply migrations ทุกไฟล์ใน active folder แบบ numeric order, import, reconcile และ compare stable manifests. ตรวจ counts, net ตาม mapping เดิม, payments/refunds, expiry, void, unique IDs, ledger/entitlement และ FK ทุกตาราง. Fault injection เปลี่ยน expiry, receipt total และ FK orphan ต้องถูกจับแล้ว rollback; importer ต้องปฏิเสธ populated target โดยข้อมูลเดิมไม่เปลี่ยน.
+
+ผลอยู่ `backend/target/migration-rehearsal/*.json`; CI upload ก่อน Maven clean package. นี่คือ fixture rehearsal ไม่ใช่ dry run บนสำเนาฐานจริงที่ได้รับอนุญาต และไม่ได้ทดสอบ backup/restore ของ production infrastructure.
+
+**ข้อแตกต่างทางการเงินที่ต้อง review:** importer เดิมใช้ผลรวม `sale_items.line_total` แทน `sales.total` เมื่อมีรายการ. Demo snapshot มี header รวม 45,800 แต่ mapped receipt net 47,300 (ต่าง 15 ใบ). Manifest เก็บ `sourceReceiptHeaderTotal` และ `receiptHeaderDifferences` ทุกใบ จึงไม่อ้างว่ายอดเดิมตรงกันหรืออนุมัติการแปลงนี้แล้ว. Refund เดิมเป็น negative amount ส่วน v2 เก็บ positive refund_amount จึงเทียบ absolute amount แยกจาก payment receipts.
+
+`MIGRATION_REHEARSAL_OK` ยืนยัน technical mapping/repeatability; summary ตั้ง `releaseReady=false`. Q3/Q4 numbering, Q7 expiry, Q10 legacy field mapping และ accounting differences ยังต้องอนุมัติก่อน final P9/release.
