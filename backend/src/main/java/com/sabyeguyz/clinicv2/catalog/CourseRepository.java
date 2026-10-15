@@ -16,6 +16,18 @@ import org.springframework.data.repository.query.Param;
 public interface CourseRepository extends JpaRepository<Course, Long> {
     Optional<Course> findByCourseNo(String courseNo);
 
+    /** Live courses sold in or before the month whose commission is not locked by a monthly close yet. */
+    default long countOpenCommissionUpToMonth(String saleMonth) {
+        return countByCommissionStatusUpToMonth(saleMonth, com.sabyeguyz.clinicv2.enums.CommissionStatus.Provisional,
+                List.of(CourseStatus.Active, CourseStatus.Completed));
+    }
+
+    @Query("select count(c) from Course c where c.saleMonth <= :saleMonth and c.commissionStatus = :status "
+            + "and c.courseStatus in :live")
+    long countByCommissionStatusUpToMonth(@Param("saleMonth") String saleMonth,
+                                           @Param("status") com.sabyeguyz.clinicv2.enums.CommissionStatus status,
+                                           @Param("live") java.util.Collection<CourseStatus> live);
+
     /**
      * Loads a course with a row lock (SELECT ... FOR UPDATE) so concurrent visit usages of the same
      * course queue up and each sees the balance left by the previous one. Call it before anything

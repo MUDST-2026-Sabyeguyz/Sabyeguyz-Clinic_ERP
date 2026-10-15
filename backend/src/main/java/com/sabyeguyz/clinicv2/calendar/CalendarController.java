@@ -18,7 +18,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Manager-only: see the state of the Google Calendar sync, set each branch's calendar, run a round now. */
+/**
+ * The Manager sees the state of the Google Calendar sync, sets each branch's calendar and runs a round now. Any signed-in
+ * user can read the status of their own branch's calendar (to open it); nothing else is open to them.
+ */
 @RestController
 @RequestMapping("/api/calendar")
 @PreAuthorize("hasRole('MANAGER')")
@@ -34,9 +37,12 @@ public class CalendarController {
     private final CalendarProperties properties;
     private final BranchRepository branches;
     private final AppointmentCalendarRepository appointments;
+    private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
     public CalendarController(CalendarSyncService sync, CalendarProperties properties, BranchRepository branches,
-                              AppointmentCalendarRepository appointments) {
+                              AppointmentCalendarRepository appointments,
+                              com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+        this.branchAccess = branchAccess;
         this.sync = sync;
         this.properties = properties;
         this.branches = branches;
@@ -44,14 +50,20 @@ public class CalendarController {
     }
 
     @GetMapping("/status")
+    @PreAuthorize("isAuthenticated()")
     @Transactional(readOnly = true)
     public Status status() {
         LocalDate since = LocalDate.now(ZoneId.of(properties.getTimeZone())).minusDays(1);
-        List<BranchStatus> rows = branches.findAll().stream().map(branch -> new BranchStatus(branch.getBranchCode(),
+        // scope(null) is null only for a Manager (every branch); anyone else gets their own branch
+        Branch own = branchAccess.scope(null);
+        List<BranchStatus> rows = branches.findAll().stream()
+                .filter(branch -> own == null || branch.getId().equals(own.getId()))
+                .map(branch -> new BranchStatus(branch.getBranchCode(),
                 branch.getBranchName(), branch.getGoogleCalendarId(),
                 branch.getGoogleCalendarId() == null ? 0 : appointments.countDirty(branch.getId(), since),
                 appointments.countFailed(branch.getId()))).toList();
-        return new Status(sync.isEnabled(), properties.getDefaultDurationMinutes(), sync.lastRunAt(), sync.lastResult(), rows);
+        return new Status(sync.isEnabled(), properties.getDefaultDurationMinutes(), sync.lastRunAt(),
+                own == null ? sync.lastResult() : null, rows);
     }
 
     /** Sets (or, with an empty value, clears) the calendar of one branch; its appointments are then synced. */
