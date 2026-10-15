@@ -30,6 +30,7 @@ const profileInitials = computed(
 const profileBranch = computed(
   () => patient.value?.branch?.name || patient.value?.branchName || '-',
 )
+const editStatus = computed(() => (patient.value?.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'))
 const profileBirthDate = computed(() => {
   const raw = patient.value?.birthDate ?? ''
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || '-'
@@ -91,7 +92,6 @@ const confirmationOpen = ref(false)
 const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
 const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
-const nationalityOptions = ['ไทย', 'ต่างชาติ'].map((value) => ({ value, label: value }))
 const customerSourceOptions = ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'].map((value) => ({
   value,
   label: value,
@@ -100,6 +100,14 @@ const insuranceOptions = [{ value: 'AIA', label: 'AIA' }]
 function splitFullName(fullName: string) {
   const [firstName = '', ...lastName] = fullName.trim().split(/\s+/)
   return { firstName, lastName: lastName.join(' ') }
+}
+function splitEditFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  return {
+    firstName: parts[0] ?? '',
+    middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
+    lastName: parts.length > 1 ? (parts.at(-1) ?? '') : '',
+  }
 }
 function toDateInput(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
@@ -147,26 +155,21 @@ const draft = reactive({
   customerSource: 'หน้าสาขา',
   insuranceCompany: '',
   firstName: '',
+  middleName: '',
   lastName: '',
   birthDateInput: '',
 })
 const isForeignNationalityValue = (value: string) =>
   ['ต่างชาติ', 'FOREIGN', 'FOREIGNER', 'NON_THAI'].includes(value.trim().toUpperCase())
 const isForeignNationality = computed(() => isForeignNationalityValue(draft.nationality))
-const isPassportDocument = computed(() => draft.identityDocumentType === 'หนังสือเดินทาง')
-const identityDocumentOptions = computed(() =>
-  (isForeignNationality.value ? ['หนังสือเดินทาง'] : ['บัตรประจำตัวประชาชน', 'หนังสือเดินทาง']).map(
-    (value) => ({ value, label: value }),
-  ),
-)
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
 watch(
   () => draft.nationality,
   (nationality) => {
-    if (isForeignNationalityValue(nationality) && draft.identityDocumentType !== 'หนังสือเดินทาง') {
-      draft.identityDocumentType = 'หนังสือเดินทาง'
-      draft.identityNumber = ''
-    }
+    draft.identityDocumentType = isForeignNationalityValue(nationality)
+      ? 'หนังสือเดินทาง'
+      : 'บัตรประจำตัวประชาชน'
+    draft.identityNumber = ''
   },
 )
 watch(
@@ -197,7 +200,7 @@ function normalizeProfile(profile: PatientProfile): UiPatientProfile {
 }
 function assignDraft(profile: UiPatientProfile) {
   const foreignPatient = isForeignNationalityValue(profile.nationality)
-  Object.assign(draft, profile, splitFullName(profile.fullName), {
+  Object.assign(draft, profile, splitEditFullName(profile.fullName), {
     nationality: foreignPatient ? 'ต่างชาติ' : profile.nationality,
     identityDocumentType:
       foreignPatient || profile.identityDocumentType === 'PASSPORT'
@@ -221,11 +224,11 @@ async function saveEdit() {
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
-      fullName: `${draft.firstName} ${draft.lastName}`.trim(),
+      fullName: `${draft.firstName} ${draft.middleName} ${draft.lastName}`.replace(/\s+/g, ' ').trim(),
       birthDate: draft.birthDateInput,
       gender: draft.gender,
       phone: draft.phone,
-      identityDocumentType: isPassportDocument.value ? 'PASSPORT' : 'NATIONAL_ID',
+      identityDocumentType: isForeignNationality.value ? 'PASSPORT' : 'NATIONAL_ID',
       identityNumber: draft.identityNumber,
       address: draft.address,
       drugAllergy: draft.drugAllergy,
@@ -274,7 +277,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="patient-workspace patient-profile-page">
+  <div class="patient-workspace patient-profile-page" :class="{ 'is-editing': editing }">
     <StaffHeader />
     <main>
       <button v-if="editing" type="button" class="back-link back-link-button" @click="cancelEdit">
@@ -311,126 +314,139 @@ onMounted(async () => {
         </nav>
       </template>
 
-      <h1 v-if="patient && editing" class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
-      <form
-        v-if="patient && editing"
-        class="patient-edit"
-        @submit.prevent="confirmationOpen = true"
-      >
-        <div class="edit-fields">
-          <h3>ข้อมูลส่วนตัว</h3>
-          <label
-            >คำนำหน้า
-            <FilterDropdown
-              v-model="draft.title"
-              :options="titleOptions"
-              default-label="เลือกคำนำหน้า"
-              label="คำนำหน้า"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label>อีเมล <input v-model="draft.email" type="text" inputmode="email" /></label>
-          <label>ชื่อ <em>*</em><input v-model="draft.firstName" required /></label>
-          <label>นามสกุล <em>*</em><input v-model="draft.lastName" required /></label>
-          <label>ชื่อเล่น <input v-model="draft.nickname" /></label>
-          <label
-            >เพศ
-            <FilterDropdown
-              v-model="draft.gender"
-              :options="genderOptions"
-              default-label="เลือกเพศ"
-              label="เพศ"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >วันเกิด <em>*</em
-            ><ThaiDatePicker v-model="draft.birthDateInput" show-calendar-icon hide-caret
-          /></label>
-          <label>เบอร์โทรศัพท์ <em>*</em><input v-model="draft.phone" type="tel" required /></label>
-          <label
-            >กรุ๊ปเลือด
-            <FilterDropdown
-              v-model="draft.bloodGroup"
-              :options="bloodGroupOptions"
-              default-label="เลือกกรุ๊ปเลือด"
-              label="กรุ๊ปเลือด"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >สัญชาติ
-            <FilterDropdown
-              v-model="draft.nationality"
-              :options="nationalityOptions"
-              default-label="เลือกสัญชาติ"
-              label="สัญชาติ"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >ประเภทเอกสารยืนยันตัวตน <em>*</em>
-            <FilterDropdown
-              v-model="draft.identityDocumentType"
-              :options="identityDocumentOptions"
-              default-label="เลือกประเภทเอกสาร"
-              label="ประเภทเอกสารยืนยันตัวตน"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >{{ isPassportDocument ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }} <em>*</em
-            ><input
-              v-model.trim="draft.identityNumber"
-              inputmode="numeric"
-              :maxlength="isPassportDocument ? 20 : 13"
-              :placeholder="
-                isPassportDocument
-                  ? 'กรอกเลขหนังสือเดินทางเป็นตัวเลข'
-                  : 'กรอกเลขบัตรประชาชน 13 หลัก'
-              "
-              required
-              @input="draft.identityNumber = digitsOnly(draft.identityNumber)"
-          /></label>
-          <label
-            >กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true"
-          /></label>
-          <label
-            >ช่องทางแนะนำ
-            <FilterDropdown
-              v-model="draft.customerSource"
-              :options="customerSourceOptions"
-              default-label="เลือกช่องทางแนะนำ"
-              label="ช่องทางแนะนำ"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >บริษัทประกัน
-            <FilterDropdown
-              v-model="draft.insuranceCompany"
-              :options="insuranceOptions"
-              default-label="ไม่มีประกัน"
-              label="บริษัทประกัน"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label class="wide"
-            >ที่อยู่ <em>*</em><textarea v-model="draft.address" rows="3" required></textarea>
-          </label>
-        </div>
-        <footer>
-          <button type="button" class="outline" @click="cancelEdit">ยกเลิก</button
-          ><button class="primary">บันทึกข้อมูล</button>
-        </footer>
-      </form>
+      <template v-if="patient && editing">
+        <h1 class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
+        <section class="patient-edit-summary" aria-label="สรุปผู้ป่วยที่กำลังแก้ไข">
+          <div class="patient-edit-avatar" aria-hidden="true">{{ profileInitials }}</div>
+          <div>
+            <h2>{{ patient.title }}{{ patient.fullName }}</h2>
+            <p>HN {{ patient.hn }} <span>{{ patient.phone || '-' }}</span></p>
+          </div>
+          <span class="patient-edit-status">{{ editStatus }}</span>
+        </section>
+        <form class="patient-edit" @submit.prevent="confirmationOpen = true">
+          <section class="patient-edit-section">
+            <h2>ข้อมูลส่วนตัว</h2>
+            <fieldset class="edit-nationality">
+              <legend>สัญชาติ <em>*</em></legend>
+              <label :class="{ selected: draft.nationality === 'ไทย' }">
+                <input v-model="draft.nationality" type="radio" value="ไทย" />ไทย
+              </label>
+              <label :class="{ selected: draft.nationality === 'ต่างชาติ' }">
+                <input v-model="draft.nationality" type="radio" value="ต่างชาติ" />ต่างชาติ
+              </label>
+            </fieldset>
+            <div class="patient-edit-two-column-grid">
+              <label>
+                คำนำหน้า
+                <FilterDropdown
+                  v-model="draft.title"
+                  :options="titleOptions"
+                  default-label="เลือกคำนำหน้า"
+                  label="คำนำหน้า"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+              <label>
+                เพศ <em>*</em>
+                <FilterDropdown
+                  v-model="draft.gender"
+                  :options="genderOptions"
+                  default-label="เลือกเพศ"
+                  label="เพศ"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+            </div>
+            <div class="patient-edit-name-grid">
+              <label>ชื่อ <em>*</em><input v-model.trim="draft.firstName" required /></label>
+              <label>ชื่อกลาง<input v-model.trim="draft.middleName" placeholder="ระบุชื่อกลาง (ถ้ามี)" /></label>
+              <label>นามสกุล <em>*</em><input v-model.trim="draft.lastName" required /></label>
+            </div>
+            <div class="patient-edit-two-column-grid">
+              <label>ชื่อเล่น<input v-model.trim="draft.nickname" /></label>
+              <label>
+                วันเกิด <em v-if="!isForeignNationality">*</em>
+                <ThaiDatePicker v-model="draft.birthDateInput" show-calendar-icon hide-caret />
+              </label>
+            </div>
+            <div class="patient-edit-two-column-grid">
+              <label>
+                กรุ๊ปเลือด
+                <FilterDropdown
+                  v-model="draft.bloodGroup"
+                  :options="bloodGroupOptions"
+                  default-label="เลือกกรุ๊ปเลือด"
+                  label="กรุ๊ปเลือด"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+              <label>
+                {{ isForeignNationality ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }}
+                <em v-if="!isForeignNationality">*</em>
+                <input
+                  v-model.trim="draft.identityNumber"
+                  :inputmode="isForeignNationality ? 'text' : 'numeric'"
+                  :maxlength="isForeignNationality ? 20 : 13"
+                  :placeholder="isForeignNationality ? 'กรอกเลขพาสปอร์ต' : 'x-xxxx-xxxxx-xx-x'"
+                  :required="!isForeignNationality"
+                  @input="
+                    draft.identityNumber = isForeignNationality
+                      ? draft.identityNumber.replace(/[^A-Za-z0-9]/g, '')
+                      : digitsOnly(draft.identityNumber)
+                  "
+                />
+              </label>
+            </div>
+          </section>
+          <section class="patient-edit-section">
+            <h2>ข้อมูลติดต่อ</h2>
+            <div class="patient-edit-two-column-grid">
+              <label>
+                เบอร์โทร <em v-if="!isForeignNationality">*</em>
+                <input v-model.trim="draft.phone" type="tel" :required="!isForeignNationality" />
+              </label>
+              <label>อีเมล<input v-model.trim="draft.email" type="text" inputmode="email" /></label>
+              <label class="wide">ที่อยู่<textarea v-model.trim="draft.address" rows="4" required /></label>
+            </div>
+          </section>
+          <section class="patient-edit-section">
+            <h2>ข้อมูลเพิ่มเติม (ไม่บังคับ)</h2>
+            <div class="patient-edit-two-column-grid">
+              <label>สาขาที่ลงทะเบียน<input :value="profileBranch" readonly aria-readonly="true" /></label>
+              <label>กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true" /></label>
+              <label>
+                ช่องทางแนะนำ
+                <FilterDropdown
+                  v-model="draft.customerSource"
+                  :options="customerSourceOptions"
+                  default-label="เลือกช่องทางแนะนำ"
+                  label="ช่องทางแนะนำ"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+              <label>
+                บริษัทประกัน
+                <FilterDropdown
+                  v-model="draft.insuranceCompany"
+                  :options="insuranceOptions"
+                  default-label="ไม่มีประกัน"
+                  label="บริษัทประกัน"
+                  :clear-on-reselect="false"
+                />
+              </label>
+            </div>
+          </section>
+          <footer>
+            <button type="button" class="outline" @click="cancelEdit">ยกเลิก</button>
+            <button class="primary">บันทึก</button>
+          </footer>
+        </form>
+      </template>
       <section
         v-else-if="patient"
         class="patient-profile-details"
