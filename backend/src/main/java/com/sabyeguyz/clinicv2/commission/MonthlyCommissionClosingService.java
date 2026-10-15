@@ -111,10 +111,15 @@ public class MonthlyCommissionClosingService {
             Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
             courseCommission.unlock(course, "Reopen การปิดยอด " + closing.getClosingMonth() + ": " + reason.trim(), actorId);
         }
+        String trimmed = reason.trim();
+        if (trimmed.length() > 255) throw new IllegalArgumentException("เหตุผลที่ Reopen ยาวเกิน 255 ตัวอักษร");
         closing.setClosingStatus(ClosingStatus.Open);
         closing.setClosedAt(null);
         closing.setClosedBy(null);
         closing.setLockedCommissionRate(null);
+        closing.setReopenReason(trimmed);
+        closing.setReopenedBy(actorId);
+        closing.setReopenedAt(Instant.now());
         return closings.save(closing);
     }
 

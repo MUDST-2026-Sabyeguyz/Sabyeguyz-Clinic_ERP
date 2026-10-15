@@ -156,8 +156,24 @@ export type Branch = {
   address: string
   phone: string
   active: boolean
+  email?: string | null
+  licenseNo?: string | null
+  // "HH:mm"; both set or both empty
+  bookingOpenTime?: string | null
+  bookingCloseTime?: string | null
+  defaultAppointmentMinutes?: number | null
 }
-export type BranchRequest = Pick<Branch, 'branchCode' | 'name' | 'address' | 'phone'>
+export type BranchRequest = Pick<Branch, 'branchCode' | 'name' | 'address' | 'phone'> &
+  Partial<
+    Pick<
+      Branch,
+      | 'email'
+      | 'licenseNo'
+      | 'bookingOpenTime'
+      | 'bookingCloseTime'
+      | 'defaultAppointmentMinutes'
+    >
+  >
 export type Staff = {
   id: number
   userId: number
@@ -184,6 +200,11 @@ export type Course = {
   bonusSessions: number
   validityDays: number
   active: boolean
+  // validity in days, months or years; validityDays stays for older readers (it means days)
+  validityValue?: number
+  validityUnit?: 'Day' | 'Month' | 'Year'
+  // appointment length in minutes; 0 or empty = use the branch default
+  defaultDurationMinutes?: number | null
 }
 export type Therapist = { id: number; code: string; fullName: string; branchCode: string }
 export type PaymentMethod = { id: number; code: string; name: string; active: boolean }
@@ -246,6 +267,8 @@ export type SaleSummary = {
   voidedAt?: string
   voidReason?: string
   itemDescription?: string
+  // CoursePurchase | SingleVisit | Assessment (what the line sold)
+  itemType?: string
 }
 export type SaleReceipt = SaleSummary & { note?: string }
 export type SaleDetail = SaleReceipt & {
@@ -408,15 +431,18 @@ export type ManagedService = {
   id: number
   code: string
   name: string
+  // 0 = no length of its own (the branch default is used)
   defaultDurationMinutes: number
   price: number
   active: boolean
 }
+export type ManagedServiceRequest = Omit<ManagedService, 'id' | 'active' | 'defaultDurationMinutes'> & {
+  defaultDurationMinutes?: number | null
+}
 export const serviceManagementApi = {
   list: () => api.get<ManagedService[]>('/api/services'),
-  create: (body: Omit<ManagedService, 'id' | 'active'>) =>
-    api.post<ManagedService>('/api/services', body),
-  update: (id: number, body: Omit<ManagedService, 'id' | 'active'>) =>
+  create: (body: ManagedServiceRequest) => api.post<ManagedService>('/api/services', body),
+  update: (id: number, body: ManagedServiceRequest) =>
     api.put<ManagedService>(`/api/services/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
 }
@@ -440,7 +466,31 @@ const normalizeAppointment = (item: Appointment): Appointment => ({
   status: statusFromServer(item.status),
 })
 
+export type AppointmentSlot = { time: string; available: boolean; reason: string | null }
+export type AppointmentAvailability = {
+  date: string
+  openTime: string
+  closeTime: string
+  // false = the branch has no booking window yet, so a default 09:00-18:00 is shown
+  windowConfigured: boolean
+  durationMinutes: number | null
+  stepMinutes: number
+  slots: AppointmentSlot[]
+}
 export const appointmentApi = {
+  availability: (params: {
+    branchCode: string
+    therapistId: number
+    date: string
+    serviceId?: number
+    excludeAppointmentId?: number
+  }) => {
+    const query = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== 0) query.set(key, String(value))
+    })
+    return api.get<AppointmentAvailability>(`/api/appointments/availability?${query}`)
+  },
   search: (
     params: {
       branchCode?: string
@@ -527,6 +577,38 @@ type LedgerResponse = {
   }
   movements: unknown[]
   allocations: Array<{ visitDate: string; gross: number; fee: number; ownerNet: number }>
+}
+
+export type CourseExtension = {
+  id: number
+  courseId: number
+  requestedPatientId: number
+  value: number
+  unit: 'Day' | 'Month' | 'Year'
+  reason: string | null
+  status: 'Pending' | 'Approved' | 'Rejected'
+  requestedAt: string
+  decidedAt: string | null
+  decisionNote: string | null
+  oldExpiry: string | null
+  newExpiry: string | null
+}
+// The original owner asks, a Manager approves; the new expiry date is shared by every holder of the course.
+export const courseExtensionApi = {
+  list: (courseId: number) =>
+    api.get<CourseExtension[]>(`/api/course-extensions?courseId=${courseId}`),
+  pending: () => api.get<CourseExtension[]>('/api/course-extensions?status=Pending'),
+  create: (body: {
+    courseId: number
+    value: number
+    unit: CourseExtension['unit']
+    reason?: string
+    requestedByPatientId?: number
+  }) => api.post<CourseExtension>('/api/course-extensions', body),
+  approve: (id: number, note?: string) =>
+    api.post<CourseExtension>(`/api/course-extensions/${id}/approve`, { note }),
+  reject: (id: number, note?: string) =>
+    api.post<CourseExtension>(`/api/course-extensions/${id}/reject`, { note }),
 }
 
 export const courseApi = {
@@ -775,6 +857,9 @@ export const commissionApi = {
         version: string
         rate: number
         status: string
+        // why the month was last reopened (null if never)
+        reopenReason?: string | null
+        reopenedAt?: string | null
       }>
     >(`/api/commission/closings?month=${month}-01`),
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
@@ -815,7 +900,9 @@ export const commissionApi = {
   closePayment: (id: number) => api.post<StaffPayment>(`/api/commission/payments/${id}/close`, {}),
   reopenPayment: (id: number) =>
     api.post<StaffPayment>(`/api/commission/payments/${id}/reopen`, {}),
-  payPayment: (id: number) => api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, {}),
+  // paidDate is the day the money was paid (yyyy-mm-dd, default today); reference is the transfer or slip number
+  payPayment: (id: number, body: { paidDate?: string; reference?: string } = {}) =>
+    api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, body),
   adjustments: (staffId?: number) =>
     api.get<PayAdjustment[]>(`/api/commission/adjustments${staffId ? `?staffId=${staffId}` : ''}`),
   createAdjustment: (body: AdjustmentInput) =>
@@ -876,6 +963,8 @@ export type StaffPayment = {
   adjustment: number | null
   net: number | null
   paidAt: string | null
+  paidDate?: string | null
+  paymentReference?: string | null
   closingId: number | null
   pendingSessions: number
   applications: AdjustmentApplicationRow[]
