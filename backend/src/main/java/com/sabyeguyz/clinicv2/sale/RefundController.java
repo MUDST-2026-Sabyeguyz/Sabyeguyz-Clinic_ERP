@@ -45,10 +45,14 @@ public class RefundController {
         this.audit = audit;
     }
 
-    public record RefundRequest(BigDecimal amount, String paymentMethodCode, String reason) {}
+    /** items: per course of a course receipt, the amount refunded and the unused sessions to cancel. */
+    public record RefundRequest(BigDecimal amount, String paymentMethodCode, String reason,
+                                 List<RefundService.ItemRequest> items) {}
+
+    public record ItemResponse(Long courseId, BigDecimal refundAmount, int cancelledVisits) {}
 
     public record Response(Long id, Long paymentId, BigDecimal amount, String paymentMethodCode, String status,
-                            Instant requestedAt, Instant refundedAt) {}
+                            Instant requestedAt, Instant refundedAt, List<ItemResponse> items) {}
 
     @PostMapping("/api/payments/{paymentId}/refunds")
     @ResponseStatus(HttpStatus.CREATED)
@@ -60,7 +64,7 @@ public class RefundController {
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
         var permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
         RefundTransaction refund = refundService.request(payment, request.amount(), method, permission,
-                request.reason(), actor.currentId());
+                request.reason(), actor.currentId(), request.items());
         audit.record("refund_transaction", String.valueOf(refund.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
                 "Pending " + request.amount() + " (payment " + paymentId + ")", actor.currentId());
         return toResponse(refund);
@@ -68,13 +72,20 @@ public class RefundController {
 
     @GetMapping("/api/payments/{paymentId}/refunds")
     public List<Response> forPayment(@PathVariable Long paymentId) {
-        return refunds.findByOriginalPaymentId(paymentId).stream().map(RefundController::toResponse).toList();
+        return refunds.findByOriginalPaymentId(paymentId).stream().map(this::toResponse).toList();
     }
 
     @PostMapping("/api/refunds/{id}/complete")
     public Response complete(@PathVariable Long id) {
         RefundTransaction refund = refundService.complete(id, actor.currentId());
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Completed", actor.currentId());
+        return toResponse(refund);
+    }
+
+    @PostMapping("/api/refunds/{id}/void")
+    public Response voidRequest(@PathVariable Long id) {
+        RefundTransaction refund = refundService.voidRequest(id);
+        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Voided", actor.currentId());
         return toResponse(refund);
     }
 
@@ -85,9 +96,11 @@ public class RefundController {
         return toResponse(refund);
     }
 
-    private static Response toResponse(RefundTransaction refund) {
+    private Response toResponse(RefundTransaction refund) {
+        List<ItemResponse> items = refundService.itemsOf(refund.getId()).stream()
+                .map(item -> new ItemResponse(item.getCourse().getId(), item.getRefundAmount(), item.getCancelledVisits())).toList();
         return new Response(refund.getId(), refund.getOriginalPayment().getId(), refund.getRefundAmount(),
                 refund.getPaymentMethod().getMethodName(), refund.getRefundStatus().name(), refund.getRequestedAt(),
-                refund.getRefundedAt());
+                refund.getRefundedAt(), items);
     }
 }

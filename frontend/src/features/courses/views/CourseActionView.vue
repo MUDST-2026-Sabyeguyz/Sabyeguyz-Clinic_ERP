@@ -53,6 +53,13 @@ const errorMessage = ref('')
 const selectedCourse = ref<UiCourse>({} as UiCourse)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
+// '' = the Owner PT of the course treats; another PT is a substitute and earns the treatment fee instead
+const treatingStaffId = ref<number | ''>('')
+const treatingStaffName = computed(
+  () =>
+    therapists.value.find((person) => person.id === treatingStaffId.value)?.fullName ??
+    'เจ้าของคอร์ส (ผู้ขาย)',
+)
 const usageDate = ref(clinicToday())
 const usageReview = ref(false)
 const usageSuccess = ref(false)
@@ -107,6 +114,12 @@ const inactiveCourses = computed(() =>
   ),
 )
 const historyFromInactive = ref(false)
+// the session is given at the branch the course was sold at
+const serviceBranchName = computed(() => {
+  const code = selectedCourse.value.branchCode
+  const branch = branches.value.find((item) => item.branchCode === code)
+  return branch?.name ?? code ?? 'ไม่ระบุสาขา'
+})
 function branchLabel(patient: Patient | null) {
   const name = patient?.branchName || patient?.branchCode
   return name ? (name.startsWith('สาขา') ? name : `สาขา${name}`) : 'ไม่ระบุสาขา'
@@ -385,6 +398,7 @@ async function confirm() {
       usageConfirmDialog.value = false
       await courseApi.use({
         coursePurchaseId: selectedCourse.value.id,
+        treatingStaffId: treatingStaffId.value === '' ? undefined : treatingStaffId.value,
         note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
       })
     } else {
@@ -622,11 +636,22 @@ function closePrintSuccess() {
               </div>
               <div>
                 <dt>นักกายภาพ</dt>
-                <dd>กภ. ศิริพร</dd>
+                <dd>
+                  <select v-model="treatingStaffId" aria-label="นักกายภาพผู้รักษา (ตรวจสอบ)">
+                    <option value="">เจ้าของคอร์ส (ผู้ขาย)</option>
+                    <option v-for="person in therapists" :key="person.id" :value="person.id">
+                      {{ person.fullName }}
+                    </option>
+                  </select>
+                  <small v-if="treatingStaffId" class="substitute-hint"
+                    >ผู้รักษา: {{ treatingStaffName }} — จ่ายค่ามือรักษาแทน
+                    เจ้าของคอร์สไม่ได้คอมมิชชันครั้งนี้</small
+                  >
+                </dd>
               </div>
               <div>
                 <dt>สาขา</dt>
-                <dd>แบริ่ง</dd>
+                <dd>{{ serviceBranchName }}</dd>
               </div>
               <div>
                 <dt>จำนวนที่ใช้ครั้งนี้</dt>
@@ -681,7 +706,18 @@ function closePrintSuccess() {
               </select></label
             >
             <label>บริการที่ใช้สิทธิ์ได้<input :value="selectedCourse.name" readonly /></label>
-            <label>นักกายภาพ<input value="ผู้ให้บริการตามตาราง" readonly /></label>
+            <label
+              >นักกายภาพผู้รักษา<select v-model="treatingStaffId" aria-label="นักกายภาพผู้รักษา">
+                <option value="">เจ้าของคอร์ส (ผู้ขาย)</option>
+                <option v-for="person in therapists" :key="person.id" :value="person.id">
+                  {{ person.fullName }}
+                </option>
+              </select>
+              <small v-if="treatingStaffId" class="substitute-hint"
+                >ผู้รักษาไม่ใช่เจ้าของคอร์ส: จ่ายค่ามือรักษาแทนตามกฎ
+                และเจ้าของคอร์สไม่ได้คอมมิชชันครั้งนี้</small
+              ></label
+            >
             <label
               >วันที่ใช้บริการ<ThaiDatePicker
                 v-model="usageDate"
@@ -1216,21 +1252,17 @@ function closePrintSuccess() {
               v-if="transferReceiptId && !historyFromInactive"
               class="course-after-transfer-entry"
             >
-              <strong>โอนสิทธิ์ · TRF-DEMO-0001</strong>
+              <strong>โอนสิทธิ์ · เลขที่ {{ transferReceiptId }}</strong>
               <span
-                >{{ owner?.fullName }} → {{ selectedRecipient?.fullName || 'นางวรรณา มั่นคง' }} ·
-                สาขาพระราม 9</span
+                >{{ owner?.fullName }} → {{ selectedRecipient?.fullName }} ·
+                {{ serviceBranchName }}</span
               >
               <span
                 >โอน {{ transferAmount }} ครั้ง · ผู้โอนคงเหลือ {{ selectedCourse.balance }} ครั้ง ·
                 ผู้รับได้รับ {{ transferAmount }} ครั้ง</span
               >
             </article>
-            <article
-              v-for="(entry, index) in usageEntries"
-              :key="entry.id"
-              class="course-history-entry"
-            >
+            <article v-for="entry in usageEntries" :key="entry.id" class="course-history-entry">
               <strong>{{
                 new Date(entry.createdAt).toLocaleDateString('th-TH', {
                   day: 'numeric',
@@ -1240,16 +1272,7 @@ function closePrintSuccess() {
               }}</strong>
               <div>
                 <b>{{ selectedCourse.name }}</b>
-                <span
-                  >{{
-                    index === 0
-                      ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                      : index === 1
-                        ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                        : 'กภ. วีระพงษ์ · สาขาพระราม 9'
-                  }}
-                  · USE-DEMO-000{{ 3 - index }}</span
-                >
+                <span>{{ serviceBranchName }} · {{ entry.reason || 'ใช้สิทธิ์คอร์ส' }}</span>
               </div>
               <aside>
                 <b>ใช้ {{ Math.abs(entry.quantity) }} ครั้ง</b
@@ -4966,5 +4989,10 @@ function closePrintSuccess() {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
+}
+.substitute-hint {
+  display: block;
+  margin-top: 6px;
+  color: #a15c07;
 }
 </style>
