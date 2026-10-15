@@ -12,6 +12,16 @@ const busyId = ref<number | null>(null)
 const errorMessage = ref('')
 const notice = ref('')
 const confirmPay = ref<StaffPayment | null>(null)
+const payDate = ref(clinicToday())
+const payReference = ref('')
+const today = clinicToday()
+const thaiDay = (value: string) =>
+  new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(new Date(`${value}T12:00:00`))
+function openPay(row: StaffPayment) {
+  payDate.value = clinicToday()
+  payReference.value = ''
+  confirmPay.value = row
+}
 
 const monthOptions = Array.from({ length: 12 }, (_, index) => {
   const [year, number] = clinicToday().slice(0, 7).split('-').map(Number)
@@ -76,7 +86,15 @@ async function pay() {
   const row = confirmPay.value
   confirmPay.value = null
   if (row)
-    await run(row, () => commissionApi.payPayment(row.id), `ยืนยันจ่าย ${row.staffName} แล้ว`)
+    await run(
+      row,
+      () =>
+        commissionApi.payPayment(row.id, {
+          paidDate: payDate.value || undefined,
+          reference: payReference.value.trim() || undefined,
+        }),
+      `ยืนยันจ่าย ${row.staffName} แล้ว`,
+    )
 }
 </script>
 
@@ -163,7 +181,7 @@ async function pay() {
                   ><button
                     class="commission-primary"
                     :disabled="busyId !== null"
-                    @click="confirmPay = row"
+                    @click="openPay(row)"
                   >
                     ยืนยันจ่าย
                   </button></template
@@ -171,13 +189,15 @@ async function pay() {
                 <small v-else
                   >จ่ายเมื่อ
                   {{
-                    row.paidAt
-                      ? new Intl.DateTimeFormat('th-TH', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        }).format(new Date(row.paidAt))
-                      : ''
-                  }}</small
+                    row.paidDate
+                      ? thaiDay(row.paidDate)
+                      : row.paidAt
+                        ? new Intl.DateTimeFormat('th-TH', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          }).format(new Date(row.paidAt))
+                        : ''
+                  }}<template v-if="row.paymentReference"> · อ้างอิง {{ row.paymentReference }}</template></small
                 >
               </td>
             </tr>
@@ -202,9 +222,24 @@ async function pay() {
           ยอดสุทธิ {{ baht(confirmPay.net) }} · การปิดยอดของเดือนขายที่คอมมิชชันนี้อิงอยู่จะถูก
           Finalize พร้อมกัน และไม่สามารถ Reopen ได้อีก
         </p>
+        <label class="pay-field"
+          >วันที่จ่าย
+          <input v-model="payDate" type="date" :max="today" aria-label="วันที่จ่าย" />
+        </label>
+        <label class="pay-field"
+          >เลขที่อ้างอิง
+          <input
+            v-model="payReference"
+            maxlength="100"
+            aria-label="เลขที่อ้างอิง"
+            placeholder="เลขที่โอนหรือเลขที่สลิป (ไม่บังคับ)"
+          />
+        </label>
         <div>
           <button class="cancel" type="button" @click="confirmPay = null">ยกเลิก</button
-          ><button class="confirm" type="button" @click="pay">ยืนยันจ่าย</button>
+          ><button class="confirm" type="button" :disabled="!payDate" @click="pay">
+            ยืนยันจ่าย
+          </button>
         </div>
       </section>
     </div>

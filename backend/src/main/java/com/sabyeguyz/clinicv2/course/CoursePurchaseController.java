@@ -88,6 +88,8 @@ public class CoursePurchaseController {
     private final com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations;
     private final com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments;
 
+    private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
+
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
                                      CourseTransferService transferService, PermissionService permissions,
@@ -99,7 +101,9 @@ public class CoursePurchaseController {
                                      CurrentActor actor,
                                      com.sabyeguyz.clinicv2.audit.AuditLogService audit,
                                      com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
-                                     com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments) {
+                                     com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments,
+                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+        this.branchAccess = branchAccess;
         this.treatments = treatments;
         this.cancellations = cancellations;
         this.courses = courses;
@@ -252,6 +256,7 @@ public class CoursePurchaseController {
     public Response reverse(@PathVariable Long movementId, @RequestBody ReasonRequest request) {
         CourseLedger original = ledger.findById(movementId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการ"));
+        branchAccess.requireAccess(original.getCourse().getBranch(), "ยกเลิกได้เฉพาะรายการของสาขาตัวเอง รายการต่างสาขาดูรายละเอียดได้อย่างเดียว");
         Permission permission = permissions.getOrCreate("COURSE_REVERSE", "Course", actor.currentId());
         switch (original.getEntryType()) {
             case Treatment -> usageService.reverse(original.getVisitUsage(), permission, request.reason(), actor.currentId());
@@ -266,6 +271,7 @@ public class CoursePurchaseController {
     @PostMapping("/api/course-purchases/{id}/cancel")
     public Response cancel(@PathVariable Long id, @RequestBody ReasonRequest request) {
         Course course = courses.findByIdForUpdate(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        branchAccess.requireAccess(course.getBranch(), "ยกเลิกได้เฉพาะรายการของสาขาตัวเอง รายการต่างสาขาดูรายละเอียดได้อย่างเดียว");
         if (course.getCourseStatus() != CourseStatus.Active && course.getCourseStatus() != CourseStatus.Completed) {
             throw new IllegalStateException("คอร์สนี้ถูกยกเลิกหรือคืนเงินไปแล้ว");
         }
