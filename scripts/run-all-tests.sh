@@ -38,7 +38,11 @@ stage() { # name, command...   (output goes to the log, only the verdict is show
     record "$name" 1; echo "    FAILED - last lines of the log:"; tail -n 25 "$logs/${name// /_}.log" | sed 's/^/    | /'
   fi
 }
-port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+port_busy() {
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null ||
+    curl -s -o /dev/null -m 2 "http://127.0.0.1:$1/" ||
+    curl -s -o /dev/null -m 2 "http://localhost:$1/"
+}
 
 cleanup() {
   [ -n "$vite_pid" ] && kill "$vite_pid" 2>/dev/null
@@ -104,7 +108,17 @@ if [ "$mode" != "quick" ]; then
       (cd "$root/frontend" && VITE_API_PROXY_TARGET=http://127.0.0.1:18080 npx vite --host localhost --port 5173 --strictPort >"$logs/vite.log" 2>&1) &
       vite_pid=$!
       for _ in $(seq 1 30); do curl -s -o /dev/null -m 2 http://localhost:5173/ && break; sleep 2; done
-      stage "frontend browser tests (Cypress)" bash -c "cd '$root/frontend' && CYPRESS_API_URL=http://127.0.0.1:18080 npx cypress run --config-file cypress.v2.config.ts"
+      if ! kill -0 "$vite_pid" 2>/dev/null || ! curl -s -o /dev/null -m 2 http://localhost:5173/; then
+        echo "The frontend dev server did not start. Last lines of its log:"
+        tail -n 20 "$logs/vite.log"
+        record "start the frontend dev server" 1
+      else
+        if [ -n "${CYPRESS_SPEC:-}" ]; then
+          stage "frontend browser tests (Cypress)" bash -c 'cd "$1/frontend" && CYPRESS_API_URL=http://127.0.0.1:18080 npx cypress run --config-file cypress.v2.config.ts --browser chrome --spec "$2"' _ "$root" "$CYPRESS_SPEC"
+        else
+          stage "frontend browser tests (Cypress)" bash -c "cd '$root/frontend' && CYPRESS_API_URL=http://127.0.0.1:18080 npx cypress run --config-file cypress.v2.config.ts --browser chrome"
+        fi
+      fi
     fi
   fi
 fi
