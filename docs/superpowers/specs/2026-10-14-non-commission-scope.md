@@ -139,7 +139,7 @@
 | Q8 | เวลาสิ้นสุด/duration มาจากนัดหรือ catalog; ใช้บริการแล้วผูก complete หรือ receipt; แก้ therapist ในการเลื่อนนัดได้ไหม | timing/status P3 |
 | Q9 | Figma permission matrix, Manager multi-branch selection, Admin ไม่ได้รับ cross-branch โดยอัตโนมัติใช่ไหม | permission gap P1 |
 | Q10 | ข้อมูล allergy/consent/emergency จะเก็บ field ใดและเก็บข้อมูลเดิมอย่างไร | T27/P2/P9 |
-| Q11 | Dashboard เก่า/ใหม่ตาม first visit หรือ registration; ยอดขายตาม saleDate หรือเงินรับ; ต่ออายุ/อัปเดตแพ็กเกจเป็น metric หรือปุ่ม | P8 |
+| Q11 | Dashboard เก่า/ใหม่ตาม first visit หรือ registration; ยอดขายตาม saleDate หรือเงินรับ; ต่ออายุ/อัปเดตแพ็กเกจเป็น metric หรือปุ่ม | P8; ตอบและ implement แล้ววันที่15ต.ค. ดูคำตอบยืนยันด้านล่างและรายงาน Dashboard Q11 |
 | Q12 | Google owner account/calendar per branch/OAuth consent/conflict/delete/privacy policy; rooms และ password-reset delivery channel | backlog P8 |
 | Q13 | รูปที่แนบตอนเพิ่มคอร์สคือหลักฐานการซื้อ/ภาพผู้ป่วย/เอกสารชนิดใด; ผูกกับ purchase หรือ profile; รับชนิดไฟล์/ขนาด/จำนวนเท่าไร; ใครเห็น ลบ หรือเก็บนานเท่าไร | attachment P7; ห้ามเก็บภาพลง JSON snapshot ของใบตัดคอร์สโดยไม่มี contract |
 

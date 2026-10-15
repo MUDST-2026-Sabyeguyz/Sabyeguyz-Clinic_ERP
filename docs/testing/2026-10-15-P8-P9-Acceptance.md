@@ -1,5 +1,7 @@
 # P8/P9 execution report — 15 October 2026 (Asia/Bangkok)
 
+รายงานนี้เป็นหลักฐานของรอบก่อน 07:20. หลังนายท่านตอบ Q11 ได้ implement Dashboard ต่อและตรวจชุดใหม่แล้ว ดู [P8 Dashboard Q11](2026-10-15-P8-Dashboard-Q11.md); ตัวเลขผลรันด้านล่างยังคงเป็นผลของรอบเดิม ไม่ใช่ผลล่าสุด.
+
 ## Outcome and timing
 
 P8 audit/current regression และ P9 disposable migration rehearsal/CI tooling ทำแล้ว. **P8 feature completion และ P9 final release acceptance ยังไม่ครบ** เพราะ Q11/Q12 และ P6/P7 schema/business gates ยังเปิด. ไม่มี merge กลับ `feat/backend-v2-integration`, ไม่มี push/deploy/production migration.
