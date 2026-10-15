@@ -91,13 +91,49 @@ const router = createRouter({
     {
       path: '/staff/commission',
       name: 'staff-commission',
-      component: () => import('@/features/commission/views/CommissionView.vue'),
+      component: () => import('@/features/commission/views/CommissionOverviewView.vue'),
       meta: { permission: 'Commission' },
     },
     {
       path: '/staff/compensation',
       name: 'therapist-compensation',
       component: () => import('@/features/commission/views/TherapistCompensationView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/commission/:id?',
+      name: 'therapist-commission-detail',
+      component: () => import('@/features/commission/views/TherapistCommissionDetailView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/commission/:id?/source',
+      name: 'therapist-commission-source',
+      component: () => import('@/features/commission/views/TherapistCommissionSourceView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/treatment/:id?',
+      name: 'therapist-treatment-fee-detail',
+      component: () => import('@/features/commission/views/TherapistTreatmentFeeDetailView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/treatment/:id?/source',
+      name: 'therapist-treatment-source',
+      component: () => import('@/features/commission/views/TherapistTreatmentSourceView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/payments',
+      name: 'therapist-payment-history',
+      component: () => import('@/features/commission/views/TherapistPaymentHistoryView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/adjustment/:id?',
+      name: 'therapist-adjustment-detail',
+      component: () => import('@/features/commission/views/TherapistAdjustmentDetailView.vue'),
       meta: { roles: ['therapist'] },
     },
     {
@@ -110,6 +146,18 @@ const router = createRouter({
       path: '/staff/commission/closing',
       name: 'commission-closing',
       component: () => import('@/features/commission/views/CommissionClosingView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/staff/:staffId',
+      name: 'commission-person-detail',
+      component: () => import('@/features/commission/views/CommissionPersonDetailView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/compensation-settings',
+      name: 'commission-compensation-settings',
+      component: () => import('@/features/commission/views/CommissionCompensationSettingsView.vue'),
       meta: { roles: ['manager'] },
     },
     {
@@ -131,6 +179,12 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
+      path: '/staff/personnel',
+      name: 'staff-personnel',
+      component: () => import('@/features/commission/views/PersonnelTransactionsView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/settings',
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
@@ -141,8 +195,11 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (!to.path.startsWith('/staff/')) return true
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
-  const role = authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
+  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+    role?: string
+  } | null
+  const role =
+    authUser?.role === 'MANAGER' ? 'manager' : authUser?.role === 'THERAPIST' ? 'therapist' : null
   if (role !== 'manager' && role !== 'therapist') {
     localStorage.removeItem('authToken')
     localStorage.removeItem('authUser')
@@ -151,7 +208,10 @@ router.beforeEach((to) => {
   const allowedRoles = to.meta.roles as string[] | undefined
   if (allowedRoles && !allowedRoles.includes(role)) return { name: 'patient-search' }
   const requiredPermission = to.meta.permission as string | undefined
-  const permissions = role === 'manager' ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup' : 'Patient, Visit, Treatment, Course, Transaction'
+  const permissions =
+    role === 'manager'
+      ? 'Patient, Visit, Treatment, Course, Transaction, Commission, Setup'
+      : 'Patient, Visit, Treatment, Course, Transaction'
   if (role !== 'manager' && requiredPermission && !permissions.includes(requiredPermission)) {
     const destinations: Array<[string, string]> = [
       ['Patient', '/staff/patients'],
@@ -168,12 +228,11 @@ router.beforeEach((to) => {
 })
 
 router.afterEach(() => {
-  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
+  const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+    role?: string
+  } | null
   const usesSharedStaffUi = authUser?.role === 'THERAPIST' || authUser?.role === 'MANAGER'
-  document.body.classList.toggle(
-    'therapist-ui',
-    usesSharedStaffUi,
-  )
+  document.body.classList.toggle('therapist-ui', usesSharedStaffUi)
 })
 
 export default router
