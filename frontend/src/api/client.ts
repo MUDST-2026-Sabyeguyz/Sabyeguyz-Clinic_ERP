@@ -770,6 +770,18 @@ export const commissionApi = {
     >(`/api/commission/closings?month=${month}-01`),
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
   closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
+  preview: (courseId: number, sellerStaffId?: number) =>
+    api.get<{
+      netPrice: number
+      commissionRate: number
+      commissionPool: number
+      commissionPerVisit: number
+    }>(
+      `/api/commission/preview?${new URLSearchParams({
+        courseId: String(courseId),
+        ...(sellerStaffId ? { sellerStaffId: String(sellerStaffId) } : {}),
+      })}`,
+    ),
   treatmentFees: () => api.get<TreatmentFeeRule[]>('/api/commission/treatment-fees'),
   createTreatmentFee: (body: TreatmentFeeInput) =>
     api.post<TreatmentFeeRule>('/api/commission/treatment-fees', body),
@@ -787,6 +799,7 @@ export const commissionApi = {
     ),
   reopenClosing: (id: number, reason: string) =>
     api.post<{ id: number; status: string }>(`/api/commission/closings/${id}/reopen`, { reason }),
+  myPayments: () => api.get<StaffPayment[]>('/api/commission/my-payments'),
   payments: (month: string) => api.get<StaffPayment[]>(`/api/commission/payments?month=${month}`),
   preparePayments: (month: string) =>
     api.post<StaffPayment[]>(`/api/commission/payments/prepare?month=${month}`, {}),
