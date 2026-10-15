@@ -1,6 +1,6 @@
-# Sabyeguyz Clinic ERP frontend
+# Frontend Repository
 
-Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz** อยู่ที่โฟลเดอร์นี้โดยตรง
+Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz**
 
 ## Requirements
 
@@ -8,11 +8,11 @@ Frontend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz** อยู
 * Node.js `22.18+`
 * npm
 
-## Setup (local Vite)
+## Setup
 
 ```bash
-git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
-cd Sabyeguyz-Clinic_ERP/frontend
+git clone https://github.com/MUDST-2026-Sabyeguyz/frontend.git
+cd frontend
 npm install
 npm run dev
 ```
@@ -22,9 +22,6 @@ npm run dev
 ```text
 http://localhost:5173
 ```
-
-เมื่อรันผ่าน Docker Compose ให้เปิด `http://localhost` เพราะ nginx ใน container
-ฟังที่ port 80 (เปลี่ยน host port ได้ด้วย `FRONTEND_PORT` ใน `.env`)
 
 ## การพัฒนา
 
@@ -37,7 +34,9 @@ Frontend รับผิดชอบ:
 * API Client
 * Frontend Tests
 
-หน้าจอ production ใช้ API จาก backend เท่านั้น ไม่มี mock data หรือ localStorage เป็นแหล่งข้อมูล
+**ขณะพัฒนา UI ไม่จำเป็นต้องมี Backend หรือ PostgreSQL**
+
+หากต้องใช้ข้อมูล สามารถใช้ Mock Data ตาม API Contract ที่ทีมตกลงกัน
 
 ## เชื่อม Backend
 
@@ -53,9 +52,6 @@ VITE_API_BASE_URL=http://localhost:8080
 npm run type-check
 npm run test:unit -- --run
 npm run build
-
-# ต้องเปิด backend จริงไว้ที่ localhost:8080
-npm run test:integration
 ```
 
 ## Rules
@@ -66,7 +62,7 @@ npm run test:integration
 
 ## Git
 
-ใช้ `main`, `develop`, `xan` และ `feature/<feature-name>`
+ใช้ `main`, `develop` และ `feature/<feature-name>`
 
 [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
 

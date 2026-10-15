@@ -1,0 +1,346 @@
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { formatPaymentMethod } from '@/features/payments/format'
+import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import {
+  courseApi,
+  patientApi,
+  salesApi,
+  type CoursePurchase,
+  type PatientProfile,
+  type SaleDetail,
+  type SaleSummary,
+} from '@/api/client'
+
+const route = useRoute()
+const activeTab = ref<'payments' | 'courses'>(
+  route.query.tab === 'courses' ? 'courses' : 'payments',
+)
+const patient = ref<PatientProfile | null>(null)
+const payments = ref<SaleSummary[]>([])
+const paymentDetails = ref<Record<number, SaleDetail>>({})
+const courses = ref<CoursePurchase[]>([])
+const query = ref('')
+const dateFilter = ref('')
+const branchFilter = ref('')
+const statusFilter = ref('')
+const typeFilter = ref('')
+const page = ref(0)
+const totalPages = ref(0)
+const totalElements = ref(0)
+const loading = ref(true)
+const errorMessage = ref('')
+const filteredPayments = computed(() => {
+  const keyword = query.value.trim().toLowerCase()
+  return payments.value.filter((item) => {
+    const detail = paymentDetails.value[item.id]
+    const description =
+      item.itemDescription || detail?.items.map((entry) => entry.description).join(' ') || ''
+    return (
+      (!keyword ||
+        `${item.receiptNo} ${item.status} ${description}`.toLowerCase().includes(keyword)) &&
+      (!dateFilter.value || item.soldAt.slice(0, 10) === dateFilter.value) &&
+      (!branchFilter.value || item.branchCode === branchFilter.value) &&
+      (!statusFilter.value || item.status === statusFilter.value) &&
+      (!typeFilter.value || detail?.items.some((entry) => entry.type === typeFilter.value))
+    )
+  })
+})
+const filteredCourses = computed(() => {
+  const keyword = query.value.trim().toLowerCase()
+  return courses.value.filter(
+    (item) =>
+      (!keyword ||
+        `${item.course.code} ${item.course.name} ${item.status}`.toLowerCase().includes(keyword)) &&
+      (!dateFilter.value || item.purchasedAt.slice(0, 10) === dateFilter.value) &&
+      (!branchFilter.value || item.branchCode === branchFilter.value) &&
+      (!statusFilter.value || courseDisplayStatus(item) === statusFilter.value),
+  )
+})
+const branchOptions = computed(() => [
+  ...new Set([
+    ...payments.value.map((item) => item.branchCode),
+    ...courses.value.map((item) => item.branchCode),
+  ]),
+])
+const statusOptions = computed(() =>
+  activeTab.value === 'payments'
+    ? ['PAID', 'VOIDED']
+    : ['ACTIVE', 'EXHAUSTED', 'EXPIRED', 'CANCELLED'],
+)
+const paymentDescription = (item: SaleSummary) =>
+  item.itemDescription ||
+  paymentDetails.value[item.id]?.items.map((entry) => entry.description).join(', ') ||
+  '-'
+const paymentMethod = (item: SaleSummary) =>
+  paymentDetails.value[item.id]?.payments
+    .map((entry) => formatPaymentMethod(entry.paymentMethodCode))
+    .join(', ') || '-'
+const paymentStatus = (status: string) => {
+  const labels: Record<string, string> = {
+    PAID: 'ชำระแล้ว',
+    COMPLETED: 'ชำระแล้ว',
+    PENDING: 'รอชำระ',
+    VOIDED: 'ยกเลิกแล้ว',
+    CANCELLED: 'ยกเลิกแล้ว',
+  }
+  return labels[status] || status
+}
+const courseStatus = (status: string) => {
+  const labels: Record<string, string> = {
+    ACTIVE: 'ใช้งานอยู่',
+    COMPLETED: 'ใช้ครบแล้ว',
+    EXHAUSTED: 'ใช้ครบแล้ว',
+    EXPIRED: 'หมดอายุ',
+    CANCELLED: 'ยกเลิกแล้ว',
+  }
+  return labels[status] || status
+}
+const courseDisplayStatus = (item: CoursePurchase) => {
+  if (item.status === 'CANCELLED') return 'CANCELLED'
+  if (item.expired) return 'EXPIRED'
+  if (item.remaining <= 0) return 'EXHAUSTED'
+  return 'ACTIVE'
+}
+const thaiDate = (value: string) =>
+  new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(new Date(value))
+
+watch(activeTab, () => {
+  statusFilter.value = ''
+  typeFilter.value = ''
+})
+
+async function loadPayments(targetPage = 0) {
+  loading.value = true
+  errorMessage.value = ''
+  payments.value = []
+  paymentDetails.value = {}
+  try {
+    const paymentPage = await salesApi.list({
+      patientId: Number(route.params.id),
+      receiptsOnly: true,
+      page: targetPage,
+      size: 20,
+    })
+    page.value = targetPage
+    totalPages.value = paymentPage.totalPages
+    totalElements.value = paymentPage.totalItems
+    payments.value = paymentPage.items
+    const details = await Promise.allSettled(paymentPage.items.map((item) => salesApi.get(item.id)))
+    paymentDetails.value = Object.fromEntries(
+      details.flatMap((result, index) =>
+        result.status === 'fulfilled' ? [[paymentPage.items[index]!.id, result.value]] : [],
+      ),
+    )
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดประวัติใบเสร็จไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
+}
+onMounted(async () => {
+  const id = Number(route.params.id)
+  if (!Number.isInteger(id) || id <= 0) {
+    errorMessage.value = 'รหัสผู้ป่วยไม่ถูกต้อง'
+    loading.value = false
+    return
+  }
+  await Promise.allSettled([
+    patientApi.get(id).then((profile) => {
+      patient.value = profile
+    }),
+    courseApi.patientCourses(id).then((items) => {
+      courses.value = items
+    }),
+    loadPayments(),
+  ])
+})
+</script>
+
+<template>
+  <div class="patient-workspace patient-history-page">
+    <StaffHeader />
+    <main class="history-page-content">
+      <RouterLink class="back-link" :to="`/staff/patients/${route.params.id}`"
+        >← กลับข้อมูลผู้ป่วย</RouterLink
+      >
+      <h1>ประวัติการรักษา</h1>
+      <p class="history-subtitle">ตรวจสอบใบเสร็จ การชำระเงิน และสิทธิ์คอร์สรักษาของผู้ป่วย</p>
+      <nav class="history-tabs">
+        <button :class="{ active: activeTab === 'payments' }" @click="activeTab = 'payments'">
+          ใบเสร็จและการชำระเงิน</button
+        ><button :class="{ active: activeTab === 'courses' }" @click="activeTab = 'courses'">
+          คอร์สรักษา
+        </button>
+      </nav>
+      <section class="history-card">
+        <p v-if="activeTab === 'payments'">ค้นหาและตัวกรองด้านล่างใช้เฉพาะใบเสร็จในหน้านี้</p>
+        <div class="history-filters">
+          <input v-model="query" placeholder="ค้นหาเลขที่ใบเสร็จหรือชื่อคอร์ส" />
+          <ThaiDatePicker v-model="dateFilter" show-calendar-icon numeric-month hide-caret />
+          <FilterDropdown
+            v-model="branchFilter"
+            label="กรองตามสาขา"
+            default-label="สาขา"
+            :options="branchOptions.map((value) => ({ value, label: value }))"
+          />
+          <FilterDropdown
+            v-model="statusFilter"
+            label="กรองตามสถานะ"
+            default-label="สถานะทั้งหมด"
+            :options="
+              statusOptions.map((value) => ({
+                value,
+                label: activeTab === 'payments' ? paymentStatus(value) : courseStatus(value),
+              }))
+            "
+          />
+          <FilterDropdown
+            v-model="typeFilter"
+            label="กรองตามประเภทรายการ"
+            default-label="ประเภทรายการทั้งหมด"
+            :options="
+              activeTab === 'courses'
+                ? [{ value: 'COURSE', label: 'คอร์สรักษา' }]
+                : [
+                    { value: 'ASSESSMENT', label: 'Assessment' },
+                    { value: 'SINGLE_VISIT', label: 'Single Visit' },
+                    { value: 'COURSE', label: 'Course' },
+                  ]
+            "
+          />
+        </div>
+        <p v-if="loading">กำลังโหลดข้อมูล...</p>
+        <p v-else-if="errorMessage" class="error">{{ errorMessage }}</p>
+        <div v-else class="history-table-wrap">
+          <table v-if="activeTab === 'payments'">
+            <thead>
+              <tr>
+                <th>วันที่</th>
+                <th>เลขที่ใบเสร็จ</th>
+                <th>บริการ / คอร์ส</th>
+                <th>สาขา</th>
+                <th>ยอดสุทธิ</th>
+                <th>การชำระ</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in filteredPayments" :key="item.id">
+                <td>{{ thaiDate(item.soldAt) }}</td>
+                <td>{{ item.receiptNo }}</td>
+                <td>{{ paymentDescription(item) }}</td>
+                <td>{{ item.branchCode }}</td>
+                <td>฿{{ item.total.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
+                <td>{{ paymentMethod(item) }}</td>
+                <td>
+                  <span class="history-status">{{ paymentStatus(item.status) }}</span>
+                </td>
+                <td class="history-actions">
+                  <RouterLink class="history-row-action" :to="`/staff/receipts/${item.id}`"
+                    >ดูใบเสร็จ</RouterLink
+                  >
+                  <RouterLink
+                    class="history-row-action outline"
+                    :to="{ path: `/staff/receipts/${item.id}`, query: { print: '1' } }"
+                    >พิมพ์</RouterLink
+                  >
+                </td>
+              </tr>
+              <tr v-if="!filteredPayments.length">
+                <td colspan="8">ไม่พบประวัติการชำระเงิน</td>
+              </tr>
+            </tbody>
+          </table>
+          <table v-else class="course-history-table">
+            <thead>
+              <tr>
+                <th>ชื่อคอร์ส</th>
+                <th>วันที่ซื้อ</th>
+                <th>ผู้ขาย / นักกายภาพ</th>
+                <th>สิทธิ์รวม</th>
+                <th>ใช้แล้ว</th>
+                <th>คงเหลือ</th>
+                <th>หมดอายุ</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in filteredCourses" :key="item.id">
+                <td>
+                  <b>{{ item.course.name }}</b>
+                </td>
+                <td>{{ thaiDate(item.purchasedAt) }}</td>
+                <td>-</td>
+                <td>{{ item.purchased }} ครั้ง</td>
+                <td>ใช้ {{ item.used }}</td>
+                <td>
+                  <b>เหลือ {{ item.remaining }}</b>
+                </td>
+                <td>{{ thaiDate(item.expiresAt) }}</td>
+                <td>
+                  <span class="history-status course-status">{{
+                    courseStatus(courseDisplayStatus(item))
+                  }}</span>
+                </td>
+                <td class="history-actions course-actions">
+                  <RouterLink
+                    class="history-row-action"
+                    :to="{
+                      path: `/staff/patients/${patient?.id}/courses/${item.id}`,
+                      query: {
+                        patientId: patient?.id,
+                        courseId: item.id,
+                        action: 'history',
+                        print: '1',
+                      },
+                    }"
+                    >รายละเอียด</RouterLink
+                  >
+                  <RouterLink
+                    class="history-row-action outline"
+                    :to="{
+                      path: `/staff/patients/${patient?.id}/courses/${item.id}`,
+                      query: { patientId: patient?.id, courseId: item.id, action: 'history' },
+                    }"
+                    >ประวัติใช้สิทธิ์</RouterLink
+                  >
+                </td>
+              </tr>
+              <tr v-if="!filteredCourses.length">
+                <td colspan="9">ไม่พบประวัติคอร์ส</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="!loading && !errorMessage" class="history-result-count">
+          {{
+            activeTab === 'payments'
+              ? `แสดง ${filteredPayments.length} จาก ${payments.length} ใบเสร็จในหน้านี้ · ทั้งหมด ${totalElements} ใบเสร็จ`
+              : 'สิทธิ์คงเหลือเป็นข้อมูลล่าสุดหลังการใช้บริการและการแชร์คอร์ส'
+          }}
+        </p>
+        <nav v-if="activeTab === 'payments'" aria-label="หน้าใบเสร็จ">
+          <button type="button" :disabled="loading || page <= 0" @click="loadPayments(page - 1)">
+            ก่อนหน้า
+          </button>
+          <span>หน้า {{ totalPages ? page + 1 : 0 }} / {{ totalPages }}</span>
+          <button
+            type="button"
+            :disabled="loading || page + 1 >= totalPages"
+            @click="loadPayments(page + 1)"
+          >
+            ถัดไป
+          </button>
+        </nav>
+      </section>
+    </main>
+  </div>
+</template>
+
+<style scoped src="../styles/patient-history.css"></style>

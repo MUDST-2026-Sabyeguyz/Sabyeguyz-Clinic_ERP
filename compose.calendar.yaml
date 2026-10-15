@@ -1,0 +1,14 @@
+# Optional add-on: turns on the two-way Google Calendar sync of the backend.
+#
+#   docker compose -f compose.yaml -f compose.calendar.yaml up -d --build
+#
+# Needs CALENDAR_KEY_FILE in .env: the path, ON THE SERVER, of the service account JSON key (see
+# docs/google-calendar-sync.md and docs/deploy-calendar-sync.md). The key is mounted read-only into the backend
+# container and is never copied into an image or the repository.
+services:
+  backend:
+    environment:
+      APP_CALENDAR_ENABLED: "true"
+      APP_CALENDAR_SERVICE_ACCOUNT_KEY_FILE: /run/secrets/calendar-sync-key.json
+    volumes:
+      - ${CALENDAR_KEY_FILE:?CALENDAR_KEY_FILE must be set in .env (path of the service account JSON key on this server)}:/run/secrets/calendar-sync-key.json:ro

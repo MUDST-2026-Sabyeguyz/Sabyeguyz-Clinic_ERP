@@ -1,10 +1,11 @@
 .patient-workspace {
   min-height: 100vh;
-  color: #013d5a;
-  background: linear-gradient(180deg, #fcf8f3, #f6f1ea);
+  color: #1f2937;
+  background: #faf6f0;
+  font-family: 'Noto Sans Thai', 'Leelawadee UI', Tahoma, Arial, sans-serif;
 }
 .patient-profile-page {
-  background: #fbf7f1;
+  background: #faf6f0;
 }
 .patient-profile-page main {
   width: min(1040px, calc(100% - 56px));
@@ -59,8 +60,9 @@ main {
 .primary {
   padding: 11px 20px;
   color: white;
-  background: #789c69;
-  box-shadow: 0 7px 17px #5f815230;
+  border-color: #1e807c;
+  background: #1e807c;
+  box-shadow: 0 7px 17px rgb(30 128 124 / 19%);
 }
 .outline {
   padding: 8px 15px;
@@ -115,18 +117,6 @@ main {
 .branch-filter,
 .sort-filter {
   min-width: 170px;
-  height: 46px;
-  padding: 0 14px;
-  border: 1px solid #aebebb;
-  border-radius: 10px;
-  color: #173f44;
-  background: #fff;
-  font: inherit;
-  cursor: pointer;
-}
-.branch-filter option,
-.sort-filter option {
-  cursor: pointer;
 }
 .table-scroll {
   overflow-x: auto;
@@ -168,7 +158,7 @@ tbody tr:nth-child(even) {
 .patient-pagination {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 14px;
   padding: 18px 0 4px;
   color: #496762;
@@ -177,20 +167,29 @@ tbody tr:nth-child(even) {
 .patient-pagination button {
   min-width: 104px;
   padding: 9px 14px;
-  border: 1px solid #71955f;
+  border: 1px solid #1e807c;
   border-radius: 8px;
   color: #fff;
-  background: #7da36d;
+  background: #1e807c;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
 }
 .patient-pagination button:disabled {
-  border-color: #9bb58f;
-  color: #fff;
-  background: #9bb58f;
   cursor: not-allowed;
-  opacity: 1;
+  opacity: 0.55;
+}
+.patient-pagination button:first-child {
+  border-color: #d2dfdc;
+  color: #34595a;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(23 63 68 / 12%);
+}
+.patient-pagination button:first-child:disabled {
+  border-color: #d2dfdc;
+  color: #34595a;
+  background: #fff;
+  cursor: not-allowed;
 }
 
 .creation-snackbar,
@@ -202,9 +201,9 @@ tbody tr:nth-child(even) {
   width: min(390px, calc(100vw - 40px));
   padding: 17px 28px;
   border-radius: 12px;
-  color: #fff;
-  background: #a9b96a;
-  box-shadow: 0 12px 30px rgb(93 111 46 / 26%);
+  color: #1e807c;
+  background: #fff;
+  box-shadow: 0 12px 30px rgb(23 63 68 / 16%);
   font-size: 19px;
   font-weight: 700;
   text-align: center;
@@ -225,9 +224,16 @@ tbody tr:nth-child(even) {
 .back-link {
   display: inline-flex;
   margin-bottom: 16px;
-  color: #5f8152;
+  color: #1f2937;
   font-size: 18px;
   font-weight: 700;
+}
+.back-link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
 }
 .profile-heading .avatar {
   display: grid;
@@ -236,7 +242,7 @@ tbody tr:nth-child(even) {
   flex: 0 0 68px;
   place-items: center;
   border-radius: 50%;
-  color: #789c69;
+  color: #173f44;
   background: #f5f8ef;
   font-size: 24px;
   font-weight: 700;
@@ -250,10 +256,10 @@ tbody tr:nth-child(even) {
 .profile-heading {
   gap: 18px;
   padding: 22px 28px;
-  border-color: #aa9275;
+  border-color: #1e807c;
   border-radius: 15px 15px 0 0;
-  background: #ad987d;
-  box-shadow: 0 5px 12px #60524520;
+  background: #1e807c;
+  box-shadow: 0 5px 12px rgb(30 128 124 / 16%);
 }
 .profile-heading small,
 .profile-heading h1,
@@ -277,7 +283,7 @@ tbody tr:nth-child(even) {
   padding: 9px 18px;
   border-color: #fff;
   border-radius: 18px;
-  color: #315a58;
+  color: #1e807c;
   background: #fff;
   box-shadow: 0 2px 6px #60524525;
   cursor: pointer;
@@ -285,12 +291,131 @@ tbody tr:nth-child(even) {
 .profile-heading button {
   font: inherit;
 }
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.profile-actions .history-button {
+  min-width: 150px;
+  padding: 9px 18px;
+  border: 1px solid #fff;
+  border-radius: 18px;
+  color: #fff;
+  text-align: center;
+  text-decoration: none;
+}
+.patient-confirmation-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(23 42 37 / 52%);
+}
+.patient-confirmation {
+  width: min(460px, 100%);
+  min-height: 196px;
+  box-sizing: border-box;
+  padding: 33px;
+  border: 1px solid #e9e4dc;
+  border-radius: 16px;
+  background: #fff;
+  text-align: center;
+  box-shadow:
+    0 20px 40px -10px rgb(42 54 40 / 18%),
+    0 8px 16px -6px rgb(42 54 40 / 10%);
+}
+.patient-confirmation h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30.25px;
+  letter-spacing: -0.55px;
+}
+.patient-confirmation > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 41px;
+  padding-top: 4px;
+}
+.patient-confirmation button {
+  min-height: 46px;
+  padding: 12px 22px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.patient-confirmation .outline {
+  border: 2px solid #1e807c;
+  color: #1f2937;
+  background: #faf6f0;
+}
+.patient-confirmation .primary {
+  border: 2px solid transparent;
+  color: #fff;
+  background: #1e807c;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
+}
+.patient-save-success-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(23 23 23 / 62%);
+}
+.patient-save-success {
+  display: grid;
+  width: min(460px, 100%);
+  min-height: 146px;
+  box-sizing: border-box;
+  place-items: center;
+  padding: 33px;
+  border: 1px solid #e9e4dc;
+  border-radius: 16px;
+  color: #1f2937;
+  background: #fff;
+  box-shadow:
+    0 20px 40px -10px rgb(42 54 40 / 18%),
+    0 8px 16px -6px rgb(42 54 40 / 10%);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30.25px;
+  letter-spacing: -0.55px;
+  text-align: center;
+}
+.save-success-enter-active,
+.save-success-leave-active {
+  transition: opacity 0.2s ease;
+}
+.save-success-enter-active .patient-save-success,
+.save-success-leave-active .patient-save-success {
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+.save-success-enter-from,
+.save-success-leave-to,
+.save-success-enter-from .patient-save-success,
+.save-success-leave-to .patient-save-success {
+  opacity: 0;
+}
+.save-success-enter-from .patient-save-success {
+  transform: translateY(-8px) scale(0.98);
+}
 .profile-sheet {
   margin-top: 0;
   padding: 1px 28px 24px;
   border-top: 0;
   border-radius: 0 0 15px 15px;
-  box-shadow: 0 5px 12px #60524520;
+  box-shadow: 0 5px 12px rgb(31 41 55 / 10%);
 }
 .section-title {
   margin: 16px 0 3px;
@@ -395,13 +520,20 @@ tbody tr:nth-child(even) {
 }
 
 .patient-edit {
-  margin-top: 0;
+  margin-top: 56px;
+  padding: 26px 28px 28px;
   overflow: hidden;
-  border: 1px solid #d6e4df;
-  border-top: 0;
-  border-radius: 0 0 14px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 5px 10px #60524520;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
+}
+
+.patient-edit-title {
+  margin: 28px 0 0;
+  color: #25372e;
+  font-size: 34px;
+  line-height: 1.2;
 }
 
 .patient-edit header,
@@ -428,21 +560,22 @@ tbody tr:nth-child(even) {
 .patient-edit .edit-fields {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px 28px;
-  padding: 8px 28px 24px;
+  gap: 14px 22px;
+  padding: 0;
 }
 
 .patient-edit h3 {
   grid-column: 1 / -1;
-  padding: 12px 0 8px;
-  border-bottom: 1px solid #d6e4df;
-  font-size: 22px;
+  margin: 0 0 0;
+  padding: 3px 0 8px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 19px;
 }
 
 .patient-edit label {
-  color: #173f44;
-  font-size: 16px;
-  font-weight: 700;
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .patient-edit em {
@@ -455,13 +588,17 @@ tbody tr:nth-child(even) {
 .patient-edit textarea {
   display: block;
   width: 100%;
+  box-sizing: border-box;
   margin-top: 5px;
-  padding: 10px;
-  min-height: 44px;
-  border: 1px solid #aebebb;
-  border-radius: 7px;
+  padding: 7px 11px;
+  min-height: 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   background: #fff;
-  font-size: 17px;
+  color: #1f2937;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .patient-edit .wide {
@@ -470,21 +607,79 @@ tbody tr:nth-child(even) {
 
 .patient-edit footer {
   justify-content: flex-end;
-  gap: 10px;
-  border-top: 1px solid #dce7e4;
+  gap: 12px;
+  padding: 30px 0 0;
+  border-top: 0;
   background: #fff;
 }
 .patient-edit footer button {
-  min-width: 128px;
-  min-height: 46px;
-  padding: 10px 18px;
+  min-width: 100px;
+  min-height: 38px;
+  padding: 5px 18px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 400;
   cursor: pointer;
+}
+.patient-edit footer .primary {
+  min-width: 126px;
+  border-color: #1e807c;
+  background: #1e807c;
+  box-shadow: none;
 }
 .patient-edit footer button:disabled {
   cursor: not-allowed;
 }
 .patient-edit input[readonly] {
   cursor: not-allowed;
+}
+
+.patient-edit :deep(.filter-dropdown),
+.patient-edit :deep(.thai-date-picker) {
+  margin-top: 5px;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.patient-edit :deep(.filter-dropdown__button),
+.patient-edit :deep(.date-trigger) {
+  min-height: 36px;
+  padding: 7px 11px;
+  border-color: #d1d5db;
+  border-radius: 6px;
+  color: #1f2937;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.patient-edit :deep(.filter-dropdown.open .filter-dropdown__button),
+.patient-edit :deep(.date-trigger:focus-visible) {
+  border-color: #1e8883;
+  outline: 0;
+  box-shadow: 0 0 0 1px #1e8883;
+}
+
+.patient-edit :deep(.filter-dropdown__menu) {
+  z-index: 60;
+  border-radius: 8px;
+}
+
+.patient-edit :deep(.filter-dropdown__option) {
+  min-height: 36px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.patient-edit :deep(.trigger-actions svg) {
+  color: #16827d;
+}
+
+.patient-edit :deep(.calendar) {
+  z-index: 70;
+  border-color: #d8e2e1;
+  box-shadow: 0 10px 24px rgb(20 55 56 / 16%);
 }
 
 .edit-success {
@@ -496,8 +691,28 @@ tbody tr:nth-child(even) {
 }
 
 @media (max-width: 600px) {
+  .patient-pagination {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 12px;
+    padding-inline: 8px;
+  }
+
+  .patient-pagination button {
+    flex: 0 1 auto;
+  }
+
   .patient-edit .edit-fields {
     grid-template-columns: 1fr;
+  }
+
+  .patient-edit {
+    margin-top: 36px;
+    padding: 24px 18px;
+  }
+
+  .patient-edit-title {
+    font-size: 32px;
   }
 
   .patient-edit .wide {
@@ -506,5 +721,18 @@ tbody tr:nth-child(even) {
 
   .patient-edit h3 {
     grid-column: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .patient-pagination {
+    gap: 8px;
+    padding-inline: 4px;
+    font-size: 14px;
+  }
+
+  .patient-pagination button {
+    min-width: 88px;
+    padding-inline: 10px;
   }
 }

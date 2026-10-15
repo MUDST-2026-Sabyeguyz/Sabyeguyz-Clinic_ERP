@@ -90,7 +90,7 @@ public class SaleService {
         if (!patient.isActive()) {
             throw new IllegalArgumentException("ผู้ป่วยถูกปิดการใช้งาน");
         }
-        Branch branch = branchRepository.findByCodeAndActiveTrue(request.branchCode().toUpperCase())
+        Branch branch = branchRepository.findByBranchCodeAndActiveTrue(request.branchCode().trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
         Staff salesperson = resolveSalesperson(request.salespersonStaffId());
 
@@ -103,7 +103,7 @@ public class SaleService {
         requirePaymentsToMatch(received, total);
 
         Instant soldAt = Instant.now();
-        String receiptNo = receiptNumbers.next(branch.getId(), branch.getNumericCode(),
+        String receiptNo = receiptNumbers.next(branch.getId(), branch.getBranchCode(),
                 LocalDate.ofInstant(soldAt, CLINIC_ZONE));
         Sale sale = saleRepository.save(
                 new Sale(receiptNo, patient, branch, salesperson, total, trimmed(request.note()), soldAt));
@@ -177,7 +177,7 @@ public class SaleService {
             throw new PatientNotFoundException(patientId);
         }
         Long branchId = branchCode == null || branchCode.isBlank() ? null
-                : branchRepository.findByCodeAndActiveTrue(branchCode.trim().toUpperCase())
+                : branchRepository.findByBranchCodeAndActiveTrue(branchCode.trim())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน " + branchCode))
                         .getId();
 
@@ -192,11 +192,16 @@ public class SaleService {
         Map<Long, BigDecimal> paid = paymentRepository
                 .paidAmountsOf(sales.getContent().stream().map(Sale::getId).toList()).stream()
                 .collect(Collectors.toMap(SalePaidAmount::saleId, SalePaidAmount::amount));
+        Map<Long, String> descriptions = itemRepository
+                .findBySaleIdInOrderByIdAsc(sales.getContent().stream().map(Sale::getId).toList()).stream()
+                .collect(Collectors.toMap(item -> item.getSale().getId(), SaleItem::getDescription,
+                        (first, ignored) -> first));
 
         return new SaleSearchResponse(
                 sales.getContent().stream()
                         .map(sale -> SaleSummaryResponse.from(sale,
-                                paid.getOrDefault(sale.getId(), BigDecimal.ZERO)))
+                                paid.getOrDefault(sale.getId(), BigDecimal.ZERO),
+                                descriptions.getOrDefault(sale.getId(), "รายการขายบริการ / คอร์ส")))
                         .toList(),
                 sales.getNumber(), sales.getSize(), sales.getTotalElements(), sales.getTotalPages());
     }

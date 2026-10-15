@@ -93,6 +93,12 @@ public class CourseLedgerController {
         return ResponseEntity.status(201).body(service.use(request));
     }
 
+    @GetMapping("/course-usages")
+    @Operation(summary = "List course usage transactions and their reversal status")
+    public List<CourseUsageTransactionResponse> listUsages() {
+        return service.listUsageTransactions();
+    }
+
     @PostMapping("/course-movements/{movementId}/reverse")
     @Operation(summary = "Reverse a session usage",
             description = "Adds an opposite movement that gives the session back. The original movement is never "
