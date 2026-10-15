@@ -4,6 +4,7 @@ import com.sabyeguyz.clinicv2.commission.CommissionScheme;
 import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
 import com.sabyeguyz.clinicv2.commission.CommissionTier;
 import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
+import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedger;
@@ -53,17 +54,19 @@ public class CourseService {
     private final CourseEntitlementRepository entitlements;
     private final CommissionSchemeResolver schemeResolver;
     private final CommissionTierResolver tierResolver;
+    private final MonthlyTierSalesService tierSales;
 
     public CourseService(CourseRepository courses, CourseLedgerRepository ledger,
                           CourseSharedMemberRepository sharedMembers,
                           CourseEntitlementRepository entitlements, CommissionSchemeResolver schemeResolver,
-                          CommissionTierResolver tierResolver) {
+                          CommissionTierResolver tierResolver, MonthlyTierSalesService tierSales) {
         this.courses = courses;
         this.ledger = ledger;
         this.sharedMembers = sharedMembers;
         this.entitlements = entitlements;
         this.schemeResolver = schemeResolver;
         this.tierResolver = tierResolver;
+        this.tierSales = tierSales;
     }
 
     /**
@@ -102,7 +105,7 @@ public class CourseService {
                 : "%s-%02d".formatted(receipt.getReceiptNo(), courseSequence);
 
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveSaleDate);
-        BigDecimal monthlySalesToDate = courses.sumCreditedSalesByStaffAndSaleMonth(sellerStaff.getId(), saleMonth)
+        BigDecimal monthlySalesToDate = tierSales.netSales(sellerStaff.getId(), saleMonth)
                 .add(price);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySalesToDate);
 

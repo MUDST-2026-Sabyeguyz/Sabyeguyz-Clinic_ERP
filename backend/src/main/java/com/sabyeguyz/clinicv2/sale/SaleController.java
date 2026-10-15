@@ -54,6 +54,7 @@ public class SaleController {
     private final ServiceRepository services;
     private final PaymentMethodRepository paymentMethods;
     private final CurrentActor actor;
+    private final SingleVisitFeeAccrual singleVisitFees;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
     private final com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService;
     private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
@@ -67,7 +68,9 @@ public class SaleController {
                            ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor,
                                      com.sabyeguyz.clinicv2.audit.AuditLogService audit,
                                      com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
-                                     com.sabyeguyz.clinicv2.auth.AppUserRepository users) {
+                                     com.sabyeguyz.clinicv2.auth.AppUserRepository users,
+                                     SingleVisitFeeAccrual singleVisitFees) {
+        this.singleVisitFees = singleVisitFees;
         this.visitService = visitService;
         this.users = users;
         this.receiptService = receiptService;
@@ -198,6 +201,7 @@ public class SaleController {
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode()));
                 paymentTransactionService.record(patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
             }
+            singleVisitFees.accrue(receipt, lines, actor.currentId());
         }
 
         audit.record("receipt", String.valueOf(receipt.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
