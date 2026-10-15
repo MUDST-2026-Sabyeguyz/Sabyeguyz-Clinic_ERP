@@ -5,6 +5,7 @@ import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.commission.CommissionAllocationLedger;
 import com.sabyeguyz.clinicv2.commission.CommissionAllocationLedgerRepository;
+import com.sabyeguyz.clinicv2.commission.CourseCommissionService;
 import com.sabyeguyz.clinicv2.commission.TreatmentFeeRule;
 import com.sabyeguyz.clinicv2.commission.TreatmentFeeRuleResolver;
 import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
@@ -26,19 +27,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Uses one Course visit and splits the commission between the Case Owner
- * and (if different) the substitute Treating PT — the Financial Allocation
- * Rule, Commission_System_Requirement_Dev §15.2 / §28.
+ * Uses one Course session (Data Dictionary: Course_visit_usage).
  *
- * <p>Known simplifications, both flagged for the team:</p>
  * <ul>
- *   <li>Overflow policy is hard-coded to CAP_AT_COMMISSION (the doc's own
- *   default recommendation) since System_setting is not wired in yet.</li>
- *   <li>If the Course's rate is not locked yet (Monthly Closing has not
- *   run), this falls back to price × provisionalCommissionRate / totalVisits
- *   so "Buy &amp; Use Same Day" (Workflow Brief §5) still works. That
- *   provisional number can differ from the frozen one Monthly Closing
- *   computes later — the doc does not say how that reconciles.</li>
+ *   <li>The session takes the lowest free position of the course (usage_sequence, all users together); the Owner
+ *       commission of a position comes from the locked rate and the rounding rule of the course.</li>
+ *   <li>The Owner PT is the course's seller. The Owner earns the commission of the position only when treating the
+ *       session personally and before leaving; a substitute earns the full treatment fee of the rule in force that day,
+ *       never limited by the commission, and the Owner then gets 0.</li>
+ *   <li>While the sale month is not closed the rate is unknown: an Owner-treated session keeps NULL (not 0) as its
+ *       commission and gets its allocation row when the month is closed ({@link CourseCommissionService#settle}).</li>
  * </ul>
  */
 @Service
@@ -50,12 +48,15 @@ public class CourseVisitUsageService {
     private final TreatmentFeeRuleResolver treatmentFeeRuleResolver;
     private final CourseEntitlementRepository entitlements;
     private final TransactionCancellationService cancellations;
+    private final CourseCommissionService courseCommission;
 
     public CourseVisitUsageService(CourseVisitUsageRepository usages, CourseLedgerRepository ledger,
                                     CourseRepository courses, CommissionAllocationLedgerRepository allocationLedger,
                                     TreatmentFeeRuleResolver treatmentFeeRuleResolver,
                                     CourseEntitlementRepository entitlements,
-                                    TransactionCancellationService cancellations) {
+                                    TransactionCancellationService cancellations,
+                                    CourseCommissionService courseCommission) {
+        this.courseCommission = courseCommission;
         this.usages = usages;
         this.ledger = ledger;
         this.courses = courses;
@@ -75,6 +76,7 @@ public class CourseVisitUsageService {
         require(usingPatient != null, "ต้องระบุผู้ป่วยที่ใช้สิทธิ์");
         require(treatingStaff != null, "ต้องระบุผู้รักษา");
         require(visitDate != null, "ต้องระบุวันที่ใช้บริการ");
+        requireCanTreat(treatingStaff, visit, visitDate);
         if (course.getExpiryDate().isBefore(visitDate)) {
             throw new IllegalArgumentException("คอร์สหมดอายุแล้ว");
         }
@@ -86,13 +88,8 @@ public class CourseVisitUsageService {
             throw new IllegalArgumentException("ผู้ป่วยรายนี้ไม่มีสิทธิ์คงเหลือในคอร์สนี้");
         }
 
-        // The Owner PT is the course's seller. The Owner earns the per-visit commission only when treating the visit
-        // personally (and before leaving); a substitute earns the full treatment fee of the rule in force that day,
-        // never limited by the commission, and the Owner then gets 0.
         Staff owner = course.getOwnerStaff();
         boolean substituted = !treatingStaff.getId().equals(owner.getId());
-        boolean ownerLeft = owner.getTerminationDate() != null && visitDate.isAfter(owner.getTerminationDate());
-        BigDecimal allocationPerVisit = commissionAllocationPerVisit(course);
 
         BigDecimal treatmentFee = BigDecimal.ZERO;
         TreatmentFeeRule appliedRule = null;
@@ -102,7 +99,6 @@ public class CourseVisitUsageService {
                             "ไม่พบ Treatment Fee Rule ที่ใช้ได้ในวันที่ " + visitDate));
             treatmentFee = treatmentFeeRuleResolver.calculateFee(appliedRule, course);
         }
-        BigDecimal ownerNet = substituted || ownerLeft ? BigDecimal.ZERO : allocationPerVisit;
 
         CourseVisitUsage usage = new CourseVisitUsage();
         usage.setVisit(visit);
@@ -115,8 +111,11 @@ public class CourseVisitUsageService {
         usage.setVisitDate(visitDate.atStartOfDay());
         usage.setVisitQty(1);
         usage.setUsageStatus(UsageStatus.Completed);
-        usage.setCommissionAllocationPerVisit(allocationPerVisit);
         placeInCourse(usage, course);
+        // NULL while the rate is unknown (sale month not closed); 0 when the Owner does not earn this session
+        BigDecimal ownerNet = CourseCommissionService.ownerNetOf(course, usage.getUsageSequence(), treatingStaff, visitDate);
+        usage.setCommissionAllocationPerVisit(CourseCommissionService.isRateKnown(course)
+                ? CourseCommissionService.rateAt(course, usage.getUsageSequence()) : null);
         usage.setTreatmentFeeRule(appliedRule);
         usage.setSubstituteTreatmentFeeAmount(treatmentFee);
         usage.setOwnerNetCommission(ownerNet);
@@ -124,25 +123,9 @@ public class CourseVisitUsageService {
         usage.setUsageCreateBy(actorId);
         CourseVisitUsage savedUsage = usages.save(usage);
 
-        CommissionAllocationLedger allocation = new CommissionAllocationLedger();
-        allocation.setVisitUsage(savedUsage);
-        allocation.setEntryType(AllocationEntryType.Allocation);
-        allocation.setCourse(course);
-        allocation.setPatient(usingPatient);
-        allocation.setOwnerStaff(owner);
-        allocation.setTreatingStaff(treatingStaff);
-        allocation.setVisitDate(visitDate);
-        allocation.setAllocationVersion(1);
-        allocation.setTreatmentFeeRule(appliedRule);
-        allocation.setTreatmentFeeType(appliedRule == null ? null : appliedRule.getFeeType());
-        allocation.setTreatmentFeeRateOrAmount(appliedRule == null ? null : appliedRule.getFeeValue());
-        allocation.setTreatmentFeeCalculationBase(appliedRule == null || appliedRule.getFeeType() == FeeType.Fixed
-                ? null : treatmentFeeRuleResolver.perVisitBase(course));
-        allocation.setTreatmentFeeAmount(treatmentFee);
-        allocation.setOwnerNetCommission(ownerNet);
-        allocation.setAllocationCreateAt(Instant.now());
-        allocation.setAllocationCreateBy(actorId);
-        allocationLedger.save(allocation);
+        if (ownerNet != null) {
+            courseCommission.recordAllocation(savedUsage, ownerNet, 1, null, actorId);
+        }
 
         long newPatientBalance = patientBalance - 1;
         CourseLedger treatmentEntry = new CourseLedger();
@@ -162,12 +145,29 @@ public class CourseVisitUsageService {
 
         course.setVisitsUsed(course.getVisitsUsed() + 1);
         course.setRemainingVisits(course.getRemainingVisits() - 1);
-        course.setOwnerNetCommissionReleasedTotal(course.getOwnerNetCommissionReleasedTotal().add(ownerNet));
-        course.setSubstituteTreatmentFeeTotal(course.getSubstituteTreatmentFeeTotal().add(treatmentFee));
-        course.refreshCommissionOutstanding();
+        courseCommission.refreshTotals(course);
         courses.save(course);
 
         return savedUsage;
+    }
+
+    /**
+     * The PT who treats a session is chosen when the patient comes (not taken from a transfer): an active PT of the
+     * branch where the service is given, who had not left by the day, and the same PT for the visit and the usage.
+     */
+    private static void requireCanTreat(Staff treatingStaff, PatientVisit visit, LocalDate visitDate) {
+        boolean workingThatDay = treatingStaff.getTerminationDate() != null
+                ? !visitDate.isAfter(treatingStaff.getTerminationDate()) // a PT who is leaving still works until the last day
+                : treatingStaff.isStaffStatus();
+        require(workingThatDay, treatingStaff.getTerminationDate() != null
+                ? "ผู้รักษาลาออกก่อนวันที่ใช้บริการแล้ว" : "ผู้รักษาไม่ได้อยู่ในสถานะใช้งาน");
+        if (visit.getBranch() != null && treatingStaff.getBranch() != null
+                && !visit.getBranch().getId().equals(treatingStaff.getBranch().getId())) {
+            throw new IllegalArgumentException("ผู้รักษาต้องอยู่สาขาเดียวกับสาขาที่ให้บริการ");
+        }
+        if (visit.getTreatingStaff() != null && !visit.getTreatingStaff().getId().equals(treatingStaff.getId())) {
+            throw new IllegalArgumentException("ผู้รักษาของการใช้สิทธิ์ต้องเป็นคนเดียวกับผู้รักษาของ Visit");
+        }
     }
 
     /**
@@ -182,6 +182,9 @@ public class CourseVisitUsageService {
         }
         int position = 1;
         while (taken.contains(position)) position++;
+        if (position > course.getTotalVisits()) {
+            throw new IllegalStateException("ลำดับสิทธิ์เต็มจำนวนครั้งของคอร์สแล้ว");
+        }
         usage.setUsageSequence(position);
         final int chosen = position;
         Set<Long> alreadyReplaced = new HashSet<>();
@@ -213,29 +216,11 @@ public class CourseVisitUsageService {
         long balance = ledger.sumQtyChangeByCourseAndPatient(course.getId(), patient.getId());
         ledger.save(CourseLedgerEntries.reversalOf(treatment, balance, reason.trim(), actorId));
 
-        CommissionAllocationLedger original = allocationLedger
-                .findByVisitUsageIdAndEntryType(usage.getId(), AllocationEntryType.Allocation)
-                .orElseThrow(() -> new IllegalStateException("ไม่พบรายการจัดสรรคอมมิชชันของการใช้สิทธิ์นี้"));
-        CommissionAllocationLedger reversal = new CommissionAllocationLedger();
-        reversal.setEntryType(AllocationEntryType.Reversal);
-        reversal.setReversesAllocation(original);
-        reversal.setAllocationVersion(original.getAllocationVersion());
-        reversal.setReversalReason(reason.trim());
-        reversal.setVisitUsage(usage);
-        reversal.setCourse(course);
-        reversal.setPatient(patient);
-        reversal.setOwnerStaff(original.getOwnerStaff());
-        reversal.setTreatingStaff(original.getTreatingStaff());
-        reversal.setVisitDate(original.getVisitDate());
-        reversal.setTreatmentFeeRule(original.getTreatmentFeeRule());
-        reversal.setTreatmentFeeType(original.getTreatmentFeeType());
-        reversal.setTreatmentFeeRateOrAmount(original.getTreatmentFeeRateOrAmount());
-        reversal.setTreatmentFeeCalculationBase(original.getTreatmentFeeCalculationBase());
-        reversal.setTreatmentFeeAmount(original.getTreatmentFeeAmount().negate());
-        reversal.setOwnerNetCommission(original.getOwnerNetCommission().negate());
-        reversal.setAllocationCreateAt(Instant.now());
-        reversal.setAllocationCreateBy(actorId);
-        allocationLedger.save(reversal);
+        // A session whose Owner commission is still unknown has no allocation yet, so there is nothing to reverse.
+        courseCommission.currentAllocation(usage).ifPresent(original -> {
+            CourseCommissionService.requireNotPaid(original);
+            allocationLedger.save(courseCommission.reversalOf(original, reason, actorId));
+        });
 
         usage.setUsageStatus(UsageStatus.Reversed);
         usage.setUsageUpdateAt(Instant.now());
@@ -244,11 +229,7 @@ public class CourseVisitUsageService {
 
         course.setVisitsUsed(course.getVisitsUsed() - 1);
         course.setRemainingVisits(course.getRemainingVisits() + 1);
-        course.setOwnerNetCommissionReleasedTotal(
-                course.getOwnerNetCommissionReleasedTotal().subtract(original.getOwnerNetCommission()));
-        course.setSubstituteTreatmentFeeTotal(
-                course.getSubstituteTreatmentFeeTotal().subtract(original.getTreatmentFeeAmount()));
-        course.refreshCommissionOutstanding();
+        courseCommission.refreshTotals(course);
         courses.save(course);
 
         CourseEntitlement entitlement = entitlementOf(course, patient, balance);
@@ -261,18 +242,6 @@ public class CourseVisitUsageService {
     private CourseEntitlement entitlementOf(Course course, Patient patient, long balanceBefore) {
         return entitlements.findById(new CourseEntitlementId(course.getId(), patient.getId()))
                 .orElseGet(() -> new CourseEntitlement(course, patient, (int) balanceBefore));
-    }
-
-    /** Locked rate if Monthly Closing has run; otherwise a provisional estimate (see class Javadoc). */
-    private BigDecimal commissionAllocationPerVisit(Course course) {
-        if (course.getCommissionAllocationPerVisit() != null) {
-            return course.getCommissionAllocationPerVisit();
-        }
-        if (course.getProvisionalCommissionRate() == null) {
-            throw new IllegalStateException("คอร์สนี้ยังไม่มี Commission Rate ให้คำนวณ");
-        }
-        BigDecimal provisionalPool = course.getCoursePrice().multiply(course.getProvisionalCommissionRate());
-        return provisionalPool.divide(BigDecimal.valueOf(course.getTotalVisits()), 2, RoundingMode.HALF_UP);
     }
 
     private static void require(boolean condition, String message) {

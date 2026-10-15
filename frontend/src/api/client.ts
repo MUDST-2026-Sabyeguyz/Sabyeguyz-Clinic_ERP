@@ -743,9 +743,11 @@ export const commissionApi = {
         treatingStaffName: string
         ownerStaffId: number | null
         ownerStaffName: string
-        gross: number
+        /** null (with ownerNetPending) while the sale month is not closed: the Owner commission is not known yet */
+        gross: number | null
         treatmentFee: number
-        ownerNet: number
+        ownerNet: number | null
+        ownerNetPending: boolean
       }>
     >(`/api/commission/treatment-report?${new URLSearchParams({ from, to })}`),
   closings: (month: string) =>
