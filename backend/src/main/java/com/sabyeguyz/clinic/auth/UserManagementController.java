@@ -1,9 +1,9 @@
 package com.sabyeguyz.clinic.auth;
 
-import com.sabyeguyz.clinic.staff.Staff;
-import com.sabyeguyz.clinic.staff.StaffRepository;
 import com.sabyeguyz.clinic.branch.Branch;
 import com.sabyeguyz.clinic.branch.BranchRepository;
+import com.sabyeguyz.clinic.staff.Staff;
+import com.sabyeguyz.clinic.staff.StaffRepository;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -11,11 +11,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-@org.springframework.context.annotation.Profile("!database-v2")
 @RestController
 @RequestMapping("/api/users")
 @PreAuthorize("hasRole('MANAGER')")
@@ -38,12 +37,23 @@ public class UserManagementController {
             @NotNull Role role,
             @NotBlank @Size(max = 40) String employeeCode,
             @NotBlank @Size(max = 160) String fullName,
-            @Size(max = 40) String phone, String branchCode, Boolean active) {}
+            @Size(max = 40) String phone,
+            String branchCode) {}
 
-    public record Response(Long id, String username, String email, Role role,
-                           String employeeCode, String fullName, String phone, String branchCode, String branchName, boolean active) {}
+    public record Response(
+            Long id,
+            String username,
+            String email,
+            Role role,
+            String employeeCode,
+            String fullName,
+            String phone,
+            String branchCode,
+            String branchName,
+            boolean active) {}
 
     @GetMapping
+    @Transactional
     public List<Response> list() {
         return staff.findAllByOrderByFullName().stream().map(this::out).toList();
     }
@@ -65,13 +75,11 @@ public class UserManagementController {
         if (staff.findByEmployeeCode(employeeCode).isPresent()) {
             throw new IllegalArgumentException("รหัสพนักงานซ้ำ");
         }
-        AppUser user = users.save(new AppUser(username, email, encoder.encode(request.password()), request.role()));
-        Staff value = new Staff(user, employeeCode, request.fullName().trim(), normalize(request.phone()));
+        AppUser user = users.save(
+                new AppUser(username, email, encoder.encode(request.password()), request.role()));
+        Staff value = new Staff(
+                user, employeeCode, request.fullName().trim(), normalize(request.phone()));
         value.assignBranch(resolveBranch(request.branchCode()));
-        if (Boolean.FALSE.equals(request.active())) {
-            user.deactivate();
-            value.deactivate();
-        }
         return out(staff.save(value));
     }
 
@@ -83,27 +91,21 @@ public class UserManagementController {
         String username = request.username().trim();
         String email = normalize(request.email());
         if (users.findByUsername(username).filter(item -> !item.getId().equals(id)).isPresent()
-                || (email != null && users.findByEmail(email).filter(item -> !item.getId().equals(id)).isPresent())) {
+                || (email != null
+                        && users.findByEmail(email).filter(item -> !item.getId().equals(id)).isPresent())) {
             throw new IllegalArgumentException("ชื่อผู้ใช้หรืออีเมลนี้มีอยู่แล้ว");
         }
         staff.findByEmployeeCode(request.employeeCode().trim())
                 .filter(item -> !item.getId().equals(id))
-                .ifPresent(item -> { throw new IllegalArgumentException("รหัสพนักงานซ้ำ"); });
+                .ifPresent(item -> {
+                    throw new IllegalArgumentException("รหัสพนักงานซ้ำ");
+                });
         user.update(username, email, request.role());
         if (request.password() != null && !request.password().isBlank()) {
             user.updatePassword(encoder.encode(request.password()));
         }
         current.update(request.employeeCode().trim(), request.fullName().trim(), normalize(request.phone()));
         current.assignBranch(resolveBranch(request.branchCode()));
-        if (request.active() != null) {
-            if (request.active()) {
-                user.activate();
-                current.activate();
-            } else {
-                user.deactivate();
-                current.deactivate();
-            }
-        }
         return out(staff.save(current));
     }
 
@@ -133,14 +135,24 @@ public class UserManagementController {
     private Response out(Staff value) {
         AppUser user = value.getUser();
         Branch branch = value.getBranch();
-        return new Response(user.getId(), user.getUsername(), user.getEmail(), user.getRole(),
-                value.getEmployeeCode(), value.getFullName(), value.getPhone(), branch == null ? null : branch.getCode(),
-                branch == null ? null : branch.getName(), user.isActive() && value.isActive());
+        return new Response(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getRole(),
+                value.getEmployeeCode(),
+                value.getFullName(),
+                value.getPhone(),
+                branch == null ? null : branch.getBranchCode(),
+                branch == null ? null : branch.getName(),
+                user.isActive() && value.isActive());
     }
 
     private Branch resolveBranch(String code) {
-        if (code == null || code.isBlank()) return null;
-        return branches.findByCodeAndActiveTrue(code.trim().toUpperCase())
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        return branches.findByBranchCodeAndActiveTrue(code.trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน " + code));
     }
 

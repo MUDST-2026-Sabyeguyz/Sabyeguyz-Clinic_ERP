@@ -4,6 +4,7 @@ export interface PatientRegistrationForm {
   title: string
   customerType: string
   firstName: string
+  middleName: string
   lastName: string
   nickname: string
   fullNameEnglish: string
@@ -23,6 +24,29 @@ export interface PatientRegistrationForm {
   foodAllergy: boolean
   chronicDisease: string
   privacyConsent: boolean
+}
+
+export const patientTitleOptions = [
+  { value: 'นาย', label: 'นาย / Mr.' },
+  { value: 'นางสาว', label: 'นางสาว / Miss' },
+  { value: 'นาง', label: 'นาง / Mrs.' },
+  { value: 'เด็กชาย', label: 'เด็กชาย / Boy' },
+  { value: 'เด็กหญิง', label: 'เด็กหญิง / Girl' },
+]
+export const patientGenderOptions = [
+  { value: 'Male', label: 'ชาย' },
+  { value: 'Female', label: 'หญิง' },
+  { value: 'NotSpecified', label: 'ไม่ระบุ' },
+]
+
+const hnSequenceKey = 'mockPatientHnSequence'
+
+export function createMockHn() {
+  const nextSequence = Number(localStorage.getItem(hnSequenceKey) ?? '0') + 1
+  localStorage.setItem(hnSequenceKey, String(nextSequence))
+  const now = new Date()
+  const dateCode = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  return `HN${dateCode}${String(nextSequence).padStart(4, '0')}`
 }
 
 export function formatPhoneNumber(value: string) {

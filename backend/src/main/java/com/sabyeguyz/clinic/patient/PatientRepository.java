@@ -12,7 +12,7 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
 
     @Query("""
             select p from Patient p
-            where (:branchCode is null or p.branch.code = :branchCode)
+            where (:branchCode is null or p.branch.branchCode = :branchCode)
               and (:query = ''
                or lower(p.hn) like lower(concat('%', :query, '%'))
                or lower(p.fullName) like lower(concat('%', :query, '%'))

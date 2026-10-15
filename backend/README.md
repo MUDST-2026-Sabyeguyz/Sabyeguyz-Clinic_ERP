@@ -5,8 +5,9 @@ Backend สำหรับ **Physiotherapy Clinic ERP — Sabyeguyz**
 ## Requirements
 
 - Git
-- Java 21
+- Java 17
 - Maven
+- Node.js 24 (สำหรับ Cypress API tests)
 - Docker Desktop
 
 ตรวจสอบเครื่องมือที่ติดตั้งแล้ว:
@@ -55,7 +56,7 @@ Health Check: `http://localhost:8080/actuator/health`
 
 ## การทำงานร่วมกัน
 
-ใช้ Branch `main`, `develop`, `xan` และ `feature/<feature-name>` ตาม [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
+ใช้ Branch `main`, `develop` และ `feature/<feature-name>` ตาม [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
 
 ## Context กลาง
 
@@ -97,29 +98,39 @@ GET http://localhost:8080/api/hello
 GET http://localhost:8080/actuator/health
 ```
 
-รัน Test และ package:
+รัน Cypress tests ทั้งหมดและ package (ติดตั้ง dependencies ตามหัวข้อ Test ก่อน):
 
 ```bash
-mvn verify
+npm test
 ```
 
-CI จะรัน `mvn verify` ใน GitHub Actions เมื่อ Push ไปยัง `main`, `develop`, `xan` หรือ feature branch และเมื่อเปิด Pull Request ไปยัง `develop`
+CI รัน `npm test` (package + Cypress tests ทั้งหมด) เมื่อ Push ไปยัง `develop`, `feat/**`, `feature/**` หรือเปิด Pull Request เข้า `develop`
 
 ## Test
 
-รัน Test และ package:
+ติดตั้งชุดทดสอบและรัน package พร้อม Cypress tests ทั้งหมดจากโฟลเดอร์ `backend`:
 
 ```bash
-mvn verify
+npm ci
+npx cypress install
+npm test
 ```
 
-หรือรันเฉพาะ Test:
+เลือกชุดทดสอบ:
 
 ```bash
-mvn test
+npm run build
+npm run test:api
+npm run test:api:open
 ```
 
-CI จะรัน `mvn verify` ใน GitHub Actions เมื่อ Push ไปยัง `main`, `develop`, `xan` หรือ feature branch และเมื่อเปิด Pull Request ไปยัง `develop`
+บน Windows ใช้ `./run-tests.ps1` เพื่อ build และรันทดสอบทั้งหมด หรือ `-Suite api` เพื่อรัน Cypress โดยไม่ package ก่อน
+
+Cypress เป็น test runner เพียงตัวเดียวของ backend และตรวจ HTTP, business rules, repository และ concurrency ทั้งหมด ใช้ backend ที่เปิด/ปิดอัตโนมัติบนพอร์ต 18080 ฐานข้อมูล H2 แยกและ JWT จริง โดยไม่ต้องเปิด frontend ไม่มี JUnit/Mockito เหลืออยู่ ส่วน `src/test/java` เก็บเฉพาะ helpers ที่เตรียมข้อมูลและเปิดทางเข้าถึง logic ภายในให้ Cypress ตรวจผล
+
+`mvn package` หรือ `mvn verify` ใช้ compile/package เท่านั้น หากต้องการรันทดสอบทั้งหมดให้ใช้ `npm test`
+
+ดูข้อจำกัด H2, การเตรียมข้อมูล และตารางเทสต์ที่ย้ายใน [คู่มือ Cypress](cypress/README.md)
 
 ## Prototype: Patient Registration
 
@@ -138,7 +149,7 @@ Branch `xan-prototype` เพิ่ม Vertical Slice แรกตาม Figma:
 
 ## Git
 
-ใช้ `main`, `develop`, `xan` และ `feature/<feature-name>`
+ใช้ `main`, `develop` และ `feature/<feature-name>`
 
 [Branching Guide](https://github.com/MUDST-2026-Sabyeguyz/docs/blob/main/branching.md)
 

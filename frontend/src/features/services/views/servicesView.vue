@@ -1,251 +1,545 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { formatPaymentMethod } from '@/features/payments/format'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { appointmentApi, branchApi, catalogApi, courseApi, patientApi, paymentMethodApi, salesApi, staffApi, type Branch, type Course, type Patient, type PaymentMethod, type SaleReceipt, type ServiceOption, type Staff } from '@/api/client'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import {
+  appointmentApi,
+  branchApi,
+  catalogApi,
+  commissionApi,
+  patientApi,
+  paymentMethodApi,
+  salesApi,
+  staffApi,
+  type Course,
+  type Branch,
+  type Patient,
+  type PatientProfile,
+  type PaymentMethod,
+  type ServiceOption,
+  type Staff,
+} from '@/api/client'
 type Mode = 'single' | 'course'
+const route = useRoute()
+const router = useRouter()
 const query = ref(''),
   patient = ref<Patient | null>(null),
   mode = ref<Mode>('single'),
-  action = ref<'use' | 'buy'>('use'),
   confirmed = ref(false),
+  reviewing = ref(false),
   loading = ref(false),
-  errorMessage = ref(''),
-  receiptErrorMessage = ref('')
+  errorMessage = ref('')
 const results = ref<Patient[]>([])
+const patientProfile = ref<PatientProfile | null>(null)
 const services = ref<ServiceOption[]>([])
 const courses = ref<Course[]>([])
-const branches = ref<Branch[]>([])
 const paymentMethods = ref<PaymentMethod[]>([])
 const staff = ref<Staff[]>([])
-const selectedServiceId = ref(0), selectedCourseId = ref(0), selectedStaffId = ref<number | undefined>()
-const selectedBranchCode = ref('')
-const paymentCode = ref(''), note = ref('')
-const route = useRoute()
-const router = useRouter()
-const discountKind = ref<'none' | 'line' | 'bill'>('none')
-const discountAmount = ref('')
-const receipt = ref<SaleReceipt | null>(null)
-const pendingReceiptId = ref<number | null>(null)
-const receiptLoading = ref(false)
-const receiptRoutePresent = ref(false)
+const branches = ref<Branch[]>([])
+const selectedServiceId = ref(0),
+  selectedCourseId = ref(0),
+  selectedStaffId = ref<number | undefined>(),
+  // the PT who gives a single-visit service (a course sale has no treating PT): separate from the seller/Owner
+  treatingStaffId = ref<number | undefined>()
+const paymentCode = ref(''),
+  note = ref('')
+const searched = ref(false)
+const receiptNo = ref('')
+const savedSaleId = ref<number | null>(null)
+const paymentDialogOpen = ref(false)
+const screen = ref<'search' | 'menu' | 'sale'>(route.query.patientId ? 'menu' : 'search')
 async function loadMaster() {
-  const [s, c, p, methods, staffList, allowedBranches] = await Promise.all([catalogApi.services(), catalogApi.courses(), patientApi.searchAll(), paymentMethodApi.list(), staffApi.list(), branchApi.list({ accessible: true })])
-  services.value = s; courses.value = c; results.value = p; paymentMethods.value = methods; staff.value = staffList
-  branches.value = allowedBranches.filter((branch) => branch.active)
-  selectedBranchCode.value = branches.value[0]?.code ?? ''
-  selectedServiceId.value = s[0]?.id ?? 0; selectedCourseId.value = c[0]?.id ?? 0; paymentCode.value = methods[0]?.code ?? ''; selectedStaffId.value = staffList[0]?.id
-}
-async function loadAppointmentHandoff() {
-  const rawAppointmentId = route.query.appointmentId
-  if (typeof rawAppointmentId !== 'string') return
-  const appointmentId = Number(rawAppointmentId)
-  if (!Number.isSafeInteger(appointmentId) || appointmentId < 1) throw new Error('เลขนัดหมายไม่ถูกต้อง')
-  const appointment = await appointmentApi.get(appointmentId)
-  const verifiedPatient = await patientApi.get(appointment.patient.id)
-  const verifiedService = services.value.find((service) => service.id === appointment.service.id)
-  const verifiedBranch = branches.value.find((branch) => branch.code === appointment.branchCode)
-  if (!verifiedPatient.active) throw new Error('ผู้ป่วยนี้ปิดใช้งาน')
-  if (!verifiedService) throw new Error('บริการของนัดหมายไม่อยู่ในรายการที่ใช้งาน')
-  if (!verifiedBranch) throw new Error('ไม่มีสิทธิ์เข้าถึงสาขาของนัดหมาย')
-  patient.value = verifiedPatient
-  selectedBranchCode.value = verifiedBranch.code
-  query.value = `${verifiedPatient.fullName} ${verifiedPatient.hn}`
-  mode.value = 'single'
-  selectedServiceId.value = verifiedService.id
+  const [s, c, p, methods, staffList] = await Promise.all([
+    catalogApi.services(),
+    catalogApi.courses(),
+    patientApi.searchAll(),
+    paymentMethodApi.list(),
+    staffApi.list(),
+  ])
+  services.value = s.filter(
+    (service) =>
+      !service.code.toUpperCase().includes('ASSESS') &&
+      !service.name.toLowerCase().includes('assessment'),
+  )
+  courses.value = c
+  results.value = p
+  paymentMethods.value = methods
+  staff.value = staffList
+  selectedServiceId.value = services.value[0]?.id ?? 0
+  selectedCourseId.value = c[0]?.id ?? 0
+  paymentCode.value = methods[0]?.code ?? ''
+  selectedStaffId.value = staffList[0]?.id
+  treatingStaffId.value = staffList[0]?.id
+  try {
+    branches.value = await branchApi.list()
+  } catch {
+    branches.value = []
+  }
+  const patientId = Number(route.query.patientId)
+  const selectedPatient = p.find((item) => item.id === patientId)
+  if (route.query.appointmentId) {
+    const appointment = await appointmentApi.get(Number(route.query.appointmentId))
+    if (appointment.patient.id !== patientId) throw new Error('ผู้ป่วยไม่ตรงกับนัดหมาย')
+  }
+  if (selectedPatient) await choose(selectedPatient)
 }
 onMounted(async () => {
-  try { await loadReceiptFromRoute() } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลใบเสร็จไม่สำเร็จ' }
-  try { await loadMaster(); await loadAppointmentHandoff() } catch (error) { patient.value = null; errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ' }
-})
-async function loadReceiptFromRoute() {
-  const rawId = route.query.receiptId
-  if (rawId === undefined) return
-  receiptRoutePresent.value = true
-  if (typeof rawId !== 'string') throw new Error('เลขที่ใบเสร็จไม่ถูกต้อง')
-  const id = Number(rawId)
-  if (!Number.isSafeInteger(id) || id < 1) throw new Error('เลขที่ใบเสร็จไม่ถูกต้อง')
-  pendingReceiptId.value = id
-  await refreshReceipt(id)
-}
-async function refreshReceipt(id = pendingReceiptId.value) {
-  if (id === null || receiptLoading.value) return
-  pendingReceiptId.value = id
-  receiptLoading.value = true
   try {
-    receipt.value = await salesApi.get(id)
-    receiptErrorMessage.value = ''
-  } catch {
-    receiptErrorMessage.value = `ใบเสร็จ ${id} โหลดไม่สำเร็จ กดโหลดอีกครั้งได้ โดยไม่ต้องบันทึกรายการซ้ำ`
-  } finally {
-    receiptLoading.value = false
+    await loadMaster()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ'
   }
-}
+})
 let searchTimer: number | undefined
-onBeforeUnmount(() => window.clearTimeout(searchTimer))
-watch(query, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(async () => { if (query.value.trim()) results.value = (await patientApi.search(query.value, 0, 20)).items }, 250) })
+watch(query, () => {
+  window.clearTimeout(searchTimer)
+  const keyword = query.value.trim()
+  if (!keyword) {
+    searched.value = false
+    return
+  }
+  searchTimer = window.setTimeout(async () => {
+    try {
+      results.value = (await patientApi.search(keyword, 0, 20)).items
+      searched.value = true
+    } catch (error) {
+      results.value = []
+      errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
+      searched.value = true
+    }
+  }, 250)
+})
 const item = computed(() =>
   mode.value === 'single'
-    ? services.value.find((s) => s.id === selectedServiceId.value)?.name ?? 'บริการรายครั้ง'
-    : courses.value.find((c) => c.id === selectedCourseId.value)?.name ?? 'คอร์ส',
+    ? (services.value.find((s) => s.id === selectedServiceId.value)?.name ?? 'บริการรายครั้ง')
+    : (courses.value.find((c) => c.id === selectedCourseId.value)?.name ?? 'คอร์ส'),
 )
-const amount = computed(() =>
-  mode.value === 'single'
-    ? `฿${(services.value.find((s) => s.id === selectedServiceId.value)?.price ?? 0).toLocaleString()}`
-    : action.value === 'buy'
-      ? `฿${(courses.value.find((c) => c.id === selectedCourseId.value)?.price ?? 0).toLocaleString()}`
-      : 'ใช้สิทธิ์ 1 ครั้ง',
+const rawPrice = computed(() =>
+  mode.value === 'course'
+    ? (courses.value.find((c) => c.id === selectedCourseId.value)?.price ?? 0)
+    : (services.value.find((s) => s.id === selectedServiceId.value)?.price ?? 0),
 )
-const grossAmount = computed(() => mode.value === 'single'
-  ? services.value.find((s) => s.id === selectedServiceId.value)?.price ?? 0
-  : courses.value.find((c) => c.id === selectedCourseId.value)?.price ?? 0)
-const fixedDiscount = computed(() => Number(discountAmount.value || 0))
-const lineDiscount = computed(() => discountKind.value === 'line' ? fixedDiscount.value : 0)
-const billDiscount = computed(() => discountKind.value === 'bill' ? fixedDiscount.value : 0)
-const amountDue = computed(() => grossAmount.value - lineDiscount.value - billDiscount.value)
-function printReceipt() { window.print() }
-function choose(p: Patient) {
+const itemDiscount = computed(() => 0)
+const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
+const billDiscount = computed(() => 0)
+const netAmount = computed(() => Math.max(afterItemDiscount.value - billDiscount.value, 0))
+// the commission of a course sale is estimated by the server from the seller's tier (locked when the month is closed)
+const commissionPreview = ref<{ commissionRate: number; commissionPool: number } | null>(null)
+const commissionAmount = computed(() => commissionPreview.value?.commissionPool ?? 0)
+const commissionRateLabel = computed(() =>
+  commissionPreview.value
+    ? `${Math.round(commissionPreview.value.commissionRate * 10000) / 100}%`
+    : '—',
+)
+watch(
+  [mode, selectedCourseId, selectedStaffId],
+  async () => {
+    commissionPreview.value = null
+    if (mode.value !== 'course' || !selectedCourseId.value || !selectedStaffId.value) return
+    try {
+      commissionPreview.value = await commissionApi.preview(
+        selectedCourseId.value,
+        selectedStaffId.value,
+      )
+    } catch {
+      commissionPreview.value = null
+    }
+  },
+  { immediate: true },
+)
+const money = (value: number) =>
+  new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(value)
+const selectedStaffName = computed(
+  () => staff.value.find((person) => person.id === selectedStaffId.value)?.fullName || '-',
+)
+const staffFilterOptions = computed(() =>
+  staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
+)
+const initials = computed(
+  () =>
+    patient.value?.fullName
+      .replace(/^นาย|^นางสาว|^นาง/, '')
+      .trim()
+      .slice(0, 2) ?? '',
+)
+async function choose(p: Patient) {
   patient.value = p
+  patientProfile.value = null
   query.value = `${p.fullName} ${p.hn}`
+  screen.value = 'menu'
+  try {
+    patientProfile.value = await patientApi.get(p.id)
+  } catch {
+    patientProfile.value = null
+  }
+}
+function searchPatients() {
+  if (query.value.trim()) searched.value = true
+}
+function openPatientCourses() {
+  if (patient.value) router.push({ path: '/staff/courses', query: { patientId: patient.value.id } })
+}
+function clearPatient() {
+  const remainingQuery = { ...route.query }
+  delete remainingQuery.appointmentId
+  delete remainingQuery.patientId
+  void router.replace({ query: remainingQuery })
+  patient.value = null
+  patientProfile.value = null
+  query.value = ''
+  searched.value = false
+  reviewing.value = false
+  confirmed.value = false
+  screen.value = 'search'
+}
+function backToServiceMenu() {
+  reviewing.value = false
+  confirmed.value = false
+  screen.value = 'menu'
+}
+function startSale() {
+  screen.value = 'sale'
+  mode.value = 'single'
+  selectedServiceId.value =
+    services.value.find((service) => service.code === 'MANUAL')?.id ?? services.value[0]?.id ?? 0
+  reviewing.value = false
+  confirmed.value = false
+  paymentDialogOpen.value = false
 }
 async function submit() {
-  if (loading.value || receiptRoutePresent.value || pendingReceiptId.value !== null || !patient.value || !selectedBranchCode.value) return
-  loading.value = true; errorMessage.value = ''; confirmed.value = false
+  if (!patient.value || loading.value || savedSaleId.value !== null) return
+  loading.value = true
+  errorMessage.value = ''
+  confirmed.value = false
   try {
-    if (mode.value === 'course' && action.value === 'use') {
-      const owned = await courseApi.patientCourses(patient.value.id); const usable = owned.find((course) => course.usable)
-      if (!usable) throw new Error('ผู้ป่วยไม่มีคอร์สที่ใช้ได้')
-      await courseApi.use({ coursePurchaseId: usable.id, note: note.value })
-    } else {
-      const type = mode.value === 'single' ? 'SINGLE_VISIT' : 'COURSE'
-      const referenceId = mode.value === 'course' ? selectedCourseId.value : selectedServiceId.value
-      const created = await salesApi.create({ patientId: patient.value.id, branchCode: selectedBranchCode.value, salespersonStaffId: selectedStaffId.value, note: note.value,
-        items: [{ type, referenceId, quantity: 1, ...(discountKind.value === 'line' ? { lineDiscountAmount: fixedDiscount.value } : {}) }],
-        billDiscountAmount: billDiscount.value,
-        payments: [{ paymentMethodCode: paymentCode.value, amount: amountDue.value }] })
-      pendingReceiptId.value = created.id
-      receiptRoutePresent.value = true
-      receipt.value = created
-      confirmed.value = true
-      try { await router.replace({ query: { ...route.query, receiptId: String(created.id) } }) } catch { /* Keep the returned receipt visible even if route persistence fails. */ }
-      await refreshReceipt(created.id)
-    }
+    const type = mode.value === 'single' ? 'SINGLE_VISIT' : 'COURSE'
+    const referenceId = mode.value === 'course' ? selectedCourseId.value : selectedServiceId.value
+    if (!referenceId) throw new Error('ไม่พบรายการบริการที่เลือก')
+    const price =
+      mode.value === 'course'
+        ? (courses.value.find((c) => c.id === referenceId)?.price ?? 0)
+        : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
+    const sale = await salesApi.create({
+      patientId: patient.value.id,
+      branchCode: patient.value.branchCode ?? (await branchApi.list())[0]?.branchCode ?? 'RP',
+      salespersonStaffId: selectedStaffId.value,
+      treatingStaffId: mode.value === 'single' ? treatingStaffId.value : undefined,
+      note: note.value,
+      items: [{ type, referenceId, quantity: 1 }],
+      payments: [
+        { paymentMethodCode: paymentCode.value, amount: Math.min(price, netAmount.value) },
+      ],
+    })
+    receiptNo.value = sale.receiptNo
+    savedSaleId.value = sale.id
     confirmed.value = true
-  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการไม่สำเร็จ' }
-  finally { loading.value = false }
+    reviewing.value = false
+    paymentDialogOpen.value = false
+    await router.push(`/staff/receipts/${sale.id}`)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 <template>
   <div class="service-page">
-    <StaffHeader />
+    <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <h1>เลือกผู้ป่วยที่ต้องการทำรายการ</h1>
-      <div class="search-wrap">
-        <label class="search">
-          <span class="search-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="6" />
-              <path d="m16 16 4 4" />
-            </svg>
-          </span>
-          <input
-            v-model="query"
-            aria-label="ค้นหาผู้ป่วย"
-            placeholder="ค้นหาชื่อผู้ป่วยหรือเลขประจำตัวผู้ป่วย"
-            @input="patient = null"
-          />
-        </label>
-        <div v-if="query && results.length && !patient" class="results">
-          <button v-for="p in results" :key="p.hn" @click="choose(p)">
-            <b>{{ p.fullName }}</b
-            ><small>{{ p.hn }} {{ p.phone }}</small>
-          </button>
-        </div>
-      </div>
-      <p v-if="!patient" class="hint">
-        {{
-          query && !results.length
-            ? 'ไม่พบผู้ป่วยที่ตรงกับคำค้น'
-            : 'พิมพ์ชื่อหรือเลข HN แล้วเลือกผู้ป่วยจากรายการ'
-        }}
+      <p v-if="route.query.appointmentId && patient">
+        อ้างอิงนัดหมาย #{{ route.query.appointmentId }}
       </p>
-      <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-      <section v-if="patient" class="card">
-        <header>
-          <div class="identity">
-            <i>{{ patient.fullName[0] }}</i>
-            <div>
-              <h2>{{ patient.fullName }}</h2>
-              <p>{{ patient.hn }} · สาขา {{ patient.active ? 'ใช้งาน' : 'ปิดใช้งาน' }}</p>
-            </div>
+      <template v-if="screen === 'search'">
+        <h1>บริการและคอร์ส</h1>
+        <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
+        <section class="service-search">
+          <h2>ค้นหาผู้ป่วย</h2>
+          <div class="search-wrap">
+            <label class="search">
+              <span class="search-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="6" />
+                  <path d="m16 16 4 4" />
+                </svg>
+              </span>
+              <input
+                v-model="query"
+                aria-label="ค้นหาผู้ป่วย"
+                placeholder="ค้นหาชื่อ เบอร์โทรศัพท์ หรือ HN"
+                @input="patient = null"
+              />
+            </label>
+            <button class="service-search-button" type="button" @click="searchPatients">
+              ค้นหา
+            </button>
           </div>
-          <b>คอร์สที่ใช้งาน 1 คอร์ส</b>
-        </header>
-        <div class="body">
-          <div class="title">
-            <h2>รายละเอียดรายการ</h2>
-            <RouterLink to="/staff/courses">จัดการคอร์ส</RouterLink>
-          </div>
-          <div class="category">
-            <label
-              >เลือกประเภทรายการ<select v-model="mode">
-                <option value="single">Single Visit</option>
-                <option value="course">Course</option>
-              </select></label
+          <section v-if="searched" class="service-results-card">
+            <h2>ผลการค้นหา {{ results.length }} คน</h2>
+            <p>ตรวจสอบชื่อ HN และเบอร์โทรศัพท์ก่อนเลือกผู้ป่วย</p>
+            <button
+              v-for="p in results"
+              :key="p.hn"
+              class="service-patient-result"
+              type="button"
+              @click="choose(p)"
             >
-            <div v-if="mode === 'course'" class="toggle">
-              <button :class="{ active: action === 'use' }" @click="action = 'use'">
-                ใช้สิทธิ์</button
-              ><button :class="{ active: action === 'buy' }" @click="action = 'buy'">
-                ซื้อคอร์ส
-              </button>
-            </div>
-          </div>
-          <div class="fields">
-            <label>สาขาที่ทำรายการ<select v-model="selectedBranchCode" aria-label="สาขาที่ทำรายการ">
-              <option v-for="branch in branches" :key="branch.id" :value="branch.code">{{ branch.name }} ({{ branch.code }})</option>
-            </select></label><label
-              >{{
-                mode === 'single' ? 'บริการรายครั้ง' : 'รายการคอร์ส'
-              }}<select v-if="mode !== 'course'" v-model="selectedServiceId">
-                <option v-for="service in services" :key="service.id" :value="service.id">{{ service.name }} ฿{{ service.price.toLocaleString() }}</option>
-              </select><select v-else v-model="selectedCourseId">
-                <option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }} ฿{{ course.price.toLocaleString() }}</option>
-              </select></label
-            ><label
-              >ผู้ทำรายการ<select v-model="selectedStaffId">
-                <option v-for="person in staff" :key="person.id" :value="person.id">{{ person.fullName }}</option>
-              </select></label
-            ><label v-if="mode !== 'course' || action === 'buy'"
-              >ช่องทางชำระเงิน<select v-model="paymentCode">
-                <option v-for="method in paymentMethods" :key="method.code" :value="method.code">{{ method.name }}</option>
-              </select></label
-            ><label v-if="mode !== 'course' || action === 'buy'">ส่วนลดแบบบาท<select v-model="discountKind" aria-label="ส่วนลดแบบบาท">
-              <option value="none">ไม่มีส่วนลด</option><option value="line">ส่วนลดรายการ</option><option value="bill">ส่วนลดท้ายบิล</option>
-            </select></label><label v-if="discountKind !== 'none'">จำนวนส่วนลด (บาท)<input v-model="discountAmount" aria-label="จำนวนส่วนลดบาท" type="number" min="0" step="0.01"></label
-            ><label class="note">หมายเหตุ<textarea v-model.trim="note" /></label>
-          </div>
+              <span
+                ><b>{{ p.fullName }}</b
+                ><small>HN {{ p.hn }} · โทร {{ p.phone || '-' }}</small></span
+              >
+              <strong>เลือกผู้ป่วย</strong>
+            </button>
+            <p v-if="!results.length" class="service-empty-result">ไม่พบผู้ป่วยที่ตรงกับคำค้น</p>
+          </section>
+          <section v-else class="service-search-hint">
+            <p>
+              ค้นหาผู้ป่วยจากช่องด้านบน แล้วเลือกคนที่ต้องการทำรายการ<br />ข้อมูลผู้ป่วยและสิทธิ์คอร์สจะแสดงหลังเลือกผู้ป่วย
+            </p>
+          </section>
+        </section>
+      </template>
+      <section v-else-if="screen === 'menu' && patient" class="service-menu">
+        <h1>บริการและคอร์ส</h1>
+        <section class="patient-summary">
+          <strong>{{ patient.fullName }}</strong>
+          <span>HN {{ patient.hn }}</span>
+          <button type="button" @click="clearPatient">เปลี่ยนผู้ป่วย</button>
+        </section>
+        <div class="service-menu-actions">
+          <article>
+            <h2>ขายบริการและคอร์ส</h2>
+            <p>Single Visit<br />หรือซื้อคอร์สใหม่</p>
+            <button type="button" @click="startSale">เริ่มขายบริการ</button>
+          </article>
+          <article>
+            <h2>ใช้สิทธิ์และจัดการคอร์ส</h2>
+            <p>ดูสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</p>
+            <button type="button" @click="openPatientCourses">ดูคอร์สผู้ป่วย</button>
+          </article>
         </div>
-        <footer>
-          <h3>รายการที่เลือก</h3>
-          <div>
-            <strong>{{ item }}</strong
-            ><b>{{ amount }}</b
-            ><p>ก่อนส่วนลด ฿{{ grossAmount.toLocaleString() }} · ส่วนลด ฿{{ (lineDiscount + billDiscount).toLocaleString() }} · ยอดชำระ ฿{{ amountDue.toLocaleString() }}</p
-            ><button :disabled="loading || !selectedBranchCode || receiptRoutePresent || pendingReceiptId !== null" @click="submit">{{ loading ? 'กำลังบันทึก...' : receiptRoutePresent || pendingReceiptId !== null ? 'บันทึกแล้ว' : 'ยืนยันรายการ' }}</button>
-          </div>
-        </footer>
-      <p v-if="confirmed" class="success">บันทึกรายการเรียบร้อยแล้ว</p>
       </section>
-      <p v-if="receiptErrorMessage" class="error" role="alert">{{ receiptErrorMessage }}</p>
-      <button v-if="pendingReceiptId !== null && receiptErrorMessage" type="button" :disabled="receiptLoading" @click="refreshReceipt()">{{ receiptLoading ? 'กำลังโหลดใบเสร็จ...' : 'โหลดใบเสร็จอีกครั้ง' }}</button>
-      <section v-if="receipt" class="receipt-preview" aria-label="ใบเสร็จสำหรับพิมพ์">
-        <h2>ใบเสร็จ {{ receipt.receiptNo }}</h2>
-        <p>{{ receipt.patient.fullName }} · HN {{ receipt.patient.hn }} · สาขา {{ receipt.branchCode }}</p>
-        <ul><li v-for="line in receipt.items" :key="line.id">{{ line.description }}: gross ฿{{ line.grossAmount.toLocaleString() }}, ส่วนลดรายการ ฿{{ line.lineDiscountAmount.toLocaleString() }}, ยอดรายการ ฿{{ line.lineTotal.toLocaleString() }}, commission base ฿{{ line.commissionBase.toLocaleString() }}</li></ul>
-        <p>gross ฿{{ receipt.grossTotal.toLocaleString() }} · ส่วนลดรายการ ฿{{ receipt.lineDiscountTotal.toLocaleString() }} · ส่วนลดท้ายบิล ฿{{ receipt.billDiscountAmount.toLocaleString() }}</p>
-        <p>ยอดสุทธิ ฿{{ receipt.total.toLocaleString() }} · รับเงินจริง ฿{{ receipt.paid.toLocaleString() }} · commission base ฿{{ receipt.commissionBase.toLocaleString() }}</p>
-        <button type="button" @click="printReceipt">พิมพ์ใบเสร็จ</button>
+      <section v-else-if="patient" class="sale-page">
+        <button type="button" class="sale-back-button" @click="backToServiceMenu">
+          <span aria-hidden="true">←</span> กลับไปหน้าบริการ
+        </button>
+        <ol class="sales-progress" aria-label="ขั้นตอนการขาย">
+          <li :class="{ active: !reviewing && !confirmed, done: reviewing || confirmed }">
+            <i>1</i><span>สร้างรายการ</span>
+          </li>
+          <li :class="{ active: reviewing && !confirmed, done: confirmed }">
+            <i>2</i><span>ตรวจสอบและชำระ</span>
+          </li>
+          <li :class="{ active: confirmed }"><i>3</i><span>สำเร็จ</span></li>
+        </ol>
+
+        <template v-if="!confirmed">
+          <h1>{{ reviewing ? 'ตรวจสอบและชำระเงิน' : 'ขายบริการและคอร์ส' }}</h1>
+          <p class="sale-intro">
+            {{
+              reviewing
+                ? 'ตรวจสอบรายการ ส่วนลด และฐานค่าคอมมิชชันก่อนยืนยัน'
+                : 'ระบุรายการ ส่วนลด และช่องทางชำระเงิน'
+            }}
+          </p>
+          <section class="sale-patient-summary">
+            <i>{{ initials }}</i>
+            <div>
+              <strong>{{ patient.fullName }}</strong
+              ><span>HN {{ patient.hn }}　☎ {{ patient.phone }}</span>
+            </div>
+            <b>{{ patient.branchName ? `สาขา${patient.branchName}` : 'ไม่ระบุสาขา' }}</b>
+          </section>
+          <div class="sales-workspace" :class="{ review: reviewing }">
+            <section class="sale-line-card">
+              <div class="sale-tabs" v-if="!reviewing">
+                <button type="button" @click="mode = 'single'">Single Visit</button>
+                <button type="button" @click="mode = 'course'">Course</button>
+              </div>
+              <label v-if="mode === 'course' && !reviewing"
+                >รายการคอร์ส
+                <select v-model="selectedCourseId" aria-label="รายการคอร์ส">
+                  <option v-for="course in courses" :key="course.id" :value="course.id">
+                    {{ course.name }}
+                  </option>
+                </select>
+              </label>
+              <label v-if="mode === 'single' && !reviewing"
+                >รายการบริการ
+                <select v-model="selectedServiceId" aria-label="รายการบริการ">
+                  <option v-for="service in services" :key="service.id" :value="service.id">
+                    {{ service.name }}
+                  </option>
+                </select>
+              </label>
+              <header>
+                <h2>รายละเอียดรายการ</h2>
+                <small>1 รายการ</small>
+              </header>
+              <div class="sale-line-head">
+                <span>บริการ</span><span>ราคา/หน่วย</span><span>จำนวน</span><span>ส่วนลดรายการ</span
+                ><span>ยอดหลังลด</span>
+              </div>
+              <div class="sale-line-values">
+                <div>
+                  <div class="sale-service-readonly" aria-label="บริการที่เลือก">{{ item }}</div>
+                  <small>{{ mode === 'course' ? 'คอร์ส' : 'บริการรายครั้ง' }}</small>
+                </div>
+                <span>{{ money(rawPrice) }}</span
+                ><span>1</span><span>− {{ money(itemDiscount) }}</span
+                ><b>{{ money(afterItemDiscount) }}</b>
+              </div>
+              <div class="sale-people">
+                <label v-if="mode === 'single'"
+                  >นักกายภาพผู้ให้บริการ<FilterDropdown
+                    :model-value="String(treatingStaffId)"
+                    :options="staffFilterOptions"
+                    default-label="เลือกนักกายภาพ"
+                    label="นักกายภาพผู้ให้บริการ"
+                    :clear-on-reselect="false"
+                    @update:model-value="treatingStaffId = Number($event)" /></label
+                ><label
+                  >ผู้ขาย/เจ้าของยอด<FilterDropdown
+                    :model-value="String(selectedStaffId)"
+                    :options="staffFilterOptions"
+                    default-label="เลือกผู้ขาย/เจ้าของยอด"
+                    label="ผู้ขายหรือเจ้าของยอด"
+                    :clear-on-reselect="false"
+                    @update:model-value="selectedStaffId = Number($event)"
+                /></label>
+              </div>
+              <div class="payment-group">
+                <span>ช่องทางชำระเงิน</span>
+                <div class="payment-options">
+                  <button
+                    v-for="method in paymentMethods"
+                    :key="method.code"
+                    type="button"
+                    :class="{ active: paymentCode === method.code }"
+                    @click="paymentCode = method.code"
+                  >
+                    {{ formatPaymentMethod(method.code, method.name) }}
+                  </button>
+                </div>
+              </div>
+              <label class="sale-note"
+                >หมายเหตุ (ไม่บังคับ)<textarea
+                  v-model.trim="note"
+                  placeholder="เพิ่มรายละเอียดเกี่ยวกับรายการขาย"
+                />
+              </label>
+              <button v-if="reviewing" type="button" class="sale-edit" @click="reviewing = false">
+                แก้ไข
+              </button>
+            </section>
+            <aside class="sale-summary-card">
+              <h2>สรุปรายการ</h2>
+              <p>
+                <span>ยอดก่อนส่วนลด</span><b>{{ money(rawPrice) }}</b>
+              </p>
+              <p>
+                <span>ส่วนลดรายการรวม</span><b>− {{ money(itemDiscount) }}</b>
+              </p>
+              <p>
+                <strong>ยอดหลังส่วนลดรายการ</strong><strong>{{ money(afterItemDiscount) }}</strong>
+              </p>
+              <p class="bill-discount">
+                <span>ส่วนลดท้ายบิล</span><b>− {{ money(billDiscount) }}</b>
+              </p>
+              <p class="net-total">
+                <strong>ยอดสุทธิที่ลูกค้าชำระ</strong><strong>{{ money(netAmount) }}</strong>
+              </p>
+              <div v-if="mode === 'course'" class="commission">
+                <p>
+                  <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
+                </p>
+                <p>
+                  <span>ค่าคอมมิชชัน {{ commissionRateLabel }} (ประมาณการ)</span
+                  ><b>{{ money(commissionAmount) }}</b>
+                </p>
+              </div>
+              <button
+                type="button"
+                :disabled="loading"
+                @click="reviewing ? (paymentDialogOpen = true) : (reviewing = true)"
+              >
+                {{ reviewing ? 'ยืนยันรับชำระเงิน' : 'ตรวจสอบและชำระเงิน' }}
+              </button>
+            </aside>
+          </div>
+        </template>
+
+        <section v-else class="sale-success-card">
+          <i>✓</i>
+          <h1>บันทึกการขายสำเร็จ</h1>
+          <p>เลขที่เอกสาร {{ receiptNo }}</p>
+          <div>
+            <section>
+              <b>{{ patient.fullName }}　HN {{ patient.hn }}</b
+              ><span
+                >{{ item }} ·
+                {{ patient.branchName ? `สาขา${patient.branchName}` : 'ไม่ระบุสาขา' }}</span
+              ><template v-if="mode === 'course'"
+                ><small>ฐานค่าคอมมิชชัน {{ money(afterItemDiscount) }}</small
+                ><small
+                  >เจ้าของคอร์ส/ผู้ได้รับ Commission กภ. {{ selectedStaffName }} · ประมาณการ
+                  {{ money(commissionAmount) }}</small
+                ></template
+              >
+            </section>
+            <section>
+              <span>ยอดชำระ</span><strong>{{ money(netAmount) }}</strong>
+            </section>
+          </div>
+          <footer>
+            <button v-if="mode === 'course'" type="button" @click="openPatientCourses">
+              ดูคอร์สผู้ป่วย</button
+            ><button type="button" @click="router.push(`/staff/receipts/${savedSaleId}`)">
+              ดูและพิมพ์ใบเสร็จ</button
+            ><button type="button" @click="backToServiceMenu">กลับหน้าบริการ</button>
+          </footer>
+        </section>
+
+        <div
+          v-if="paymentDialogOpen"
+          class="payment-modal-backdrop"
+          @click.self="paymentDialogOpen = false"
+        >
+          <section class="payment-modal">
+            <h2>ยืนยันรับชำระเงิน</h2>
+            <p>โปรดตรวจสอบอีกครั้งก่อนบันทึกการขาย</p>
+            <div>
+              <section>
+                <span>ยอดที่ลูกค้าชำระ</span><strong>{{ money(netAmount) }}</strong
+                ><small
+                  >ช่องทางการชำระเงิน　{{
+                    formatPaymentMethod(
+                      paymentCode,
+                      paymentMethods.find((method) => method.code === paymentCode)?.name,
+                    )
+                  }}</small
+                >
+              </section>
+              <section v-if="mode === 'course'">
+                <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b
+                ><small
+                  >ค่าคอมมิชชัน {{ commissionRateLabel }} (ประมาณการ)　{{
+                    money(commissionAmount)
+                  }}</small
+                >
+              </section>
+            </div>
+            <footer>
+              <button type="button" @click="paymentDialogOpen = false">ยกเลิก</button
+              ><button type="button" :disabled="loading" @click="submit">
+                {{ loading ? 'กำลังบันทึก...' : 'ยืนยันการชำระเงิน' }}
+              </button>
+            </footer>
+          </section>
+        </div>
+        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
       </section>
     </main>
   </div>
