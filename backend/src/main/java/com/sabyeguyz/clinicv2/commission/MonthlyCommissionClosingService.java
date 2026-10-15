@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.enums.ClosingStatus;
@@ -142,7 +143,7 @@ public class MonthlyCommissionClosingService {
         course.setLockedCommissionRate(tier.getCommissionRate());
         course.setTotalCourseCommissionPool(pool);
         course.setCommissionAllocationPerVisit(perVisit);
-        course.setCommissionGeneratedDate(LocalDate.now());
+        course.setCommissionGeneratedDate(ClinicTime.today());
         courses.save(course);
         // sessions used before the rate was known get their rate, Owner commission and allocation now
         courseCommission.settle(course, actorId);

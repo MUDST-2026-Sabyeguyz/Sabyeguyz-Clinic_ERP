@@ -42,6 +42,30 @@ describe('patient courses', () => {
     cy.api('GET', '/api/course-usages').its('body').should('have.length', 1)
   })
 
+  it('lets another PT treat the session: a substitute is recorded and the Owner earns nothing for it', function () {
+    cy.registerPatient().then((patient) => {
+      buyCourse(this.fixtures, patient)
+      cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`)
+    })
+    cy.contains('.course-manager-actions button', 'ใช้สิทธิ์').click()
+    // the PT must work at the branch of the visit (branch 01)
+    cy.api('GET', '/api/staff').then(({ body }) => {
+      const therapist = body.find((row) => row.id === this.fixtures.therapistId)
+      cy.get('.course-review-details select').select(therapist.fullName)
+    })
+    cy.get('.substitute-hint').should('contain.text', 'จ่ายค่ามือรักษาแทน')
+    cy.contains('button', 'ยืนยันใช้สิทธิ์').click()
+    cy.get('.course-usage-confirm').contains('button', 'ยืนยันใช้สิทธิ์').click()
+    cy.noAlert()
+    cy.contains('h1', 'ใช้สิทธิ์สำเร็จ').should('be.visible')
+    cy.api('GET', '/api/commission/treatment-report?from=2020-01-01&to=2099-12-31').then(({ body }) => {
+      expect(body).to.have.length(1)
+      expect(body[0].treatingStaffId).to.not.equal(body[0].ownerStaffId)
+      expect(Number(body[0].treatmentFee)).to.be.greaterThan(0)
+      expect(Number(body[0].ownerNet)).to.equal(0)
+    })
+  })
+
   it('does not use anything when the confirmation is dismissed', function () {
     cy.registerPatient().then((patient) => {
       buyCourse(this.fixtures, patient)
