@@ -14,7 +14,8 @@ pipeline {
         script {
           if (params.LOCAL_SNAPSHOT) {
             def bundle = params.SOURCE_BRANCH == 'develop' ? 'develop.bundle' : 'integration.bundle'
-            sh "git init && git fetch /opt/clinic/source/${bundle} 'refs/heads/${params.SOURCE_BRANCH}:refs/heads/${params.SOURCE_BRANCH}' && git checkout '${params.SOURCE_BRANCH}'"
+            def sourceRef = params.SOURCE_BRANCH == 'develop' ? 'refs/remotes/origin/develop' : "refs/heads/${params.SOURCE_BRANCH}"
+            sh "git init && git fetch /opt/clinic/source/${bundle} '${sourceRef}:refs/heads/${params.SOURCE_BRANCH}' && git checkout '${params.SOURCE_BRANCH}'"
           } else {
             git branch: params.SOURCE_BRANCH, credentialsId: params.GIT_CREDENTIAL_ID, url: 'https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git'
           }
