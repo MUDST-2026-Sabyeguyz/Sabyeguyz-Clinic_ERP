@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
+import { previewCoursePurchases } from '@/features/courses/data/coursePreview'
 import {
   branchApi,
   courseApi,
@@ -42,6 +43,29 @@ type CourseMovement = {
   appointmentId?: number | null
   createdAt: string
 }
+type LocalSharedCourse = {
+  transfer: TransferRecord
+  course: CoursePurchase
+}
+const localSharedCoursesKey = 'sabyeguyz-local-shared-courses'
+function readLocalSharedCourses(): LocalSharedCourse[] {
+  try {
+    const value = window.localStorage.getItem(localSharedCoursesKey)
+    return value ? (JSON.parse(value) as LocalSharedCourse[]) : []
+  } catch {
+    return []
+  }
+}
+function saveLocalSharedCourse(record: LocalSharedCourse) {
+  const records = readLocalSharedCourses().filter(
+    (item) =>
+      !(
+        item.transfer.destinationPatientId === record.transfer.destinationPatientId &&
+        item.transfer.courseId === record.transfer.courseId
+      ),
+  )
+  window.localStorage.setItem(localSharedCoursesKey, JSON.stringify([...records, record]))
+}
 const owner = ref<Patient | null>(null)
 const owners = ref<Patient[]>([])
 const patientCourses = ref<UiCourse[]>([])
@@ -51,6 +75,7 @@ const therapists = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
 const courseUsageHistory = ref<CourseMovement[]>([])
 const errorMessage = ref('')
+const usingPreviewCourseData = ref(false)
 const selectedCourse = ref<UiCourse>({} as UiCourse)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
@@ -114,6 +139,47 @@ const managerCourses = computed(() =>
   managerCourseTab.value === 'active' ? activeCourses.value : inactiveCourses.value,
 )
 const historyFromInactive = ref(false)
+const expandedCourseDetails = ref<Record<string, boolean>>({})
+const expiryDialogCourse = ref<UiCourse | null>(null)
+const expiryDate = ref('')
+const expiryReason = ref('อนุมัติตามดุลพินิจของคลินิก')
+function openExpiryDialog(course: UiCourse) {
+  const nextExpiry = new Date(course.expiresAt)
+  nextExpiry.setDate(nextExpiry.getDate() + 90)
+  expiryDate.value = nextExpiry.toISOString().slice(0, 10)
+  expiryReason.value = 'อนุมัติตามดุลพินิจของคลินิก'
+  expiryDialogCourse.value = course
+}
+function closeExpiryDialog() {
+  expiryDialogCourse.value = null
+}
+function confirmExpiryChange() {
+  if (!expiryDialogCourse.value || !expiryDate.value || !expiryReason.value.trim()) return
+  const nextExpiresAt = `${expiryDate.value}T23:59:59+07:00`
+  const updatedCourse = {
+    ...expiryDialogCourse.value,
+    expiresAt: nextExpiresAt,
+    expiry: new Date(nextExpiresAt).toLocaleDateString('th-TH'),
+  }
+  patientCourses.value = patientCourses.value.map((course) =>
+    course.id === updatedCourse.id ? updatedCourse : course,
+  )
+  if (selectedCourse.value.id === updatedCourse.id) selectedCourse.value = updatedCourse
+  closeExpiryDialog()
+}
+function courseDetailKey(course: UiCourse, section: 'share' | 'source' | 'renewal') {
+  return `${course.id}-${section}`
+}
+function isCourseDetailOpen(course: UiCourse, section: 'share' | 'source' | 'renewal') {
+  return Boolean(expandedCourseDetails.value[courseDetailKey(course, section)])
+}
+function toggleCourseDetail(course: UiCourse, section: 'share' | 'source' | 'renewal') {
+  const key = courseDetailKey(course, section)
+  expandedCourseDetails.value[key] = !expandedCourseDetails.value[key]
+}
+function transferRecipient() {
+  return selectedRecipient.value ?? owners.value.find((patient) => patient.id !== owner.value?.id)
+}
 function branchLabel(patient: Patient | null) {
   const name = patient?.branchName || patient?.branchCode
   return name ? (name.startsWith('สาขา') ? name : `สาขา${name}`) : 'ไม่ระบุสาขา'
@@ -163,7 +229,23 @@ async function loadOwner() {
   if (owner.value) await loadCourses(owner.value.id)
 }
 async function loadCourses(patientId: number) {
-  const purchases: CoursePurchase[] = await courseApi.patientCourses(patientId)
+  let purchases: CoursePurchase[] = []
+  try {
+    purchases = await courseApi.patientCourses(patientId)
+  } catch {
+    purchases = []
+  }
+  usingPreviewCourseData.value = purchases.length === 0
+  if (usingPreviewCourseData.value) purchases = previewCoursePurchases
+  const localSharedCourses = readLocalSharedCourses().filter(
+    (item) => item.transfer.destinationPatientId === patientId,
+  )
+  if (localSharedCourses.length) {
+    purchases = [
+      ...purchases,
+      ...localSharedCourses.map((item) => ({ ...item.course, patient: owner.value ?? item.course.patient })),
+    ]
+  }
   patientCourses.value = purchases.map((course) => ({
     ...course,
     name: course.course.name,
@@ -172,10 +254,15 @@ async function loadCourses(patientId: number) {
     total: course.purchased,
   }))
   try {
+    if (usingPreviewCourseData.value) throw new Error('preview')
     courseTransfers.value = await courseApi.transferHistory(patientId)
   } catch {
     courseTransfers.value = []
   }
+  courseTransfers.value = [
+    ...courseTransfers.value,
+    ...localSharedCourses.map((item) => item.transfer),
+  ]
   const requestedCourseId = Number(route.query.courseId)
   const requestedCourse = patientCourses.value.find((course) => course.id === requestedCourseId)
   selectedCourseId.value = requestedCourse?.id ?? patientCourses.value[0]?.id ?? 0
@@ -407,19 +494,55 @@ async function confirm() {
     const balanceBeforeUse = selectedCourse.value.balance
     if (isCourseUsage) {
       usageConfirmDialog.value = false
-      await courseApi.use({
-        coursePurchaseId: selectedCourse.value.id,
-        note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
-      })
+      if (!usingPreviewCourseData.value) {
+        await courseApi.use({
+          coursePurchaseId: selectedCourse.value.id,
+          note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
+        })
+      }
     } else {
       if (!selectedRecipient.value) return
-      const transfer = await courseApi.transfer({
-        sourcePurchaseId: selectedCourse.value.id,
-        destinationPatientId: selectedRecipient.value.id,
-        quantity: transferAmount.value,
-        reason: transferReason.value || 'แชร์คอร์สตามคำขอผู้ป่วย',
-      })
-      transferReceiptId.value = transfer.id
+      if (usingPreviewCourseData.value) {
+        const localTransferId = Date.now()
+        transferReceiptId.value = localTransferId
+        const sharedAt = new Date().toISOString()
+        const sharedCourse: CoursePurchase = {
+          ...selectedCourse.value,
+          id: -localTransferId,
+          patient: selectedRecipient.value,
+          purchased: transferAmount.value,
+          sessions: transferAmount.value,
+          used: 0,
+          remaining: transferAmount.value,
+          purchasedAt: sharedAt,
+          expiresAt: selectedCourse.value.expiresAt,
+        }
+        saveLocalSharedCourse({
+          course: sharedCourse,
+          transfer: {
+            id: localTransferId,
+            sourcePatientId: owner.value.id,
+            sourcePatientHn: owner.value.hn,
+            sourcePatientName: owner.value.fullName,
+            destinationPatientId: selectedRecipient.value.id,
+            destinationPatientHn: selectedRecipient.value.hn,
+            destinationPatientName: selectedRecipient.value.fullName,
+            branchCode: selectedCourse.value.branchCode,
+            courseId: selectedCourse.value.course.id,
+            quantity: transferAmount.value,
+            reason: transferReason.value || 'แชร์คอร์สตามคำขอผู้ป่วย',
+            createdAt: sharedAt,
+          },
+        })
+      } else {
+        const transfer = await courseApi.transfer({
+          sourcePurchaseId: selectedCourse.value.id,
+          destinationPatientId: selectedRecipient.value.id,
+          quantity: transferAmount.value,
+          reason: transferReason.value || 'แชร์คอร์สตามคำขอผู้ป่วย',
+        })
+        transferReceiptId.value = transfer.id
+      }
     }
     await loadCourses(owner.value.id)
     if (isCourseUsage) {
@@ -448,6 +571,13 @@ async function confirm() {
     } else {
       selectedCourse.value =
         patientCourses.value.find((course) => course.id === usedCourseId) ?? selectedCourse.value
+      if (usingPreviewCourseData.value) {
+        const newBalance = Math.max(0, selectedCourse.value.balance - transferAmount.value)
+        selectedCourse.value = { ...selectedCourse.value, balance: newBalance, remaining: newBalance }
+        patientCourses.value = patientCourses.value.map((course) =>
+          course.id === usedCourseId ? selectedCourse.value : course,
+        )
+      }
       action.value = 'transfer'
       transferStep.value = 'success'
     }
@@ -541,6 +671,30 @@ function closePrintSuccess() {
 <template>
   <div class="staff-page course-page">
     <StaffHeader />
+    <div v-if="expiryDialogCourse" class="course-expiry-dialog-backdrop" @click.self="closeExpiryDialog">
+      <section class="course-expiry-dialog" role="dialog" aria-modal="true" aria-labelledby="expiry-dialog-title">
+        <h2 id="expiry-dialog-title">ต่ออายุคอร์ส</h2>
+        <p>การเปลี่ยนแปลงมีผลเฉพาะสิทธิ์ของบุคคลที่เลือก</p>
+        <label>
+          <span>วันหมดอายุใหม่</span>
+          <ThaiDatePicker v-model="expiryDate" numeric-month show-calendar-icon hide-caret />
+        </label>
+        <label>
+          <span>เหตุผลในการต่ออายุ</span>
+          <input v-model="expiryReason" type="text" />
+        </label>
+        <footer>
+          <button type="button" @click="closeExpiryDialog">ยกเลิก</button>
+          <button
+            type="button"
+            :disabled="!expiryDate || !expiryReason.trim()"
+            @click="confirmExpiryChange"
+          >
+            ยืนยันต่ออายุ
+          </button>
+        </footer>
+      </section>
+    </div>
     <main
       v-if="action === 'use'"
       class="course-use-main"
@@ -805,7 +959,7 @@ function closePrintSuccess() {
         {{
           transferStep === 'review'
             ? 'ตรวจสอบผู้ให้ ผู้รับ และจำนวนสิทธิ์ก่อนยืนยัน'
-            : 'ระบุผู้รับ จำนวนสิทธิ์ เหตุผล และสัดส่วนยอดขาย'
+            : 'แชร์สิทธิ์หลังเกิดการนัดหมาย โดยระบุผู้รับ จำนวนสิทธิ์ และเหตุผล'
         }}
       </p>
       <ol class="course-transfer-steps" aria-label="ขั้นตอนการแชร์คอร์ส">
@@ -860,20 +1014,13 @@ function closePrintSuccess() {
                 ></span
               ></label
             >
-            <label class="course-transfer-reason"
-              >เหตุผลการแชร์ *<input
-                v-model.trim="transferReason"
-                :class="{ invalid: showReasonError && !transferReason.trim() }"
-                :aria-invalid="showReasonError && !transferReason.trim()"
-                @input="showReasonError = false"
-                placeholder="ระบุเหตุผลเพื่อบันทึกในประวัติการแชร์"
-              /><small v-if="showReasonError && !transferReason.trim()"
-                >กรุณาระบุเหตุผลการแชร์</small
-              ></label
-            >
+            <div class="course-original-therapist-note">
+              <strong>นักกายภาพเดิมจากนัดหมาย: {{ therapists[0]?.fullName || 'ไม่ระบุ' }}</strong>
+              <span>ผู้รับเลือกนักกายภาพเดิมหรือคนอื่นได้ในนัดครั้งต่อไป</span>
+            </div>
           </section>
           <section class="course-transfer-recipient">
-            <h2>ผู้รับและผู้ดูแลร่วม</h2>
+            <h2>ผู้รับสิทธิ์</h2>
             <label
               >ค้นหาผู้รับสิทธิ์ *<input
                 v-model.trim="recipientSearch"
@@ -909,46 +1056,23 @@ function closePrintSuccess() {
               </div>
               <button type="button" aria-label="เปลี่ยนผู้รับ" @click="clearRecipient">×</button>
             </div>
-            <label
-              >นักกายภาพคนที่ 2 *
-              <select v-model="coTherapistId">
-                <option value="">เลือกนักกายภาพคนที่ 2</option>
-                <option v-for="person in therapists" :key="person.id" :value="person.id">
-                  {{ person.fullName }}
-                </option></select
-              ><small>พิมพ์ชื่อหรือเลือกจากรายชื่อในระบบ</small>
-            </label>
-            <div class="course-share-allocation">
-              <strong>สัดส่วนยอดขาย</strong>
-              <label
-                >นักกายภาพหลัก<input
-                  v-if="coTherapistId"
-                  v-model.number="primaryShare"
-                  type="number"
-                  min="0"
-                  max="100"
-                /><em v-else>—</em></label
-              >
-              <label
-                >{{
-                  therapists.find((person) => person.id === coTherapistId)?.fullName ||
-                  'นักกายภาพคนที่ 2'
-                }}<input
-                  v-if="coTherapistId"
-                  v-model.number="secondaryShare"
-                  type="number"
-                  min="0"
-                  max="100"
-                /><em v-else>—</em></label
-              >
-              <small v-if="coTherapistId" :class="{ invalid: !shareIsValid }"
-                >รวม {{ primaryShare + secondaryShare }}% — ต้องรวมเท่ากับ 100%</small
-              >
+            <label class="course-transfer-reason"
+              >เหตุผลการแชร์ *<input
+                v-model.trim="transferReason"
+                :class="{ invalid: showReasonError && !transferReason.trim() }"
+                :aria-invalid="showReasonError && !transferReason.trim()"
+                @input="showReasonError = false"
+                placeholder="ระบุเหตุผลเพื่อบันทึกในประวัติการแชร์"
+              /><small v-if="showReasonError && !transferReason.trim()"
+                >กรุณาระบุเหตุผลการแชร์</small
+              ></label
+            >
+            <div class="course-shared-expiry-policy">
+              <strong>วันหมดอายุของสิทธิ์</strong>
+              <b>วันหมดอายุร่วมเดิม: {{ fullThaiDate(selectedCourse.expiresAt) }}</b>
+              <span>หากผู้รับต่ออายุ จะเปลี่ยนเฉพาะสิทธิ์ของผู้รับ</span>
+              <span>หากเจ้าของคอร์สต่ออายุ สิทธิ์ของผู้รับจะไม่เปลี่ยน</span>
             </div>
-            <p class="course-transfer-allocation-hint">กำหนดสัดส่วนหลังเลือกนักกายภาพคนที่ 2</p>
-            <p class="course-transfer-help">
-              ค่ารักษาแทนคำนวณจากนักกายภาพผู้ให้บริการจริง ไม่ได้แบ่งตามสัดส่วนนี้
-            </p>
           </section>
         </div>
         <footer class="course-transfer-footer">
@@ -957,9 +1081,7 @@ function closePrintSuccess() {
             type="button"
             :disabled="
               selectedRecipient && recipientConfirmed
-                ? !coTherapistId ||
-                  !shareIsValid ||
-                  transferAmount < 1 ||
+                ? transferAmount < 1 ||
                   transferAmount > selectedCourse.balance
                 : selectedRecipient
                   ? false
@@ -1338,11 +1460,21 @@ function closePrintSuccess() {
         :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
         >← กลับไปหน้าบริการ</RouterLink
       >
-      <h1>คอร์สของผู้ป่วย</h1>
-      <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการการต่ออายุ</p>
+      <h1>{{ transferReceiptId ? 'จัดการคอร์สผู้ป่วย' : 'คอร์สของผู้ป่วย' }}</h1>
+      <p class="course-manager-intro">
+        {{
+          transferReceiptId
+            ? 'ตรวจสอบสิทธิ์ วันหมดอายุ การใช้งาน และการแชร์คอร์ส'
+            : 'ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการการต่ออายุ'
+        }}
+      </p>
       <section v-if="transferReceiptId" class="course-after-patient">
-        <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
-        <span>HN {{ owner?.hn || '-' }}</span>
+        <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 1) || '-' }}</i>
+        <div>
+          <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
+          <span>HN {{ owner?.hn || '-' }} <b>{{ owner?.phone || '-' }}</b></span>
+        </div>
+        <RouterLink to="/staff/services">↻　เปลี่ยนผู้ป่วย</RouterLink>
       </section>
       <section v-else class="course-use-patient">
         <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) || '--' }}</i>
@@ -1391,7 +1523,17 @@ function closePrintSuccess() {
             <p>
               <strong>{{ course.balance }}</strong> ครั้ง
             </p>
-            <small>จากทั้งหมด {{ course.total }} ครั้ง</small>
+            <small
+              >ใช้แล้ว {{ Math.max(0, course.total - course.balance - transferAmount) }} จากทั้งหมด
+              {{ course.total }} ครั้ง</small
+            >
+            <div class="course-after-progress" aria-hidden="true">
+              <span
+                :style="{
+                  width: `${Math.min(100, Math.max(0, ((course.total - course.balance - transferAmount) / course.total) * 100))}%`,
+                }"
+              ></span>
+            </div>
           </div>
           <div class="course-after-counts">
             <article>
@@ -1406,52 +1548,179 @@ function closePrintSuccess() {
             </article>
           </div>
           <div class="course-after-dates">
-            <p>
-              <span
-                >วันที่ซื้อ<br /><b>{{
+            <div class="course-after-expiry-copy">
+              <span>วันหมดอายุคอร์ส</span>
+              <strong>{{ course.expiry }}</strong>
+              <small
+                >วันที่ซื้อคอร์ส
+                {{
                   new Date(course.purchasedAt).toLocaleDateString('th-TH', {
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric',
                   })
-                }}</b></span
+                }}</small
               >
-            </p>
-            <p>
-              <span
-                >วันหมดอายุ<br /><b>{{ course.expiry }}</b></span
-              >
-            </p>
+            </div>
+            <div class="course-after-expiry-tools">
+              <div><span>วันที่คงเหลือ</span><strong>{{ daysUntilExpiry(course) }} วัน</strong></div>
+              <button type="button" title="แก้ไขผ่านเมนูต่ออายุคอร์ส">
+                แก้ไขวันหมดอายุ
+              </button>
+            </div>
           </div>
           <div class="course-after-actions">
-            <button type="button" @click="start('history', course)">ดูประวัติคอร์ส</button>
+            <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
+            <button type="button" @click="openExpiryDialog(course)">ต่ออายุคอร์ส</button>
             <button type="button" :disabled="!course.usable" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
           </div>
-          <button
-            class="course-manager-latest-transfer"
-            type="button"
-            @click="openLatestTransfer(course)"
-          >
-            ← ดูรายการแชร์ล่าสุด
-          </button>
+          <div class="course-after-accordions">
+            <button
+              type="button"
+              :aria-expanded="isCourseDetailOpen(course, 'share')"
+              @click="toggleCourseDetail(course, 'share')"
+            >
+              <strong>การแชร์คอร์ส</strong>
+              <span>แชร์แล้ว 1 คน · {{ transferAmount }} ครั้ง</span
+              ><b>{{ isCourseDetailOpen(course, 'share') ? '⌃' : '⌄' }}</b>
+            </button>
+            <div v-if="isCourseDetailOpen(course, 'share')" class="course-after-detail share">
+              <div>
+                <strong>แชร์ให้ {{ transferRecipient()?.fullName || 'ผู้รับสิทธิ์' }}</strong>
+                <span
+                  >จำนวน {{ transferAmount }} ครั้ง · ผู้รับ HN
+                  {{ transferRecipient()?.hn || '-' }}</span
+                >
+              </div>
+              <em>แชร์คอร์ส</em>
+            </div>
+            <button
+              type="button"
+              :aria-expanded="isCourseDetailOpen(course, 'renewal')"
+              @click="toggleCourseDetail(course, 'renewal')"
+            >
+              <strong>ประวัติการต่ออายุ</strong>
+              <span>1 รายการ · ล่าสุด {{ fullThaiDate(course.expiresAt) }}</span
+              ><b>{{ isCourseDetailOpen(course, 'renewal') ? '⌃' : '⌄' }}</b>
+            </button>
+            <div v-if="isCourseDetailOpen(course, 'renewal')" class="course-after-detail renewal">
+              <div>
+                <strong>{{ fullThaiDate(course.expiresAt) }}</strong>
+                <span>ต่ออายุเพิ่ม 80 วัน · โดย กฤชญา</span>
+              </div>
+              <button type="button" title="รอเชื่อมต่อรายละเอียดการต่ออายุ">ดูรายละเอียด</button>
+            </div>
+          </div>
+        </section>
+        <section v-else-if="incomingTransfer(course)" class="course-recipient-card">
+          <header>
+            <div>
+              <h2>{{ courseDisplayName(course) }}</h2>
+              <p>{{ course.course.code }}</p>
+            </div>
+            <div class="course-recipient-badges"><em>แชร์คอร์ส</em><span>ใช้งานได้</span></div>
+          </header>
+          <div class="course-recipient-remaining">
+            <span>สิทธิ์คงเหลือของผู้รับ</span>
+            <p><strong>{{ course.balance }}</strong> ครั้ง</p>
+            <small>ได้รับ {{ incomingTransfer(course)?.quantity || course.total }} ครั้ง</small>
+            <div class="course-after-progress" aria-hidden="true">
+              <span
+                :style="{
+                  width: `${Math.min(100, Math.max(0, ((Number(incomingTransfer(course)?.quantity) - course.balance) / Number(incomingTransfer(course)?.quantity || 1)) * 100))}%`,
+                }"
+              ></span>
+            </div>
+          </div>
+          <div class="course-recipient-dates">
+            <div>
+              <span>วันที่ได้รับ</span>
+              <strong>{{ fullThaiDate(incomingTransfer(course)?.createdAt || course.purchasedAt) }}</strong>
+              <span>วันที่หมดอายุ</span>
+              <strong>{{ fullThaiDate(course.expiresAt) }}</strong>
+            </div>
+            <aside>
+              <div><span>วันที่คงเหลือ</span><strong>{{ daysUntilExpiry(course) }} วัน</strong></div>
+              <button type="button" title="แก้ไขผ่านเมนูต่ออายุคอร์ส">
+                แก้ไขวันหมดอายุ
+              </button>
+            </aside>
+          </div>
+          <div class="course-recipient-counts">
+            <article>
+              <span>ได้รับมา</span
+              ><strong>{{ incomingTransfer(course)?.quantity || course.total }} ครั้ง</strong>
+            </article>
+            <article>
+              <span>ใช้แล้ว</span
+              ><strong
+                >{{
+                  Math.max(0, Number(incomingTransfer(course)?.quantity || course.total) - course.balance)
+                }} ครั้ง</strong
+              >
+            </article>
+            <article><span>คงเหลือ</span><strong>{{ course.balance }} ครั้ง</strong></article>
+          </div>
+          <p class="course-recipient-renewal-note">
+            การต่ออายุจะเปลี่ยนเฉพาะวันหมดอายุของสิทธิ์ผู้รับ และไม่กระทบเจ้าของคอร์ส
+          </p>
+          <h3>การดำเนินการ</h3>
+          <div class="course-recipient-actions">
+            <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
+            <button type="button" @click="openExpiryDialog(course)">ต่ออายุคอร์ส</button>
+            <button type="button" :disabled="!course.usable" @click="start('use', course)">
+              ใช้สิทธิ์คอร์ส
+            </button>
+          </div>
+          <div class="course-after-accordions course-recipient-accordions">
+            <button
+              type="button"
+              :aria-expanded="isCourseDetailOpen(course, 'source')"
+              @click="toggleCourseDetail(course, 'source')"
+            >
+              <strong>รายละเอียดคอร์สต้นทาง</strong>
+              <span
+                >ผู้ให้: {{ incomingTransfer(course)?.sourcePatientName || '-' }}
+                {{ incomingTransfer(course)?.quantity || course.total }} ครั้ง</span
+              ><b>{{ isCourseDetailOpen(course, 'source') ? '⌃' : '⌄' }}</b>
+            </button>
+            <div v-if="isCourseDetailOpen(course, 'source')" class="course-after-detail share">
+              <div>
+                <strong>ผู้ให้ {{ incomingTransfer(course)?.sourcePatientName || '-' }}</strong>
+                <span
+                  >HN {{ incomingTransfer(course)?.sourcePatientHn || '-' }} · จำนวน
+                  {{ incomingTransfer(course)?.quantity || course.total }} ครั้ง</span
+                >
+              </div>
+              <em>คอร์สต้นทาง</em>
+            </div>
+            <button
+              type="button"
+              :aria-expanded="isCourseDetailOpen(course, 'renewal')"
+              @click="toggleCourseDetail(course, 'renewal')"
+            >
+              <strong>ประวัติการต่ออายุ</strong>
+              <span>1 รายการ · ล่าสุด {{ fullThaiDate(course.expiresAt) }}</span
+              ><b>{{ isCourseDetailOpen(course, 'renewal') ? '⌃' : '⌄' }}</b>
+            </button>
+            <div v-if="isCourseDetailOpen(course, 'renewal')" class="course-after-detail renewal">
+              <div>
+                <strong>{{ fullThaiDate(course.expiresAt) }}</strong>
+                <span>ต่ออายุเพิ่ม 80 วัน · โดย กฤชญา</span>
+              </div>
+              <button type="button" title="รอเชื่อมต่อรายละเอียดการต่ออายุ">ดูรายละเอียด</button>
+            </div>
+          </div>
         </section>
         <section
           v-else
           class="course-manager-card course-patient-card"
-          :class="{ 'shared-course': incomingTransfer(course) }"
         >
-          <span
-            >{{ incomingTransfer(course) ? 'แชร์คอร์ส' : 'ใช้งานได้' }} ·
-            {{ course.course.code }}</span
-          >
+          <span>ใช้งานได้ · {{ course.course.code }}</span>
           <h2>{{ courseDisplayName(course) }} (คอร์ส {{ course.total }} ครั้ง)</h2>
-          <p v-if="incomingTransfer(course)">
-            ได้รับจาก {{ incomingTransfer(course)?.sourcePatientName }} ·
-            {{ courseBranchLabel(course) }}
-          </p>
-          <p v-else>
+          <p>
             ซื้อเมื่อ {{ fullThaiDate(course.purchasedAt) }} {{ courseBranchLabel(course) }}
           </p>
           <div class="course-manager-metrics">
@@ -1465,9 +1734,7 @@ function closePrintSuccess() {
               <small>คงเหลือ</small><strong>{{ course.balance }} ครั้ง</strong>
             </article>
             <article class="course-expiry-panel">
-              <small>{{
-                incomingTransfer(course) ? 'วันหมดอายุสิทธิ์ของผู้รับ' : 'วันหมดอายุคอร์ส'
-              }}</small>
+              <small>วันหมดอายุคอร์ส</small>
               <strong>{{ fullThaiDate(course.expiresAt) }}</strong>
               <b>วันที่คงเหลือ {{ daysUntilExpiry(course) }} วัน</b>
             </article>
@@ -1485,12 +1752,11 @@ function closePrintSuccess() {
           <p class="course-manager-used">
             ใช้แล้ว {{ course.total - course.balance }} จาก {{ course.total }} ครั้ง
           </p>
-          <p v-if="incomingTransfer(course)" class="shared-renewal-note">
-            การต่ออายุมีผลเฉพาะสิทธิ์ของผู้รับ ไม่เปลี่ยนวันหมดอายุของเจ้าของคอร์ส
-          </p>
           <div class="course-manager-actions">
-            <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
-            <button type="button" title="รอเชื่อมต่อระบบต่ออายุคอร์ส">ต่ออายุคอร์ส</button>
+            <button type="button" @click="start('transfer', course)">แชร์คอร์ส</button>
+            <button type="button" :disabled="!course.usable" @click="start('use', course)">
+              ใช้สิทธิ์คอร์ส
+            </button>
           </div>
           <button
             v-if="transferReceiptId"
@@ -3193,9 +3459,68 @@ function closePrintSuccess() {
 }
 </style>
 <style scoped>
+.course-transfer-main {
+  width: min(1200px, calc(100% - 48px));
+  padding-bottom: 100px;
+}
+.course-transfer-columns {
+  gap: 20px;
+}
+.course-transfer-source,
+.course-transfer-recipient {
+  min-height: 428px;
+  box-sizing: border-box;
+}
+.course-shared-expiry-policy {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  color: #617873;
+  background: #e0edfc;
+  font-size: 13px;
+}
+.course-shared-expiry-policy strong,
+.course-shared-expiry-policy b {
+  color: #1f2e29;
+}
+.course-shared-expiry-policy strong {
+  font-size: 15px;
+}
+.course-shared-expiry-policy b {
+  font-size: 14px;
+}
+.course-original-therapist-note {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid #b9cfe8;
+  border-radius: 9px;
+  color: #617873;
+  background: #e0edfc;
+  font-size: 13px;
+}
+.course-original-therapist-note strong {
+  color: #25372e;
+  font-size: 14px;
+}
 .course-manager-main {
   width: min(1200px, calc(100% - 48px));
   padding: 15px 0 80px;
+}
+@media (max-width: 760px) {
+  .course-transfer-main {
+    width: min(100% - 28px, 1200px);
+  }
+  .course-transfer-columns {
+    grid-template-columns: 1fr;
+  }
+  .course-transfer-source,
+  .course-transfer-recipient {
+    min-height: auto;
+  }
 }
 .course-manager-main > h1 {
   margin: 12px 0 2px;
@@ -5050,6 +5375,784 @@ function closePrintSuccess() {
   }
   .course-after-history-totals > div {
     grid-template-columns: 1fr;
+  }
+}
+/* Compact share-course layout for regular desktop screens. */
+@media (min-width: 761px) {
+  .course-transfer-main:not(.is-review):not(.is-success) {
+    width: min(1040px, calc(100% - 64px));
+  }
+  .course-transfer-main:not(.is-review):not(.is-success) > h1 {
+    font-size: 26px;
+  }
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-intro {
+    font-size: 14px;
+  }
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-steps {
+    width: min(640px, 100%);
+    margin-block: 18px 22px;
+  }
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-owner-summary {
+    min-height: 88px;
+    padding-block: 12px;
+  }
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-source,
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-recipient {
+    min-height: 380px;
+    padding: 18px;
+  }
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-source h2,
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-recipient h2 {
+    font-size: 19px;
+  }
+  .course-transfer-main:not(.is-review):not(.is-success) .course-transfer-footer {
+    margin-top: 42px;
+  }
+}
+/* Figma 140:3876 — compact owner layout after sharing. */
+.course-manager-main.after-transfer > h1 {
+  margin: 34px 0 4px;
+  font-size: 34px;
+}
+.course-manager-main.after-transfer .course-manager-intro {
+  display: block;
+  margin-bottom: 24px;
+}
+.course-after-patient {
+  grid-template-columns: 60px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 104px;
+  margin: 0 0 28px;
+  padding: 20px;
+  border: 1px solid #d6e0db;
+  border-radius: 14px;
+  color: #1a2e29;
+  background: #fff;
+}
+.course-after-patient > i {
+  display: grid;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  color: #14615c;
+  background: #e0f5eb;
+  place-items: center;
+  font-style: normal;
+  font-weight: 700;
+}
+.course-after-patient > div {
+  display: grid;
+  gap: 8px;
+}
+.course-after-patient strong {
+  font-size: 18px;
+}
+.course-after-patient span {
+  color: #637570;
+  font-size: 14px;
+}
+.course-after-patient span b {
+  margin-left: 32px;
+  font-weight: 400;
+}
+.course-after-patient > a {
+  min-width: 142px;
+  padding: 10px 14px;
+  border: 1px solid #218b85;
+  border-radius: 8px;
+  color: #218b85;
+  text-align: center;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+.course-manager-main.after-transfer .course-status-tabs {
+  margin: 0 0 22px;
+}
+.course-manager-main.after-transfer .course-status-tabs::before {
+  grid-column: 1 / -1;
+  margin-bottom: 8px;
+  color: #637570;
+  content: 'สถานะคอร์ส';
+  font-size: 14px;
+  font-weight: 700;
+}
+.course-manager-main.after-transfer .course-status-tabs button {
+  min-height: 44px;
+  text-align: center;
+}
+.course-manager-main.after-transfer .course-status-tabs button.active {
+  color: #fff;
+  background: #1a8782;
+}
+.course-manager-main.after-transfer .course-status-tabs button.active::after,
+.course-manager-main.after-transfer .course-status-tabs button:last-child {
+  display: none;
+}
+.course-after-share-card {
+  grid-template-columns: 350px 1fr;
+  gap: 16px 24px;
+  padding: 28px;
+  border-radius: 16px;
+}
+.course-after-share-card > header,
+.course-after-counts,
+.course-after-actions,
+.course-after-accordions {
+  grid-column: 1 / -1;
+}
+.course-after-share-card > header {
+  grid-row: 1;
+}
+.course-after-remaining {
+  grid-column: 1;
+  grid-row: 2;
+}
+.course-after-dates {
+  grid-column: 2;
+  grid-row: 2;
+}
+.course-after-counts {
+  grid-row: 3;
+}
+.course-after-actions {
+  grid-row: 4;
+}
+.course-after-accordions {
+  grid-row: 5;
+}
+.course-after-share-card header h2 {
+  font-size: 24px;
+}
+.course-after-share-card header > span {
+  min-width: 112px;
+  border-radius: 999px;
+  background: #e0f5eb;
+  font-size: 13px;
+}
+.course-after-remaining {
+  min-height: 205px;
+  box-sizing: border-box;
+  padding: 22px;
+  border-radius: 14px;
+}
+.course-after-remaining strong {
+  font-size: 44px;
+}
+.course-after-dates {
+  display: grid;
+  align-content: center;
+  min-height: 205px;
+  box-sizing: border-box;
+  padding: 24px;
+  border-radius: 14px;
+  background: #e0edfa;
+}
+.course-after-dates p {
+  display: block;
+}
+.course-after-dates p:first-child {
+  order: 2;
+  color: #637570;
+  font-size: 14px;
+}
+.course-after-dates p:last-child b {
+  display: block;
+  margin-top: 12px;
+  font-size: 27px;
+  font-weight: 700;
+}
+.course-after-counts {
+  gap: 0;
+  border: 1px solid #d6e0db;
+  border-radius: 12px;
+}
+.course-after-counts article {
+  min-height: 108px;
+  border: 0;
+  border-right: 1px solid #d6e0db;
+  border-radius: 0;
+  text-align: left;
+}
+.course-after-counts article:last-child {
+  border-right: 0;
+}
+.course-after-actions {
+  justify-content: space-between;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #d6e0db;
+}
+.course-after-actions button {
+  min-width: 210px;
+  min-height: 48px;
+}
+.course-after-actions button:last-child {
+  margin-left: auto;
+  min-width: 236px;
+}
+.course-after-accordions {
+  display: grid;
+  gap: 12px;
+}
+.course-after-accordions > button {
+  display: grid;
+  grid-template-columns: 1fr auto 24px;
+  align-items: center;
+  min-height: 60px;
+  padding: 0 17px;
+  border: 1px solid #d6e0db;
+  border-radius: 10px;
+  color: #1a2e29;
+  background: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.course-after-accordions span {
+  color: #637570;
+  font-size: 14px;
+}
+.course-after-accordions b {
+  color: #14615c;
+  text-align: right;
+}
+.course-after-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 88px;
+  padding: 16px 18px;
+  border-radius: 10px;
+}
+.course-after-detail.share {
+  background: #e0edfa;
+}
+.course-after-detail.renewal {
+  border: 1px solid #d6e0db;
+  background: #f7faf7;
+}
+.course-after-detail > div {
+  display: grid;
+  gap: 8px;
+}
+.course-after-detail strong {
+  color: #1a2e29;
+  font-size: 14px;
+}
+.course-after-detail span {
+  color: #637570;
+  font-size: 13px;
+}
+.course-after-detail em {
+  min-width: 120px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  color: #1a2e29;
+  background: #fff0b8;
+  text-align: center;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+}
+.course-after-detail > button {
+  padding: 8px 0;
+  border: 0;
+  color: #14615c;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.course-recipient-card {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px 20px;
+  padding: 22px;
+  border: 1px solid #d6e0db;
+  border-radius: 16px;
+  background: #fff;
+}
+.course-recipient-card > header,
+.course-recipient-counts,
+.course-recipient-renewal-note,
+.course-recipient-card > h3,
+.course-recipient-actions,
+.course-recipient-accordions {
+  grid-column: 1 / -1;
+}
+.course-recipient-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.course-recipient-card header h2,
+.course-recipient-card header p {
+  margin: 0;
+}
+.course-recipient-card header h2 {
+  color: #1a2e29;
+  font-size: 21px;
+}
+.course-recipient-card header p {
+  margin-top: 5px;
+  color: #637570;
+  font-size: 13px;
+}
+.course-recipient-badges {
+  display: flex;
+  gap: 10px;
+}
+.course-recipient-badges em,
+.course-recipient-badges span {
+  min-width: 92px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+.course-recipient-badges em {
+  color: #1a2e29;
+  background: #fff0b8;
+}
+.course-recipient-badges span {
+  min-width: 74px;
+  color: #14615c;
+  background: #e0f5eb;
+}
+.course-recipient-remaining,
+.course-recipient-dates {
+  min-height: 176px;
+  padding: 18px;
+  box-sizing: border-box;
+  border-radius: 14px;
+}
+.course-recipient-remaining {
+  background: #f2f7f2;
+}
+.course-recipient-remaining > span,
+.course-recipient-remaining small,
+.course-recipient-dates span {
+  color: #637570;
+  font-size: 13px;
+}
+.course-recipient-remaining p {
+  margin: 8px 0 0;
+}
+.course-recipient-remaining p strong {
+  margin-right: 10px;
+  color: #1a8782;
+  font-size: 38px;
+}
+.course-recipient-remaining small {
+  display: block;
+  margin-top: 18px;
+}
+.course-recipient-dates {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 176px;
+  gap: 18px;
+  background: #e0edfa;
+}
+.course-recipient-dates > div {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+}
+.course-recipient-dates > div strong {
+  margin-bottom: 8px;
+  color: #1a2e29;
+  font-size: 21px;
+}
+.course-recipient-dates aside {
+  display: grid;
+  gap: 12px;
+}
+.course-recipient-dates aside > div {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff;
+}
+.course-recipient-dates aside strong {
+  color: #14615c;
+  font-size: 22px;
+}
+.course-recipient-dates aside button {
+  min-height: 42px;
+  border: 1px solid #d6e0db;
+  border-radius: 8px;
+  color: #14615c;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.course-recipient-counts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid #d6e0db;
+  border-radius: 12px;
+}
+.course-recipient-counts article {
+  display: grid;
+  gap: 8px;
+  min-height: 90px;
+  padding: 16px;
+  border-right: 1px solid #d6e0db;
+  box-sizing: border-box;
+}
+.course-recipient-counts article:last-child {
+  border-right: 0;
+}
+.course-recipient-counts span {
+  color: #637570;
+  font-size: 13px;
+}
+.course-recipient-counts strong {
+  color: #1a2e29;
+  font-size: 20px;
+}
+.course-recipient-renewal-note {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 10px;
+  color: #14615c;
+  background: #e0f5eb;
+  font-size: 13px;
+  font-weight: 700;
+}
+.course-recipient-card > h3 {
+  margin: 2px 0 -8px;
+  color: #1a2e29;
+  font-size: 15px;
+}
+.course-recipient-actions {
+  display: flex;
+  gap: 12px;
+}
+.course-recipient-actions button {
+  min-width: 180px;
+  min-height: 44px;
+  border: 1px solid #d6e0db;
+  border-radius: 8px;
+  color: #14615c;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.course-recipient-actions button:last-child {
+  min-width: 200px;
+  margin-left: auto;
+  border-color: #1a8782;
+  color: #fff;
+  background: #1a8782;
+}
+.course-expiry-dialog-backdrop {
+  position: fixed;
+  z-index: 3000;
+  inset: 0;
+  display: grid;
+  padding: 20px;
+  background: rgb(15 23 20 / 62%);
+  place-items: center;
+}
+.course-expiry-dialog {
+  width: min(600px, 100%);
+  padding: 28px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 12px rgb(0 0 0 / 18%);
+}
+.course-expiry-dialog h2,
+.course-expiry-dialog p {
+  margin: 0;
+}
+.course-expiry-dialog h2 {
+  color: #1f2e29;
+  font-size: 24px;
+}
+.course-expiry-dialog > p {
+  margin-top: 4px;
+  color: #617873;
+  font-size: 14px;
+}
+.course-expiry-dialog label {
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+  color: #1f2e29;
+  font-size: 14px;
+  font-weight: 700;
+}
+.course-expiry-dialog input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  box-sizing: border-box;
+  border: 1px solid #c9d6d1;
+  border-radius: 10px;
+  color: #1f2e29;
+  background: #fff;
+  font: inherit;
+  font-weight: 400;
+}
+.course-expiry-dialog :deep(.thai-date-picker) {
+  width: 100%;
+}
+.course-expiry-dialog :deep(.date-trigger) {
+  min-height: 48px;
+  border-color: #c9d6d1;
+  border-radius: 10px;
+  background: #fff;
+}
+.course-expiry-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.course-expiry-dialog footer button {
+  min-width: 150px;
+  min-height: 48px;
+  border: 1px solid #c9d6d1;
+  border-radius: 10px;
+  color: #1f2e29;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+.course-expiry-dialog footer button:last-child {
+  min-width: 170px;
+  border-color: #238b85;
+  color: #fff;
+  background: #238b85;
+}
+.course-expiry-dialog footer button:disabled {
+  opacity: 0.5;
+}
+/* Figma 1529:6952 — compact course card shown after a successful share. */
+.course-manager-main.after-transfer {
+  width: min(1040px, calc(100% - 40px));
+  padding-bottom: 44px;
+}
+.course-manager-main.after-transfer > h1 {
+  margin-top: 24px;
+  font-size: 28px;
+}
+.course-manager-main.after-transfer .course-manager-intro {
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+.course-after-patient {
+  grid-template-columns: 52px 1fr auto;
+  min-height: 88px;
+  margin-bottom: 22px;
+  padding: 16px 18px;
+}
+.course-after-patient > i {
+  width: 52px;
+  height: 52px;
+}
+.course-manager-main.after-transfer .course-status-tabs {
+  width: min(560px, 100%);
+  margin-bottom: 18px;
+  background: transparent;
+}
+.course-manager-main.after-transfer .course-status-tabs button {
+  background: transparent;
+}
+.course-after-share-card {
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px 20px;
+  padding: 22px;
+}
+.course-after-share-card header h2 {
+  font-size: 21px;
+}
+.course-after-share-card header > span {
+  min-width: 134px;
+  min-height: 34px;
+}
+.course-after-remaining,
+.course-after-dates {
+  min-height: 176px;
+  padding: 18px;
+}
+.course-after-remaining strong {
+  font-size: 38px;
+}
+.course-after-remaining small {
+  display: block;
+  margin-top: 18px;
+}
+.course-after-progress {
+  width: 100%;
+  height: 7px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #d9e5de;
+}
+.course-after-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1a8782;
+}
+.course-after-dates {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 176px;
+  align-content: stretch;
+  gap: 18px;
+}
+.course-after-expiry-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.course-after-expiry-copy > span,
+.course-after-expiry-copy > small,
+.course-after-expiry-tools span {
+  color: #637570;
+  font-size: 13px;
+  font-weight: 400;
+}
+.course-after-expiry-copy > strong {
+  margin-top: 10px;
+  color: #1a2e29;
+  font-size: 24px;
+}
+.course-after-expiry-copy > small {
+  margin-top: auto;
+}
+.course-after-expiry-tools {
+  display: grid;
+  gap: 12px;
+}
+.course-after-expiry-tools > div {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  min-height: 78px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff;
+}
+.course-after-expiry-tools strong {
+  color: #14615c;
+  font-size: 22px;
+}
+.course-after-expiry-tools button {
+  min-height: 42px;
+  border: 1px solid #d6e0db;
+  border-radius: 8px;
+  color: #14615c;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.course-after-counts article {
+  min-height: 90px;
+  padding: 16px;
+}
+.course-after-actions {
+  padding-bottom: 22px;
+}
+.course-after-actions button {
+  min-width: 180px;
+  min-height: 44px;
+}
+.course-after-actions button:last-child {
+  min-width: 200px;
+}
+.course-after-accordions > button {
+  min-height: 52px;
+}
+@media (max-width: 760px) {
+  .course-after-patient,
+  .course-after-share-card {
+    grid-template-columns: 1fr;
+  }
+  .course-after-patient > a {
+    justify-self: stretch;
+  }
+  .course-after-share-card > * {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .course-after-dates {
+    grid-template-columns: 1fr;
+  }
+  .course-after-expiry-copy > small {
+    margin-top: 18px;
+  }
+  .course-after-actions {
+    flex-direction: column;
+  }
+  .course-after-actions button,
+  .course-after-actions button:last-child {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  .course-after-accordions > button {
+    grid-template-columns: 1fr 24px;
+  }
+  .course-after-accordions span {
+    grid-column: 1 / -1;
+  }
+  .course-after-detail {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .course-recipient-card {
+    grid-template-columns: 1fr;
+  }
+  .course-recipient-card > * {
+    grid-column: 1;
+  }
+  .course-recipient-card > header,
+  .course-recipient-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .course-recipient-dates,
+  .course-recipient-counts {
+    grid-template-columns: 1fr;
+  }
+  .course-recipient-counts article {
+    border-right: 0;
+    border-bottom: 1px solid #d6e0db;
+  }
+  .course-recipient-counts article:last-child {
+    border-bottom: 0;
+  }
+  .course-recipient-actions button,
+  .course-recipient-actions button:last-child {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  .course-expiry-dialog {
+    padding: 22px;
+  }
+  .course-expiry-dialog footer {
+    flex-direction: column-reverse;
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .course-expiry-dialog footer button,
+  .course-expiry-dialog footer button:last-child {
+    width: 100%;
   }
 }
 @media print {
