@@ -53,7 +53,7 @@ public class CypressCommissionScenariosController {
     @GetMapping("/courses/{courseId}/usages")
     public List<Map<String, Object>> usages(@PathVariable Long courseId) {
         return jdbc.queryForList("SELECT visit_usage_id, usage_sequence, usage_status::text AS usage_status, treating_staff_id, "
-                + "commission_allocation_per_visit, owner_net_commission, substitute_treatment_fee_amount, replaces_usage_id "
+                + "commission_allocation_per_visit, owner_net_commission, substitute_treatment_fee_amount, replaces_usage_id, treatment_id "
                 + "FROM course_visit_usage WHERE course_id = ? ORDER BY usage_sequence, visit_usage_id", courseId);
     }
 
