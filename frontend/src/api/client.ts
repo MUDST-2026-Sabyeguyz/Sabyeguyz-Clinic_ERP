@@ -20,7 +20,6 @@ export function getToken() {
 export function clearSession() {
   localStorage.removeItem('authToken')
   localStorage.removeItem('authUser')
-  localStorage.removeItem('mockStaffPermissions')
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -636,6 +635,7 @@ export const commissionApi = {
       }>
     >(`/api/commission/closings?month=${month}-01`),
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
+  closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
 }
 
