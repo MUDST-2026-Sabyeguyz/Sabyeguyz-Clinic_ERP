@@ -4,7 +4,8 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
-import { commissionApi } from '@/api/client'
+import { branchApi, commissionApi } from '@/api/client'
+import { clinicToday } from '@/utils/clinicDate'
 
 type PersonRow = {
   id: string
@@ -21,7 +22,20 @@ const errorMessage = ref('')
 const search = ref('')
 const branch = ref('')
 const status = ref('')
-const date = ref(new Date().toISOString().slice(0, 10))
+const date = ref(clinicToday())
+// the real branches (by code), not a fixed list
+const branchOptions = ref<Array<{ value: string; label: string }>>([])
+void branchApi
+  .list()
+  .then((items) => {
+    branchOptions.value = items.map((item) => ({
+      value: item.branchCode,
+      label: `สาขา${item.name}`,
+    }))
+  })
+  .catch(() => {
+    branchOptions.value = []
+  })
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
@@ -56,7 +70,9 @@ onMounted(async () => {
         commission: Number(r.commission),
         treatment: 0,
         branch: r.branchCode,
-        status: ['CLOSED', 'FINALIZED'].includes(closingStatus.get(r.staffId!) ?? '') ? 'approved' : 'pending',
+        status: ['CLOSED', 'FINALIZED'].includes(closingStatus.get(r.staffId!) ?? '')
+          ? 'approved'
+          : 'pending',
       }))
     rows.value = realRows
   } catch (error) {
@@ -102,10 +118,7 @@ onMounted(async () => {
             default-value=""
             default-label="ทุกสาขา"
             label="สาขา"
-            :options="[
-              { value: 'BR', label: 'สาขาแบริ่ง' },
-              { value: 'R9', label: 'สาขาพระราม 9' },
-            ]" /></label
+            :options="branchOptions" /></label
         ><label
           >รอบคำนวณ<ThaiDatePicker
             v-model="date"

@@ -119,6 +119,41 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
     })
   })
 
+  it('links a session to a treatment of the same visit, PT and service, and refuses any other', function () {
+    template('ACC13', 10000, 13).then((courseId) => {
+      cy.registerPatient().then((patient) => buy(this.fixtures, patient, courseId, this.fixtures.managerStaffId).then((course) => {
+        cy.api('POST', '/api/appointments', {
+          branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, serviceId: this.fixtures.serviceId,
+          startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`,
+        }).then(({ body: appointment }) => {
+          cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)
+          const treatment = (extra) => cy.api('POST', '/api/treatments', {
+            patientId: patient.id, appointmentId: appointment.id, staffId: this.fixtures.therapistId,
+            serviceId: courseId, note: 'ใช้คอร์ส', ...extra,
+          }).then(({ status, body }) => {
+            expect(status, JSON.stringify(body)).to.equal(201)
+            return body
+          })
+          treatment({ serviceId: this.fixtures.serviceId }).then((other) => {
+            // a treatment of another service is not this course's
+            use(course.id, { appointmentId: appointment.id, treatingStaffId: this.fixtures.therapistId, treatmentId: other.id })
+              .its('status').should('equal', 400)
+          })
+          treatment({ staffId: this.fixtures.managerStaffId }).then((wrongPt) => {
+            use(course.id, { appointmentId: appointment.id, treatingStaffId: this.fixtures.therapistId, treatmentId: wrongPt.id })
+              .its('status').should('equal', 400)
+          })
+          usages(course.id).should('have.length', 0)
+          treatment({}).then((ok) => {
+            use(course.id, { appointmentId: appointment.id, treatingStaffId: this.fixtures.therapistId, treatmentId: ok.id })
+              .its('status').should('equal', 200)
+            usages(course.id).then((rows) => expect(rows[0].treatment_id).to.equal(ok.id))
+          })
+        })
+      }))
+    })
+  })
+
   it('a session used after the close takes the locked rate of its position at once', function () {
     flatRate(0.07)
     template('ACC13', 10000, 13).then((courseId) => {
@@ -474,6 +509,63 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
             })
           })
         }))
+      })
+    })
+  })
+})
+
+describe('v2 commission: closing the month while sessions are being recorded', () => {
+  const race = (a, b) => cy.parallelApi([a, b])
+  const closeRequest = { method: 'POST', url: `/api/commission/closings/${month}-01`, body: {} }
+
+  it('settles every session exactly once whatever the order of a close and the use that races it', function () {
+    flatRate(0.07)
+    template('ACC13', 10000, 13).then((courseId) => {
+      cy.registerPatient().then((patient) => {
+        const courses = []
+        // two closes at once: one closing row, no duplicate allocation
+        buy(this.fixtures, patient, courseId, this.fixtures.therapistId).then((first) => {
+          courses.push(first)
+          use(first.id).its('status').should('equal', 200)
+          race(closeRequest, closeRequest).then((responses) => {
+            responses.forEach((response) => expect(response.status, JSON.stringify(response.body)).to.be.oneOf([200, 409]))
+            expect(responses.some((response) => response.status === 200)).to.equal(true)
+          })
+        })
+        // a close racing a use, again and again: the month is reopened before each round
+        for (let round = 0; round < 5; round += 1) {
+          buy(this.fixtures, patient, courseId, this.fixtures.therapistId).then((course) => {
+            courses.push(course)
+            cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+              const closing = body.find((row) => row.employeeId === this.fixtures.therapistId)
+              if (closing && closing.status === 'CLOSED') {
+                cy.api('POST', `/api/commission/closings/${closing.id}/reopen`, { reason: 'รอบทดสอบ' }).its('status').should('equal', 200)
+              }
+            })
+            race(closeRequest, { method: 'POST', url: '/api/course-usages', body: { coursePurchaseId: course.id } }).then((responses) => {
+              responses.forEach((response) => expect(response.status, JSON.stringify(response.body)).to.equal(200))
+            })
+          })
+        }
+        cy.then(() => {
+          // whatever order they ran in, one more close leaves nothing unsettled and nothing doubled
+          cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+            const closing = body.find((row) => row.employeeId === this.fixtures.therapistId)
+            if (closing.status !== 'CLOSED') closeMonth()
+          })
+          courses.forEach((course) => {
+            usages(course.id).then((rows) => {
+              expect(rows).to.have.length(1)
+              expect(money(rows[0].owner_net_commission), 'no session is left without its Owner commission').to.equal(53.85)
+            })
+            allocations(course.id).then((rows) => {
+              const live = rows.filter((row) => row.entry_type === 'Allocation').length - rows.filter((row) => row.entry_type === 'Reversal').length
+              expect(live, 'exactly one live allocation').to.equal(1)
+            })
+            totals(course.id).then((row) => expect(row.commission_status).to.equal('Locked'))
+          })
+          cy.api('GET', `/api/commission/closings?month=${month}`).its('body').should('have.length', 1)
+        })
       })
     })
   })
