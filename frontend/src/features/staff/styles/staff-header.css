@@ -246,8 +246,8 @@ nav a.router-link-active:after {
 .staff-header.manager-header nav a::after {
   display: none;
 }
-.staff-header.manager-header nav a:hover {
-  color: #fff;
+.staff-header.manager-header nav a:not(.pill-target):hover {
+  color: #181818;
   background: transparent;
   box-shadow: none;
   transform: none;
