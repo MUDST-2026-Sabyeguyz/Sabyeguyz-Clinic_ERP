@@ -81,7 +81,7 @@ describe('v2 commission', () => {
     })
   })
 
-  it('lists a visit in the treatment report with its commission allocation', function () {
+  it('lists a visit in the treatment report; the Owner commission is unknown (null) until the month is closed', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
@@ -91,11 +91,42 @@ describe('v2 commission', () => {
           expect(status).to.equal(200)
           expect(body).to.have.length(1)
           expect(body[0].patientHn).to.equal(patient.hn)
-          expect(Number(body[0].gross)).to.be.greaterThan(0)
+          expect(body[0].ownerNet).to.equal(null)
+          expect(body[0].gross).to.equal(null)
+          expect(body[0].ownerNetPending).to.equal(true)
           expect(Number(body[0].treatmentFee)).to.equal(0)
-          expect(Number(body[0].ownerNet)).to.equal(Number(body[0].gross))
+        })
+        cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
+        cy.api('GET', `/api/commission/treatment-report${range}`).then(({ body }) => {
+          // 9,000 THB at 5% = 450 over 6 sessions: 75.00 for the first session
+          expect(Number(body[0].ownerNet)).to.equal(75)
+          expect(Number(body[0].gross)).to.equal(75)
+          expect(body[0].ownerNetPending).to.equal(false)
         })
       })
+    })
+  })
+
+  it('manages the clinic-wide treatment fee rule: validation, no overlap, take-over, enable/disable', () => {
+    const rule = (body) => cy.api('POST', '/api/commission/treatment-fees', body)
+    rule({ feeType: 'Percentage', feeValue: 101, effectiveFrom: '2026-01-01' }).its('status').should('equal', 400)
+    rule({ feeType: 'Fixed', feeValue: -1, effectiveFrom: '2026-01-01' }).its('status').should('equal', 400)
+    rule({ feeType: 'Bogus', feeValue: 5, effectiveFrom: '2026-01-01' }).its('status').should('equal', 400)
+    rule({ feeType: 'Fixed', feeValue: 50, effectiveFrom: '2026-03-01', effectiveTo: '2026-03-31' }).its('status').should('equal', 400)
+    rule({ feeType: 'Percentage', feeValue: 10, effectiveFrom: '2030-01-01' }).then(({ status, body }) => {
+      expect(status, JSON.stringify(body)).to.equal(201)
+      expect(body.enabled).to.equal(true)
+      expect(body.used).to.equal(false)
+      cy.api('GET', '/api/commission/treatment-fees').then(({ body: rules }) => {
+        const seeded = rules.find((entry) => entry.feeType === 'Fixed')
+        expect(seeded.effectiveTo).to.equal('2029-12-31')
+      })
+      cy.api('PUT', `/api/commission/treatment-fees/${body.id}`, { feeValue: 12.5 }).then((updated) => {
+        expect(updated.status).to.equal(200)
+        expect(Number(updated.body.feeValue)).to.equal(12.5)
+      })
+      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/disable`).its('body.enabled').should('equal', false)
+      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/enable`).its('body.enabled').should('equal', true)
     })
   })
 
@@ -112,7 +143,7 @@ describe('v2 commission', () => {
     cy.api('POST', '/api/commission/schemes', {
       name: 'Scheme 2030', effectiveFrom: '2030-01-01',
       tiers: [
-        { minimum: 0, maximum: 99999, rate: 0.04, order: 1 },
+        { minimum: 0, maximum: 99999.99, rate: 0.04, order: 1 },
         { minimum: 100000, maximum: null, rate: 0.12, order: 2 },
       ],
     }).then(({ status, body }) => {
@@ -125,7 +156,106 @@ describe('v2 commission', () => {
     })
   })
 
-  it('rejects a scheme whose tiers leave a gap or overlap', () => {
+  const defaultScheme = () => cy.api('GET', '/api/commission/schemes')
+    .then(({ body }) => body.find((scheme) => scheme.name === 'Default Tier Scheme'))
+
+  it('keeps tier ranges contiguous at two decimals (50,000.00 then 50,000.01)', () => {
+    cy.api('POST', '/api/commission/schemes', {
+      name: 'Satang scheme', effectiveFrom: '2032-01-01',
+      tiers: [
+        { minimum: 0, maximum: 50000, rate: 0.05, order: 1 },
+        { minimum: 50000.01, maximum: null, rate: 0.06, order: 2 },
+      ],
+    }).then(({ status, body }) => {
+      expect(status, JSON.stringify(body)).to.equal(201)
+      cy.api('GET', `/api/commission/schemes/${body.id}/tiers`).then((tiers) => {
+        expect(Number(tiers.body[0].maximum)).to.equal(50000)
+        expect(Number(tiers.body[1].minimum)).to.equal(50000.01)
+      })
+    })
+  })
+
+  it('rejects whole-baht tiers that leave satang in no tier, and other malformed tiers', () => {
+    const scheme = (tiers) => ({ name: 'Bad scheme', effectiveFrom: '2034-01-01', tiers })
+    const bad = [
+      [{ minimum: 0, maximum: 59999, rate: 0.05, order: 1 }, { minimum: 60000, maximum: null, rate: 0.1, order: 2 }],
+      [{ minimum: 0, maximum: 100.005, rate: 0.05, order: 1 }, { minimum: 100.01, maximum: null, rate: 0.1, order: 2 }],
+      [{ minimum: 0, maximum: 100, rate: 0.05, order: 1 }, { minimum: 100.01, maximum: null, rate: 0.1, order: 1 }],
+      [{ minimum: 0, maximum: 100, rate: 0.05, order: 1 }, { minimum: 100.01, maximum: 200, rate: 0.1, order: 2 }],
+      [{ minimum: 1, maximum: null, rate: 0.05, order: 1 }],
+      [{ minimum: 0, maximum: null, rate: 1.5, order: 1 }],
+    ]
+    bad.forEach((tiers) => cy.api('POST', '/api/commission/schemes', scheme(tiers)).its('status').should('equal', 400))
+  })
+
+  it('rejects a scheme whose dates overlap another scheme without taking over from it', () => {
+    cy.api('POST', '/api/commission/schemes', {
+      name: 'Inside', effectiveFrom: '2026-06-01', effectiveTo: '2026-12-31',
+      tiers: [{ minimum: 0, maximum: null, rate: 0.05, order: 1 }],
+    }).its('status').should('equal', 400)
+  })
+
+  it('ends the open-ended scheme the day before a newer version starts', () => {
+    cy.api('POST', '/api/commission/schemes', {
+      name: 'Takeover', effectiveFrom: '2035-01-01',
+      tiers: [{ minimum: 0, maximum: null, rate: 0.05, order: 1 }],
+    }).its('status').should('equal', 201)
+    cy.api('GET', '/api/commission/schemes').then(({ body }) => {
+      const previous = body.find((scheme) => scheme.name === 'Default Tier Scheme')
+      expect(previous.effectiveTo).to.equal('2034-12-31')
+    })
+  })
+
+  it('creates a new version of a scheme and keeps the old one untouched', () => {
+    defaultScheme().then((scheme) => {
+      cy.api('POST', `/api/commission/schemes/${scheme.id}/versions`, {
+        effectiveFrom: '2036-01-01',
+        tiers: [{ minimum: 0, maximum: 70000, rate: 0.04, order: 1 }, { minimum: 70000.01, maximum: null, rate: 0.09, order: 2 }],
+      }).then(({ status, body }) => {
+        expect(status, JSON.stringify(body)).to.equal(201)
+        expect(body.name).to.equal('Default Tier Scheme')
+        expect(body.version).to.equal(scheme.version + 1)
+        cy.api('GET', `/api/commission/schemes/${scheme.id}/tiers`).its('body').should('have.length', 5)
+      })
+    })
+  })
+
+  it('refuses to change the tiers or disable a scheme a course already uses, but allows a rename', function () {
+    cy.registerPatient().then((patient) => {
+      cy.api('POST', '/api/course-purchases', {
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+      }).its('status').should('equal', 201)
+      defaultScheme().then((scheme) => {
+        expect(scheme.locked).to.equal(true)
+        cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
+          name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom, tiers: [{ minimum: 0, maximum: null, rate: 0.01, order: 1 }],
+        }).its('status').should('equal', 409)
+        cy.api('DELETE', `/api/commission/schemes/${scheme.id}`).its('status').should('equal', 409)
+        cy.api('PUT', `/api/commission/schemes/${scheme.id}`, { name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom })
+          .its('status').should('equal', 200)
+        cy.api('GET', `/api/commission/schemes/${scheme.id}/tiers`).its('body').should('have.length', 5)
+      })
+    })
+  })
+
+  it('counts only valid course sales towards the monthly tier sales (a voided sale is left out)', function () {
+    cy.registerPatient().then((patient) => {
+      cy.api('POST', '/api/course-purchases', {
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId,
+      }).its('status').should('equal', 201)
+      cy.api('POST', '/api/course-purchases', {
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId,
+      }).then(({ body: second }) => {
+        cy.api('POST', `/api/payments/${second.id}/reverse`, { reason: 'ยกเลิกการขาย' }).its('status').should('equal', 200)
+      })
+      cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+        const row = body.find((entry) => entry.employeeId === this.fixtures.therapistId)
+        expect(Number(row.sales)).to.equal(9000)
+      })
+    })
+  })
+
+  it('rejects a gap or overlap in the tiers', () => {
     const scheme = (tiers) => ({ name: 'Bad scheme', effectiveFrom: '2031-01-01', tiers })
     cy.api('POST', '/api/commission/schemes', scheme([
       { minimum: 0, maximum: 50000, rate: 0.05, order: 1 },
