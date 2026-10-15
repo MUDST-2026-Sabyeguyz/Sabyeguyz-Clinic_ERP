@@ -4,8 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { formatPaymentMethod } from '@/features/payments/format'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import paymentBankIcon from '@/assets/payment-bank.svg'
+import paymentQrIcon from '@/assets/payment-qr.svg'
+import paymentCardIcon from '@/assets/payment-card.svg'
+import saleSuccessCheck from '@/assets/sale-success-check.svg'
 import {
   appointmentApi,
+
   branchApi,
   catalogApi,
   commissionApi,
@@ -45,11 +50,13 @@ const selectedServiceId = ref(0),
   treatingStaffId = ref<number | undefined>()
 const paymentCode = ref(''),
   note = ref('')
+const paymentStatus = ref<'INSTALLMENT' | 'DEPOSIT' | 'PAID'>('PAID')
 const searched = ref(false)
 const receiptNo = ref('')
 const savedSaleId = ref<number | null>(null)
 const paymentDialogOpen = ref(false)
 const screen = ref<'search' | 'menu' | 'sale'>(route.query.patientId ? 'menu' : 'search')
+
 async function loadMaster() {
   const [s, c, p, methods, staffList] = await Promise.all([
     catalogApi.services(),
@@ -63,6 +70,7 @@ async function loadMaster() {
       !service.code.toUpperCase().includes('ASSESS') &&
       !service.name.toLowerCase().includes('assessment'),
   )
+
   courses.value = c
   results.value = p
   paymentMethods.value = methods
@@ -84,6 +92,7 @@ async function loadMaster() {
     if (appointment.patient.id !== patientId) throw new Error('ผู้ป่วยไม่ตรงกับนัดหมาย')
   }
   if (selectedPatient) await choose(selectedPatient)
+
 }
 onMounted(async () => {
   try {
@@ -107,7 +116,9 @@ watch(query, () => {
     } catch (error) {
       results.value = []
       errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
+
       searched.value = true
+      errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
     }
   }, 250)
 })
@@ -149,6 +160,7 @@ watch(
   },
   { immediate: true },
 )
+
 const money = (value: number) =>
   new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(value)
 const selectedStaffName = computed(
@@ -157,6 +169,22 @@ const selectedStaffName = computed(
 const staffFilterOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
 )
+function paymentMethodCategory(code: string, name = '') {
+  const value = `${code} ${name}`.toLocaleLowerCase('th')
+  if (value.includes('bank') || value.includes('transfer') || value.includes('ธนาคาร'))
+    return 'bank'
+  if (value.includes('prompt') || value.includes('qr') || value.includes('พร้อมเพย์')) return 'qr'
+  if (value.includes('card') || value.includes('บัตร')) return 'card'
+  return 'other'
+}
+const salePaymentMethods = computed(() => paymentMethods.value)
+function paymentMethodIcon(code: string, name = '') {
+  const category = paymentMethodCategory(code, name)
+  if (category === 'bank') return paymentBankIcon
+  if (category === 'qr') return paymentQrIcon
+  if (category === 'card') return paymentCardIcon
+  return ''
+}
 const initials = computed(
   () =>
     patient.value?.fullName
@@ -226,6 +254,7 @@ async function submit() {
       branchCode: patient.value.branchCode ?? (await branchApi.list())[0]?.branchCode ?? 'RP',
       salespersonStaffId: selectedStaffId.value,
       treatingStaffId: mode.value === 'single' ? treatingStaffId.value : undefined,
+
       note: note.value,
       items: [{ type, referenceId, quantity: 1 }],
       payments: [
@@ -234,6 +263,7 @@ async function submit() {
     })
     receiptNo.value = sale.receiptNo
     savedSaleId.value = sale.id
+
     confirmed.value = true
     reviewing.value = false
     paymentDialogOpen.value = false
@@ -303,24 +333,35 @@ async function submit() {
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
         <h1>บริการและคอร์ส</h1>
-        <section class="patient-summary">
-          <strong>{{ patient.fullName }}</strong>
-          <span>HN {{ patient.hn }}</span>
-          <button type="button" @click="clearPatient">เปลี่ยนผู้ป่วย</button>
+        <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
+          <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
+          <div class="service-menu-patient-info">
+            <strong>{{ patientProfile?.title }}{{ patient.fullName }}</strong>
+            <p>
+              <span>HN {{ patient.hn }}</span
+              ><span>{{ patient.phone || '—' }}</span>
+            </p>
+          </div>
+          <span class="service-menu-branch">{{
+            patientProfile?.branch?.name || patient.branchName || '—'
+          }}</span>
+          <button type="button" @click="clearPatient">↻ เปลี่ยนผู้ป่วย</button>
         </section>
         <div class="service-menu-actions">
           <article>
             <h2>ขายบริการและคอร์ส</h2>
             <p>Single Visit<br />หรือซื้อคอร์สใหม่</p>
+
             <button type="button" @click="startSale">เริ่มขายบริการ</button>
           </article>
           <article>
             <h2>ใช้สิทธิ์และจัดการคอร์ส</h2>
-            <p>ดูสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</p>
+            <p>ตรวจสอบสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</p>
             <button type="button" @click="openPatientCourses">ดูคอร์สผู้ป่วย</button>
           </article>
         </div>
       </section>
+
       <section v-else-if="patient" class="sale-page">
         <button type="button" class="sale-back-button" @click="backToServiceMenu">
           <span aria-hidden="true">←</span> กลับไปหน้าบริการ
@@ -351,6 +392,7 @@ async function submit() {
               ><span>HN {{ patient.hn }}　☎ {{ patient.phone }}</span>
             </div>
             <b>{{ patient.branchName ? `สาขา${patient.branchName}` : 'ไม่ระบุสาขา' }}</b>
+
           </section>
           <div class="sales-workspace" :class="{ review: reviewing }">
             <section class="sale-line-card">
@@ -410,17 +452,37 @@ async function submit() {
                     @update:model-value="selectedStaffId = Number($event)"
                 /></label>
               </div>
+              <fieldset class="payment-status-group">
+                <legend>สถานะการชำระเงิน</legend>
+                <div>
+                  <button
+                    v-for="status in [
+                      { value: 'INSTALLMENT', label: 'ผ่อนชำระ' },
+                      { value: 'DEPOSIT', label: 'มัดจำ' },
+                      { value: 'PAID', label: 'ชำระเต็มจำนวน' },
+                    ] as const"
+                    :key="status.value"
+                    type="button"
+                    :class="{ active: paymentStatus === status.value }"
+                    @click="paymentStatus = status.value"
+                  >
+                    {{ status.label }}
+                  </button>
+                </div>
+              </fieldset>
               <div class="payment-group">
                 <span>ช่องทางชำระเงิน</span>
                 <div class="payment-options">
                   <button
-                    v-for="method in paymentMethods"
+                    v-for="method in salePaymentMethods"
                     :key="method.code"
                     type="button"
                     :class="{ active: paymentCode === method.code }"
                     @click="paymentCode = method.code"
                   >
+                    <img v-if="paymentMethodIcon(method.code, method.name)" :src="paymentMethodIcon(method.code, method.name)" alt="" />
                     {{ formatPaymentMethod(method.code, method.name) }}
+
                   </button>
                 </div>
               </div>
@@ -453,11 +515,12 @@ async function submit() {
               </p>
               <div v-if="mode === 'course'" class="commission">
                 <p>
-                  <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
+                  <span>ค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
                 </p>
                 <p>
                   <span>ค่าคอมมิชชัน {{ commissionRateLabel }} (ประมาณการ)</span
                   ><b>{{ money(commissionAmount) }}</b>
+
                 </p>
               </div>
               <button
@@ -472,7 +535,7 @@ async function submit() {
         </template>
 
         <section v-else class="sale-success-card">
-          <i>✓</i>
+          <i><img :src="saleSuccessCheck" alt="" /><span>✓</span></i>
           <h1>บันทึกการขายสำเร็จ</h1>
           <p>เลขที่เอกสาร {{ receiptNo }}</p>
           <div>
@@ -487,6 +550,7 @@ async function submit() {
                   >เจ้าของคอร์ส/ผู้ได้รับ Commission กภ. {{ selectedStaffName }} · ประมาณการ
                   {{ money(commissionAmount) }}</small
                 ></template
+
               >
             </section>
             <section>
@@ -521,6 +585,7 @@ async function submit() {
                     )
                   }}</small
                 >
+
               </section>
               <section v-if="mode === 'course'">
                 <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b
