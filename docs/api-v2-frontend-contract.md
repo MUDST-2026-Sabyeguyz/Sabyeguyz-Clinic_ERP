@@ -132,3 +132,20 @@ Open Question Q9 ยังไม่ปิด: ระบบปัจจุบั�
 - V1001 เพิ่ม `Assessment` ใน PostgreSQL transaction enum เพื่อเก็บประวัติเก่า; การขายใหม่ยัง reject. Legacy migration คงชนิด Assessment และเลขใบเสร็จเดิมถูก map เป็นเลขใหม่ตามกติกา migration เดิม
 - Tax0เป็นนโยบายที่ยืนยันในR32 ไม่มีการเปลี่ยนสูตร/ข้อมูลย้อนหลัง; ซ่อนAssessmentในUIการขายใหม่ คงAPIenum/ประวัติเดิมให้อ่านและพิมพ์ได้
 - Q4formatเลข/หน่วยcourseและQ9permissionmatrixยังไม่ปิด; ไม่เปลี่ยนreceiptNoหรือquantity/price semantics และคงglobalpatient/salesaccessเดิม เช่นเดียวกับAPIก่อนP5
+
+## P8 Dashboard Q11 (15 ตุลาคม 2026)
+
+`GET /api/dashboard/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&branchCode=01` เพิ่ม fields โดยคง fields เดิม. from/to รวมวันตาม Asia/Bangkok; timestamp interval เป็น [from midnight, midnight หลัง to). ช่วงกลับด้านได้400.
+
+- `newCustomers`: ผู้ลงทะเบียนในช่วง แม้ยังไม่มาใช้บริการ; filter สาขาตาม patient registration branch.
+- `returningCustomers`: ผู้ลงทะเบียนก่อน from และมี visit Arrived/InService/Completed ในช่วง; นับ patient distinct และ filter ตาม visit branch. ผู้ลงทะเบียนก่อนช่วงแต่ไม่มาไม่นับ.
+- `courseRenewals`: จำนวนแถว `course_extension` ในช่วงตาม extended_at, filter ตาม course branch. เป็นรายการที่บันทึกแล้ว ไม่สร้าง extension behavior แทน P7.
+- `packageUpdates`: จำนวน audit UPDATE ของ logical record `course_template` ในช่วง; นับการแก้แม่แบบ Back Office สำเร็จที่ค่าเปลี่ยนจริง ไม่รวม create/delete/no-op. `packageUpdatesScope="CLINIC"` เพราะ catalog เป็นกลางไม่ผูกสาขา.
+- ประวัติ package update เริ่มจากการบันทึก audit ใหม่นี้; ไม่ backfill จาก updatedAt หรือเดาว่าหนึ่งแม่แบบถูกแก้กี่ครั้งก่อนหน้า. UI ระบุจำนวน “รายการที่บันทึก” และ “ทั้งคลินิก”.
+- `salesTotal`: รวม receipt.netAmount ของใบไม่ Voided ตาม saleDate; เป็นยอดขายก่อนคืนเงินย้อนหลัง (void ออกแล้ว) ไม่ใช่ cash.
+- `cashReceived`: เท่ากับ `totalRevenue` เดิมซึ่งรวม payments สำเร็จตาม paymentDate; เป็นเงินรับก่อนหัก refund. ไม่เปลี่ยนการแบ่ง revenue/commission เดิม.
+- `dailySales: [{date,amount}]`: ยอดขายตามวัน ครบทุกวันในช่วงรวมวันศูนย์. แสดงแยกจากกราฟเงินรับตามประเภทเดิม.
+- `uniquePatients`/gender/visits ยังเป็นผู้มาใช้บริการจริง; frontend ไม่ใช้จำนวนผู้ป่วยทั้งฐานแทนค่า0ของช่วง/สาขาอีกต่อไป.
+- audit template เก็บ old/new response snapshots, actor และ timestamp ใน transaction เดียวกับ update; ไม่แก้กติกาอายุ/ราคา/commission ของ template.
+
+Q11 นิยามข้างต้นยืนยันโดยนายท่าน; Q9 report authorization, Q12 Calendar/rooms/reset และ final P9 gates ยังแยกติดตามต่อ.
