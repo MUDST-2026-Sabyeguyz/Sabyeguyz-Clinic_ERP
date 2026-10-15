@@ -224,7 +224,9 @@ async function saveEdit() {
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
-      fullName: `${draft.firstName} ${draft.middleName} ${draft.lastName}`.replace(/\s+/g, ' ').trim(),
+      fullName: `${draft.firstName} ${draft.middleName} ${draft.lastName}`
+        .replace(/\s+/g, ' ')
+        .trim(),
       birthDate: draft.birthDateInput,
       gender: draft.gender,
       phone: draft.phone,
@@ -307,8 +309,7 @@ onMounted(async () => {
             >ข้อมูลส่วนตัว</RouterLink
           >
           <RouterLink :to="`/staff/patients/${patient.id}/history`">ประวัติการรักษา</RouterLink>
-          <RouterLink
-            :to="{ path: `/staff/patients/${patient.id}/history`, query: { tab: 'courses' } }"
+          <RouterLink :to="{ path: '/staff/services', query: { patientId: patient.id } }"
             >คอร์ส</RouterLink
           >
         </nav>
@@ -320,7 +321,9 @@ onMounted(async () => {
           <div class="patient-edit-avatar" aria-hidden="true">{{ profileInitials }}</div>
           <div>
             <h2>{{ patient.title }}{{ patient.fullName }}</h2>
-            <p>HN {{ patient.hn }} <span>{{ patient.phone || '-' }}</span></p>
+            <p>
+              HN {{ patient.hn }} <span>{{ patient.phone || '-' }}</span>
+            </p>
           </div>
           <span class="patient-edit-status">{{ editStatus }}</span>
         </section>
@@ -362,7 +365,9 @@ onMounted(async () => {
             </div>
             <div class="patient-edit-name-grid">
               <label>ชื่อ <em>*</em><input v-model.trim="draft.firstName" required /></label>
-              <label>ชื่อกลาง<input v-model.trim="draft.middleName" placeholder="ระบุชื่อกลาง (ถ้ามี)" /></label>
+              <label
+                >ชื่อกลาง<input v-model.trim="draft.middleName" placeholder="ระบุชื่อกลาง (ถ้ามี)"
+              /></label>
               <label>นามสกุล <em>*</em><input v-model.trim="draft.lastName" required /></label>
             </div>
             <div class="patient-edit-two-column-grid">
@@ -410,14 +415,20 @@ onMounted(async () => {
                 <input v-model.trim="draft.phone" type="tel" :required="!isForeignNationality" />
               </label>
               <label>อีเมล<input v-model.trim="draft.email" type="text" inputmode="email" /></label>
-              <label class="wide">ที่อยู่<textarea v-model.trim="draft.address" rows="4" required /></label>
+              <label class="wide"
+                >ที่อยู่<textarea v-model.trim="draft.address" rows="4" required />
+              </label>
             </div>
           </section>
           <section class="patient-edit-section">
             <h2>ข้อมูลเพิ่มเติม (ไม่บังคับ)</h2>
             <div class="patient-edit-two-column-grid">
-              <label>สาขาที่ลงทะเบียน<input :value="profileBranch" readonly aria-readonly="true" /></label>
-              <label>กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true" /></label>
+              <label
+                >สาขาที่ลงทะเบียน<input :value="profileBranch" readonly aria-readonly="true"
+              /></label>
+              <label
+                >กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true"
+              /></label>
               <label>
                 ช่องทางแนะนำ
                 <FilterDropdown
