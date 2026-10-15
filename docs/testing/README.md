@@ -103,3 +103,7 @@ node scripts/verify-compose.mjs
 ## Latest integration trial
 
 หลักฐาน merge dev-backed ล่าสุดก่อน feat/database และการตรวจ v2 runtime/legacy import ดู [Latest Integration Trial Merge](2026-10-13-Latest-Integration-Trial-Merge.md)
+
+## Manual validation ของทีม
+
+[Validation checklist](https://docs.google.com/spreadsheets/d/1tJqQv1AxWR1F_JMyo8AcWGv3zZDmyAlNlDNmukJJO2I/edit?usp=sharing) เป็นรายการให้ทีมตรวจรับเพิ่มเติม ลิงก์นี้รักษามาจาก main; รอบนี้ไม่ได้อ่านหรือยืนยันผลในชีต และไม่ใช้แทน automated evidence
