@@ -103,6 +103,22 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
     })
   })
 
+  it('prints a usage slip for every Completed session with the history of all users up to it', function () {
+    template('ACC13', 10000, 13).then((courseId) => {
+      cy.registerPatient().then((patient) => buy(this.fixtures, patient, courseId, this.fixtures.therapistId).then((course) => {
+        use(course.id).its('status').should('equal', 200)
+        use(course.id, { treatingStaffId: this.fixtures.managerStaffId }).its('status').should('equal', 200)
+        cy.api('GET', `/__cypress/commission/courses/${course.id}/prints`).then(({ body }) => {
+          expect(body).to.have.length(2)
+          const second = JSON.parse(body[1].snapshot)
+          expect(second.history.map((line) => line.sequence)).to.deep.equal([1, 2])
+          expect(second.history.map((line) => line.treatingStaffId)).to.deep.equal([this.fixtures.therapistId, this.fixtures.managerStaffId])
+          expect(JSON.parse(body[0].snapshot).history).to.have.length(1)
+        })
+      }))
+    })
+  })
+
   it('a session used after the close takes the locked rate of its position at once', function () {
     flatRate(0.07)
     template('ACC13', 10000, 13).then((courseId) => {
