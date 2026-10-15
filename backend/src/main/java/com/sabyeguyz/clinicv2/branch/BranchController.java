@@ -34,9 +34,25 @@ public class BranchController {
             @NotBlank @Pattern(regexp = "\\d{2}", message = "branchCode ต้องเป็นตัวเลข 2 หลัก") String branchCode,
             @NotBlank @Size(max = 100) String name,
             @NotBlank @Size(max = 255) String address,
-            @NotBlank @Size(max = 20) String phone) {}
+            @NotBlank @Size(max = 20) String phone,
+            @Size(max = 255) String email,
+            @Size(max = 50) String licenseNo,
+            @Size(max = 5) String bookingOpenTime,
+            @Size(max = 5) String bookingCloseTime,
+            Integer defaultAppointmentMinutes) {
+        /** Old clients send only the four required fields; the optional settings are then left empty. */
+        public Request(String branchCode, String name, String address, String phone) {
+            this(branchCode, name, address, phone, null, null, null, null, null);
+        }
 
-    public record Response(Long id, String branchCode, String name, String address, String phone, boolean active) {}
+        BranchService.Settings settings() {
+            return new BranchService.Settings(email, licenseNo, bookingOpenTime, bookingCloseTime, defaultAppointmentMinutes);
+        }
+    }
+
+    public record Response(Long id, String branchCode, String name, String address, String phone, boolean active,
+                           String email, String licenseNo, String bookingOpenTime, String bookingCloseTime,
+                           Integer defaultAppointmentMinutes) {}
 
     @GetMapping
     public List<Response> list() {
@@ -54,7 +70,7 @@ public class BranchController {
     public Response create(@Valid @RequestBody Request request) {
         Branch branch = service.create(request.branchCode(), request.name(), request.address(), request.phone(),
                 actor.currentId());
-        return toResponse(branch);
+        return toResponse(service.applySettings(branch.getId(), request.settings(), actor.currentId()));
     }
 
     @PutMapping("/{id}")
@@ -64,8 +80,8 @@ public class BranchController {
         if (!existing.getBranchCode().equals(request.branchCode().trim())) {
             throw new IllegalArgumentException("ไม่อนุญาตให้แก้ branchCode เพื่อรักษา HN เดิม");
         }
-        Branch branch = service.update(id, request.name(), request.address(), request.phone(), actor.currentId());
-        return toResponse(branch);
+        service.update(id, request.name(), request.address(), request.phone(), actor.currentId());
+        return toResponse(service.applySettings(id, request.settings(), actor.currentId()));
     }
 
     @DeleteMapping("/{id}")
@@ -77,6 +93,12 @@ public class BranchController {
 
     private static Response toResponse(Branch branch) {
         return new Response(branch.getId(), branch.getBranchCode(), branch.getBranchName(),
-                branch.getAddress(), branch.getPhone(), branch.isBranchStatus());
+                branch.getAddress(), branch.getPhone(), branch.isBranchStatus(), branch.getBranchEmail(),
+                branch.getLicenseNo(), hhmm(branch.getBookingOpenTime()), hhmm(branch.getBookingCloseTime()),
+                branch.getDefaultAppointmentMinutes());
+    }
+
+    private static String hhmm(java.time.LocalTime time) {
+        return time == null ? null : time.toString().substring(0, 5);
     }
 }

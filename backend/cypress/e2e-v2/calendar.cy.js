@@ -203,7 +203,12 @@ describe('v2 Google Calendar sync - Google to system', () => {
 describe('v2 Google Calendar sync - access', () => {
   it('is for the manager only', function () {
     cy.login('therapist', 'therapist123').then(({ body: auth }) => {
-      cy.apiAs(auth.token, 'GET', '/api/calendar/status').its('status').should('equal', 403)
+      // a therapist may look at the state of their own branch's calendar, and nothing else
+      cy.apiAs(auth.token, 'GET', '/api/calendar/status').then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body.branches.map((row) => row.branchCode)).to.deep.equal(['01'])
+        expect(body.lastResult).to.equal(null)
+      })
       cy.apiAs(auth.token, 'PUT', '/api/calendar/branches/01', { googleCalendarId: CAL }).its('status').should('equal', 403)
       cy.apiAs(auth.token, 'POST', '/api/calendar/sync').its('status').should('equal', 403)
     })

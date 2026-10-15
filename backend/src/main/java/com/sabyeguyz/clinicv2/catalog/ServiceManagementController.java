@@ -33,7 +33,8 @@ public class ServiceManagementController {
         this.actor = actor;
     }
 
-    public record Request(@NotBlank String code, @NotBlank String name, int defaultDurationMinutes,
+    /** defaultDurationMinutes is optional (5-480); empty = the appointment uses the branch default. */
+    public record Request(@NotBlank String code, @NotBlank String name, Integer defaultDurationMinutes,
                            @NotNull BigDecimal price) {}
 
     public record Response(Long id, String code, String name, int defaultDurationMinutes, BigDecimal price,
@@ -51,7 +52,8 @@ public class ServiceManagementController {
     public Response create(@Valid @RequestBody Request request) {
         Service created = service.create(request.code(), request.name(), ServiceType.SingleVisit, request.price(),
                 null, null, null, actor.currentId());
-        return toResponse(created);
+        created.setDefaultAppointmentMinutes(validMinutes(request.defaultDurationMinutes()));
+        return toResponse(repository.save(created));
     }
 
     @PutMapping("/{id}")
@@ -59,6 +61,7 @@ public class ServiceManagementController {
         Service existing = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         existing.setServiceName(request.name());
         existing.setServicePrice(request.price());
+        existing.setDefaultAppointmentMinutes(validMinutes(request.defaultDurationMinutes()));
         return toResponse(repository.save(existing));
     }
 
@@ -68,7 +71,17 @@ public class ServiceManagementController {
         service.deactivate(id, actor.currentId());
     }
 
+    private static Integer validMinutes(Integer minutes) {
+        if (minutes == null || minutes == 0) return null; // 0 = none, as a response shows it
+        if (minutes < 5 || minutes > 480) {
+            throw new IllegalArgumentException("ระยะเวลานัดต้องอยู่ระหว่าง 5 ถึง 480 นาที");
+        }
+        return minutes;
+    }
+
     private static Response toResponse(Service s) {
-        return new Response(s.getId(), s.getServiceCode(), s.getServiceName(), 0, s.getServicePrice(), s.isServiceStatus());
+        return new Response(s.getId(), s.getServiceCode(), s.getServiceName(),
+                s.getDefaultAppointmentMinutes() == null ? 0 : s.getDefaultAppointmentMinutes(), s.getServicePrice(),
+                s.isServiceStatus());
     }
 }
