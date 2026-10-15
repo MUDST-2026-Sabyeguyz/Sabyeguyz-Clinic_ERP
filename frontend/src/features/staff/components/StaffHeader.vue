@@ -36,10 +36,11 @@ const navItems = computed(() =>
         { to: '/staff/patients', label: 'ผู้ป่วย' },
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
-        { to: '/staff/transactions', label: 'ธุรกรรม' },
-        { to: '/staff/commission', label: 'บุคลากรและค่าคอมมิชชัน' },
+        { to: '/staff/transactions', label: 'รายการธุรกรรม' },
+        { to: '/staff/commission', label: 'คอมมิชชั่น' },
+        { to: '/staff/personnel', label: 'บุคลากร' },
         { to: '/staff/reports', label: 'รายงาน' },
-        { to: '/staff/settings', label: 'ตั้งค่า' },
+        { to: '/staff/settings', label: 'การตั้งค่า' },
       ]
     : [
         { to: '/staff/patients', label: 'ผู้ป่วย' },
@@ -77,13 +78,12 @@ function movePillToActive() {
   movePill(matchingLink ?? links[0] ?? null)
 }
 function handleNavHover(event: Event) {
+  if (isManager.value) return
   const target = event.target
   if (!(target instanceof Element)) return
   const link = target.closest<HTMLAnchorElement>('a')
   if (!link || !navRef.value?.contains(link) || link === hoveredLink) return
   hoveredLink = link
-  // Device/Responsive mode may report a hover during the resize frame.  Make
-  // the transition available first, then position the pill on the next frame.
   pillReady.value = true
   if (hoverFrame) cancelAnimationFrame(hoverFrame)
   nextTick(() => {
@@ -93,12 +93,12 @@ function handleNavHover(event: Event) {
   })
 }
 function resetHoverToActive() {
+  if (isManager.value) return
   hoveredLink = null
   if (hoverFrame) cancelAnimationFrame(hoverFrame)
   movePillToActive()
 }
 function positionPillWithoutAnimation() {
-  hoveredLink = null
   pillReady.value = false
   movePillToActive()
   if (readyFrame) cancelAnimationFrame(readyFrame)
@@ -180,7 +180,7 @@ function switchManagerBranch(code: string) {
       ref="navRef"
       :class="{ 'mobile-open': menuOpen }"
       aria-label="เมนูเจ้าหน้าที่คลินิก"
-      @mouseleave="() => resetHoverToActive()"
+      @mouseleave="resetHoverToActive"
     >
       <div class="mobile-menu-head">
         <button type="button" aria-label="ปิดเมนู" @click="menuOpen = false">×</button>
