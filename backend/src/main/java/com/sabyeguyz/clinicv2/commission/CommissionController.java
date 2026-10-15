@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.*;
 public class CommissionController {
     private final CommissionSchemeService schemeService;
     private final TreatmentFeeRuleService treatmentFeeService;
+    private final com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems;
     private final com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual;
     private final com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository;
     private final MonthlyTierSalesService tierSales;
@@ -62,7 +63,9 @@ public class CommissionController {
                                  com.sabyeguyz.clinicv2.audit.AuditLogService audit,
                                  TreatmentFeeRuleService treatmentFeeService, MonthlyTierSalesService tierSales,
                                  com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
-                                 com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual) {
+                                 com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
+                                 com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems) {
+        this.refundItems = refundItems;
         this.singleVisitFeeAccrual = singleVisitFeeAccrual;
         this.usageRepository = usageRepository;
         this.treatmentFeeService = treatmentFeeService;
@@ -170,15 +173,19 @@ public class CommissionController {
         if (to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
         // A course sale is credited entirely to its seller (the Owner PT).
         Map<Long, List<Course>> bySeller = new LinkedHashMap<>();
-        for (Course course : courses.findByReceiptSaleDateBetween(from, to)) {
+        // only sales still in effect count, less the Completed refunds against them (the same base as the monthly tier)
+        for (Course course : courses.findValidByReceiptSaleDateBetween(from, to)) {
             bySeller.computeIfAbsent(course.getSellerStaff().getId(), k -> new ArrayList<>()).add(course);
         }
         List<ReportRow> rows = new ArrayList<>();
         for (List<Course> group : bySeller.values()) {
             Course first = group.get(0);
             Staff seller = first.getSellerStaff();
-            BigDecimal base = group.stream().map(Course::getCoursePrice)
+            BigDecimal refunded = group.stream().map(course -> refundItems.sumRefundAmountOfCourse(course.getId(),
+                    java.util.List.of(com.sabyeguyz.clinicv2.enums.RefundStatus.Completed)))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal base = group.stream().map(Course::getCoursePrice)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add).subtract(refunded).max(BigDecimal.ZERO);
             CommissionScheme scheme = first.getCommissionScheme();
             CommissionTier tier = tierResolver.resolve(scheme, base);
             rows.add(new ReportRow(seller.getId(), seller.getStaffFname() + " " + seller.getStaffLname(),
