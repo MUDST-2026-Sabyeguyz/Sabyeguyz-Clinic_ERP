@@ -232,7 +232,6 @@ body.therapist-ui .appointment-page .appointment-confirm-modal .primary {
   body.therapist-ui .appointment-page .appointment-panel .search-box,
   body.therapist-ui .appointment-page .appointment-panel .branch-filter,
   body.therapist-ui .appointment-page .appointment-panel .appointment-date-filter,
-  body.therapist-ui .appointment-page .appointment-panel .appointment-status-filter,
   body.therapist-ui .appointment-page .appointment-panel .appointment-sort {
     width: 100%;
     max-width: none;
