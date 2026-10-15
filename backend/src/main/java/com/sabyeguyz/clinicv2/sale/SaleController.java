@@ -60,6 +60,8 @@ public class SaleController {
     private final com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService;
     private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
 
+    private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
+
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
                            PaymentTransactionService paymentTransactionService,
                            TransactionCancellationService cancellations, TransactionCancellationRepository cancellationRecords, PermissionService permissions,
@@ -70,7 +72,9 @@ public class SaleController {
                                      com.sabyeguyz.clinicv2.audit.AuditLogService audit,
                                      com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
                                      com.sabyeguyz.clinicv2.auth.AppUserRepository users,
-                                     SingleVisitFeeAccrual singleVisitFees) {
+                                     SingleVisitFeeAccrual singleVisitFees,
+                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+        this.branchAccess = branchAccess;
         this.singleVisitFees = singleVisitFees;
         this.visitService = visitService;
         this.users = users;
@@ -122,7 +126,8 @@ public class SaleController {
                            SalespersonSummary salesperson, BigDecimal total, BigDecimal paid, String status,
                            Instant soldAt, Instant voidedAt, String voidReason, String note, String paymentLabel,
                            Long receiptId, BigDecimal subtotalBeforeDiscount, BigDecimal billDiscountAmount,
-                           BigDecimal taxableAmount, BigDecimal taxAmount, BigDecimal netAmount) {}
+                           BigDecimal taxableAmount, BigDecimal taxAmount, BigDecimal netAmount,
+                           String itemType, String itemDescription) {}
     public record Detail(Long id, String receiptNo, PatientSummary patient, String branchCode,
                           SalespersonSummary salesperson, BigDecimal total, BigDecimal paid, String status,
                           Instant soldAt, Instant voidedAt, String voidReason, String note,
@@ -213,6 +218,7 @@ public class SaleController {
     @PostMapping("/api/payments/{id}/reverse")
     public Detail reverse(@PathVariable Long id, @RequestBody ReverseRequest request) {
         SalesTransaction transaction = findTransaction(id);
+        branchAccess.requireAccess(transaction.getBranch(), "ยกเลิกได้เฉพาะรายการของสาขาตัวเอง รายการต่างสาขาดูรายละเอียดได้อย่างเดียว");
         Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
         cancellations.voidSale(transaction, permission, request.reason(), actor.currentId());
         audit.record("sales_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "PAID", "VOIDED: " + request.reason(),
@@ -255,7 +261,8 @@ public class SaleController {
                 t.isTransactionStatus() ? "PAID" : "VOIDED",
                 t.getTransactionDate(), cancellation == null ? null : cancellation.getCancelledAt(),
                 cancellation == null ? null : cancellation.getReason(), null, receipt.getPaymentLabel().name(), receipt.getId(), receipt.getSubtotalBeforeDiscount(),
-                receipt.getBillDiscountAmount(), receipt.getTaxableAmount(), receipt.getTaxAmount(), receipt.getNetAmount());
+                receipt.getBillDiscountAmount(), receipt.getTaxableAmount(), receipt.getTaxAmount(), receipt.getNetAmount(),
+                t.getTransactionType().name(), t.getItemNameSnapshot());
     }
 
     private Detail toDetail(SalesTransaction t) {

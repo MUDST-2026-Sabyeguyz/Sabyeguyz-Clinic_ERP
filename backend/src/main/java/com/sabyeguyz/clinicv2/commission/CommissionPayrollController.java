@@ -44,11 +44,14 @@ public class CommissionPayrollController {
 
     public record ReasonRequest(String reason) {}
     public record ReferenceRequest(String reference) {}
+    /** paidDate (yyyy-mm-dd) defaults to today; reference is the transfer or slip number. */
+    public record PayRequest(java.time.LocalDate paidDate, String reference) {}
     public record ApplicationRequest(String month, BigDecimal amount) {}
 
     public record PaymentResponse(Long id, Long staffId, String staffName, String month, String status, BigDecimal courseCommission,
                                    BigDecimal singleVisitFee, BigDecimal substituteFee, BigDecimal adjustment, BigDecimal net,
-                                   Instant paidAt, Long closingId, long pendingSessions, List<ApplicationResponse> applications) {}
+                                   Instant paidAt, Long closingId, long pendingSessions, List<ApplicationResponse> applications,
+                                   java.time.LocalDate paidDate, String paymentReference) {}
     public record ApplicationResponse(Long id, Long adjustmentId, BigDecimal amount, String status, boolean approved,
                                        String approvalReference) {}
     public record AdjustmentResponse(Long id, Long staffId, String staffName, String originalMonth, String appliedMonth,
@@ -104,8 +107,9 @@ public class CommissionPayrollController {
     }
 
     @PostMapping("/payments/{id}/pay")
-    public PaymentResponse pay(@PathVariable Long id) {
-        StaffMonthlyPayment payment = paymentService.pay(id, actor.currentId());
+    public PaymentResponse pay(@PathVariable Long id, @RequestBody(required = false) PayRequest request) {
+        StaffMonthlyPayment payment = request == null ? paymentService.pay(id, actor.currentId())
+                : paymentService.pay(id, request.paidDate(), request.reference(), actor.currentId());
         audit.record("staff_monthly_payment", String.valueOf(id), AuditAction.UPDATE, "Closed",
                 "Paid net " + payment.getNetPaymentAmount(), actor.currentId());
         return toPayment(payment);
@@ -201,7 +205,8 @@ public class CommissionPayrollController {
                 payment.getCourseCommissionAmount(), payment.getSingleVisitFeeAmount(), payment.getSubstituteFeeAmount(),
                 payment.getAdjustmentAmount(), payment.getNetPaymentAmount(), payment.getPaidAt(),
                 payment.getClosing() == null ? null : payment.getClosing().getId(), pending,
-                paymentService.applicationsOf(payment.getId()).stream().map(CommissionPayrollController::toApplication).toList());
+                paymentService.applicationsOf(payment.getId()).stream().map(CommissionPayrollController::toApplication).toList(),
+                payment.getPaidDate(), payment.getPaymentReference());
     }
 
     private AdjustmentResponse toAdjustment(StaffPayAdjustment adjustment) {
