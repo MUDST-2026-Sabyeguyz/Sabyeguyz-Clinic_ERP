@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
@@ -293,8 +294,8 @@ public class CourseCommissionService {
         Staff owner = course.getOwnerStaff();
         // from the day the Owner leaves no session can earn the Owner anything more (a future leaving date still allows it)
         boolean ownerLeft = owner != null && owner.getTerminationDate() != null
-                && !LocalDate.now().isBefore(owner.getTerminationDate());
-        boolean expired = course.getExpiryDate() != null && course.getExpiryDate().isBefore(LocalDate.now());
+                && !ClinicTime.today().isBefore(owner.getTerminationDate());
+        boolean expired = course.getExpiryDate() != null && course.getExpiryDate().isBefore(ClinicTime.today());
         if (course.getCourseStatus() != CourseStatus.Active || expired || ownerLeft) {
             return BigDecimal.ZERO;
         }

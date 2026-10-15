@@ -548,8 +548,12 @@ export const courseApi = {
       })
       return { ...ledger, movements }
     }),
-  use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) =>
-    api.post<CoursePurchase>('/api/course-usages', body),
+  use: (body: {
+    coursePurchaseId: number
+    appointmentId?: number
+    treatingStaffId?: number
+    note?: string
+  }) => api.post<CoursePurchase>('/api/course-usages', body),
   reverse: (movementId: number, reason: string) =>
     api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, { reason }),
   cancel: (id: number, reason: string) =>

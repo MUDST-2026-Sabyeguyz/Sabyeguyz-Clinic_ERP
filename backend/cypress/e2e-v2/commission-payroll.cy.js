@@ -1,18 +1,13 @@
 // Reopen before payment, the monthly payment of each staff member (Open -> Closed -> Paid), Finalize with the payment and
 // adjustments after payment (documents' tests 05 and 06), plus who may do what.
-const month = new Date().toISOString().slice(0, 7)
-const nextMonth = (() => {
-  const date = new Date()
-  date.setUTCDate(1)
-  date.setUTCMonth(date.getUTCMonth() + 1)
+const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).slice(0, 7)
+const shiftMonth = (delta) => {
+  const date = new Date(`${month}-01T00:00:00Z`)
+  date.setUTCMonth(date.getUTCMonth() + delta)
   return date.toISOString().slice(0, 7)
-})()
-const lastMonth = (() => {
-  const date = new Date()
-  date.setUTCDate(1)
-  date.setUTCMonth(date.getUTCMonth() - 1)
-  return date.toISOString().slice(0, 7)
-})()
+}
+const nextMonth = shiftMonth(1)
+const lastMonth = shiftMonth(-1)
 const money = (value) => Math.round(Number(value) * 100) / 100
 
 const template = (code, price, sessions) => cy.api('POST', '/api/courses',
