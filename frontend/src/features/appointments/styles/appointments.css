@@ -1350,3 +1350,492 @@
     margin-inline: 8px;
   }
 }
+
+/* Therapist create appointment — Figma 1527:8352, 1527:8396, 1527:8440, 1527:8484 */
+.appointment-form-page {
+  width: min(1342px, 100%);
+  padding-inline: 0;
+}
+.appointment-back-row {
+  width: 100%;
+  margin-top: 20px;
+}
+.appointment-create-card {
+  width: 100%;
+  min-height: 920px;
+  padding: 38px 48px 30px;
+  border-color: #d7e0dd;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.appointment-create-card > h1 {
+  margin: 0;
+  color: #243832;
+  font-size: 32px;
+  font-weight: 700;
+}
+.appointment-form-context {
+  margin: 8px 0 28px;
+  color: #718783;
+  font-size: 13px;
+}
+.appointment-create-card .appointment-create-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 500px) minmax(0, 520px);
+  grid-template-areas:
+    'patient-type therapist'
+    'patient date'
+    'phone time'
+    'service-mode note'
+    'selection summary';
+  justify-content: space-between;
+  gap: 16px 80px;
+}
+.appointment-create-card .appointment-create-grid.is-editing {
+  grid-template-areas:
+    'patient therapist'
+    'phone date'
+    'service-mode time'
+    'selection note'
+    'summary summary';
+}
+.appointment-create-card.is-editing {
+  min-height: 794px;
+  padding: 38px 80px 46px;
+  border-radius: 22px;
+  box-shadow: 0 4px 4px rgb(0 0 0 / 18%);
+}
+.appointment-create-card.is-editing > h1 {
+  font-size: 40px;
+  letter-spacing: 0.4px;
+}
+.appointment-create-card.is-editing .appointment-original-summary {
+  margin: 4px 0 14px;
+  color: #4a6366;
+  font-size: 16px;
+}
+.appointment-reschedule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 526px));
+  grid-template-areas:
+    'patient service'
+    'therapist date'
+    'time branch'
+    'note note';
+  justify-content: space-between;
+  gap: 24px 76px;
+}
+.reschedule-patient-field { grid-area: patient; }
+.reschedule-service-field { grid-area: service; }
+.reschedule-therapist-field { grid-area: therapist; }
+.reschedule-date-field { grid-area: date; }
+.reschedule-time-field { grid-area: time; }
+.reschedule-branch-field { grid-area: branch; }
+.reschedule-note-field { grid-area: note; }
+.appointment-reschedule-grid > label {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 600;
+}
+.appointment-reschedule-grid input,
+.appointment-reschedule-grid textarea,
+.appointment-reschedule-grid :deep(.appointment-form-filter .filter-dropdown__button),
+.reschedule-time-trigger {
+  width: 100%;
+  min-height: 59px;
+  box-sizing: border-box;
+  border: 1px solid #8e8e8e;
+  border-radius: 7px;
+  color: #56665d;
+  background: #f7f7f7;
+  box-shadow: 0 1px 3.5px rgb(119 119 119 / 25%);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+.appointment-reschedule-grid input,
+.appointment-reschedule-grid textarea {
+  padding: 16px 18px;
+}
+.appointment-create-card .appointment-reschedule-grid input[readonly] {
+  background: #f7f7f7;
+}
+.reschedule-patient-meta {
+  margin-top: -4px;
+  color: #4a6366;
+  font-size: 14px;
+  font-weight: 400;
+}
+.reschedule-time-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px 6px 18px;
+  cursor: pointer;
+}
+.reschedule-time-trigger strong {
+  padding: 10px 18px;
+  border: 1px solid #d7e0dd;
+  border-radius: 7px;
+  color: #218b85;
+  background: #fff;
+  font-size: 14px;
+}
+.appointment-reschedule-grid .reschedule-note-field textarea {
+  min-height: 59px;
+  resize: vertical;
+}
+.appointment-create-card.is-editing .appointment-save {
+  margin-top: 56px;
+}
+.appointment-patient-type-field { grid-area: patient-type; }
+.appointment-patient-field { grid-area: patient; }
+.appointment-phone-field { grid-area: phone; }
+.appointment-service-mode-field { grid-area: service-mode; }
+.appointment-service-field,
+.appointment-course-field { grid-area: selection; }
+.appointment-therapist-field { grid-area: therapist; }
+.appointment-date-field { grid-area: date; }
+.appointment-time-field { grid-area: time; }
+.appointment-note-field { grid-area: note; }
+.appointment-course-summary { grid-area: summary; }
+.appointment-create-card .form-grid label,
+.appointment-create-card .form-grid legend {
+  color: #243832;
+  font-size: 14px;
+  font-weight: 600;
+}
+.appointment-create-card .form-grid input,
+.appointment-create-card .form-grid textarea,
+.appointment-create-card :deep(.appointment-form-filter .filter-dropdown__button),
+.appointment-time-picker {
+  min-height: 56px;
+  border: 1px solid #d7e0dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #243832;
+}
+.appointment-create-card .form-grid input[readonly] {
+  background: #fff;
+}
+.appointment-service-mode-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.appointment-service-mode-field legend {
+  margin-bottom: 8px;
+}
+.appointment-service-mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, 176px);
+  gap: 8px;
+}
+.appointment-service-mode-options button {
+  height: 48px;
+  border: 1px solid #d7e0dd;
+  border-radius: 8px;
+  color: #243832;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.appointment-service-mode-options button.active {
+  border-color: #218b85;
+  color: #fff;
+  background: #218b85;
+}
+.appointment-list-mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, 176px);
+  gap: 8px;
+  padding: 0 0 20px;
+  background: transparent;
+}
+.appointment-list-mode-toggle button {
+  height: 48px;
+  border: 1px solid #d7e0dd;
+  border-radius: 8px;
+  color: #243832;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.appointment-list-mode-toggle button.active {
+  border-color: #218b85;
+  color: #fff;
+  background: #218b85;
+}
+.appointment-course-empty {
+  margin-top: 5px;
+  color: #718783;
+  font-size: 12px;
+  font-weight: 400;
+}
+.appointment-time-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px 4px 16px;
+  font-weight: 400;
+}
+.appointment-time-picker > span {
+  color: #718783;
+  font-size: 14px;
+}
+.appointment-time-picker button {
+  min-width: 176px;
+  height: 48px;
+  border: 1px solid #d7e0dd;
+  border-radius: 8px;
+  color: #218b85;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.appointment-create-card .form-grid .appointment-note-field textarea {
+  min-height: 56px;
+  padding: 16px;
+  background: #fff;
+}
+.appointment-course-summary {
+  min-height: 150px;
+  padding: 15px 17px;
+  border: 1px solid #d7e0dd;
+  border-radius: 10px;
+  color: #243832;
+  background: #fff;
+}
+.appointment-course-summary header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.appointment-course-summary h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.appointment-course-summary header span {
+  flex: none;
+  padding: 6px 20px;
+  border-radius: 999px;
+  color: #218b85;
+  background: #e7f6f2;
+  font-size: 12px;
+  font-weight: 600;
+}
+.appointment-course-summary header span.shared {
+  color: #243832;
+  background: #fff3c7;
+}
+.appointment-course-summary p,
+.appointment-course-summary small {
+  display: block;
+  margin: 8px 0 0;
+  color: #718783;
+  font-size: 12px;
+  font-weight: 400;
+}
+.appointment-course-summary strong {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.appointment-create-card .appointment-save {
+  gap: 16px;
+  margin-top: 128px;
+}
+.appointment-create-card .appointment-save button {
+  width: 170px;
+  height: 48px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.appointment-create-card .appointment-save .secondary {
+  border: 1px solid #d7e0dd;
+  color: #218b85;
+  background: #fff;
+}
+.appointment-create-card .appointment-save .primary {
+  min-width: 170px;
+  box-shadow: none;
+}
+.appointment-time-drawer-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  background: rgb(36 56 50 / 28%);
+}
+.appointment-time-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  width: min(700px, 100%);
+  min-height: 100%;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 64px 72px 70px;
+  background: #fff;
+  box-shadow: -16px 0 40px rgb(36 56 50 / 12%);
+  animation: appointment-drawer-in 180ms ease-out;
+}
+@keyframes appointment-drawer-in {
+  from { transform: translateX(32px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.appointment-time-drawer h2 {
+  margin: 0;
+  color: #243832;
+  font-size: 30px;
+}
+.appointment-time-drawer-content > p {
+  margin: 6px 0;
+  color: #718783;
+  font-size: 13px;
+}
+.appointment-time-drawer-content > strong {
+  display: block;
+  margin-bottom: 28px;
+  color: #243832;
+  font-size: 13px;
+}
+.appointment-time-drawer label {
+  display: grid;
+  gap: 8px;
+  color: #243832;
+  font-size: 14px;
+  font-weight: 600;
+}
+.appointment-time-drawer section {
+  margin-top: 20px;
+}
+.appointment-time-drawer h3 {
+  margin: 0 0 14px;
+  color: #243832;
+  font-size: 14px;
+}
+.appointment-time-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.appointment-time-slots button {
+  height: 48px;
+  border: 1px solid #d7e0dd;
+  border-radius: 8px;
+  color: #243832;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.appointment-time-slots button.selected {
+  border: 2px solid #218b85;
+  background: #e7f6f2;
+  font-weight: 600;
+}
+.appointment-time-help {
+  margin-top: 36px !important;
+  padding: 22px 18px;
+  border-radius: 8px;
+  color: #243832 !important;
+  background: #eaf2ff;
+}
+.appointment-time-drawer footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
+.appointment-time-drawer footer button {
+  min-width: 145px;
+  height: 48px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.appointment-time-drawer footer .secondary {
+  border: 1px solid #d7e0dd;
+  color: #218b85;
+  background: #fff;
+}
+.appointment-time-drawer footer .primary {
+  border: 1px solid #218b85;
+  color: #fff;
+  background: #218b85;
+}
+
+@media (max-width: 900px) {
+  .appointment-create-card {
+    min-height: 0;
+    padding: 32px;
+  }
+  .appointment-create-card .appointment-create-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'patient-type' 'patient' 'phone' 'service-mode' 'selection'
+      'therapist' 'date' 'time' 'note' 'summary';
+    gap: 18px;
+  }
+  .appointment-create-card .appointment-create-grid.is-editing {
+    grid-template-areas:
+      'patient' 'phone' 'service-mode' 'selection'
+      'therapist' 'date' 'time' 'note' 'summary';
+  }
+  .appointment-create-card.is-editing {
+    min-height: 0;
+    padding: 32px;
+  }
+  .appointment-create-card.is-editing > h1 {
+    font-size: 32px;
+  }
+  .appointment-reschedule-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'patient' 'service' 'therapist' 'date' 'time' 'branch' 'note';
+    gap: 18px;
+  }
+  .appointment-create-card.is-editing .appointment-save {
+    margin-top: 40px;
+  }
+  .appointment-create-card .appointment-save {
+    margin-top: 40px;
+  }
+}
+
+@media (max-width: 600px) {
+  .appointment-back-row { width: 100%; }
+  .appointment-create-card { padding: 26px 18px; }
+  .appointment-create-card.is-editing { padding: 26px 18px; }
+  .appointment-create-card > h1 { font-size: 26px; }
+  .appointment-service-mode-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .appointment-list-mode-toggle {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .appointment-time-picker { align-items: stretch; flex-direction: column; padding: 10px; }
+  .appointment-time-picker > span { padding: 6px; }
+  .appointment-time-picker button { width: 100%; min-width: 0; }
+  .reschedule-time-trigger { align-items: stretch; flex-direction: column; }
+  .appointment-create-card .appointment-save { flex-direction: column-reverse; }
+  .appointment-create-card .appointment-save button,
+  .appointment-create-card .appointment-save .primary { width: 100%; min-width: 0; }
+  .appointment-time-drawer { padding: 34px 20px 28px; }
+  .appointment-time-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .appointment-time-drawer footer { display: grid; grid-template-columns: 1fr 1fr; margin-top: 32px; }
+  .appointment-time-drawer footer button { min-width: 0; }
+}
