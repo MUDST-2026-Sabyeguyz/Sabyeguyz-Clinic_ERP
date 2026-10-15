@@ -4,6 +4,7 @@ export interface PatientRegistrationForm {
   title: string
   customerType: string
   firstName: string
+  middleName: string
   lastName: string
   nickname: string
   fullNameEnglish: string
