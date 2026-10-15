@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.enums.ServiceType;
@@ -24,9 +25,11 @@ public class CommissionPreviewService {
     private final CourseRepository courses;
     private final CommissionSchemeResolver schemeResolver;
     private final CommissionTierResolver tierResolver;
+    private final MonthlyTierSalesService tierSales;
 
     public CommissionPreviewService(CourseRepository courses, CommissionSchemeResolver schemeResolver,
-                                     CommissionTierResolver tierResolver) {
+                                     CommissionTierResolver tierResolver, MonthlyTierSalesService tierSales) {
+        this.tierSales = tierSales;
         this.courses = courses;
         this.schemeResolver = schemeResolver;
         this.tierResolver = tierResolver;
@@ -49,13 +52,13 @@ public class CommissionPreviewService {
         if (totalVisits == null || totalVisits < 1) {
             throw new IllegalArgumentException("คอร์สนี้ไม่ได้ตั้งค่าจำนวนครั้ง");
         }
-        LocalDate date = saleDate == null ? LocalDate.now() : saleDate;
+        LocalDate date = saleDate == null ? ClinicTime.today() : saleDate;
         BigDecimal gross = priceOverride != null ? priceOverride : courseTemplate.getServicePrice();
         BigDecimal net = (discount == null ? Discount.none() : discount).apply(gross);
 
         CommissionScheme scheme = schemeResolver.resolveEffective(date);
-        BigDecimal monthlySalesToDate = courses
-                .sumCreditedSalesByStaffAndSaleMonth(seller.getId(), date.format(SALE_MONTH)).add(net);
+        BigDecimal monthlySalesToDate = tierSales
+                .netSales(seller.getId(), date.format(SALE_MONTH)).add(net);
         BigDecimal rate = tierResolver.resolve(scheme, monthlySalesToDate).getCommissionRate();
 
         BigDecimal pool = net.multiply(rate).setScale(2, RoundingMode.HALF_UP);
