@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.report;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.appointment.Appointment;
 import com.sabyeguyz.clinicv2.appointment.AppointmentRepository;
@@ -192,7 +193,7 @@ public class ReportController {
                     c.getReceipt().getBranch().getBranchCode(), c.getCourseName(), purchased, c.getVisitsUsed(),
                     c.getRemainingVisits(), c.getCourseCreateAt(),
                     c.getExpiryDate().atStartOfDay(CLINIC_ZONE).toInstant(),
-                    c.getExpiryDate().isBefore(LocalDate.now()));
+                    c.getExpiryDate().isBefore(ClinicTime.today()));
         }).toList();
         return new CourseBalanceReport(balanceRows.size(), balanceRows);
     }
