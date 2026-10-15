@@ -10,4 +10,4 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && l
     && apt-get update && apt-get install -y --no-install-recommends maven postgresql-client chromium libgtk-3-0 libgbm1 libnotify4 libnss3 libxss1 libasound2 libxtst6 xauth xvfb \
     && rm -rf /var/lib/apt/lists/*
 USER jenkins
-RUN jenkins-plugin-cli --plugins workflow-aggregator git
+RUN jenkins-plugin-cli --plugins workflow-aggregator git junit
