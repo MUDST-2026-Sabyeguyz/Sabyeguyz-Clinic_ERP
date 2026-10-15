@@ -111,6 +111,26 @@ describe('monthly payments page', () => {
     ).toHaveLength(1)
   })
 
+  it('sends the payment date and reference the Manager entered', async () => {
+    responses['GET /api/commission/payments'] = [payment({ status: 'CLOSED' })]
+    await mountView(CommissionPaymentsView)
+    await click('ยืนยันจ่าย')
+    await page().find('input[aria-label="วันที่จ่าย"]').setValue('2026-10-05')
+    await page().find('input[aria-label="เลขที่อ้างอิง"]').setValue('TRF-001')
+    await page().find('.confirm-modal .confirm').trigger('click')
+    await flushPromises()
+    const pay = calls.find((c) => c.method === 'POST' && c.url === '/api/commission/payments/1/pay')
+    expect(pay?.body).toEqual({ paidDate: '2026-10-05', reference: 'TRF-001' })
+  })
+
+  it('shows the payment date and reference of a paid row', async () => {
+    responses['GET /api/commission/payments'] = [
+      payment({ status: 'PAID', paidDate: '2026-10-05', paymentReference: 'TRF-001' }),
+    ]
+    await mountView(CommissionPaymentsView)
+    expect(page().find('tbody tr').text()).toContain('อ้างอิง TRF-001')
+  })
+
   it('shows the server refusal of an action', async () => {
     responses['GET /api/commission/payments'] = [payment()]
     failing['POST /api/commission/payments/1/close'] = 'ยังปิดงวดไม่ได้'
@@ -189,8 +209,23 @@ describe('adjustments page', () => {
   it('refuses to save an incomplete adjustment without calling the server', async () => {
     await mountView(CommissionAdjustmentsView)
     await click('+ สร้างใบปรับยอด')
-    await click('บันทึกใบปรับยอด')
+    await click('บันทึกและนำไปใช้ในงวด')
     expect(page().find('.drawer-error').text()).toContain('กรุณาเลือกพนักงาน')
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('asks for the consent reference when a deduction is applied in the same step', async () => {
+    responses['GET /api/staff'] = [
+      { id: 7, userId: 1, username: 't', role: 'THERAPIST', employeeCode: 'T1', fullName: 'Therapist Demo', active: true },
+    ]
+    await mountView(CommissionAdjustmentsView)
+    await click('+ สร้างใบปรับยอด')
+    const numbers = page().findAll('.rule-form input[type="number"]')
+    await numbers[0]!.setValue('50')
+    await numbers[1]!.setValue('12')
+    await page().find('.rule-form input[maxlength="255"]').setValue('ผู้รักษาผิดคน')
+    await click('บันทึกและนำไปใช้ในงวด')
+    expect(page().find('.drawer-error').text()).toContain('เลขที่อ้างอิงความยินยอม')
     expect(calls.some((c) => c.method === 'POST')).toBe(false)
   })
 })
