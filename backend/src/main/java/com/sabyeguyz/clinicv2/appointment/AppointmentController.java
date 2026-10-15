@@ -153,6 +153,8 @@ public class AppointmentController {
         }
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
         AppointmentStatus initial = parseInitialStatus(request.status());
+        Service chosen = request.serviceId() == null ? null : services.findById(request.serviceId()).orElse(null);
+        availability.requireNoGoogleBusy(branch, chosen, local.toLocalDate(), local.toLocalTime());
         if ("NEW".equalsIgnoreCase(request.patientType())) {
             RequestedServiceType requested = request.requestedServiceType() == null || request.requestedServiceType().isBlank()
                     ? null : RequestedServiceType.valueOf(request.requestedServiceType().trim());
@@ -224,6 +226,8 @@ public class AppointmentController {
         requireAppointmentAccess(id);
         if (request.startAt() == null) throw new IllegalArgumentException("ต้องระบุเวลานัดใหม่");
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
+        Appointment current = service.get(id);
+        availability.requireNoGoogleBusy(current.getBranch(), current.getService(), local.toLocalDate(), local.toLocalTime());
         // Reassigning the therapist on reschedule is not supported yet (AppointmentService.reschedule
         // only moves date/time) - request.therapistId() is accepted but ignored, flagged for the team.
         Appointment appointment = service.reschedule(id, local.toLocalDate(), local.toLocalTime(),

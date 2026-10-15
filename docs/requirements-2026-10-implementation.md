@@ -20,7 +20,7 @@ to be added there (the comparison in `commission-schema-migration.md` lists 52 t
 |---|---|---|
 | 1.1 | New-patient form: nickname, phone, date/time and therapist required; first/last name not asked | Done. The form has one name field, relabelled "ชื่อเล่น" (stored in `appointment.contact_name`) |
 | 1.2 | Choose the therapist | Done, required |
-| 1.3 | Detect free times | Done: `GET /api/appointments/availability` (branch booking window, past times, overlap with the therapist's other appointments). **Not done:** a Busy event added by hand in Google Calendar is not read back, because the sync only follows events it created itself |
+| 1.3 | Detect free times | Done: `GET /api/appointments/availability` (branch booking window, past times, overlap with the therapist's other appointments, and Busy time in the branch's Google Calendar). See "Busy time from Google Calendar" below |
 | 1.4 | Book without choosing a service | Done (`service` optional for a registered patient, "ยังไม่ระบุบริการ") |
 | 1.5-1.7 | Confirmed CURRENT patient goes to the services page; NEW registers then goes to services without searching again | Done. The first part already existed; NEW now goes to `/staff/services?patientId=` straight after registering |
 | 1.8 | Do not link the registered patient back to the NEW appointment | Done: the link call was removed. The NEW appointment stays NEW and Confirmed (see open questions) |
@@ -69,5 +69,19 @@ The course page shows the request form, the waiting request and the real history
 
 1. NEW appointment after registration: it is left as it was (NEW, Confirmed). Should something mark it done?
 2. Notes 4.2 ("bonus sessions ... gone") and 3.2 ("Commission pool = whole shop's sales") were not clear enough to change anything.
-3. Should a Busy event typed by hand into Google Calendar block a free time? It needs a read of the calendar's events at booking time.
+3. A Busy event in a branch calendar blocks that time for **every** therapist of the branch (the calendar is per branch, an event is not tied to one therapist). Is that what the clinic wants, or should a therapist have their own calendar?
 4. Phase 2: printed commission report for everyone.
+
+## Busy time from Google Calendar
+
+When a branch has a Google Calendar and the sync is switched on, the free-time lookup and the booking read that day's
+events from the calendar. An event counts as Busy when it is not cancelled, not marked "Free" (transparent) and was not
+written by this system (its own events are appointments already). All-day events cover whole days.
+
+- A Busy event blocks the time for every therapist of the branch (the calendar belongs to the branch).
+- The availability answer has `googleCalendar`: `NOT_CONNECTED`, `CHECKED` or `UNAVAILABLE`. A booking or move on Busy time is
+  refused with 400. When Google cannot be read the booking is **not** blocked and the screen says that only the system's
+  own appointments were used.
+- The real client (`HttpGoogleCalendarClient.busyBlocks`) is checked against a local stand-in for Google, without an
+  account: `java -cp "target/classes:target/test-classes:$(cat target/test-classpath.txt)" com.sabyeguyz.clinicv2.calendar.HttpBusyBlocksCheck`
+  prints `BUSY_CHECK_OK`. It has not been run against a real Google calendar.
