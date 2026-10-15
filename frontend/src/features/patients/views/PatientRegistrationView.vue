@@ -288,14 +288,9 @@ async function submit() {
     })
     registeredPatientId.value = result.id
     if (appointmentId.value) {
-      try {
-        await appointmentApi.linkPatient(appointmentId.value, result.id)
-      } catch (error) {
-        // A committed link whose response was lost can be safely recognized by exact patient ID.
-        const current = await appointmentApi.get(appointmentId.value)
-        if (current.patient.id !== result.id) throw error
-      }
-      await router.push({ path: '/staff/services', query: { patientId: result.id, appointmentId: appointmentId.value } })
+      // The NEW appointment only brought the contact details here: the patient is not linked back to it and the
+      // visit does not remember which NEW appointment it came from. Go straight on to the services page.
+      await router.push({ path: '/staff/services', query: { patientId: result.id } })
       return
     }
     registeredHn.value = result.hn
@@ -328,7 +323,6 @@ async function submit() {
           <p>กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p>
         </div>
         <p v-if="sourceAppointment">ลงทะเบียนสำหรับนัดหมาย #{{ sourceAppointment.id }} — {{ sourceAppointment.contactName }}</p>
-        <button v-if="appointmentId && registeredPatientId" type="button" :disabled="submitting" @click="submit">ลองเชื่อมนัดหมายอีกครั้ง</button>
         <form class="form-card" novalidate @submit.prevent="requestSubmit">
           <section class="registration-section">
             <h2>ข้อมูลส่วนตัว</h2>
