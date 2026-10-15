@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class CypressCalendarFakeController {
     public record EditRequest(String calendarId, Long appointmentId, String start, boolean cancel) {}
 
+    public record BusyRequest(String calendarId, String start, String end) {}
+
     private final FakeGoogleCalendarClient fake;
 
     public CypressCalendarFakeController(FakeGoogleCalendarClient fake) {
@@ -39,6 +41,19 @@ public class CypressCalendarFakeController {
         FakeGoogleCalendarClient.FakeEvent event = fake.edit(request.calendarId(), request.appointmentId(),
                 request.start() == null ? null : LocalDateTime.parse(request.start()), request.cancel());
         return Map.of("id", event.id, "start", event.start.toString(), "cancelled", event.cancelled);
+    }
+
+    /** A person adds a Busy event by hand in the calendar. */
+    @PostMapping("/busy")
+    public Map<String, Object> busy(@RequestBody BusyRequest request) {
+        fake.addBusy(request.calendarId(), LocalDateTime.parse(request.start()), LocalDateTime.parse(request.end()));
+        return Map.of("added", true);
+    }
+
+    @PostMapping("/fail-busy")
+    public Map<String, Object> failBusy(@RequestParam int count) {
+        fake.failBusyNext(count);
+        return Map.of("failing", count);
     }
 
     @PostMapping("/fail")
