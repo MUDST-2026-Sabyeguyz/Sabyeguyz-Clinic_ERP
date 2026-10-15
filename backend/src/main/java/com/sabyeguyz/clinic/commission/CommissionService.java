@@ -68,8 +68,8 @@ public class CommissionService {
         if(from==null||to==null||to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
         ZoneId zone=ZoneId.of("Asia/Bangkok"); List<Sale> rows=sales.findPaidForCommission(from.atStartOfDay(zone).toInstant(),to.plusDays(1).atStartOfDay(zone).toInstant());
         Map<String,List<Sale>> groups=new LinkedHashMap<>();
-        for(Sale s:rows){String key=(s.getSalesperson()==null?"-":s.getSalesperson().getId())+"|"+s.getBranch().getCode();groups.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(s);}
-        return groups.values().stream().map(g->{Sale first=g.get(0);BigDecimal base=g.stream().map(Sale::getTotal).reduce(BigDecimal.ZERO,BigDecimal::add);CommissionTier tier=resolve(to,base);return new ReportRow(first.getSalesperson()==null?null:first.getSalesperson().getId(),first.getSalesperson()==null?"ไม่ระบุ":first.getSalesperson().getFullName(),first.getBranch().getCode(),first.getBranch().getName(),g.size(),base,tier.getCommissionRate(),base.multiply(tier.getCommissionRate()));}).toList();
+        for(Sale s:rows){String key=(s.getSalesperson()==null?"-":s.getSalesperson().getId())+"|"+s.getBranch().getBranchCode();groups.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(s);}
+        return groups.values().stream().map(g->{Sale first=g.get(0);BigDecimal base=g.stream().map(Sale::getTotal).reduce(BigDecimal.ZERO,BigDecimal::add);CommissionTier tier=resolve(to,base);return new ReportRow(first.getSalesperson()==null?null:first.getSalesperson().getId(),first.getSalesperson()==null?"ไม่ระบุ":first.getSalesperson().getFullName(),first.getBranch().getBranchCode(),first.getBranch().getName(),g.size(),base,tier.getCommissionRate(),base.multiply(tier.getCommissionRate()));}).toList();
     }
     private CommissionScheme find(long id){return schemes.findById(id).orElseThrow(()->new IllegalArgumentException("commission scheme not found"));}
     private void validateMetadata(String name,String version,LocalDate from,LocalDate to,List<TierInput> inputs){if(name==null||name.isBlank()||version==null||version.isBlank()||from==null)throw new IllegalArgumentException("scheme metadata is required");if(to!=null&&!to.isAfter(from))throw new IllegalArgumentException("effective_to must be after effective_from");if(inputs==null||inputs.isEmpty())throw new IllegalArgumentException("at least one commission tier is required");}
@@ -111,7 +111,7 @@ public class CommissionService {
             var treating = row.getTreating();
             var owner = row.getOwner();
             return new TreatmentReportRow(row.getId(), row.getVisitDate(), purchase.getId(), purchase.getCourseCode(),
-                    patient.getId(), patient.getHn(), patient.getFullName(), branch.getCode(), branch.getName(),
+                    patient.getId(), patient.getHn(), patient.getFullName(), branch.getBranchCode(), branch.getName(),
                     treating == null ? null : treating.getId(), treating == null ? "ไม่ระบุ" : treating.getFullName(),
                     owner == null ? null : owner.getId(), owner == null ? "ไม่ระบุ" : owner.getFullName(),
                     row.getGross(), row.getFee(), row.getOwnerNet());

@@ -1,6 +1,13 @@
 .registration-page {
+  font-family: 'Noto Sans Thai', 'Leelawadee UI', Tahoma, Arial, sans-serif;
   min-height: 100vh;
   background: var(--clinic-background);
+}
+.registration-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 1px;
 }
 .clinic-header {
   height: 108px;
@@ -121,6 +128,114 @@ fieldset {
   margin: 0 0 20px;
   padding: 0;
   border: 0;
+}
+.patient-type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.patient-type legend {
+  width: 100%;
+  font-weight: 600;
+}
+.patient-type label {
+  display: flex;
+  width: 220px;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid #cbd5d1;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.patient-type label.selected {
+  border: 2px solid #1e807c;
+  background: #e8f3f0;
+}
+.patient-type input {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #1e807c;
+  box-shadow: none;
+}
+.duplicate-modal {
+  box-sizing: border-box;
+  width: min(560px, 100%);
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+}
+.duplicate-modal h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: normal;
+}
+.duplicate-modal > strong {
+  display: block;
+  margin: 0;
+  color: #991b1b;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: normal;
+}
+.duplicate-modal > p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 16px;
+  line-height: 32px;
+}
+.duplicate-patient {
+  display: flex;
+  min-height: 68px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #f3f7f5;
+  text-align: center;
+}
+.duplicate-patient b {
+  color: #111827;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: normal;
+}
+.duplicate-patient span {
+  color: #111827;
+  font-size: 16px;
+  line-height: normal;
+}
+.duplicate-modal .registration-modal-actions {
+  height: 44px;
+  margin-top: 0;
+}
+.duplicate-modal .registration-modal-actions button {
+  min-height: 44px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.duplicate-modal .registration-modal-actions .secondary {
+  border-color: transparent;
+  background: #eef3f0;
+  color: #25372e;
+}
+.duplicate-modal .registration-modal-actions .primary {
+  border-color: #1e807c;
+  background: #1e807c;
+  color: #fff;
 }
 input:disabled {
   color: #7d8987;
@@ -353,7 +468,7 @@ fieldset {
   cursor: pointer;
 }
 .primary {
-  background: #1d7c78;
+  background: #1e807c;
   box-shadow: 0 6px 15px rgb(22 100 96 / 18%);
 }
 .primary:hover:not(:disabled) {
@@ -404,5 +519,134 @@ fieldset {
   .primary,
   .secondary {
     min-width: 100px;
+  }
+}
+.registration-modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(17 24 39 / 42%);
+}
+.registration-modal {
+  width: min(520px, 100%);
+  padding: 34px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(20 45 38 / 25%);
+}
+.confirmation-modal {
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  min-height: 218px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px;
+  border: 1px solid #e9e4dc;
+  background: #fff;
+  box-shadow:
+    0 20px 40px -10px rgb(42 54 40 / 18%),
+    0 8px 16px -6px rgb(42 54 40 / 10%);
+}
+.confirmation-modal h2 {
+  margin: 0;
+  padding-bottom: 8px;
+  color: #1f2937;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30.25px;
+  letter-spacing: -0.55px;
+  text-align: center;
+}
+.confirmation-modal-spacer {
+  width: 56px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+.confirmation-modal .registration-modal-actions {
+  width: 100%;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+.confirmation-modal .registration-modal-actions button {
+  min-height: 46px;
+  padding: 15px 22px;
+  border-width: 2px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.confirmation-modal .registration-modal-actions .secondary {
+  border-color: #1e807c;
+  background: #faf6f0;
+  color: #1f2937;
+}
+.confirmation-modal .registration-modal-actions .primary {
+  border-color: transparent;
+  background: #1e807c;
+  color: #fff;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
+}
+.registration-modal h2 {
+  margin: 0 0 7px;
+  font-size: 27px;
+}
+.registration-modal > p {
+  margin: 0 0 22px;
+  color: #647b7e;
+}
+.registration-modal dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 18px;
+  border-radius: 10px;
+  background: #f5f8f5;
+}
+.registration-modal dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+.registration-modal dt {
+  color: #647b7e;
+}
+.registration-modal dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+.registration-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+.registration-modal-actions button {
+  font: inherit;
+}
+@media (max-width: 560px) {
+  .confirmation-modal {
+    width: min(420px, 100%);
+    min-height: 206px;
+    padding: 24px 20px;
+  }
+  .confirmation-modal .registration-modal-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .duplicate-modal {
+    min-height: auto;
+    padding: 28px 22px;
+  }
+  .registration-modal-actions {
+    grid-template-columns: 1fr;
+  }
+  .duplicate-modal .registration-modal-actions {
+    height: auto;
   }
 }

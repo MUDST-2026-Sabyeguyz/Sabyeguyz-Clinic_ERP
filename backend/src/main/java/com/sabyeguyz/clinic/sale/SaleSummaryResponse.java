@@ -17,15 +17,17 @@ public record SaleSummaryResponse(
         BigDecimal paid,
         SaleStatus status,
         Instant soldAt,
-        Instant voidedAt
+        Instant voidedAt,
+        String voidReason,
+        String itemDescription
 ) {
-    static SaleSummaryResponse from(Sale sale, BigDecimal paid) {
+    static SaleSummaryResponse from(Sale sale, BigDecimal paid, String itemDescription) {
         return new SaleSummaryResponse(
                 sale.getId(),
                 sale.getReceiptNo(),
                 new SaleResponse.PatientSummary(sale.getPatient().getId(), sale.getPatient().getHn(),
                         sale.getPatient().getFullName()),
-                sale.getBranch().getCode(),
+                sale.getBranch().getBranchCode(),
                 sale.getSalesperson() == null ? null : new SaleResponse.SalespersonSummary(
                         sale.getSalesperson().getId(), sale.getSalesperson().getEmployeeCode(),
                         sale.getSalesperson().getFullName()),
@@ -33,6 +35,8 @@ public record SaleSummaryResponse(
                 paid,
                 sale.getStatus(),
                 sale.getSoldAt(),
-                sale.getVoidedAt());
+                sale.getVoidedAt(),
+                sale.getVoidReason(),
+                itemDescription);
     }
 }

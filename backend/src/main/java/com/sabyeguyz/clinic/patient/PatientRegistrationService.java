@@ -25,14 +25,14 @@ public class PatientRegistrationService {
 
     @Transactional
     public PatientResponse register(PatientRegistrationRequest request) {
-        Branch branch = branchRepository.findByCodeAndActiveTrue(request.branchCode().toUpperCase())
+        Branch branch = branchRepository.findByBranchCodeAndActiveTrue(request.branchCode().trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
         if (patientRepository.existsByUsernameOrIdentityNumber(request.username(), request.identityNumber())) {
             throw new IllegalArgumentException("ชื่อผู้ใช้หรือเลขเอกสารยืนยันตัวตนถูกใช้งานแล้ว");
         }
         Patient patient = patientRepository.save(new Patient(branch, request, passwordEncoder.encode(request.password())));
         entityManager.flush();
-        patient.assignHn(hnGenerator.next(branch.getId(), branch.getNumericCode(), LocalDate.now()));
+        patient.assignHn(hnGenerator.next(branch.getId(), branch.getBranchCode(), LocalDate.now()));
         return PatientResponse.from(patient);
     }
 }

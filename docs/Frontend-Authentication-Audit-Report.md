@@ -1,9 +1,7 @@
-# รายงานตรวจสอบการยืนยันตัวตนของ Frontend (historical)
+# รายงานตรวจสอบการยืนยันตัวตนของ Frontend
 
 วันที่ตรวจสอบ: 11 กันยายน 2026  
-ขอบเขตเดิม: `frontend/src` เทียบกับ security configuration ของ backend
-
-หมายเหตุ: ข้อค้นพบด้าน mock ในรายงานนี้เป็น snapshot ก่อนการเชื่อม backend บน branch `xan-database-connect`; ไฟล์ mock ถูกลบแล้วและโค้ดปัจจุบันใช้ API client กลาง
+ขอบเขต: `frontend/src` เทียบกับ security configuration ของ backend
 
 ## สรุปผล
 
@@ -25,19 +23,19 @@ Request ไปที่ `POST http://localhost/api/patients` ได้ response 
 
 ### 1. ระบบ login ยังเป็น mock
 
-ไฟล์เดิม: `frontend/src/features/auth/views/StaffLoginView.vue`
+ไฟล์: `frontend/src/features/auth/views/StaffLoginView.vue`
 
 ฟังก์ชัน `signIn()` ทำเพียง:
 
 - ตรวจว่ามี username/password
-- บันทึก session ที่ได้จาก backend ลง localStorage
+- บันทึก `mockStaffRole` ลง localStorage
 - redirect ไปหน้าถัดไป
 
 ไม่มีการเรียก `/api/auth/login` และไม่มีการบันทึก `response.token`
 
 ### 2. API ลงทะเบียนผู้ป่วยไม่ส่ง token
 
-ไฟล์เดิม: `frontend/src/api/patients.ts`
+ไฟล์: `frontend/src/api/patients.ts`
 
 ฟังก์ชัน `registerPatient()` ส่งเฉพาะ header:
 
@@ -55,7 +53,7 @@ Authorization: `Bearer ${token}`
 
 ### 3. หน้าอื่นยังเป็น mock/localStorage
 
-จากการค้นหา `fetch`, `/api/`, `Authorization` และ `axios` ใน `frontend/src` รายงานเดิมพบ API call จริงเพียง `registerPatient()` เท่านั้น
+จากการค้นหา `fetch`, `/api/`, `Authorization` และ `axios` ใน `frontend/src` พบ API call จริงเพียง `registerPatient()` เท่านั้น
 
 หน้าที่พบว่าใช้ mock data หรือ localStorage ได้แก่:
 
@@ -89,7 +87,7 @@ Backend อนุญาตโดยไม่ต้อง login เฉพาะ:
 1. เปลี่ยน `StaffLoginView.vue` ให้เรียก `/api/auth/login`
 2. เก็บ JWT เช่น `localStorage.setItem('authToken', response.token)`
 3. สร้าง shared API client หรือ helper สำหรับเติม `Authorization` ทุก request
-4. ให้ logout ลบ token และ session ที่เก็บไว้
+4. ให้ logout ลบ token และ `mockStaffRole`
 5. เมื่อเริ่มเชื่อมหน้า mock เข้ากับ backend ให้ตรวจทุก request ว่ามี token และจัดการกรณี `401` โดยส่งกลับหน้า login
 6. ไม่ควรใช้ role จาก localStorage เป็นหลักในการอนุญาตสิทธิ์ เพราะสิทธิ์จริงควรอ้างอิงจาก JWT/backend
 

@@ -21,6 +21,8 @@ Sabyeguyz-Clinic_ERP/
 
 ต้องเปิด Docker Desktop และใช้ Linux containers:
 
+คัดลอก `.env.example` เป็น `.env` แล้วตั้ง `POSTGRES_PASSWORD` และ `JWT_SECRET` ก่อนรัน:
+
 ```bash
 docker compose up --build -d
 docker compose ps
@@ -28,7 +30,7 @@ docker compose ps
 
 รอให้ `postgres` healthy และ Backend health เป็น `UP` ก่อนใช้งาน:
 
-- Frontend: http://localhost (nginx ใน container port 80)
+- Frontend: http://localhost
 - Patients: http://localhost/patients
 - Appointments: http://localhost/appointments
 - Backend health: http://localhost:8080/actuator/health
@@ -42,6 +44,8 @@ docker compose down
 อย่าใช้ `down -v` หากต้องการเก็บฐานข้อมูลใน local volume
 
 ## วิธีพัฒนาแยกบริการ
+
+ก่อนรัน Backend แยก ให้ตั้ง `DATABASE_PASSWORD` ให้ตรงกับ `POSTGRES_PASSWORD` ใน `.env` และตั้ง `JWT_SECRET` ใน shell ที่ใช้รัน Maven
 
 ```bash
 docker compose up -d postgres
@@ -57,7 +61,7 @@ npm ci
 npm run dev
 ```
 
-เมื่อรัน Frontend แยกด้วย Vite จะใช้ `http://localhost:5173` และเรียก Backend ที่ `http://localhost:8080` ผ่าน `VITE_API_BASE_URL`
+Frontend ใช้ `http://localhost:5173` และเรียก Backend ที่ `http://localhost:8080` ผ่าน `VITE_API_BASE_URL`
 
 ## ตรวจสอบคุณภาพ
 
@@ -67,7 +71,7 @@ mvn test
 cd ../frontend
 npm run test:unit -- --run
 npm run build
-npm run test:integration
+npm run test:e2e -- --project=chromium
 ```
 
 ## Port อื่น

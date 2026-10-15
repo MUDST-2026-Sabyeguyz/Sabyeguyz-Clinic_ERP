@@ -73,7 +73,7 @@ public record SaleResponse(
                 sale.getReceiptNo(),
                 new PatientSummary(sale.getPatient().getId(), sale.getPatient().getHn(),
                         sale.getPatient().getFullName()),
-                sale.getBranch().getCode(),
+                sale.getBranch().getBranchCode(),
                 sale.getSalesperson() == null ? null : new SalespersonSummary(sale.getSalesperson().getId(),
                         sale.getSalesperson().getEmployeeCode(), sale.getSalesperson().getFullName()),
                 sale.getTotal(), sale.getTotal(), BigDecimal.ZERO, BigDecimal.ZERO, sale.getTotal(),

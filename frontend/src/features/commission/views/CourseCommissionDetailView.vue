@@ -2,34 +2,58 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { courseApi, type CoursePurchase } from '@/api/client'
+import { courseApi } from '@/api/client'
 const route = useRoute()
-const courseId = computed(() => Number(route.params.courseId))
-const ledger = ref<Array<{date:string;patient:string;owner:string;treating:string;gross:number;fee:number;net:number}>>([])
-const purchase = ref<(CoursePurchase & { commissionStatus?: string; lockedCommissionRate?: number; totalCourseCommissionPool?: number; commissionAllocationPerVisit?: number }) | null>(null)
-const loadError = ref('')
-const formatCurrency = (value: number | undefined) => value === undefined ? '—' : `฿${value.toLocaleString('th-TH')}`
+const courseId = computed(() => String(route.params.courseId || ''))
+const ledger = ref<
+  Array<{
+    date: string
+    patient: string
+    owner: string
+    treating: string
+    gross: number
+    fee: number
+    net: number
+  }>
+>([])
+const purchase = ref<{
+  patient: { fullName: string }
+  course: { name: string }
+  purchasedAt: string
+  price: number
+  used: number
+  remaining: number
+  commissionStatus?: string
+  lockedCommissionRate?: number
+  totalCourseCommissionPool?: number
+  commissionAllocationPerVisit?: number
+} | null>(null)
 onMounted(async () => {
-  if (!Number.isInteger(courseId.value)) {
-    loadError.value = 'ไม่พบรหัสคอร์สที่ต้องการตรวจสอบ'
-    return
-  }
-  try {
-    const data = await courseApi.ledger(courseId.value)
-    purchase.value = data.purchase
-    ledger.value = data.allocations.map((item) => ({
-      date: item.visitDate,
-      patient: data.purchase.patient.fullName,
-      owner: '—',
-      treating: '—',
-      gross: item.gross,
-      fee: item.fee,
-      net: item.ownerNet,
-    }))
-  } catch {
-    loadError.value = 'โหลดรายละเอียดคอมมิชชันจาก backend ไม่สำเร็จ'
+  const id = Number(courseId.value)
+  if (!Number.isNaN(id)) {
+    try {
+      const data = await courseApi.ledger(id)
+      purchase.value = data.purchase
+      ledger.value = (data.allocations || []).map((item) => ({
+        date: item.visitDate,
+        patient: data.purchase.patient.fullName,
+        owner: '—',
+        treating: '—',
+        gross: item.gross,
+        fee: item.fee,
+        net: item.ownerNet,
+      }))
+    } catch {
+      /* invalid legacy display id */
+    }
   }
 })
+const grossAllocated = computed(() => ledger.value.reduce((sum, item) => sum + item.gross, 0))
+const treatmentFees = computed(() => ledger.value.reduce((sum, item) => sum + item.fee, 0))
+const ownerNetReleased = computed(() => ledger.value.reduce((sum, item) => sum + item.net, 0))
+const outstandingPool = computed(() =>
+  Math.max(0, Number(purchase.value?.totalCourseCommissionPool || 0) - grossAllocated.value),
+)
 </script>
 
 <template>
@@ -50,24 +74,55 @@ onMounted(async () => {
         <header>
           <div>
             <small>COURSE ID</small>
-            <h2>{{ purchase?.course.name ?? `คอร์ส #${courseId}` }}</h2>
-            <p class="muted-copy">รหัสคอร์ส {{ purchase?.course.code ?? '—' }} · ซื้อเมื่อ {{ purchase?.purchasedAt ?? '—' }}</p>
+            <h2>{{ courseId }}</h2>
+            <p class="muted-copy">วันที่ซื้อ {{ purchase?.purchasedAt || '—' }}</p>
           </div>
           <span class="status locked">ล็อกอัตราแล้ว</span>
         </header>
         <div class="detail-grid">
-          <article><span>ผู้ป่วย</span><b>{{ purchase?.patient.fullName ?? '—' }}</b></article>
-          <article><span>สาขา</span><b>{{ purchase?.branchCode ?? '—' }}</b></article>
-          <article><span>แพ็กเกจ</span><b>{{ purchase?.course.name ?? '—' }}</b></article>
-          <article><span>ราคาคอร์ส</span><b>{{ formatCurrency(purchase?.price) }}</b></article>
-          <article><span>สถานะ</span><b>{{ purchase?.commissionStatus ?? purchase?.status ?? '—' }}</b></article>
-          <article><span>Commission Pool</span><b>{{ formatCurrency(purchase?.totalCourseCommissionPool) }}</b></article>
-          <article><span>คอมมิชชันต่อ Visit</span><b>{{ formatCurrency(purchase?.commissionAllocationPerVisit) }}</b></article>
-          <article><span>ใช้แล้ว / คงเหลือ</span><b>{{ purchase?.used ?? '—' }} / {{ purchase?.remaining ?? '—' }} Visits</b></article>
-          <article><span>จำนวนครั้งทั้งหมด</span><b>{{ purchase?.purchased ?? '—' }} Visits</b></article>
-          <article><span>อัตราคอมมิชชัน</span><b>{{ purchase?.lockedCommissionRate === undefined ? '—' : `${purchase.lockedCommissionRate}%` }}</b></article>
-          <article><span>วันหมดอายุ</span><b>{{ purchase?.expiresAt ?? '—' }}</b></article>
-          <article><span>การโหลดข้อมูล</span><b>{{ loadError || 'backend' }}</b></article>
+          <article>
+            <span>ผู้ป่วย</span><b>{{ purchase?.patient.fullName || '—' }}</b>
+          </article>
+          <article>
+            <span>แพ็กเกจ</span><b>{{ purchase?.course.name || '—' }}</b>
+          </article>
+          <article>
+            <span>ราคาคอร์ส</span><b>฿{{ Number(purchase?.price || 0).toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>อัตราที่ล็อก</span
+            ><b>{{
+              purchase?.lockedCommissionRate == null
+                ? '—'
+                : `${purchase.lockedCommissionRate * 100}%`
+            }}</b>
+          </article>
+          <article>
+            <span>Commission Pool</span
+            ><b>฿{{ Number(purchase?.totalCourseCommissionPool || 0).toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>คอมมิชชันต่อ Visit</span
+            ><b
+              >฿{{ Number(purchase?.commissionAllocationPerVisit || 0).toLocaleString('th-TH') }}</b
+            >
+          </article>
+          <article>
+            <span>ใช้แล้ว / คงเหลือ</span
+            ><b>{{ purchase?.used || 0 }} / {{ purchase?.remaining || 0 }} Visits</b>
+          </article>
+          <article>
+            <span>Gross Allocated</span><b>฿{{ grossAllocated.toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>ค่ารักษาแทน</span><b>฿{{ treatmentFees.toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>Owner Net Released</span><b>฿{{ ownerNetReleased.toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>Outstanding Pool</span><b>฿{{ outstandingPool.toLocaleString('th-TH') }}</b>
+          </article>
         </div>
       </section>
       <section class="staff-panel commission-page-panel">
@@ -90,8 +145,6 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loadError"><td colspan="7">{{ loadError }}</td></tr>
-            <tr v-else-if="!ledger.length"><td colspan="7">ยังไม่มีรายการจัดสรรจาก backend</td></tr>
             <tr v-for="item in ledger" :key="item.date">
               <td>{{ item.date }}</td>
               <td>{{ item.patient }}</td>

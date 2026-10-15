@@ -2,6 +2,8 @@
 
 Run from the repository root with Docker Desktop (Linux containers) running:
 
+Copy `.env.example` to `.env`, then set unique `POSTGRES_PASSWORD` and `JWT_SECRET` values.
+
 ```bash
 docker compose config --quiet
 docker compose up --build -d
@@ -10,11 +12,11 @@ docker compose ps
 
 | Service | Local address | Purpose |
 | --- | --- | --- |
-| Frontend | http://localhost:5173/patients | Vue production build served by nginx |
+| Frontend | http://localhost/patients | Vue production build served by nginx |
 | Backend | http://localhost:8080 | Spring Boot REST API |
 | PostgreSQL | localhost:5432 | Database `clinic_erp`, local user `clinic` |
 
-Set `POSTGRES_PASSWORD` and `JWT_SECRET` in a local `.env` file before starting Compose. Never commit `.env`, real patient data, or production credentials. Ports bind to the local machine only.
+Do not use real patient data or production credentials in this setup. Set the database and JWT secrets in `.env` before starting Compose.
 
 PostgreSQL must become healthy before the backend starts. Spring Boot applies Flyway migrations and validates the schema. The frontend health check at `/healthz` checks nginx only; wait for http://localhost:8080/actuator/health to return `{"status":"UP"}` before using patient operations.
 
@@ -24,9 +26,9 @@ nginx forwards `/api/` requests to `backend:8080` without removing the `/api/` p
 
 Use synthetic data only:
 
-1. Open http://localhost:5173/patients/register and complete registration with a unique username, email, and identity number. The existing form selects branch `RP`.
+1. Open http://localhost/patients/register and complete registration with a unique username, email, and identity number. The existing form selects branch `RP`.
 2. Record the HN shown after successful registration.
-3. Open http://localhost:5173/patients and search for that HN.
+3. Open http://localhost/patients and search for that HN.
 4. Open the patient profile and verify the submitted details.
 5. Refresh the profile URL to verify Vue route fallback.
 6. Stop and start the same Compose project, then search for the HN again to verify persistence.
@@ -57,3 +59,7 @@ Remove these process-level overrides before returning to the default ports:
 ```powershell
 Remove-Item Env:FRONTEND_PORT, Env:BACKEND_PORT, Env:POSTGRES_PORT -ErrorAction SilentlyContinue
 ```
+
+## Google Calendar sync (optional)
+
+To turn on the two-way Google Calendar sync, add `compose.calendar.yaml` and a `CALENDAR_KEY_FILE` entry to `.env`; see `docs/deploy-calendar-sync.md`.

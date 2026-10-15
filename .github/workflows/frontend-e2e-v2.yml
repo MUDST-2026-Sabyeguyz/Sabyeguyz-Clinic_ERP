@@ -1,0 +1,108 @@
+name: Frontend E2E (v2 backend)
+
+# Browser tests (Cypress) of the staff web app against the real v2 backend on PostgreSQL 16.
+# The backend is started with the cypress-v2 profile, which resets the data before every test, and the Vite dev
+# server proxies /api to it. See docs/frontend-e2e-tests.md.
+
+on:
+  push:
+    branches: [develop, dev-backed, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
+    paths:
+      - 'frontend/**'
+      - 'backend/src/main/java/com/sabyeguyz/clinicv2/**'
+      - 'backend/src/main/resources/db/migration/**'
+      - 'backend/src/main/resources/db/seed_v2/**'
+      - 'backend/src/test/java/com/sabyeguyz/clinicv2/cypress/**'
+      - '.github/workflows/frontend-e2e-v2.yml'
+  pull_request:
+    branches: [develop, dev-backed]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-e2e-v2.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic
+          POSTGRES_DB: clinic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clinic -d clinic"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: jdbc:postgresql://localhost:5432/clinic
+      DATABASE_USERNAME: clinic
+      DATABASE_PASSWORD: clinic
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install the frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Start the v2 backend on port 18080
+        working-directory: backend
+        run: mvn --batch-mode --no-transfer-progress -Pcypress-v2 test-compile spring-boot:start
+
+      - name: Cypress browser tests
+        uses: cypress-io/github-action@v6
+        env:
+          VITE_API_PROXY_TARGET: http://127.0.0.1:18080
+          CYPRESS_API_URL: http://127.0.0.1:18080
+        with:
+          working-directory: frontend
+          install: false
+          start: npm run dev -- --host localhost --port 5173
+          wait-on: 'http://localhost:5173'
+          wait-on-timeout: 120
+          browser: chrome
+          config-file: cypress.v2.config.ts
+
+      - name: Stop the backend
+        if: always()
+        working-directory: backend
+        run: mvn --batch-mode --no-transfer-progress -Pcypress-v2 spring-boot:stop
+
+      - name: Upload screenshots of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-screenshots
+          path: frontend/cypress/screenshots
+          if-no-files-found: ignore
