@@ -12,7 +12,7 @@ type ClosingRow = {
   staff: string
   sales: number
   rate: number
-  status: 'Open' | 'Closed'
+  status: 'Open' | 'Closed' | 'Finalized'
 }
 
 const selectedMonth = ref(`${clinicToday().slice(0, 8)}01`)
@@ -99,7 +99,8 @@ async function load() {
       staff: row.employeeName,
       sales: Number(row.sales),
       rate: Math.round(Number(row.rate) * 10000) / 100,
-      status: row.status === 'CLOSED' || row.status === 'FINALIZED' ? 'Closed' : 'Open',
+      status:
+        row.status === 'FINALIZED' ? 'Finalized' : row.status === 'CLOSED' ? 'Closed' : 'Open',
     }))
     errorMessage.value = ''
   } catch (error) {
@@ -130,6 +131,29 @@ const visible = computed(() => {
   const keyword = search.value.trim().toLowerCase()
   return rows.value.filter((row) => !keyword || row.staff.toLowerCase().includes(keyword))
 })
+const reopenTarget = ref<ClosingRow | null>(null)
+const reopenReason = ref('')
+async function reopen() {
+  const row = reopenTarget.value
+  if (!row) return
+  if (!reopenReason.value.trim()) {
+    errorMessage.value = 'กรุณาระบุเหตุผลที่ Reopen'
+    return
+  }
+  isSaving.value = true
+  try {
+    await commissionApi.reopenClosing(row.id, reopenReason.value.trim())
+    reopenTarget.value = null
+    reopenReason.value = ''
+    closedSuccessfully.value = false
+    await load()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Reopen ไม่สำเร็จ'
+    reopenTarget.value = null
+  } finally {
+    isSaving.value = false
+  }
+}
 const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)
 const totalPool = computed(() =>
   rows.value.reduce((sum, row) => sum + (row.sales * row.rate) / 100, 0),
@@ -191,6 +215,9 @@ const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.r
         </p>
       </header>
       <CommissionTabs active="closing" />
+      <p v-if="errorMessage && !reopenTarget" class="reopen-error" role="alert">
+        {{ errorMessage }}
+      </p>
       <section class="commission-card commission-table-wrap">
         <table class="commission-table">
           <thead>
@@ -199,6 +226,7 @@ const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.r
               <th>ยอดขาย</th>
               <th>อัตรา</th>
               <th>สถานะ</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -206,10 +234,28 @@ const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.r
               <td>{{ row.staff }}</td>
               <td>{{ currency(row.sales) }}</td>
               <td>{{ row.rate }}%</td>
-              <td>{{ row.status === 'Closed' ? 'ปิดรอบแล้ว' : 'รอปิดรอบ' }}</td>
+              <td>
+                {{
+                  row.status === 'Finalized'
+                    ? 'ปิดรอบแล้ว (จ่ายแล้ว)'
+                    : row.status === 'Closed'
+                      ? 'ปิดรอบแล้ว'
+                      : 'รอปิดรอบ'
+                }}
+              </td>
+              <td>
+                <button
+                  v-if="row.status === 'Closed'"
+                  class="reopen-button"
+                  type="button"
+                  @click="reopenTarget = row"
+                >
+                  Reopen
+                </button>
+              </td>
             </tr>
             <tr v-if="visible.length === 0">
-              <td colspan="4">ไม่พบข้อมูลตามตัวกรอง</td>
+              <td colspan="5">ไม่พบข้อมูลตามตัวกรอง</td>
             </tr>
           </tbody>
         </table>
@@ -305,6 +351,33 @@ const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.r
         </section>
       </template>
     </main>
+    <div
+      v-if="reopenTarget"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="reopenTarget = null"
+    >
+      <section class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="reopen-title">
+        <h2 id="reopen-title">Reopen รอบของ {{ reopenTarget.staff }}?</h2>
+        <p>
+          อัตราที่ล็อกไว้จะถูกปลดและค่าคอมมิชชันที่จัดสรรไว้จะถูกกลับรายการ ปิดรอบใหม่เพื่อคำนวณ
+          Tier ตามยอดขายล่าสุด ทำได้ก่อนจ่ายเท่านั้น
+        </p>
+        <input
+          v-model="reopenReason"
+          aria-label="เหตุผลที่ Reopen"
+          placeholder="เหตุผลที่ Reopen"
+        />
+        <p v-if="errorMessage" class="reopen-error" role="alert">{{ errorMessage }}</p>
+        <div>
+          <button class="cancel" type="button" :disabled="isSaving" @click="reopenTarget = null">
+            ยกเลิก</button
+          ><button class="confirm" type="button" :disabled="isSaving" @click="reopen">
+            ยืนยัน Reopen
+          </button>
+        </div>
+      </section>
+    </div>
     <div
       v-if="isConfirming"
       class="modal-backdrop"
@@ -816,5 +889,31 @@ td {
   .table-scroll {
     grid-column: 1 / -1;
   }
+}
+.reopen-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff1ef;
+  color: #b42318;
+}
+.reopen-button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #d9e1dc;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.confirm-modal input {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid #b7cecc;
+  border-radius: 9px;
+  font: inherit;
 }
 </style>

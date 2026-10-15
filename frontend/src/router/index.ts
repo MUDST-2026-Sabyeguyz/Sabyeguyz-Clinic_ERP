@@ -107,6 +107,24 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
+      path: '/staff/commission/payments',
+      name: 'commission-payments',
+      component: () => import('@/features/commission/views/CommissionPaymentsView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments',
+      name: 'commission-adjustments',
+      component: () => import('@/features/commission/views/CommissionAdjustmentsView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/refunds',
+      name: 'staff-refunds',
+      component: () => import('@/features/refunds/views/RefundView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/commission/staff/:staffId',
       name: 'commission-person-detail',
       component: () => import('@/features/commission/views/CommissionPersonDetailView.vue'),
