@@ -153,6 +153,26 @@ public class CommissionSchemeService {
         return create(base.getSchemeName(), effectiveFrom, effectiveTo, base.getPermission(), tierInputs, actorId);
     }
 
+    /**
+     * New tiers are a new cycle's rules: they start on the first day of a month after the current one, and only once the
+     * commission of the current cycle (and any earlier one) has been closed, so no course is priced under two rule sets.
+     */
+    private void requireNextCycle(LocalDate effectiveFrom) {
+        if (effectiveFrom == null) throw new IllegalArgumentException("ต้องระบุ effective_from");
+        if (effectiveFrom.getDayOfMonth() != 1) {
+            throw new IllegalArgumentException("เวอร์ชันใหม่ต้องเริ่มวันที่ 1 ของเดือน เพื่อให้ใช้ทั้งรอบ");
+        }
+        java.time.YearMonth current = java.time.YearMonth.from(com.sabyeguyz.clinicv2.config.ClinicTime.today());
+        if (!java.time.YearMonth.from(effectiveFrom).isAfter(current)) {
+            throw new IllegalArgumentException("เวอร์ชันใหม่ใช้ตั้งแต่รอบถัดไป ต้องเริ่มหลังเดือน " + current);
+        }
+        long open = courses.countOpenCommissionUpToMonth(current.toString());
+        if (open > 0) {
+            throw new IllegalStateException("ต้องปิดยอดคอมมิชชันของรอบปัจจุบันก่อน (ยังมี " + open
+                    + " คอร์สที่ยังไม่ปิดยอดถึงเดือน " + current + ") จึงจะสร้างเวอร์ชันใหม่ได้");
+        }
+    }
+
     @Transactional
     public void activate(Long id) {
         // v2's Commission_scheme has no status column - only Commission_tier does.
@@ -206,6 +226,8 @@ public class CommissionSchemeService {
                 throw new IllegalArgumentException("ช่วงวันที่ของ Scheme ซ้อนกับ \"" + other.getSchemeName() + "\" เวอร์ชัน "
                         + other.getSchemeVersion() + " ที่มีผลอยู่แล้ว");
             }
+            // new tiers replace the rules that are live now: only from a later cycle, after the current one is closed
+            requireNextCycle(from);
             if (courses.existsBySchemeUsedAfter(other.getId(), from.minusDays(1))) {
                 throw new IllegalStateException("Scheme \"" + other.getSchemeName() + "\" เวอร์ชัน " + other.getSchemeVersion()
                         + " ถูกใช้กับคอร์สที่ขายตั้งแต่วันที่ " + from + " แล้ว จึงสิ้นสุดก่อนวันนั้นไม่ได้");
