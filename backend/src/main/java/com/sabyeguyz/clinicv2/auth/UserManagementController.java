@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.auth;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.branch.Branch;
@@ -94,7 +95,7 @@ public class UserManagementController {
         StaffPosition position = resolvePosition(request.role());
 
         Staff staff = staffService.create(request.employeeCode(), names[0], names[1], position, branch,
-                LocalDate.now(), actor.currentId());
+                ClinicTime.today(), actor.currentId());
         AppUser user = appUserService.register(request.username(), request.password(), staff, actor.currentId());
         Role role = resolveOrCreateRole(request.role());
         appUserService.assignRole(user.getId(), role.getId());

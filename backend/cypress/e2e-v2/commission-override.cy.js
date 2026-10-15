@@ -1,4 +1,4 @@
-const month = new Date().toISOString().slice(0, 7)
+const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).slice(0, 7)
 const range = '?from=2020-01-01&to=2099-12-31'
 
 function buyAndClose(fx, patient) {
@@ -63,20 +63,16 @@ describe('v2 commission rate override and credited staff sales', () => {
     })
   })
 
-  it('credits a split course sale to each PT in the staff sales report', function () {
+  it('credits a course sale to its seller (the Owner PT) in full in the staff sales report', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
-        shares: [
-          { staffId: this.fixtures.managerStaffId, percent: 60 },
-          { staffId: this.fixtures.therapistId, percent: 40 },
-        ],
+        caseOwnerStaffId: this.fixtures.therapistId,
       }).its('status').should('equal', 201)
       cy.api('GET', `/api/reports/staff-sales${range}`).then(({ status, body }) => {
         expect(status).to.equal(200)
         const amountOf = (needle) => Number(body.rows.find((row) => row.fullName.includes(needle)).amount)
-        expect(amountOf('Manager')).to.equal(5400)
-        expect(amountOf('Therapist Demo')).to.equal(3600)
+        expect(amountOf('Therapist Demo')).to.equal(9000)
       })
     })
   })
