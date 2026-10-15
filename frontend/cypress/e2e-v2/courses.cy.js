@@ -12,7 +12,7 @@ const useOnce = (purchase) => cy.api('POST', '/api/course-usages', { coursePurch
 describe('patient courses', () => {
   it('shows a patient with no course', () => {
     cy.registerPatient().then((patient) => cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`))
-    cy.contains('h1', 'จัดการคอร์สผู้ป่วย').should('be.visible')
+    cy.contains('h1', 'คอร์สของผู้ป่วย').should('be.visible')
     cy.contains('h2', 'ยังไม่มีคอร์สที่ใช้งานได้').should('be.visible')
   })
 
@@ -23,7 +23,7 @@ describe('patient courses', () => {
     })
     cy.contains('.course-use-patient', 'สมชาย ใจดี').should('be.visible')
     cy.get('.course-manager-card').should('have.length', 1).and('contain.text', 'คงเหลือ6 ครั้ง')
-      .and('contain.text', 'ทั้งหมด6 ครั้ง').and('contain.text', 'Bonus 1 ครั้ง').and('contain.text', 'หมดอายุ')
+      .and('contain.text', 'ทั้งหมด6 ครั้ง').and('contain.text', 'สิทธิ์เพิ่มเติม 1 ครั้ง').and('contain.text', 'หมดอายุ')
   })
 
   it('uses one visit of the course', function () {
