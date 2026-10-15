@@ -33,10 +33,7 @@ public class V2CoreController {
             case "CourseService/rejectsASaleLineThatIsNotACoursePurchase" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsASaleLineThatIsNotACoursePurchase();
             case "CourseService/rejectsASaleLineThatAlreadyHasACourse" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsASaleLineThatAlreadyHasACourse();
             case "CourseService/rejectsAPurchaserThatDiffersFromTheReceiptPatient" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsAPurchaserThatDiffersFromTheReceiptPatient();
-            case "CourseService/creditsTheSaleToTheSellerAtOneHundredPercentByDefault" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().creditsTheSaleToTheSellerAtOneHundredPercentByDefault();
-            case "CourseService/splitsTheSaleCreditBetweenTwoStaff" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().splitsTheSaleCreditBetweenTwoStaff();
-            case "CourseService/rejectsSaleSharesThatDoNotTotalOneHundred" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsSaleSharesThatDoNotTotalOneHundred();
-            case "CourseService/rejectsTheSameStaffTwiceInTheSaleShares" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().rejectsTheSameStaffTwiceInTheSaleShares();
+            case "CourseService/creditsTheWholeSaleToTheSeller" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().creditsTheWholeSaleToTheSeller();
             case "CourseService/createsTheOwnerMemberAndEntitlementForThePurchaser" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().createsTheOwnerMemberAndEntitlementForThePurchaser();
             case "CourseService/recordsThePurchaseLedgerEntryAgainstTheSaleLine" -> new com.sabyeguyz.clinicv2.catalog.CourseServiceScenarios().recordsThePurchaseLedgerEntryAgainstTheSaleLine();
             case "ServiceCatalogService/createsASingleVisitService" -> new com.sabyeguyz.clinicv2.catalog.ServiceCatalogServiceScenarios().createsASingleVisitService();
@@ -67,11 +64,9 @@ public class V2CoreController {
             case "StaffService/createsStaffAssignedToABranch" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().createsStaffAssignedToABranch();
             case "StaffService/rejectsDuplicateStaffCode" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().rejectsDuplicateStaffCode();
             case "StaffService/rejectsMissingBranch" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().rejectsMissingBranch();
-            case "StaffService/terminateSetsStatusAndPolicy" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateSetsStatusAndPolicy();
-            case "StaffService/terminateRequiresAPolicy" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateRequiresAPolicy();
-            case "StaffService/terminateStampsThePolicyLockTime" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateStampsThePolicyLockTime();
-            case "StaffService/rejectsChangingALockedTerminationPolicy" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().rejectsChangingALockedTerminationPolicy();
-            case "StaffService/repeatingTheSameLockedPolicyKeepsTheOriginalLockTime" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().repeatingTheSameLockedPolicyKeepsTheOriginalLockTime();
+            case "StaffService/terminateSetsStatusAndDate" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateSetsStatusAndDate();
+            case "StaffService/terminateRequiresADate" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().terminateRequiresADate();
+            case "StaffService/rejectsTerminatingBeforeTheHireDate" -> new com.sabyeguyz.clinicv2.staff.StaffServiceScenarios().rejectsTerminatingBeforeTheHireDate();
             default -> throw new IllegalArgumentException("Unknown core scenario: " + group + "/" + scenario);
         };
     }
