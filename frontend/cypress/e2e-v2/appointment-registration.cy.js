@@ -3,7 +3,7 @@ const at = (fx) => `${fx.tomorrow}T09:00:00+07:00`
 describe('P3 appointment registration and service navigation', () => {
   it('creates a NEW appointment without creating a patient or showing room/branch selectors to staff', function () {
     cy.visitAs('therapist', '/staff/appointments')
-    cy.contains('button', 'สร้างนัดหมาย').click()
+    cy.contains('button', 'สร้างนัดหมาย').first().click()
     cy.get('input[type=radio][value=NEW]').check()
     cy.get('input[placeholder="กรอกชื่อเล่นผู้ป่วยใหม่"]').type('คนไข้ ใหม่')
     cy.get('input[placeholder="เบอร์โทรผู้ป่วยใหม่"]').type('0891234567')
@@ -12,8 +12,10 @@ describe('P3 appointment registration and service navigation', () => {
     cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
     cy.chooseDropdown('เลือกประเภทบริการ', 'รายคอร์ส')
     cy.get('textarea[placeholder="ระบุรายละเอียดเพิ่มเติม"]').type('นัดครั้งแรก')
-    cy.get('.appointment-save button').click()
+    cy.get('.appointment-save button.primary').click()
     cy.get('.appointment-confirm-modal').contains('button', /^ใช่$/).click()
+    // the list is split by the kind of service asked for: this one asked for a course
+    cy.contains('.appointment-list-mode-toggle button', 'รายคอร์ส').click()
     cy.contains('tr', 'คนไข้ ใหม่').should('contain.text', '0891234567')
     cy.api('GET', '/api/patients').its('body.totalItems').should('equal', 0)
     cy.api('GET', '/api/appointments').then(({ body }) => {
@@ -38,7 +40,7 @@ describe('P3 appointment registration and service navigation', () => {
         cy.get('input[placeholder="xxx-xxx-xxxx"]').should('have.value', '0891234567')
         cy.contains('label', 'วันเกิด').pickDate('1990-01-15')
         cy.get('input[placeholder="example@gmail.com"]').type('p3@gmail.com')
-        cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประจำตัวประชาชน')
+        cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประชาชน')
         cy.get('input[placeholder="กรอกเลขบัตรประชาชน 13 หลัก"]').type('1100000000777')
         cy.contains('button', 'บันทึก').click()
         cy.get('.confirmation-modal').contains('button', /^ใช่$/).click()
@@ -60,12 +62,12 @@ describe('P3 appointment registration and service navigation', () => {
       .then(({ body }) => {
         cy.visitAs('therapist', '/staff/appointments')
         cy.contains('tr', 'คนไข้ ใหม่').contains('button', 'แก้ไข').click()
-        cy.get('textarea[placeholder="ระบุรายละเอียดเพิ่มเติม"]').type('แก้หมายเหตุ')
-        cy.get('.appointment-save button').click()
+        cy.get('.reschedule-note-field textarea').type('แก้หมายเหตุ')
+        cy.get('.appointment-save button.primary').click()
         cy.get('.appointment-confirm-modal').contains('button', /^ใช่$/).click()
         cy.contains('เลื่อนนัดหมายสำเร็จ').should('be.visible')
         cy.api('GET', `/api/appointments/${body.id}`).its('body.note').should('eq', 'แก้หมายเหตุ')
-        cy.contains('button', 'สร้างนัดหมาย').click()
+        cy.contains('button', 'สร้างนัดหมาย').first().click()
         cy.get('input[type=radio][value=NEW]').check()
         cy.get('input[placeholder="เบอร์โทรผู้ป่วยใหม่"]').should('have.value', '')
         cy.get('button[aria-label="เลือกประเภทบริการ"]').should('contain.text', 'รายครั้ง')

@@ -111,6 +111,7 @@ describe('AppointmentView', () => {
     expect(source).toContain('appointmentApi.availability')
     expect(source).toContain(':disabled="!slot.available"')
     expect(source).not.toContain('เวลานอกกะ')
+    expect(source).not.toContain('ติด Busy ใน Google Calendar')
   })
 
   it('does not show a room column in the appointment list', () => {
