@@ -34,13 +34,19 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
     }
 
     private final Map<String, Map<String, FakeEvent>> calendars = new LinkedHashMap<>();
+    /** Busy time typed into the calendar by a person (not one of the clinic's own events). */
+    private final Map<String, List<BusyBlock>> busy = new LinkedHashMap<>();
     private int sequence = 0;
     private int failures = 0;
+    /** Failures only for reading Busy time, so a test of the sync is not disturbed by the booking that reads it. */
+    private int busyFailures = 0;
 
     public synchronized void reset() {
         calendars.clear();
+        busy.clear();
         sequence = 0;
         failures = 0;
+        busyFailures = 0;
     }
 
     /** The next n calls fail, like Google being unreachable. */
@@ -64,6 +70,26 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
         if (cancel) event.cancelled = true;
         touch(event);
         return event;
+    }
+
+    /** The next n reads of Busy time fail. */
+    public synchronized void failBusyNext(int count) {
+        this.busyFailures = count;
+    }
+
+    /** A person adds a Busy event by hand in Google. */
+    public synchronized void addBusy(String calendarId, LocalDateTime start, LocalDateTime end) {
+        busy.computeIfAbsent(calendarId, key -> new ArrayList<>()).add(new BusyBlock(start, end));
+    }
+
+    @Override
+    public synchronized List<BusyBlock> busyBlocks(String calendarId, LocalDateTime from, LocalDateTime to) {
+        if (busyFailures > 0) {
+            busyFailures--;
+            throw new CalendarApiException(503, "fake Google is down");
+        }
+        return busy.getOrDefault(calendarId, List.of()).stream()
+                .filter(block -> block.start().isBefore(to) && block.end().isAfter(from)).toList();
     }
 
     private void touch(FakeEvent event) {
