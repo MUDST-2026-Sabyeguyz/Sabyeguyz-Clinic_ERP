@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -9,6 +9,7 @@ import { branchApi, masterDataApi, patientApi, type PatientProfile } from '@/api
 import { type PatientRegistrationForm } from '../data/patientRegistration'
 
 const submitting = ref(false)
+const route = useRoute()
 const router = useRouter()
 const submitted = ref(false)
 const emailFocused = ref(false)
@@ -169,6 +170,40 @@ onMounted(async () => {
     if (!form.customerSource) form.customerSource = referralChannels.value[0]!
   } catch {
     errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
+  }
+  if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
+    duplicatePatient.value = {
+      id: 10,
+      hn: '070700000010',
+      fullName: 'ผู้ป่วยสาธิต ชาย 10',
+      phone: '0890000010',
+      active: true,
+      branch: { id: 1, code: 'BR', name: 'แบริ่ง', active: true },
+      title: 'นาย',
+      birthDate: '1990-01-01',
+      gender: 'ชาย',
+      identityDocumentType: 'NATIONAL_ID',
+      identityNumber: '1103700123456',
+      address: 'กรุงเทพฯ',
+      drugAllergy: false,
+      foodAllergy: false,
+      chronicDisease: '',
+      emergencyContactName: '',
+      emergencyContactRelationship: '',
+      emergencyContactPhone: '',
+      privacyConsent: true,
+    }
+    duplicateOpen.value = true
+  } else if (import.meta.env.DEV && route.query.previewSuccess === '1') {
+    Object.assign(form, {
+      title: 'นาย',
+      firstName: 'สมชาย',
+      lastName: 'ใจดี',
+      identityNumber: '1111111111111',
+    })
+    registeredHn.value = '2601080022'
+    registeredPatientId.value = 10
+    successOpen.value = true
   }
 })
 async function requestSubmit() {

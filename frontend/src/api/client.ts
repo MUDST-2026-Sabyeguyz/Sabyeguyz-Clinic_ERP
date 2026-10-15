@@ -337,7 +337,15 @@ export const patientApi = {
 }
 
 export const branchApi = {
-  list: () => api.get<Branch[]>('/api/branches'),
+  list: async () => {
+    const branches = await api.get<Branch[]>('/api/branches')
+    return branches.filter(
+      (branch) =>
+        branch.code.toUpperCase() !== 'RP' &&
+        !branch.name.includes('ราชพฤกษ์') &&
+        !branch.name.includes('พารพฤกษ์'),
+    )
+  },
   get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
   create: (body: { code: string; numericCode: string; name: string }) =>
     api.post<Branch>('/api/branches', body),
