@@ -76,8 +76,10 @@ async function validatePeriod() {
           tiers.every((tier, index) => {
             if (index === 0) return Number(tier.minimum) === 0
             const previous = tiers[index - 1]!
+            // tier ranges are in baht with two decimals: the next tier starts exactly one satang above the previous maximum
             return (
-              previous.maximum !== null && Number(tier.minimum) === Number(previous.maximum) + 1
+              previous.maximum !== null &&
+              Math.round((Number(tier.minimum) - Number(previous.maximum)) * 100) === 1
             )
           })
       } catch {

@@ -168,7 +168,7 @@ public class V2WorkflowScenariosController {
         var members = new V2RepositoryStub<>(CourseSharedMemberRepository.class);
         var entitlements = new V2RepositoryStub<>(CourseEntitlementRepository.class);
         var cancellationRepo = new V2RepositoryStub<>(TransactionCancellationRepository.class);
-        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null);
+        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null, null, null, null);
         Course course = new Course(); setId(course, 1L);
         Patient from = new Patient(); setId(from, 10L);
         Patient to = new Patient(); setId(to, 20L);
@@ -244,10 +244,14 @@ public class V2WorkflowScenariosController {
         var courses = new V2RepositoryStub<>(CourseRepository.class);
         var allocations = new V2RepositoryStub<>(CommissionAllocationLedgerRepository.class);
         var rules = new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
-        usages.on("findByCourseIdOrderByIdDesc", args -> List.of());
+        usages.on("findByCourseIdOrderByIdDesc", args -> {
+            var saved = new java.util.ArrayList<>(new java.util.LinkedHashSet<>(usages.arguments("save").stream().map(a -> (CourseVisitUsage) a[0]).toList()));
+            java.util.Collections.reverse(saved);
+            return saved;
+        });
         var entitlements = new V2RepositoryStub<>(CourseEntitlementRepository.class);
         var cancellationRepo = new V2RepositoryStub<>(TransactionCancellationRepository.class);
-        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null);
+        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null, null, null, null);
         Course course = lockedCourse();
         Staff owner = new Staff(); setId(owner, 10L);
         Staff substitute = new Staff(); setId(substitute, 11L);
@@ -263,15 +267,17 @@ public class V2WorkflowScenariosController {
         if (scenario.equals("exhausted")) course.setRemainingVisits(0);
         ledger.on("findByVisitUsageId", args -> ledger.arguments("save").stream().map(a -> (CourseLedger) a[0])
                 .filter(l -> l.getVisitUsage() != null).toList());
-        allocations.on("findByVisitUsageIdAndEntryType",
-                args -> Optional.of((CommissionAllocationLedger) allocations.arguments("save").get(0)[0]));
+        allocations.on("findByVisitUsageIdOrderByIdAsc",
+                args -> allocations.arguments("save").stream().map(a -> (CommissionAllocationLedger) a[0]).toList());
         entitlements.on("findById", args -> entitlements.arguments("save").isEmpty() ? Optional.empty()
                 : Optional.of((CourseEntitlement) entitlements.arguments("save").get(entitlements.arguments("save").size() - 1)[0]));
         boolean ownerTreats = scenario.equals("owner") || scenario.equals("reverse") || scenario.equals("reverse-twice")
                 || scenario.equals("reverse-no-reason");
         return V2RepositoryStub.outcome(() -> {
             var service = new CourseVisitUsageService(usages.proxy(), ledger.proxy(), courses.proxy(),
-                    allocations.proxy(), new TreatmentFeeRuleResolver(rules.proxy()), entitlements.proxy(), cancellations);
+                    allocations.proxy(), new TreatmentFeeRuleResolver(rules.proxy()), entitlements.proxy(), cancellations,
+                    new com.sabyeguyz.clinicv2.commission.CourseCommissionService(usages.proxy(), allocations.proxy(),
+                            courses.proxy(), new TreatmentFeeRuleResolver(rules.proxy())));
             var result = service.use(course, new PatientVisit(), patient, ownerTreats ? owner : substitute,
                     LocalDate.of(2026, 9, 1), 1L);
             Map<String, Object> resultMap = new LinkedHashMap<>();
@@ -348,7 +354,8 @@ public class V2WorkflowScenariosController {
         Course course = new Course(); setId(course, 1L);
         course.setCoursePrice(new BigDecimal("10000.00"));
         course.setTotalVisits(10); course.setRemainingVisits(10); course.setVisitsUsed(0);
-        course.setExpiryDate(LocalDate.of(2026, 12, 31)); course.setCourseStatus(CourseStatus.Active);
+        course.setExpiryDate(LocalDate.of(2099, 12, 31)); course.setCourseStatus(CourseStatus.Active);
+        course.setCommissionStatus(com.sabyeguyz.clinicv2.enums.CommissionStatus.Locked);
         course.setCommissionAllocationPerVisit(new BigDecimal("70.00"));
         course.setTotalCourseCommissionPool(new BigDecimal("700.00"));
         course.setTreatmentFeeBaseAmount(new BigDecimal("10000.00"));

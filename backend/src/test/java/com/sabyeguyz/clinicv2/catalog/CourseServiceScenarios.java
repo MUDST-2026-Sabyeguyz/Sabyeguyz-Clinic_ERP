@@ -8,6 +8,7 @@ import com.sabyeguyz.clinicv2.commission.CommissionScheme;
 import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
 import com.sabyeguyz.clinicv2.commission.CommissionTier;
 import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
+import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedger;
@@ -49,7 +50,7 @@ public class CourseServiceScenarios {
 
     private CourseService service() {
         return new CourseService(courses, ledger, sharedMembersStub.proxy(),
-                entitlementsStub.proxy(), schemeResolver, tierResolver);
+                entitlementsStub.proxy(), schemeResolver, tierResolver, new MonthlyTierSalesService(courses));
     }
 
     /** A CoursePurchase sale line for the receipt's patient, as SalesTransactionService records it before selling the Course. */
