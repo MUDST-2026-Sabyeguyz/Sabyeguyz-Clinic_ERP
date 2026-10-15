@@ -41,7 +41,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
 
   describe('commission schemes', () => {
     const tiers = [
-      { minimum: 0, maximum: 99999, rate: 0.04, order: 1 },
+      { minimum: 0, maximum: 99999.99, rate: 0.04, order: 1 },
       { minimum: 100000, maximum: null, rate: 0.12, order: 2 },
     ]
 

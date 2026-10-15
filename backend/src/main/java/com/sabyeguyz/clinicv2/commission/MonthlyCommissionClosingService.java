@@ -18,13 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
  * every Course they sold that month — the "Course must remember its own
  * Tier forever" rule (§4).
  *
- * <p>Known gap, flagged for the team: if any Course from this month already
- * had visits used before closing ("Buy &amp; Use Same Day"), those
- * {@code Course_visit_usage}/{@code Commission_allocation_ledger} rows were
- * computed from the provisional per-visit amount, which can differ from the
- * now-locked one. This method does not retroactively adjust those rows —
- * the requirement doc does not specify how that reconciliation should
- * work.</p>
+ * <p>Sessions used before the close ("Buy &amp; Use Same Day") kept a NULL Owner commission, because the
+ * rate was not known; closing the month settles them ({@link CourseCommissionService#settle}).</p>
  */
 @org.springframework.stereotype.Service
 public class MonthlyCommissionClosingService {
@@ -32,9 +27,14 @@ public class MonthlyCommissionClosingService {
     private final CourseRepository courses;
     private final CommissionSchemeResolver schemeResolver;
     private final CommissionTierResolver tierResolver;
+    private final MonthlyTierSalesService tierSales;
+    private final CourseCommissionService courseCommission;
 
     public MonthlyCommissionClosingService(MonthlyCommissionClosingRepository closings, CourseRepository courses,
-                                            CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver) {
+                                            CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
+                                            MonthlyTierSalesService tierSales, CourseCommissionService courseCommission) {
+        this.courseCommission = courseCommission;
+        this.tierSales = tierSales;
         this.closings = closings;
         this.courses = courses;
         this.schemeResolver = schemeResolver;
@@ -51,7 +51,7 @@ public class MonthlyCommissionClosingService {
         }
 
         LocalDate effectiveDate = LocalDate.parse(saleMonth + "-01");
-        BigDecimal monthlySales = courses.sumCreditedSalesByStaffAndSaleMonth(staff.getId(), saleMonth);
+        BigDecimal monthlySales = tierSales.netSales(staff.getId(), saleMonth);
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveDate);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySales);
 
@@ -69,16 +69,19 @@ public class MonthlyCommissionClosingService {
         closing.setClosedBy(actorId);
         MonthlyCommissionClosing saved = closings.save(closing);
 
-        for (Course course : courses.findBySellerStaffIdAndSaleMonth(staff.getId(), saleMonth)) {
-            lockCourse(course, scheme, tier);
+        // each course is locked (row lock) like a usage does, so a session being recorded now is either settled here or
+        // sees the locked rate itself
+        for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonth(staff.getId(), saleMonth)) {
+            Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
+            lockCourse(course, scheme, tier, actorId);
         }
 
         return saved;
     }
 
-    private void lockCourse(Course course, CommissionScheme scheme, CommissionTier tier) {
+    private void lockCourse(Course course, CommissionScheme scheme, CommissionTier tier, Long actorId) {
         BigDecimal pool = course.getCoursePrice().multiply(tier.getCommissionRate()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal perVisit = pool.divide(BigDecimal.valueOf(course.getTotalVisits()), 2, RoundingMode.HALF_UP);
+        BigDecimal perVisit = CommissionAllocationCalculator.nominal(pool, course.getTotalVisits());
 
         course.setCommissionStatus(CommissionStatus.Locked);
         course.setCommissionScheme(scheme);
@@ -87,8 +90,9 @@ public class MonthlyCommissionClosingService {
         course.setTotalCourseCommissionPool(pool);
         course.setCommissionAllocationPerVisit(perVisit);
         course.setCommissionGeneratedDate(LocalDate.now());
-        course.refreshCommissionOutstanding();
         courses.save(course);
+        // sessions used before the rate was known get their rate, Owner commission and allocation now
+        courseCommission.settle(course, actorId);
     }
 
     private static void require(boolean condition, String message) {
