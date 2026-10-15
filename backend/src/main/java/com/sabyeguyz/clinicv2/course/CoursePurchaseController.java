@@ -46,23 +46,21 @@ import org.springframework.web.bind.annotation.*;
  *   the seller from the current user's linked Staff record and fails if
  *   the logged-in account has none - the frontend form should really
  *   collect a seller explicitly.</li>
- *   <li>{@code use}: no treating-staff field either, so this always treats
- *   the Case Owner as the Treating PT (substitute-PT usage isn't reachable
- *   through this endpoint); the "using patient" for a Shared Course is
- *   likewise always the Course's original buyer, never a shared member.</li>
+ *   <li>{@code use}: the PT who treats the session is {@code treatingStaffId} (the Owner PT by
+ *   default); a different PT is a substitute who earns the treatment fee. The using patient is
+ *   {@code patientId} (the Course's buyer, or the appointment's patient, by default).</li>
  *   <li>{@code use}: Course_visit_usage.visit_id is NOT NULL, so a usage always
  *   belongs to a visit. With an appointmentId it uses that appointment's
  *   checked-in visit; without one (what the frontend sends today) it records a
- *   walk-in visit for the buyer, checked in and completed at the Case Owner.</li>
+ *   walk-in visit for the using patient, checked in and completed at the treating PT.</li>
  *   <li>{@code reverse}: reverses the usage (Treatment movement) or the
  *   transfer (TransferOut/TransferIn movement) the given ledger movement
  *   belongs to, with proper Reversal ledger entries, a reversed commission
  *   allocation and a cancellation record. Other movement types (Purchase,
  *   Adjustment, Reversal) cannot be reversed here.</li>
- *   <li>{@code cancel}: only flips course_status to Cancelled. The
- *   Commission_System_Requirement_Dev §22 Refund/Cancellation rules
- *   (stop future allocation, compute adjustment, audit trail) are not
- *   implemented.</li>
+ *   <li>{@code cancel}: voids the sale line of the course (a Void cancellation), stops every right not yet
+ *   used with a Cancellation ledger entry and marks the course Cancelled. Sessions already given keep their
+ *   treatment fee and commission.</li>
  * </ul>
  */
 @Transactional
@@ -86,6 +84,7 @@ public class CoursePurchaseController {
     private final com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository;
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
+    private final com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
@@ -96,7 +95,9 @@ public class CoursePurchaseController {
                                      PatientVisitRepository visits, PatientVisitService visitService,
                                      AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
                                      CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                                     com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations) {
+        this.cancellations = cancellations;
         this.courses = courses;
         this.ledger = ledger;
         this.usages = usages;
@@ -127,7 +128,8 @@ public class CoursePurchaseController {
      */
     public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
                                    BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares) {}
-    public record UseRequest(Long coursePurchaseId, Long appointmentId, String note) {}
+    /** treatingStaffId (optional): the PT who treats the session, the Owner PT by default; patientId (optional): who uses the entitlement. */
+    public record UseRequest(Long coursePurchaseId, Long appointmentId, String note, Long treatingStaffId, Long patientId) {}
     public record ReasonRequest(String reason) {}
 
     public record PatientSummary(Long id, String hn, String fullName) {}
@@ -223,13 +225,19 @@ public class CoursePurchaseController {
         // Row-lock first: two parallel usages must not both see the last remaining visit.
         Course course = courses.findByIdForUpdate(request.coursePurchaseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Patient owner = course.getPurchaserPatient();
-        PatientVisit visit = request.appointmentId() == null ? walkInVisit(course, owner)
+        Staff treating = request.treatingStaffId() == null ? course.getOwnerStaff() : staffById(request.treatingStaffId());
+        PatientVisit appointmentVisit = request.appointmentId() == null ? null
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
                         .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
-        // Always treats the Case Owner as the Treating PT - see class Javadoc.
-        usageService.use(course, visit, owner, course.getOwnerStaff(), LocalDate.now(), actor.currentId());
-        return toResponse(courses.findById(course.getId()).orElseThrow(), owner.getId());
+        Patient usingPatient = request.patientId() != null
+                ? patients.findById(request.patientId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
+                : appointmentVisit != null ? appointmentVisit.getPatient() : course.getPurchaserPatient();
+        if (appointmentVisit != null && !appointmentVisit.getPatient().getId().equals(usingPatient.getId())) {
+            throw new IllegalArgumentException("ผู้ใช้สิทธิ์ต้องเป็นผู้ป่วยคนเดียวกับของ Visit");
+        }
+        PatientVisit visit = appointmentVisit != null ? appointmentVisit : walkInVisit(course, usingPatient, treating);
+        usageService.use(course, visit, usingPatient, treating, LocalDate.now(), actor.currentId());
+        return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
     @PostMapping("/api/course-movements/{movementId}/reverse")
@@ -249,19 +257,31 @@ public class CoursePurchaseController {
 
     @PostMapping("/api/course-purchases/{id}/cancel")
     public Response cancel(@PathVariable Long id, @RequestBody ReasonRequest request) {
-        Course course = findCourse(id);
-        course.setCourseStatus(CourseStatus.Cancelled);
-        course.setCourseUpdateAt(Instant.now());
-        course.setCourseUpdateBy(actor.currentId());
-        Course saved = courses.save(course);
+        Course course = courses.findByIdForUpdate(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        if (course.getCourseStatus() != CourseStatus.Active && course.getCourseStatus() != CourseStatus.Completed) {
+            throw new IllegalStateException("คอร์สนี้ถูกยกเลิกหรือคืนเงินไปแล้ว");
+        }
+        if (request.reason() == null || request.reason().isBlank()) {
+            throw new IllegalArgumentException("ต้องระบุเหตุผลที่ยกเลิก");
+        }
+        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        // voids the sale line, cuts the unused rights and marks the course Cancelled
+        cancellations.voidSale(course.getSaleTransaction(), permission, request.reason(), actor.currentId());
+        Course saved = findCourse(id);
+        if (saved.getCourseStatus() != CourseStatus.Cancelled) {
+            saved.setCourseStatus(CourseStatus.Cancelled); // every right was already used: nothing to cut, but the sale is void
+            saved.setCourseUpdateAt(Instant.now());
+            saved.setCourseUpdateBy(actor.currentId());
+            saved = courses.save(saved);
+        }
         audit.record("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Active", "Cancelled: " + request.reason(),
                 actor.currentId());
         return toResponse(saved, saved.getPurchaserPatient().getId());
     }
 
-    private PatientVisit walkInVisit(Course course, Patient owner) {
-        PatientVisit visit = visitService.checkInWalkIn(owner, course.getReceipt().getBranch(),
-                course.getOwnerStaff(), actor.currentId());
+    private PatientVisit walkInVisit(Course course, Patient usingPatient, Staff treating) {
+        PatientVisit visit = visitService.checkInWalkIn(usingPatient, course.getReceipt().getBranch(),
+                treating, actor.currentId());
         return visitService.complete(visit.getId(), actor.currentId());
     }
 

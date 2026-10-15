@@ -1,8 +1,12 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.commission.SingleVisitFeeService;
+import com.sabyeguyz.clinicv2.course.CourseRightsService;
 import com.sabyeguyz.clinicv2.course.CourseTransfer;
 import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
 import com.sabyeguyz.clinicv2.enums.CancellationType;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.role.Permission;
 import java.time.Instant;
 import java.util.List;
@@ -26,13 +30,20 @@ public class TransactionCancellationService {
     private final PaymentTransactionRepository payments;
     private final PaymentTransactionService paymentTransactionService;
     private final ReceiptService receiptService;
+    private final CourseRepository courses;
+    private final CourseRightsService rights;
+    private final SingleVisitFeeService singleVisitFees;
 
     public TransactionCancellationService(TransactionCancellationRepository cancellations,
                                            SalesTransactionRepository transactions,
                                            SalesTransactionService salesTransactionService,
                                            PaymentTransactionRepository payments,
                                            PaymentTransactionService paymentTransactionService,
-                                           ReceiptService receiptService) {
+                                           ReceiptService receiptService, CourseRepository courses,
+                                           CourseRightsService rights, SingleVisitFeeService singleVisitFees) {
+        this.courses = courses;
+        this.rights = rights;
+        this.singleVisitFees = singleVisitFees;
         this.cancellations = cancellations;
         this.transactions = transactions;
         this.salesTransactionService = salesTransactionService;
@@ -61,7 +72,18 @@ public class TransactionCancellationService {
         }
         TransactionCancellation cancellation = newCancellation(permission, reason, CancellationType.Void, actorId);
         cancellation.setTransaction(transaction);
-        return cancellations.save(cancellation);
+        TransactionCancellation saved = cancellations.save(cancellation);
+        // A void stops the rights that were not used and takes back a single-visit fee not yet paid out; the treatment
+        // fees and commissions of sessions already given are kept.
+        if (transaction.getTransactionType() == TransactionType.CoursePurchase && courses != null) {
+            courses.findBySaleTransactionId(transaction.getId())
+                    .ifPresent(course -> rights.cutAllForCancellation(course.getId(), saved, reason.trim(), actorId));
+        }
+        if (transaction.getTransactionType() == TransactionType.SingleVisit && transaction.getVisit() != null
+                && singleVisitFees != null) {
+            singleVisitFees.reverse(transaction.getVisit(), reason, actorId);
+        }
+        return saved;
     }
 
     @Transactional
