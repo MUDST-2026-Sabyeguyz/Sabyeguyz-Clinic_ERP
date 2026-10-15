@@ -101,6 +101,42 @@ const router = createRouter({
       meta: { roles: ['therapist'] },
     },
     {
+      path: '/staff/compensation/commission/:id?',
+      name: 'therapist-commission-detail',
+      component: () => import('@/features/commission/views/TherapistCommissionDetailView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/commission/:id?/source',
+      name: 'therapist-commission-source',
+      component: () => import('@/features/commission/views/TherapistCommissionSourceView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/treatment/:id?',
+      name: 'therapist-treatment-fee-detail',
+      component: () => import('@/features/commission/views/TherapistTreatmentFeeDetailView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/treatment/:id?/source',
+      name: 'therapist-treatment-source',
+      component: () => import('@/features/commission/views/TherapistTreatmentSourceView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/payments',
+      name: 'therapist-payment-history',
+      component: () => import('@/features/commission/views/TherapistPaymentHistoryView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
+      path: '/staff/compensation/adjustment/:id?',
+      name: 'therapist-adjustment-detail',
+      component: () => import('@/features/commission/views/TherapistAdjustmentDetailView.vue'),
+      meta: { roles: ['therapist'] },
+    },
+    {
       path: '/staff/commission/tiers',
       name: 'commission-tiers',
       component: () => import('@/features/commission/views/CommissionTierView.vue'),
