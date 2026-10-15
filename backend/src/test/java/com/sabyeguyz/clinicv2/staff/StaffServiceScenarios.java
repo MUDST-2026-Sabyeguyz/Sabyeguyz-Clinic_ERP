@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -45,58 +44,32 @@ public class StaffServiceScenarios {
         return out;
     }
 
-    public Map<String, Object> terminateSetsStatusAndPolicy() {
+    public Map<String, Object> terminateSetsStatusAndDate() {
         Map<String, Object> out = new LinkedHashMap<>();
         Staff staff = new Staff();
         staff.setStaffStatus(true);
         repositoryStub.on("findById", args -> Optional.of(staff));
 
-        Staff terminated = new StaffService(repository).terminate(
-                5L, LocalDate.of(2026, 6, 30), CommissionAfterTerminationPolicy.CONTINUE_UNTIL_COMPLETE, 9L);
+        Staff terminated = new StaffService(repository).terminate(5L, LocalDate.of(2026, 6, 30), 9L);
 
         out.put("staffStatus", terminated.isStaffStatus());
         out.put("terminationDate", terminated.getTerminationDate());
-        out.put("commissionAfterTerminationPolicy", terminated.getCommissionAfterTerminationPolicy());
         return out;
     }
 
-    public Map<String, Object> terminateRequiresAPolicy() {
+    public Map<String, Object> terminateRequiresADate() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findById", args -> Optional.of(new Staff()));
-        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(5L, LocalDate.now(), null, 9L); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(5L, null, 9L); return null; }));
         return out;
     }
 
-    public Map<String, Object> terminateStampsThePolicyLockTime() {
+    public Map<String, Object> rejectsTerminatingBeforeTheHireDate() {
         Map<String, Object> out = new LinkedHashMap<>();
-        repositoryStub.on("findById", args -> Optional.of(new Staff()));
-        Staff terminated = new StaffService(repository).terminate(
-                5L, LocalDate.of(2026, 6, 30), CommissionAfterTerminationPolicy.FORFEIT, 9L);
-        out.put("locked", terminated.getTerminationPolicyLockedAt() != null);
-        return out;
-    }
-
-    public Map<String, Object> rejectsChangingALockedTerminationPolicy() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        Staff locked = new Staff();
-        locked.setCommissionAfterTerminationPolicy(CommissionAfterTerminationPolicy.FORFEIT);
-        locked.setTerminationPolicyLockedAt(java.time.Instant.parse("2026-06-30T00:00:00Z"));
-        repositoryStub.on("findById", args -> Optional.of(locked));
-        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(
-                5L, LocalDate.of(2026, 7, 31), CommissionAfterTerminationPolicy.CONTINUE_UNTIL_COMPLETE, 9L); return null; }));
-        return out;
-    }
-
-    public Map<String, Object> repeatingTheSameLockedPolicyKeepsTheOriginalLockTime() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        Staff locked = new Staff();
-        java.time.Instant lockedAt = java.time.Instant.parse("2026-06-30T00:00:00Z");
-        locked.setCommissionAfterTerminationPolicy(CommissionAfterTerminationPolicy.FORFEIT);
-        locked.setTerminationPolicyLockedAt(lockedAt);
-        repositoryStub.on("findById", args -> Optional.of(locked));
-        Staff result = new StaffService(repository).terminate(
-                5L, LocalDate.of(2026, 7, 31), CommissionAfterTerminationPolicy.FORFEIT, 9L);
-        out.put("lockedAtUnchanged", result.getTerminationPolicyLockedAt().equals(lockedAt));
+        Staff staff = new Staff();
+        staff.setHireDate(LocalDate.of(2026, 7, 1));
+        repositoryStub.on("findById", args -> Optional.of(staff));
+        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(5L, LocalDate.of(2026, 6, 30), 9L); return null; }));
         return out;
     }
 }
