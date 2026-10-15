@@ -214,6 +214,17 @@ public class StaffMonthlyPaymentService {
      */
     @Transactional
     public StaffMonthlyPayment pay(Long paymentId, Long actorId) {
+        return pay(paymentId, null, null, actorId);
+    }
+
+    /** Same, with the date the money was paid (today when null; never in the future) and an optional reference. */
+    @Transactional
+    public StaffMonthlyPayment pay(Long paymentId, java.time.LocalDate paidDate, String reference, Long actorId) {
+        java.time.LocalDate today = com.sabyeguyz.clinicv2.config.ClinicTime.today();
+        java.time.LocalDate date = paidDate == null ? today : paidDate;
+        if (date.isAfter(today)) throw new IllegalArgumentException("วันที่จ่ายต้องไม่เป็นวันในอนาคต");
+        String ref = reference == null || reference.isBlank() ? null : reference.trim();
+        if (ref != null && ref.length() > 100) throw new IllegalArgumentException("เลขที่อ้างอิงยาวเกิน 100 ตัวอักษร");
         StaffMonthlyPayment payment = find(paymentId);
         requireStatus(payment, PaymentStatus.Closed, "ยืนยันจ่ายได้เฉพาะงวดที่เป็น Closed");
         Totals totals = totals(payment.getStaff().getId(), payment.getPaymentMonth());
@@ -250,6 +261,8 @@ public class StaffMonthlyPaymentService {
         payment.setNetPaymentAmount(earned.add(adjustment));
         payment.setPaymentStatus(PaymentStatus.Paid);
         payment.setPaidAt(Instant.now());
+        payment.setPaidDate(date);
+        payment.setPaymentReference(ref);
         stamp(payment, actorId);
         return payments.save(payment);
     }
