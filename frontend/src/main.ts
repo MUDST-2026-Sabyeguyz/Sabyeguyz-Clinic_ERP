@@ -1,5 +1,6 @@
 import './styles/main.css'
 import './styles/therapist-theme.css'
+import './features/commission/styles/commission-manager.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
@@ -10,7 +11,8 @@ import router from './router'
 document.body.classList.toggle(
   'therapist-ui',
   ['THERAPIST', 'MANAGER'].includes(
-    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role ?? '',
+    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role ??
+      '',
   ),
 )
 

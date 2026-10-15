@@ -20,7 +20,6 @@ export function getToken() {
 export function clearSession() {
   localStorage.removeItem('authToken')
   localStorage.removeItem('authUser')
-  localStorage.removeItem('mockStaffPermissions')
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -71,6 +70,8 @@ export type AuthResponse = {
   username: string
   email?: string
   role: 'MANAGER' | 'THERAPIST'
+  branchCode?: string
+  branchName?: string
   token: string
 }
 export type Patient = {
@@ -106,6 +107,31 @@ export type PatientProfile = Patient & {
   customerSource?: string
   insuranceCompany?: string
 }
+export type PatientUpdatePayload = {
+  title: string
+  fullName: string
+  birthDate: string
+  gender: string
+  phone: string
+  identityDocumentType: 'NATIONAL_ID' | 'PASSPORT'
+  identityNumber: string
+  address: string
+  drugAllergy: boolean
+  foodAllergy: boolean
+  chronicDisease: string
+  emergencyContactName: string
+  emergencyContactRelationship: string
+  emergencyContactPhone: string
+  privacyConsent: boolean
+  active: boolean
+  nickname: string
+  email: string
+  bloodGroup: string
+  nationality: string
+  customerType: string
+  customerSource: string
+  insuranceCompany: string
+}
 export type Page<T> = {
   items: T[]
   page: number
@@ -118,6 +144,11 @@ export type Branch = {
   code: string
   numericCode: string
   name: string
+  address?: string
+  phone?: string
+  email?: string
+  licenseNumber?: string
+  taxId?: string
   active: boolean
 }
 export type Staff = {
@@ -300,7 +331,8 @@ export const patientApi = {
   },
   get: (id: number) => api.get<PatientProfile>(`/api/patients/${id}`),
   register: (payload: object) => api.post<Patient>('/api/patients', payload),
-  update: (id: number, payload: object) => api.put<PatientProfile>(`/api/patients/${id}`, payload),
+  update: (id: number, payload: PatientUpdatePayload) =>
+    api.put<PatientProfile>(`/api/patients/${id}`, payload),
 }
 
 export const branchApi = {
@@ -596,6 +628,7 @@ export const commissionApi = {
       }>
     >(`/api/commission/closings?month=${month}-01`),
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
+  closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
 }
 
