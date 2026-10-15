@@ -87,6 +87,17 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("select c from Course c where cast(c.receipt.saleDate as date) between :from and :to")
     List<Course> findByReceiptSaleDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    /** Courses sold in the range whose sale is still in effect (sale line, receipt and course not voided or cancelled). */
+    default List<Course> findValidByReceiptSaleDateBetween(LocalDate from, LocalDate to) {
+        return findValidSoldBetween(from, to, ReceiptStatus.Voided, CourseStatus.Cancelled);
+    }
+
+    @Query("select c from Course c where cast(c.receipt.saleDate as date) between :from and :to "
+            + "and c.saleTransaction.transactionStatus = true "
+            + "and c.receipt.receiptStatus <> :voided and c.courseStatus <> :cancelled")
+    List<Course> findValidSoldBetween(@Param("from") LocalDate from, @Param("to") LocalDate to,
+                                      @Param("voided") ReceiptStatus voided, @Param("cancelled") CourseStatus cancelled);
+
     default List<Long> findDistinctCreditedStaffIdsBySaleMonth(String saleMonth) {
         return findDistinctCreditedStaffIds(saleMonth, ReceiptStatus.Voided, CourseStatus.Cancelled);
     }

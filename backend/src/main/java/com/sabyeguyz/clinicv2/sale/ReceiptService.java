@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
@@ -67,7 +68,7 @@ public class ReceiptService {
         receipt.setReceiptNo(no);
         receipt.setPatient(patient);
         receipt.setBranch(branch);
-        receipt.setSaleDate(saleDate == null ? LocalDateTime.now() : saleDate.atStartOfDay());
+        receipt.setSaleDate(saleDate == null ? ClinicTime.now() : saleDate.atStartOfDay());
         receipt.setReceiptCreateAt(Instant.now());
         receipt.setReceiptCreateBy(actorId);
         return repository.save(receipt);

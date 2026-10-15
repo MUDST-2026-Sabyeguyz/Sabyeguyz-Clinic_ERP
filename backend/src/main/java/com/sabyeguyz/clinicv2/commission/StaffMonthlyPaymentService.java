@@ -344,6 +344,11 @@ public class StaffMonthlyPaymentService {
         }
     }
 
+    /** The month a date falls in (yyyy-mm), in clinic time. */
+    static String monthOf(LocalDate date) {
+        return YearMonth.from(date).toString();
+    }
+
     private static LocalDate first(String month) {
         requireMonth(month);
         return YearMonth.parse(month).atDay(1);

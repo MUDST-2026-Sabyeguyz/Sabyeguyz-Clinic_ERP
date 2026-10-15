@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.course;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitRepository;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitService;
@@ -167,11 +168,11 @@ public class CoursePurchaseController {
         // user's own staff record is the default.
         Staff seller = request.caseOwnerStaffId() == null ? resolveActorStaff() : staffById(request.caseOwnerStaffId());
 
-        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, LocalDate.now()), patient, branch, LocalDate.now(),
+        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, ClinicTime.today()), patient, branch, ClinicTime.today(),
                 actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
                 seller, null, null, null, Discount.of(request.discountType(), request.discountValue()),
-                LocalDate.now(), actor.currentId());
+                ClinicTime.today(), actor.currentId());
         receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
         audit.record("course", String.valueOf(purchase.course().getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
                 purchase.course().getCourseNo() + " price " + purchase.course().getCoursePrice(), actor.currentId());
@@ -237,7 +238,7 @@ public class CoursePurchaseController {
             throw new IllegalArgumentException("ผู้ใช้สิทธิ์ต้องเป็นผู้ป่วยคนเดียวกับของ Visit");
         }
         PatientVisit visit = appointmentVisit != null ? appointmentVisit : walkInVisit(course, usingPatient, treating);
-        usageService.use(course, visit, usingPatient, treating, LocalDate.now(), actor.currentId());
+        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), actor.currentId());
         return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
@@ -315,7 +316,7 @@ public class CoursePurchaseController {
     private Response toResponse(Course course, Long forPatientId) {
         long remaining = forPatientId == null ? course.getRemainingVisits()
                 : ledger.sumQtyChangeByCourseAndPatient(course.getId(), forPatientId);
-        boolean expired = course.getExpiryDate().isBefore(LocalDate.now());
+        boolean expired = course.getExpiryDate().isBefore(ClinicTime.today());
         boolean usable = !expired && course.getCourseStatus() == CourseStatus.Active && remaining > 0;
         Patient patient = course.getPurchaserPatient();
         return new Response(course.getId(), new PatientSummary(patient.getId(), patient.getPatientHn(),
