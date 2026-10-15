@@ -67,6 +67,11 @@ const branchRow = (item: Awaited<ReturnType<typeof branchApi.create>>) => ({
   name: item.name,
   address: item.address,
   contact: item.phone,
+  email: item.email ?? '',
+  licenseNo: item.licenseNo ?? '',
+  openTime: item.bookingOpenTime ?? '',
+  closeTime: item.bookingCloseTime ?? '',
+  appointmentMinutes: item.defaultAppointmentMinutes ? String(item.defaultAppointmentMinutes) : '',
   status: status(item.active),
 })
 const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => ({
@@ -81,13 +86,18 @@ const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => 
 const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>>) => ({
   ...item,
   type: 'Single Visit',
-  sessions: String(item.defaultDurationMinutes),
+  // a single visit is always one visit; its own field is the optional appointment length
+  sessions: '1',
+  duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
   status: status(item.active),
 })
 const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
   ...item,
   type: 'Course',
   sessions: String(item.sessions),
+  duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
+  validityValue: item.validityValue ?? item.validityDays,
+  validityUnit: item.validityUnit ?? 'Day',
   status: status(Boolean(item.active)),
 })
 const resourceRow = (item: Awaited<ReturnType<typeof resourceApi.create>>) => ({
@@ -238,7 +248,18 @@ const rolePermissions = computed(() =>
 )
 function defaults() {
   if (section.value === 'branches')
-    Object.assign(form, { code: '', name: '', address: '', contact: '', status: 'ใช้งาน' })
+    Object.assign(form, {
+      code: '',
+      name: '',
+      address: '',
+      contact: '',
+      email: '',
+      licenseNo: '',
+      openTime: '',
+      closeTime: '',
+      appointmentMinutes: '',
+      status: 'ใช้งาน',
+    })
   if (section.value === 'users')
     Object.assign(form, {
       name: '',
@@ -257,9 +278,11 @@ function defaults() {
       name: '',
       type: 'Single Visit',
       price: '',
-      sessions: '30',
+      sessions: '10',
+      duration: '',
       bonusSessions: 0,
-      validityDays: 365,
+      validityValue: 365,
+      validityUnit: 'Day',
       status: 'ใช้งาน',
     })
   if (section.value === 'rooms')
@@ -291,6 +314,18 @@ function openDrawer(index: number | null) {
   else defaults()
   drawerOpen.value = true
 }
+const textOrUndefined = (value: unknown) => String(value ?? '').trim() || undefined
+const numberOrUndefined = (value: unknown) => {
+  const text = String(value ?? '').trim()
+  return text === '' ? undefined : Number(text)
+}
+// Appointment lengths are optional whole minutes from 5 to 480.
+function invalidMinutes(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (text === '') return false
+  const minutes = Number(text)
+  return !Number.isInteger(minutes) || minutes < 5 || minutes > 480
+}
 async function save() {
   fillDefaultBranch()
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
@@ -298,7 +333,7 @@ async function save() {
   const required: Record<Exclude<SectionKey, 'payments'>, string[]> = {
     branches: ['code', 'name', 'address', 'contact'],
     users: ['name', 'role', 'branch', 'username', 'code'],
-    services: ['name', 'type', 'price', 'sessions'],
+    services: ['name', 'type', 'price'],
     rooms: ['name', 'branch', 'type'],
     commission: ['name', 'recipient', 'calculation'],
     master: ['category', 'examples'],
@@ -312,15 +347,36 @@ async function save() {
     fieldErrors.contact =
       !/^[0-9 -]+$/.test(phone) || (phoneDigits.length !== 9 && phoneDigits.length !== 10)
   }
-  if (section.value === 'branches') fieldErrors.code = !/^\d{2}$/.test(String(form.code))
+  if (section.value === 'branches') {
+    fieldErrors.code = !/^\d{2}$/.test(String(form.code))
+    const email = String(form.email ?? '').trim()
+    fieldErrors.email = email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    const open = String(form.openTime ?? '').trim()
+    const close = String(form.closeTime ?? '').trim()
+    // the booking window needs both ends, opening before closing
+    fieldErrors.openTime = (open === '') !== (close === '') || (open !== '' && open >= close)
+    fieldErrors.closeTime = fieldErrors.openTime
+    fieldErrors.appointmentMinutes = invalidMinutes(form.appointmentMinutes)
+  }
   if (section.value === 'services') {
     fieldErrors.price = !Number.isFinite(Number(form.price)) || Number(form.price) < 0
-    fieldErrors.sessions = !Number.isFinite(Number(form.sessions)) || Number(form.sessions) <= 0
+    fieldErrors.duration = invalidMinutes(form.duration)
+    if (form.type === 'Course') {
+      fieldErrors.sessions = !Number.isInteger(Number(form.sessions)) || Number(form.sessions) < 1
+      fieldErrors.validityValue =
+        !Number.isInteger(Number(form.validityValue)) || Number(form.validityValue) < 1
+    }
   }
   if (Object.values(fieldErrors).some(Boolean)) {
     validationMessage.value = fieldErrors.contact
       ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
-      : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
+      : fieldErrors.openTime
+        ? 'ช่วงเปิดรับนัดต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด'
+        : fieldErrors.email
+          ? 'รูปแบบอีเมลสาขาไม่ถูกต้อง'
+          : fieldErrors.appointmentMinutes || fieldErrors.duration
+            ? 'ระยะเวลานัดต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (เว้นว่างได้)'
+            : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }
   if (
@@ -341,6 +397,11 @@ async function save() {
         name: form.name,
         address: form.address,
         phone: form.contact,
+        email: textOrUndefined(form.email),
+        licenseNo: textOrUndefined(form.licenseNo),
+        bookingOpenTime: textOrUndefined(form.openTime),
+        bookingCloseTime: textOrUndefined(form.closeTime),
+        defaultAppointmentMinutes: numberOrUndefined(form.appointmentMinutes),
       }
       record = branchRow(
         existing?.id ? await branchApi.update(existing.id, body) : await branchApi.create(body),
@@ -372,7 +433,10 @@ async function save() {
           price: Number(form.price),
           sessions: Number(form.sessions),
           bonusSessions: Number(form.bonusSessions ?? 0),
-          validityDays: Number(form.validityDays ?? 365),
+          validityDays: Number(form.validityValue ?? 365),
+          validityValue: Number(form.validityValue ?? 365),
+          validityUnit: (form.validityUnit ?? 'Day') as 'Day' | 'Month' | 'Year',
+          defaultDurationMinutes: numberOrUndefined(form.duration),
         }
         record = courseRow(
           existing?.id ? await courseApi.update(existing.id, body) : await courseApi.create(body),
@@ -382,7 +446,7 @@ async function save() {
           code,
           name: form.name,
           price: Number(form.price),
-          defaultDurationMinutes: Number(form.sessions),
+          defaultDurationMinutes: numberOrUndefined(form.duration),
         }
         record = serviceRow(
           existing?.id
@@ -604,6 +668,30 @@ const drawerTitle = computed(() => {
               maxlength="12"
               :class="{ invalid: fieldErrors.contact }"
               placeholder="เบอร์โทรศัพท์สาขา" /></label
+          ><label
+            >อีเมลสาขา<input
+              v-model="form.email"
+              type="email"
+              :class="{ invalid: fieldErrors.email }"
+              placeholder="ไม่บังคับ" /></label
+          ><label
+            >เลขใบอนุญาต<input v-model="form.licenseNo" maxlength="50" placeholder="ไม่บังคับ" /></label
+          ><label
+            >เปิดรับนัดตั้งแต่<input
+              v-model="form.openTime"
+              type="time"
+              :class="{ invalid: fieldErrors.openTime }" /></label
+          ><label
+            >ถึงเวลา<input
+              v-model="form.closeTime"
+              type="time"
+              :class="{ invalid: fieldErrors.closeTime }" /></label
+          ><label
+            >ระยะเวลานัดเริ่มต้น (นาที)<input
+              v-model="form.appointmentMinutes"
+              inputmode="numeric"
+              :class="{ invalid: fieldErrors.appointmentMinutes }"
+              placeholder="ไม่บังคับ เช่น 60" /></label
         ></template>
         <template v-else-if="section === 'users'"
           ><label
@@ -679,19 +767,33 @@ const drawerTitle = computed(() => {
               v-model="form.price"
               :class="{ invalid: fieldErrors.price }"
               placeholder="ระบุราคา" /></label
-          ><label
-            >{{ form.type === 'Course' ? 'จำนวนครั้ง' : 'ระยะเวลา (นาที)'
-            }}<input
-              v-model="form.sessions"
-              :class="{ invalid: fieldErrors.sessions }"
-              placeholder="ระบุจำนวนครั้ง" /></label
           ><template v-if="form.type === 'Course'"
+            ><label
+              >จำนวนครั้งรวม<input
+                v-model="form.sessions"
+                :class="{ invalid: fieldErrors.sessions }"
+                placeholder="ระบุจำนวนครั้งรวม" /></label
             ><label>Bonus<input v-model="form.bonusSessions" type="number" min="0" /></label
             ><label
-              >อายุคอร์ส (วัน)<input
-                v-model="form.validityDays"
+              >อายุคอร์ส<input
+                v-model="form.validityValue"
                 type="number"
-                min="1" /></label></template
+                min="1"
+                :class="{ invalid: fieldErrors.validityValue }" /></label
+            ><label
+              >หน่วย<select v-model="form.validityUnit" aria-label="หน่วยอายุคอร์ส">
+                <option value="Day">วัน</option>
+                <option value="Month">เดือน</option>
+                <option value="Year">ปี</option>
+              </select></label
+            ></template
+          ><p v-else class="hint">Single Visit คือ 1 ครั้งต่อรายการ และไม่มีวันหมดอายุ</p
+          ><label
+            >ระยะเวลานัดเริ่มต้น (นาที)<input
+              v-model="form.duration"
+              inputmode="numeric"
+              :class="{ invalid: fieldErrors.duration }"
+              placeholder="ไม่บังคับ เช่น 60" /></label
         ></template>
         <template v-else-if="section === 'rooms'"
           ><label

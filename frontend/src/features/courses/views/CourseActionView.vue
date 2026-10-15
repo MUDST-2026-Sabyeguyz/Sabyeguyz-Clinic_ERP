@@ -5,6 +5,7 @@ import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
+import CourseExtensionPanel from '@/features/courses/components/CourseExtensionPanel.vue'
 
 import {
   branchApi,
@@ -978,8 +979,8 @@ function closePrintSuccess() {
             <div class="course-shared-expiry-policy">
               <strong>วันหมดอายุของสิทธิ์</strong>
               <b>วันหมดอายุร่วมเดิม: {{ fullThaiDate(selectedCourse.expiresAt) }}</b>
-              <span>หากผู้รับต่ออายุ จะเปลี่ยนเฉพาะสิทธิ์ของผู้รับ</span>
-              <span>หากเจ้าของคอร์สต่ออายุ สิทธิ์ของผู้รับจะไม่เปลี่ยน</span>
+              <span>เจ้าของคอร์สเดิมขอต่ออายุ และ Manager เป็นผู้อนุมัติ</span>
+              <span>เมื่อต่ออายุ ทุกคนที่ถือสิทธิ์คอร์สนี้ใช้วันหมดอายุใหม่ร่วมกัน</span>
             </div>
           </section>
         </div>
@@ -1476,7 +1477,6 @@ function closePrintSuccess() {
           </div>
           <div class="course-after-actions">
             <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
-            <button type="button" disabled title="ยังไม่มี API สำหรับต่ออายุคอร์ส">ต่ออายุคอร์ส</button>
             <button type="button" :disabled="!course.usable" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
@@ -1501,22 +1501,11 @@ function closePrintSuccess() {
               </div>
               <em>แชร์คอร์ส</em>
             </div>
-            <button
-              type="button"
-              :aria-expanded="isCourseDetailOpen(course, 'renewal')"
-              @click="toggleCourseDetail(course, 'renewal')"
-            >
-              <strong>ประวัติการต่ออายุ</strong>
-              <span>1 รายการ · ล่าสุด {{ fullThaiDate(course.expiresAt) }}</span
-              ><b>{{ isCourseDetailOpen(course, 'renewal') ? '⌃' : '⌄' }}</b>
-            </button>
-            <div v-if="isCourseDetailOpen(course, 'renewal')" class="course-after-detail renewal">
-              <div>
-                <strong>{{ fullThaiDate(course.expiresAt) }}</strong>
-                <span>ต่ออายุเพิ่ม 80 วัน · โดย กฤชญา</span>
-              </div>
-              <button type="button" title="รอเชื่อมต่อรายละเอียดการต่ออายุ">ดูรายละเอียด</button>
-            </div>
+            <CourseExtensionPanel
+              :course-id="course.id"
+              :can-request="true"
+              @changed="owner && loadCourses(owner.id)"
+            />
           </div>
         </section>
         <section v-else-if="incomingTransfer(course)" class="course-recipient-card">
@@ -1566,12 +1555,11 @@ function closePrintSuccess() {
             <article><span>คงเหลือ</span><strong>{{ course.balance }} ครั้ง</strong></article>
           </div>
           <p class="course-recipient-renewal-note">
-            การต่ออายุจะเปลี่ยนเฉพาะวันหมดอายุของสิทธิ์ผู้รับ และไม่กระทบเจ้าของคอร์ส
+            การต่ออายุเป็นของทั้งคอร์ส: เจ้าของคอร์สเดิมขอ Manager อนุมัติ และทุกคนที่ถือสิทธิ์ใช้วันหมดอายุใหม่ร่วมกัน
           </p>
           <h3>การดำเนินการ</h3>
           <div class="course-recipient-actions">
             <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
-            <button type="button" disabled title="ยังไม่มี API สำหรับต่ออายุคอร์ส">ต่ออายุคอร์ส</button>
             <button type="button" :disabled="!course.usable" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
@@ -1598,22 +1586,11 @@ function closePrintSuccess() {
               </div>
               <em>คอร์สต้นทาง</em>
             </div>
-            <button
-              type="button"
-              :aria-expanded="isCourseDetailOpen(course, 'renewal')"
-              @click="toggleCourseDetail(course, 'renewal')"
-            >
-              <strong>ประวัติการต่ออายุ</strong>
-              <span>1 รายการ · ล่าสุด {{ fullThaiDate(course.expiresAt) }}</span
-              ><b>{{ isCourseDetailOpen(course, 'renewal') ? '⌃' : '⌄' }}</b>
-            </button>
-            <div v-if="isCourseDetailOpen(course, 'renewal')" class="course-after-detail renewal">
-              <div>
-                <strong>{{ fullThaiDate(course.expiresAt) }}</strong>
-                <span>ต่ออายุเพิ่ม 80 วัน · โดย กฤชญา</span>
-              </div>
-              <button type="button" title="รอเชื่อมต่อรายละเอียดการต่ออายุ">ดูรายละเอียด</button>
-            </div>
+            <CourseExtensionPanel
+              :course-id="course.id"
+              :can-request="false"
+              @changed="owner && loadCourses(owner.id)"
+            />
           </div>
         </section>
         <section
@@ -1660,6 +1637,11 @@ function closePrintSuccess() {
               ใช้สิทธิ์คอร์ส
             </button>
           </div>
+          <CourseExtensionPanel
+            :course-id="course.id"
+            :can-request="true"
+            @changed="owner && loadCourses(owner.id)"
+          />
           <button
             v-if="transferReceiptId"
             class="course-manager-latest-transfer"

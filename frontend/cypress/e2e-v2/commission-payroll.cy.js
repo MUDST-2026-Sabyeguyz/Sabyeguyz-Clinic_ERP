@@ -43,9 +43,11 @@ describe('monthly payments page', () => {
     cy.contains('tbody tr', 'Therapist').should('contain.text', 'เปิดอยู่')
     cy.contains('tbody tr', 'Therapist').contains('button', 'ปิดงวด').click()
     cy.contains('tbody tr', 'Therapist').contains('button', 'ยืนยันจ่าย').click()
-    cy.get('.confirm-modal').should('contain.text', 'Finalize').contains('button', 'ยืนยันจ่าย').click()
+    cy.get('.confirm-modal').should('contain.text', 'Finalize')
+    cy.get('.confirm-modal input[aria-label="เลขที่อ้างอิง"]').type('TRF-100')
+    cy.get('.confirm-modal').contains('button', 'ยืนยันจ่าย').click()
     cy.noAlert()
-    cy.contains('tbody tr', 'Therapist').should('contain.text', 'จ่ายแล้ว')
+    cy.contains('tbody tr', 'Therapist').should('contain.text', 'จ่ายแล้ว').and('contain.text', 'อ้างอิง TRF-100')
     cy.contains('tbody tr', 'Therapist').find('button').should('not.exist')
     cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
       expect(body.find((row) => row.employeeId === this.fixtures.therapistId).status).to.equal('FINALIZED')
@@ -92,12 +94,14 @@ describe('pay adjustments page', () => {
         cy.visitAs('manager', '/staff/commission/adjustments')
         cy.contains('button', '+ สร้างใบปรับยอด').click()
         // a source of the right staff member and a reason are required
-        cy.get('.rule-drawer').contains('button', 'บันทึกใบปรับยอด').click()
+        cy.get('.rule-drawer').contains('button', /^บันทึก/).click()
         cy.get('.drawer-error').should('contain.text', 'กรุณาเลือกพนักงาน')
         cy.get('.rule-drawer').contains('label', 'พนักงาน').find('select').select(therapist.fullName)
         cy.get('.rule-drawer').contains('label', 'ยอด (บาท)').find('input').clear().type('140')
         cy.get('.rule-drawer').contains('label', 'เหตุผล').find('input').type('บันทึกผู้รักษาผิดคน')
         cy.get('.rule-drawer').contains('label', 'เลขที่ต้นทาง').find('input').clear().type(String(allocationId))
+        // the step-by-step way: save only, approve and apply afterwards
+        cy.get('.rule-drawer input[aria-label="นำไปใช้ในงวดทันที"]').uncheck()
         cy.get('.rule-drawer').contains('button', 'บันทึกใบปรับยอด').click()
         cy.noAlert()
         cy.get('tbody tr').should('have.length', 1).and('contain.text', '−฿140.00').and('contain.text', 'รออนุมัติ')
@@ -117,6 +121,32 @@ describe('pay adjustments page', () => {
       })
     })
     cy.api('GET', '/api/commission/adjustments').its('body.0.applications.0.status').should('equal', 'Draft')
+  })
+
+  it('creates, approves and puts a deduction into the payment in one step', function () {
+    paidMonth(this.fixtures).then((allocationId) => {
+      cy.api('GET', '/api/staff').then(({ body }) => {
+        const therapist = body.find((row) => row.id === this.fixtures.therapistId)
+        cy.visitAs('manager', '/staff/commission/adjustments')
+        cy.contains('button', '+ สร้างใบปรับยอด').click()
+        cy.get('.rule-drawer').contains('label', 'พนักงาน').find('select').select(therapist.fullName)
+        cy.get('.rule-drawer').contains('label', 'ยอด (บาท)').find('input').clear().type('140')
+        cy.get('.rule-drawer').contains('label', 'เหตุผล').find('input').type('บันทึกผู้รักษาผิดคน')
+        cy.get('.rule-drawer').contains('label', 'เลขที่ต้นทาง').find('input').clear().type(String(allocationId))
+        // a deduction needs the consent reference before it can be applied
+        cy.get('.rule-drawer').contains('button', 'บันทึกและนำไปใช้ในงวด').click()
+        cy.get('.drawer-error').should('contain.text', 'เลขที่อ้างอิงความยินยอม')
+        cy.get('.rule-drawer input[aria-label="เลขที่อ้างอิงความยินยอม"]').type('ใบยินยอม 2569/11')
+        cy.get('.rule-drawer').contains('button', 'บันทึกและนำไปใช้ในงวด').click()
+        cy.noAlert()
+        cy.contains('.notice', 'นำไปใช้ในงวด').should('be.visible')
+        cy.get('.commission-table-wrap tbody tr').should('have.length', 1).and('contain.text', 'อนุมัติแล้ว')
+      })
+    })
+    cy.api('GET', '/api/commission/adjustments').its('body.0').should((adjustment) => {
+      expect(adjustment.applications).to.have.length(1)
+      expect(adjustment.applications[0]).to.include({ status: 'Draft', approved: true, approvalReference: 'ใบยินยอม 2569/11' })
+    })
   })
 
   it('refuses an adjustment without a source and cancels one that was not applied', function () {

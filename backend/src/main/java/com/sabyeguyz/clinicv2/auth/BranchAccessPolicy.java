@@ -46,4 +46,16 @@ public class BranchAccessPolicy {
     public void requireAccess(Branch branch) {
         scope(branch.getBranchCode());
     }
+
+    /** Same check, with the text shown when the branch is not the user's own. */
+    public void requireAccess(Branch branch, String forbiddenMessage) {
+        try {
+            scope(branch.getBranchCode());
+        } catch (ResponseStatusException exception) {
+            if (exception.getStatusCode() == HttpStatus.FORBIDDEN) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, forbiddenMessage);
+            }
+            throw exception;
+        }
+    }
 }
