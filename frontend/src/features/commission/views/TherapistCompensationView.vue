@@ -146,12 +146,13 @@ onMounted(async () => {
             <div>
               <small>วันที่จ่าย</small
               ><b>{{
-                item.paidAt
+                item.paidDate || item.paidAt
                   ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(
-                      new Date(item.paidAt),
+                      new Date(item.paidDate ? `${item.paidDate}T12:00:00` : item.paidAt!),
                     )
                   : '—'
-              }}</b>
+              }}</b
+              ><small v-if="item.paymentReference">อ้างอิง {{ item.paymentReference }}</small>
             </div>
           </article>
           <p v-if="paidHistory.length === 0" class="empty-row">ยังไม่มีงวดที่จ่ายแล้ว</p>
