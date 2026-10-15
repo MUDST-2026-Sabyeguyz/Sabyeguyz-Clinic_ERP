@@ -131,12 +131,46 @@ public class CourseCommissionService {
                 boolean earns = ownerEarns(course, usage.getTreatingStaff(), usage.getVisitDate().toLocalDate());
                 BigDecimal ownerNet = earns ? rate : BigDecimal.ZERO;
                 usage.setOwnerNetCommission(ownerNet);
-                recordAllocation(usage, ownerNet, 1, null, actorId);
+                recordAllocation(usage, ownerNet, nextVersion(usage), null, actorId);
             }
             usage.setUsageUpdateAt(Instant.now());
             usage.setUsageUpdateBy(actorId);
             usages.save(usage);
         }
+        refreshTotals(course);
+        courses.save(course);
+    }
+
+    /**
+     * The sale month of the course is reopened (before payment): the Owner commission allocated at the old rate is
+     * reversed and the sessions go back to "rate unknown" until the month is closed again, which allocates the next
+     * version. Allocations whose commission sits in a payment that is Closed or Paid are refused.
+     */
+    @Transactional
+    public void unlock(Course course, String reason, Long actorId) {
+        for (CourseVisitUsage usage : completedUsages(course)) {
+            boolean earns = ownerEarns(course, usage.getTreatingStaff(), usage.getVisitDate().toLocalDate());
+            if (earns) {
+                currentAllocation(usage).ifPresent(original -> {
+                    requireNotPaid(original);
+                    if (original.getOwnerMonthlyPayment() != null
+                            && original.getOwnerMonthlyPayment().getPaymentStatus() != PaymentStatus.Open) {
+                        throw new IllegalStateException("ค่าตอบแทนอยู่ในงวดจ่ายที่ปิดแล้ว ให้ Reopen งวดจ่ายก่อน");
+                    }
+                    allocations.save(reversalOf(original, reason, actorId));
+                });
+                usage.setOwnerNetCommission(null);
+            }
+            usage.setCommissionAllocationPerVisit(null);
+            usage.setUsageUpdateAt(Instant.now());
+            usage.setUsageUpdateBy(actorId);
+            usages.save(usage);
+        }
+        course.setCommissionStatus(CommissionStatus.Provisional);
+        course.setLockedCommissionRate(null);
+        course.setTotalCourseCommissionPool(null);
+        course.setCommissionAllocationPerVisit(null);
+        course.setCommissionGeneratedDate(null);
         refreshTotals(course);
         courses.save(course);
     }

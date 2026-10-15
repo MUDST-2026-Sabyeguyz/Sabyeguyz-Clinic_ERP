@@ -57,6 +57,14 @@ public class CypressCommissionScenariosController {
                 + "FROM course_visit_usage WHERE course_id = ? ORDER BY usage_sequence, visit_usage_id", courseId);
     }
 
+    /** Usage slips of a course (document snapshots), oldest first. */
+    @GetMapping("/courses/{courseId}/prints")
+    public List<Map<String, Object>> prints(@PathVariable Long courseId) {
+        return jdbc.queryForList("SELECT p.print_id, u.usage_sequence, p.document_version, p.document_snapshot::text AS snapshot "
+                + "FROM course_usage_print p JOIN course_visit_usage u ON u.visit_usage_id = p.visit_usage_id "
+                + "WHERE p.course_id = ? ORDER BY p.print_id", courseId);
+    }
+
     /** The cached money totals of a course. */
     @GetMapping("/courses/{courseId}/totals")
     public Map<String, Object> totals(@PathVariable Long courseId) {

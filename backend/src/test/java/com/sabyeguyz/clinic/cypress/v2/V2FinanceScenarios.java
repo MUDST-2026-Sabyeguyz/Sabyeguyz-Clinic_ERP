@@ -270,7 +270,8 @@ public class V2FinanceScenarios {
                 .on("findIdsBySellerStaffIdAndSaleMonth", a -> List.of(1L))
                 .on("findByIdForUpdate", a -> Optional.of(c));
         var result = new MonthlyCommissionClosingService(closings.proxy(),courses.proxy(),schemeResolver(),tierResolver(),
-                        new MonthlyTierSalesService(courses.proxy()), settlement(courses))
+                        new MonthlyTierSalesService(courses.proxy()), settlement(courses),
+                        new V2RepositoryStub<>(CommissionAllocationLedgerRepository.class).proxy())
                 .closeMonth(scenario.equals("closing-malformed") ? "August-2026" : "2026-08",staff(),null,9L);
         return Map.of("rate",result.getLockedCommissionRate(),"status",result.isClosed(),
                 "courseStatus",c.getCommissionStatus(),"courseRate",c.getLockedCommissionRate(),

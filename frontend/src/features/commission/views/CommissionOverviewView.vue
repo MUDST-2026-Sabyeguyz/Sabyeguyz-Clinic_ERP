@@ -56,7 +56,7 @@ onMounted(async () => {
         commission: Number(r.commission),
         treatment: 0,
         branch: r.branchCode,
-        status: closingStatus.get(r.staffId!) === 'CLOSED' ? 'approved' : 'pending',
+        status: ['CLOSED', 'FINALIZED'].includes(closingStatus.get(r.staffId!) ?? '') ? 'approved' : 'pending',
       }))
     rows.value = realRows
   } catch (error) {
