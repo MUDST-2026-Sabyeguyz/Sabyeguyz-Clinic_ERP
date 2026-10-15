@@ -102,7 +102,8 @@ public class CommissionController {
                                       Long ownerStaffId, String ownerStaffName, BigDecimal gross,
                                       BigDecimal treatmentFee, BigDecimal ownerNet, boolean ownerNetPending) {}
     public record ClosingResponse(Long id, String month, Long employeeId, String employeeName, BigDecimal sales,
-                                   String version, BigDecimal rate, String status) {}
+                                   String version, BigDecimal rate, String status, String reopenReason,
+                                   java.time.Instant reopenedAt) {}
     public record TreatmentFeeResponse(Long id, Long staffId, String feeType, BigDecimal feeValue, String percentageBase,
                                         LocalDate effectiveFrom, LocalDate effectiveTo, boolean enabled, boolean used) {}
     public record TreatmentFeeRequest(String feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo) {}
@@ -228,7 +229,7 @@ public class CommissionController {
                 c.getClosingMonth(), c.getStaff().getId(), c.getStaff().getStaffFname() + " " + c.getStaff().getStaffLname(),
                 c.getMonthlyCourseSales(), String.valueOf(c.getCommissionSchemeVersion()),
                 c.getLockedCommissionRate() != null ? c.getLockedCommissionRate() : c.getCalculatedCommissionRate(),
-                c.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT))).toList());
+                c.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT), c.getReopenReason(), c.getReopenedAt())).toList());
         if (saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])")) {
             java.util.Set<Long> listed = new java.util.HashSet<>();
             rows.forEach(r -> listed.add(r.employeeId()));
@@ -245,7 +246,7 @@ public class CommissionController {
                     rate = BigDecimal.ZERO;
                 }
                 rows.add(new ClosingResponse(-sellerId, saleMonth, sellerId,
-                        seller.getStaffFname() + " " + seller.getStaffLname(), sales, "", rate, "OPEN"));
+                        seller.getStaffFname() + " " + seller.getStaffLname(), sales, "", rate, "OPEN", null, null));
             }
         }
         return rows;

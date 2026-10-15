@@ -13,6 +13,7 @@ type ClosingRow = {
   sales: number
   rate: number
   status: 'Open' | 'Closed' | 'Finalized'
+  reopenReason: string | null
 }
 
 const selectedMonth = ref(`${clinicToday().slice(0, 8)}01`)
@@ -101,6 +102,7 @@ async function load() {
       rate: Math.round(Number(row.rate) * 10000) / 100,
       status:
         row.status === 'FINALIZED' ? 'Finalized' : row.status === 'CLOSED' ? 'Closed' : 'Open',
+      reopenReason: row.reopenReason ?? null,
     }))
     errorMessage.value = ''
   } catch (error) {
@@ -242,6 +244,9 @@ const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.r
                       ? 'ปิดรอบแล้ว'
                       : 'รอปิดรอบ'
                 }}
+                <small v-if="row.reopenReason" class="reopen-reason"
+                  >Reopen ล่าสุด: {{ row.reopenReason }}</small
+                >
               </td>
               <td>
                 <button
