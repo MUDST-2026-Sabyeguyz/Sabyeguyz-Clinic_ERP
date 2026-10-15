@@ -1,4 +1,4 @@
-const month = new Date().toISOString().slice(0, 7)
+const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).slice(0, 7)
 const range = '?from=2020-01-01&to=2099-12-31'
 
 describe('v2 commission', () => {
@@ -252,6 +252,33 @@ describe('v2 commission', () => {
         const row = body.find((entry) => entry.employeeId === this.fixtures.therapistId)
         expect(Number(row.sales)).to.equal(9000)
       })
+    })
+  })
+
+  it('the sales report leaves out voided sales and takes off Completed refunds, like the monthly tier', function () {
+    cy.registerPatient().then((patient) => {
+      const sell = () => cy.api('POST', '/api/payments', {
+        patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
+        items: [{ type: 'COURSE', referenceId: this.fixtures.courseId, quantity: 1 }],
+        payments: [{ paymentMethodCode: 'Cash', amount: 9000 }],
+      }).then(({ body }) => body)
+      sell().then((first) => sell().then((second) => sell().then((third) => {
+        cy.api('POST', `/api/payments/${second.id}/reverse`, { reason: 'ยกเลิกการขาย' }).its('status').should('equal', 200)
+        cy.api('GET', `/api/receipts/${third.id}`).then(({ body: detail }) => cy.api('GET', `/api/patients/${patient.id}/courses`).then(({ body: courses }) => {
+          const course = courses.find((row) => row.receiptId === detail.receiptId)
+          cy.api('POST', `/api/payments/${detail.payments[0].id}/refunds`, {
+            amount: 2000, paymentMethodCode: 'Cash', reason: 'คืนบางส่วน',
+            items: [{ courseId: course.id, refundAmount: 2000, cancelledVisits: 3 }],
+          }).then(({ body: refund }) => cy.api('POST', `/api/refunds/${refund.id}/complete`).its('status').should('equal', 200))
+        }))
+        cy.api('GET', `/api/commission/report${range}`).then(({ status, body }) => {
+          expect(status).to.equal(200)
+          const row = body.find((entry) => entry.staffId === this.fixtures.therapistId)
+          expect(row.saleCount).to.equal(2) // the voided sale is out
+          expect(Number(row.base)).to.equal(16000) // 9,000 + 9,000 less the 2,000 refunded
+        })
+        expect(first.id).to.be.a('number')
+      })))
     })
   })
 

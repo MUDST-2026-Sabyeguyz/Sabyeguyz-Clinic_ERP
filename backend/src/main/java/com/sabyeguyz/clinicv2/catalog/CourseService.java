@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.catalog;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.commission.CommissionScheme;
 import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
 import com.sabyeguyz.clinicv2.commission.CommissionTier;
@@ -88,7 +89,7 @@ public class CourseService {
         Patient purchaser = transaction.getPatient();
         require(purchaser != null && samePatient(purchaser, receipt.getPatient()),
                 "ผู้ซื้อต้องตรงกับผู้ป่วยในรายการขายและใบเสร็จ");
-        LocalDate effectiveSaleDate = saleDate == null ? LocalDate.now() : saleDate;
+        LocalDate effectiveSaleDate = saleDate == null ? ClinicTime.today() : saleDate;
 
         BigDecimal price = transaction.getCommissionableAmount();
         Integer totalVisits = totalVisitsOverride != null ? totalVisitsOverride : serviceTemplate.getDefaultTotalVisits();

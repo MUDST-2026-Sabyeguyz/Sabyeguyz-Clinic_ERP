@@ -1,8 +1,8 @@
 // Course sessions and what they earn (Data Dictionary + LA BALANCE commission document): Owner PT = seller, tier rate locked at the
 // close of the sale month, rate per session by position with the remainder on the last one, substitute PT paid the full
 // treatment fee, Owner commission unknown (NULL) until the month is closed, single-visit fee.
-const month = new Date().toISOString().slice(0, 7)
-const today = new Date().toISOString().slice(0, 10)
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+const month = today.slice(0, 7)
 const money = (value) => Math.round(Number(value) * 100) / 100
 
 // one flat tier, so the documents' 7% examples can be reproduced exactly (the seed scheme is not in use yet)
@@ -196,8 +196,7 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
     template('ACC13', 10000, 13).then((courseId) => {
       cy.registerPatient().then((patient) => buy(this.fixtures, patient, courseId, this.fixtures.therapistId).then((course) => {
         cy.api('POST', `/__cypress/commission/courses/${course.id}/shift-sale-month?months=1`).its('status').should('equal', 200)
-        const previous = new Date()
-        previous.setUTCDate(1)
+        const previous = new Date(`${month}-01T00:00:00Z`)
         previous.setUTCMonth(previous.getUTCMonth() - 1)
         closeMonth(previous.toISOString().slice(0, 7))
         // a newer version of the scheme (a higher rate) starting later does not touch a locked course

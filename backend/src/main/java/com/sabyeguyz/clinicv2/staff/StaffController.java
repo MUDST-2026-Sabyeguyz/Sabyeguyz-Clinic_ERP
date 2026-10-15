@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.staff;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -59,7 +60,7 @@ public class StaffController {
         String[] names = splitName(request.fullName());
         StaffPosition position = resolvePosition(request.position());
         Staff staff = service.create(request.employeeCode(), names[0], names[1], position, branch,
-                LocalDate.now(), actor.currentId());
+                ClinicTime.today(), actor.currentId());
         return toResponse(staff);
     }
 
