@@ -35,6 +35,11 @@ public class PatientVisit {
     @JoinColumn(name = "assigned_staff_id")
     private Staff assignedStaff;
 
+    /** The PT who actually treats the visit (and is paid for it); required once the visit is InService or Completed. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "treating_staff_id")
+    private Staff treatingStaff;
+
     @Column(name = "visit_date", nullable = false)
     private Instant visitDate;
 
@@ -69,6 +74,8 @@ public class PatientVisit {
     public void setBranch(Branch branch) { this.branch = branch; }
     public Staff getAssignedStaff() { return assignedStaff; }
     public void setAssignedStaff(Staff assignedStaff) { this.assignedStaff = assignedStaff; }
+    public Staff getTreatingStaff() { return treatingStaff; }
+    public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
     public Instant getVisitDate() { return visitDate; }
     public void setVisitDate(Instant visitDate) { this.visitDate = visitDate; }
     public Instant getCheckoutTime() { return checkoutTime; }

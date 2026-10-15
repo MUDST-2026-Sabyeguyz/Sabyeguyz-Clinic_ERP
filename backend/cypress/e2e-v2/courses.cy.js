@@ -38,15 +38,20 @@ describe('v2 courses', () => {
     })
   })
 
-  it('credits a course sale to two PTs when shares add up to 100%', function () {
+  it('no longer splits a course sale between two PTs: the seller is the single Owner', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient, {
         shares: [
           { staffId: this.fixtures.managerStaffId, percent: 60 },
           { staffId: this.fixtures.therapistId, percent: 40 },
         ],
-        caseOwnerStaffId: this.fixtures.therapistId,
-      }).then(({ status, body }) => {
+      }).its('status').should('equal', 400)
+    })
+  })
+
+  it('records the sale for the PT named in caseOwnerStaffId, who becomes the Owner', function () {
+    cy.registerPatient().then((patient) => {
+      buy(this.fixtures, patient, { caseOwnerStaffId: this.fixtures.therapistId }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.price)).to.equal(9000)
       })
@@ -71,7 +76,7 @@ describe('v2 courses', () => {
     })
   })
 
-  it('uses a visit as a walk-in, records the allocation, then reverses it', function () {
+  it('uses a visit as a walk-in; the Owner commission is not allocated before the month is closed; then reverses it', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient).then(({ body: purchase }) => {
         cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id, note: 'walk-in' }).then(({ status, body }) => {
@@ -80,7 +85,7 @@ describe('v2 courses', () => {
           expect(body.remaining).to.equal(5)
         })
         cy.api('GET', `/api/course-purchases/${purchase.id}`).then(({ body }) => {
-          expect(body.allocations).to.have.length(1)
+          expect(body.allocations, 'rate unknown until the sale month is closed').to.have.length(0)
           const usage = body.movements.find((movement) => movement.type === 'USAGE')
           expect(usage).to.exist
           cy.api('POST', `/api/course-movements/${usage.id}/reverse`, { reason: 'บันทึกผิด' }).then((reversed) => {

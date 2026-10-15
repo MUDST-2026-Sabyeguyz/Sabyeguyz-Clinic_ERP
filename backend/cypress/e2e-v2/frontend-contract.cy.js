@@ -30,15 +30,13 @@ describe('v2 frontend contract gaps', () => {
     })
   })
 
-  it('records a termination with its commission policy', function () {
+  it('records a termination date (there is no per-person commission policy any more)', function () {
     cy.api('POST', `/api/staff/${this.fixtures.therapist2Id}/terminate`, {
-      terminationDate: this.fixtures.tomorrow, commissionAfterTerminationPolicy: 'CONTINUE_UNTIL_COMPLETE',
+      terminationDate: this.fixtures.tomorrow,
     }).then(({ status, body }) => {
       expect(status).to.equal(200)
       expect(body.active).to.equal(false)
     })
-    cy.api('POST', `/api/staff/${this.fixtures.therapistId}/terminate`, {
-      terminationDate: this.fixtures.tomorrow, commissionAfterTerminationPolicy: 'NOT_A_POLICY',
-    }).its('status').should('equal', 400)
+    cy.api('POST', `/api/staff/${this.fixtures.therapistId}/terminate`, {}).its('status').should('equal', 400)
   })
 })

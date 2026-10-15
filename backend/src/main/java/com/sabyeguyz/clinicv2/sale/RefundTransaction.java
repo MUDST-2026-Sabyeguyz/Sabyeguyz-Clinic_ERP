@@ -67,6 +67,17 @@ public class RefundTransaction {
     public void setRefundStatus(RefundStatus refundStatus) { this.refundStatus = refundStatus; }
     public Instant getRefundedAt() { return refundedAt; }
     public void setRefundedAt(Instant refundedAt) { this.refundedAt = refundedAt; }
+    /** Approver of the refund (required before it is Completed); kept permanently. */
+    @Column(name = "approved_by")
+    private Long approvedBy;
+
+    @Column(name = "approved_at")
+    private Instant approvedAt;
+
+    public Long getApprovedBy() { return approvedBy; }
+    public void setApprovedBy(Long approvedBy) { this.approvedBy = approvedBy; }
+    public Instant getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(Instant approvedAt) { this.approvedAt = approvedAt; }
     public Long getRefundedBy() { return refundedBy; }
     public void setRefundedBy(Long refundedBy) { this.refundedBy = refundedBy; }
     public Instant getRequestedAt() { return requestedAt; }
