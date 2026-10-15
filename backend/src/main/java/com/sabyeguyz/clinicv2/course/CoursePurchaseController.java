@@ -139,7 +139,8 @@ public class CoursePurchaseController {
                             BigDecimal price, int sessions, int bonusSessions, int purchased, int used, int remaining,
                             Instant purchasedAt, Instant expiresAt, boolean expired, boolean usable, String status,
                             String commissionStatus, BigDecimal lockedCommissionRate,
-                            BigDecimal totalCourseCommissionPool, BigDecimal commissionAllocationPerVisit) {}
+                            BigDecimal totalCourseCommissionPool, BigDecimal commissionAllocationPerVisit,
+                            Long receiptId) {}
 
     public record MovementResponse(Long id, String type, int quantity, String reason, Instant createdAt) {}
     public record AllocationResponse(LocalDate visitDate, BigDecimal gross, BigDecimal fee, BigDecimal ownerNet) {}
@@ -327,6 +328,6 @@ public class CoursePurchaseController {
                 course.getCourseCreateAt(), course.getExpiryDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
                 expired, usable, course.getCourseStatus().name().toUpperCase(java.util.Locale.ROOT), course.getCommissionStatus().name().toUpperCase(java.util.Locale.ROOT),
                 course.getLockedCommissionRate(), course.getTotalCourseCommissionPool(),
-                course.getCommissionAllocationPerVisit());
+                course.getCommissionAllocationPerVisit(), course.getReceipt().getId());
     }
 }
