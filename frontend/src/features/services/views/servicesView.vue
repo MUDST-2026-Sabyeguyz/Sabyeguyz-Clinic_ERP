@@ -307,7 +307,7 @@ async function submit() {
     } else {
       const sale = await salesApi.create({
         patientId: patient.value.id,
-        branchCode: 'RP',
+        branchCode: branches.value[0]?.code ?? '',
         salespersonStaffId: selectedStaffId.value,
         note: note.value,
         items: [{ type, referenceId, quantity: 1 }],
