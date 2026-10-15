@@ -47,12 +47,14 @@ public class AppointmentController {
     private final CurrentActor actor;
     private final BranchAccessPolicy branchAccess;
     private final AppointmentStatusHistoryRepository history;
+    private final AppointmentAvailabilityService availability;
 
     public AppointmentController(AppointmentService service, AppointmentRepository repository,
                                   PatientVisitService visitService, PatientVisitRepository visits,
                                   PatientRepository patients, StaffRepository staff,
                                   ServiceRepository services, CurrentActor actor, BranchAccessPolicy branchAccess,
-                                  AppointmentStatusHistoryRepository history) {
+                                  AppointmentStatusHistoryRepository history,
+                                  AppointmentAvailabilityService availability) {
         this.service = service;
         this.repository = repository;
         this.visitService = visitService;
@@ -63,6 +65,7 @@ public class AppointmentController {
         this.actor = actor;
         this.branchAccess = branchAccess;
         this.history = history;
+        this.availability = availability;
     }
 
     /**
@@ -111,6 +114,23 @@ public class AppointmentController {
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
+    /** Free start times of one therapist on one day; the service is optional (the branch default length is used). */
+    @GetMapping("/availability")
+    public AppointmentAvailabilityService.Availability availability(@RequestParam String branchCode,
+                                                                    @RequestParam Long therapistId,
+                                                                    @RequestParam LocalDate date,
+                                                                    @RequestParam(required = false) Long serviceId,
+                                                                    @RequestParam(required = false) Long excludeAppointmentId) {
+        Branch branch = branchAccess.scope(branchCode);
+        Staff therapist = staff.findById(therapistId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ให้บริการ"));
+        if (!branch.getId().equals(therapist.getBranch().getId())) {
+            throw new IllegalArgumentException("ผู้ให้บริการต้องอยู่สาขาเดียวกับนัดหมาย");
+        }
+        Service svc = serviceId == null ? null : services.findById(serviceId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
+        return availability.availability(branch, therapist, svc, date, excludeAppointmentId);
+    }
+
     @GetMapping("/{id}")
     public Response get(@PathVariable Long id) {
         return toResponse(requireAppointmentAccess(id));
@@ -141,7 +161,8 @@ public class AppointmentController {
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
-        Service svc = services.findById(request.serviceId())
+        // The service is optional: an appointment can be made before anyone decides what will be done.
+        Service svc = request.serviceId() == null ? null : services.findById(request.serviceId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         Appointment appointment = service.book(patient, branch, therapist, svc, null,
                 local.toLocalDate(), local.toLocalTime(), initial, actor.currentId());
@@ -264,14 +285,16 @@ public class AppointmentController {
                             .filter(value -> value != null && !value.isBlank()).collect(java.util.stream.Collectors.joining(" ")),
                         patient.getPhone());
         Service svc = appointment.getService();
+        Integer minutes = AppointmentService.effectiveMinutes(svc, appointment.getBranch());
+        int duration = minutes == null ? 0 : minutes;
         ServiceSummary serviceSummary = svc == null
                 ? new ServiceSummary(null, appointment.getRequestedServiceType() == null ? null
-                        : appointment.getRequestedServiceType().name(), 0)
-                : new ServiceSummary(svc.getId(), svc.getServiceName(), 0);
+                        : appointment.getRequestedServiceType().name(), duration)
+                : new ServiceSummary(svc.getId(), svc.getServiceName(), duration);
         return new Response(appointment.getId(), appointment.getBranch().getBranchCode(), patientSummary,
                 new TherapistSummary(appointment.getStaff().getId(),
                         appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname()),
-                serviceSummary, startAt, startAt, apiStatus(appointment.getAppointmentStatus()), appointment.getNotes(),
+                serviceSummary, startAt, startAt.plusSeconds(duration * 60L), apiStatus(appointment.getAppointmentStatus()), appointment.getNotes(),
                 history.findFirstByAppointmentIdAndToStatusOrderByChangedAtDescIdDesc(appointment.getId(), AppointmentStatus.Cancelled)
                         .map(AppointmentStatusHistory::getReason).orElse(null),
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),
