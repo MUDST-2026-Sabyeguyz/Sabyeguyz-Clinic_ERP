@@ -473,7 +473,7 @@ async function submit() {
               <label class="wide">ที่อยู่<textarea v-model.trim="form.address" rows="4" /></label>
               <label :class="{ 'invalid-field': emailErrorVisible }">
                 อีเมล
-                <input v-model.trim="form.email" type="email" @focus="emailFocused = true" @blur="emailFocused = false" />
+                <input v-model.trim="form.email" type="email" placeholder="example@gmail.com" @focus="emailFocused = true" @blur="emailFocused = false" />
                 <small v-if="emailErrorVisible" class="required-error">รูปแบบอีเมลไม่ถูกต้อง</small>
               </label>
             </div>
