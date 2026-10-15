@@ -27,10 +27,19 @@ const scheme = reactive({
   effectiveTo: null as string | null,
 })
 const form = reactive({ min: 0, max: '' as number | '', rate: 5, active: true })
+// New tiers are a new cycle's rules: they start on the first day of the month after the current one.
+function nextCycleStart() {
+  const [year, month] = clinicToday().split('-').map(Number)
+  return new Date(Date.UTC(year!, month!, 1)).toISOString().slice(0, 10)
+}
+const thaiDate = (value: string) =>
+  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+    new Date(`${value}T12:00:00`),
+  )
 const schemeForm = reactive({
   name: 'Commission Scheme',
   version: '2',
-  effectiveFrom: '2027-01-01',
+  effectiveFrom: nextCycleStart(),
   effectiveTo: '',
 })
 const schemeTiers = reactive<Tier[]>([])
@@ -63,7 +72,7 @@ function openSchemeEditor() {
   Object.assign(schemeForm, {
     name: scheme.name,
     version: String(Number(scheme.version || 0) + 1),
-    effectiveFrom: '2027-01-01',
+    effectiveFrom: nextCycleStart(),
     effectiveTo: '',
   })
   schemeTiers.splice(0, schemeTiers.length, ...tiers.map((tier) => ({ ...tier })))
@@ -147,7 +156,7 @@ async function saveTier() {
     const created = (await commissionApi.createScheme({
       name: scheme.name,
       version: String(Number(scheme.version) + 1),
-      effectiveFrom: clinicToday(),
+      effectiveFrom: nextCycleStart(),
       effectiveTo: null,
       tiers: nextTiers
         .filter((t) => t.active)
@@ -225,12 +234,23 @@ onMounted(async () => {
         <header>
           <div>
             <h2>{{ scheme.name }}</h2>
-            <p class="muted-copy">มีผล 1 มกราคม–31 ธันวาคม 2569 · สถานะ ใช้งานอยู่</p>
+            <p class="muted-copy">
+              มีผลตั้งแต่ {{ thaiDate(scheme.effectiveFrom) }}{{
+                scheme.effectiveTo ? ` ถึง ${thaiDate(scheme.effectiveTo)}` : ' เป็นต้นไป'
+              }}
+            </p>
           </div>
           <button class="commission-primary" @click="openSchemeEditor">
             + เพิ่ม Scheme Version
           </button>
         </header>
+        <aside class="scheme-cycle-notice" role="note">
+          <b>การปรับ Tier ทำเป็น Scheme Version ใหม่</b>
+          <span
+            >ต้องปิดยอดคอมมิชชันของรอบปัจจุบันก่อน แล้วเวอร์ชันใหม่จะเริ่มใช้ตั้งแต่ต้นรอบถัดไป (วันที่ 1
+            ของเดือน) ส่วนคอร์สที่ปิดยอดไปแล้วยังใช้เกณฑ์เดิม</span
+          >
+        </aside>
         <aside v-if="schemeLocked" class="scheme-lock-notice">
           <b>Version นี้เริ่มมีผลแล้ว</b
           ><span
@@ -399,6 +419,16 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.scheme-cycle-notice {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px solid #cfe3e1;
+  border-radius: 10px;
+  background: #f3f9f8;
+  color: #25524e;
+}
 @import '../../staff/styles/staff.css';
 @import '../styles/commission-workspace.css';
 @import '../styles/commission-manager.css';
