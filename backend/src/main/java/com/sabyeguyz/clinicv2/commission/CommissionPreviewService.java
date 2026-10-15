@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.enums.ServiceType;
@@ -51,7 +52,7 @@ public class CommissionPreviewService {
         if (totalVisits == null || totalVisits < 1) {
             throw new IllegalArgumentException("คอร์สนี้ไม่ได้ตั้งค่าจำนวนครั้ง");
         }
-        LocalDate date = saleDate == null ? LocalDate.now() : saleDate;
+        LocalDate date = saleDate == null ? ClinicTime.today() : saleDate;
         BigDecimal gross = priceOverride != null ? priceOverride : courseTemplate.getServicePrice();
         BigDecimal net = (discount == null ? Discount.none() : discount).apply(gross);
 

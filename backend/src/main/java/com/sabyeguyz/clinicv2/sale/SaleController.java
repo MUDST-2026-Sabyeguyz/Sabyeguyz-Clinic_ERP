@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
@@ -170,8 +171,8 @@ public class SaleController {
         Staff salesperson = request.salespersonStaffId() == null ? null
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
 
-        String receiptNo = receiptService.nextReceiptNo(branch, LocalDate.now());
-        Receipt receipt = receiptService.create(receiptNo, patient, branch, LocalDate.now(), actor.currentId());
+        String receiptNo = receiptService.nextReceiptNo(branch, ClinicTime.today());
+        Receipt receipt = receiptService.create(receiptNo, patient, branch, ClinicTime.today(), actor.currentId());
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
         for (ItemRequest item : request.items()) {
@@ -180,7 +181,7 @@ public class SaleController {
             Discount discount = Discount.of(item.discountType(), item.discountValue());
             if ("COURSE".equalsIgnoreCase(item.type())) {
                 lines.add(salesTransactionService.recordCoursePurchase(receipt, patient, branch, svc, salesperson,
-                        null, null, null, discount, LocalDate.now(), actor.currentId()).transaction());
+                        null, null, null, discount, ClinicTime.today(), actor.currentId()).transaction());
             } else {
                 TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
                         ? TransactionType.Assessment : TransactionType.SingleVisit;
