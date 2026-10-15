@@ -22,7 +22,7 @@ const duplicatePatient = ref<PatientProfile | null>(null)
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
 const registeredPatientName = computed(() =>
-  `${form.title}${form.firstName} ${form.lastName}`.trim(),
+  `${form.title}${form.firstName} ${form.middleName} ${form.lastName}`.replace(/\s+/g, ' ').trim(),
 )
 const registeredIdentityNumber = computed(() => {
   const value = form.identityNumber.trim()
@@ -57,6 +57,7 @@ const form = reactive<PatientRegistrationForm>({
   title: 'นาย',
   customerType: '',
   firstName: '',
+  middleName: '',
   lastName: '',
   nickname: '',
   fullNameEnglish: '',
@@ -251,7 +252,9 @@ async function submit() {
   submitting.value = true
   errorMessage.value = ''
   try {
-    const fullName = `${form.firstName} ${form.lastName}`.trim()
+    const fullName = `${form.firstName} ${form.middleName} ${form.lastName}`
+      .replace(/\s+/g, ' ')
+      .trim()
     const result = await registerPatient({
       branchCode: form.branchCode,
       username: `patient-${Date.now()}`,
@@ -318,101 +321,118 @@ async function submit() {
                 <input v-model="form.nationality" type="radio" value="ไทย" />ไทย
               </label>
               <label :class="{ selected: form.nationality === 'ต่างชาติ' }">
-                <input v-model="form.nationality" type="radio" value="ต่างชาติ" />ชาวต่างชาติ
+                <input v-model="form.nationality" type="radio" value="ต่างชาติ" />ต่างชาติ
               </label>
             </fieldset>
-            <div class="form-grid">
-              <label
-                >คำนำหน้า<FilterDropdown
+            <div class="personal-details-grid">
+              <label>
+                คำนำหน้า
+                <FilterDropdown
                   v-model="form.title"
                   :options="titleOptions"
                   default-label="เลือกคำนำหน้า"
                   label="คำนำหน้า"
                   :clear-on-reselect="false"
                   hide-default-option
-              /></label>
-              <label
-                >เพศ <em>*</em
-                ><FilterDropdown
+                />
+              </label>
+              <label>
+                เพศ <em>*</em>
+                <FilterDropdown
                   v-model="form.gender"
                   :options="genderOptions"
                   default-label="เลือกเพศ"
                   label="เพศ"
                   :clear-on-reselect="false"
                   hide-default-option
-              /></label>
-              <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.firstName) }"
-                >ชื่อ <em>*</em
-                ><input
+                />
+              </label>
+            </div>
+            <div class="patient-name-grid">
+              <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.firstName) }">
+                ชื่อ <em>*</em>
+                <input
                   v-model.trim="form.firstName"
                   placeholder="ชื่อ"
                   @input="form.firstName = allowedName(form.firstName)"
-                /><small v-if="submitted && !form.firstName" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ><small
+                />
+                <small v-if="submitted && !form.firstName" class="required-error">กรุณากรอกข้อมูล</small>
+                <small
                   v-else-if="submitted && !personNameIsValid(form.firstName)"
                   class="required-error"
-                  >รูปแบบชื่อไม่ถูกต้อง</small
-                ></label
-              >
-              <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.lastName) }"
-                >นามสกุล <em>*</em
-                ><input
+                >รูปแบบชื่อไม่ถูกต้อง</small>
+              </label>
+              <label>
+                ชื่อกลาง
+                <input
+                  v-model.trim="form.middleName"
+                  placeholder="ระบุชื่อกลาง (ถ้ามี)"
+                  @input="form.middleName = allowedName(form.middleName)"
+                />
+              </label>
+              <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.lastName) }">
+                นามสกุล <em>*</em>
+                <input
                   v-model.trim="form.lastName"
                   placeholder="นามสกุล"
                   @input="form.lastName = allowedName(form.lastName)"
-                /><small v-if="submitted && !form.lastName" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ><small
+                />
+                <small v-if="submitted && !form.lastName" class="required-error">กรุณากรอกข้อมูล</small>
+                <small
                   v-else-if="submitted && !personNameIsValid(form.lastName)"
                   class="required-error"
-                  >รูปแบบนามสกุลไม่ถูกต้อง</small
-                ></label
-              >
+                >รูปแบบนามสกุลไม่ถูกต้อง</small>
+              </label>
+            </div>
+            <div class="personal-details-grid">
               <label
                 :class="{
                   'invalid-field': submitted && form.nickname && !personNameIsValid(form.nickname),
                 }"
-                >ชื่อเล่น<input
+              >
+                ชื่อเล่น
+                <input
                   v-model.trim="form.nickname"
                   placeholder="ชื่อเล่น"
                   @input="form.nickname = allowedName(form.nickname)"
-                /><small
+                />
+                <small
                   v-if="submitted && form.nickname && !personNameIsValid(form.nickname)"
                   class="required-error"
-                  >รูปแบบชื่อเล่นไม่ถูกต้อง</small
-                ></label
-              >
-              <label :class="{ 'invalid-field': submitted && !birthDateIsValid }"
-                >วันเกิด <em v-if="!isForeign">*</em
-                ><ThaiDatePicker
+                >รูปแบบชื่อเล่นไม่ถูกต้อง</small>
+              </label>
+              <label :class="{ 'invalid-field': submitted && !birthDateIsValid }">
+                วันเกิด <em v-if="!isForeign">*</em>
+                <ThaiDatePicker
                   v-model="form.birthDate"
                   :invalid="submitted && !birthDateIsValid"
                   show-calendar-icon
                   numeric-month
                   hide-caret
-                /><small v-if="submitted && !isForeign && !form.birthDate" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                ><small v-else-if="submitted && !birthDateIsValid" class="required-error"
-                  >วันเกิดต้องเป็นวันในอดีต</small
-                ></label
-              >
-              <label
-                >กรุ๊ปเลือด<FilterDropdown
+                />
+                <small v-if="submitted && !isForeign && !form.birthDate" class="required-error">กรุณากรอกข้อมูล</small>
+                <small v-else-if="submitted && !birthDateIsValid" class="required-error">วันเกิดต้องเป็นวันในอดีต</small>
+              </label>
+            </div>
+            <div class="personal-details-grid">
+              <label>
+                กรุ๊ปเลือด
+                <FilterDropdown
                   v-model="form.bloodGroup"
                   :options="bloodGroupOptions"
                   default-label="เลือกกรุ๊ปเลือด"
                   label="กรุ๊ปเลือด"
                   :clear-on-reselect="false"
                   hide-default-option
-              /></label>
-              <label :class="{ 'invalid-field': identityErrorVisible }"
-                >{{ isForeign ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน'
-                }}<input
+                />
+              </label>
+              <label :class="{ 'invalid-field': identityErrorVisible }">
+                {{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }}
+                <input
                   v-model.trim="form.identityNumber"
                   :inputmode="isForeign ? 'text' : 'numeric'"
                   :maxlength="isForeign ? 20 : 13"
-                  :placeholder="isForeign ? 'กรอกเลขหนังสือเดินทาง' : 'x-xxxx-xxxxx-xx-x'"
+                  :placeholder="isForeign ? 'กรอกเลขพาสปอร์ต' : 'x-xxxx-xxxxx-xx-x'"
                   @focus="identityFocused = true"
                   @blur="identityFocused = false"
                   @input="
@@ -420,10 +440,11 @@ async function submit() {
                       ? form.identityNumber.replace(/[^A-Za-z0-9]/g, '')
                       : digitsOnly(form.identityNumber)
                   "
-                /><small v-if="identityErrorVisible" class="required-error">{{
-                  isForeign ? 'รูปแบบเลขหนังสือเดินทางไม่ถูกต้อง' : 'กรุณากรอกตัวเลข 13 หลัก'
-                }}</small></label
-              >
+                />
+                <small v-if="identityErrorVisible" class="required-error">{{
+                  isForeign ? 'รูปแบบเลขพาสปอร์ตไม่ถูกต้อง' : 'กรุณากรอกตัวเลข 13 หลัก'
+                }}</small>
+              </label>
             </div>
           </section>
           <section class="registration-section">
