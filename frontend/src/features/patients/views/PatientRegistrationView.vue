@@ -52,7 +52,7 @@ const insuranceCompanyOptions = computed(() =>
   insuranceCompanies.value.map((value) => ({ value, label: value })),
 )
 const form = reactive<PatientRegistrationForm>({
-  branchCode: 'RP',
+  branchCode: '',
   email: '',
   title: 'นาย',
   customerType: customerGroups.value[0]!,
@@ -180,7 +180,7 @@ onMounted(async () => {
       fullName: 'ผู้ป่วยสาธิต ชาย 10',
       phone: '0890000010',
       active: true,
-      branch: { id: 1, code: 'RP', name: 'ราชพฤกษ์', active: true },
+      branch: { id: 1, code: 'BR', name: 'แบริ่ง', active: true },
       title: 'นาย',
       birthDate: '1990-01-01',
       gender: 'ชาย',
