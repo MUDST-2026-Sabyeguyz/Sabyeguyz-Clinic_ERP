@@ -86,6 +86,7 @@ public class CoursePurchaseController {
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
     private final com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations;
+    private final com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
@@ -97,7 +98,9 @@ public class CoursePurchaseController {
                                      AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
                                      CurrentActor actor,
                                      com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                     com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations) {
+                                     com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
+                                     com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments) {
+        this.treatments = treatments;
         this.cancellations = cancellations;
         this.courses = courses;
         this.ledger = ledger;
@@ -130,7 +133,8 @@ public class CoursePurchaseController {
     public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
                                    BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares) {}
     /** treatingStaffId (optional): the PT who treats the session, the Owner PT by default; patientId (optional): who uses the entitlement. */
-    public record UseRequest(Long coursePurchaseId, Long appointmentId, String note, Long treatingStaffId, Long patientId) {}
+    public record UseRequest(Long coursePurchaseId, Long appointmentId, String note, Long treatingStaffId, Long patientId,
+                              Long treatmentId) {}
     public record ReasonRequest(String reason) {}
 
     public record PatientSummary(Long id, String hn, String fullName) {}
@@ -238,7 +242,9 @@ public class CoursePurchaseController {
             throw new IllegalArgumentException("ผู้ใช้สิทธิ์ต้องเป็นผู้ป่วยคนเดียวกับของ Visit");
         }
         PatientVisit visit = appointmentVisit != null ? appointmentVisit : walkInVisit(course, usingPatient, treating);
-        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), actor.currentId());
+        var treatment = request.treatmentId() == null ? null : treatments.findById(request.treatmentId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
+        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
         return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 

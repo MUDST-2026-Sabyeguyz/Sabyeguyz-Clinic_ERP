@@ -114,6 +114,12 @@ const inactiveCourses = computed(() =>
   ),
 )
 const historyFromInactive = ref(false)
+// the session is given at the branch the course was sold at
+const serviceBranchName = computed(() => {
+  const code = selectedCourse.value.branchCode
+  const branch = branches.value.find((item) => item.branchCode === code)
+  return branch?.name ?? code ?? 'ไม่ระบุสาขา'
+})
 function branchLabel(patient: Patient | null) {
   const name = patient?.branchName || patient?.branchCode
   return name ? (name.startsWith('สาขา') ? name : `สาขา${name}`) : 'ไม่ระบุสาขา'
@@ -645,7 +651,7 @@ function closePrintSuccess() {
               </div>
               <div>
                 <dt>สาขา</dt>
-                <dd>แบริ่ง</dd>
+                <dd>{{ serviceBranchName }}</dd>
               </div>
               <div>
                 <dt>จำนวนที่ใช้ครั้งนี้</dt>
@@ -1246,21 +1252,17 @@ function closePrintSuccess() {
               v-if="transferReceiptId && !historyFromInactive"
               class="course-after-transfer-entry"
             >
-              <strong>โอนสิทธิ์ · TRF-DEMO-0001</strong>
+              <strong>โอนสิทธิ์ · เลขที่ {{ transferReceiptId }}</strong>
               <span
-                >{{ owner?.fullName }} → {{ selectedRecipient?.fullName || 'นางวรรณา มั่นคง' }} ·
-                สาขาพระราม 9</span
+                >{{ owner?.fullName }} → {{ selectedRecipient?.fullName }} ·
+                {{ serviceBranchName }}</span
               >
               <span
                 >โอน {{ transferAmount }} ครั้ง · ผู้โอนคงเหลือ {{ selectedCourse.balance }} ครั้ง ·
                 ผู้รับได้รับ {{ transferAmount }} ครั้ง</span
               >
             </article>
-            <article
-              v-for="(entry, index) in usageEntries"
-              :key="entry.id"
-              class="course-history-entry"
-            >
+            <article v-for="entry in usageEntries" :key="entry.id" class="course-history-entry">
               <strong>{{
                 new Date(entry.createdAt).toLocaleDateString('th-TH', {
                   day: 'numeric',
@@ -1270,16 +1272,7 @@ function closePrintSuccess() {
               }}</strong>
               <div>
                 <b>{{ selectedCourse.name }}</b>
-                <span
-                  >{{
-                    index === 0
-                      ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                      : index === 1
-                        ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                        : 'กภ. วีระพงษ์ · สาขาพระราม 9'
-                  }}
-                  · USE-DEMO-000{{ 3 - index }}</span
-                >
+                <span>{{ serviceBranchName }} · {{ entry.reason || 'ใช้สิทธิ์คอร์ส' }}</span>
               </div>
               <aside>
                 <b>ใช้ {{ Math.abs(entry.quantity) }} ครั้ง</b
