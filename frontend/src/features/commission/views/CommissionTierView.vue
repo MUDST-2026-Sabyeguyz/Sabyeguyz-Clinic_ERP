@@ -323,7 +323,12 @@ onMounted(async () => {
               <header><b>Tier ของ Version ใหม่</b><small>คัดลอกจาก Version ปัจจุบัน</small></header>
               <article v-for="tier in schemeTiers" :key="tier.order">
                 <b>Tier {{ tier.order }}</b
-                ><label>ขั้นต่ำ<input v-model.number="tier.min" type="number" min="0" step="0.01" /></label
+                ><label
+                  >ขั้นต่ำ<input
+                    v-model.number="tier.min"
+                    type="number"
+                    min="0"
+                    step="0.01" /></label
                 ><label
                   >สูงสุด<input
                     :value="tier.max ?? ''"
@@ -344,7 +349,12 @@ onMounted(async () => {
             </section>
           </div>
           <div v-else class="drawer-form">
-            <label>ยอดขายขั้นต่ำ<input v-model.number="form.min" type="number" min="0" step="0.01" /></label
+            <label
+              >ยอดขายขั้นต่ำ<input
+                v-model.number="form.min"
+                type="number"
+                min="0"
+                step="0.01" /></label
             ><label
               >ยอดขายสูงสุด<input
                 v-model.number="form.max"

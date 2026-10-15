@@ -68,9 +68,18 @@ public class CourseVisitUsageService {
         this.cancellations = cancellations;
     }
 
-    @Transactional
     public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
                                  LocalDate visitDate, Long actorId) {
+        return use(course, visit, usingPatient, treatingStaff, visitDate, null, actorId);
+    }
+
+    /**
+     * @param treatment the treatment this session belongs to, when the visit has several services (optional): it must be
+     *     of the same visit, given by the same PT, and of the service the course was sold for
+     */
+    @Transactional
+    public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
+                                 LocalDate visitDate, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
         require(course != null, "ต้องระบุคอร์ส");
         require(course.getCourseStatus() == com.sabyeguyz.clinicv2.enums.CourseStatus.Active,
                 "คอร์สนี้ไม่อยู่ในสถานะพร้อมใช้งาน");
@@ -79,6 +88,15 @@ public class CourseVisitUsageService {
         require(treatingStaff != null, "ต้องระบุผู้รักษา");
         require(visitDate != null, "ต้องระบุวันที่ใช้บริการ");
         requireCanTreat(treatingStaff, visit, visitDate);
+        if (treatment != null) {
+            require(treatment.getVisit() != null && treatment.getVisit().getId().equals(visit.getId()),
+                    "Treatment ที่อ้างต้องเป็นของ Visit เดียวกับการใช้สิทธิ์");
+            require(treatment.getTreatingStaff() != null && treatment.getTreatingStaff().getId().equals(treatingStaff.getId()),
+                    "ผู้รักษาของ Treatment ต้องเป็นคนเดียวกับผู้รักษาของการใช้สิทธิ์");
+            require(treatment.getService() != null && course.getService() != null
+                    && treatment.getService().getId().equals(course.getService().getId()),
+                    "บริการของ Treatment ต้องตรงกับบริการที่คอร์สนี้ขาย");
+        }
         if (course.getExpiryDate().isBefore(visitDate)) {
             throw new IllegalArgumentException("คอร์สหมดอายุแล้ว");
         }
@@ -104,6 +122,7 @@ public class CourseVisitUsageService {
 
         CourseVisitUsage usage = new CourseVisitUsage();
         usage.setVisit(visit);
+        usage.setTreatment(treatment);
         usage.setCourse(course);
         usage.setPatient(usingPatient);
         usage.setTreatingStaff(treatingStaff);
