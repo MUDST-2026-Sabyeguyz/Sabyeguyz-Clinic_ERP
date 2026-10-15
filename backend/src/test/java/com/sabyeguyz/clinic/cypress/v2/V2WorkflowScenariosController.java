@@ -277,7 +277,9 @@ public class V2WorkflowScenariosController {
             var service = new CourseVisitUsageService(usages.proxy(), ledger.proxy(), courses.proxy(),
                     allocations.proxy(), new TreatmentFeeRuleResolver(rules.proxy()), entitlements.proxy(), cancellations,
                     new com.sabyeguyz.clinicv2.commission.CourseCommissionService(usages.proxy(), allocations.proxy(),
-                            courses.proxy(), new TreatmentFeeRuleResolver(rules.proxy())));
+                            courses.proxy(), new TreatmentFeeRuleResolver(rules.proxy())),
+                    new CourseUsagePrintService(new V2RepositoryStub<>(CourseUsagePrintRepository.class).proxy(),
+                            new V2RepositoryStub<>(CourseUsagePrintEventRepository.class).proxy(), usages.proxy()));
             var result = service.use(course, new PatientVisit(), patient, ownerTreats ? owner : substitute,
                     LocalDate.of(2026, 9, 1), 1L);
             Map<String, Object> resultMap = new LinkedHashMap<>();
@@ -328,7 +330,8 @@ public class V2WorkflowScenariosController {
     public Map<String, Object> print(@PathVariable String scenario) {
         var prints = new V2RepositoryStub<>(CourseUsagePrintRepository.class);
         var events = new V2RepositoryStub<>(CourseUsagePrintEventRepository.class);
-        var service = new CourseUsagePrintService(prints.proxy(), events.proxy());
+        var service = new CourseUsagePrintService(prints.proxy(), events.proxy(),
+                new V2RepositoryStub<>(CourseVisitUsageRepository.class).proxy());
         Course course = lockedCourse(); course.setCourseNo("RE00000010"); course.setCourseName("คอร์สทดสอบ");
         var usage = new CourseVisitUsage();
         usage.setCourse(course); usage.setVisitDate(LocalDate.of(2026, 9, 1).atStartOfDay());
