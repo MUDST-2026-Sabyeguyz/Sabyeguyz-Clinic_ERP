@@ -221,6 +221,82 @@ main > h1,
   gap: 24px;
   margin-top: 24px;
 }
+.service-menu-patient {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 104px;
+  padding: 22px 28px 22px 15px;
+  border-left: 5px solid #1f8883;
+  border-radius: 12px;
+  background: #fff;
+  color: #25372f;
+}
+.service-menu-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e0f0ed;
+  color: #176c68;
+  font-weight: 600;
+}
+.service-menu-patient-info {
+  flex: 1;
+  min-width: 0;
+}
+.service-menu-patient-info strong {
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+.service-menu-patient-info p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin: 8px 0 0;
+  color: #667a72;
+  font-size: 14px;
+}
+.service-menu-branch {
+  padding: 8px 20px;
+  border-radius: 24px;
+  background: #eef6f0;
+  color: #34724c;
+  font-size: 13px;
+}
+.service-menu-patient button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid #218b85;
+  border-radius: 8px;
+  background: #fff;
+  color: #218b85;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.service-menu .service-menu-actions article {
+  min-height: 282px;
+  align-content: start;
+  border-radius: 16px;
+}
+.service-menu .service-menu-actions h2 {
+  font-size: 28px;
+}
+@media (max-width: 760px) {
+  .service-menu-patient {
+    flex-wrap: wrap;
+    padding: 20px 16px;
+  }
+  .service-menu-patient-info {
+    flex-basis: calc(100% - 66px);
+  }
+  .service-menu .service-menu-actions h2 {
+    font-size: 24px;
+  }
+}
 .service-menu-actions article {
   display: grid;
   gap: 20px;
