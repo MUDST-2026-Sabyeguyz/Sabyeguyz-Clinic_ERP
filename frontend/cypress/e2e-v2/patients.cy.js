@@ -136,7 +136,7 @@ describe('patient registration', () => {
     cy.get('input[type="email"]').type('john@gmail.com')
     cy.get('input[placeholder="xxx-xxx-xxxx"]').type('0899999999')
     cy.contains('label', 'ที่อยู่').find('textarea').type('London')
-    cy.get('input[placeholder="กรอกเลขหนังสือเดินทาง 10 หลัก"]').type('1234567890')
+    cy.get('input[placeholder="กรอกเลขพาสปอร์ต"]').type('1234567890')
     cy.contains('button', 'บันทึก').click()
     confirmRegistration()
     cy.location('pathname').should('eq', '/staff/patients')

@@ -16,7 +16,7 @@ describe('patient courses', () => {
     cy.contains('h2', 'ยังไม่มีคอร์สที่ใช้งานได้').should('be.visible')
   })
 
-  it('shows the balance, the bonus visits and the expiry of a bought course', function () {
+  it('shows the total visits including the bonus and the expiry of a bought course', function () {
     cy.registerPatient().then((patient) => {
       buyCourse(this.fixtures, patient)
       cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`)
@@ -24,6 +24,9 @@ describe('patient courses', () => {
     cy.contains('.course-use-patient', 'สมชาย ใจดี').should('be.visible')
     cy.get('.course-manager-card').should('have.length', 1).and('contain.text', 'คงเหลือ6 ครั้ง')
       .and('contain.text', 'ทั้งหมด6 ครั้ง').and('contain.text', 'Bonus 1 ครั้ง').and('contain.text', 'หมดอายุ')
+    cy.api('GET', '/api/patients').its('body.items.0.id').then((patientId) => {
+      cy.api('GET', `/api/patients/${patientId}/courses`).its('body.0.bonusSessions').should('equal', 1)
+    })
   })
 
   it('uses one visit of the course', function () {
