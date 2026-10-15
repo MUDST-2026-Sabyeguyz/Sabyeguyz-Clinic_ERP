@@ -4,40 +4,56 @@ import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { courseApi } from '@/api/client'
 const route = useRoute()
-const courseId = computed(() => String(route.params.courseId || 'RE-2206315-01'))
-const ledger = ref<Array<{date:string;patient:string;owner:string;treating:string;gross:number;fee:number;net:number}>>([])
-const purchase = ref<{ patient: { fullName: string }; commissionStatus?: string; lockedCommissionRate?: number; totalCourseCommissionPool?: number; commissionAllocationPerVisit?: number } | null>(null)
-onMounted(async () => { const id=Number(courseId.value); if(!Number.isNaN(id)){ try { const data=await courseApi.ledger(id); purchase.value=data.purchase; ledger.value=(data.allocations||[]).map(item=>({date:item.visitDate,patient:data.purchase.patient.fullName,owner:'Case Owner',treating:'Treating PT',gross:item.gross,fee:item.fee,net:item.ownerNet})) } catch { /* invalid legacy display id */ } } })
-const fallbackLedger = [
-  {
-    date: '5 ก.ย. 2569',
-    patient: 'สมชาย ใจดี',
-    owner: 'กฤษดา น.',
-    treating: 'กฤษดา น.',
-    gross: 70,
-    fee: 0,
-    net: 70,
-  },
-  {
-    date: '12 ก.ย. 2569',
-    patient: 'สมชาย ใจดี',
-    owner: 'กฤษดา น.',
-    treating: 'ศิริพร ว.',
-    gross: 70,
-    fee: 45,
-    net: 25,
-  },
-  {
-    date: '19 ก.ย. 2569',
-    patient: 'สมชาย ใจดี',
-    owner: 'กฤษดา น.',
-    treating: 'กฤษดา น.',
-    gross: 70,
-    fee: 0,
-    net: 70,
-  },
-]
-if (!ledger.value.length) ledger.value = fallbackLedger
+const courseId = computed(() => String(route.params.courseId || ''))
+const ledger = ref<
+  Array<{
+    date: string
+    patient: string
+    owner: string
+    treating: string
+    gross: number
+    fee: number
+    net: number
+  }>
+>([])
+const purchase = ref<{
+  patient: { fullName: string }
+  course: { name: string }
+  purchasedAt: string
+  price: number
+  used: number
+  remaining: number
+  commissionStatus?: string
+  lockedCommissionRate?: number
+  totalCourseCommissionPool?: number
+  commissionAllocationPerVisit?: number
+} | null>(null)
+onMounted(async () => {
+  const id = Number(courseId.value)
+  if (!Number.isNaN(id)) {
+    try {
+      const data = await courseApi.ledger(id)
+      purchase.value = data.purchase
+      ledger.value = (data.allocations || []).map((item) => ({
+        date: item.visitDate,
+        patient: data.purchase.patient.fullName,
+        owner: '—',
+        treating: '—',
+        gross: item.gross,
+        fee: item.fee,
+        net: item.ownerNet,
+      }))
+    } catch {
+      /* invalid legacy display id */
+    }
+  }
+})
+const grossAllocated = computed(() => ledger.value.reduce((sum, item) => sum + item.gross, 0))
+const treatmentFees = computed(() => ledger.value.reduce((sum, item) => sum + item.fee, 0))
+const ownerNetReleased = computed(() => ledger.value.reduce((sum, item) => sum + item.net, 0))
+const outstandingPool = computed(() =>
+  Math.max(0, Number(purchase.value?.totalCourseCommissionPool || 0) - grossAllocated.value),
+)
 </script>
 
 <template>
@@ -59,23 +75,54 @@ if (!ledger.value.length) ledger.value = fallbackLedger
           <div>
             <small>COURSE ID</small>
             <h2>{{ courseId }}</h2>
-            <p class="muted-copy">Receipt RE-2206315 ขาย 18 ส.ค. 2569</p>
+            <p class="muted-copy">วันที่ซื้อ {{ purchase?.purchasedAt || '—' }}</p>
           </div>
           <span class="status locked">ล็อกอัตราแล้ว</span>
         </header>
         <div class="detail-grid">
-          <article><span>ผู้ป่วย</span><b>สมชาย ใจดี HN260001</b></article>
-          <article><span>ผู้ขาย / เจ้าของเคส</span><b>กฤษดา น.</b></article>
-          <article><span>แพ็กเกจ</span><b>Routine Pain 10 Visits</b></article>
-          <article><span>ราคาคอร์ส</span><b>฿10,000</b></article>
-          <article><span>Scheme / Tier</span><b>V1 Tier 7%</b></article>
-          <article><span>Commission Pool</span><b>฿700</b></article>
-          <article><span>คอมมิชชันต่อ Visit</span><b>฿70</b></article>
-          <article><span>ใช้แล้ว / คงเหลือ</span><b>3 / 7 Visits</b></article>
-          <article><span>Gross Allocated</span><b>฿210</b></article>
-          <article><span>ค่ารักษาแทน</span><b>฿45</b></article>
-          <article><span>Owner Net Released</span><b>฿165</b></article>
-          <article><span>Outstanding Pool</span><b>฿490</b></article>
+          <article>
+            <span>ผู้ป่วย</span><b>{{ purchase?.patient.fullName || '—' }}</b>
+          </article>
+          <article>
+            <span>แพ็กเกจ</span><b>{{ purchase?.course.name || '—' }}</b>
+          </article>
+          <article>
+            <span>ราคาคอร์ส</span><b>฿{{ Number(purchase?.price || 0).toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>อัตราที่ล็อก</span
+            ><b>{{
+              purchase?.lockedCommissionRate == null
+                ? '—'
+                : `${purchase.lockedCommissionRate * 100}%`
+            }}</b>
+          </article>
+          <article>
+            <span>Commission Pool</span
+            ><b>฿{{ Number(purchase?.totalCourseCommissionPool || 0).toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>คอมมิชชันต่อ Visit</span
+            ><b
+              >฿{{ Number(purchase?.commissionAllocationPerVisit || 0).toLocaleString('th-TH') }}</b
+            >
+          </article>
+          <article>
+            <span>ใช้แล้ว / คงเหลือ</span
+            ><b>{{ purchase?.used || 0 }} / {{ purchase?.remaining || 0 }} Visits</b>
+          </article>
+          <article>
+            <span>Gross Allocated</span><b>฿{{ grossAllocated.toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>ค่ารักษาแทน</span><b>฿{{ treatmentFees.toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>Owner Net Released</span><b>฿{{ ownerNetReleased.toLocaleString('th-TH') }}</b>
+          </article>
+          <article>
+            <span>Outstanding Pool</span><b>฿{{ outstandingPool.toLocaleString('th-TH') }}</b>
+          </article>
         </div>
       </section>
       <section class="staff-panel commission-page-panel">
