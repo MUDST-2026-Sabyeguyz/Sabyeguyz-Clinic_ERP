@@ -17,3 +17,9 @@
 **PENDING — ยังไม่ได้รับคำยืนยันจากเพื่อน และยังไม่ merge/push main**
 
 Review branch/PR พร้อมผล run ให้เพื่อนยืนยัน revision ที่ใช้ส่งอาจารย์ก่อนขึ้น main การสร้าง draft branch/PR ไม่ใช่การอนุมัติ
+
+## ข้อความสำหรับส่งให้เพื่อนตรวจ
+
+เตรียมชุดส่งตรวจวันที่ 16 ต.ค. ไว้ที่ `backup/draft-phase1` แล้ว รบกวนตรวจ PR ไป main, clone/run ตาม README, ผล code/tests/E2E/coverage และ Compose ของ SHA ที่จะใช้ส่ง รวมถึง requirements documents ที่รักษาจาก main หากยืนยันให้ใช้ revision นี้ส่งอาจารย์ กรุณาระบุ SHA และยืนยันให้ merge เข้า main ก่อนดำเนินการ ตอนนี้ยังไม่ได้ merge main และไม่ได้ถือว่า policy/business/K8s acceptance ที่ยังเปิดเสร็จแล้ว
+
+ผู้ยืนยัน: PENDING · Revision: PENDING · วันที่/เวลา: PENDING

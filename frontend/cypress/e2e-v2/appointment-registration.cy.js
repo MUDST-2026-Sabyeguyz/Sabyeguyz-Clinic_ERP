@@ -39,7 +39,7 @@ describe('P3 appointment registration and service navigation', () => {
         cy.get('input[placeholder="xxx-xxx-xxxx"]').should('have.value', '0891234567')
         cy.contains('label', 'วันเกิด').pickDate('1990-01-15')
         cy.get('input[type="email"]').type('p3@gmail.com')
-        cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประจำตัวประชาชน')
+        cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประชาชน')
         cy.get('input[placeholder="กรอกเลขบัตรประชาชน 13 หลัก"]').type('1100000000777')
         cy.contains('button', 'บันทึก').click()
         cy.get('.confirmation-modal').contains('button', /^ใช่$/).click()

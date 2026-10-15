@@ -8,7 +8,7 @@ function fillRegistrationForm({ first = 'สมชาย', last = 'ใจดี'
   cy.get('input[type="email"]').type(email)
   cy.get('input[placeholder="xxx-xxx-xxxx"]').type(phone)
   cy.contains('label', 'ที่อยู่').find('textarea').type('99 ถนนทดสอบ กรุงเทพฯ')
-  cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประจำตัวประชาชน')
+  cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประชาชน')
   cy.get('input[placeholder="กรอกเลขบัตรประชาชน 13 หลัก"]').type(identity)
 }
 
@@ -274,9 +274,10 @@ describe('patient profile', () => {
       field(/^ชื่อ\s*\*/).find('input').clear().type('สมหญิง')
       field(/^เบอร์โทร/).find('input').clear().type('0877777777')
       field(/^ที่อยู่/).find('textarea').clear().type('ที่อยู่ใหม่ เชียงใหม่')
+      cy.intercept('PUT', `**/api/patients/${patient.id}`).as('patientUpdate')
       cy.get('.patient-edit').contains('button', /^บันทึก$/).click()
       cy.get('.patient-confirmation').contains('button', /^ใช่$/).click()
-      cy.contains('แก้ไขข้อมูลสำเร็จ').should('be.visible')
+      cy.wait('@patientUpdate').its('response.statusCode').should('eq', 200)
       cy.contains('.patient-profile-info h2', 'สมหญิง ใจดี').should('be.visible')
       cy.contains('dt', 'เบอร์โทรศัพท์').parent().should('contain.text', '0877777777')
       cy.contains('dt', 'ที่อยู่').parent().should('contain.text', 'ที่อยู่ใหม่ เชียงใหม่')

@@ -23,6 +23,7 @@ type CourseAction = 'manage' | 'transfer' | 'history' | 'use'
 const route = useRoute()
 const router = useRouter()
 const action = ref<CourseAction>('manage')
+const initialLoading = ref(true)
 const recipientSearch = ref('')
 const recipientSearchOpen = ref(false)
 const selectedRecipient = ref<Patient | null>(null)
@@ -303,6 +304,8 @@ onMounted(async () => {
     await loadOwner()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ'
+  } finally {
+    initialLoading.value = false
   }
 })
 async function searchRecipients() {
@@ -1406,7 +1409,7 @@ function closePrintSuccess() {
           @click="managerCourseTab = 'inactive'"
         >
           หมดอายุ / ใช้สิทธิ์ครบ</button
-        ><button type="button" @click="openCourseUsageHistory">ประวัติการใช้คอร์ส</button>
+        ><button type="button" :disabled="initialLoading" @click="openCourseUsageHistory">ประวัติการใช้คอร์ส</button>
       </div>
       <section v-if="!managerCourses.length" class="course-use-empty">
         <h2>{{ managerCourseTab === 'active' ? 'ยังไม่มีคอร์สที่ใช้งานได้' : 'ไม่พบคอร์ส' }}</h2>
@@ -1477,7 +1480,7 @@ function closePrintSuccess() {
           </div>
           <div class="course-after-actions">
             <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
-            <button type="button" :disabled="!course.usable" @click="start('use', course)">
+            <button type="button" :disabled="initialLoading || !course.usable" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
           </div>
@@ -1560,7 +1563,7 @@ function closePrintSuccess() {
           <h3>การดำเนินการ</h3>
           <div class="course-recipient-actions">
             <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
-            <button type="button" :disabled="!course.usable" @click="start('use', course)">
+            <button type="button" :disabled="initialLoading || !course.usable" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
           </div>
@@ -1633,8 +1636,8 @@ function closePrintSuccess() {
             ใช้แล้ว {{ course.total - course.balance }} จาก {{ course.total }} ครั้ง
           </p>
           <div class="course-manager-actions">
-            <button type="button" @click="start('transfer', course)">แชร์คอร์ส</button>
-            <button type="button" :disabled="!course.usable" @click="start('use', course)">
+            <button type="button" :disabled="initialLoading" @click="start('transfer', course)">แชร์คอร์ส</button>
+            <button type="button" :disabled="initialLoading || !course.usable" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
           </div>

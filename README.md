@@ -9,6 +9,8 @@ Vue 3/TypeScript frontend, Spring Boot `clinicv2`, PostgreSQL 16/Flyway, Docker 
 - [รายการให้เพื่อน review ก่อนขึ้น main](docs/phase1/TEAM_REVIEW_TH.md)
 - [User stories](docs/user-stories/README.md) · [Figma](docs/figma.md) · [QA strategy](docs/testing/README.md)
 
+[ดู CI/checks ล่าสุดของ draft](https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP/actions/workflows/phase1-review.yml?query=branch%3Abackup%2Fdraft-phase1) — ต้องเทียบ SHA ใน run กับ source ที่ clone
+
 ## 1. Clone revision ที่ต้องตรวจ
 
 ต้องมี Git และสิทธิ์อ่าน repository:

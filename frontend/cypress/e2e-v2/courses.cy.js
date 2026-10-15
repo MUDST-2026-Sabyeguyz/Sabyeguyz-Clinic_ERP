@@ -80,9 +80,14 @@ describe('patient courses', () => {
   it('shows the usage history of a course', function () {
     cy.registerPatient().then((patient) => {
       buyCourse(this.fixtures, patient).then(useOnce)
+      cy.intercept('GET', '**/api/course-transfers*', (request) => {
+        request.on('response', (response) => response.setDelay(1500))
+      }).as('courseTransfers')
       cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`)
     })
-    cy.get('.course-status-tabs').contains('button', 'ประวัติการใช้คอร์ส').click()
+    cy.get('.course-status-tabs').contains('button', 'ประวัติการใช้คอร์ส').should('be.disabled')
+    cy.wait('@courseTransfers')
+    cy.get('.course-status-tabs').contains('button', 'ประวัติการใช้คอร์ส').should('be.enabled').click()
     cy.contains('h1', 'ประวัติการใช้คอร์ส').should('be.visible')
     cy.get('.course-history-entry').should('have.length', 1).and('contain.text', 'ใช้ 1 ครั้ง').and('contain.text', 'คงเหลือหลังใช้ 5 ครั้ง')
   })

@@ -166,6 +166,11 @@ try { await main() } catch (error) { result.fatalError = error.message; console.
   result.codeUnchangedDuringRun = JSON.stringify(result.codeFingerprints) === JSON.stringify(result.codeFingerprintsAfter)
   result.success = !result.fatalError && !result.reportError && result.codeUnchangedDuringRun && result.steps.every(s => s.exitCode === 0) && result.backendUnit?.tests > 0 && result.frontendUnit?.tests > 0 && result['backend-api']?.tests > 0 && result['frontend-browser']?.tests > 0 && result.backendCoverage?.LINE?.covered > 0 && result.runtimePatientControllerLines > 0 && result.frontendCoverage?.lines?.covered > 0
   fs.writeFileSync(path.join(output, 'summary.json'), JSON.stringify(result, null, 2))
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const rows = [['Backend JUnit', result.backendUnit], ['Frontend Vitest', result.frontendUnit], ['Backend HTTP/PostgreSQL', result['backend-api']], ['Frontend browser/PostgreSQL', result['frontend-browser']]]
+      .map(([name, counts]) => `| ${name} | ${counts?.tests ?? 'unverified'} | ${counts?.failures ?? '-'} | ${counts?.errors ?? '-'} | ${counts?.skipped ?? '-'} |`).join('\n')
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n## Phase 1 code/tests: ${result.success ? 'PASS' : 'FAIL'}\n\nChecked-out SHA: \`${result.sourceSha}\`. Code unchanged during run: ${result.codeUnchangedDuringRun}.\n\n| Suite | Tests | Failures | Errors | Skipped |\n|---|---:|---:|---:|---:|\n${rows}\n\nBackend line coverage: ${result.backendCoverage?.LINE?.covered ?? '?'}/${result.backendCoverage?.LINE?.denominator ?? '?'}. Frontend unit line coverage: ${result.frontendCoverage?.lines?.covered ?? '?'}/${result.frontendCoverage?.lines?.total ?? '?'}.\n\nFull logs, component fingerprints, JUnit and HTML/XML/LCOV reports are in the uploaded artifact. Coverage is partial; no approved numeric threshold. This gate does not certify full business acceptance or current-source Kubernetes deployment.\n`)
+  }
   console.log('\nEvidence: ' + path.relative(root, output))
   console.log(result.success ? 'PASS: phase1 code/test/coverage checks (not full business acceptance)' : 'FAIL: inspect summary.json and the first failing stage log')
   process.exitCode = result.success ? 0 : 1
