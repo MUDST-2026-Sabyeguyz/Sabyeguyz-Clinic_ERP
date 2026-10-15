@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks migration V1002 (commission schema) against a throw-away PostgreSQL 16 in Docker:
-#   1) a brand new database      (V1, V2, V3, V1001, V1002, V1003)
-#   2) a database with the demo seed (V1, V2, V3, V1000, V1001, V1002, V1003)
+#   1) a brand new database      (V1, V2, V3, V4, V1001, V1002, V1003)
+#   2) a database with the demo seed (V1, V2, V3, V4, V1000, V1001, V1002, V1003)
 #   3) an upgrade of a database that already holds old payment/closing rows (status conversions, NOT VALID report)
 # Each run applies V1002 in ONE transaction, like Flyway does. Needs Docker; nothing outside the container is touched.
 #
@@ -18,7 +18,8 @@ ok() { echo "  PASS  $*"; pass=$((pass + 1)); }
 bad() { echo "  FAIL  $*"; fail=$((fail + 1)); }
 
 for f in "$mig/migration/V1__initial_schema.sql" "$mig/migration/V2__integration_runtime_compatibility.sql" \
-         "$mig/migration/V3__reference_data.sql" "$mig/migration/V1001__historical_assessment_transaction_type.sql" \
+         "$mig/migration/V3__reference_data.sql" "$mig/migration/V4__add_app_user_email.sql" \
+         "$mig/migration/V1001__historical_assessment_transaction_type.sql" \
          "$mig/migration/V1002__implement_commission_requirements.sql" "$mig/migration/V1003__commission_tier_contiguity.sql" \
          "$mig/seed_v2/V1000__demo_data.sql"; do
   [ -f "$f" ] || { echo "missing migration file: $f"; exit 1; }
@@ -38,7 +39,7 @@ apply() { # db file: one transaction; prints the output and returns psql's exit 
   return "${PIPESTATUS[0]}"
 }
 scalar() { psql_i -d "$1" -At -c "$2" 2>&1; }
-files_old() { echo "$mig/migration/V1__initial_schema.sql $mig/migration/V2__integration_runtime_compatibility.sql $mig/migration/V3__reference_data.sql"; }
+files_old() { echo "$mig/migration/V1__initial_schema.sql $mig/migration/V2__integration_runtime_compatibility.sql $mig/migration/V3__reference_data.sql $mig/migration/V4__add_app_user_email.sql"; }
 V1002="$mig/migration/V1002__implement_commission_requirements.sql"
 V1001="$mig/migration/V1001__historical_assessment_transaction_type.sql"
 V1003="$mig/migration/V1003__commission_tier_contiguity.sql"
