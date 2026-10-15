@@ -195,8 +195,8 @@ P4 Q5/Q6: นายท่านยืนยันให้พักใน chat; 
 
 **Dashboard files:** `backend/src/main/java/com/sabyeguyz/clinicv2/report/{ReportController,RevenueSplit}.java`, เพิ่ม `DashboardService.java` ในpackageเดียวกันหากcontroller logicขยาย; `frontend/src/features/dashboard/views/DashboardView.vue`, `backend/cypress/e2e-v2/reports.cy.js`
 
-- [ ] Q11ตอบแล้วทำfixturesขายวันนี้/เมื่อวาน, ชำระคนละวันกับsale, void, ผู้ป่วยใหม่/เก่า, สองสาขา; expectedยอดขายกับcashreceivedแยกและมีzero-day; RED→GREENโดยreadยอดจากDBไม่ใช้mockDashboard
-- [ ] contractเสนอคงsummaryเดิมและเพิ่มfieldssalesToday/paymentsToday/newCustomers/returningCustomers/dailySales; ห้ามเรียกtotalRevenueที่มาจากpaymentว่ายอดขายโดยไม่แยก; compareช่วงเวลาใช้Asia/Bangkok; renew/updatepackageแยกmetricกับactionตามคำตอบ
+- [x] Q11ตอบแล้ว: fixturesข้ามวันขาย/รับเงิน, void, ลงทะเบียนใหม่แม้ยังไม่มา/ลูกค้าเก่ามา2ครั้งนับ1คน, สองสาขาและขอบวันBangkok; APIใหม่RED9→GREEN9 และfullAPI226/226, browser120/120; ดู `docs/testing/2026-10-15-P8-Dashboard-Q11.md`
+- [x] คงsummaryเดิมและเพิ่มsalesTotal/cashReceivedตามช่วงที่เลือก, newCustomers/returningCustomers/courseRenewals/packageUpdates/dailySales; วันศูนย์ครบ; templateupdateเป็นeventcountและlabelทั้งคลินิก; auditไม่เดาประวัติก่อนเริ่มบันทึก; Q11ยืนยันเป็นmetricไม่ใช่ปุ่ม
 - [ ] ทดสอบbranchfilterตามP1และfullreportsregression; ไม่เพิ่มTreatmentFee/Tier/commissionmetric
 
 **Google Calendar gate Q12:** ใช้ `appointment/Appointment.java`, migrationใหม่สำหรับsyncstate/outboxเมื่อจำเป็น และpackageใหม่ `backend/src/main/java/com/sabyeguyz/clinicv2/calendar/`; testใหม่ `backend/cypress/e2e-v2/calendar-sync.cy.js`

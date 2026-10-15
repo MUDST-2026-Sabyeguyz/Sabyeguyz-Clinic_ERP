@@ -4,7 +4,7 @@ import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { branchApi, patientApi, reportApi } from '@/api/client'
+import { branchApi, reportApi } from '@/api/client'
 
 const from = ref(`${clinicToday().slice(0, 8)}01`)
 const to = ref(clinicToday())
@@ -19,6 +19,13 @@ const patients = ref(0)
 const visits = ref(0)
 const revenue = ref(0)
 const courses = ref(0)
+const newCustomers = ref(0)
+const returningCustomers = ref(0)
+const courseRenewals = ref(0)
+const packageUpdates = ref(0)
+const salesTotal = ref(0)
+const dailySales = ref<Array<{ date: string; amount: number }>>([])
+const maxDailySales = computed(() => Math.max(...dailySales.value.map(row => row.amount), 1))
 const genderBreakdown = ref<Array<{ gender: string; patients: number }>>([])
 const appointmentStatuses = ref<Array<{ status: string; appointments: number }>>([])
 const monthlyRevenue = ref<Array<{ label: string; course: number; singleVisit: number }>>([])
@@ -63,7 +70,10 @@ const genderLabel = (gender: string) =>
   ({ MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่น ๆ', UNKNOWN: 'ไม่ระบุ' })[gender.toUpperCase()] ??
   gender
 const money = (value: number) =>
-  `${value.toLocaleString('th-TH', { maximumFractionDigits: 0 })} บาท`
+  `${value.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`
+const dayLabel = (date: string) => new Intl.DateTimeFormat('th-TH', {
+  day: 'numeric', month: 'short', timeZone: 'Asia/Bangkok',
+}).format(new Date(`${date}T00:00:00+07:00`))
 const statusLabel = (status: string) =>
   ({
     UNCONFIRMED: 'Unconfirmed',
@@ -81,16 +91,21 @@ async function loadDashboard() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [summary, appointments, balances, patientList, revenueReport] = await Promise.all([
+    const [summary, appointments, balances, revenueReport] = await Promise.all([
       reportApi.dashboard(from.value, to.value, branchCode.value || undefined),
       reportApi.appointments(from.value, to.value, branchCode.value || undefined),
       reportApi.balances(from.value, to.value, branchCode.value || undefined),
-      patientApi.searchAll(),
       reportApi.revenue(from.value, to.value, branchCode.value || undefined),
     ])
-    patients.value = summary.uniquePatients || patientList.length
+    patients.value = summary.uniquePatients
     visits.value = summary.visits
-    revenue.value = Number(summary.totalRevenue)
+    revenue.value = Number(summary.cashReceived)
+    newCustomers.value = summary.newCustomers
+    returningCustomers.value = summary.returningCustomers
+    courseRenewals.value = summary.courseRenewals
+    packageUpdates.value = summary.packageUpdates
+    salesTotal.value = Number(summary.salesTotal)
+    dailySales.value = summary.dailySales.map(row => ({ date: row.date, amount: Number(row.amount) }))
     courses.value = balances.purchases
     genderBreakdown.value = summary.patientsByGender ?? []
     appointmentStatuses.value = appointments.byStatus.map((item) => ({
@@ -182,7 +197,7 @@ watch([from, to, branchCode], loadDashboard)
       <section class="summary-layout" aria-label="ข้อมูลสรุป">
         <div class="summary-column">
           <article class="summary-card patient-card">
-            <p>ผู้ป่วยทั้งหมด</p>
+            <p>ผู้ป่วยที่มาใช้บริการ</p>
             <b>{{ patients.toLocaleString() }} คน</b>
             <div class="gender-bar">
               <span
@@ -201,9 +216,9 @@ watch([from, to, branchCode], loadDashboard)
             <small v-else>ยังไม่มีข้อมูลผู้ป่วยในช่วงนี้</small>
           </article>
           <article class="summary-card revenue-summary">
-            <p>รายได้รวม</p>
+            <p>เงินรับรวม</p>
             <b>{{ money(revenue) }}</b
-            ><small>{{ branchName }}</small>
+            ><small>{{ branchName }} · ก่อนหักคืนเงิน</small>
           </article>
         </div>
         <div class="summary-column">
@@ -218,11 +233,40 @@ watch([from, to, branchCode], loadDashboard)
         </div>
       </section>
 
+      <section class="activity-summary" aria-label="ยอดขายและกิจกรรมลูกค้า">
+        <article class="summary-card">
+          <p>ยอดขายสุทธิ</p><b>{{ money(salesTotal) }}</b><small>ตามวันขาย · ไม่รวมใบยกเลิก</small>
+        </article>
+        <article class="summary-card">
+          <p>ลูกค้าใหม่</p><b>{{ newCustomers.toLocaleString() }} คน</b><small>ลงทะเบียนในช่วงที่เลือก</small>
+        </article>
+        <article class="summary-card">
+          <p>ลูกค้าเก่า</p><b>{{ returningCustomers.toLocaleString() }} คน</b><small>ลงทะเบียนก่อนช่วงและมาใช้บริการในช่วงนี้</small>
+        </article>
+        <article class="summary-card">
+          <p>ต่ออายุคอร์ส</p><b>{{ courseRenewals.toLocaleString() }} รายการ</b><small>รายการที่บันทึกในช่วงที่เลือก</small>
+        </article>
+        <article class="summary-card">
+          <p>อัปเดตแม่แบบคอร์ส</p><b>{{ packageUpdates.toLocaleString() }} รายการ</b><small>รายการที่บันทึก · ทั้งคลินิก</small>
+        </article>
+      </section>
+
+      <section class="revenue-card">
+        <header><div><h2>ยอดขายรายวัน</h2><p>ยอดสุทธิตามวันขาย รวมวันที่ไม่มียอดขาย</p></div></header>
+        <ol class="daily-sales-chart" aria-label="ยอดขายสุทธิรายวัน">
+          <li v-for="day in dailySales" :key="day.date">
+            <span>{{ dayLabel(day.date) }}</span>
+            <div class="daily-sales-track" aria-hidden="true"><i :style="{ width: `${(day.amount / maxDailySales) * 100}%` }"></i></div>
+            <b>{{ money(day.amount) }}</b>
+          </li>
+        </ol>
+      </section>
+
       <section class="revenue-card">
         <header>
           <div>
-            <h2>รายได้แยกตามประเภท</h2>
-            <p>เปรียบเทียบรายได้คอร์สและรายครั้ง ตามช่วงเวลาที่เลือก</p>
+            <h2>เงินรับแยกตามประเภท</h2>
+            <p>เงินรับคอร์สและรายครั้งตามวันรับเงิน ก่อนหักคืนเงิน</p>
           </div>
           <div class="chart-legend">
             <span class="course">รายได้คอร์ส (Course)</span
@@ -231,7 +275,7 @@ watch([from, to, branchCode], loadDashboard)
         </header>
         <div class="chart-shell" role="img" aria-label="กราฟรายได้แยกตามประเภทในแต่ละเดือน">
           <div class="chart-axis" aria-hidden="true">
-            <span v-for="tick in chartTicks" :key="tick">{{ tick.toLocaleString() }}</span>
+            <span v-for="(tick, index) in chartTicks" :key="index">{{ tick.toLocaleString() }}</span>
           </div>
           <div class="monthly-chart">
             <div v-for="month in monthlyRevenue" :key="month.label" class="month-group">
@@ -414,6 +458,47 @@ watch([from, to, branchCode], loadDashboard)
 .summary-column {
   display: grid;
   gap: 24px;
+}
+.activity-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+.activity-summary .summary-card {
+  padding: 24px;
+}
+.activity-summary .summary-card b {
+  font-size: 1.65rem;
+}
+.daily-sales-chart {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 24px 0 0;
+  list-style: none;
+}
+.daily-sales-chart li {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) 115px;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.daily-sales-chart b {
+  text-align: right;
+}
+.daily-sales-track {
+  height: 12px;
+  border-radius: 6px;
+  background: #e7efeb;
+  overflow: hidden;
+}
+.daily-sales-track i {
+  display: block;
+  height: 100%;
+  background: #1e807c;
+  border-radius: inherit;
 }
 .summary-card,
 .revenue-card,

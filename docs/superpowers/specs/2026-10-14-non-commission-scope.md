@@ -139,7 +139,7 @@
 | Q8 | เวลาสิ้นสุด/duration มาจากนัดหรือ catalog; ใช้บริการแล้วผูก complete หรือ receipt; แก้ therapist ในการเลื่อนนัดได้ไหม | timing/status P3 |
 | Q9 | Figma permission matrix, Manager multi-branch selection, Admin ไม่ได้รับ cross-branch โดยอัตโนมัติใช่ไหม | permission gap P1 |
 | Q10 | ข้อมูล allergy/consent/emergency จะเก็บ field ใดและเก็บข้อมูลเดิมอย่างไร | T27/P2/P9 |
-| Q11 | Dashboard เก่า/ใหม่ตาม first visit หรือ registration; ยอดขายตาม saleDate หรือเงินรับ; ต่ออายุ/อัปเดตแพ็กเกจเป็น metric หรือปุ่ม | P8 |
+| Q11 | Dashboard เก่า/ใหม่ตาม first visit หรือ registration; ยอดขายตาม saleDate หรือเงินรับ; ต่ออายุ/อัปเดตแพ็กเกจเป็น metric หรือปุ่ม | P8; ตอบและ implement แล้ววันที่15ต.ค. ดูคำตอบยืนยันด้านล่างและรายงาน Dashboard Q11 |
 | Q12 | Google owner account/calendar per branch/OAuth consent/conflict/delete/privacy policy; rooms และ password-reset delivery channel | backlog P8 |
 | Q13 | รูปที่แนบตอนเพิ่มคอร์สคือหลักฐานการซื้อ/ภาพผู้ป่วย/เอกสารชนิดใด; ผูกกับ purchase หรือ profile; รับชนิดไฟล์/ขนาด/จำนวนเท่าไร; ใครเห็น ลบ หรือเก็บนานเท่าไร | attachment P7; ห้ามเก็บภาพลง JSON snapshot ของใบตัดคอร์สโดยไม่มี contract |
 
@@ -156,3 +156,11 @@ Assumption ที่เสนอ: นัดใช้สาขาปัจจุ�
 - F3 / หน้า 3: รูปแนบตอนเพิ่มคอร์สเป็น requirement ที่ R/T ไม่ได้ระบุ; เพิ่ม Q13 และงาน storage/permission แยกใน P7
 - F3 / หน้า 3: เบอร์โทร/วันเกิดที่ลงทะเบียน “ไม่บังคับ” แต่ยังขัดกับ R10 ที่ระบุเงื่อนไขคนไทย; Q1 ยังต้องยืนยันผู้ใช้ที่ครอบคลุม
 - F3 / หน้า 3: “ข้ามเลขใบเสร็จที่ยกเลิก” สนับสนุน test ว่าเลข void แล้วไม่ reuse; ไม่ตอบว่ารันเลขรวมทุกสาขาหรือแยกสาขา
+
+## Q11 ยืนยันเพิ่มเติมโดยนายท่าน วันที่ 15 ตุลาคม 2026
+
+- ลูกค้าใหม่ยึดวันลงทะเบียน: ผู้ลงทะเบียนในช่วงที่เลือกนับแม้ยังไม่มาใช้บริการ.
+- ลูกค้าเก่า: ผู้ลงทะเบียนก่อนช่วงและมาใช้บริการในช่วงที่เลือก; นับคนไม่ซ้ำ. นายท่านยืนยันนิยามช่วงเวลานี้โดยตรง.
+- ต่ออายุ/อัปเดตแพ็กเกจบน Dashboard เป็นตัวเลขสรุปจำนวนรายการ.
+- อัปเดตแพ็กเกจหมายถึงแก้แม่แบบคอร์สใน Back Office ไม่ใช่เปลี่ยนแพ็กเกจที่ผู้ป่วยซื้อ.
+- implementation/field contract และขอบเขตประวัติที่บันทึกใหม่ดู `docs/api-v2-frontend-contract.md` หัวข้อ P8 Dashboard Q11. Q12 และคำถามของ P6/P7/P9 ยังไม่ถูกปิดจากคำตอบ Q11.

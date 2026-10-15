@@ -35,10 +35,8 @@ import org.springframework.web.bind.annotation.*;
  * data volumes are small - revisit with real SQL aggregation before this
  * runs against production-scale data.
  *
- * <p>receiptsVoided is approximated from Sales_transaction.transaction_status
- * (per-transaction, not per-Receipt) since Sales_transaction has no
- * receipt_id to group by - see SaleController's Javadoc for the same
- * underlying schema gap.</p>
+ * <p>Dashboard net sales follow non-voided receipts and sale dates. Cash follows successful payments
+ * and payment dates, before refunds; customer activity uses the approved registration-based rules.</p>
  */
 @Transactional
 @RestController
@@ -53,12 +51,14 @@ public class ReportController {
     private final CourseRepository courses;
     private final BranchRepository branches;
     private final com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository saleShares;
+    private final DashboardMetricsService dashboardMetrics;
 
     public ReportController(PatientVisitRepository visits, PaymentTransactionRepository payments,
                              com.sabyeguyz.clinicv2.sale.ReceiptRepository receipts,
                              SalesTransactionRepository transactions, AppointmentRepository appointments,
                              CourseRepository courses, BranchRepository branches,
-                             com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository saleShares) {
+                             com.sabyeguyz.clinicv2.course.CourseSaleStaffShareRepository saleShares,
+                             DashboardMetricsService dashboardMetrics) {
         this.visits = visits;
         this.payments = payments;
         this.receipts = receipts;
@@ -67,12 +67,17 @@ public class ReportController {
         this.courses = courses;
         this.branches = branches;
         this.saleShares = saleShares;
+        this.dashboardMetrics = dashboardMetrics;
     }
 
     public record GenderCount(String gender, long patients) {}
     public record DashboardResponse(long uniquePatients, List<GenderCount> patientsByGender, long visits,
                                      BigDecimal totalRevenue, BigDecimal courseRevenue, BigDecimal singleVisitRevenue,
-                                     BigDecimal assessmentRevenue, long receiptsIssued, long receiptsVoided) {}
+                                     BigDecimal assessmentRevenue, long receiptsIssued, long receiptsVoided,
+                                     long newCustomers, long returningCustomers, long courseRenewals, long packageUpdates,
+                                     String packageUpdatesScope, BigDecimal salesTotal, BigDecimal cashReceived,
+                                     List<DailySales> dailySales) {}
+    public record DailySales(LocalDate date, BigDecimal amount) {}
 
     public record StatusCount(String status, long appointments) {}
     public record AppointmentReport(List<StatusCount> byStatus, long appointments, long visits, BigDecimal noShowRate) {}
@@ -91,11 +96,13 @@ public class ReportController {
     @GetMapping("/api/dashboard/summary")
     public DashboardResponse dashboard(@RequestParam LocalDate from, @RequestParam LocalDate to,
                                         @RequestParam(required = false) String branchCode) {
+        if (to.isBefore(from)) throw new IllegalArgumentException("วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น");
         Long branchId = resolveBranchId(branchCode);
         Instant fromInstant = from.atStartOfDay(CLINIC_ZONE).toInstant();
         Instant toInstant = to.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
 
         List<PatientVisit> attendedVisits = visits.findByVisitDateBetween(fromInstant, toInstant, branchId).stream()
+                .filter(v -> v.getVisitDate().isBefore(toInstant))
                 .filter(v -> v.getVisitStatus() == VisitStatus.Arrived || v.getVisitStatus() == VisitStatus.InService
                         || v.getVisitStatus() == VisitStatus.Completed)
                 .toList();
@@ -108,7 +115,8 @@ public class ReportController {
             genderCounts.merge(gender, 1L, Long::sum);
         });
 
-        List<PaymentTransaction> paid = payments.findByPaymentDateBetween(fromInstant, toInstant, branchId);
+        List<PaymentTransaction> paid = payments.findByPaymentDateBetween(fromInstant, toInstant, branchId).stream()
+                .filter(p -> p.getPaymentDate().isBefore(toInstant)).toList();
         BigDecimal totalRevenue = sum(paid, PaymentTransaction::getAmount);
         Map<TransactionType, BigDecimal> revenueByType = new EnumMap<>(TransactionType.class);
         for (PaymentTransaction p : paid) {
@@ -123,10 +131,20 @@ public class ReportController {
         long receiptsVoided = receiptsInRange.stream()
                 .filter(r -> r.getReceiptStatus() == ReceiptStatus.Voided).count();
 
+        List<Receipt> activeSales = receiptsInRange.stream()
+                .filter(r -> r.getReceiptStatus() != ReceiptStatus.Voided).toList();
+        BigDecimal salesTotal = sum(activeSales, Receipt::getNetAmount);
+        Map<LocalDate, BigDecimal> salesByDay = new LinkedHashMap<>();
+        activeSales.forEach(r -> salesByDay.merge(r.getSaleDate().toLocalDate(), r.getNetAmount(), BigDecimal::add));
+        List<DailySales> dailySales = from.datesUntil(to.plusDays(1))
+                .map(date -> new DailySales(date, salesByDay.getOrDefault(date, BigDecimal.ZERO))).toList();
+        DashboardMetricsService.Activity activity = dashboardMetrics.activity(fromInstant, toInstant, branchId, attendedVisits);
+
         return new DashboardResponse(uniquePatients,
                 genderCounts.entrySet().stream().map(e -> new GenderCount(e.getKey(), e.getValue())).toList(),
                 attendedVisits.size(), totalRevenue, courseRevenue, singleVisitRevenue, assessmentRevenue,
-                receiptsIssued, receiptsVoided);
+                receiptsIssued, receiptsVoided, activity.newCustomers(), activity.returningCustomers(),
+                activity.courseRenewals(), activity.packageUpdates(), "CLINIC", salesTotal, totalRevenue, dailySales);
     }
 
     private Map<TransactionType, BigDecimal> revenueSplit(PaymentTransaction payment) {
