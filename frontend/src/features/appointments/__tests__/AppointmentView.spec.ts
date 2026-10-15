@@ -96,8 +96,21 @@ describe('AppointmentView', () => {
       'utf8',
     )
 
-    expect(source).toContain('ผู้ป่วย <em>*</em>')
+    // a new patient is asked for a nickname (required) and a phone (required); the service is optional
+    expect(source).toContain("appointmentPatientType === 'NEW' ? 'ชื่อเล่น' : 'ผู้ป่วย'")
     expect(source).toContain('เบอร์โทร <em>*</em>')
+    expect(source).toContain('ประเภทบริการ (ไม่บังคับ)')
+  })
+
+  it('offers the free times of the therapist from the server instead of a fixed list', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
+      'utf8',
+    )
+
+    expect(source).toContain('appointmentApi.availability')
+    expect(source).toContain(':disabled="!slot.available"')
+    expect(source).not.toContain('เวลานอกกะ')
   })
 
   it('does not show a room column in the appointment list', () => {

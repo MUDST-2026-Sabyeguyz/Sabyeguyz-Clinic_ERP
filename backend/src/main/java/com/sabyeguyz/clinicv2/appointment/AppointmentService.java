@@ -56,10 +56,10 @@ public class AppointmentService {
         require(patient != null, "ต้องระบุผู้ป่วย");
         require(branch != null, "ต้องระบุสาขา");
         require(staff != null, "ต้องระบุผู้ให้บริการ");
-        require(service != null, "ต้องระบุบริการ");
         require(appointmentDate != null, "ต้องระบุวันที่นัด");
         require(appointmentTime != null, "ต้องระบุเวลานัด");
         requireNoConflict(staff.getId(), appointmentDate, appointmentTime, null);
+        requireSlotFits(branch, staff, service, appointmentDate, appointmentTime, null);
 
         Appointment appointment = new Appointment();
         appointment.setPatient(patient);
@@ -96,6 +96,7 @@ public class AppointmentService {
         require(appointmentDate != null, "ต้องระบุวันที่นัด");
         require(appointmentTime != null, "ต้องระบุเวลานัด");
         requireNoConflict(staff.getId(), appointmentDate, appointmentTime, null);
+        requireSlotFits(branch, staff, null, appointmentDate, appointmentTime, null);
 
         Appointment appointment = new Appointment();
         appointment.setPatient(null);
@@ -147,6 +148,7 @@ public class AppointmentService {
         require(newDate != null, "ต้องระบุวันที่นัดใหม่");
         require(newTime != null, "ต้องระบุเวลานัดใหม่");
         requireNoConflict(appointment.getStaff().getId(), newDate, newTime, id);
+        requireSlotFits(appointment.getBranch(), appointment.getStaff(), appointment.getService(), newDate, newTime, id);
 
         appointment.setAppointmentDate(newDate);
         appointment.setAppointmentTime(newTime);
@@ -234,6 +236,46 @@ public class AppointmentService {
                     staffId, date, time, excludingAppointmentId, AppointmentStatus.slotReleasing());
         if (conflict) {
             throw new IllegalArgumentException("ผู้ให้บริการไม่ว่างในวันเวลาที่เลือก");
+        }
+    }
+
+    /**
+     * How long an appointment lasts: the service's own length, else the branch default, else unknown (null).
+     * An unknown length keeps the old rule that only the exact same start time collides.
+     */
+    public static Integer effectiveMinutes(Service service, Branch branch) {
+        if (service != null && service.getDefaultAppointmentMinutes() != null) return service.getDefaultAppointmentMinutes();
+        return branch == null ? null : branch.getDefaultAppointmentMinutes();
+    }
+
+    /** Two appointments overlap when each starts before the other ends (back to back is fine). */
+    public static boolean overlaps(int startMinute, int length, int otherStartMinute, int otherLength) {
+        return startMinute < otherStartMinute + otherLength && otherStartMinute < startMinute + length;
+    }
+
+    /** The slot must be inside the branch's booking window and must not overlap another appointment of the therapist. */
+    private void requireSlotFits(Branch branch, Staff staff, Service service, LocalDate date, LocalTime time,
+                                  Long excludingAppointmentId) {
+        Integer minutes = effectiveMinutes(service, branch);
+        LocalTime open = branch == null ? null : branch.getBookingOpenTime();
+        LocalTime close = branch == null ? null : branch.getBookingCloseTime();
+        int length = minutes == null ? 0 : minutes;
+        if (open != null && close != null) {
+            LocalTime end = time.plusMinutes(length);
+            if (time.isBefore(open) || end.isBefore(time) || end.isAfter(close)) {
+                throw new IllegalArgumentException("เวลานัดอยู่นอกช่วงเปิดรับนัดของสาขา (" + open + "-" + close + ")");
+            }
+        }
+        if (minutes == null || staff == null || staff.getId() == null) return;
+        int start = time.getHour() * 60 + time.getMinute();
+        for (Appointment other : appointments.activeOfStaffOnDate(staff.getId(), date, AppointmentStatus.slotReleasing())) {
+            if (other.getId() != null && other.getId().equals(excludingAppointmentId)) continue;
+            Integer otherMinutes = effectiveMinutes(other.getService(), other.getBranch());
+            LocalTime otherTime = other.getAppointmentTime();
+            int otherStart = otherTime.getHour() * 60 + otherTime.getMinute();
+            if (overlaps(start, length, otherStart, otherMinutes == null ? 0 : otherMinutes)) {
+                throw new IllegalArgumentException("ผู้ให้บริการไม่ว่างในช่วงเวลาที่เลือก (ทับกับนัดอื่น)");
+            }
         }
     }
 

@@ -243,7 +243,7 @@ describe('BackOffice backend integration', () => {
     await section('บริการและคอร์ส')
     await wrapper.findAll('button.edit')[1]!.trigger('click')
     await field('Bonus', '3')
-    await field('อายุคอร์ส (วัน)', '90')
+    await field('อายุคอร์ส', '90')
     await save()
     expect(requests).toContainEqual({
       url: '/api/courses/4',
@@ -255,8 +255,83 @@ describe('BackOffice backend integration', () => {
         sessions: 10,
         bonusSessions: 3,
         validityDays: 90,
+        validityValue: 90,
+        validityUnit: 'Day',
       },
     })
+  })
+  it('saves the course validity in months and the optional appointment length', async () => {
+    await start()
+    await section('บริการและคอร์ส')
+    await wrapper.findAll('button.edit')[1]!.trigger('click')
+    await field('อายุคอร์ส', '6')
+    await wrapper.get('select[aria-label="หน่วยอายุคอร์ส"]').setValue('Month')
+    await field('ระยะเวลานัดเริ่มต้น (นาที)', '45')
+    await save()
+    expect(requests).toContainEqual(
+      expect.objectContaining({
+        url: '/api/courses/4',
+        method: 'PUT',
+        body: expect.objectContaining({
+          validityValue: 6,
+          validityUnit: 'Month',
+          defaultDurationMinutes: 45,
+        }),
+      }),
+    )
+  })
+  it('does not ask a single visit for sessions or an expiry, and the appointment length is optional', async () => {
+    await start()
+    await section('บริการและคอร์ส')
+    await wrapper.get('.settings-add').trigger('click')
+    await field('ชื่อคอร์ส', 'Massage')
+    await field('ราคา (บาท)', '900')
+    expect(wrapper.get('.drawer').text()).not.toContain('อายุคอร์ส')
+    expect(wrapper.get('.drawer').text()).not.toContain('จำนวนครั้งรวม')
+    await save()
+    expect(requests).toContainEqual(
+      expect.objectContaining({
+        url: '/api/services',
+        method: 'POST',
+        body: expect.objectContaining({ name: 'Massage', price: 900 }),
+      }),
+    )
+    const created = requests.find((request) => request.url === '/api/services' && request.method === 'POST')
+    expect((created?.body as { defaultDurationMinutes?: number }).defaultDurationMinutes).toBeUndefined()
+  })
+  it('sends the branch booking window, email, licence and default appointment length', async () => {
+    await start()
+    await wrapper.get('button.edit').trigger('click')
+    await field('อีเมลสาขา', 'rama9@clinic.test')
+    await field('เลขใบอนุญาต', 'PT-1234')
+    await field('เปิดรับนัดตั้งแต่', '09:00')
+    await field('ถึงเวลา', '18:00')
+    await field('ระยะเวลานัดเริ่มต้น (นาที)', '60')
+    await save()
+    expect(requests).toContainEqual(
+      expect.objectContaining({
+        url: '/api/branches/1',
+        method: 'PUT',
+        body: expect.objectContaining({
+          email: 'rama9@clinic.test',
+          licenseNo: 'PT-1234',
+          bookingOpenTime: '09:00',
+          bookingCloseTime: '18:00',
+          defaultAppointmentMinutes: 60,
+        }),
+      }),
+    )
+  })
+  it('rejects a branch booking window with only one end or a wrong order', async () => {
+    await start()
+    await wrapper.get('button.edit').trigger('click')
+    await field('เปิดรับนัดตั้งแต่', '09:00')
+    await save()
+    expect(wrapper.get('.drawer').text()).toContain('ช่วงเปิดรับนัด')
+    await field('ถึงเวลา', '08:00')
+    await save()
+    expect(wrapper.get('.drawer').text()).toContain('ช่วงเปิดรับนัด')
+    expect(requests.filter((request) => request.method === 'PUT')).toHaveLength(0)
   })
   it('persists payment toggles and keeps state on a failed toggle', async () => {
     await start()
@@ -304,6 +379,8 @@ describe('BackOffice backend integration', () => {
         sessions: 10,
         bonusSessions: 2,
         validityDays: 365,
+        validityValue: 365,
+        validityUnit: 'Day',
       },
     ],
     [

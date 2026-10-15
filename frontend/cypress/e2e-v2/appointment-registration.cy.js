@@ -5,7 +5,7 @@ describe('P3 appointment registration and service navigation', () => {
     cy.visitAs('therapist', '/staff/appointments')
     cy.contains('button', 'สร้างนัดหมาย').click()
     cy.get('input[type=radio][value=NEW]').check()
-    cy.get('input[placeholder="กรอกชื่อผู้ป่วยใหม่"]').type('คนไข้ ใหม่')
+    cy.get('input[placeholder="กรอกชื่อเล่นผู้ป่วยใหม่"]').type('คนไข้ ใหม่')
     cy.get('input[placeholder="เบอร์โทรผู้ป่วยใหม่"]').type('0891234567')
     cy.get('button[aria-label="เลือกสาขา"]').should('not.exist')
     cy.get('button[aria-label="เลือกห้อง"]').should('not.exist')
@@ -24,7 +24,7 @@ describe('P3 appointment registration and service navigation', () => {
     })
   })
 
-  it('confirms NEW, registers once and retries linking without making a duplicate patient', function () {
+  it('confirms NEW and registers, then goes on to services without linking the appointment back', function () {
     cy.api('POST', '/api/appointments', { branchCode: '01', therapistId: this.fixtures.therapistId,
       startAt: at(this.fixtures), patientType: 'NEW', contactName: 'สมชาย ใจดี', contactPhone: '0891234567', status: 'Unconfirmed' })
       .then(({ body: appointment }) => {
@@ -40,17 +40,17 @@ describe('P3 appointment registration and service navigation', () => {
         cy.get('input[placeholder="example@gmail.com"]').type('p3@gmail.com')
         cy.chooseDropdown('ประเภทเอกสารยืนยันตัวตน', 'บัตรประจำตัวประชาชน')
         cy.get('input[placeholder="กรอกเลขบัตรประชาชน 13 หลัก"]').type('1100000000777')
-        cy.intercept({ method: 'POST', url: `**/api/appointments/${appointment.id}/link-patient`, times: 1 },
-          { statusCode: 503, body: { message: 'เชื่อมนัดหมายไม่สำเร็จชั่วคราว' } }).as('linkFailure')
         cy.contains('button', 'บันทึก').click()
         cy.get('.confirmation-modal').contains('button', /^ใช่$/).click()
-        cy.wait('@linkFailure')
-        cy.contains('button', 'ลองเชื่อมนัดหมายอีกครั้ง').click()
         cy.location('pathname').should('eq', '/staff/services')
-        cy.location('search').should('contain', `appointmentId=${appointment.id}`)
+        cy.location('search').should('contain', 'patientId=').and('not.contain', 'appointmentId')
         cy.contains('สมชาย ใจดี').should('be.visible')
         cy.api('GET', '/api/patients').its('body.totalItems').should('equal', 1)
-        cy.api('GET', `/api/appointments/${appointment.id}`).its('body.patientType').should('equal', 'CURRENT')
+        // the NEW appointment is left as it was: not linked to the patient
+        cy.api('GET', `/api/appointments/${appointment.id}`).its('body').should((saved) => {
+          expect(saved.patientType).to.equal('NEW')
+          expect(saved.patient.id).to.equal(null)
+        })
       })
   })
 
