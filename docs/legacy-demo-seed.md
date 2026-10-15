@@ -30,6 +30,9 @@ APP_V2_FLYWAY_EXTRA_LOCATIONS=,classpath:db/seed_v2_legacy
 | `patient_visit`, `sales_transaction` | Visit ที่ Completed มีเวลาออกและผู้รักษา; บรรทัดขายแบบครั้งเดียวผูก visit (walk-in 1 ชั่วโมง) และผู้รักษา ตามข้อบังคับของ schema ใหม่ |
 | `refund_transaction` | ผู้อนุมัติ/เวลาอนุมัติของการคืนเงินที่เสร็จแล้ว |
 | คอร์ส | บริการ `COURSE_10`, `COURSE_5`, กฎค่ามือผู้รักษาแทน 45 บาท และคอร์ส 2 ใบ |
+| โอนสิทธิ์/ต่ออายุ/ใบตัดคอร์ส | `course_transfer` (โอน 2 ครั้งให้ผู้ป่วย 3 พร้อม ledger ทั้งสองฝั่ง), `course_extension` (+1 เดือน), `course_usage_print` + `course_usage_print_event` (Issued/Reprint) |
+| ค่าตอบแทนรายเดือน | `single_visit_fee_ledger` (ค่ามือ 45 ต่อครั้งเดี่ยวที่ชำระแล้ว), `staff_monthly_payment` (ต.ค. สถานะ Open เชื่อมกับ allocation), `staff_pay_adjustment` + `adjustment_application` (ปรับ +100 รอจ่าย ต.ค.) |
+| อื่นๆ | `user_permission` (therapist2 ถูกปฏิเสธ COURSE_REVERSE), `audit_log` 3 รายการ |
 
 คอร์ส `RE26090013` (10 ครั้ง 10,000 บาท ขายก.ย. โดย THP-001) ปิดยอดเดือน ก.ย. แล้ว (Locked 5%, pool 500, ครั้งละ 50) ใช้ไป 3 ครั้ง
 ครั้งที่ 3 โดย RP-T01 แทน (ค่ามือ 45, owner ได้ 5) คอร์ส `RE26100001` (6 ครั้งรวมแถม 1 ขาย ต.ค. โดย RP-T01) ยัง Provisional และยังไม่ใช้
@@ -38,7 +41,8 @@ APP_V2_FLYWAY_EXTRA_LOCATIONS=,classpath:db/seed_v2_legacy
 ## ที่ตั้งใจไม่เติม
 - ส่วนลดบิล/รายการ: ไม่แต่งส่วนลดเพราะเปลี่ยนยอดเงินจริงของข้อมูลเดิม
 - Google Calendar (`external_calendar_event_id`, `calendar_*`): ต้องมาจากการ sync จริง
-- `staff_monthly_payment`, `course_transfer`, `course_extension`, `course_usage_print*`, ใบคืนเงินคอร์ส: ยังไม่มีข้อมูลตัวอย่าง
+- `course_refund_item`, `commission_rate_override_audit`, `system_setting`: ยังไม่มีข้อมูลตัวอย่าง (dictionary ไม่กำหนดคีย์ตั้งค่า และการคืนเงินคอร์ส/override ต้องมีเหตุการณ์จริง)
+- `course_sale_staff_share`, `service_group*`, `staff_group*`: Data Dictionary ระบุว่าเลิกใช้ (ตารางยังอยู่ใน V1002) seed นี้จึงไม่ใส่ข้อมูล
 
 ## ข้อควรรู้
 - `migrate-legacy-to-v2.sql` ในรีโปยังเป็นรูปแบบก่อน V1002: ใช้กับ schema ล่าสุดไม่ได้โดยตรง (ตาราง `treatment_fee_rule`, `course`,
