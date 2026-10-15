@@ -15,6 +15,7 @@ import {
   courseApi,
   patientApi,
   type Appointment,
+  type AppointmentAvailability,
   type AppointmentStatus,
   type Branch,
   type CalendarStatus,
@@ -156,12 +157,30 @@ const currentBranchName = computed(() => branchName(form.value.branchCode))
 const currentBranchLabel = computed(() =>
   currentBranchName.value.startsWith('สาขา') ? currentBranchName.value : `สาขา${currentBranchName.value}`,
 )
+// Free times come from the server (branch booking window, the therapist's other appointments); the fixed list
+// is only the fallback when the lookup is not available.
+const availability = ref<AppointmentAvailability | null>(null)
+const slotOptions = computed(() =>
+  availability.value
+    ? availability.value.slots
+    : timeOptions.map((time) => ({ time, available: true, reason: null })),
+)
+const appointmentMinutes = computed(
+  () => availability.value?.durationMinutes || selectedService.value?.durationMinutes || 60,
+)
 const drawerServiceLabel = computed(() => {
-  const label = selectedService.value?.name || selectedPatientCourse.value?.course.name || 'บริการ'
-  return /นาที/.test(label) ? label : `${label} ${selectedService.value?.durationMinutes || 60} นาที`
+  const label = selectedService.value?.name || selectedPatientCourse.value?.course.name
+  return label
+    ? /นาที/.test(label) ? label : `${label} ${appointmentMinutes.value} นาที`
+    : `ยังไม่ระบุบริการ ${appointmentMinutes.value} นาที`
 })
-const morningTimeOptions = computed(() => timeOptions.filter((time) => Number(time.slice(0, 2)) < 12))
-const afternoonTimeOptions = computed(() => timeOptions.filter((time) => Number(time.slice(0, 2)) >= 12))
+const morningSlots = computed(() => slotOptions.value.filter((slot) => Number(slot.time.slice(0, 2)) < 12))
+const afternoonSlots = computed(() => slotOptions.value.filter((slot) => Number(slot.time.slice(0, 2)) >= 12))
+// The dropdown offers only the free times (plus the time already chosen, so an edited appointment keeps its own).
+const timeChoices = computed(() => {
+  const free = slotOptions.value.filter((slot) => slot.available).map((slot) => slot.time)
+  return form.value.time && !free.includes(form.value.time) ? [form.value.time, ...free] : free
+})
 const filteredAppointments = computed(() => {
   const direction = sortOrder.value === 'newest' ? -1 : 1
   return appointments.value
@@ -304,7 +323,7 @@ const formatTime = (value: string) =>
 const formatTimeRange = (time: string) => {
   if (!time) return 'ยังไม่ได้เลือกเวลา'
   const [hour = 0, minute = 0] = time.split(':').map(Number)
-  const endMinutes = hour * 60 + minute + (selectedService.value?.durationMinutes || 60)
+  const endMinutes = hour * 60 + minute + appointmentMinutes.value
   return `${time}–${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`
 }
 const calendarDate = computed(() => selectedDate.value || clinicToday())
@@ -423,7 +442,6 @@ const googleOpenLabel = computed(() =>
 async function openGoogleCalendar() {
   calendarSyncOpen.value = true
   googleMessage.value = ''
-  if (!isManagerUser) return
   try {
     googleStatus.value = await calendarApi.status()
   } catch (error) {
@@ -447,7 +465,6 @@ async function syncGoogleNow() {
   }
 }
 async function loadGoogleStatus() {
-  if (!isManagerUser) return
   try {
     googleStatus.value = await calendarApi.status()
   } catch {
@@ -491,6 +508,44 @@ async function changePage(nextPage: number) {
     await load()
   }
 }
+let availabilityRequest = 0
+async function loadAvailability() {
+  const { branchCode, therapistId, date, serviceId } = form.value
+  if (viewMode.value === 'list' || !branchCode || !therapistId || !date) {
+    availability.value = null
+    return
+  }
+  const request = ++availabilityRequest
+  try {
+    const result = await appointmentApi.availability({
+      branchCode,
+      therapistId,
+      date,
+      serviceId: serviceId || undefined,
+      excludeAppointmentId: editingId.value ?? undefined,
+    })
+    if (request !== availabilityRequest) return
+    availability.value = result
+    // A time that is no longer free is replaced by the first free one (an edited appointment keeps its own time).
+    const chosen = result.slots.find((slot) => slot.time === form.value.time)
+    if (!chosen?.available && !editingId.value) {
+      form.value.time = result.slots.find((slot) => slot.available)?.time ?? ''
+    }
+  } catch {
+    if (request === availabilityRequest) availability.value = null
+  }
+}
+watch(
+  () =>
+    [
+      viewMode.value,
+      form.value.branchCode,
+      form.value.therapistId,
+      form.value.date,
+      form.value.serviceId,
+    ] as const,
+  () => void loadAvailability(),
+)
 function openCreate(source: 'standard' | 'calendar' = 'standard') {
   if (!appointmentMasterReady.value) return
   editingId.value = null
@@ -508,7 +563,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   form.value = {
     patientId: 0,
     therapistId: therapists.value.find((item) => item.branchCode === branchCode)?.id ?? 0,
-    serviceId: services.value[0]?.id ?? 0,
+    serviceId: 0,
     branchCode,
     date: clinicToday(),
     time: '09:00',
@@ -649,7 +704,9 @@ async function save() {
     form.value.patientId = patient?.id ?? form.value.patientId
     const editingNew = editingId.value !== null && editingAppointment.value?.patientType === 'NEW'
     if (!creatingNew && !editingNew && !form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ')
-    if (creatingNew && (!patientQuery.value.trim() || !contactPhone.value.trim())) throw new Error('ต้องระบุชื่อและเบอร์โทรผู้ป่วยใหม่')
+    if (creatingNew && (!patientQuery.value.trim() || !contactPhone.value.trim())) throw new Error('ต้องระบุชื่อเล่นและเบอร์โทรผู้ป่วยใหม่')
+    if (!form.value.therapistId) throw new Error('กรุณาเลือกนักกายภาพ')
+    if (!form.value.time) throw new Error('กรุณาเลือกเวลาที่ว่าง')
 
 
     const wasEditing = editingId.value !== null
@@ -665,7 +722,7 @@ async function save() {
         branchCode: form.value.branchCode,
         patientId: form.value.patientId,
         therapistId: form.value.therapistId,
-        serviceId: form.value.serviceId,
+        serviceId: form.value.serviceId || undefined,
         startAt: toStartAt(),
         note: form.value.note,
         ...(creatingNew ? { patientType: 'NEW' as const, contactName: patientQuery.value,
@@ -890,14 +947,16 @@ function continueAppointment(item: Appointment) {
               </div>
             </fieldset>
             <label class="appointment-patient-field">
-              ผู้ป่วย <em>*</em>
+              {{ appointmentPatientType === 'NEW' ? 'ชื่อเล่น' : 'ผู้ป่วย' }} <em>*</em>
 
               <div class="appointment-patient-picker">
                 <input
                   v-model.trim="patientQuery"
                   :readonly="isEditing"
                   :class="{ 'is-invalid': patientError }"
-                  placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
+                  :placeholder="
+                    appointmentPatientType === 'NEW' ? 'กรอกชื่อเล่นผู้ป่วยใหม่' : 'กรอกชื่อผู้ป่วยหรือรหัส HN'
+                  "
                   required
                   @focus="showPatientResults = true"
                   @input="changePatientQuery"
@@ -927,13 +986,13 @@ function continueAppointment(item: Appointment) {
               </div>
             </label>
             <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-service-field">
-              ประเภทบริการ
+              ประเภทบริการ (ไม่บังคับ)
 
               <FilterDropdown
                 v-model="formServiceModel"
                 class="appointment-form-filter"
                 label="เลือกบริการ"
-                default-label="เลือกบริการ"
+                default-label="ยังไม่ระบุบริการ"
                 :clear-on-reselect="false"
                 :options="services.map((service) => ({ value: String(service.id), label: service.name }))"
               />
@@ -980,7 +1039,7 @@ function continueAppointment(item: Appointment) {
                 label="เลือกเวลา"
                 default-label="เลือกเวลา"
                 :clear-on-reselect="false"
-                :options="timeOptions.map((time) => ({ value: time, label: time }))"
+                :options="timeChoices.map((time) => ({ value: time, label: time }))"
               />
             </label>
             <label v-if="isManager" class="appointment-branch-field">
@@ -1054,13 +1113,15 @@ function continueAppointment(item: Appointment) {
               <h3>ช่วงเช้า</h3>
               <div class="appointment-time-slots">
                 <button
-                  v-for="time in morningTimeOptions"
-                  :key="time"
+                  v-for="slot in morningSlots"
+                  :key="slot.time"
                   type="button"
-                  :class="{ selected: form.time === time }"
-                  @click="selectAppointmentTime(time)"
+                  :disabled="!slot.available"
+                  :title="slot.reason ?? undefined"
+                  :class="{ selected: form.time === slot.time }"
+                  @click="selectAppointmentTime(slot.time)"
                 >
-                  {{ formatTimeRange(time) }}
+                  {{ formatTimeRange(slot.time) }}
                 </button>
               </div>
             </section>
@@ -1068,17 +1129,24 @@ function continueAppointment(item: Appointment) {
               <h3>ช่วงบ่าย</h3>
               <div class="appointment-time-slots">
                 <button
-                  v-for="time in afternoonTimeOptions"
-                  :key="time"
+                  v-for="slot in afternoonSlots"
+                  :key="slot.time"
                   type="button"
-                  :class="{ selected: form.time === time }"
-                  @click="selectAppointmentTime(time)"
+                  :disabled="!slot.available"
+                  :title="slot.reason ?? undefined"
+                  :class="{ selected: form.time === slot.time }"
+                  @click="selectAppointmentTime(slot.time)"
                 >
-                  {{ formatTimeRange(time) }}
+                  {{ formatTimeRange(slot.time) }}
                 </button>
               </div>
             </section>
-            <p class="appointment-time-help">ช่วงสีเทาไม่สามารถเลือกได้: นัดคลินิก, Google Calendar, เวลาพัก หรือเวลานอกกะ</p>
+            <p class="appointment-time-help">
+              ช่วงสีเทาเลือกไม่ได้: นักกายภาพมีนัดอื่นหรือติด Busy ใน Google Calendar, เลยเวลาแล้ว หรืออยู่นอกช่วงเปิดรับนัดของสาขา
+              <template v-if="availability && !availability.windowConfigured">
+                (สาขานี้ยังไม่ได้ตั้งช่วงเปิดรับนัด จึงแสดง {{ availability.openTime }}–{{ availability.closeTime }} เป็นค่าเริ่มต้น)
+              </template>
+            </p>
           </div>
           <footer>
             <button type="button" class="secondary" @click="timeDrawerOpen = false">ยกเลิก</button>
@@ -1169,7 +1237,7 @@ function continueAppointment(item: Appointment) {
               </button>
             </div>
             <a
-              v-if="isManagerUser && googleStatus?.enabled && googleTargets.length"
+              v-if="googleStatus?.enabled && googleTargets.length"
               class="calendar-google"
               :href="googleOpenUrl"
               target="_blank"
@@ -1365,8 +1433,10 @@ function continueAppointment(item: Appointment) {
         <h2>สถานะ Google Calendar</h2>
         <div class="calendar-sync-description" data-cy="google-sync-info">
           <p>ระบบซิงก์นัดหมายกับ Google Calendar 2 ทาง แยก 1 ปฏิทินต่อสาขา เลื่อนหรือยกเลิกนัดใน Google แล้วระบบจะตามให้เอง</p>
-          <p v-if="!isManagerUser">การตั้งค่าและการซิงก์ทันทีทำได้เฉพาะผู้จัดการ</p>
-          <template v-else-if="googleStatus">
+          <p v-if="!isManagerUser">
+            ผู้จัดการเป็นผู้เชื่อมบัญชี Google กลางและตั้งปฏิทินของแต่ละสาขา คุณดูสถานะและเปิดปฏิทินของสาขาที่คลินิกแชร์ให้ได้
+          </p>
+          <template v-if="googleStatus">
             <p v-if="!googleStatus.enabled">
               ยังไม่ได้เปิดใช้งานการซิงก์บนเซิร์ฟเวอร์ ให้ผู้ดูแลระบบตั้งค่า APP_CALENDAR_ENABLED ก่อน
             </p>
