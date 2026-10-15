@@ -13,6 +13,12 @@ const router = createRouter({
       redirect: '/',
     },
     {
+      path: '/staff/select-branch',
+      name: 'manager-branch-selection',
+      component: () => import('@/features/staff/views/ManagerBranchSelectionView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/patients/new',
       name: 'patient-registration',
       component: () => import('@/features/patients/views/PatientRegistrationView.vue'),
