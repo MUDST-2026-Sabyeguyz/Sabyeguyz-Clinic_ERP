@@ -92,10 +92,20 @@ describe('reports', () => {
     cy.get('.report-figma-table tbody tr').first().should('contain.text', 'สมชาย ใจดี').and('contain.text', 'อรุณ แสงทอง')
   })
 
-  it('loads the commission report without an error', () => {
-    cy.visitAs('manager', '/staff/reports')
-    cy.chooseDropdown('เลือกรายงาน', 'ค่าคอมมิชชั่น')
-    cy.contains('h2', 'รายงานค่าคอมมิชชั่น').should('be.visible')
-    cy.get('.report-error').should('not.exist')
+  it('shows the seller, count and amount from a paid course in the commission report', function () {
+    cy.registerPatient().then((patient) => sellCourse(this.fixtures, patient))
+    cy.api('GET', '/api/commission/report?from=2020-01-01&to=2099-12-31').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      const seller = body.find((row) => row.staffId === this.fixtures.managerStaffId)
+      expect(seller, 'the paid course seller').to.exist
+      expect(seller.saleCount).to.equal(1)
+      expect(Number(seller.commission)).to.be.greaterThan(0)
+      cy.visitAs('manager', '/staff/reports')
+      cy.chooseDropdown('เลือกรายงาน', 'ค่าคอมมิชชั่น')
+      cy.contains('h2', 'รายงานค่าคอมมิชชั่น').should('be.visible')
+      cy.contains('.report-figma-table tbody tr', seller.staffName)
+        .should('contain.text', `${seller.saleCount} รายการ`)
+        .and('contain.text', `฿${Number(seller.commission).toLocaleString()}`)
+    })
   })
 })
