@@ -99,8 +99,12 @@ async function loadMaster() {
     branches.value = []
   }
   const patientId = Number(route.query.patientId)
-  const selectedPatient = p.find((item) => item.id === patientId)
-  if (selectedPatient) await choose(selectedPatient)
+  if (Number.isInteger(patientId) && patientId > 0) {
+    const profile = await patientApi.get(patientId)
+    patient.value = profile
+    patientProfile.value = profile
+    screen.value = 'menu'
+  }
 }
 onMounted(async () => {
   try {
@@ -397,20 +401,29 @@ async function submit() {
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
         <h1>บริการและคอร์ส</h1>
-        <section class="patient-summary">
-          <strong>{{ patient.fullName }}</strong>
-          <span>HN {{ patient.hn }}</span>
-          <button type="button" @click="clearPatient">เปลี่ยนผู้ป่วย</button>
+        <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
+          <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
+          <div class="service-menu-patient-info">
+            <strong>{{ patientProfile?.title }}{{ patient.fullName }}</strong>
+            <p>
+              <span>HN {{ patient.hn }}</span
+              ><span>{{ patient.phone || '—' }}</span>
+            </p>
+          </div>
+          <span class="service-menu-branch">{{
+            patientProfile?.branch?.name || patient.branchName || '—'
+          }}</span>
+          <button type="button" @click="clearPatient">↻ เปลี่ยนผู้ป่วย</button>
         </section>
         <div class="service-menu-actions">
           <article>
             <h2>ขายบริการและคอร์ส</h2>
-            <p>Assessment / Single Visit<br />หรือซื้อคอร์สใหม่</p>
+            <p>บันทึกบริการรายครั้ง หรือขายคอร์สใหม่<br />พร้อมตรวจสอบยอดก่อนชำระเงิน</p>
             <button type="button" @click="startSale">เริ่มขายบริการ</button>
           </article>
           <article>
             <h2>ใช้สิทธิ์และจัดการคอร์ส</h2>
-            <p>ดูสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</p>
+            <p>ตรวจสอบสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</p>
             <button type="button" @click="openPatientCourses">ดูคอร์สผู้ป่วย</button>
           </article>
         </div>
@@ -563,7 +576,7 @@ async function submit() {
               <strong>{{ patient.fullName }}</strong
               ><span>HN {{ patient.hn }}　☎ {{ patient.phone }}</span>
             </div>
-            <b>{{ patient.branchName ? `สาขา${patient.branchName}` : 'สาขาแบริ่ง' }}</b>
+            <b>{{ patientProfile?.branch?.name || patient.branchName || '—' }}</b>
           </section>
           <div class="sales-workspace" :class="{ review: reviewing }">
             <section class="sale-line-card">
@@ -695,7 +708,7 @@ async function submit() {
               <b>{{ patient.fullName }}　HN {{ patient.hn }}</b
               ><span
                 >{{ item }}
-                {{ patient.branchName ? `สาขา${patient.branchName}` : 'สาขาแบริ่ง' }}</span
+                {{ patientProfile?.branch?.name || patient.branchName || '—' }}</span
               ><small>ฐานค่าคอมมิชชัน　{{ money(afterItemDiscount) }}</small
               ><small
                 >ผู้ได้รับค่าคอมมิชชัน　<b>{{ selectedStaffName }}</b></small
