@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.staff;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -59,7 +60,7 @@ public class StaffController {
         String[] names = splitName(request.fullName());
         StaffPosition position = resolvePosition(request.position());
         Staff staff = service.create(request.employeeCode(), names[0], names[1], position, branch,
-                LocalDate.now(), actor.currentId());
+                ClinicTime.today(), actor.currentId());
         return toResponse(staff);
     }
 
@@ -73,7 +74,7 @@ public class StaffController {
         return toResponse(staff);
     }
 
-    /** Switches the staff member off; use {@code /terminate} when the commission policy must be recorded. */
+    /** Switches the staff member off; use {@code /terminate} to record the resignation date. */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -81,23 +82,14 @@ public class StaffController {
         service.deactivate(id, actor.currentId());
     }
 
+    /** commissionAfterTerminationPolicy is no longer used (there is no per-person policy); it is accepted and ignored. */
     public record TerminateRequest(LocalDate terminationDate, String commissionAfterTerminationPolicy) {}
 
-    /** Records a resignation: the date and what happens to the outstanding commission (policy name). */
+    /** Records a resignation date; the staff member becomes Inactive. */
     @PostMapping("/{id}/terminate")
     @PreAuthorize("hasRole('MANAGER')")
     public Response terminate(@PathVariable Long id, @RequestBody TerminateRequest request) {
-        if (request.commissionAfterTerminationPolicy() == null) {
-            throw new IllegalArgumentException("ต้องระบุ commissionAfterTerminationPolicy");
-        }
-        com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy policy;
-        try {
-            policy = com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy
-                    .valueOf(request.commissionAfterTerminationPolicy());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("commissionAfterTerminationPolicy ไม่ถูกต้อง");
-        }
-        return toResponse(service.terminate(id, request.terminationDate(), policy, actor.currentId()));
+        return toResponse(service.terminate(id, request.terminationDate(), actor.currentId()));
     }
 
     private Branch resolveBranch(String branchCode) {

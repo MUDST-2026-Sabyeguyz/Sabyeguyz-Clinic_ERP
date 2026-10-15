@@ -171,6 +171,17 @@ async function loadBackendSettings() {
     failures.push('Commission Rule')
   }
   loadError.value = failures.length ? `ยังโหลดข้อมูลไม่ได้: ${failures.join(', ')}` : ''
+  fillDefaultBranch()
+}
+// A form opened before the branches arrived starts without a branch: give it the default one as soon as it is known.
+function fillDefaultBranch() {
+  if (
+    drawerOpen.value &&
+    editingIndex.value === null &&
+    (section.value === 'users' || section.value === 'rooms') &&
+    !String(form.branch ?? '').trim()
+  )
+    form.branch = data.branches[0]?.name ?? ''
 }
 onMounted(loadBackendSettings)
 const copy = computed(
@@ -281,6 +292,7 @@ function openDrawer(index: number | null) {
   drawerOpen.value = true
 }
 async function save() {
+  fillDefaultBranch()
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
   validationMessage.value = ''
   const required: Record<Exclude<SectionKey, 'payments'>, string[]> = {
