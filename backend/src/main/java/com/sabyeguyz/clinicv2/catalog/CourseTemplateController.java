@@ -8,6 +8,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sabyeguyz.clinicv2.audit.AuditLogService;
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,11 +30,16 @@ public class CourseTemplateController {
     private final ServiceCatalogService service;
     private final ServiceRepository repository;
     private final CurrentActor actor;
+    private final AuditLogService audit;
+    private final ObjectMapper json;
 
-    public CourseTemplateController(ServiceCatalogService service, ServiceRepository repository, CurrentActor actor) {
+    public CourseTemplateController(ServiceCatalogService service, ServiceRepository repository, CurrentActor actor,
+                                    AuditLogService audit, ObjectMapper json) {
         this.service = service;
         this.repository = repository;
         this.actor = actor;
+        this.audit = audit;
+        this.json = json;
     }
 
     public record Request(@NotBlank String code, @NotBlank String name, @NotNull BigDecimal price,
@@ -62,12 +71,21 @@ public class CourseTemplateController {
     @PutMapping("/{id}")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Service existing = find(id);
+        Response before = toResponse(existing);
+        boolean changed = !Objects.equals(existing.getServiceName(), request.name())
+                || existing.getServicePrice().compareTo(request.price()) != 0
+                || !Objects.equals(existing.getDefaultTotalVisits(), request.sessions())
+                || !Objects.equals(existing.getDefaultBonusVisits(), request.bonusSessions() == null ? 0 : request.bonusSessions())
+                || !Objects.equals(existing.getDefaultValidityDays(), request.validityDays());
         existing.setServiceName(request.name());
         existing.setServicePrice(request.price());
         existing.setDefaultTotalVisits(request.sessions());
         existing.setDefaultBonusVisits(request.bonusSessions() == null ? 0 : request.bonusSessions());
         existing.setDefaultValidityDays(request.validityDays());
-        return toResponse(repository.save(existing));
+        Response after = toResponse(repository.save(existing));
+        if (changed) audit.record("course_template", String.valueOf(id), AuditAction.UPDATE,
+                json.valueToTree(before).toString(), json.valueToTree(after).toString(), actor.currentId());
+        return after;
     }
 
     @DeleteMapping("/{id}")
