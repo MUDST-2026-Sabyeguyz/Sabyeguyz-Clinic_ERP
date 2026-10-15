@@ -4,6 +4,7 @@ import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.enums.ClosingStatus;
 import com.sabyeguyz.clinicv2.enums.CommissionStatus;
+import com.sabyeguyz.clinicv2.enums.PaymentStatus;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import java.math.BigDecimal;
@@ -29,10 +30,13 @@ public class MonthlyCommissionClosingService {
     private final CommissionTierResolver tierResolver;
     private final MonthlyTierSalesService tierSales;
     private final CourseCommissionService courseCommission;
+    private final CommissionAllocationLedgerRepository allocations;
 
     public MonthlyCommissionClosingService(MonthlyCommissionClosingRepository closings, CourseRepository courses,
                                             CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
-                                            MonthlyTierSalesService tierSales, CourseCommissionService courseCommission) {
+                                            MonthlyTierSalesService tierSales, CourseCommissionService courseCommission,
+                                            CommissionAllocationLedgerRepository allocations) {
+        this.allocations = allocations;
         this.courseCommission = courseCommission;
         this.tierSales = tierSales;
         this.closings = closings;
@@ -55,7 +59,9 @@ public class MonthlyCommissionClosingService {
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveDate);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySales);
 
-        MonthlyCommissionClosing closing = new MonthlyCommissionClosing();
+        // a month that was reopened is closed again on the same row (one closing per staff and month)
+        MonthlyCommissionClosing closing = closings.findByClosingMonthAndStaffId(saleMonth, staff.getId())
+                .orElseGet(MonthlyCommissionClosing::new);
         closing.setClosingMonth(saleMonth);
         closing.setPermission(permission);
         closing.setStaff(staff);
@@ -77,6 +83,53 @@ public class MonthlyCommissionClosingService {
         }
 
         return saved;
+    }
+
+    /**
+     * Reopens a Closed month before it is paid (Manager): the rate of every course the seller sold that month is
+     * unlocked and the Owner commission allocated at that rate is reversed; closing the month again works the tier out
+     * again from the sales at that time and allocates a new version. Refused once the month is Finalized or any of its
+     * Owner commission is in a Paid payment (a later correction is a pay adjustment).
+     */
+    @Transactional
+    public MonthlyCommissionClosing reopen(Long closingId, String reason, Long actorId) {
+        require(reason != null && !reason.isBlank(), "ต้องระบุเหตุผลที่ Reopen");
+        MonthlyCommissionClosing closing = closings.findById(closingId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการปิดยอด"));
+        if (closing.getClosingStatus() == ClosingStatus.Finalized) {
+            throw new IllegalStateException("เดือนนี้ Finalize แล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+        }
+        if (closing.getClosingStatus() == ClosingStatus.Open) {
+            throw new IllegalStateException("เดือนนี้ยังไม่ได้ปิดยอด");
+        }
+        Long staffId = closing.getStaff().getId();
+        if (allocations.ownerCommissionOfSaleMonthIn(staffId, closing.getClosingMonth(), java.util.List.of(PaymentStatus.Paid))) {
+            throw new IllegalStateException("ค่าคอมมิชชันของเดือนนี้ถูกจ่ายแล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+        }
+        for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonth(staffId, closing.getClosingMonth())) {
+            Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
+            courseCommission.unlock(course, "Reopen การปิดยอด " + closing.getClosingMonth() + ": " + reason.trim(), actorId);
+        }
+        closing.setClosingStatus(ClosingStatus.Open);
+        closing.setClosedAt(null);
+        closing.setClosedBy(null);
+        closing.setLockedCommissionRate(null);
+        return closings.save(closing);
+    }
+
+    /** Closed -> Finalized, together with the payment of the money that depends on its rate. */
+    @Transactional
+    public MonthlyCommissionClosing finalizeClosing(MonthlyCommissionClosing closing, Long actorId) {
+        if (closing.getClosingStatus() == ClosingStatus.Finalized) {
+            return closing;
+        }
+        if (closing.getClosingStatus() != ClosingStatus.Closed) {
+            throw new IllegalStateException("เดือนขาย " + closing.getClosingMonth() + " ยังไม่ได้ปิดยอด จึง Finalize ไม่ได้");
+        }
+        closing.setClosingStatus(ClosingStatus.Finalized);
+        closing.setFinalizedAt(Instant.now());
+        closing.setFinalizedBy(actorId);
+        return closings.save(closing);
     }
 
     private void lockCourse(Course course, CommissionScheme scheme, CommissionTier tier, Long actorId) {
