@@ -96,7 +96,7 @@ public class UserManagementController {
 
         Staff staff = staffService.create(request.employeeCode(), names[0], names[1], position, branch,
                 ClinicTime.today(), actor.currentId());
-        AppUser user = appUserService.register(request.username(), request.password(), staff, actor.currentId());
+        AppUser user = appUserService.register(request.username(), request.email(), request.password(), staff, actor.currentId());
         Role role = resolveOrCreateRole(request.role());
         appUserService.assignRole(user.getId(), role.getId());
         appUserService.grantBranchAccess(user.getId(), branch.getId());
@@ -118,7 +118,7 @@ public class UserManagementController {
         StaffPosition position = resolvePosition(request.role());
         staffService.update(staff.getId(), names[0], names[1], position, branch, actor.currentId());
 
-        appUserService.updateProfile(id, request.username(), request.password(), actor.currentId());
+        appUserService.updateProfile(id, request.username(), request.email(), request.password(), actor.currentId());
         userRoles.deleteByUserId(id);
         Role role = resolveOrCreateRole(request.role());
         appUserService.assignRole(id, role.getId());
@@ -182,7 +182,7 @@ public class UserManagementController {
                 .findFirst().orElse(null);
         Branch branch = staff == null ? null : staff.getBranch();
         // Staff has no phone column in the v2 data dictionary (a gap vs. the old API) - always null here.
-        return new Response(user.getId(), user.getUsername(), null, roleName,
+        return new Response(user.getId(), user.getUsername(), user.getEmail(), roleName,
                 staff == null ? null : staff.getStaffCode(),
                 staff == null ? null : staff.getStaffFname() + " " + staff.getStaffLname(),
                 null,
