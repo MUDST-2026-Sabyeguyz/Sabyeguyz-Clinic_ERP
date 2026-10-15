@@ -41,6 +41,12 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
                               @Param("hasStatus") boolean hasStatus, @Param("status") AppointmentStatus status,
                               @Param("query") String query, @Param("pattern") String pattern, Pageable pageable);
 
+    /** The appointments that still hold a therapist's time on a day (status passed as a parameter, never a literal). */
+    @Query("select a from Appointment a where a.staff.id = :staffId and a.appointmentDate = :date "
+            + "and a.appointmentStatus not in :released")
+    java.util.List<Appointment> activeOfStaffOnDate(@Param("staffId") Long staffId, @Param("date") LocalDate date,
+                                                     @Param("released") Collection<AppointmentStatus> released);
+
     @Query("select a from Appointment a where a.appointmentDate between :from and :to "
             + "and (:branchId is null or a.branch.id = :branchId)")
     java.util.List<Appointment> findByAppointmentDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to,
