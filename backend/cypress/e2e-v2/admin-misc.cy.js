@@ -1,4 +1,4 @@
-const month = new Date().toISOString().slice(0, 7)
+const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).slice(0, 7)
 
 describe('v2 users, commission schemes, course templates, treatments and lookups', () => {
   describe('users', () => {
@@ -41,7 +41,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
 
   describe('commission schemes', () => {
     const tiers = [
-      { minimum: 0, maximum: 99999, rate: 0.04, order: 1 },
+      { minimum: 0, maximum: 99999.99, rate: 0.04, order: 1 },
       { minimum: 100000, maximum: null, rate: 0.12, order: 2 },
     ]
 
