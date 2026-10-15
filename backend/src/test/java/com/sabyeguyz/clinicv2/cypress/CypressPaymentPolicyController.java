@@ -48,7 +48,7 @@ public class CypressPaymentPolicyController {
     @PostMapping("/held-usage/{courseId}")
     @Transactional
     public Map<String,Object> heldUsage(@PathVariable Long courseId) throws InterruptedException {
-        courses.use(new com.sabyeguyz.clinicv2.course.CoursePurchaseController.UseRequest(courseId, null, null, null, null));
+        courses.use(new com.sabyeguyz.clinicv2.course.CoursePurchaseController.UseRequest(courseId, null, null, null, null, null));
         var state = new HeldUsage(jdbc.queryForObject("select pg_backend_pid()", Integer.class), new java.util.concurrent.CountDownLatch(1));
         held.put(courseId, state);
         try {

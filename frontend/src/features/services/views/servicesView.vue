@@ -8,6 +8,7 @@ import {
   appointmentApi,
   branchApi,
   catalogApi,
+  commissionApi,
   patientApi,
   paymentMethodApi,
   salesApi,
@@ -39,7 +40,9 @@ const staff = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
 const selectedServiceId = ref(0),
   selectedCourseId = ref(0),
-  selectedStaffId = ref<number | undefined>()
+  selectedStaffId = ref<number | undefined>(),
+  // the PT who gives a single-visit service (a course sale has no treating PT): separate from the seller/Owner
+  treatingStaffId = ref<number | undefined>()
 const paymentCode = ref(''),
   note = ref('')
 const searched = ref(false)
@@ -68,6 +71,7 @@ async function loadMaster() {
   selectedCourseId.value = c[0]?.id ?? 0
   paymentCode.value = methods[0]?.code ?? ''
   selectedStaffId.value = staffList[0]?.id
+  treatingStaffId.value = staffList[0]?.id
   try {
     branches.value = await branchApi.list()
   } catch {
@@ -121,7 +125,30 @@ const itemDiscount = computed(() => 0)
 const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
 const billDiscount = computed(() => 0)
 const netAmount = computed(() => Math.max(afterItemDiscount.value - billDiscount.value, 0))
-const commissionAmount = computed(() => afterItemDiscount.value * 0.1)
+// the commission of a course sale is estimated by the server from the seller's tier (locked when the month is closed)
+const commissionPreview = ref<{ commissionRate: number; commissionPool: number } | null>(null)
+const commissionAmount = computed(() => commissionPreview.value?.commissionPool ?? 0)
+const commissionRateLabel = computed(() =>
+  commissionPreview.value
+    ? `${Math.round(commissionPreview.value.commissionRate * 10000) / 100}%`
+    : '—',
+)
+watch(
+  [mode, selectedCourseId, selectedStaffId],
+  async () => {
+    commissionPreview.value = null
+    if (mode.value !== 'course' || !selectedCourseId.value || !selectedStaffId.value) return
+    try {
+      commissionPreview.value = await commissionApi.preview(
+        selectedCourseId.value,
+        selectedStaffId.value,
+      )
+    } catch {
+      commissionPreview.value = null
+    }
+  },
+  { immediate: true },
+)
 const money = (value: number) =>
   new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(value)
 const selectedStaffName = computed(
@@ -198,6 +225,7 @@ async function submit() {
       patientId: patient.value.id,
       branchCode: patient.value.branchCode ?? (await branchApi.list())[0]?.branchCode ?? 'RP',
       salespersonStaffId: selectedStaffId.value,
+      treatingStaffId: mode.value === 'single' ? treatingStaffId.value : undefined,
       note: note.value,
       items: [{ type, referenceId, quantity: 1 }],
       payments: [
@@ -322,7 +350,7 @@ async function submit() {
               <strong>{{ patient.fullName }}</strong
               ><span>HN {{ patient.hn }}　☎ {{ patient.phone }}</span>
             </div>
-            <b>{{ patient.branchName ? `สาขา${patient.branchName}` : 'สาขาแบริ่ง' }}</b>
+            <b>{{ patient.branchName ? `สาขา${patient.branchName}` : 'ไม่ระบุสาขา' }}</b>
           </section>
           <div class="sales-workspace" :class="{ review: reviewing }">
             <section class="sale-line-card">
@@ -364,14 +392,14 @@ async function submit() {
                 ><b>{{ money(afterItemDiscount) }}</b>
               </div>
               <div class="sale-people">
-                <label
+                <label v-if="mode === 'single'"
                   >นักกายภาพผู้ให้บริการ<FilterDropdown
-                    :model-value="String(selectedStaffId)"
+                    :model-value="String(treatingStaffId)"
                     :options="staffFilterOptions"
                     default-label="เลือกนักกายภาพ"
                     label="นักกายภาพผู้ให้บริการ"
                     :clear-on-reselect="false"
-                    @update:model-value="selectedStaffId = Number($event)" /></label
+                    @update:model-value="treatingStaffId = Number($event)" /></label
                 ><label
                   >ผู้ขาย/เจ้าของยอด<FilterDropdown
                     :model-value="String(selectedStaffId)"
@@ -423,12 +451,13 @@ async function submit() {
               <p class="net-total">
                 <strong>ยอดสุทธิที่ลูกค้าชำระ</strong><strong>{{ money(netAmount) }}</strong>
               </p>
-              <div class="commission">
+              <div v-if="mode === 'course'" class="commission">
                 <p>
                   <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
                 </p>
                 <p>
-                  <span>ค่าคอมมิชชัน 10%</span><b>{{ money(commissionAmount) }}</b>
+                  <span>ค่าคอมมิชชัน {{ commissionRateLabel }} (ประมาณการ)</span
+                  ><b>{{ money(commissionAmount) }}</b>
                 </p>
               </div>
               <button
@@ -451,11 +480,13 @@ async function submit() {
               <b>{{ patient.fullName }}　HN {{ patient.hn }}</b
               ><span
                 >{{ item }} ·
-                {{ patient.branchName ? `สาขา${patient.branchName}` : 'สาขาแบริ่ง' }}</span
-              ><small>ฐานค่าคอมมิชชัน {{ money(afterItemDiscount) }}</small
-              ><small
-                >ผู้ได้รับ Commission กภ. {{ selectedStaffName }} · ประมาณการ
-                {{ money(commissionAmount) }}</small
+                {{ patient.branchName ? `สาขา${patient.branchName}` : 'ไม่ระบุสาขา' }}</span
+              ><template v-if="mode === 'course'"
+                ><small>ฐานค่าคอมมิชชัน {{ money(afterItemDiscount) }}</small
+                ><small
+                  >เจ้าของคอร์ส/ผู้ได้รับ Commission กภ. {{ selectedStaffName }} · ประมาณการ
+                  {{ money(commissionAmount) }}</small
+                ></template
               >
             </section>
             <section>
@@ -491,9 +522,13 @@ async function submit() {
                   }}</small
                 >
               </section>
-              <section>
+              <section v-if="mode === 'course'">
                 <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b
-                ><small>ค่าคอมมิชชัน 10%　{{ money(commissionAmount) }}</small>
+                ><small
+                  >ค่าคอมมิชชัน {{ commissionRateLabel }} (ประมาณการ)　{{
+                    money(commissionAmount)
+                  }}</small
+                >
               </section>
             </div>
             <footer>
