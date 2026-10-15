@@ -22,7 +22,7 @@ describe('selling a service or a course', () => {
     cy.visitAs('therapist', '/staff/services')
     cy.contains('h1', 'บริการและคอร์ส').should('be.visible')
     choosePatient()
-    cy.contains('.patient-summary', 'สมชาย ใจดี').should('be.visible')
+    cy.contains('.service-menu-patient', 'สมชาย ใจดี').should('be.visible')
     cy.contains('h2', 'ขายบริการและคอร์ส').should('be.visible')
     cy.contains('h2', 'ใช้สิทธิ์และจัดการคอร์ส').should('be.visible')
   })
