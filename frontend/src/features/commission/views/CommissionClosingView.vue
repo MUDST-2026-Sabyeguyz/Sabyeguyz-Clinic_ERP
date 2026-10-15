@@ -99,7 +99,7 @@ async function load() {
       staff: row.employeeName,
       sales: Number(row.sales),
       rate: Math.round(Number(row.rate) * 10000) / 100,
-      status: row.status === 'CLOSED' ? 'Closed' : 'Open',
+      status: row.status === 'CLOSED' || row.status === 'FINALIZED' ? 'Closed' : 'Open',
     }))
     errorMessage.value = ''
   } catch (error) {

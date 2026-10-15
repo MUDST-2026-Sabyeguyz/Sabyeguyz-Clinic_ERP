@@ -253,7 +253,9 @@ public class CommissionController {
             boolean alreadyClosed = closings.findByClosingMonthAndStaffId(saleMonth, sellerId)
                     .map(MonthlyCommissionClosing::isClosed).orElse(false);
             if (!alreadyClosed) {
-                closingService.closeMonth(saleMonth, seller, permission, actor.currentId());
+                MonthlyCommissionClosing closed = closingService.closeMonth(saleMonth, seller, permission, actor.currentId());
+                audit.record("monthly_commission_closing", String.valueOf(closed.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                        "Open", "Closed " + saleMonth + " rate " + closed.getLockedCommissionRate(), actor.currentId());
             }
         }
         return closings(month);
