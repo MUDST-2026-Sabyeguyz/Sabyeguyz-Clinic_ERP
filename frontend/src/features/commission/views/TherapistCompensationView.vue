@@ -39,13 +39,13 @@ onMounted(async () => {
     loading.value = false
   }
 })
-</script>
 
+</script>
 <template>
   <div class="therapist-compensation-page">
     <StaffHeader />
-    <main class="compensation-main">
-      <header class="compensation-heading">
+    <main class="therapist-compensation-main">
+      <header class="therapist-compensation-heading">
         <div>
           <h1>{{ activeTab === 'ภาพรวม' ? 'ค่าตอบแทนของฉัน' : 'ประวัติการจ่าย' }}</h1>
           <p>
@@ -59,7 +59,9 @@ onMounted(async () => {
         <div v-if="activeTab === 'ภาพรวม' && selected" class="latest-status">
           <span>สถานะงวด</span
           ><b :class="{ paid: selected.status === 'PAID' }">{{ statusLabel(selected.status) }}</b>
+
         </div>
+        <span class="therapist-status-pill">รอตรวจสอบ</span>
       </header>
 
       <nav class="compensation-tabs" aria-label="เมนูค่าตอบแทน">
