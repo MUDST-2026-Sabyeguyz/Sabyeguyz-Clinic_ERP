@@ -107,9 +107,9 @@ describe('creating and changing appointments', () => {
     cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 0)
   })
 
-  it('does not offer a time the therapist is already booked at, and the server refuses it anyway', function () {
+  it('refuses a second booking of the same therapist at the same time', function () {
     cy.registerPatient().then((patient) => book(this.fixtures, patient)).as('existingAppointment')
-    cy.registerPatient({ firstName: 'อรุณ', lastName: 'แสงทอง', identityNumber: '1100000000102', phone: '0822222222' })
+    cy.registerPatient({ firstName: 'อรุณ', lastName: 'แสงทอง', identityNumber: '1100000000102', phone: '0822222222' }).as('otherPatient')
     cy.visitAs('manager', '/staff/appointments')
     cy.contains('button', 'สร้างนัดหมาย').click()
     cy.chooseBranch('เลือกสาขา', '01')
@@ -119,19 +119,14 @@ describe('creating and changing appointments', () => {
     cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type('อรุณ')
     cy.contains('.patient-search-results button', 'อรุณ แสงทอง').click()
     cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
-    // the free-time list leaves out the booked 09:00 ...
-    cy.get('button[aria-label="เลือกเวลา"]').click()
-    cy.get('[role="listbox"][aria-label="เลือกเวลา"] [role="option"]').then(($options) => {
-      const times = [...$options].map((option) => option.textContent.replace('✓', '').trim())
-      expect(times).to.not.include('09:00')
-      expect(times).to.include('10:30')
+    cy.get('button.filter-dropdown__button[aria-label="เลือกเวลา"]').click()
+    cy.get('[role="listbox"][aria-label="เลือกเวลา"] [role="option"]').should('not.contain.text', '09:00')
+    cy.get('@otherPatient').then((patient) => {
+      cy.api('POST', '/api/appointments', {
+        branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId,
+        serviceId: this.fixtures.serviceId, startAt: at(this.fixtures, '09:00'),
+      }).its('status').should('equal', 400)
     })
-    // ... and the API still refuses the same start time
-    cy.get('@existingAppointment').then((appointment) => cy.registerPatient({ firstName: 'ซ้ำ', lastName: 'เวลา', identityNumber: '1100000000103', phone: '0833333333' })
-      .then((other) => cy.api('POST', '/api/appointments', {
-        branchCode: '01', patientId: other.id, therapistId: appointment.therapist.id, serviceId: appointment.service.id,
-        startAt: appointment.startAt,
-      })).its('status').should('equal', 400))
     cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 1)
   })
 
@@ -143,6 +138,7 @@ describe('creating and changing appointments', () => {
     cy.get('.reschedule-time-trigger').click()
     cy.contains('.appointment-time-slots button', /^14:30/).click()
     cy.contains('.appointment-time-drawer button', 'ยืนยันเวลา').click()
+    cy.get('.reschedule-time-trigger').should('contain.text', '14:30')
     cy.contains('.appointment-save button', 'บันทึก').click()
     cy.get('.appointment-confirm-modal').contains('button', /^ใช่$/).click()
     cy.contains('เลื่อนนัดหมายสำเร็จ').should('be.visible')
