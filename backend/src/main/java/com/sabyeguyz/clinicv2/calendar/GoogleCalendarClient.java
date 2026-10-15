@@ -15,6 +15,9 @@ public interface GoogleCalendarClient {
     /** An event seen when asking for changes; start is in the clinic time zone, null for all-day events. */
     record RemoteEvent(String id, String etag, boolean cancelled, LocalDateTime start, Long appointmentId) {}
 
+    /** A stretch of the calendar that is taken (Busy) by an event the clinic did not write; clinic-local times. */
+    record BusyBlock(LocalDateTime start, LocalDateTime end) {}
+
     EventRef insert(String calendarId, EventData data);
 
     EventRef update(String calendarId, String eventId, EventData data);
@@ -24,4 +27,10 @@ public interface GoogleCalendarClient {
 
     /** Events created or changed since the instant (cancelled ones included). */
     List<RemoteEvent> changedSince(String calendarId, Instant updatedMin);
+
+    /**
+     * The Busy time between the two clinic-local instants: events that are not cancelled, not shown as Free and not
+     * written by this system (its own events are already appointments). An all-day event covers whole days.
+     */
+    List<BusyBlock> busyBlocks(String calendarId, LocalDateTime from, LocalDateTime to);
 }
