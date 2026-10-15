@@ -76,8 +76,12 @@ public class RuntimeCheck {
                     "sessions", 5, "bonusSessions", 1, "validityDays", 30), 201);
             request("GET", "/api/courses", null, 200);
             // A single visit is treated by one PT: create the staff member first and name them in the sale.
-            request("POST", "/api/users", Map.of("username", "runtime-seller", "password", "runtime-test-password",
+            JsonNode seller = request("POST", "/api/users", Map.of("username", "runtime-seller",
+                    "email", "Runtime.Seller@example.com", "password", "runtime-test-password",
                     "role", "MANAGER", "employeeCode", "RUNTIME001", "fullName", "Runtime Seller", "branchCode", "01"), 201);
+            check(seller.path("email").asText().equals("Runtime.Seller@example.com"), "V4 email must be returned");
+            check(db.queryForObject("select email from app_user where username='runtime-seller'", String.class)
+                    .equals("Runtime.Seller@example.com"), "V4 email must persist");
             Long treatingStaffId = db.queryForObject("select staff_id from staff where staff_code='RUNTIME001'", Long.class);
             JsonNode sale = request("POST", "/api/payments", Map.of(
                     "patientId", patient.path("id").asLong(), "branchCode", "01", "treatingStaffId", treatingStaffId,
@@ -90,7 +94,19 @@ public class RuntimeCheck {
                     "full payment label must persist");
             request("GET", "/api/receipts/" + sale.path("id").asLong(), null, 200);
             request("GET", "/api/payments", null, 200);
-            token = request("POST", "/api/auth/login", Map.of("username", "runtime-seller", "password", "runtime-test-password"), 200)
+            JsonNode sellerLogin = request("POST", "/api/auth/login",
+                    Map.of("username", "runtime.seller@EXAMPLE.com", "password", "runtime-test-password"), 200);
+            check(sellerLogin.path("email").asText().equals("Runtime.Seller@example.com"), "V4 email login response");
+            token = sellerLogin.path("token").asText();
+            JsonNode updatedSeller = request("PUT", "/api/users/" + seller.path("id").asLong(),
+                    Map.of("username", "runtime-seller", "email", "seller.updated@example.com",
+                            "password", "runtime-test-password", "role", "MANAGER", "employeeCode", "RUNTIME001",
+                            "fullName", "Runtime Seller", "branchCode", "01"), 200);
+            check(updatedSeller.path("email").asText().equals("seller.updated@example.com"), "V4 email update response");
+            request("POST", "/api/auth/login",
+                    Map.of("username", "Runtime.Seller@example.com", "password", "runtime-test-password"), 400);
+            token = request("POST", "/api/auth/login",
+                    Map.of("username", "SELLER.UPDATED@example.com", "password", "runtime-test-password"), 200)
                     .path("token").asText();
             db.update("insert into permission(permission_name,permission_create_by) values ('RUNTIME_COMMISSION',?)", userId);
             Long permissionId = db.queryForObject("select permission_id from permission where permission_name='RUNTIME_COMMISSION'", Long.class);
