@@ -27,7 +27,7 @@ const usage = {
   patientHn: 'HN-U',
   courseName: 'Usage Course',
   branchCode: '01',
-  usedAt: '2026-10-11T09:00:00',
+  usedAt: '2026-10-09T09:00:00',
   voidedAt: null,
   voidReason: null,
 }
@@ -111,7 +111,11 @@ async function click(text: string) {
   await flushPromises()
 }
 async function review(kind: 'sale' | 'usage' = 'sale') {
-  if (kind === 'usage') await click('รายการใช้บริการ')
+  // sales and course usage share one list: narrow it with the search box
+  if (kind === 'usage') {
+    await wrapper.get('input[aria-label="ค้นหารายการ"]').setValue('Usage Patient')
+    await flushPromises()
+  }
   await click('ตรวจสอบ')
   await click('ดำเนินการยกเลิก')
   expect(
@@ -165,8 +169,21 @@ describe('TransactionView backend integration', () => {
     expect(wrapper.text()).toContain('API-SECOND-PAGE')
     expect(wrapper.text()).toContain('Backend Branch')
     expect(wrapper.text()).not.toContain('SL-2569-0084')
-    await click('รายการใช้บริการ')
+    // course usage is in the same list as the sales
     expect(wrapper.text()).toContain('Usage Patient')
+    expect(wrapper.text()).toContain('ใช้สิทธิ์คอร์ส 1 ครั้ง')
+  })
+  it('has one list for sales and course usage, not separate tabs', async () => {
+    await render()
+    const tabs = wrapper.findAll('.transaction-tabs button').map((button) => button.text())
+    expect(tabs).toEqual(['รายการทั้งหมด', 'ประวัติการยกเลิก'])
+  })
+  it('lets a therapist only read a transaction of another branch', async () => {
+    localStorage.setItem('authUser', JSON.stringify({ role: 'THERAPIST', branchCode: '02' }))
+    await render()
+    await click('ดูรายละเอียด')
+    expect(wrapper.text()).toContain('ดูรายละเอียดได้อย่างเดียว')
+    expect(wrapper.findAll('button').some((button) => button.text() === 'ดำเนินการยกเลิก')).toBe(false)
   })
   it('shows no seed transactions when the backend is empty', async () => {
     empty = true

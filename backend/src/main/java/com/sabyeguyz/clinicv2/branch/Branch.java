@@ -47,7 +47,35 @@ public class Branch {
     @Column(name = "google_calendar_id", length = 255, unique = true)
     private String googleCalendarId;
 
+    @Column(name = "branch_email", length = 255)
+    private String branchEmail;
+
+    @Column(name = "license_no", length = 50)
+    private String licenseNo;
+
+    /** Hours in which appointments can be booked; both null = no limit. */
+    @Column(name = "booking_open_time")
+    private java.time.LocalTime bookingOpenTime;
+
+    @Column(name = "booking_close_time")
+    private java.time.LocalTime bookingCloseTime;
+
+    /** Length of an appointment when its service has none of its own. */
+    @Column(name = "default_appointment_minutes")
+    private Integer defaultAppointmentMinutes;
+
     public Branch() {}
+
+    public String getBranchEmail() { return branchEmail; }
+    public void setBranchEmail(String branchEmail) { this.branchEmail = branchEmail; }
+    public String getLicenseNo() { return licenseNo; }
+    public void setLicenseNo(String licenseNo) { this.licenseNo = licenseNo; }
+    public java.time.LocalTime getBookingOpenTime() { return bookingOpenTime; }
+    public void setBookingOpenTime(java.time.LocalTime bookingOpenTime) { this.bookingOpenTime = bookingOpenTime; }
+    public java.time.LocalTime getBookingCloseTime() { return bookingCloseTime; }
+    public void setBookingCloseTime(java.time.LocalTime bookingCloseTime) { this.bookingCloseTime = bookingCloseTime; }
+    public Integer getDefaultAppointmentMinutes() { return defaultAppointmentMinutes; }
+    public void setDefaultAppointmentMinutes(Integer defaultAppointmentMinutes) { this.defaultAppointmentMinutes = defaultAppointmentMinutes; }
 
     public String getGoogleCalendarId() { return googleCalendarId; }
     public void setGoogleCalendarId(String googleCalendarId) { this.googleCalendarId = googleCalendarId; }

@@ -41,6 +41,9 @@ const form = reactive({
   sourceId: 0,
   originalMonth: '',
   appliedMonth: '',
+  // one step: approve the adjustment and put it into the payment of the month (the rest carries over by itself)
+  applyNow: true,
+  reference: '',
 })
 
 const application = reactive({ month: '', amount: '' as number | '', reference: '' })
@@ -99,6 +102,8 @@ function openDrawer() {
     sourceId: 0,
     originalMonth: '',
     appliedMonth: '',
+    applyNow: true,
+    reference: '',
   })
   drawerOpen.value = true
 }
@@ -107,6 +112,10 @@ async function create() {
   drawerError.value = ''
   if (!form.staffId || !(form.amount > 0) || !form.reason.trim() || !(form.sourceId > 0)) {
     drawerError.value = 'กรุณาเลือกพนักงาน ระบุยอด เหตุผล และเลขที่ต้นทางที่อ้างอิง'
+    return
+  }
+  if (form.applyNow && form.direction === 'deduct' && !form.reference.trim()) {
+    drawerError.value = 'การหักเงินต้องระบุเลขที่อ้างอิงความยินยอมของพนักงาน'
     return
   }
   const body: AdjustmentInput = {
@@ -122,7 +131,24 @@ async function create() {
     const created = await commissionApi.createAdjustment(body)
     drawerOpen.value = false
     selectedId.value = created.id
-    notice.value = 'บันทึกใบปรับยอดแล้ว รออนุมัติ'
+    if (form.applyNow) {
+      try {
+        await commissionApi.approveAdjustment(created.id)
+        const month = created.appliedMonth || form.appliedMonth
+        const added = await commissionApi.createApplication(created.id, month)
+        await commissionApi.approveApplication(
+          added.id,
+          form.direction === 'deduct' ? form.reference.trim() : undefined,
+        )
+        notice.value = `บันทึกใบปรับยอดและนำไปใช้ในงวด ${month} แล้ว จะมีผลเมื่อยืนยันจ่ายงวดนั้น ส่วนที่หักไม่ครบจะยกไปงวดถัดไปเอง`
+      } catch (caught) {
+        errorMessage.value = `บันทึกใบปรับยอดแล้ว แต่นำไปใช้ในงวดไม่สำเร็จ: ${
+          caught instanceof Error ? caught.message : 'ไม่ทราบสาเหตุ'
+        } (ทำต่อได้จากรายละเอียดด้านล่าง)`
+      }
+    } else {
+      notice.value = 'บันทึกใบปรับยอดแล้ว รออนุมัติ'
+    }
     await load()
   } catch (caught) {
     drawerError.value = caught instanceof Error ? caught.message : 'บันทึกใบปรับยอดไม่สำเร็จ'
@@ -334,7 +360,7 @@ const today = clinicToday()
             <div>
               <h2>สร้างใบปรับยอด</h2>
               <p>
-                ต้องอ้างอิงต้นทางของพนักงานคนเดียวกันอย่างน้อยหนึ่งรายการ และต้องอนุมัติก่อนนำไปใช้
+                ต้องอ้างอิงต้นทางของพนักงานคนเดียวกันอย่างน้อยหนึ่งรายการ ระบบอนุมัติและนำไปใช้ในงวดให้ในขั้นตอนเดียว ส่วนที่หักไม่ครบยกไปงวดถัดไปเอง
               </p>
             </div>
             <button class="drawer-close" @click="drawerOpen = false">×</button>
@@ -380,12 +406,25 @@ const today = clinicToday()
                 v-model="form.appliedMonth"
                 type="month"
             /></label>
+            <label class="check-row"
+              ><input v-model="form.applyNow" type="checkbox" aria-label="นำไปใช้ในงวดทันที" />
+              นำไปใช้ในงวดทันที (อนุมัติและเพิ่มในงวดให้เลย)</label
+            >
+            <label v-if="form.applyNow && form.direction === 'deduct'"
+              >เลขที่อ้างอิงความยินยอมของพนักงาน *<input
+                v-model="form.reference"
+                maxlength="100"
+                aria-label="เลขที่อ้างอิงความยินยอม"
+                placeholder="เช่น เลขที่เอกสารที่พนักงานเซ็นรับทราบ"
+            /></label>
           </div>
           <p v-if="drawerError" class="drawer-error" role="alert">{{ drawerError }}</p>
           <footer>
             <button class="commission-secondary" @click="drawerOpen = false">ยกเลิก</button
             ><button class="commission-primary" :disabled="saving" @click="create">
-              {{ saving ? 'กำลังบันทึก...' : 'บันทึกใบปรับยอด' }}
+              {{
+                saving ? 'กำลังบันทึก...' : form.applyNow ? 'บันทึกและนำไปใช้ในงวด' : 'บันทึกใบปรับยอด'
+              }}
             </button>
           </footer>
         </aside>
