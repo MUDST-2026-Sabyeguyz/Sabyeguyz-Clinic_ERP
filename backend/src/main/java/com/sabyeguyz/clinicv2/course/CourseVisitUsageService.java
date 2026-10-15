@@ -49,13 +49,15 @@ public class CourseVisitUsageService {
     private final CourseEntitlementRepository entitlements;
     private final TransactionCancellationService cancellations;
     private final CourseCommissionService courseCommission;
+    private final CourseUsagePrintService prints;
 
     public CourseVisitUsageService(CourseVisitUsageRepository usages, CourseLedgerRepository ledger,
                                     CourseRepository courses, CommissionAllocationLedgerRepository allocationLedger,
                                     TreatmentFeeRuleResolver treatmentFeeRuleResolver,
                                     CourseEntitlementRepository entitlements,
                                     TransactionCancellationService cancellations,
-                                    CourseCommissionService courseCommission) {
+                                    CourseCommissionService courseCommission, CourseUsagePrintService prints) {
+        this.prints = prints;
         this.courseCommission = courseCommission;
         this.usages = usages;
         this.ledger = ledger;
@@ -147,6 +149,8 @@ public class CourseVisitUsageService {
         course.setRemainingVisits(course.getRemainingVisits() - 1);
         courseCommission.refreshTotals(course);
         courses.save(course);
+        // a Completed session is printed on the course usage slip with the history of every user (Data Dictionary)
+        prints.issue(savedUsage, actorId);
 
         return savedUsage;
     }
