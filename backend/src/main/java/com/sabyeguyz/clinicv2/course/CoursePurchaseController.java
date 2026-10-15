@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.course;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitRepository;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitService;
@@ -46,23 +47,21 @@ import org.springframework.web.bind.annotation.*;
  *   the seller from the current user's linked Staff record and fails if
  *   the logged-in account has none - the frontend form should really
  *   collect a seller explicitly.</li>
- *   <li>{@code use}: no treating-staff field either, so this always treats
- *   the Case Owner as the Treating PT (substitute-PT usage isn't reachable
- *   through this endpoint); the "using patient" for a Shared Course is
- *   likewise always the Course's original buyer, never a shared member.</li>
+ *   <li>{@code use}: the PT who treats the session is {@code treatingStaffId} (the Owner PT by
+ *   default); a different PT is a substitute who earns the treatment fee. The using patient is
+ *   {@code patientId} (the Course's buyer, or the appointment's patient, by default).</li>
  *   <li>{@code use}: Course_visit_usage.visit_id is NOT NULL, so a usage always
  *   belongs to a visit. With an appointmentId it uses that appointment's
  *   checked-in visit; without one (what the frontend sends today) it records a
- *   walk-in visit for the buyer, checked in and completed at the Case Owner.</li>
+ *   walk-in visit for the using patient, checked in and completed at the treating PT.</li>
  *   <li>{@code reverse}: reverses the usage (Treatment movement) or the
  *   transfer (TransferOut/TransferIn movement) the given ledger movement
  *   belongs to, with proper Reversal ledger entries, a reversed commission
  *   allocation and a cancellation record. Other movement types (Purchase,
  *   Adjustment, Reversal) cannot be reversed here.</li>
- *   <li>{@code cancel}: only flips course_status to Cancelled. The
- *   Commission_System_Requirement_Dev §22 Refund/Cancellation rules
- *   (stop future allocation, compute adjustment, audit trail) are not
- *   implemented.</li>
+ *   <li>{@code cancel}: voids the sale line of the course (a Void cancellation), stops every right not yet
+ *   used with a Cancellation ledger entry and marks the course Cancelled. Sessions already given keep their
+ *   treatment fee and commission.</li>
  * </ul>
  */
 @Transactional
@@ -86,6 +85,8 @@ public class CoursePurchaseController {
     private final com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository;
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
+    private final com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations;
+    private final com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
@@ -96,7 +97,11 @@ public class CoursePurchaseController {
                                      PatientVisitRepository visits, PatientVisitService visitService,
                                      AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
                                      CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                                     com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
+                                     com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments) {
+        this.treatments = treatments;
+        this.cancellations = cancellations;
         this.courses = courses;
         this.ledger = ledger;
         this.usages = usages;
@@ -118,6 +123,7 @@ public class CoursePurchaseController {
     }
 
     /** A sale credit split: {@code percent} of the course price is credited to {@code staffId}. */
+    /** Sale-credit shares were removed: a course has a single Owner PT, its seller. */
     public record ShareRequest(Long staffId, BigDecimal percent) {}
     /**
      * {@code shares} (optional) splits the sale credit between up to two PTs and must add up to 100%;
@@ -126,7 +132,9 @@ public class CoursePurchaseController {
      */
     public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
                                    BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares) {}
-    public record UseRequest(Long coursePurchaseId, Long appointmentId, String note) {}
+    /** treatingStaffId (optional): the PT who treats the session, the Owner PT by default; patientId (optional): who uses the entitlement. */
+    public record UseRequest(Long coursePurchaseId, Long appointmentId, String note, Long treatingStaffId, Long patientId,
+                              Long treatmentId) {}
     public record ReasonRequest(String reason) {}
 
     public record PatientSummary(Long id, String hn, String fullName) {}
@@ -136,7 +144,8 @@ public class CoursePurchaseController {
                             BigDecimal price, int sessions, int bonusSessions, int purchased, int used, int remaining,
                             Instant purchasedAt, Instant expiresAt, boolean expired, boolean usable, String status,
                             String commissionStatus, BigDecimal lockedCommissionRate,
-                            BigDecimal totalCourseCommissionPool, BigDecimal commissionAllocationPerVisit) {}
+                            BigDecimal totalCourseCommissionPool, BigDecimal commissionAllocationPerVisit,
+                            Long receiptId) {}
 
     public record MovementResponse(Long id, String type, int quantity, String reason, Instant createdAt) {}
     public record AllocationResponse(LocalDate visitDate, BigDecimal gross, BigDecimal fee, BigDecimal ownerNet) {}
@@ -156,17 +165,18 @@ public class CoursePurchaseController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
         Service courseTemplate = services.findById(request.courseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Staff seller = resolveActorStaff();
-        Staff caseOwner = request.caseOwnerStaffId() == null ? null : staffById(request.caseOwnerStaffId());
-        List<com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare> shares = request.shares() == null ? null
-                : request.shares().stream().map(share -> new com.sabyeguyz.clinicv2.catalog.CourseService.SaleShare(
-                        staffById(share.staffId()), share.percent())).toList();
+        if (request.shares() != null && !request.shares().isEmpty()) {
+            throw new IllegalArgumentException("ไม่รองรับการแบ่งเครดิตยอดขายแล้ว เจ้าของคอร์สคือผู้ขายคนเดียว");
+        }
+        // The seller is the Owner PT. A manager may record the sale for a PT with caseOwnerStaffId; the signed-in
+        // user's own staff record is the default.
+        Staff seller = request.caseOwnerStaffId() == null ? resolveActorStaff() : staffById(request.caseOwnerStaffId());
 
-        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, LocalDate.now()), patient, branch, LocalDate.now(),
+        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, ClinicTime.today()), patient, branch, ClinicTime.today(),
                 actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
-                seller, caseOwner, null, null, null, Discount.of(request.discountType(), request.discountValue()),
-                shares, LocalDate.now(), actor.currentId());
+                seller, null, null, null, Discount.of(request.discountType(), request.discountValue()),
+                ClinicTime.today(), actor.currentId());
         receiptService.finalizeTotals(receipt, List.of(purchase.transaction()), Discount.none(), actor.currentId());
         audit.record("course", String.valueOf(purchase.course().getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
                 purchase.course().getCourseNo() + " price " + purchase.course().getCoursePrice(), actor.currentId());
@@ -182,7 +192,7 @@ public class CoursePurchaseController {
                         l.getLedgerCreateAt()))
                 .toList();
         List<AllocationResponse> allocations = allocationLedger.findByCourseIdOrderByIdDesc(id).stream()
-                .map(a -> new AllocationResponse(a.getVisitDate(), a.getGrossCommissionAllocation(),
+                .map(a -> new AllocationResponse(a.getVisitDate(), a.getOwnerNetCommission().add(a.getTreatmentFeeAmount()),
                         a.getTreatmentFeeAmount(), a.getOwnerNetCommission()))
                 .toList();
         return new LedgerResponse(toResponse(course, ownerPatientId), movements, allocations);
@@ -221,15 +231,20 @@ public class CoursePurchaseController {
         // Row-lock first: two parallel usages must not both see the last remaining visit.
         Course course = courses.findByIdForUpdate(request.coursePurchaseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Patient owner = course.getPurchaserPatient();
-        PatientVisit visit = request.appointmentId() == null ? walkInVisit(course, owner)
+        Staff treating = request.treatingStaffId() == null ? course.getOwnerStaff() : staffById(request.treatingStaffId());
+        PatientVisit appointmentVisit = request.appointmentId() == null ? null
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
                         .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
-        // The visit's patient takes the visit from his or her own balance, so a patient who received transferred
-        // visits uses them; a walk-in use stays with the buyer. The balance check lives in the usage service.
-        Patient usingPatient = request.appointmentId() == null ? owner : visit.getPatient();
-        // Always treats the Case Owner as the Treating PT - see class Javadoc.
-        usageService.use(course, visit, usingPatient, course.getCaseOwnerStaff(), LocalDate.now(), actor.currentId());
+        Patient usingPatient = request.patientId() != null
+                ? patients.findById(request.patientId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
+                : appointmentVisit != null ? appointmentVisit.getPatient() : course.getPurchaserPatient();
+        if (appointmentVisit != null && !appointmentVisit.getPatient().getId().equals(usingPatient.getId())) {
+            throw new IllegalArgumentException("ผู้ใช้สิทธิ์ต้องเป็นผู้ป่วยคนเดียวกับของ Visit");
+        }
+        PatientVisit visit = appointmentVisit != null ? appointmentVisit : walkInVisit(course, usingPatient, treating);
+        var treatment = request.treatmentId() == null ? null : treatments.findById(request.treatmentId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
+        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
         return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
@@ -250,19 +265,31 @@ public class CoursePurchaseController {
 
     @PostMapping("/api/course-purchases/{id}/cancel")
     public Response cancel(@PathVariable Long id, @RequestBody ReasonRequest request) {
-        Course course = findCourse(id);
-        course.setCourseStatus(CourseStatus.Cancelled);
-        course.setCourseUpdateAt(Instant.now());
-        course.setCourseUpdateBy(actor.currentId());
-        Course saved = courses.save(course);
+        Course course = courses.findByIdForUpdate(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        if (course.getCourseStatus() != CourseStatus.Active && course.getCourseStatus() != CourseStatus.Completed) {
+            throw new IllegalStateException("คอร์สนี้ถูกยกเลิกหรือคืนเงินไปแล้ว");
+        }
+        if (request.reason() == null || request.reason().isBlank()) {
+            throw new IllegalArgumentException("ต้องระบุเหตุผลที่ยกเลิก");
+        }
+        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        // voids the sale line, cuts the unused rights and marks the course Cancelled
+        cancellations.voidSale(course.getSaleTransaction(), permission, request.reason(), actor.currentId());
+        Course saved = findCourse(id);
+        if (saved.getCourseStatus() != CourseStatus.Cancelled) {
+            saved.setCourseStatus(CourseStatus.Cancelled); // every right was already used: nothing to cut, but the sale is void
+            saved.setCourseUpdateAt(Instant.now());
+            saved.setCourseUpdateBy(actor.currentId());
+            saved = courses.save(saved);
+        }
         audit.record("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Active", "Cancelled: " + request.reason(),
                 actor.currentId());
         return toResponse(saved, saved.getPurchaserPatient().getId());
     }
 
-    private PatientVisit walkInVisit(Course course, Patient owner) {
-        PatientVisit visit = visitService.checkInWalkIn(owner, course.getReceipt().getBranch(),
-                course.getCaseOwnerStaff(), actor.currentId());
+    private PatientVisit walkInVisit(Course course, Patient usingPatient, Staff treating) {
+        PatientVisit visit = visitService.checkInWalkIn(usingPatient, course.getReceipt().getBranch(),
+                treating, actor.currentId());
         return visitService.complete(visit.getId(), actor.currentId());
     }
 
@@ -300,7 +327,7 @@ public class CoursePurchaseController {
     private Response toResponse(Course course, Long forPatientId) {
         long remaining = forPatientId == null ? course.getRemainingVisits()
                 : ledger.sumQtyChangeByCourseAndPatient(course.getId(), forPatientId);
-        boolean expired = course.getExpiryDate().isBefore(LocalDate.now());
+        boolean expired = course.getExpiryDate().isBefore(ClinicTime.today());
         boolean usable = !expired && course.getCourseStatus() == CourseStatus.Active && remaining > 0;
         Patient patient = course.getPurchaserPatient();
         return new Response(course.getId(), new PatientSummary(patient.getId(), patient.getPatientHn(),
@@ -313,6 +340,6 @@ public class CoursePurchaseController {
                 course.getCourseCreateAt(), course.getExpiryDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
                 expired, usable, course.getCourseStatus().name().toUpperCase(java.util.Locale.ROOT), course.getCommissionStatus().name().toUpperCase(java.util.Locale.ROOT),
                 course.getLockedCommissionRate(), course.getTotalCourseCommissionPool(),
-                course.getCommissionAllocationPerVisit());
+                course.getCommissionAllocationPerVisit(), course.getReceipt().getId());
     }
 }

@@ -66,7 +66,7 @@ async function load() {
     treatments.value = treatmentReport.filter((item) => item.treatingStaffId === staffId.value)
     const closing = closings.find((item) => item.employeeId === staffId.value)
     closingId.value = closing?.id ?? null
-    approved.value = closing?.status === 'CLOSED'
+    approved.value = closing?.status === 'CLOSED' || closing?.status === 'FINALIZED'
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลค่าตอบแทนไม่สำเร็จ'
   } finally {

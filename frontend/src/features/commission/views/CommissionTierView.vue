@@ -9,10 +9,10 @@ import { commissionApi } from '@/api/client'
 
 type Tier = { order: number; min: number; max: number | null; rate: number; active: boolean }
 const tiers = reactive<Tier[]>([
-  { order: 1, min: 0, max: 59999, rate: 5, active: true },
-  { order: 2, min: 60000, max: 69999, rate: 6, active: true },
-  { order: 3, min: 70000, max: 79999, rate: 7, active: true },
-  { order: 4, min: 80000, max: 89999, rate: 8, active: true },
+  { order: 1, min: 0, max: 59999.99, rate: 5, active: true },
+  { order: 2, min: 60000, max: 69999.99, rate: 6, active: true },
+  { order: 3, min: 70000, max: 79999.99, rate: 7, active: true },
+  { order: 4, min: 80000, max: 89999.99, rate: 8, active: true },
   { order: 5, min: 90000, max: null, rate: 10, active: true },
 ])
 const editingIndex = ref(-1)
@@ -82,9 +82,10 @@ async function saveSchemeVersion() {
         tier.min < 0 ||
         tier.rate <= 0 ||
         (tier.max !== null && tier.min > tier.max) ||
+        // two-decimal ranges: the next tier starts exactly one satang above the previous maximum
         (index > 0 &&
           activeTiers[index - 1]!.max !== null &&
-          tier.min !== activeTiers[index - 1]!.max! + 1),
+          Math.round((tier.min - activeTiers[index - 1]!.max!) * 100) !== 1),
     )
     if (invalidTier) {
       error.value = 'ตรวจช่วงยอดขายและอัตราของ Tier ให้ต่อเนื่องกัน'
@@ -322,12 +323,18 @@ onMounted(async () => {
               <header><b>Tier ของ Version ใหม่</b><small>คัดลอกจาก Version ปัจจุบัน</small></header>
               <article v-for="tier in schemeTiers" :key="tier.order">
                 <b>Tier {{ tier.order }}</b
-                ><label>ขั้นต่ำ<input v-model.number="tier.min" type="number" min="0" /></label
+                ><label
+                  >ขั้นต่ำ<input
+                    v-model.number="tier.min"
+                    type="number"
+                    min="0"
+                    step="0.01" /></label
                 ><label
                   >สูงสุด<input
                     :value="tier.max ?? ''"
                     type="number"
                     min="0"
+                    step="0.01"
                     placeholder="ไม่จำกัด"
                     @input="
                       tier.max =
@@ -342,12 +349,18 @@ onMounted(async () => {
             </section>
           </div>
           <div v-else class="drawer-form">
-            <label>ยอดขายขั้นต่ำ<input v-model.number="form.min" type="number" min="0" /></label
+            <label
+              >ยอดขายขั้นต่ำ<input
+                v-model.number="form.min"
+                type="number"
+                min="0"
+                step="0.01" /></label
             ><label
               >ยอดขายสูงสุด<input
                 v-model.number="form.max"
                 type="number"
                 min="0"
+                step="0.01"
                 placeholder="ไม่จำกัด" /></label
             ><label
               >อัตราคอมมิชชัน (%)<input

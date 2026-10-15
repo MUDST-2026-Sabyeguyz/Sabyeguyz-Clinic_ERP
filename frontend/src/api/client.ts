@@ -228,6 +228,7 @@ export type CoursePurchase = {
   expired: boolean
   usable: boolean
   status: string
+  receiptId?: number
 }
 export type PaymentLabel = 'FullyPaid' | 'Installment' | 'Deposit'
 export type SaleSummary = {
@@ -556,8 +557,12 @@ export const courseApi = {
       })
       return { ...ledger, movements }
     }),
-  use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) =>
-    api.post<CoursePurchase>('/api/course-usages', body),
+  use: (body: {
+    coursePurchaseId: number
+    appointmentId?: number
+    treatingStaffId?: number
+    note?: string
+  }) => api.post<CoursePurchase>('/api/course-usages', body),
   reverse: (movementId: number, reason: string) =>
     api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, { reason }),
   cancel: (id: number, reason: string) =>
@@ -752,9 +757,11 @@ export const commissionApi = {
         treatingStaffName: string
         ownerStaffId: number | null
         ownerStaffName: string
-        gross: number
+        /** null (with ownerNetPending) while the sale month is not closed: the Owner commission is not known yet */
+        gross: number | null
         treatmentFee: number
-        ownerNet: number
+        ownerNet: number | null
+        ownerNetPending: boolean
       }>
     >(`/api/commission/treatment-report?${new URLSearchParams({ from, to })}`),
   closings: (month: string) =>
@@ -772,7 +779,163 @@ export const commissionApi = {
     >(`/api/commission/closings?month=${month}-01`),
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
   closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
-  treatmentFees: () => api.get('/api/commission/treatment-fees'),
+  preview: (courseId: number, sellerStaffId?: number) =>
+    api.get<{
+      netPrice: number
+      commissionRate: number
+      commissionPool: number
+      commissionPerVisit: number
+    }>(
+      `/api/commission/preview?${new URLSearchParams({
+        courseId: String(courseId),
+        ...(sellerStaffId ? { sellerStaffId: String(sellerStaffId) } : {}),
+      })}`,
+    ),
+  treatmentFees: () => api.get<TreatmentFeeRule[]>('/api/commission/treatment-fees'),
+  createTreatmentFee: (body: TreatmentFeeInput) =>
+    api.post<TreatmentFeeRule>('/api/commission/treatment-fees', body),
+  updateTreatmentFee: (id: number, body: Partial<TreatmentFeeInput>) =>
+    api.put<TreatmentFeeRule>(`/api/commission/treatment-fees/${id}`, body),
+  setTreatmentFeeEnabled: (id: number, enabled: boolean) =>
+    api.patch<TreatmentFeeRule>(
+      `/api/commission/treatment-fees/${id}/${enabled ? 'enable' : 'disable'}`,
+      {},
+    ),
+  backfillSingleVisitFees: (from: string, to: string) =>
+    api.post<{ recorded: number }>(
+      `/api/commission/single-visit-fees/backfill?${new URLSearchParams({ from, to })}`,
+      {},
+    ),
+  reopenClosing: (id: number, reason: string) =>
+    api.post<{ id: number; status: string }>(`/api/commission/closings/${id}/reopen`, { reason }),
+  myPayments: () => api.get<StaffPayment[]>('/api/commission/my-payments'),
+  payments: (month: string) => api.get<StaffPayment[]>(`/api/commission/payments?month=${month}`),
+  preparePayments: (month: string) =>
+    api.post<StaffPayment[]>(`/api/commission/payments/prepare?month=${month}`, {}),
+  closePayment: (id: number) => api.post<StaffPayment>(`/api/commission/payments/${id}/close`, {}),
+  reopenPayment: (id: number) =>
+    api.post<StaffPayment>(`/api/commission/payments/${id}/reopen`, {}),
+  payPayment: (id: number) => api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, {}),
+  adjustments: (staffId?: number) =>
+    api.get<PayAdjustment[]>(`/api/commission/adjustments${staffId ? `?staffId=${staffId}` : ''}`),
+  createAdjustment: (body: AdjustmentInput) =>
+    api.post<PayAdjustment>('/api/commission/adjustments', body),
+  approveAdjustment: (id: number) =>
+    api.post<PayAdjustment>(`/api/commission/adjustments/${id}/approve`, {}),
+  cancelAdjustment: (id: number) =>
+    api.post<PayAdjustment>(`/api/commission/adjustments/${id}/cancel`, {}),
+  externalReviewAdjustment: (id: number) =>
+    api.post<PayAdjustment>(`/api/commission/adjustments/${id}/external-review`, {}),
+  createApplication: (id: number, month: string, amount?: number) =>
+    api.post<AdjustmentApplicationRow>(`/api/commission/adjustments/${id}/applications`, {
+      month,
+      amount,
+    }),
+  approveApplication: (id: number, reference?: string) =>
+    api.post<AdjustmentApplicationRow>(`/api/commission/adjustment-applications/${id}/approve`, {
+      reference,
+    }),
+  cancelApplication: (id: number) =>
+    api.post<AdjustmentApplicationRow>(`/api/commission/adjustment-applications/${id}/cancel`, {}),
+}
+
+export type TreatmentFeeRule = {
+  id: number
+  feeType: 'Fixed' | 'Percentage'
+  feeValue: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  enabled: boolean
+  /** a ledger row already copied the rule: its type, value and start can no longer change */
+  used: boolean
+}
+export type TreatmentFeeInput = {
+  feeType: 'Fixed' | 'Percentage'
+  feeValue: number
+  effectiveFrom: string
+  effectiveTo?: string | null
+}
+export type AdjustmentApplicationRow = {
+  id: number
+  adjustmentId: number
+  amount: number
+  status: 'Draft' | 'Applied' | 'Cancelled'
+  approved: boolean
+  approvalReference: string | null
+}
+export type StaffPayment = {
+  id: number
+  staffId: number
+  staffName: string
+  month: string
+  status: 'OPEN' | 'CLOSED' | 'PAID'
+  /** null = not calculated yet (a session still waits for its sale month to be closed), never 0 */
+  courseCommission: number | null
+  singleVisitFee: number | null
+  substituteFee: number | null
+  adjustment: number | null
+  net: number | null
+  paidAt: string | null
+  closingId: number | null
+  pendingSessions: number
+  applications: AdjustmentApplicationRow[]
+}
+export type PayAdjustment = {
+  id: number
+  staffId: number
+  staffName: string
+  originalMonth: string
+  appliedMonth: string
+  amount: number
+  reason: string
+  status: 'Pending' | 'Approved' | 'PartiallyApplied' | 'Applied' | 'ExternalReview' | 'Cancelled'
+  processed: number
+  remaining: number
+  allocationId: number | null
+  singleVisitFeeId: number | null
+  courseId: number | null
+  visitId: number | null
+  saleTransactionId: number | null
+  applications: AdjustmentApplicationRow[]
+}
+export type AdjustmentInput = {
+  staffId: number
+  amount: number
+  reason: string
+  originalMonth?: string
+  appliedMonth?: string
+  allocationId?: number
+  singleVisitFeeId?: number
+  courseId?: number
+  visitId?: number
+  saleTransactionId?: number
+}
+
+export type RefundItem = { courseId: number; refundAmount: number; cancelledVisits: number }
+export type RefundRow = {
+  id: number
+  paymentId: number
+  amount: number
+  paymentMethodCode: string
+  status: 'Pending' | 'Completed' | 'Failed' | 'Voided'
+  requestedAt: string
+  refundedAt: string | null
+  items: RefundItem[]
+}
+export const refundApi = {
+  forPayment: (paymentId: number) => api.get<RefundRow[]>(`/api/payments/${paymentId}/refunds`),
+  request: (
+    paymentId: number,
+    body: {
+      amount: number
+      paymentMethodCode: string
+      reason: string
+      items?: RefundItem[]
+    },
+  ) => api.post<RefundRow>(`/api/payments/${paymentId}/refunds`, body),
+  complete: (id: number) => api.post<RefundRow>(`/api/refunds/${id}/complete`, {}),
+  fail: (id: number) => api.post<RefundRow>(`/api/refunds/${id}/fail`, {}),
+  void: (id: number) => api.post<RefundRow>(`/api/refunds/${id}/void`, {}),
 }
 
 export type ClinicResource = {

@@ -56,16 +56,15 @@ public class SalesTransactionService {
     /** CoursePurchase: records the sale line first, then the Course that references it. */
     @Transactional
     public CoursePurchase recordCoursePurchase(Receipt receipt, Patient patient, Branch branch, Service courseTemplate,
-                                                Staff sellerStaff, Staff caseOwnerStaff, BigDecimal priceOverride,
+                                                Staff sellerStaff, BigDecimal priceOverride,
                                                 Integer totalVisitsOverride, Integer bonusVisitsOverride,
-                                                Discount discount, List<CourseService.SaleShare> saleShares,
-                                                LocalDate saleDate, Long actorId) {
+                                                Discount discount, LocalDate saleDate, Long actorId) {
         BigDecimal price = priceOverride != null ? priceOverride : courseTemplate.getServicePrice();
         SalesTransaction transaction = transactions.save(base(receipt, patient, branch, courseTemplate,
                 TransactionType.CoursePurchase, null, sellerStaff, 1, price, null, discount, UNIT_COURSE, actorId));
 
-        Course course = courseService.sell(receipt, transaction, courseTemplate, sellerStaff, caseOwnerStaff,
-                totalVisitsOverride, bonusVisitsOverride, saleShares, saleDate, actorId);
+        Course course = courseService.sell(receipt, transaction, courseTemplate, sellerStaff,
+                totalVisitsOverride, bonusVisitsOverride, saleDate, actorId);
         return new CoursePurchase(transaction, course);
     }
 
