@@ -32,6 +32,7 @@ const navItems = computed(() =>
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
+        { to: '/staff/refunds', label: 'คืนเงิน' },
         { to: '/staff/commission', label: 'คอมมิชชัน' },
         { to: '/staff/personnel', label: 'บุคลากร' },
         { to: '/staff/reports', label: 'รายงาน' },
