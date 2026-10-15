@@ -140,31 +140,31 @@ public class CypressCommissionEntitiesController {
         Map<String, Object> out = new LinkedHashMap<>();
         Long[] allocationId = new Long[1];
         out.put("allocation", attempt(() -> {
-            var saved = fees.saveAndFlush(fee(ids, AllocationEntryType.Allocation, "100.00", 1));
+            var saved = fees.saveAndFlush(fee(ids, AllocationEntryType.Allocation, "100.00", 11));
             allocationId[0] = saved.getId();
             var read = fees.findById(saved.getId()).orElseThrow();
             return map("id", read.getId(), "entryType", read.getEntryType().name(), "feeAmount", read.getFeeAmount(),
                     "feeType", read.getFeeType().name(), "version", read.getFeeVersion(), "month", read.getServiceDate().toString());
         }));
         out.put("reversalWithoutReason", attempt(() -> {
-            var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 1);
+            var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 11);
             row.setReversesFee(fees.findById(allocationId[0]).orElseThrow());
             return map("id", fees.saveAndFlush(row).getId());
         }));
         out.put("reversal", attempt(() -> {
-            var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 1);
+            var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 11);
             row.setReversesFee(fees.findById(allocationId[0]).orElseThrow());
             row.setReason("บันทึกผิด");
             var saved = fees.saveAndFlush(row);
             return map("id", saved.getId(), "reversesAllocation", saved.getReversesFee().getId().equals(allocationId[0]));
         }));
         out.put("secondReversalOfTheSameFee", attempt(() -> {
-            var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 2);
+            var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 12);
             row.setReversesFee(fees.findById(allocationId[0]).orElseThrow());
             row.setReason("ซ้ำ");
             return map("id", fees.saveAndFlush(row).getId());
         }));
-        out.put("negativeAllocation", attempt(() -> map("id", fees.saveAndFlush(fee(ids, AllocationEntryType.Allocation, "-5.00", 3)).getId())));
+        out.put("negativeAllocation", attempt(() -> map("id", fees.saveAndFlush(fee(ids, AllocationEntryType.Allocation, "-5.00", 13)).getId())));
         return out;
     }
 

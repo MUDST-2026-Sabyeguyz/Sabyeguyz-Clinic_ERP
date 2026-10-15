@@ -48,7 +48,7 @@ describe('v2 commission tables (entities and database rules)', () => {
 
   it('saves a single-visit fee, its reversal and keeps the one-reversal and reason rules', function () {
     check('single-visit-fee', this.ids).then((body) => {
-      expect(body.allocation).to.include({ entryType: 'Allocation', feeType: 'Percentage', version: 1 })
+      expect(body.allocation).to.include({ entryType: 'Allocation', feeType: 'Percentage', version: 11 })
       expect(Number(body.allocation.feeAmount)).to.equal(100)
       expect(body.reversalWithoutReason.rejected).to.contain('chk_single_visit_fee_entry')
       expect(body.reversal.reversesAllocation).to.equal(true)

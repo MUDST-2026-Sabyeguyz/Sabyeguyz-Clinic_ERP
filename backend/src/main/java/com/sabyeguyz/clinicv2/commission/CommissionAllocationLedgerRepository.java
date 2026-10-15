@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CommissionAllocationLedgerRepository extends JpaRepository<CommissionAllocationLedger, Long> {
     List<CommissionAllocationLedger> findByCourseIdOrderByIdDesc(Long courseId);
 
+    List<CommissionAllocationLedger> findByVisitUsageIdOrderByIdAsc(Long visitUsageId);
+
     Optional<CommissionAllocationLedger> findByVisitUsageIdAndEntryType(Long visitUsageId, AllocationEntryType entryType);
 
     List<CommissionAllocationLedger> findByVisitDateBetweenOrderByVisitDateDescIdDesc(LocalDate from, LocalDate to);

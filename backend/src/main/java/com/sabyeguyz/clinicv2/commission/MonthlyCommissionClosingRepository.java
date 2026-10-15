@@ -8,4 +8,6 @@ public interface MonthlyCommissionClosingRepository extends JpaRepository<Monthl
     Optional<MonthlyCommissionClosing> findByClosingMonthAndStaffId(String closingMonth, Long staffId);
 
     List<MonthlyCommissionClosing> findByClosingMonth(String closingMonth);
+
+    boolean existsByCommissionSchemeId(Long commissionSchemeId);
 }
