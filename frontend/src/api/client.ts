@@ -283,6 +283,14 @@ export type DashboardResponse = {
   assessmentRevenue: number
   receiptsIssued: number
   receiptsVoided: number
+  newCustomers: number
+  returningCustomers: number
+  courseRenewals: number
+  packageUpdates: number
+  packageUpdatesScope: 'CLINIC'
+  salesTotal: number
+  cashReceived: number
+  dailySales: Array<{ date: string; amount: number }>
 }
 export type AppointmentReport = {
   byStatus: Array<{ status: string; appointments: number }>
