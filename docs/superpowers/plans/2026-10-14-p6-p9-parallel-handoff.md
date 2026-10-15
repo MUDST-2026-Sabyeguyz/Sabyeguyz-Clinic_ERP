@@ -25,8 +25,10 @@
 
 | ฝั่ง | Branch | เจ้าของ | Deliverables |
 |---|---|---|---|
-| A | `codex/p6-p7-identifiers-courses` | เรา | P6 HN/receipt/sequence compatibility; P7 expiry/history/transfer และ attachment เมื่อผ่าน gate |
-| B | `codex/p8-p9-reports-release` | เพื่อน | P8 dashboard และ audit Calendar/backlog; P9 importer, CI, migration dry run, acceptance/release evidence |
+| A | `feat/p6-p7-identifiers-courses` | เพื่อนร่วมทีม | P6 HN/receipt/sequence compatibility; P7 expiry/history/transfer และ attachment เมื่อผ่าน gate |
+| B | `feat/p8-p9-reports-release` | นายท่าน/Alice | P8 dashboard และ audit Calendar/backlog; P9 importer, CI, migration dry run, acceptance/release evidence |
+
+อัปเดต execution 15 ตุลาคม: สลับผู้รับผิดชอบตามคำสั่งนายท่านและใช้ prefix `feat/` ตามชื่อ branch จริง. ให้ใช้ branch/owner ในตารางนี้เป็นหลัก. ฝั่ง B รับ `844e83a` ที่มีเอกสารนี้ก่อน execution. เพื่อนส่ง `edfc4e6` ระบุว่าเสร็จเฉพาะ A1 และ A2/A3 ยังรอ gate จึงยังไม่เข้าเงื่อนไข merge ทั้ง P6/P7.
 
 สองฝั่งทำได้พร้อมกัน แต่ dependency เป็นดังนี้:
 
@@ -84,11 +86,11 @@ P9 harness/CI diagnosis เริ่มทันทีได้; P9 final dry ru
 
 Local branches สร้างแล้วจาก hash ที่ระบุ เอกสารนี้ยังเป็น untracked file บน checkout ปัจจุบัน ให้ส่งไฟล์ให้เพื่อนโดยตรงก่อน หรือ commit/push เอกสารเมื่อพร้อมแชร์; Git branch ยังไม่ได้มีไฟล์นี้ใน tree จนกว่าจะ commit
 
-ขั้นตอนเรา:
+ขั้นตอนเพื่อน (ฝั่ง A):
 
 ```powershell
 git status --short
-git switch codex/p6-p7-identifiers-courses
+git switch feat/p6-p7-identifiers-courses
 git rev-parse HEAD
 ```
 
@@ -97,21 +99,21 @@ git rev-parse HEAD
 ขั้นตอนเผยแพร่ branch หลังพร้อมแชร์ (ยังไม่ได้รัน):
 
 ```powershell
-git push -u origin codex/p6-p7-identifiers-courses
-git push -u origin codex/p8-p9-reports-release
+git push -u origin feat/p6-p7-identifiers-courses
+git push -u origin feat/p8-p9-reports-release
 ```
 
-เพื่อนใช้ clone ของตัวเอง แล้ว:
+เรา/Alice ใช้ checkout ฝั่ง B แล้ว:
 
 ```powershell
 git fetch origin
-git switch --track origin/codex/p8-p9-reports-release
+git switch --track origin/feat/p8-p9-reports-release
 git merge-base --is-ancestor b6473b807c344891e1cc188473194845e164a1a2 HEAD
 git rev-parse HEAD
 git status --short
 ```
 
-คำสั่ง switch --track ใช้ครั้งแรกที่ยังไม่มี local branch เท่านั้น ถ้ามีแล้วใช้ `git switch codex/p8-p9-reports-release` และตรวจ divergence ก่อน pull. หาก branch ยังไม่ถูก push ให้รอ remote branch หรือสร้างจาก exact base ที่ fetch มาได้ด้วย `git switch -c codex/p8-p9-reports-release b6473b807c344891e1cc188473194845e164a1a2`
+คำสั่ง switch --track ใช้ครั้งแรกที่ยังไม่มี local branch เท่านั้น ถ้ามีแล้วใช้ `git switch feat/p8-p9-reports-release` และตรวจ divergence ก่อน pull. หาก branch ยังไม่ถูก push ให้รอ remote branch หรือสร้างจาก exact base ที่ fetch มาได้ด้วย `git switch -c feat/p8-p9-reports-release b6473b807c344891e1cc188473194845e164a1a2`
 
 ใช้เครื่อง/clone แยกกันจะไม่มี working files ปะปน ถ้าทำบนเครื่องเดียวให้ใช้ worktree แยกและ process/DB แยก; runner `backend/scripts/run-v2-tests.cjs` ใช้ ports 18080/19001 คงที่ จึงห้ามรันสอง suite พร้อมกันบน host เดียวจนกว่าจะจัด ports ใหม่ครบ config
 
@@ -176,9 +178,9 @@ npx cypress run --config-file cypress.v2.config.ts
 - [ ] GREEN expiry/transfer/courses/history API + course browser + frontend build; ส่ง schema/API/date-policy/attachment metadata ให้ B; commit แต่ละ deliverable
 - [ ] ออก report P6/P7 พร้อม test hash/results/gated remainder; freeze contract ที่จะใช้ P9
 
-## 8. ฝั่ง B: Context และขั้นตอนสำหรับเพื่อน
+## 8. ฝั่ง B: Context และขั้นตอนสำหรับเรา/Alice
 
-คุณรับผิดชอบ `codex/p8-p9-reports-release` จาก base b6473b8. อีกฝั่งทำ P6/P7; คุณไม่ต้อง implement numbering/expiry ซ้ำ และไม่ต้องรอทั้งฝั่งก่อนเริ่ม baseline, P8 audit, migration harness และ CI diagnosis
+คุณรับผิดชอบ `feat/p8-p9-reports-release` จาก base b6473b8. อีกฝั่งทำ P6/P7; คุณไม่ต้อง implement numbering/expiry ซ้ำ และไม่ต้องรอทั้งฝั่งก่อนเริ่ม baseline, P8 audit, migration harness และ CI diagnosis
 
 ### B1 — Audit P8 ปัจจุบันและคำตอบ Q11/Q12
 
@@ -224,10 +226,10 @@ npx cypress run --config-file cypress.v2.config.ts
 - [ ] A ส่ง reviewed commit hash/contract freeze/migration list/test report และ push branch แล้ว B มี working tree สะอาดก่อน merge:
 
 ```powershell
-git switch codex/p8-p9-reports-release
+git switch feat/p8-p9-reports-release
 git fetch origin
-git log --oneline HEAD..origin/codex/p6-p7-identifiers-courses
-git merge --no-ff origin/codex/p6-p7-identifiers-courses
+git log --oneline HEAD..origin/feat/p6-p7-identifiers-courses
+git merge --no-ff origin/feat/p6-p7-identifiers-courses
 ```
 
 - [ ] Review shared files ด้วย ownership matrix; ห้าม resolve โดยเลือก ours/theirs ทั้งไฟล์; migrations ห้าม version ชนกัน และห้าม renumber file ที่ถูก apply ใน DB shared แล้ว
@@ -251,7 +253,7 @@ git merge --no-ff origin/codex/p6-p7-identifiers-courses
 
 ## 10. ข้อความพร้อมส่งให้เพื่อน
 
-> รับผิดชอบ P8/P9 บน `codex/p8-p9-reports-release` จาก base `b6473b807c344891e1cc188473194845e164a1a2` ของ `feat/backend-v2-integration` ครับ/ค่ะ เราทำ P6/P7 บน `codex/p6-p7-identifiers-courses` อ่านเอกสารนี้กับ non-commission scope/plan และ API contract ก่อน เริ่ม baseline → audit reports/Calendar → dashboard หลัง Q11 → P9 fixture/reconciliation/CI ได้ทันที Calendar มี code ที่ merge แล้วจึงตรวจและต่อยอด ห้ามสร้างซ้ำ คุณเป็นเจ้าของ importer/CI เราประสาน schema migrations และ numbering/expiry contract; shared client.ts/BackOffice/API docs ให้แจ้ง section ก่อนแก้ Q3/Q4/Q7/Q13 ของเรากับ Q11/Q12 ของคุณยังต้องยืนยันก่อน behavior ที่เกี่ยวข้อง เมื่อเราส่ง reviewed hash/contract freeze ให้ merge branch เราเข้า branch คุณแล้วทำ final migration dry run/full regression รวม commission และ browser; ส่งผลพร้อม tested hash/ข้อจำกัดก่อนเสนอ merge กลับ parent ไม่ deploy หรือ migrate ข้อมูลจริง และไม่อ้าง P6–P9 ครบถ้ายังมี gated requirements
+> คุณรับผิดชอบ P6/P7 บน `feat/p6-p7-identifiers-courses` ส่วนเรา/Alice ทำ P8/P9 บน `feat/p8-p9-reports-release` จาก base `b6473b8` เดียวกัน อ่าน non-commission spec/plan และ API contract ก่อน คุณเป็นผู้ประสาน schema migrations และ numbering/expiry contract ส่วนเราเป็นเจ้าของ importer/CI และ final integration. shared client.ts/BackOffice/API docs ให้แจ้ง section ก่อนแก้ Q3/Q4/Q7/Q13 ของคุณกับ Q11/Q12 ของเราต้องยืนยันก่อนเปลี่ยน behavior ที่เกี่ยวข้อง เมื่อ P6/P7 พร้อมให้ส่ง reviewed hash, migration list, approved literal examples และ test report มาให้เรา merge และทำ final P9. รายงาน `edfc4e6` ระบุ A1 เสร็จแต่ A2/A3 ยังรอคำตอบ เราจึงยังไม่ merge ทั้ง branch ตามเงื่อนไขนายท่าน. ไม่ deploy หรือ migrate ข้อมูลจริง และไม่อ้าง P6–P9 ครบถ้ายังมี gated requirements
 
 ## 11. Definition of done
 
