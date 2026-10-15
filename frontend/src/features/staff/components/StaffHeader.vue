@@ -3,6 +3,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import logo from '@/assets/sabyeguyz-logo.png'
 import drawerLogo from '@/assets/sabyeguyz-logo2.png'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import {
+  managerBranches,
+  selectedManagerBranch,
+  setSelectedManagerBranch,
+} from '@/features/staff/data/managerBranch'
 const profileOpen = ref(false)
 const menuOpen = ref(false)
 const route = useRoute()
@@ -20,6 +26,7 @@ const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
 } | null
 const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
+const activeManagerBranch = ref(selectedManagerBranch())
 const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
 const navItems = computed(() =>
@@ -113,6 +120,7 @@ onMounted(() => {
   navRef.value?.addEventListener('pointerover', handleNavHover)
   navRef.value?.addEventListener('pointermove', handleNavHover)
   navRef.value?.addEventListener('focusin', handleNavHover)
+  window.addEventListener('manager-branch-changed', syncActiveManagerBranch)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', positionPillWithoutAnimation)
@@ -120,6 +128,7 @@ onBeforeUnmount(() => {
   navRef.value?.removeEventListener('pointerover', handleNavHover)
   navRef.value?.removeEventListener('pointermove', handleNavHover)
   navRef.value?.removeEventListener('focusin', handleNavHover)
+  window.removeEventListener('manager-branch-changed', syncActiveManagerBranch)
   if (readyFrame) cancelAnimationFrame(readyFrame)
   if (routeFrame) cancelAnimationFrame(routeFrame)
   if (hoverFrame) cancelAnimationFrame(hoverFrame)
@@ -142,6 +151,16 @@ function signOut() {
   localStorage.removeItem('staffUsername')
   localStorage.removeItem('mockStaffRole')
   localStorage.removeItem('mockStaffEmail')
+}
+function syncActiveManagerBranch() {
+  activeManagerBranch.value = selectedManagerBranch()
+}
+function switchManagerBranch(code: string) {
+  const branch = managerBranches.find((item) => item.code === code)
+  if (!branch) return
+  setSelectedManagerBranch(branch)
+  activeManagerBranch.value = branch
+  window.dispatchEvent(new CustomEvent('manager-branch-changed'))
 }
 </script>
 
@@ -177,6 +196,18 @@ function signOut() {
         {{ item.label }}
       </RouterLink>
     </nav>
+    <div v-if="isManager" class="branch-switcher">
+      <FilterDropdown
+        class="manager-branch-filter"
+        :model-value="activeManagerBranch?.code ?? ''"
+        :options="managerBranches.map((branch) => ({ value: branch.code, label: branch.name }))"
+        default-label="เลือกสาขา"
+        label="เลือกสาขา"
+        :clear-on-reselect="false"
+        hide-default-option
+        @update:model-value="switchManagerBranch"
+      />
+    </div>
     <div class="profile-wrap">
       <button
         class="profile-trigger"
