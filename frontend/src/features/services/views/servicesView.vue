@@ -323,7 +323,7 @@ async function submit() {
         : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
     const sale = await salesApi.create({
       patientId: patient.value.id,
-      branchCode: patient.value.branchCode || '',
+      branchCode: patient.value.branchCode || branches.value[0]?.code || '',
       salespersonStaffId: selectedStaffId.value,
       note: note.value,
       items: [{ type, referenceId, quantity: 1 }],
