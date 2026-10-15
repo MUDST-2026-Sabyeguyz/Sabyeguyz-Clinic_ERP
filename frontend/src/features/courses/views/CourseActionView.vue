@@ -1564,9 +1564,6 @@ function closePrintSuccess() {
             </div>
             <div class="course-after-expiry-tools">
               <div><span>วันที่คงเหลือ</span><strong>{{ daysUntilExpiry(course) }} วัน</strong></div>
-              <button type="button" title="แก้ไขผ่านเมนูต่ออายุคอร์ส">
-                แก้ไขวันหมดอายุ
-              </button>
             </div>
           </div>
           <div class="course-after-actions">
@@ -1643,9 +1640,6 @@ function closePrintSuccess() {
             </div>
             <aside>
               <div><span>วันที่คงเหลือ</span><strong>{{ daysUntilExpiry(course) }} วัน</strong></div>
-              <button type="button" title="แก้ไขผ่านเมนูต่ออายุคอร์ส">
-                แก้ไขวันหมดอายุ
-              </button>
             </aside>
           </div>
           <div class="course-recipient-counts">
@@ -5782,16 +5776,6 @@ function closePrintSuccess() {
   color: #14615c;
   font-size: 22px;
 }
-.course-recipient-dates aside button {
-  min-height: 42px;
-  border: 1px solid #d6e0db;
-  border-radius: 8px;
-  color: #14615c;
-  background: #fff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-}
 .course-recipient-counts {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -6048,16 +6032,6 @@ function closePrintSuccess() {
 .course-after-expiry-tools strong {
   color: #14615c;
   font-size: 22px;
-}
-.course-after-expiry-tools button {
-  min-height: 42px;
-  border: 1px solid #d6e0db;
-  border-radius: 8px;
-  color: #14615c;
-  background: #fff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
 }
 .course-after-counts article {
   min-height: 90px;
