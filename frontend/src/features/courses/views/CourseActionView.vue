@@ -1631,7 +1631,11 @@ function closePrintSuccess() {
           <p class="course-manager-used">
             ใช้แล้ว {{ course.total - course.balance }} จาก {{ course.total }} ครั้ง
           </p>
+          <p v-if="course.bonusSessions > 0" class="course-manager-used">
+            สิทธิ์เพิ่มเติม {{ course.bonusSessions }} ครั้ง (รวมในจำนวนทั้งหมดแล้ว)
+          </p>
           <div class="course-manager-actions">
+            <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
             <button type="button" @click="start('transfer', course)">แชร์คอร์ส</button>
             <button type="button" :disabled="!course.usable" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
