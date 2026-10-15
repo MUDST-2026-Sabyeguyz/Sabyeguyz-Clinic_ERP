@@ -32,7 +32,6 @@ const timeDrawerOpen = ref(false)
 const scheduleView = ref<'list' | 'day' | 'week'>('list')
 const listServiceMode = ref<'single' | 'course'>('single')
 const calendarSyncOpen = ref(false)
-const query = ref('')
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
 const startDate = ref('')
@@ -48,6 +47,12 @@ const patients = ref<Patient[]>([])
 const services = ref<ServiceOption[]>([])
 const therapists = ref<Therapist[]>([])
 const patientQuery = ref('')
+const newPatientForm = ref({
+  firstName: '',
+  lastName: '',
+  nickname: '',
+  phone: '',
+})
 const showPatientResults = ref(false)
 const editingId = ref<number | null>(null)
 const savingStatusId = ref<number | null>(null)
@@ -126,16 +131,11 @@ const drawerServiceLabel = computed(() => {
 const morningTimeOptions = computed(() => timeOptions.filter((time) => Number(time.slice(0, 2)) < 12))
 const afternoonTimeOptions = computed(() => timeOptions.filter((time) => Number(time.slice(0, 2)) >= 12))
 const filteredAppointments = computed(() => {
-  const keyword = query.value.trim().toLowerCase()
   const direction = sortOrder.value === 'newest' ? -1 : 1
   return appointments.value
     .filter(
       (item) =>
         (listServiceMode.value === 'course' ? isCourseAppointment(item) : !isCourseAppointment(item)) &&
-        (!keyword ||
-          `${item.patient.hn} ${item.patient.fullName} ${item.service.name} ${item.therapist.fullName}`
-            .toLowerCase()
-            .includes(keyword)) &&
         (!startDate.value || item.startAt.slice(0, 10) >= startDate.value) &&
         (!endDate.value || item.startAt.slice(0, 10) <= endDate.value),
     )
@@ -319,6 +319,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   selectedCourseId.value = 0
   timeDrawerOpen.value = false
   patientQuery.value = ''
+  newPatientForm.value = { firstName: '', lastName: '', nickname: '', phone: '' }
   showPatientResults.value = false
   const branch = branchOptions.value[0]
   const branchCode = branch?.code ?? ''
@@ -394,7 +395,11 @@ function goToEdit(item: Appointment) {
 function goToAppointmentList() {
   timeDrawerOpen.value = false
   viewMode.value = 'list'
-  void router.push({ name: 'staff-appointments' })
+  if (createSource.value === 'calendar') {
+    void router.push({ name: 'staff-appointment-calendar' })
+  } else {
+    void router.push({ name: 'staff-appointments' })
+  }
   window.scrollTo({ top: 0, behavior: 'auto' })
 }
 function choosePatient(patient: Patient) {
@@ -413,6 +418,14 @@ function changePatientQuery() {
 function hidePatientResults() {
   window.setTimeout(() => (showPatientResults.value = false), 160)
 }
+function changeAppointmentPatientType() {
+  errorMessage.value = ''
+  form.value.patientId = 0
+  patientQuery.value = ''
+  patientCourses.value = []
+  selectedCourseId.value = 0
+  showPatientResults.value = false
+}
 function changeSchedule() {
   if (scheduleError.value) errorMessage.value = ''
 }
@@ -424,6 +437,10 @@ function confirmAppointmentTime() {
   timeDrawerOpen.value = false
 }
 function requestSaveConfirmation() {
+  if (appointmentPatientType.value === 'NEW') {
+    errorMessage.value = 'ยังไม่รองรับการบันทึกผู้ป่วย NEW จนกว่าจะเชื่อมต่อ backend'
+    return
+  }
   if (!savingAppointment.value) pendingSaveConfirmation.value = true
 }
 function confirmSave() {
@@ -467,7 +484,6 @@ async function save() {
       })
     }
 
-    query.value = ''
     selectedBranch.value = 'ทั้งหมด'
     selectedDate.value = ''
     startDate.value = ''
@@ -561,7 +577,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
       <div v-if="viewMode !== 'list'" class="appointment-form-page">
         <div class="appointment-back-row">
           <button class="appointment-back" type="button" @click="goToAppointmentList">
-            ← กลับไปหน้านัดหมาย
+            {{ isCalendarCreate ? '← กลับไปหน้าปฏิทิน' : '← กลับไปหน้านัดหมาย' }}
           </button>
         </div>
         <section
@@ -653,32 +669,42 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               <textarea v-model.trim="form.note" maxlength="500" rows="2" />
             </label>
           </div>
-          <div v-else class="form-grid appointment-create-grid">
+          <div
+            v-else
+            class="form-grid appointment-create-grid"
+            :class="{ 'is-new-patient': appointmentPatientType === 'NEW' }"
+          >
             <fieldset v-if="!isEditing" class="appointment-patient-type-field">
               <legend>ประเภทผู้ป่วย</legend>
               <div class="appointment-patient-type-options">
                 <label>
-                  <input v-model="appointmentPatientType" type="radio" value="CURRENT" />
+                  <input
+                    v-model="appointmentPatientType"
+                    type="radio"
+                    value="CURRENT"
+                    @change="changeAppointmentPatientType"
+                  />
                   Current
                 </label>
                 <label>
-                  <input v-model="appointmentPatientType" type="radio" value="NEW" />
+                  <input
+                    v-model="appointmentPatientType"
+                    type="radio"
+                    value="NEW"
+                    @change="changeAppointmentPatientType"
+                  />
                   NEW
                 </label>
               </div>
             </fieldset>
-            <label class="appointment-patient-field">
+            <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-patient-field">
               ผู้ป่วย
               <div class="appointment-patient-picker">
                 <input
                   v-model.trim="patientQuery"
                   :readonly="isEditing"
                   :class="{ 'is-invalid': patientError }"
-                  :placeholder="
-                    appointmentPatientType === 'NEW'
-                      ? 'กรอกชื่อผู้ป่วยใหม่'
-                      : 'กรอกชื่อผู้ป่วยหรือรหัส HN'
-                  "
+                  placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
                   required
                   @focus="showPatientResults = true"
                   @input="changePatientQuery"
@@ -707,10 +733,43 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 </p>
               </div>
             </label>
-            <label class="appointment-phone-field">
+            <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-phone-field">
               เบอร์โทรศัพท์
               <input :value="selectedFormPatient?.phone || ''" readonly placeholder="เบอร์โทรศัพท์" />
             </label>
+            <div v-else class="appointment-new-patient-fields">
+              <label>
+                <span>ชื่อ <em>*</em></span>
+                <input
+                  v-model.trim="newPatientForm.firstName"
+                  autocomplete="given-name"
+                  placeholder="กรอกชื่อ"
+                />
+              </label>
+              <label>
+                <span>นามสกุล <em>*</em></span>
+                <input
+                  v-model.trim="newPatientForm.lastName"
+                  autocomplete="family-name"
+                  placeholder="กรอกนามสกุล"
+                />
+              </label>
+              <label>
+                <span>ชื่อเล่น <em>*</em></span>
+                <input v-model.trim="newPatientForm.nickname" placeholder="กรอกชื่อเล่น" />
+              </label>
+              <label>
+                <span>เบอร์โทรศัพท์ <em>*</em></span>
+                <input
+                  v-model.trim="newPatientForm.phone"
+                  type="tel"
+                  inputmode="numeric"
+                  autocomplete="tel"
+                  maxlength="10"
+                  placeholder="กรอกเบอร์โทรศัพท์"
+                />
+              </label>
+            </div>
             <fieldset class="appointment-service-mode-field">
               <legend>ประเภทบริการ</legend>
               <div class="appointment-service-mode-options">
@@ -879,51 +938,46 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
       </div>
       <section v-if="viewMode === 'list'" class="staff-panel appointment-panel">
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-        <div class="appointment-list-mode-toggle" aria-label="เลือกรูปแบบรายการ">
-          <button
-            type="button"
-            :class="{ active: listServiceMode === 'single' }"
-            @click="listServiceMode = 'single'"
-          >
-            รายครั้ง
-          </button>
-          <button
-            type="button"
-            :class="{ active: listServiceMode === 'course' }"
-            @click="listServiceMode = 'course'"
-          >
-            รายคอร์ส
-          </button>
-        </div>
-        <header v-show="scheduleView === 'list'" class="panel-head appointment-list-filters">
-          <div class="search-box">
-            <span class="search-icon" aria-hidden="true"
-              ><svg viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="6" />
-                <path d="m16 16 4 4" /></svg></span
-            ><input v-model="query" placeholder="ค้นหาชื่อ เบอร์โทร หรือรหัส HN" />
+        <div v-show="scheduleView === 'list'" class="appointment-list-controls">
+          <div class="appointment-list-mode-toggle" aria-label="เลือกรูปแบบรายการ">
+            <button
+              type="button"
+              :class="{ active: listServiceMode === 'single' }"
+              @click="listServiceMode = 'single'"
+            >
+              รายครั้ง
+            </button>
+            <button
+              type="button"
+              :class="{ active: listServiceMode === 'course' }"
+              @click="listServiceMode = 'course'"
+            >
+              รายคอร์ส
+            </button>
           </div>
-          <label class="appointment-date-range">
-            <span>วันที่เริ่มต้น</span>
-            <ThaiDatePicker
-              v-model="startDate"
-              numeric-month
-              show-calendar-icon
-              hide-caret
-              placeholder="วว/ดด/ปปปป"
-            />
-          </label>
-          <label class="appointment-date-range">
-            <span>วันที่สิ้นสุด</span>
-            <ThaiDatePicker
-              v-model="endDate"
-              numeric-month
-              show-calendar-icon
-              hide-caret
-              placeholder="วว/ดด/ปปปป"
-            />
-          </label>
-        </header>
+          <header class="panel-head appointment-list-filters">
+            <label class="appointment-date-range">
+              <span>วันที่เริ่มต้น</span>
+              <ThaiDatePicker
+                v-model="startDate"
+                numeric-month
+                show-calendar-icon
+                hide-caret
+                placeholder="วว/ดด/ปปปป"
+              />
+            </label>
+            <label class="appointment-date-range">
+              <span>วันที่สิ้นสุด</span>
+              <ThaiDatePicker
+                v-model="endDate"
+                numeric-month
+                show-calendar-icon
+                hide-caret
+                placeholder="วว/ดด/ปปปป"
+              />
+            </label>
+          </header>
+        </div>
         <section v-if="scheduleView !== 'list'" class="appointment-calendar">
           <header class="calendar-heading">
             <button type="button" class="calendar-list-back" @click="scheduleView = 'list'">
@@ -1028,8 +1082,6 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 <th>เบอร์โทรศัพท์</th>
                 <th>บริการ</th>
                 <th>นักกายภาพ</th>
-                <th>สาขา</th>
-                <th>ห้อง</th>
                 <th>สถานะ</th>
                 <th class="status-notice-cell">
                   <span v-if="statusNotice" class="status-feedback" aria-live="polite">{{
@@ -1050,8 +1102,6 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 <td>{{ patientPhone(item) }}</td>
                 <td>{{ item.service.name }}</td>
                 <td>{{ item.therapist.fullName }}</td>
-                <td>{{ branchName(item.branchCode) }}</td>
-                <td>{{ appointmentRoom(item) }}</td>
                 <td>
                   <div class="appointment-status-filter" :data-status="uiStatusFor(item.status)">
                     <FilterDropdown
@@ -1070,7 +1120,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 <td><button class="appointment-edit" @click="goToEdit(item)">แก้ไข</button></td>
               </tr>
               <tr v-if="filteredAppointments.length === 0">
-                <td class="appointment-empty" colspan="9">ไม่พบข้อมูลนัดหมาย</td>
+                <td class="appointment-empty" colspan="8">ไม่พบข้อมูลนัดหมาย</td>
               </tr>
             </tbody>
           </table>
