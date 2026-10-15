@@ -2,19 +2,21 @@ pipeline {
   agent any
   options { disableConcurrentBuilds(); timeout(time: 90, unit: 'MINUTES'); buildDiscarder(logRotator(numToKeepStr: '10')) }
   parameters {
-    booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Deploy develop to local test app after checks pass')
+    booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to local test app after checks pass (test-only by default)')
     booleanParam(name: 'LOCAL_SNAPSHOT', defaultValue: true, description: 'Use develop snapshot refreshed by Refresh-Source.ps1')
+    choice(name: 'SOURCE_BRANCH', choices: ['develop', 'feat/backend-v2-integration'], description: 'Branch to test; local integration bundle is required for unpushed commits')
     string(name: 'GIT_CREDENTIAL_ID', defaultValue: 'github-read', description: 'Jenkins read-only GitHub credential; used when LOCAL_SNAPSHOT=false')
   }
   stages {
-    stage('Checkout develop') {
+    stage('Checkout selected branch') {
       steps {
         deleteDir()
         script {
           if (params.LOCAL_SNAPSHOT) {
-            sh 'git init && git fetch /opt/clinic/source/develop.bundle refs/remotes/origin/develop:refs/heads/develop && git checkout develop'
+            def bundle = params.SOURCE_BRANCH == 'develop' ? 'develop.bundle' : 'integration.bundle'
+            sh "git init && git fetch /opt/clinic/source/${bundle} 'refs/heads/${params.SOURCE_BRANCH}:refs/heads/${params.SOURCE_BRANCH}' && git checkout '${params.SOURCE_BRANCH}'"
           } else {
-            git branch: 'develop', credentialsId: params.GIT_CREDENTIAL_ID, url: 'https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git'
+            git branch: params.SOURCE_BRANCH, credentialsId: params.GIT_CREDENTIAL_ID, url: 'https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git'
           }
         }
         script { env.SOURCE_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim(); env.CI_PROJECT = "clinic-ci-${env.BUILD_NUMBER}" }
