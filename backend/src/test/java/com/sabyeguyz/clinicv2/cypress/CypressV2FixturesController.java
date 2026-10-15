@@ -79,7 +79,19 @@ public class CypressV2FixturesController {
         jdbc.update("DELETE FROM master_data_type WHERE type_name NOT IN ('Customer Group', 'Referral Channel', 'Insurance Type', 'Insurance Company')");
         jdbc.update("DELETE FROM commission_tier WHERE commission_scheme_id <> (SELECT MIN(commission_scheme_id) FROM commission_scheme)");
         jdbc.update("DELETE FROM commission_scheme WHERE commission_scheme_id <> (SELECT MIN(commission_scheme_id) FROM commission_scheme)");
-        jdbc.update("UPDATE commission_tier SET tier_status = TRUE");
+        // the seed scheme as the demo data defines it (tests change its name, dates and tiers)
+        jdbc.update("UPDATE commission_scheme SET scheme_name = 'Default Tier Scheme', scheme_version = 1, "
+                + "effective_from = DATE '2026-01-01', effective_to = NULL");
+        jdbc.update("DELETE FROM commission_tier");
+        jdbc.update("INSERT INTO commission_tier (commission_scheme_id, permission_id, tier_order, minimum_monthly_sales, "
+                + "maximum_monthly_sales, commission_rate, tier_status, effective_from, tier_create_by) "
+                + "SELECT cs.commission_scheme_id, cs.permission_id, t.tier_order, t.lo, t.hi, t.rate, TRUE, cs.effective_from, "
+                + "cs.scheme_create_by FROM commission_scheme cs CROSS JOIN (VALUES "
+                + "(1, 0.00, 59999.99, 0.05), (2, 60000.00, 69999.99, 0.06), (3, 70000.00, 79999.99, 0.07), "
+                + "(4, 80000.00, 89999.99, 0.08), (5, 90000.00, NULL::numeric, 0.10)) AS t(tier_order, lo, hi, rate)");
+        jdbc.update("DELETE FROM treatment_fee_rule WHERE treatment_fee_rule_id <> (SELECT MIN(treatment_fee_rule_id) FROM treatment_fee_rule)");
+        jdbc.update("UPDATE treatment_fee_rule SET fee_type = 'Fixed'::fee_type_enum, fee_value = 45, effective_to = NULL, "
+                + "treatment_fee_rule_status = TRUE");
         jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL");
         jdbc.update("UPDATE app_user SET user_status = TRUE WHERE username <> 'system'");
         jdbc.update("UPDATE branch SET branch_status = TRUE");

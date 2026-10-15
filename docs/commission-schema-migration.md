@@ -81,7 +81,51 @@ V3 ต้นฉบับ **ล้มบนฐานที่มีข้อม�
 ทดสอบ: `backend/cypress/e2e-v2/commission-entities.cy.js` (4 ข้อ) ใช้ endpoint ทดสอบ `CypressCommissionEntitiesController` (เฉพาะโปรไฟล์ `cypress-v2`) เตรียมข้อมูลจริงผ่าน API (ผู้ป่วย, ขายรายครั้ง, คืนเงิน, ซื้อคอร์ส) แล้วบันทึก-อ่านกลับ และยืนยันว่า DB ปฏิเสธข้อมูลผิดกติกา (ชื่อ constraint อยู่ในผลที่ตรวจ): รายการคืนเงินซ้ำ/ยอด 0, ค่ามือกลับรายการซ้ำหรือไม่มีเหตุผล, จ่ายสถานะ Paid ที่ไม่มียอด/ยอดรวมไม่ตรง/ไม่มีวันที่จ่าย, ใบปรับยอด (เดือนที่ใช้ไม่หลังเดือนเดิม, ยอด 0, ไม่มีต้นทาง, ไม่มีเหตุผล, ยอดคงเหลือไม่ตรง, สถานะอนุมัติแต่ไม่มีผู้อนุมัติ) และการนำไปใช้ที่ Applied โดยไม่มีผู้อนุมัติหรือการหักที่ไม่มีเลขอ้างอิง
 ผล: backend HTTP v2 222/222 (218 เดิม + 4 ใหม่), `SchemaCheck` 49 entities ผ่าน, `RuntimeCheck` ผ่าน
 
+## ชุด A (T4-T7): Scheme/Tier, ยอดขายรายเดือน, กฎค่ามือส่วนกลาง
+
+**Migration V1003** (`V1003__commission_tier_contiguity.sql`): ตาราง Tier ของข้อมูลตัวอย่างเขียนเป็นบาทเต็ม (59,999 แล้ว 60,000) ซึ่งทำให้ 59,999.01-59,999.99 ไม่อยู่ใน Tier ใดเมื่อยอดขายมีสตางค์ จึงปรับขอบบนให้เป็น `ขอบล่างของ Tier ถัดไป - 0.01` (อัตราและขอบล่างไม่เปลี่ยน) เลข V1002/V1003 ถูกใช้แล้ว ฝั่งอื่นใช้ V1004 ขึ้นไป
+
+**T4 Scheme/Tier** (`CommissionSchemeService`, `CommissionSchemeResolver`, `CommissionTierResolver`)
+- Tier เป็นบาท 2 ตำแหน่ง ขอบ inclusive ทั้งสองด้าน Tier แรกเริ่ม 0.00, Tier ถัดไปเริ่ม `ขอบบนเดิม + 0.01` พอดี (50,000.00 แล้ว 50,000.01), Tier สุดท้ายไม่มีเพดาน, `tier_order` ไม่ซ้ำ, อัตรา 0-1 ไม่เกิน 4 ตำแหน่ง ; ยอดขายถูกปัดเป็น 2 ตำแหน่งก่อนเทียบ (59,999.995 ไป Tier ถัดไป)
+- วันที่ของ Scheme ไม่ซ้อนกัน (ปลายวัน inclusive) ; Scheme เวอร์ชันใหม่แบบไม่มีวันสิ้นสุดจะปิดเวอร์ชันเดิมที่ไม่มีวันสิ้นสุดเป็น `วันเริ่มใหม่ - 1` โดยอัตโนมัติ (ปฏิเสธถ้าเวอร์ชันเดิมถูกใช้กับคอร์สที่ขายตั้งแต่วันนั้นแล้ว) ; resolver ต้องพบ Scheme/Tier เพียงหนึ่งรายการ
+- Scheme ที่คอร์สหรือการปิดยอดอ้างอิงแล้ว (`locked` ในการตอบ) แก้ Tier/วันเริ่ม/ปิดใช้งานไม่ได้ (409) แก้ได้เฉพาะชื่อและวันสิ้นสุด ; ทำเวอร์ชันใหม่ด้วย `POST /api/commission/schemes/{id}/versions` ; `PUT` ที่ส่ง `tiers: []` หมายถึงไม่เปลี่ยน Tier ; เวอร์ชันนับต่อชื่อ Scheme
+
+**T5 Owner และค่าที่ล็อกตอนขาย**: ทำไว้แล้วใน T2 (ผู้ขาย = Owner ฟิลด์เดียว, `course_price` = commissionable amount, `treatment_fee_base_amount` = amount - ส่วนลดท้ายบิล, `sale_month`, scheme id/version, `provisional_commission_rate`) ชุดนี้เพิ่มการทดสอบอัตโนมัติ
+
+**T6 ยอดขายสำหรับหา Tier** (`MonthlyTierSalesService`): รวม `course_price` ของคอร์สที่ขายโดยผู้ขายในเดือนขาย เฉพาะที่ยังมีผล (รายการขายไม่ถูก void, ใบเสร็จไม่ Voided, คอร์สไม่ Cancelled) แล้วหักยอด `Course_refund_item.refund_amount` ของการคืนเงินที่ **Completed** (แต่ละรายการครั้งเดียว ไม่หัก Pending/Failed/Voided และไม่หักซ้ำกับคอร์สที่ void/cancel แล้ว) ผลไม่ต่ำกว่า 0 ; ใช้ทั้งตอนขาย (อัตราชั่วคราว), พรีวิว, รายการปิดยอด และตอนปิดยอดจริง ; หลังปิดยอดแล้ว ยอดที่เก็บไว้ไม่ถูกคำนวณใหม่
+
+**T7 กฎค่ามือส่วนกลาง** (`TreatmentFeeRuleService`, `/api/commission/treatment-fees`): สร้าง/แก้/เปิด-ปิดกฎ Fixed (บาทต่อ Visit ทศนิยมไม่เกิน 2) หรือ Percentage (0-100 ทศนิยมไม่เกิน 4) ; ช่วงวันที่ของกฎที่เปิดใช้งานไม่ซ้อนกัน (กฎใหม่แบบไม่มีวันสิ้นสุดปิดกฎเดิมเป็น `วันเริ่มใหม่ - 1`) ; กฎที่ ledger คัดลอกไปแล้ว (`used`) แก้ประเภท/อัตรา/วันเริ่มไม่ได้ (409) ให้สร้างกฎใหม่ ; สูตรค่ามือคอร์ส = `treatment_fee_base_amount x อัตรา / (total_visits x 100)` ปัดผลสุดท้ายครั้งเดียว (ทำไว้ใน T2)
+
+## ชุด B (T8-T12): การใช้คอร์ส, ผู้รักษา, ค่ามือรายครั้ง, การกลับรายการ/คืนเงิน
+
+**Owner commission ยังไม่ทราบก่อนปิดยอด (ตามที่ Data Dictionary กำหนด NULL ไม่ใช่ 0)** (`CourseCommissionService`)
+- ตอนใช้คอร์สที่ยังไม่ล็อกอัตรา: ถ้า Owner รักษาเอง `owner_net_commission` และ `commission_allocation_per_visit` ของ usage เป็น **NULL**, ยังไม่มีแถว allocation, `commission_outstanding` เป็น NULL ; ถ้าคนอื่นรักษาหรือ Owner ลาออกแล้ว `owner_net_commission` = 0 ทันทีและมีแถว allocation (ค่ามือเต็ม) เพราะไม่ต้องรู้อัตรา
+- ตอนปิดยอดเดือนขาย (`MonthlyCommissionClosingService` → `settle`): ทุก usage ของคอร์สที่เพิ่งล็อกได้อัตราตามตำแหน่ง ; ที่ Owner รักษาเองได้ `owner_net_commission` และสร้างแถว allocation เวอร์ชัน 1 ; ที่คนอื่นรักษาได้อัตราตำแหน่งไว้ตรวจสอบเท่านั้น (Owner ยังได้ 0, ไม่ย้ายไปครั้งอื่น)
+- **ข้อสันนิษฐานที่ Data Dictionary ไม่ได้ระบุตรงๆ (ให้ Manager ตรวจ):** จังหวะสร้างแถว allocation ของ session ที่ใช้ก่อนปิดยอดคือ "ตอนปิดยอด" (Dictionary บอกว่า allocation สร้างภายหลัง usage ได้เมื่อปิดยอดเดือนขาย) ; Visit ในวันที่ลาออกพอดียังได้ commission (Dictionary เขียนว่า Visit **หลัง** วันลาออก = 0)
+- หลังปิดยอด: session ใหม่ได้ `owner_net` ตามอัตราของตำแหน่งทันที ; `recalculate` (ใช้เมื่อแก้อัตราก่อนจ่าย: override อัตรา, และ Reopen ในชุด C) กลับ allocation เดิมแล้วสร้างเวอร์ชันถัดไป ปฏิเสธถ้า allocation อยู่ใน payment ที่ Paid แล้ว
+
+**T8 ลำดับสิทธิ์และเศษ** (`CommissionAllocationCalculator`): อัตราต่อตำแหน่ง = `ROUND(pool/total_visits,2)` ทุกตำแหน่งยกเว้นครั้งสุดท้ายที่ได้ส่วนที่เหลือของ pool (700/13 → 53.85 x 12 แล้ว 53.80) ; ไม่เกินงบที่เหลือและไม่ติดลบ (pool 0.07 / 12 ครั้ง → 0.01 x 7 ที่เหลือ 0) ; ตำแหน่ง = ตำแหน่งว่างต่ำสุดของคอร์ส (รวมทุกผู้ใช้) ตำแหน่งที่ Reversed ถูกใช้ซ้ำและมี `replaces_usage_id` ; ไม่เกิน `total_visits`
+
+**T9 Owner รักษาเอง**: ข้างบน ; ผู้รักษาของ Visit ต้องเป็นคนเดียวกับของการใช้สิทธิ์ ; ผู้รักษาต้องยังทำงานในวันนั้น (ผู้ที่กำลังจะลาออกยังรักษาได้ถึงวันสุดท้าย), อยู่สาขาเดียวกับ Visit ; Owner ลาออก: `commission_outstanding` = 0 ตั้งแต่วันลาออก
+
+**T10 PT อื่นรักษาแทน**: `POST /api/course-usages` รับ `treatingStaffId` (ค่าเริ่มต้น = Owner) และ `patientId` (ผู้ใช้สิทธิ์ ค่าเริ่มต้น = ผู้ซื้อ/ผู้ป่วยของนัด) ; ค่ามือจ่ายเต็มตามกฎ ณ วันรักษา ไม่จำกัดด้วย commission (ไม่พบกฎ → 409 ไม่ใช้ 0) ; Owner ได้ 0 ; ใบ allocation เก็บ snapshot ของกฎ/ฐานก่อนปัด
+
+**T11 ค่ามือรักษารายครั้ง** (`SingleVisitFeeService`, `SingleVisitFeeAccrual`): เมื่อใบเสร็จชำระครบและรายการ SingleVisit มี Visit ที่รักษาโดย PT หนึ่งคน สร้าง `single_visit_fee_ledger` : Percentage = `ROUND(ฐาน x ค่า / 100, 2)` โดยฐาน = `amount - ส่วนลดท้ายบิลของรายการนั้น` (ไม่รวมคอร์สในบิล), Fixed = หนึ่งครั้งต่อ Visit ไม่คูณจำนวน ; ถ้ายังไม่มีกฎ **ไม่บล็อกการขายและไม่ใส่ 0** รอ `POST /api/commission/single-visit-fees/backfill?from=&to=` หลังตั้งกฎ ; void ใบเสร็จก่อนจ่าย → Reversal (เวอร์ชันเดียวกัน, ครั้งเดียว)
+
+**T12 กลับรายการ/ยกเลิก/คืนเงิน**
+- กลับ usage (`reverse`): ถ้ามี allocation ที่ยังไม่ถูกกลับ → Reversal (ค่าตรงข้ามทุกช่อง ครั้งเดียว) ; ถ้ายังไม่มี (Owner commission ยังไม่ทราบ) ไม่มีอะไรให้กลับ ; allocation ที่อยู่ใน payment ที่ Paid แล้ว กลับไม่ได้ (409 ให้ใช้ Adjustment)
+- ยกเลิกคอร์ส (`POST /api/course-purchases/{id}/cancel` ต้องมีเหตุผล) และ void ใบขายคอร์ส: void รายการขาย (Transaction_cancellation Void) ตัดสิทธิ์ที่ยังไม่ใช้ทั้งหมดด้วย `Course_ledger.Cancellation` (ผูก `cancellation_id`, ครั้งเดียว) คอร์สเป็น Cancelled ; ค่ามือ/commission ของครั้งที่ใช้ไปแล้วคงเดิม
+- คืนเงิน: ใบเสร็จที่มีคอร์สต้องส่ง `items: [{courseId, refundAmount, cancelledVisits}]` (ยอดรวมเท่ากับยอดคืน, ไม่เกินยอดที่จ่ายสำหรับคอร์ส, ไม่เกินสิทธิ์ที่ยังไม่ใช้) ; **คืนคอร์สที่ใช้ไปบางส่วนได้** (ส่วนที่ยังไม่ใช้) ; ตัดสิทธิ์ตอน Completed ใน transaction เดียวกัน ครั้งเดียวต่อรายการ ; Failed/Voided ไม่ตัดสิทธิ์ ; คอร์สเป็น Refunded เมื่อสิทธิ์หมด ไม่เช่นนั้นคง Active ; ไม่เรียกคืนค่ามือ/commission และไม่คำนวณฐานเดิมใหม่ ; `POST /api/refunds/{id}/void` ยกเลิกคำขอที่ยัง Pending
+- แก้อัตราคอร์ส (override) ถูกปฏิเสธหลังเดือนขาย Finalize
+
+**ผลต่อ API/ฟรอนต์เอนด์:** `GET /api/commission/treatment-report` คืน `ownerNet`/`gross` เป็น `null` พร้อม `ownerNetPending: true` จนกว่าจะปิดยอด (อิงจาก usage ไม่ใช่ allocation) ; `SchemeResponse` มี `locked` ; `TreatmentFeeResponse` มี `effectiveFrom/effectiveTo/enabled/used` ; ตอบคืนเงินมี `items` ; จอปรับตั้งค่า/คืนเงินในฟรอนต์เอนด์ยังไม่ได้ปรับ (นอกขอบเขตของ backend)
+
+ทดสอบ: `commission.cy.js` (Scheme/Tier/กฎค่ามือ ผ่าน HTTP), `commission-sessions.cy.js` (ตัวอย่างในเอกสาร PDF ข้อ 01, 02, 03, 04, 07, เศษ 53.80, NULL ก่อนปิดยอด, ลาออก, กลับรายการ, ค่ามือรายครั้ง, ยกเลิก/คืนเงิน), `payment-policy.cy.js` (คืนเงินคอร์สที่ใช้บางส่วน + ล็อกแถวคอร์ส), ชุดเก่า `v2-finance` (ตัวคำนวณ, resolver, validation แบบ unit บน stub)
+ตัวอย่างข้อ 05 (Reopen) และ 06 (Adjustment หลัง Finalize) อยู่ในชุด C
+
 ## ข้อควรรู้ก่อนรวมเข้า branch หลัก
 - constraint `NOT VALID` บังคับกับแถวใหม่ทันที (ดูตารางด้านบน) ฐานเดิมที่รันบน V1001 อัปเกรดได้ตามที่ทดสอบ
 - seed `V1000__demo_data.sql` รันก่อน V1002 จึงไม่ต้องแก้ ; legacy importer ที่อ้างคอลัมน์ที่ถูกลบต้องแก้ในงานของฝั่ง P9
-- ยังไม่ได้เทียบ V3 กับ Data Dictionary ทีละคอลัมน์ ตรวจเฉพาะตารางหลักด้านค่าคอมมิชชัน
+- เลข migration ที่ใช้แล้ว: V1002 (สคีมาค่าคอมมิชชัน) และ V1003 (Tier ต่อเนื่องระดับสตางค์) ฝั่งอื่นใช้ V1004 ขึ้นไป
+- เทียบสคีมาที่ migrate แล้ว (V1-V1003) กับ Data Dictionary (15 ต.ค. 2026, 48 ตาราง) ทีละคอลัมน์ ทั้งชื่อ ชนิดข้อมูล ความยาว/ทศนิยม และ NULL/NOT NULL: **ตรงทุกคอลัมน์** ยกเว้นคอลัมน์ที่แอปมีเพิ่มนอก Dictionary (`patient.gender_detail`, `service.default_bonus_visits`, `course.bonus_visits`, `receipt.taxable_amount/tax_amount`, `appointment.room_id`) และตารางที่ยังคงอยู่ (`course_sale_staff_share` เลิกใช้แต่ยังเก็บข้อมูลเก่า, `staff_group*`, `service_group*`, `user_branch_access`, `legacy_v1002_*` ที่ V1002 เก็บข้อมูลตัดสินใจเดิมไว้ตรวจ)
+- ผลทดสอบชุด A+B (15 ต.ค. 2026): backend HTTP v2 **249/249**, ชุดเก่า `test:api` **432/432**, `RuntimeCheck` และ `SchemaCheck` (49 entities) ผ่าน, `check-v1002.sh` ผ่านทั้งฐานว่าง/ฐานมี seed/ฐานมีข้อมูลเก่า, frontend ESLint + unit + type check + build ผ่าน และเบราว์เซอร์ **117/117** (หน้า Tier และหน้าปิดรอบปรับให้ใช้ช่วงยอดระดับสตางค์)

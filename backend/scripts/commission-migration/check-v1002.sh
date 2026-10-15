@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks migration V1002 (commission schema) against a throw-away PostgreSQL 16 in Docker:
-#   1) a brand new database      (V1, V2, V3, V1001, V1002)
-#   2) a database with the demo seed (V1, V2, V3, V1000, V1001, V1002)
+#   1) a brand new database      (V1, V2, V3, V1001, V1002, V1003)
+#   2) a database with the demo seed (V1, V2, V3, V1000, V1001, V1002, V1003)
 #   3) an upgrade of a database that already holds old payment/closing rows (status conversions, NOT VALID report)
 # Each run applies V1002 in ONE transaction, like Flyway does. Needs Docker; nothing outside the container is touched.
 #
@@ -19,7 +19,8 @@ bad() { echo "  FAIL  $*"; fail=$((fail + 1)); }
 
 for f in "$mig/migration/V1__initial_schema.sql" "$mig/migration/V2__integration_runtime_compatibility.sql" \
          "$mig/migration/V3__reference_data.sql" "$mig/migration/V1001__historical_assessment_transaction_type.sql" \
-         "$mig/migration/V1002__implement_commission_requirements.sql" "$mig/seed_v2/V1000__demo_data.sql"; do
+         "$mig/migration/V1002__implement_commission_requirements.sql" "$mig/migration/V1003__commission_tier_contiguity.sql" \
+         "$mig/seed_v2/V1000__demo_data.sql"; do
   [ -f "$f" ] || { echo "missing migration file: $f"; exit 1; }
 done
 command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 || { echo "Docker is not running."; exit 1; }
@@ -40,6 +41,7 @@ scalar() { psql_i -d "$1" -At -c "$2" 2>&1; }
 files_old() { echo "$mig/migration/V1__initial_schema.sql $mig/migration/V2__integration_runtime_compatibility.sql $mig/migration/V3__reference_data.sql"; }
 V1002="$mig/migration/V1002__implement_commission_requirements.sql"
 V1001="$mig/migration/V1001__historical_assessment_transaction_type.sql"
+V1003="$mig/migration/V1003__commission_tier_contiguity.sql"
 SEED="$mig/seed_v2/V1000__demo_data.sql"
 
 structure() { # db label
@@ -56,14 +58,16 @@ structure() { # db label
 
 echo "1) brand new database"
 newdb chk_new
-for f in $(files_old) "$V1001" "$V1002"; do out=$(apply chk_new "$f") || bad "new: $(basename "$f"): $out"; done
+for f in $(files_old) "$V1001" "$V1002" "$V1003"; do out=$(apply chk_new "$f") || bad "new: $(basename "$f"): $out"; done
 structure chk_new "new"
 [ "$(scalar chk_new "select count(*) from pg_constraint where not convalidated")" = "0" ] && ok "new: every constraint is validated" || bad "new: NOT VALID constraints left"
 
 echo "2) database with the demo seed"
 newdb chk_seed
-for f in $(files_old) "$SEED" "$V1001" "$V1002"; do out=$(apply chk_seed "$f") || bad "seed: $(basename "$f"): $out"; done
+for f in $(files_old) "$SEED" "$V1001" "$V1002" "$V1003"; do out=$(apply chk_seed "$f") || bad "seed: $(basename "$f"): $out"; done
 structure chk_seed "seed"
+[ "$(scalar chk_seed "select count(*) from commission_tier t join commission_tier n on n.commission_scheme_id = t.commission_scheme_id and n.tier_order = t.tier_order + 1 where n.minimum_monthly_sales <> t.maximum_monthly_sales + 0.01")" = "0" ] \
+  && ok "seed: tier ranges are contiguous at two decimals (V1003)" || bad "seed: a tier gap remains"
 
 echo "3) upgrade with old payment and closing rows"
 newdb chk_old
