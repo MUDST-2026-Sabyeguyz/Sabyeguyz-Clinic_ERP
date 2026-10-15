@@ -190,7 +190,7 @@ public class CoursePurchaseController {
 
     public record UsageTransactionResponse(Long id, Long coursePurchaseId, String patientName, String patientHn,
                                             String courseName, String branchCode, Instant usedAt, Instant voidedAt,
-                                            String voidReason) {}
+                                            String voidReason, String therapistName) {}
 
     /** Every visit taken from a course (newest first) with its reversal status; id is the Treatment movement. */
     @GetMapping("/api/course-usages")
@@ -211,7 +211,7 @@ public class CoursePurchaseController {
                     patient.getPatientFname() + " " + patient.getPatientLname(), patient.getPatientHn(),
                     course.getCourseName(), course.getReceipt().getBranch().getBranchCode(),
                     usage.getUsageCreateAt(), reversal.map(l -> l.getLedgerCreateAt()).orElse(null),
-                    reversal.map(l -> l.getRemark()).orElse(null));
+                    reversal.map(l -> l.getRemark()).orElse(null), staffName(usage.getTreatingStaff()));
         }).toList();
     }
 
@@ -225,9 +225,12 @@ public class CoursePurchaseController {
         PatientVisit visit = request.appointmentId() == null ? walkInVisit(course, owner)
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
                         .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
+        // The visit's patient takes the visit from his or her own balance, so a patient who received transferred
+        // visits uses them; a walk-in use stays with the buyer. The balance check lives in the usage service.
+        Patient usingPatient = request.appointmentId() == null ? owner : visit.getPatient();
         // Always treats the Case Owner as the Treating PT - see class Javadoc.
-        usageService.use(course, visit, owner, course.getCaseOwnerStaff(), LocalDate.now(), actor.currentId());
-        return toResponse(courses.findById(course.getId()).orElseThrow(), owner.getId());
+        usageService.use(course, visit, usingPatient, course.getCaseOwnerStaff(), LocalDate.now(), actor.currentId());
+        return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
     @PostMapping("/api/course-movements/{movementId}/reverse")
@@ -270,6 +273,11 @@ public class CoursePurchaseController {
             case TransferIn -> "TRANSFER_IN";
             default -> type.name().toUpperCase(java.util.Locale.ROOT);
         };
+    }
+
+    /** The treating PT as recorded on the usage (never re-chosen here); null when none was recorded. */
+    private static String staffName(Staff staff) {
+        return staff == null ? null : staff.getStaffFname() + " " + staff.getStaffLname();
     }
 
     private Staff staffById(Long id) {
