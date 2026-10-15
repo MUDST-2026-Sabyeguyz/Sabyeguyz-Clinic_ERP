@@ -1,6 +1,6 @@
 # คู่มือ Jenkins CI/CD สำรองในเครื่อง
 
-ชุดนี้ใช้ `develop` เพื่อ build/test และ deploy แอปทดสอบในเครื่อง โดยไม่ใช้โควตา GitHub Actions ไม่ใช่ production deployment
+ชุดนี้ใช้ `develop` หรือ `feat/backend-v2-integration` เพื่อ build/test ในเครื่อง โดยไม่ใช้โควตา GitHub Actions ไม่ใช่ production deployment ค่าเริ่มต้น `DEPLOY=false`.
 
 ## สิ่งที่ต้องเตรียม
 
@@ -54,11 +54,22 @@ Backend tests ปัจจุบันของ develop ใช้ H2 ส่ว�
 
 | ตัวเลือก | การใช้ |
 |---|---|
-| LOCAL_SNAPSHOT=true | ใช้ develop ที่ Refresh-Source.ps1 ดึงล่าสุดผ่านสิทธิ์ Git ในเครื่อง |
-| LOCAL_SNAPSHOT=false | ดึง develop จาก GitHub โดยตรงด้วย credential ใน Jenkins |
+| LOCAL_SNAPSHOT=true | ใช้ Git bundle ใน `source/` ตาม `SOURCE_BRANCH` |
+| LOCAL_SNAPSHOT=false | ดึง `SOURCE_BRANCH` จาก GitHub โดยตรงด้วย credential ใน Jenkins; commit ที่ยังไม่ push จะไม่อยู่ในรอบนี้ |
+| SOURCE_BRANCH | เลือก `develop` หรือ `feat/backend-v2-integration`; branch หลังใช้ `source/integration.bundle` เมื่อเป็น local snapshot |
 | GIT_CREDENTIAL_ID | ID ของ credential สำหรับอ่าน private repo ค่าเริ่มต้น github-read |
-| DEPLOY=true | deploy หลังตรวจผ่าน |
-| DEPLOY=false | ตรวจอย่างเดียว |
+| DEPLOY=true | deploy หลังตรวจผ่าน (ต้องเลือกเอง) |
+| DEPLOY=false | ตรวจอย่างเดียว; เป็นค่าเริ่มต้น |
+
+สำหรับ integration branch ที่ยังไม่ได้ push ให้สร้าง bundle จาก commit ที่ต้องการทดสอบ แล้วเลือก `SOURCE_BRANCH=feat/backend-v2-integration`, `LOCAL_SNAPSHOT=true`, `DEPLOY=false` ใน Jenkins:
+
+```powershell
+git bundle create jenkins-backup/source/integration.bundle feat/backend-v2-integration
+git bundle verify jenkins-backup/source/integration.bundle
+git rev-parse feat/backend-v2-integration
+```
+
+ตรวจ SHA ใน `source-sha.txt` ของ build ให้ตรงกับ `git rev-parse` ก่อนใช้ผลทดสอบ. Pipeline ปัจจุบันมี backend Maven verify, frontend unit/build, image build และ browser login smoke; ชุด v2 HTTP/browser เต็มกับ migration rehearsal ต้องรันแยกและบันทึกผลเพิ่ม.
 
 อย่ารัน Refresh-Source.ps1 พร้อมกับขั้น checkout ของ build เดิม Snapshot ไม่รวมไฟล์แก้ที่ยังไม่ push และไม่เปลี่ยน branch ปัจจุบันของเครื่อง
 
