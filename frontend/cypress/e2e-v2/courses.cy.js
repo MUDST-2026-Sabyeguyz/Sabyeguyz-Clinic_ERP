@@ -12,18 +12,21 @@ const useOnce = (purchase) => cy.api('POST', '/api/course-usages', { coursePurch
 describe('patient courses', () => {
   it('shows a patient with no course', () => {
     cy.registerPatient().then((patient) => cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`))
-    cy.contains('h1', 'จัดการคอร์สผู้ป่วย').should('be.visible')
+    cy.contains('h1', 'คอร์สของผู้ป่วย').should('be.visible')
     cy.contains('h2', 'ยังไม่มีคอร์สที่ใช้งานได้').should('be.visible')
   })
 
-  it('shows the balance, the bonus visits and the expiry of a bought course', function () {
+  it('shows the total visits including the bonus and the expiry of a bought course', function () {
     cy.registerPatient().then((patient) => {
       buyCourse(this.fixtures, patient)
       cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`)
     })
     cy.contains('.course-use-patient', 'สมชาย ใจดี').should('be.visible')
     cy.get('.course-manager-card').should('have.length', 1).and('contain.text', 'คงเหลือ6 ครั้ง')
-      .and('contain.text', 'ทั้งหมด6 ครั้ง').and('contain.text', 'Bonus 1 ครั้ง').and('contain.text', 'หมดอายุ')
+      .and('contain.text', 'ทั้งหมด6 ครั้ง').and('contain.text', 'หมดอายุ')
+    cy.api('GET', '/api/patients').its('body.items.0.id').then((patientId) => {
+      cy.api('GET', `/api/patients/${patientId}/courses`).its('body.0.bonusSessions').should('equal', 1)
+    })
   })
 
   it('uses one visit of the course', function () {
@@ -82,7 +85,8 @@ describe('patient courses', () => {
       buyCourse(this.fixtures, patient).then(useOnce)
       cy.visitAs('therapist', `/staff/courses?patientId=${patient.id}`)
     })
-    cy.contains('button', 'ดูประวัติการใช้').click()
+    cy.get('.course-manager-card').should('have.length', 1)
+    cy.contains('.course-status-tabs button', 'ประวัติการใช้คอร์ส').click()
     cy.contains('h1', 'ประวัติการใช้คอร์ส').should('be.visible')
     cy.get('.course-history-entry').should('have.length', 1).and('contain.text', 'ใช้ 1 ครั้ง').and('contain.text', 'คงเหลือหลังใช้ 5 ครั้ง')
   })
