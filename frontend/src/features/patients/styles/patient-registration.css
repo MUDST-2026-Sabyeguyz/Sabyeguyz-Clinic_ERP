@@ -746,3 +746,139 @@ fieldset {
     height: auto;
   }
 }
+
+/* Patient registration form, aligned with the Thai and foreign Figma variants. */
+.registration-page {
+  background: #faf7f2;
+}
+
+.back-row {
+  width: min(1200px, calc(100% - 64px));
+  margin: 18px auto 0;
+}
+
+.back-link {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #177f7b;
+  background: transparent;
+  font-size: 16px;
+}
+
+.back-link:hover {
+  background: transparent;
+  transform: none;
+  text-decoration: underline;
+}
+
+.registration-shell {
+  width: min(1000px, calc(100% - 40px));
+  margin: 12px auto 72px;
+}
+
+.intro h1 {
+  color: #1f2937;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.intro p {
+  margin: 4px 0 24px;
+  color: #57706a;
+  font-size: 17px;
+}
+
+.form-card {
+  padding: 52px 40px 36px;
+  border: 1px solid #edf0ee;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgb(34 57 48 / 7%);
+}
+
+.form-card h2 {
+  margin: 0 0 18px;
+  color: #1f2937;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.registration-section + .registration-section {
+  margin-top: 26px;
+  padding-top: 26px;
+  border-top: 1px solid #e5ece9;
+}
+
+.form-card label,
+.form-card legend {
+  color: #27323f;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.form-card input,
+.form-card textarea {
+  min-height: 44px;
+  margin-top: 7px;
+  padding: 10px 14px;
+  border-color: #d4dddf;
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: 15px;
+}
+
+.patient-type {
+  margin-bottom: 22px;
+}
+
+.patient-type label {
+  min-height: 48px;
+  font-weight: 500;
+}
+
+.personal-details-grid,
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 22px;
+}
+
+.patient-name-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 22px;
+  margin-top: 16px;
+}
+
+.personal-details-grid + .personal-details-grid {
+  margin-top: 16px;
+}
+
+.actions.end {
+  margin-top: 28px;
+  padding-top: 20px;
+}
+
+.primary {
+  min-width: 114px;
+  min-height: 42px;
+  border-radius: 8px;
+  font-size: 15px;
+  box-shadow: none;
+}
+
+@media (max-width: 560px) {
+  .back-row {
+    width: calc(100% - 32px);
+  }
+
+  .form-card {
+    padding: 28px 20px;
+  }
+
+  .personal-details-grid,
+  .patient-name-grid {
+    grid-template-columns: 1fr;
+  }
+}
