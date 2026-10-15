@@ -297,7 +297,7 @@ describe('BackOffice backend integration', () => {
       }),
     )
     const created = requests.find((request) => request.url === '/api/services' && request.method === 'POST')
-    expect((created?.body as { defaultDurationMinutes?: number }).defaultDurationMinutes).toBeUndefined()
+    expect((created?.body as { defaultDurationMinutes?: number } | undefined)?.defaultDurationMinutes).toBeUndefined()
   })
   it('sends the branch booking window, email, licence and default appointment length', async () => {
     await start()

@@ -9,7 +9,7 @@
 | ส่วน | Quality Gate ระยะเริ่มต้น |
 |---|---|
 | Frontend | `npm ci`, type-check, Unit Test และ production build |
-| Backend | `npm ci`, `npx cypress install`, `npm test` (package + Cypress tests ทั้งหมด) |
+| Backend | JUnit/JaCoCo และ Cypress HTTP บน PostgreSQL ของ clinicv2; ใช้ entry point ด้านล่าง |
 | Docs/API | ตรวจว่า User Story, Acceptance Criteria และ API Contract สอดคล้องกัน |
 | Deploy | ตรวจ Docker Compose และ Kubernetes manifest เมื่อมีไฟล์แล้ว |
 
@@ -77,18 +77,28 @@ E2E ต้องตรวจอย่างน้อย Success Case, Validation
 - **Docker:** Build image, start Compose และทดสอบ health/API จริง
 - **Kubernetes:** Apply manifest, ตรวจ Pod/Service/Ingress และเรียกใช้งานผ่าน Runtime จริง
 
-## Current Baseline
+## Current baseline — Phase 1 review 16 Oct 2026
 
-- Frontend มี type-check, Vitest Unit Test, Build และ Cypress browser tests; การย้ายครั้งนี้ไม่ได้เปลี่ยน frontend
-- Backend ย้าย MockMvc API tests 9 คลาสไป Cypress แล้ว: ผู้ป่วย นัดหมาย คอร์ส การชำระเงิน รายงาน และ API contract รวมทั้งตรวจ JWT/สิทธิ์ผ่าน HTTP จริง
-- Backend ย้ายเทสต์ Java ที่เหลืออีก 146 กรณีไป Cypress แล้ว รวม 227 กรณี ไม่มี JUnit/Mockito; Java helpers ใน `src/test` ใช้เตรียมข้อมูลและเข้าถึง logic ภายในเท่านั้น การตรวจผลอยู่ใน Cypress ทั้งหมด
-- Concurrency ใช้ Node task ส่ง HTTP สองคำขอพร้อมกันและตรวจข้อมูลหลังจบ ส่วน specs รันตามลำดับเพื่อไม่ให้ชนการ reset ฐานข้อมูล
-- `npm test` ใน `backend` เป็นคำสั่งตรวจทั้งหมดพร้อม package; `mvn package`/`mvn verify` ไม่ได้รัน Cypress
-- Deploy มี Backend Dockerfile และ Docker Compose สำหรับ PostgreSQL/Backend แล้ว แต่ยังไม่มี Kubernetes manifest
-- Cypress regression profile ใช้ H2 และ legacy migration ถึง V20.1; Backend CI ตรวจ runtime v2 บน PostgreSQL 16 ด้วย production Flyway และ Hibernate validate เพิ่ม ดู [V2 Runtime CI](2026-10-13-V2-Runtime-CI.md)
-- เมื่อมี API Contract ที่ BA/Backend ยืนยันแล้ว ให้เพิ่ม Contract Test ก่อนเชื่อม Frontend กับ Backend
+ชุดตรวจ current `clinicv2` ใช้คำสั่งจาก repo root:
 
-รายละเอียดการรัน การแยกฐานข้อมูล และตารางเทสต์ที่ย้าย: [Backend Cypress API tests](../../backend/cypress/README.md)
+```bash
+node scripts/verify-phase1.mjs
+node scripts/verify-compose.mjs
+```
+
+ต้องมี Node 24.12+/npm และ Docker Linux engine; รายละเอียด clone, ports, demo login, database isolation และ troubleshooting อยู่ใน [คู่มือผู้ตรวจ](../phase1/REVIEW_GUIDE_TH.md) ผลจริงและขอบเขตที่ยังเปิดอยู่ใน [validation](../phase1/VALIDATION_TH.md)
+
+- JUnit regressions ตรวจ Bangkok date boundaries, HN sequence/overflow และ confirmed baht discount แยกจาก HTTP/browser suites
+- Backend HTTP Cypress v2 ใช้ production Flyway/PostgreSQL 16 กับ test-only fixtures และตรวจ security/permissions ผ่าน HTTP จริง
+- Frontend ใช้ Vitest กับ V8 coverage, type-check/build, ESLint/Oxlint และ Cypress browser v2 กับ API/PostgreSQL จริง ไม่ใช้ mocked API แทน integration ทั้งชุด
+- JaCoCo รวม production clinicv2 ทุก class รวมที่ยังไม่ cover และเก็บ unit + instrumented app execution; frontend V8 เป็น unit coverage รวม TS/Vue ที่ไม่ได้ import ด้วย ไม่ใช่ browser coverage
+- ไม่มี numeric coverage threshold ที่อนุมัติแล้ว ต้องรายงาน denominator และ gaps ตามจริง
+- Maven verify อย่างเดียวไม่รัน Cypress ทั้งชุด; npm test เดิมใน backend เป็น legacy entry point จึงไม่ใช้แทน current-v2 gate
+- Pipeline `.github/workflows/phase1-review.yml` เรียกคำสั่งเดียวกันและเก็บ logs/JUnit/coverage แม้ fail; ต้องผูก remote run กับ SHA จริง
+- Compose gate build images ใหม่ใน project/volume สังเคราะห์เฉพาะ run แล้วตรวจ health, app/JS, 401, normal login และ authenticated patient read
+- การมี Kubernetes manifests ไม่ใช่หลักฐานว่า current app revision deploy แล้ว ต้องเก็บ image digest/deployment/Ingress evidence แยก
+
+เอกสาร legacy เช่น [Backend Cypress API tests](../../backend/cypress/README.md) และ [V2 Runtime CI](2026-10-13-V2-Runtime-CI.md) ใช้อ้างประวัติ/รายละเอียด ไม่ใช้ counts ของ revision เก่าแทน source ที่ตรวจรอบนี้
 
 ## Latest integration trial
 

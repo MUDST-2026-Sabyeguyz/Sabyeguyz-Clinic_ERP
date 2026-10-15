@@ -42,7 +42,7 @@ describe('appointment list', () => {
   it('shows an appointment that is still waiting for confirmation', function () {
     cy.registerPatient().then((patient) => book(this.fixtures, patient, { status: 'Unconfirmed' }))
     cy.visitAs('manager', '/staff/appointments')
-    cy.contains('tr', 'สมชาย ใจดี').find('.appointment-status-badge').should('have.attr', 'data-status', 'PENDING')
+    cy.contains('tr', 'สมชาย ใจดี').find('.appointment-status-filter').should('have.attr', 'data-status', 'PENDING')
     statusSelect('สมชาย ใจดี').find('option:selected').should('have.text', 'รอยืนยัน')
   })
 
@@ -73,9 +73,9 @@ describe('creating and changing appointments', () => {
     cy.contains('button', 'สร้างนัดหมาย').should('be.enabled').click()
     cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type('สมชาย')
     cy.contains('.patient-search-results button', 'สมชาย ใจดี').click()
-    cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
+    cy.get('.appointment-date-field').pickDate(this.fixtures.tomorrow)
     cy.chooseDropdown('เลือกเวลา', '10:30')
-    cy.get('.appointment-save button').click()
+    cy.get('.appointment-save button.primary').click()
     cy.contains('ยืนยันการสร้างนัดหมายหรือไม่?').should('be.visible')
     cy.get('.appointment-confirm-modal').contains('button', /^ใช่$/).click()
     cy.contains('tr', 'สมชาย ใจดี', { timeout: 15000 }).should('contain.text', '10:30')
@@ -90,8 +90,8 @@ describe('creating and changing appointments', () => {
     cy.contains('button', 'สร้างนัดหมาย').click()
     cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type('สมชาย')
     cy.contains('.patient-search-results button', 'สมชาย ใจดี').click()
-    cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
-    cy.get('.appointment-save button').click()
+    cy.get('.appointment-date-field').pickDate(this.fixtures.tomorrow)
+    cy.get('.appointment-save button.primary').click()
     cy.get('.appointment-confirm-modal').contains('button', 'ไม่ใช่').click()
     cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 0)
   })
@@ -100,8 +100,8 @@ describe('creating and changing appointments', () => {
     cy.visitAs('manager', '/staff/appointments')
     cy.contains('button', 'สร้างนัดหมาย').click()
     cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type('ไม่มีคนนี้')
-    cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
-    cy.get('.appointment-save button').click()
+    cy.get('.appointment-date-field').pickDate(this.fixtures.tomorrow)
+    cy.get('.appointment-save button.primary').click()
     cy.get('.appointment-confirm-modal').contains('button', /^ใช่$/).click()
     cy.get('.patient-input-error').should('be.visible')
     cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 0)
@@ -109,7 +109,7 @@ describe('creating and changing appointments', () => {
 
   it('refuses a second booking of the same therapist at the same time', function () {
     cy.registerPatient().then((patient) => book(this.fixtures, patient)).as('existingAppointment')
-    cy.registerPatient({ firstName: 'อรุณ', lastName: 'แสงทอง', identityNumber: '1100000000102', phone: '0822222222' })
+    cy.registerPatient({ firstName: 'อรุณ', lastName: 'แสงทอง', identityNumber: '1100000000102', phone: '0822222222' }).as('secondPatient')
     cy.visitAs('manager', '/staff/appointments')
     cy.contains('button', 'สร้างนัดหมาย').click()
     cy.chooseBranch('เลือกสาขา', '01')
@@ -118,11 +118,18 @@ describe('creating and changing appointments', () => {
     })
     cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type('อรุณ')
     cy.contains('.patient-search-results button', 'อรุณ แสงทอง').click()
-    cy.contains('label', 'วันที่').pickDate(this.fixtures.tomorrow)
-    cy.chooseDropdown('เลือกเวลา', '09:00')
-    cy.get('.appointment-save button').click()
-    cy.get('.appointment-confirm-modal').contains('button', /^ใช่$/).click()
-    cy.get('[role="alert"]').should('be.visible')
+    cy.get('.appointment-date-field').pickDate(this.fixtures.tomorrow)
+    cy.get('button[aria-label="เลือกเวลา"]').click()
+    cy.get('[role="listbox"][aria-label="เลือกเวลา"] [role="option"]').should(($options) => {
+      expect([...$options].map(option => option.textContent.trim())).not.to.include('09:00')
+    })
+    // The UI removes occupied slots; a direct attempt must also be rejected by the real API.
+    cy.get('@secondPatient').then((patient) => {
+      cy.api('POST', '/api/appointments', {
+        branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId,
+        serviceId: this.fixtures.serviceId, startAt: at(this.fixtures, '09:00'),
+      }).its('status').should('equal', 400)
+    })
     cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 1)
   })
 
@@ -131,8 +138,10 @@ describe('creating and changing appointments', () => {
     cy.visitAs('manager', '/staff/appointments')
     cy.contains('tr', 'สมชาย ใจดี').contains('button', 'แก้ไข').click()
     cy.contains('h1', 'เลื่อนนัดหมาย').should('be.visible')
-    cy.chooseDropdown('เลือกเวลา', '14:30')
-    cy.get('.appointment-save button').click()
+    cy.get('.reschedule-time-trigger').click()
+    cy.get('.appointment-time-drawer').contains('button', /^14:30/).should('be.enabled').click()
+    cy.get('.appointment-time-drawer').contains('button', 'ยืนยันเวลา').click()
+    cy.get('.appointment-save button.primary').click()
     cy.get('.appointment-confirm-modal').contains('button', /^ใช่$/).click()
     cy.contains('เลื่อนนัดหมายสำเร็จ').should('be.visible')
     cy.api('GET', '/api/appointments').its('body.items.0.startAt').should('contain', 'T07:30:00')

@@ -1605,6 +1605,7 @@ function closePrintSuccess() {
           <div class="course-manager-metrics">
             <article>
               <small>ทั้งหมด</small><strong>{{ course.total }} ครั้ง</strong>
+              <span>Bonus {{ course.bonusSessions }} ครั้ง</span>
             </article>
             <article>
               <small>ใช้แล้ว</small><strong>{{ course.total - course.balance }} ครั้ง</strong>

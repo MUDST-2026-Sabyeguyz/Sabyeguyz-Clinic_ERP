@@ -1,62 +1,89 @@
-# Sabyeguyz Clinic ERP
+# Sabyeguyz Clinic ERP — Phase 1 review
 
-Monorepo: Vue frontend, Spring Boot backend, PostgreSQL database, and deployment configuration.
+Vue 3/TypeScript frontend, Spring Boot `clinicv2`, PostgreSQL 16/Flyway, Docker Compose, Vitest, JUnit, Cypress and GitHub Actions.
 
-## Quick Start
+**ชุดเตรียมส่งตรวจ 16 Oct 2026:** branch `backup/draft-phase1` อิง develop ล่าสุด ยังไม่ merge เข้า main จนเพื่อนยืนยัน และไม่ใช่คำยืนยันว่า business requirements/Phase 1 ครบทั้งหมด
 
-Requirements: Git and Docker with Docker Compose. No local Java, Maven, Node.js, or PostgreSQL installation is required.
+- **[คู่มือผู้ตรวจ: clone → run → tests/E2E → coverage → pipeline](docs/phase1/REVIEW_GUIDE_TH.md)**
+- [ผลตรวจจริงและข้อจำกัด](docs/phase1/VALIDATION_TH.md)
+- [รายการให้เพื่อน review ก่อนขึ้น main](docs/phase1/TEAM_REVIEW_TH.md)
+- [User stories](docs/user-stories/README.md) · [Figma](docs/figma.md) · [QA strategy](docs/testing/README.md)
+
+## 1. Clone revision ที่ต้องตรวจ
+
+ต้องมี Git และสิทธิ์อ่าน repository:
 
 ```bash
-git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+git clone --branch backup/draft-phase1 https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
 cd Sabyeguyz-Clinic_ERP
-cp .env.example .env
-# Set unique POSTGRES_PASSWORD and JWT_SECRET values in .env.
-docker compose up --build -d
+git rev-parse HEAD
 ```
 
-Services:
+จด SHA ก่อนรัน ระหว่างรออนุมัติ main ให้ใช้ branch นี้ ไม่ใช้ผล CI/coverage ของ archived backup/present-environment แทน app revision นี้
 
-- Frontend: http://localhost
-- Backend health: http://localhost:8080/actuator/health
-- Swagger UI: http://localhost:8080/swagger-ui/index.html
-- OpenAPI JSON: http://localhost:8080/v3/api-docs
-- PostgreSQL: localhost:5432
+## 2. เปิดแอปพร้อม synthetic demo data
 
-The first startup runs Flyway migrations automatically. PostgreSQL data is stored in the `postgres-data` Docker volume and survives `docker compose down` followed by `docker compose up -d`. Use `docker compose down -v` only when you intentionally want to remove the database volume.
+ขั้นต่ำ: Docker Desktop ที่เปิด **Linux containers และ Compose v2** ไม่ต้องลง host Java/Node/Maven/PostgreSQL เพื่อเปิด Compose
 
-The Compose project is named `sabyeguyz`. Data from an older Compose project stays in its previous volume and is not moved into the new project automatically.
+Windows PowerShell จาก repo root:
 
-Copy `.env.example` to `.env` and set unique database and JWT secrets before starting Compose. Ports can also be changed there.
+```powershell
+.\scripts\start-local.ps1 -DemoSeed
+```
 
-## Local Docker verification
+สคริปต์สุ่มรหัส DB/JWT เก็บ local ใน `.env.phase1-demo`, แยก project `clinic-phase1-review-demo` / volume `clinic-phase1-review-demo_postgres-v2-data`, build/start และรอ postgres/backend/frontend healthy
 
-Install Docker Desktop with Linux containers and Docker Compose, then run from this repository root:
+| สิ่งที่ตรวจ | URL / ค่า |
+|---|---|
+| Login | http://localhost:18082/ |
+| บัญชีสังเคราะห์ | manager / manager123 |
+| Backend health | http://localhost:18081/actuator/health |
+| Swagger | http://localhost:18081/swagger-ui/index.html |
+| PostgreSQL host port | 127.0.0.1:15432 |
+
+พอร์ตต้องว่าง เก็บ env file ไว้เปิดข้อมูลเดิม ห้ามใช้ demo seed กับฐานจริง สำหรับ Linux/macOS หรือ manual Compose ดู [คำสั่งพร้อม env](docs/phase1/REVIEW_GUIDE_TH.md#run-compose)
+
+ถ้าต้องการฐานว่างให้รัน `start-local.ps1` โดยไม่ใส่ DemoSeed บัญชีแรก phase1.manager ใช้รหัส bootstrap สุ่มใน `.env.phase1`; ฐานนี้ยังต้องตั้ง branch/staff/services ก่อนใช้ flow
+
+หยุดโดยรักษาข้อมูล:
+
+```powershell
+docker compose -p clinic-phase1-review-demo --env-file .env.phase1-demo -f compose.yaml -f compose.phase1-demo.yaml stop
+```
+
+เปิดต่อด้วย start-local.ps1 -DemoSeed ไม่ลบ volume เพื่อแก้ password mismatch
+
+## 3. Tests/E2E/coverage ด้วยคำสั่งเดียว
+
+เพิ่ม **Node 24.12+ และ npm** ตาม .nvmrc; Docker เปิดอยู่ และพอร์ต **18080/5173** ต้องว่าง จาก repo root:
 
 ```bash
-docker compose up --build -d
-docker compose ps
+node scripts/verify-phase1.mjs
 ```
 
-Wait for the backend health endpoint to return `{"status":"UP"}` before using the application:
+ติดตั้ง dependencies ตาม lockfile, ESLint/Oxlint แบบไม่ autofix, frontend unit/V8 coverage/type-check/build, backend JUnit/JaCoCo, backend HTTP Cypress และ frontend browser Cypress v2 กับ PostgreSQL ที่สร้างเฉพาะ run ใช้ Maven/JDK 21 ใน Docker จึงไม่ต้องลง Maven/JDK บน host สำหรับ entry point นี้
 
-- Frontend: http://localhost/patients
-- Register patient: http://localhost/patients/register
-- Backend health: http://localhost:8080/actuator/health
-- Swagger: http://localhost:8080/swagger-ui/index.html
+ใช้ Electron ที่มากับ Cypress ไม่ต้องลง Chrome เอง Fixtures reset เฉพาะฐาน test แยก ไม่ชี้ไป demo/production Cleanup ตรวจ IDs/labels ของ run และเก็บ dependency cache ใช้ซ้ำ
 
-The frontend serves a production build through nginx. Browser requests to `/api/` are forwarded to the backend on the Compose network. No local Node.js, Java, or Maven installation is required.
+| ผลลัพธ์ | ตำแหน่ง |
+|---|---|
+| Source SHA, code fingerprints, stage exits/logs | artifacts/phase1/แต่ละ-run/summary.json และ logs |
+| Backend unit JUnit | backend/target/surefire-reports/ |
+| Backend JaCoCo HTML/XML/CSV | backend/target/site/jacoco/ |
+| Frontend Vitest JUnit | frontend/test-results/unit.xml |
+| Frontend coverage HTML/LCOV/summary | frontend/coverage/ |
+| HTTP/browser Cypress JUnit | artifacts/phase1/แต่ละ-run/ |
 
-```bash
-docker compose logs --tail=100 backend frontend
-docker compose down
-```
+Backend denominator รวม production clinicv2 ทุก class รวมที่ยังไม่ cover โดยไม่รวม legacy; frontend รวม TS/Vue source ที่ไม่ได้ import ใน unit suite ด้วย เป็น **frontend unit coverage ไม่ใช่ browser coverage** ไม่มี threshold ตัวเลขที่อนุมัติ และไม่ใช้เปอร์เซ็นต์แทน requirement completeness
 
-Database data remains in the Compose volume after `down`. See [deployment instructions](deploy/README.md) for port overrides, test steps, and database details.
+## 4. Pipeline as code
 
-## Development workflow
+[Phase 1 review workflow](.github/workflows/phase1-review.yml) เรียก entry point เดียวกับ local บน push main/develop/backup/draft-phase1 และ PR เข้า main/develop พร้อม upload reports แม้ fail
 
-Create `feat/<feature-name>` branches from `develop`, then open a pull request into `develop` after verification.
+Workflow เดียวกันมี Compose build/runtime/normal-login gate แยกผ่าน `node scripts/verify-compose.mjs`; [Compose build เดิม](.github/workflows/compose-verify.yml) และ [workflows ทั้งหมด](.github/workflows) เป็น source configuration; CI PASS ต้องมี run ที่ตรง SHA จริง Default workflow ใหม่ใช้ ubuntu-latest กรณี Billing block ให้ owner แก้ Billing/Actions budget หรือเลือก dedicated self-hosted runner ตามคู่มือ Local PASS ไม่ใช่ remote CI PASS
 
-### Frontend tests
+Current-source Kubernetes deployment และ business acceptance ยังเป็น gates แยกจาก pre-review นี้ Historical archived deployment ไม่ยืนยัน clinicv2 revision นี้
 
-Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. The GitHub Actions workflow starts the backend and Vite server before running the same Cypress command in Chrome.
+## 5. หากรันไม่ได้
+
+อ่าน [troubleshooting](docs/phase1/REVIEW_GUIDE_TH.md#troubleshooting) เริ่มจาก exception แรก ห้ามข้าม tests/ล้าง schema/แก้ applied migrations เพื่อทำให้เขียว ไม่ commit .env, credentials, dumps, generated artifacts หรือ patient data

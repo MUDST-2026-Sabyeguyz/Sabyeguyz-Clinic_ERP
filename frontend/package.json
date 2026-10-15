@@ -8,6 +8,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "cypress run",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
@@ -44,6 +45,7 @@
     "vite": "^8.1.5",
     "vite-plugin-vue-devtools": "^8.1.5",
     "vitest": "^4.1.10",
+    "@vitest/coverage-v8": "4.1.10",
     "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.3.7"
   },
