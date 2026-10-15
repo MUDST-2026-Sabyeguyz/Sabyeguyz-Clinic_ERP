@@ -7,6 +7,7 @@ import { patientApi, reportApi } from '@/api/client'
 import {
   clearSelectedManagerBranch,
   selectedManagerBranch,
+  setSelectedManagerBranch,
 } from '@/features/staff/data/managerBranch'
 
 const now = new Date()
@@ -14,6 +15,7 @@ const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, 
 const to = ref(now.toISOString().slice(0, 10))
 const branchCode = ref('')
 const managerBranch = ref(selectedManagerBranch())
+const lastManagerBranch = ref(selectedManagerBranch())
 const selectedPeriod = ref('june-2569')
 const customRangeOpen = ref(false)
 const customFrom = ref(from.value)
@@ -149,9 +151,17 @@ function syncManagerBranch() {
   // Keep the manager selection as UI context until those branch records are available.
   branchCode.value = ''
   managerBranch.value = selectedManagerBranch()
+  if (managerBranch.value) lastManagerBranch.value = managerBranch.value
 }
 function showAllBranches() {
+  if (managerBranch.value) lastManagerBranch.value = managerBranch.value
   clearSelectedManagerBranch()
+  syncManagerBranch()
+  window.dispatchEvent(new CustomEvent('manager-branch-changed'))
+}
+function restoreCurrentBranchView() {
+  if (!lastManagerBranch.value) return
+  setSelectedManagerBranch(lastManagerBranch.value)
   syncManagerBranch()
   window.dispatchEvent(new CustomEvent('manager-branch-changed'))
 }
@@ -243,6 +253,14 @@ function applyCustomRange() {
           @click="showAllBranches"
         >
           ดูภาพรวมทุกสาขา
+        </button>
+        <button
+          v-else-if="lastManagerBranch"
+          class="all-branches-button"
+          type="button"
+          @click="restoreCurrentBranchView"
+        >
+          กลับมุมมองสาขาปัจจุบัน
         </button>
       </header>
 
