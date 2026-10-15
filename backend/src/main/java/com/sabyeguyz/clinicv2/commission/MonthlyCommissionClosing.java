@@ -58,6 +58,16 @@ public class MonthlyCommissionClosing {
     @Column(name = "closed_by")
     private Long closedBy;
 
+    /** The latest Reopen of this month: why, by whom and when (the audit log keeps the earlier ones). */
+    @Column(name = "reopen_reason", length = 255)
+    private String reopenReason;
+
+    @Column(name = "reopened_by")
+    private Long reopenedBy;
+
+    @Column(name = "reopened_at")
+    private Instant reopenedAt;
+
     @Column(name = "finalized_at")
     private Instant finalizedAt;
 
@@ -93,6 +103,12 @@ public class MonthlyCommissionClosing {
     public void setFinalizedBy(Long finalizedBy) { this.finalizedBy = finalizedBy; }
     public Instant getClosedAt() { return closedAt; }
     public void setClosedAt(Instant closedAt) { this.closedAt = closedAt; }
+    public String getReopenReason() { return reopenReason; }
+    public void setReopenReason(String reopenReason) { this.reopenReason = reopenReason; }
+    public Long getReopenedBy() { return reopenedBy; }
+    public void setReopenedBy(Long reopenedBy) { this.reopenedBy = reopenedBy; }
+    public Instant getReopenedAt() { return reopenedAt; }
+    public void setReopenedAt(Instant reopenedAt) { this.reopenedAt = reopenedAt; }
     public Long getClosedBy() { return closedBy; }
     public void setClosedBy(Long closedBy) { this.closedBy = closedBy; }
 }

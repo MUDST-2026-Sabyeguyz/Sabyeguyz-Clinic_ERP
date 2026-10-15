@@ -33,6 +33,13 @@ public class StaffMonthlyPayment {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    /** The date the Manager says the money was paid, and the reference (transfer / slip number) of that payment. */
+    @Column(name = "paid_date")
+    private java.time.LocalDate paidDate;
+
+    @Column(name = "payment_reference", length = 100)
+    private String paymentReference;
+
     @Column(name = "status_changed_by", nullable = false)
     private Long statusChangedBy;
 
@@ -69,6 +76,10 @@ public class StaffMonthlyPayment {
     public void setPaymentMonth(String paymentMonth) { this.paymentMonth = paymentMonth; }
     public PaymentStatus getPaymentStatus() { return paymentStatus; }
     public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
+    public java.time.LocalDate getPaidDate() { return paidDate; }
+    public void setPaidDate(java.time.LocalDate paidDate) { this.paidDate = paidDate; }
+    public String getPaymentReference() { return paymentReference; }
+    public void setPaymentReference(String paymentReference) { this.paymentReference = paymentReference; }
     public Instant getPaidAt() { return paidAt; }
     public void setPaidAt(Instant paidAt) { this.paidAt = paidAt; }
     public Long getStatusChangedBy() { return statusChangedBy; }
