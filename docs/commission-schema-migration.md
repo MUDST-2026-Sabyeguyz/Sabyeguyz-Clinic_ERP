@@ -4,6 +4,14 @@
 `backend/src/main/resources/db/migration/V1002__implement_commission_requirements.sql` ตามกติกาใน Data Dictionary ล่าสุด
 ผ่านการทดสอบกับ Flyway จริง ทั้งฐานใหม่และการอัปเกรดฐานที่มีข้อมูล
 
+## Migration V4: อีเมลผู้ใช้และฐานเดิม
+
+`feat/database` เพิ่ม `V4__add_app_user_email.sql` หลังจากบางฐานใช้งาน `V1001` แล้ว ฐานเหล่านั้นเริ่มระบบไม่ได้เมื่อ Flyway ใช้ค่าเริ่มต้น เพราะ V4 เป็น migration ที่ยังไม่ได้รันและมีเลขต่ำกว่าเวอร์ชันปัจจุบัน (`Detected resolved migration not applied to database: 4`). โปรไฟล์ `v2` จึงเปิด `spring.flyway.out-of-order=true` เพื่อให้ฐานเดิมรัน V4 ก่อน V1002/V1003 โดยยังตรวจ checksum ตามปกติ ส่วนฐานใหม่รันตามลำดับ V1, V2, V3, V4, V1001, V1002, V1003
+
+`FlywayOutOfOrderUpgradeCheck` สร้างฐานที่มีประวัติถึง V1001 ก่อน แล้วเปิดแอปจริงเพื่อยืนยันว่า V4, V1002, V1003 ถูกนำไปใช้ครบและ Hibernate validate ผ่าน ส่วน `RuntimeCheck` ตรวจการสร้าง/แก้บัญชี การบันทึกอีเมล และล็อกอินด้วยอีเมลแบบไม่สนตัวพิมพ์ใหญ่เล็กบนฐานใหม่ หากฐานเดิมมี `app_user.username` ที่มี `@`, V4 จะปฏิเสธตาม constraint ใหม่ ต้องตรวจและแก้ชื่อผู้ใช้ดังกล่าวก่อนอัปเกรด โดยไม่เปลี่ยนข้อมูลอัตโนมัติ
+
+ไฟล์ V3 ต้นฉบับที่เคยเก็บใน `db/pending_migrations` ถูกนำออกแล้ว เพราะ V1002 เป็นฉบับที่ปรับให้ใช้งานจริงและมีเอกสารความต่างด้านล่าง ต้นฉบับยังดูได้ใน `feat/database` คอมมิต `28fdb46`
+
 ## ทำไมเลข V1002 ไม่ใช่ V3
 - v2 มี `V3__reference_data.sql` อยู่แล้ว (เลขชน)
 - ฐานข้อมูลที่ใช้อยู่ได้ apply `V1001` ไปแล้ว ถ้าเพิ่มเลขต่ำกว่า (เช่น V4) Flyway จะปฏิเสธ (migration ที่ยังไม่ apply แต่เลขต่ำกว่าที่ apply แล้ว)
@@ -26,14 +34,14 @@ V3 ต้นฉบับ **ล้มบนฐานที่มีข้อม�
 ## ผลทดสอบ (15 ต.ค. 2026, PostgreSQL 16)
 | กรณี | ผล |
 |---|---|
-| ฐานใหม่ (V1, V2, V3, V1001, V1002) ด้วย psql ทรานแซกชันเดียว และด้วย Flyway จริง | ผ่าน ทุก constraint validated |
+| ฐานใหม่ (V1, V2, V3, V4, V1001, V1002, V1003) ด้วย psql ทรานแซกชันเดียว และด้วย Flyway จริง | ผ่าน ทุก constraint validated |
 | ฐานมีข้อมูลตัวอย่าง (seed) | ผ่าน |
 | อัปเกรดฐานที่อยู่ที่ V1001 และมีข้อมูลที่ระบบเก่าสร้างผ่าน API จริง (5 คอร์ส, 4 การใช้สิทธิ์, 5 allocation, 2 closing, คืนเงิน, ย้อนการใช้สิทธิ์) ด้วย Flyway จริง | ผ่าน ("Successfully applied 1 migration ... now at version v1002") |
 | ข้อมูลเก่าขอบเขต: การจ่าย Unpaid/Paid, closing ที่ยังไม่ปิด, ป้ายฐานคำนวณเป็นข้อความ | แปลงถูกต้อง |
 | มี `Adjustment` เก่า | migration หยุดและ rollback ตามที่ออกแบบ |
 | V3 ต้นฉบับบนข้อมูลเดียวกัน | ล้ม |
 
-ชุดตรวจที่รันซ้ำได้: `bash backend/scripts/commission-migration/check-v1002.sh` (ใช้ Docker, 14 ข้อ) ส่วนการทดสอบกับข้อมูลที่ระบบเก่าสร้างจริงทำมือ: รัน backend ที่ `SPRING_FLYWAY_TARGET=1001`, สร้างข้อมูลด้วย `backend/scripts/commission-migration/seed-old-data.mjs` (แก้ `B` ให้ตรงพอร์ต) แล้วค่อยให้ Flyway ใช้ V1002
+ชุดตรวจที่รันซ้ำได้: `bash backend/scripts/commission-migration/check-v1002.sh` (ใช้ Docker, 15 ข้อ) และ `FlywayOutOfOrderUpgradeCheck` สำหรับฐาน pre-V4 ที่เคยรันถึง V1001 ส่วนผลทดสอบกับข้อมูลเก่าที่สร้างผ่าน API จริงในตารางด้านบนเป็นหลักฐานจากการทดสอบก่อนเพิ่ม V4
 
 ## ข้อมูลเก่าที่ยังไม่ผ่านกติกาใหม่ (ได้รับ NOTICE และคง NOT VALID)
 - `sales_transaction.chk_sales_transaction_required_staff_visit`: รายการ SingleVisit เก่าไม่มีผู้รักษา/Visit
