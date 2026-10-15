@@ -341,7 +341,6 @@ export const branchApi = {
     const branches = await api.get<Branch[]>('/api/branches')
     return branches.filter(
       (branch) =>
-        branch.code.toUpperCase() !== 'RP' &&
         !branch.name.includes('ราชพฤกษ์') &&
         !branch.name.includes('พารพฤกษ์'),
     )
