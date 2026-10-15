@@ -4,7 +4,10 @@ import AppointmentView from '../views/AppointmentView.vue'
 import { appointmentApi } from '@/api/client'
 import { clinicToday } from '@/utils/clinicDate'
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ params: {}, query: {}, name: 'staff-appointments' }),
+  useRouter: () => ({ push: vi.fn() }),
+}))
 vi.mock('/calendar-appointment.svg', () => ({ default: '/calendar-appointment.svg' }))
 vi.mock('@/api/client', async (original) => {
   const actual = await original<typeof import('@/api/client')>()
