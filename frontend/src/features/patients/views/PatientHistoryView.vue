@@ -27,8 +27,6 @@ const paymentDetails = ref<Record<number, SaleDetail>>({})
 const courses = ref<CoursePurchase[]>([])
 const query = ref('')
 const dateFilter = ref('')
-const branchFilter = ref('')
-const statusFilter = ref('')
 const typeFilter = ref('')
 const selectedReceipt = ref<SaleDetail | null>(null)
 const receiptView = ref(false)
@@ -49,9 +47,12 @@ const filteredPayments = computed(() => {
       (!keyword ||
         `${item.receiptNo} ${item.status} ${description}`.toLowerCase().includes(keyword)) &&
       (!dateFilter.value || item.soldAt.slice(0, 10) === dateFilter.value) &&
-      (!branchFilter.value || item.branchCode === branchFilter.value) &&
-      (!statusFilter.value || item.status === statusFilter.value) &&
-      (!typeFilter.value || detail?.items.some((entry) => entry.type === typeFilter.value))
+      (!typeFilter.value ||
+        detail?.items.some((entry) =>
+          typeFilter.value === 'SINGLE'
+            ? entry.type === 'ASSESSMENT' || entry.type === 'SINGLE_VISIT'
+            : entry.type === 'COURSE',
+        ))
     )
   })
 })
@@ -61,28 +62,26 @@ const filteredCourses = computed(() => {
     (item) =>
       (!keyword ||
         `${item.course.code} ${item.course.name} ${item.status}`.toLowerCase().includes(keyword)) &&
-      (!dateFilter.value || item.purchasedAt.slice(0, 10) === dateFilter.value) &&
-      (!branchFilter.value || item.branchCode === branchFilter.value) &&
-      (!statusFilter.value || courseDisplayStatus(item) === statusFilter.value),
+      (!dateFilter.value || item.purchasedAt.slice(0, 10) === dateFilter.value),
   )
 })
-const branchOptions = computed(() => [
-  ...new Set([
-    ...payments.value.map((item) => item.branchCode),
-    ...courses.value.map((item) => item.branchCode),
-  ]),
-])
-const statusOptions = computed(() =>
-  activeTab.value === 'payments'
-    ? ['PAID', 'VOIDED']
-    : ['ACTIVE', 'EXHAUSTED', 'EXPIRED', 'CANCELLED'],
-)
 const paymentDescription = (item: SaleSummary) =>
   item.itemDescription ||
   paymentDetails.value[item.id]?.items.map((entry) => entry.description).join(', ') ||
   '-'
 const paymentMethod = (item: SaleSummary) =>
   paymentDetails.value[item.id]?.payments.map((entry) => entry.paymentMethodCode).join(', ') || '-'
+const paymentMethodLabel = (code: string) => {
+  const labels: Record<string, string> = {
+    CASH: 'เงินสด',
+    BANK_TRANSFER: 'โอนเงินผ่านธนาคาร',
+    PROMPTPAY: 'พร้อมเพย์',
+    QR_CODE: 'พร้อมเพย์',
+    CARD: 'บัตรเครดิต/เดบิต',
+    CREDIT_CARD: 'บัตรเครดิต/เดบิต',
+  }
+  return labels[code] || code
+}
 const paymentStatus = (status: string) => {
   const labels: Record<string, string> = {
     PAID: 'ชำระแล้ว',
@@ -143,9 +142,14 @@ const retryPrint = () => {
 }
 const thaiDate = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(new Date(value))
+const receiptDate = (value: string) =>
+  new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value))
 
 watch(activeTab, () => {
-  statusFilter.value = ''
   typeFilter.value = ''
 })
 
@@ -190,9 +194,10 @@ onMounted(async () => {
     <main
       v-if="selectedReceipt"
       v-show="receiptView"
-      class="receipt-page-main service-receipt-page printable-receipt-screen"
+      class="receipt-page-main printable-receipt-screen"
     >
-      <article class="printable-receipt">
+      <section class="service-receipt-page">
+        <article class="printable-receipt">
         <header>
           <div class="receipt-clinic">
             <h1>
@@ -201,15 +206,17 @@ onMounted(async () => {
             </h1>
             <p>ที่อยู่: {{ receiptBranch?.address?.trim() || '—' }}</p>
             <p>โทร: {{ receiptBranch?.phone?.trim() || '—' }}</p>
-            <p>เลขที่ใบอนุญาต: {{ receiptBranch?.licenseNumber?.trim() || '—' }}</p>
-            <p>เลขประจำตัวผู้เสียภาษี: {{ receiptBranch?.taxId?.trim() || '—' }}</p>
-            <p>อีเมล: {{ receiptBranch?.email?.trim() || '—' }}</p>
+            <p>
+              เลขที่ใบอนุญาต: {{ receiptBranch?.licenseNumber?.trim() || '—' }}　 อีเมล:
+              {{ receiptBranch?.email?.trim() || '—' }}
+            </p>
           </div>
           <div class="receipt-document">
             <h2>ใบเสร็จรับเงิน</h2>
-            <p>เลขที่เอกสาร: {{ selectedReceipt.receiptNo }}</p>
-            <p>เอกสารอ้างอิง: {{ selectedReceipt.receiptNo }}</p>
-            <p>วันที่ออกเอกสาร: {{ thaiDate(selectedReceipt.soldAt) }}</p>
+            <div>
+              <p>เลขที่เอกสาร: {{ selectedReceipt.receiptNo }}</p>
+              <p>วันที่ออกเอกสาร: {{ receiptDate(selectedReceipt.soldAt) }}</p>
+            </div>
           </div>
         </header>
         <section class="receipt-customer">
@@ -224,7 +231,7 @@ onMounted(async () => {
           <thead>
             <tr>
               <th>รายการ</th>
-              <th>จำนวน</th>
+              <th>จำนวน / หน่วย</th>
               <th>ราคา</th>
               <th>ยอดรวม</th>
             </tr>
@@ -232,7 +239,7 @@ onMounted(async () => {
           <tbody>
             <tr v-for="(entry, index) in selectedReceipt.items" :key="entry.id">
               <td>{{ index + 1 }}. {{ entry.description }}</td>
-              <td>{{ entry.quantity }}</td>
+              <td>{{ entry.quantity }} ครั้ง</td>
               <td>฿{{ (entry.lineTotal / entry.quantity).toLocaleString() }}</td>
               <td>฿{{ entry.lineTotal.toLocaleString() }}</td>
             </tr>
@@ -250,13 +257,7 @@ onMounted(async () => {
                 })
               }}</b
             >
-            <span>มูลค่าก่อนภาษี</span
-            ><b
-              >฿{{
-                selectedReceipt.paid.toLocaleString(undefined, { minimumFractionDigits: 2 })
-              }}</b
-            >
-            <span>ภาษีมูลค่าเพิ่ม (ไม่มีภาษี)</span><b>฿0.00</b><strong>ยอดชำระ</strong
+            <strong>ยอดสุทธิที่ชำระ</strong
             ><strong
               >฿{{
                 selectedReceipt.paid.toLocaleString(undefined, { minimumFractionDigits: 2 })
@@ -267,7 +268,9 @@ onMounted(async () => {
             <span>สถานะการชำระเงิน</span><b>{{ paymentStatus(selectedReceipt.status) }}</b>
             <span>ช่องทางการชำระ</span
             ><b>{{
-              selectedReceipt.payments.map((entry) => entry.paymentMethodCode).join(', ')
+              selectedReceipt.payments
+                .map((entry) => paymentMethodLabel(entry.paymentMethodCode))
+                .join(', ')
             }}</b>
             <strong>ยอดสุทธิ</strong
             ><strong
@@ -278,7 +281,6 @@ onMounted(async () => {
           </div>
         </section>
         <section class="receipt-balance">
-          <p><b>แต้มคงเหลือ: 0</b><b>วงเงินคงเหลือ: ฿0.00</b></p>
           <p>
             <b>หมายเหตุ: {{ selectedReceipt.note || '-' }}</b>
           </p>
@@ -299,11 +301,12 @@ onMounted(async () => {
           </div>
         </section>
         <p class="receipt-printed-at">พิมพ์เมื่อ {{ new Date().toLocaleString('th-TH') }}</p>
-      </article>
-      <footer class="receipt-print-actions">
-        <button type="button" @click="receiptView = false">← กลับ</button
-        ><button type="button" @click="openReceiptPrint">พิมพ์เอกสาร</button>
-      </footer>
+        </article>
+        <div class="receipt-print-actions">
+          <button type="button" @click="receiptView = false">← กลับ</button
+          ><button type="button" @click="openReceiptPrint">พิมพ์เอกสาร</button>
+        </div>
+      </section>
     </main>
     <main v-show="!receiptView" class="history-page-content">
       <RouterLink class="back-link" :to="`/staff/patients/${route.params.id}`"
@@ -323,35 +326,14 @@ onMounted(async () => {
           <input v-model="query" placeholder="ค้นหาเลขที่ใบเสร็จหรือชื่อคอร์ส" />
           <ThaiDatePicker v-model="dateFilter" show-calendar-icon numeric-month hide-caret />
           <FilterDropdown
-            v-model="branchFilter"
-            label="กรองตามสาขา"
-            default-label="สาขา"
-            :options="branchOptions.map((value) => ({ value, label: value }))"
-          />
-          <FilterDropdown
-            v-model="statusFilter"
-            label="กรองตามสถานะ"
-            default-label="สถานะทั้งหมด"
-            :options="
-              statusOptions.map((value) => ({
-                value,
-                label: activeTab === 'payments' ? paymentStatus(value) : courseStatus(value),
-              }))
-            "
-          />
-          <FilterDropdown
+            v-if="activeTab === 'payments'"
             v-model="typeFilter"
             label="กรองตามประเภทรายการ"
-            default-label="ประเภทรายการทั้งหมด"
-            :options="
-              activeTab === 'courses'
-                ? [{ value: 'COURSE', label: 'คอร์สรักษา' }]
-                : [
-                    { value: 'ASSESSMENT', label: 'Assessment' },
-                    { value: 'SINGLE_VISIT', label: 'Single Visit' },
-                    { value: 'COURSE', label: 'Course' },
-                  ]
-            "
+            default-label="ประเภทรายการ"
+            :options="[
+              { value: 'SINGLE', label: 'รายครั้ง' },
+              { value: 'COURSE', label: 'รายคอร์ส' },
+            ]"
           />
         </div>
         <p v-if="loading">กำลังโหลดข้อมูล...</p>
@@ -366,8 +348,7 @@ onMounted(async () => {
                 <th>สาขา</th>
                 <th>ยอดสุทธิ</th>
                 <th>การชำระ</th>
-                <th>สถานะ</th>
-                <th>จัดการ</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -378,16 +359,13 @@ onMounted(async () => {
                 <td>{{ item.branchCode }}</td>
                 <td>฿{{ item.paid.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
                 <td>{{ paymentMethod(item) }}</td>
-                <td>
-                  <span class="history-status">{{ paymentStatus(item.status) }}</span>
-                </td>
                 <td class="history-actions">
                   <button type="button" @click="openReceipt(item)">ดูใบเสร็จ</button>
                   <button type="button" class="outline" @click="openPrint(item)">พิมพ์</button>
                 </td>
               </tr>
               <tr v-if="!filteredPayments.length">
-                <td colspan="8">ไม่พบประวัติการชำระเงิน</td>
+                <td colspan="7">ไม่พบประวัติการชำระเงิน</td>
               </tr>
             </tbody>
           </table>
@@ -463,8 +441,12 @@ onMounted(async () => {
       </section>
     </main>
     <Teleport to="body">
-      <div v-if="printConfirm" class="history-modal-backdrop" @click.self="printConfirm = false">
-        <section class="history-modal print-confirm-modal" role="dialog" aria-modal="true">
+      <div
+        v-if="printConfirm"
+        class="receipt-print-modal-backdrop"
+        @click.self="printConfirm = false"
+      >
+        <section class="receipt-print-modal" role="dialog" aria-modal="true">
           <h2>ยืนยันการพิมพ์เอกสาร</h2>
           <p>ตรวจสอบชื่อผู้รับบริการ เลขที่เอกสาร รายการ และยอดสุทธิให้ครบถ้วนก่อนส่งพิมพ์</p>
           <footer>
@@ -475,8 +457,12 @@ onMounted(async () => {
       </div>
     </Teleport>
     <Teleport to="body">
-      <div v-if="printResult" class="history-modal-backdrop" @click.self="closePrintResult">
-        <section class="history-modal print-result-modal" role="dialog" aria-modal="true">
+      <div
+        v-if="printResult"
+        class="receipt-print-modal-backdrop"
+        @click.self="closePrintResult"
+      >
+        <section class="receipt-print-modal" role="dialog" aria-modal="true">
           <template v-if="printResult === 'success'">
             <h2>ส่งเอกสารไปยังเครื่องพิมพ์แล้ว</h2>
             <p>สถานะเอกสารถูกบันทึกเป็น “พิมพ์แล้ว” สามารถกลับไปดูรายการต้นทางได้</p>
