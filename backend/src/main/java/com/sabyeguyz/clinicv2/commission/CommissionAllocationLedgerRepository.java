@@ -11,6 +11,33 @@ public interface CommissionAllocationLedgerRepository extends JpaRepository<Comm
 
     List<CommissionAllocationLedger> findByVisitUsageIdOrderByIdAsc(Long visitUsageId);
 
+    /** Rows of the Owner's commission earned on treatments in a date range (Allocation and Reversal). */
+    @org.springframework.data.jpa.repository.Query("select a from CommissionAllocationLedger a where a.ownerStaff.id = :staffId "
+            + "and a.visitDate between :from and :to order by a.id")
+    List<CommissionAllocationLedger> findOwnerRows(@org.springframework.data.repository.query.Param("staffId") Long staffId,
+            @org.springframework.data.repository.query.Param("from") LocalDate from,
+            @org.springframework.data.repository.query.Param("to") LocalDate to);
+
+    /** Rows whose treatment fee belongs to the treating PT, in a date range. */
+    @org.springframework.data.jpa.repository.Query("select a from CommissionAllocationLedger a where a.treatingStaff.id = :staffId "
+            + "and a.treatmentFeeAmount <> 0 and a.visitDate between :from and :to order by a.id")
+    List<CommissionAllocationLedger> findTreatingFeeRows(@org.springframework.data.repository.query.Param("staffId") Long staffId,
+            @org.springframework.data.repository.query.Param("from") LocalDate from,
+            @org.springframework.data.repository.query.Param("to") LocalDate to);
+
+    default boolean ownerCommissionOfSaleMonthIn(Long sellerStaffId, String saleMonth,
+                                                  List<com.sabyeguyz.clinicv2.enums.PaymentStatus> statuses) {
+        return countOwnerPayments(sellerStaffId, saleMonth, statuses) > 0;
+    }
+
+    /** Owner commission of the courses a seller sold in a month that sits in payments of the given statuses. */
+    @org.springframework.data.jpa.repository.Query("select count(a) from CommissionAllocationLedger a "
+            + "where a.course.sellerStaff.id = :staffId and a.course.saleMonth = :saleMonth "
+            + "and a.ownerMonthlyPayment.paymentStatus in :statuses")
+    long countOwnerPayments(@org.springframework.data.repository.query.Param("staffId") Long staffId,
+            @org.springframework.data.repository.query.Param("saleMonth") String saleMonth,
+            @org.springframework.data.repository.query.Param("statuses") List<com.sabyeguyz.clinicv2.enums.PaymentStatus> statuses);
+
     Optional<CommissionAllocationLedger> findByVisitUsageIdAndEntryType(Long visitUsageId, AllocationEntryType entryType);
 
     List<CommissionAllocationLedger> findByVisitDateBetweenOrderByVisitDateDescIdDesc(LocalDate from, LocalDate to);
