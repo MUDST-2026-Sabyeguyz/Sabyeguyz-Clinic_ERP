@@ -1,5 +1,5 @@
 /* oxlint-disable vitest/valid-expect -- Cypress assertions use Chai, not Vitest. */
-const month = new Date().toISOString().slice(0, 7)
+const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).slice(0, 7)
 
 // A course owned by the therapist with one session used by the Owner: 9,000 THB at 5% over 6 sessions = 75.00 for the session.
 function courseWithOneSession(fx) {

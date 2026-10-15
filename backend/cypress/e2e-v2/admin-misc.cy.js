@@ -1,4 +1,4 @@
-const month = new Date().toISOString().slice(0, 7)
+const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).slice(0, 7)
 
 describe('v2 users, commission schemes, course templates, treatments and lookups', () => {
   describe('users', () => {

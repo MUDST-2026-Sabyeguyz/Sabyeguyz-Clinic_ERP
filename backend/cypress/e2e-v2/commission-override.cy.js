@@ -1,4 +1,4 @@
-const month = new Date().toISOString().slice(0, 7)
+const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).slice(0, 7)
 const range = '?from=2020-01-01&to=2099-12-31'
 
 function buyAndClose(fx, patient) {
