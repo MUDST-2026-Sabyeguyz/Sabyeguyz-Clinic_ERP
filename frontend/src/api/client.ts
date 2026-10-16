@@ -154,6 +154,30 @@ export type Branch = {
   taxId?: string
   active: boolean
 }
+type BackendBranch = {
+  id: number
+  branchCode: string
+  name: string
+  address?: string
+  phone?: string
+  email?: string | null
+  licenseNo?: string | null
+  active: boolean
+}
+
+function normalizeBranch(branch: BackendBranch): Branch {
+  return {
+    id: branch.id,
+    code: branch.branchCode,
+    numericCode: branch.branchCode,
+    name: branch.name,
+    address: branch.address,
+    phone: branch.phone,
+    email: branch.email ?? undefined,
+    licenseNumber: branch.licenseNo ?? undefined,
+    active: branch.active,
+  }
+}
 export type Staff = {
   id: number
   userId: number
@@ -362,12 +386,26 @@ export const patientApi = {
 }
 
 export const branchApi = {
-  list: () => api.get<Branch[]>('/api/branches'),
-  get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
+  list: () => api.get<BackendBranch[]>('/api/branches').then((items) => items.map(normalizeBranch)),
+  get: (id: number) => api.get<BackendBranch>(`/api/branches/${id}`).then(normalizeBranch),
   create: (body: { code: string; numericCode: string; name: string }) =>
-    api.post<Branch>('/api/branches', body),
+    api
+      .post<BackendBranch>('/api/branches', {
+        branchCode: body.code || body.numericCode,
+        name: body.name,
+        address: '',
+        phone: '',
+      })
+      .then(normalizeBranch),
   update: (id: number, body: { code: string; numericCode: string; name: string }) =>
-    api.put<Branch>(`/api/branches/${id}`, body),
+    api
+      .put<BackendBranch>(`/api/branches/${id}`, {
+        branchCode: body.code || body.numericCode,
+        name: body.name,
+        address: '',
+        phone: '',
+      })
+      .then(normalizeBranch),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }
 
