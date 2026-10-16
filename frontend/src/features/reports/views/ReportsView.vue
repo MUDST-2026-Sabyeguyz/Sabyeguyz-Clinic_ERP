@@ -51,6 +51,9 @@ const pageSize = 10
 const branches = ref<Branch[]>([])
 const courseOptions = ref<Array<{ id: number; name: string }>>([])
 const reportData = ref<ReportData>(null)
+const loadedReport = ref<ReportKey | null>(null)
+const currentReportData = computed(() => loadedReport.value === report.value ? reportData.value : null)
+let reportRequest = 0
 const loading = ref(false)
 const errorMessage = ref('')
 const lastUpdatedText = ref('')
@@ -173,7 +176,7 @@ function updateTimestamp() {
 
 // ── Dynamic Filtering ────────────────────────────────────────────────────────
 
-const revenueData = computed(() => reportData.value as RevenueReport | null)
+const revenueData = computed(() => currentReportData.value as RevenueReport | null)
 
 const filteredRevenueCategories = computed(() => {
   if (!revenueData.value?.byCategory) return []
@@ -225,7 +228,7 @@ const kpiItems = computed(() => {
 const activeKpis = computed(() => (report.value === 'revenue' ? kpiItems.value : []))
 
 // Filtered Course Balance Rows
-const balanceData = computed(() => reportData.value as CourseBalanceReport | null)
+const balanceData = computed(() => currentReportData.value as CourseBalanceReport | null)
 
 type ExtendedBalanceRow = {
   hn: string
@@ -258,7 +261,7 @@ const filteredBalanceRows = computed<ExtendedBalanceRow[]>(() => {
 
 // Filtered Commission Rows
 const filteredCommissionRows = computed<CommissionReportRow[]>(() => {
-  const data = (reportData.value as CommissionReportRow[] | null) ?? []
+  const data = (currentReportData.value as CommissionReportRow[] | null) ?? []
 
   return data.filter((row) => {
     const qStaff = filters.staff.trim().toLowerCase()
@@ -306,7 +309,7 @@ const tableRows = computed<string[][]>(() => {
   }
 
   if (report.value === 'transfer') {
-    const data = (reportData.value as TransferRecord[] | null) ?? []
+    const data = (currentReportData.value as TransferRecord[] | null) ?? []
     return data
       .filter((row) => {
         const q = filters.patient.trim().toLowerCase()
@@ -395,31 +398,39 @@ const totalRow = computed<string[] | null>(() => {
 })
 
 async function fetchReport() {
+  const request = ++reportRequest
+  const requestedReport = report.value
   loading.value = true
   errorMessage.value = ''
   reportData.value = null
+  loadedReport.value = null
   try {
     const branchCode = filters.branch === 'ทุกสาขา' ? undefined : filters.branch
-    switch (report.value) {
+    let data: ReportData = null
+    switch (requestedReport) {
       case 'revenue':
-        reportData.value = await reportApi.revenue(filters.from, filters.to, branchCode)
+        data = await reportApi.revenue(filters.from, filters.to, branchCode)
         break
       case 'balance':
-        reportData.value = await reportApi.balances(filters.from, filters.to, branchCode)
+        data = await reportApi.balances(filters.from, filters.to, branchCode)
         break
       case 'transfer':
-        reportData.value = await courseApi.transferHistory()
+        data = await courseApi.transferHistory()
         break
       case 'commission':
-        reportData.value = await commissionApi.report(filters.from, filters.to)
+        data = await commissionApi.report(filters.from, filters.to)
         break
     }
+    if (request !== reportRequest) return
+    reportData.value = data
+    loadedReport.value = requestedReport
     updateTimestamp()
   } catch (error) {
+    if (request !== reportRequest) return
     reportData.value = null
     errorMessage.value = error instanceof Error ? error.message : 'โหลดรายงานไม่สำเร็จ'
   } finally {
-    loading.value = false
+    if (request === reportRequest) loading.value = false
   }
 }
 

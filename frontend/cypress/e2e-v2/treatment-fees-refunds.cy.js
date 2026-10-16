@@ -30,10 +30,14 @@ describe('treatment fee rules page', () => {
   })
 
   it('disables and enables a rule', () => {
+    cy.intercept('PATCH', '**/api/commission/treatment-fees/*/disable').as('disableRule')
+    cy.intercept('PATCH', '**/api/commission/treatment-fees/*/enable').as('enableRule')
     cy.visitAs('manager', '/staff/commission/compensation-settings')
     cy.get('.rule-card').contains('button', 'ปิดใช้งาน').click()
+    cy.wait('@disableRule').its('response.statusCode').should('equal', 200)
     cy.get('.rule-card').should('contain.text', 'ปิดใช้งาน').contains('button', 'เปิดใช้งาน').click()
-    cy.get('.rule-card').should('contain.text', 'ใช้งาน')
+    cy.wait('@enableRule').its('response.statusCode').should('equal', 200)
+    cy.get('.rule-card').contains('button', 'ปิดใช้งาน').should('be.visible')
     cy.api('GET', '/api/commission/treatment-fees').its('body.0.enabled').should('equal', true)
   })
 
