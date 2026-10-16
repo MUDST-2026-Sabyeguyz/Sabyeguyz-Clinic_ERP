@@ -71,6 +71,13 @@ public class AppUserService {
         if (!user.isUserStatus() || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new IllegalArgumentException("ชื่อผู้ใช้ อีเมล หรือรหัสผ่านไม่ถูกต้อง");
         }
+        // staff of a closed branch cannot work at all until it is opened again; a Manager still gets in to open it
+        com.sabyeguyz.clinicv2.branch.Branch home = user.getStaff() == null ? null : user.getStaff().getBranch();
+        boolean manager = userRoles.findByUserId(user.getId()).stream()
+                .anyMatch(role -> "Manager".equalsIgnoreCase(role.getRole().getRoleName()));
+        if (home != null && !home.isBranchStatus() && !manager) {
+            throw new IllegalArgumentException("สาขา " + home.getBranchName() + " ปิดใช้งาน ไม่สามารถเข้าสู่ระบบได้");
+        }
         return user;
     }
 

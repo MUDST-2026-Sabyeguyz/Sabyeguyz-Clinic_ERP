@@ -94,7 +94,7 @@ async function loadMaster() {
   staff.value = staffList
   selectedServiceId.value = s[0]?.id ?? 0
   selectedCourseId.value = c[0]?.id ?? 0
-  paymentCode.value = methods[0]?.code ?? ''
+  paymentCode.value = methods.find((method) => method.active !== false)?.code ?? ''
   selectedStaffId.value = staffList[0]?.id
   try {
     branches.value = await branchApi.list()
@@ -212,11 +212,6 @@ const selectedStaffName = computed(
 const staffFilterOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
 )
-const requiredSalePaymentMethods = [
-  { code: 'BANK_TRANSFER', name: 'โอนเงินผ่านธนาคาร' },
-  { code: 'PROMPTPAY', name: 'พร้อมเพย์' },
-  { code: 'CARD', name: 'บัตรเครดิต/เดบิต' },
-]
 function paymentMethodCategory(code: string, name = '') {
   const value = `${code} ${name}`.toLocaleLowerCase('th')
   if (value.includes('bank') || value.includes('transfer') || value.includes('ธนาคาร'))
@@ -226,14 +221,7 @@ function paymentMethodCategory(code: string, name = '') {
   return 'other'
 }
 const salePaymentMethods = computed(() => {
-  return requiredSalePaymentMethods.map((defaultMethod) => {
-    const category = paymentMethodCategory(defaultMethod.code, defaultMethod.name)
-    return (
-      paymentMethods.value.find(
-        (method) => paymentMethodCategory(method.code, method.name) === category,
-      ) ?? defaultMethod
-    )
-  })
+  return paymentMethods.value.filter((method) => method.active !== false)
 })
 function paymentMethodIcon(code: string, name = '') {
   const category = paymentMethodCategory(code, name)
@@ -331,6 +319,11 @@ async function submit() {
   errorMessage.value = ''
   confirmed.value = false
   try {
+    const availablePaymentMethod =
+      salePaymentMethods.value.find((method) => method.code === paymentCode.value) ??
+      salePaymentMethods.value[0]
+    if (!availablePaymentMethod) throw new Error('ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager')
+    paymentCode.value = availablePaymentMethod.code
     const type =
       mode.value === 'assessment'
         ? 'ASSESSMENT'
@@ -678,6 +671,9 @@ async function submit() {
                     <span>{{ paymentMethodLabel(method.code, method.name) }}</span>
                   </button>
                 </div>
+                  <small v-if="!salePaymentMethods.length" class="service-error">
+                    ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager
+                  </small>
               </div>
               <label class="sale-note"
                 >หมายเหตุ (ไม่บังคับ)<textarea

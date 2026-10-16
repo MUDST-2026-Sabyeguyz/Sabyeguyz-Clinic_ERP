@@ -146,13 +146,29 @@ export type Branch = {
   id: number
   code: string
   numericCode: string
+  branchCode: string
   name: string
   address?: string
   phone?: string
   email?: string
   licenseNumber?: string
+  licenseNo?: string | null
   taxId?: string
+  bookingOpenTime?: string | null
+  bookingCloseTime?: string | null
+  defaultAppointmentMinutes?: number | null
   active: boolean
+}
+export type BranchRequest = {
+  branchCode: string
+  name: string
+  address?: string
+  phone?: string
+  email?: string
+  licenseNo?: string | null
+  bookingOpenTime?: string | null
+  bookingCloseTime?: string | null
+  defaultAppointmentMinutes?: number | null
 }
 type BackendBranch = {
   id: number
@@ -162,6 +178,9 @@ type BackendBranch = {
   phone?: string
   email?: string | null
   licenseNo?: string | null
+  bookingOpenTime?: string | null
+  bookingCloseTime?: string | null
+  defaultAppointmentMinutes?: number | null
   active: boolean
 }
 
@@ -170,11 +189,16 @@ function normalizeBranch(branch: BackendBranch): Branch {
     id: branch.id,
     code: branch.branchCode,
     numericCode: branch.branchCode,
+    branchCode: branch.branchCode,
     name: branch.name,
     address: branch.address,
     phone: branch.phone,
     email: branch.email ?? undefined,
     licenseNumber: branch.licenseNo ?? undefined,
+    licenseNo: branch.licenseNo,
+    bookingOpenTime: branch.bookingOpenTime,
+    bookingCloseTime: branch.bookingCloseTime,
+    defaultAppointmentMinutes: branch.defaultAppointmentMinutes,
     active: branch.active,
   }
 }
@@ -203,6 +227,9 @@ export type Course = {
   sessions: number
   bonusSessions: number
   validityDays: number
+  validityValue?: number
+  validityUnit?: 'Day' | 'Month' | 'Year'
+  defaultDurationMinutes?: number | null
   active: boolean
 }
 export type Therapist = {
@@ -396,25 +423,25 @@ export const patientApi = {
 
 export const branchApi = {
   list: () => api.get<BackendBranch[]>('/api/branches').then((items) => items.map(normalizeBranch)),
+  listActive: async () => (await branchApi.list()).filter((branch) => branch.active !== false),
   get: (id: number) => api.get<BackendBranch>(`/api/branches/${id}`).then(normalizeBranch),
-  create: (body: { code: string; numericCode: string; name: string }) =>
+  create: (body: BranchRequest | { code: string; numericCode: string; name: string }) =>
     api
       .post<BackendBranch>('/api/branches', {
-        branchCode: body.code || body.numericCode,
+        ...body,
+        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
         name: body.name,
-        address: '',
-        phone: '',
       })
       .then(normalizeBranch),
-  update: (id: number, body: { code: string; numericCode: string; name: string }) =>
+  update: (id: number, body: BranchRequest | { code: string; numericCode: string; name: string }) =>
     api
       .put<BackendBranch>(`/api/branches/${id}`, {
-        branchCode: body.code || body.numericCode,
+        ...body,
+        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
         name: body.name,
-        address: '',
-        phone: '',
       })
       .then(normalizeBranch),
+  activate: (id: number) => api.patch<BackendBranch>(`/api/branches/${id}/activate`, {}),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }
 
@@ -454,13 +481,19 @@ export type ManagedService = {
   price: number
   active: boolean
 }
+export type ManagedServiceRequest = Omit<ManagedService, 'id' | 'active' | 'defaultDurationMinutes'> & {
+  defaultDurationMinutes?: number | null
+}
 export const serviceManagementApi = {
   list: () => api.get<ManagedService[]>('/api/services'),
-  create: (body: Omit<ManagedService, 'id' | 'active'>) =>
+  create: (body: ManagedServiceRequest) =>
     api.post<ManagedService>('/api/services', body),
-  update: (id: number, body: Omit<ManagedService, 'id' | 'active'>) =>
+  update: (id: number, body: ManagedServiceRequest) =>
     api.put<ManagedService>(`/api/services/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
+  activate: (id: number) => api.patch<ManagedService>(`/api/services/${id}/activate`, {}),
+  changeType: (id: number, type: 'SingleVisit' | 'Course') =>
+    api.post<ManagedService>(`/api/services/${id}/type`, { type }),
 }
 
 export const appointmentApi = {
@@ -822,6 +855,26 @@ export type StaffPayment = {
   }>
 }
 
+export type TreatmentFeeRule = {
+  id: number
+  name?: string | null
+  feeType: 'Fixed' | 'Percentage'
+  feeValue: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  enabled: boolean
+  used: boolean
+  lastEditedBy?: string | null
+  lastEditedAt?: string | null
+}
+export type TreatmentFeeInput = {
+  name?: string
+  feeType: 'Fixed' | 'Percentage'
+  feeValue: number
+  effectiveFrom: string
+  effectiveTo?: string | null
+}
+
 export const commissionApi = {
   schemes: () => api.get('/api/commission/schemes'),
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
@@ -880,6 +933,17 @@ export const commissionApi = {
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
   closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
+  createTreatmentFee: (body: TreatmentFeeInput) =>
+    api.post<TreatmentFeeRule>('/api/commission/treatment-fees', body),
+  updateTreatmentFee: (id: number, body: Partial<TreatmentFeeInput>) =>
+    api.put<TreatmentFeeRule>(`/api/commission/treatment-fees/${id}`, body),
+  setTreatmentFeeEnabled: (id: number, enabled: boolean) =>
+    api.patch<TreatmentFeeRule>(`/api/commission/treatment-fees/${id}/${enabled ? 'enable' : 'disable'}`, {}),
+  backfillSingleVisitFees: (from: string, to: string) =>
+    api.post<{ recorded: number }>(
+      `/api/commission/single-visit-fees/backfill?${new URLSearchParams({ from, to })}`,
+      {},
+    ),
   myPayments: () => api.get<StaffPayment[]>('/api/commission/my-payments'),
   myLines: (month: string) =>
     api.get<TherapistLines>(`/api/commission/my-lines?month=${encodeURIComponent(month)}`),
@@ -932,6 +996,32 @@ export const masterDataApi = {
   activate: (id: number) => api.patch<MasterData>(`/api/master-data/${id}/activate`, {}),
 }
 
+export type AuditEntry = {
+  id: number
+  tableName: string
+  recordId: string
+  action: 'INSERT' | 'UPDATE' | 'DELETE'
+  oldValue: string | null
+  newValue: string | null
+  changedBy: number | null
+  changedAt: string
+  changedByName: string | null
+}
+export type AuditPage = {
+  items: AuditEntry[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+export type AuditFilter = {
+  tableName?: string
+  recordId?: string
+  action?: string
+  changedBy?: number
+  from?: string
+  to?: string
+}
 export const auditApi = {
   list: (page = 0, size = 50) => api.get(`/api/audit-logs?page=${page}&size=${size}`),
 }

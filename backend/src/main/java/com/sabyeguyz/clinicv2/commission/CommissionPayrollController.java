@@ -59,16 +59,21 @@ public class CommissionPayrollController {
                                       Long allocationId, Long singleVisitFeeId, Long courseId, Long visitId, Long saleTransactionId,
                                       List<ApplicationResponse> applications) {}
     public record ClosingStateResponse(Long id, String month, Long staffId, String status) {}
-    public record TherapistLinesResponse(String month, BigDecimal courseCommission, BigDecimal singleVisitFee,
-                                         BigDecimal substituteFee, long pendingSessions, List<Object> lines) {}
 
     // ---------- reopening a closed month ----------
 
     @PostMapping("/closings/{closingId}/reopen")
     public ClosingStateResponse reopenClosing(@PathVariable Long closingId, @RequestBody ReasonRequest request) {
         MonthlyCommissionClosing closing = closingService.reopen(closingId, request.reason(), actor.currentId());
-        audit.record("monthly_commission_closing", String.valueOf(closingId), AuditAction.UPDATE, "Closed",
-                "Open (reopen): " + request.reason().trim(), actor.currentId());
+        audit.recordChange("monthly_commission_closing", String.valueOf(closingId), AuditAction.UPDATE,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Closed"),
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Open",
+                        "reopen_reason", request.reason().trim(), "closing_month", closing.getClosingMonth(),
+                        "staff_id", closing.getStaff().getId(),
+                        "monthly_course_sales", closing.getMonthlyCourseSales(),
+                        "commission_scheme_version", closing.getCommissionSchemeVersion(),
+                        "calculated_commission_rate", closing.getCalculatedCommissionRate(),
+                        "locked_commission_rate", closing.getLockedCommissionRate()), actor.currentId());
         return new ClosingStateResponse(closing.getId(), closing.getClosingMonth(), closing.getStaff().getId(),
                 closing.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT));
     }
@@ -121,33 +126,13 @@ public class CommissionPayrollController {
     @GetMapping("/my-payments")
     @PreAuthorize("isAuthenticated()")
     public List<PaymentResponse> myPayments(@RequestParam(required = false) String month) {
-        Staff me = currentStaff();
+        Staff me = users.findById(actor.requireId()).map(user -> user.getStaff()).orElse(null);
         if (me == null) {
             return List.of();
         }
         return paymentService.ofStaff(me.getId()).stream()
                 .filter(payment -> month == null || payment.getPaymentMonth().equals(month))
                 .map(this::toPayment).toList();
-    }
-
-    @GetMapping("/my-lines")
-    @PreAuthorize("isAuthenticated()")
-    public TherapistLinesResponse myLines(@RequestParam String month) {
-        StaffMonthlyPaymentService.requireMonth(month);
-        Staff me = currentStaff();
-        if (me == null) {
-            return new TherapistLinesResponse(month, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0, List.of());
-        }
-        StaffMonthlyPaymentService.Totals totals = paymentService.totals(me.getId(), month);
-        return new TherapistLinesResponse(month, totals.courseCommission(), totals.singleVisitFee(),
-                totals.substituteFee(), totals.pendingSessions(), List.of());
-    }
-
-    @GetMapping("/my-adjustments")
-    @PreAuthorize("isAuthenticated()")
-    public List<AdjustmentResponse> myAdjustments() {
-        Staff me = currentStaff();
-        return me == null ? List.of() : adjustmentService.list(me.getId()).stream().map(this::toAdjustment).toList();
     }
 
     // ---------- adjustments ----------
@@ -229,10 +214,6 @@ public class CommissionPayrollController {
                 payment.getClosing() == null ? null : payment.getClosing().getId(), pending,
                 paymentService.applicationsOf(payment.getId()).stream().map(CommissionPayrollController::toApplication).toList(),
                 payment.getPaidDate(), payment.getPaymentReference());
-    }
-
-    private Staff currentStaff() {
-        return users.findById(actor.requireId()).map(user -> user.getStaff()).orElse(null);
     }
 
     private AdjustmentResponse toAdjustment(StaffPayAdjustment adjustment) {

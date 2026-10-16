@@ -91,6 +91,12 @@ public class BranchController {
         service.deactivate(id, actor.currentId());
     }
 
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/activate")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
+    public Response activate(@PathVariable Long id) {
+        return toResponse(service.activate(id, actor.currentId()));
+    }
+
     private static Response toResponse(Branch branch) {
         return new Response(branch.getId(), branch.getBranchCode(), branch.getBranchName(),
                 branch.getAddress(), branch.getPhone(), branch.isBranchStatus(), branch.getBranchEmail(),
