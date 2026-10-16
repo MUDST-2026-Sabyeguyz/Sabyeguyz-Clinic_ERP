@@ -47,17 +47,17 @@ public class Branch {
     @Column(name = "google_calendar_id", length = 255, unique = true)
     private String googleCalendarId;
 
-    @Column(name = "branch_email", length = 255)
+    @Column(name = "email", length = 254)
     private String branchEmail;
 
     @Column(name = "license_no", length = 50)
     private String licenseNo;
 
     /** Hours in which appointments can be booked; both null = no limit. */
-    @Column(name = "booking_open_time")
+    @Column(name = "opening_time")
     private java.time.LocalTime bookingOpenTime;
 
-    @Column(name = "booking_close_time")
+    @Column(name = "closing_time")
     private java.time.LocalTime bookingCloseTime;
 
     /** Length of an appointment when its service has none of its own. */

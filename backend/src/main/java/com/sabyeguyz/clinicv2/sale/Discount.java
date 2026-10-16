@@ -60,6 +60,9 @@ public record Discount(DiscountType type, BigDecimal value) {
                 yield price.subtract(price.multiply(value).divide(HUNDRED, 2, RoundingMode.HALF_UP));
             }
             case Fixed -> {
+                if (value.stripTrailingZeros().scale() > 2) {
+                    throw new IllegalArgumentException("ส่วนลดบาทต้องไม่ละเอียดเกิน 2 ตำแหน่ง");
+                }
                 if (value.compareTo(price) > 0) {
                     throw new IllegalArgumentException("ส่วนลดต้องไม่เกินราคา");
                 }
