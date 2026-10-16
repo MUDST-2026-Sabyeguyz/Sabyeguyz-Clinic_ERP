@@ -6,7 +6,6 @@ import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   appointmentApi,
   branchApi,
-  calendarIntegrationApi,
   catalogApi,
   type Appointment,
   type Branch,
@@ -28,22 +27,6 @@ const branches = ref<Branch[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
 const calendarSyncOpen = ref(false)
-const calendarConnecting = ref(false)
-const calendarSyncMessage = ref('')
-
-async function connectGoogleCalendar() {
-  calendarSyncOpen.value = true
-  calendarConnecting.value = true
-  calendarSyncMessage.value = 'กำลังเริ่มการเชื่อมต่อ…'
-  try {
-    const { authorizationUrl } = await calendarIntegrationApi.startGoogleConnect()
-    window.location.assign(authorizationUrl)
-  } catch {
-    calendarSyncMessage.value = 'ระบบเชื่อมต่อยังรอการเปิดใช้งานจาก backend'
-  } finally {
-    calendarConnecting.value = false
-  }
-}
 
 const timeOptions = ['09:00', '11:00', '13:00', '15:00', '17:00']
 const branchOptions = computed(() => branches.value.filter((branch) => branch.active))
@@ -96,7 +79,7 @@ const weekColumns = computed(() =>
 const columns = computed(() => (mode.value === 'week' ? weekColumns.value : dayColumns.value))
 
 function branchName(code: string) {
-  return branches.value.find((branch) => branch.code === code)?.name || code
+  return branches.value.find((branch) => branch.branchCode === code)?.name || code
 }
 
 function formatTime(value: string) {
@@ -162,10 +145,7 @@ function moveDate(direction: number) {
 function openSlot(date: string, time: string, therapist?: Therapist) {
   const item = appointmentFor(date, time, therapist)
   if (item) {
-    void router.push({
-      name: 'staff-appointment-edit',
-      params: { id: item.id },
-    })
+    void router.push({ name: 'staff-appointment-edit', params: { id: item.id } })
     return
   }
   void router.push({
@@ -224,24 +204,14 @@ onMounted(() => void load())
           label="กรองนักกายภาพ"
           default-value="ทั้งหมด"
           default-label="นักกายภาพ: ทั้งหมด"
-          :options="
-            therapists.map((item) => ({
-              value: String(item.id),
-              label: item.fullName,
-            }))
-          "
+          :options="therapists.map((item) => ({ value: String(item.id), label: item.fullName }))"
         />
         <FilterDropdown
           v-model="selectedBranch"
           label="กรองสาขา"
           default-value="ทั้งหมด"
           default-label="สาขา: ทั้งหมด"
-          :options="
-            branchOptions.map((item) => ({
-              value: item.code,
-              label: item.name,
-            }))
-          "
+          :options="branchOptions.map((item) => ({ value: item.branchCode, label: item.name }))"
         />
         <div class="calendar-view-toggle">
           <button type="button" :class="{ active: mode === 'day' }" @click="mode = 'day'">
@@ -251,7 +221,7 @@ onMounted(() => void load())
             รายสัปดาห์
           </button>
         </div>
-        <button class="calendar-google" type="button" @click="connectGoogleCalendar">
+        <button class="calendar-google" type="button" @click="calendarSyncOpen = true">
           เชื่อมต่อ Google Calendar
         </button>
       </section>
@@ -264,9 +234,7 @@ onMounted(() => void load())
         <span data-status="cancelled">ยกเลิก</span>
       </div>
 
-      <p v-if="errorMessage" class="calendar-error" role="alert">
-        {{ errorMessage }}
-      </p>
+      <p v-if="errorMessage" class="calendar-error" role="alert">{{ errorMessage }}</p>
       <div v-else-if="loading" class="calendar-loading">กำลังโหลดปฏิทิน...</div>
       <div v-else class="calendar-grid-scroll">
         <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1) }">
@@ -289,15 +257,9 @@ onMounted(() => void load())
             >
               <template v-if="appointmentFor(column.date, time, column.therapist)">
                 <strong>
-                  {{ time }}
-                  {{ appointmentFor(column.date, time, column.therapist)?.patient.fullName }}
+                  {{ time }} {{ appointmentFor(column.date, time, column.therapist)?.patient.fullName }}
                 </strong>
-                <small
-                  >นก.
-                  {{
-                    appointmentFor(column.date, time, column.therapist)?.therapist.fullName
-                  }}</small
-                >
+                <small>นก. {{ appointmentFor(column.date, time, column.therapist)?.therapist.fullName }}</small>
               </template>
               <template v-else>
                 <strong>ว่าง</strong>
@@ -310,22 +272,11 @@ onMounted(() => void load())
       </div>
     </main>
 
-    <div
-      v-if="calendarSyncOpen"
-      class="calendar-modal-backdrop"
-      @click.self="calendarSyncOpen = false"
-    >
-      <section
-        class="calendar-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="calendar-sync-title"
-      >
+    <div v-if="calendarSyncOpen" class="calendar-modal-backdrop" @click.self="calendarSyncOpen = false">
+      <section class="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-sync-title">
         <h2 id="calendar-sync-title">เชื่อมต่อ Google Calendar</h2>
-        <p>{{ calendarSyncMessage }}</p>
-        <button type="button" :disabled="calendarConnecting" @click="calendarSyncOpen = false">
-          {{ calendarConnecting ? 'กำลังเชื่อมต่อ…' : 'รับทราบ' }}
-        </button>
+        <p>ส่วนนี้เตรียมไว้สำหรับเชื่อมต่อ Google Calendar กับ backend</p>
+        <button type="button" @click="calendarSyncOpen = false">รับทราบ</button>
       </section>
     </div>
   </div>

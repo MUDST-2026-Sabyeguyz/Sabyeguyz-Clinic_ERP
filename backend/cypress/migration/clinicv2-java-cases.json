@@ -1,0 +1,203 @@
+[
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentServiceTest.java",
+    "methods": [
+      "booksAConfirmedAppointment",
+      "rejectsBookingWhenStaffAlreadyBooked",
+      "cancelRecordsStatusHistory",
+      "rejectsCancelOnAlreadyCompletedAppointment",
+      "rescheduleMovesDateAndTimeAndKeepsConfirmedStatus"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/PatientVisitServiceTest.java",
+    "methods": [
+      "checkInFromAppointmentMarksTheAppointmentArrived",
+      "checkInWalkInRequiresAPatientAndBranch",
+      "completeSetsCheckoutTimeAndPropagatesToTheAppointment",
+      "rejectsProgressingACancelledVisit"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/audit/AuditLogServiceTest.java",
+    "methods": [
+      "recordsAnAuditEntry",
+      "rejectsMissingAction"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/auth/AppUserServiceTest.java",
+    "methods": [
+      "registerHashesThePassword",
+      "rejectsShortPassword",
+      "loginRejectsWrongPassword",
+      "loginRejectsDeactivatedUser",
+      "grantBranchAccessIsIdempotent",
+      "assignRoleSavesWhenNotAlreadyAssigned"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/branch/BranchServiceTest.java",
+    "methods": [
+      "createsBranchWithValidTwoDigitCode",
+      "rejectsNonNumericBranchCode",
+      "rejectsDuplicateBranchCode",
+      "rejectsBlankAddress",
+      "updateNeverTouchesBranchCode",
+      "deactivateThrowsWhenBranchMissing"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/catalog/CourseServiceTest.java",
+    "methods": [
+      "sellsACourseWithAProvisionalTierRate",
+      "appendsSequenceSuffixWhenMultipleCoursesShareAReceipt",
+      "remainingVisitsIncludesBonusButCommissionRateIgnoresIt",
+      "rejectsACourseTemplateWithoutADefaultValidity"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/catalog/ServiceCatalogServiceTest.java",
+    "methods": [
+      "createsASingleVisitService",
+      "courseRequiresADefaultTotalVisits",
+      "rejectsNegativePrice"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/commission/CommissionRateOverrideServiceTest.java",
+    "methods": [
+      "recordsTheAuditAndAppliesTheNewRate",
+      "requiresAReason",
+      "rejectsOverridingACourseThatWasNeverLocked"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/commission/CommissionSchemeResolverTest.java",
+    "methods": [
+      "picksTheSchemeWhoseRangeCoversTheDate",
+      "newestVersionWinsWhenRangesOverlapAtTheBoundary",
+      "throwsWhenNoSchemeCoversTheDate"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/commission/CommissionTierResolverTest.java",
+    "methods": [
+      "resolvesTheSeventyPercentTierFromTheRequirementDocExample",
+      "openEndedTopTierHasNoUpperBound",
+      "throwsWhenNoTierCoversTheAmount"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/commission/MonthlyCommissionClosingServiceTest.java",
+    "methods": [
+      "locksTheRateAndStampsItOntoEveryCourseSoldThatMonth",
+      "rejectsClosingTheSameStaffAndMonthTwice",
+      "rejectsAMalformedMonth"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/commission/TreatmentFeeRuleResolverTest.java",
+    "methods": [
+      "fixedFeeMatchesTheDocExample",
+      "percentageFeeMatchesTheDocExample",
+      "prefersAStaffSpecificRuleOverADefaultRule"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/course/CourseTransferServiceTest.java",
+    "methods": [
+      "transfersVisitsAndWritesBothLedgerEntries",
+      "rejectsTransferExceedingTheBalance",
+      "rejectsTransferringToOneself"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/course/CourseVisitUsageServiceTest.java",
+    "methods": [
+      "caseOwnerTreatingThemselvesGetsTheFullAllocation",
+      "substituteFixedFeeMatchesCase3And9",
+      "substitutePercentageFeeMatchesCase10",
+      "feeExceedingAllocationIsCappedAndOwnerNetNeverGoesNegative",
+      "rejectsUsageOnAnExpiredCourse",
+      "rejectsUsageWhenCourseHasNoRemainingVisits",
+      "rejectsUsageWhenThisPatientHasNoBalanceEvenIfCourseDoes"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/masterdata/MasterDataServiceTest.java",
+    "methods": [
+      "createsAType",
+      "rejectsDuplicateTypeName",
+      "createsAValueUnderAType",
+      "deactivateThrowsWhenValueMissing"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/patient/HnGeneratorServiceTest.java",
+    "methods": [
+      "formatsYearBranchMonthAndRunningNumber",
+      "startsANewSequenceAtOne",
+      "incrementsAnExistingSequence",
+      "rejectsABranchWithoutACode"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/patient/PatientServiceTest.java",
+    "methods": [
+      "registersAPatientAndAssignsAnHn",
+      "rejectsMissingBranch",
+      "rejectsMissingRequiredField"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/role/RoleServiceTest.java",
+    "methods": [
+      "createsRole",
+      "rejectsDuplicateRoleName",
+      "grantPermissionIsIdempotent"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/sale/PaymentTransactionServiceTest.java",
+    "methods": [
+      "recordsAPaymentAgainstAnActiveTransaction",
+      "rejectsPaymentAgainstAVoidedTransaction",
+      "rejectsZeroOrNegativeAmount"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/sale/ReceiptServiceTest.java",
+    "methods": [
+      "createsAReceipt",
+      "rejectsDuplicateReceiptNo"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/sale/SalesTransactionServiceTest.java",
+    "methods": [
+      "recordsAnAssessmentSale",
+      "rejectsCoursePurchaseInRecordVisitSale",
+      "coursePurchaseCreatesTheCourseFirstThenTheTransaction",
+      "voidRejectsAnAlreadyVoidedTransaction"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/setting/SystemSettingServiceTest.java",
+    "methods": [
+      "createsANewSetting",
+      "updatesAnExistingSettingInPlace",
+      "rejectsBlankValue"
+    ]
+  },
+  {
+    "file": "backend/src/test/java/com/sabyeguyz/clinicv2/staff/StaffServiceTest.java",
+    "methods": [
+      "createsStaffAssignedToABranch",
+      "rejectsDuplicateStaffCode",
+      "rejectsMissingBranch",
+      "terminateSetsStatusAndPolicy",
+      "terminateRequiresAPolicy"
+    ]
+  }
+]
