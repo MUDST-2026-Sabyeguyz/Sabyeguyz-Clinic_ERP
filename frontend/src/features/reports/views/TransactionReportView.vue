@@ -15,7 +15,6 @@ const reportOptions = [
   { value: 'salesTransaction', label: 'Transaction' },
   { value: 'payment', label: 'รายงานยอดรับชำระ' },
 ]
-const purchaseOnly = ref(false)
 const search = ref('')
 const from = ref('')
 const to = ref('')
@@ -41,9 +40,7 @@ const title = computed(() =>
 const keyword = computed(() => search.value.trim().toLowerCase())
 const salesRows = computed(() =>
   sales.value.filter((row) => {
-    const matchesType = row.items.some((item) =>
-      purchaseOnly.value ? item.type === 'COURSE' : item.type === 'SINGLE_VISIT',
-    )
+    const matchesType = row.items.some((item) => item.type === 'SINGLE_VISIT')
     return (
       matchesType &&
       (!from.value || row.soldAt.slice(0, 10) >= from.value) &&
@@ -160,7 +157,7 @@ void branchApi
   })
   .catch(() => {})
 watch([type, from, to], load, { immediate: true })
-watch([type, search, from, to, purchaseOnly], () => {
+watch([type, search, from, to], () => {
   page.value = 1
 })
 watch(reportSelection, (report) => {
@@ -232,7 +229,7 @@ watch(reportSelection, (report) => {
           <p>
             {{
               type === 'single'
-                ? `รายการขาย · ${purchaseOnly ? 'CoursePurchase' : 'Single Visit'}`
+                ? 'รายการขาย · Single Visit'
                 : 'รายการใช้สิทธิ์คอร์ส · ไม่ใช่ยอดขายใหม่'
             }}
           </p>
@@ -240,9 +237,6 @@ watch(reportSelection, (report) => {
         <div class="results-actions">
           <button class="action" type="button" @click="sourceTierOpen = true">
             ดูต้นทางยอดขายและฐาน Tier
-          </button>
-          <button v-if="type === 'single'" class="action" @click="purchaseOnly = !purchaseOnly">
-            ประเภท: {{ purchaseOnly ? 'รายครั้ง' : 'ซื้อคอร์ส' }}
           </button>
           <RouterLink v-else class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
         </div>
@@ -285,7 +279,7 @@ watch(reportSelection, (report) => {
               <td>{{ date(row.soldAt) }}</td>
               <td>{{ branchNames[row.branchCode] || row.branchCode }}</td>
               <td>{{ row.salesperson?.fullName || '—' }}</td>
-              <td>{{ purchaseOnly ? 'CoursePurchase' : 'Single Visit' }} / —</td>
+              <td>Single Visit / —</td>
               <td>{{ money(row.total) }}</td>
               <td>—</td>
             </tr>
