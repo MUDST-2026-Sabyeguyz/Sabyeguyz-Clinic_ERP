@@ -13,10 +13,6 @@ const { payments, adjustments, month, loading, errorMessage } = useTherapistPay(
     :error="errorMessage"
     :loading="loading"
   >
-    <TherapistCompensationPaymentHistory
-      :payments="payments"
-      :adjustments="adjustments"
-      :month="month"
-    />
+    <TherapistCompensationPaymentHistory :payments="payments" :adjustments="adjustments" :month="month" />
   </TherapistCompensationShell>
 </template>
