@@ -35,7 +35,7 @@ public class PatientService {
         Patient patient = new Patient();
         patient.setBranch(input.branch());
         patient.setCustomerType(require(input.customerType(), "customerType"));
-        patient.setTitle(normalizeTitle(requireText(input.title(), "title")));
+        patient.setTitle(normalizeTitle(requireText(input.title(), "title"), input.customerType()));
         patient.setPatientFname(requireText(input.patientFname(), "patientFname"));
         patient.setPatientLname(requireText(input.patientLname(), "patientLname"));
         patient.setPatientMiddleName(normalizeMiddleName(input.middleName()));
@@ -105,7 +105,7 @@ public class PatientService {
                                   com.sabyeguyz.clinicv2.enums.BloodGroup bloodGroup, String nationality,
                                   String address, String middleName, boolean updateMiddleName, Long actorId) {
         Patient patient = find(id);
-        if (title != null && !title.isBlank()) patient.setTitle(normalizeTitle(title));
+        if (title != null && !title.isBlank()) patient.setTitle(normalizeTitle(title, patient.getCustomerType()));
         if (updateMiddleName) patient.setPatientMiddleName(normalizeMiddleName(middleName));
         if (fname != null && !fname.isBlank()) patient.setPatientFname(fname.trim());
         if (lname != null && !lname.isBlank()) patient.setPatientLname(lname.trim());
@@ -145,15 +145,19 @@ public class PatientService {
         return name;
     }
 
-    private static String normalizeTitle(String value) {
-        return switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
-            case "นาย", "mr.", "mr" -> "นาย";
-            case "นางสาว", "miss" -> "นางสาว";
-            case "นาง", "mrs.", "mrs" -> "นาง";
-            case "เด็กชาย", "boy" -> "เด็กชาย";
-            case "เด็กหญิง", "girl" -> "เด็กหญิง";
-            default -> value.trim();
+    private static String normalizeTitle(String value, com.sabyeguyz.clinicv2.enums.CustomerType type) {
+        int title = switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "นาย", "mr.", "mr" -> 0;
+            case "นางสาว", "miss" -> 1;
+            case "นาง", "mrs.", "mrs" -> 2;
+            case "เด็กชาย", "boy" -> 3;
+            case "เด็กหญิง", "girl" -> 4;
+            default -> throw new IllegalArgumentException("คำนำหน้าชื่อไม่ถูกต้อง");
         };
+        String[] labels = type == com.sabyeguyz.clinicv2.enums.CustomerType.Foreigner
+                ? new String[] {"Mr.", "Miss", "Mrs.", "Boy", "Girl"}
+                : new String[] {"นาย", "นางสาว", "นาง", "เด็กชาย", "เด็กหญิง"};
+        return labels[title];
     }
 
     private static <T> T require(T value, String field) {
