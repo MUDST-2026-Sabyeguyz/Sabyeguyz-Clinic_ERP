@@ -848,9 +848,6 @@ function closePrintSuccess() {
                 ></span
               ></label
             >
-            <p class="course-transfer-info">
-              สิทธิ์คอร์สที่แชร์จะถูกย้ายให้ผู้รับทันที และผู้ให้ยังคงเหลือสิทธิ์ตามจำนวนที่กำหนด
-            </p>
           </section>
           <section class="course-transfer-recipient">
             <h2>ผู้รับและผู้ดูแลร่วม</h2>
@@ -889,18 +886,6 @@ function closePrintSuccess() {
               </div>
               <button type="button" aria-label="เปลี่ยนผู้รับ" @click="clearRecipient">×</button>
             </div>
-            <label
-              >นักกายภาพคนที่ 2 *
-              <select v-model="coTherapistId">
-                <option value="">เลือกนักกายภาพคนที่ 2</option>
-                <option v-for="person in therapists" :key="person.id" :value="person.id">
-                  {{ person.fullName }}
-                </option></select
-              ><small>พิมพ์ชื่อหรือเลือกจากรายชื่อในระบบ</small>
-            </label>
-            <p class="course-transfer-info recipient-info">
-              สัดส่วนค่าตอบแทนจะคำนวณตามนักกายภาพผู้ให้บริการจริง และบันทึกไว้ในประวัติการแชร์
-            </p>
           </section>
         </div>
         <footer class="course-transfer-footer">
@@ -909,9 +894,7 @@ function closePrintSuccess() {
             type="button"
             :disabled="
               selectedRecipient && recipientConfirmed
-                ? !coTherapistId ||
-                  !shareIsValid ||
-                  transferAmount < 1 ||
+                ? transferAmount < 1 ||
                   transferAmount > selectedCourse.balance
                 : selectedRecipient
                   ? false
@@ -951,14 +934,6 @@ function closePrintSuccess() {
           <p>
             <span>ผู้ให้คงเหลือหลังแชร์</span
             ><b>{{ selectedCourse.balance - transferAmount }} ครั้ง</b>
-          </p>
-          <p>
-            <span>นักกายภาพผู้ดูแลร่วม</span
-            ><b>{{ therapists.find((person) => person.id === coTherapistId)?.fullName }}</b>
-          </p>
-          <p>
-            <span>สัดส่วนยอดขาย</span
-            ><b>กภ. ศิริพร {{ primaryShare }}% · กภ. วีระพงษ์ {{ secondaryShare }}%</b>
           </p>
           <p>
             <span>ผู้รับได้รับสิทธิ์</span><b>{{ transferAmount }} ครั้ง</b>
@@ -4042,18 +4017,6 @@ function closePrintSuccess() {
 }
 .course-transfer-stepper em {
   margin-left: 6px;
-}
-.course-transfer-info {
-  margin: 26px 0 0;
-  padding: 13px 14px;
-  border-radius: 7px;
-  color: #315c76;
-  background: #ddecfa;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.course-transfer-info.recipient-info {
-  margin-top: 22px;
 }
 .course-transfer-reason {
   margin-top: 24px;
