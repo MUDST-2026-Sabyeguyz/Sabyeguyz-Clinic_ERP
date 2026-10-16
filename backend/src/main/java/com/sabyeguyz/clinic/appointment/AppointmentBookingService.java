@@ -40,7 +40,7 @@ public class AppointmentBookingService {
 
     @Transactional
     public AppointmentResponse create(AppointmentCreateRequest request) {
-        Branch branch = branchRepository.findByCodeAndActiveTrue(request.branchCode().toUpperCase())
+        Branch branch = branchRepository.findByBranchCodeAndActiveTrue(request.branchCode().trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
         Patient patient = patientRepository.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));

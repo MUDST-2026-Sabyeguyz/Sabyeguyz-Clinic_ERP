@@ -70,7 +70,7 @@ public class CourseLedgerService {
         if (!course.isActive()) {
             throw new IllegalArgumentException("คอร์สถูกปิดการใช้งาน");
         }
-        Branch branch = branchRepository.findByCodeAndActiveTrue(request.branchCode().toUpperCase())
+        Branch branch = branchRepository.findByBranchCodeAndActiveTrue(request.branchCode().trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
 
         CoursePurchase purchase = openPurchase(patient, course, branch, Instant.now());
