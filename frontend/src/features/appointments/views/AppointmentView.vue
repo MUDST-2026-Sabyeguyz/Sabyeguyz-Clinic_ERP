@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -307,6 +307,9 @@ async function load() {
         page: page.value,
         size: 20,
         branchCode: managerBranchCode.value,
+        startDate: startDate.value || undefined,
+        endDate: endDate.value || undefined,
+        sortOrder: sortOrder.value,
       }),
       branchApi.list(),
       patientApi.searchAll('', managerBranchCode.value),
@@ -358,6 +361,10 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
+watch([startDate, endDate], () => {
+  page.value = 0
+  void load()
+})
 function applyManagerBranch() {
   if (!isManager) return
   selectedBranch.value = selectedManagerBranch()?.code ?? 'ทั้งหมด'
