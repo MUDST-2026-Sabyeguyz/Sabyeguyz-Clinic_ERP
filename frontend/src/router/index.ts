@@ -128,12 +128,6 @@ const router = createRouter({
       redirect: '/staff/services',
     },
     {
-      path: '/staff/receipts/:id',
-      name: 'staff-receipt',
-      component: () => import('@/features/receipts/views/ReceiptView.vue'),
-      meta: { permission: 'Treatment' },
-    },
-    {
       path: '/staff/courses',
       name: 'staff-courses',
       component: () => import('@/features/courses/views/CourseActionView.vue'),
@@ -245,12 +239,6 @@ const router = createRouter({
       path: '/staff/reports/transaction/tier-round',
       name: 'transaction-tier-round',
       component: () => import('@/features/reports/views/TransactionTierRoundDetailView.vue'),
-      meta: { roles: ['manager'] },
-    },
-    {
-      path: '/staff/calendar',
-      name: 'staff-calendar',
-      component: () => import('@/features/settings/views/CalendarSettingsView.vue'),
       meta: { roles: ['manager'] },
     },
     {
