@@ -2,6 +2,7 @@ param(
     [string]$Context = 'docker-desktop',
     [string]$ImageTag = '',
     [switch]$SkipBuild,
+    [switch]$SkipImageLoad,
     [switch]$HostBuild,
     [ValidateSet('default', 'host')][string]$BuildNetwork = 'default'
 )
@@ -35,23 +36,23 @@ if (!$SkipBuild) {
     }
 }
 foreach ($image in $images[2..3]) { Invoke-Tool docker @('pull', $image) }
-switch ($Context) {
+if (!$SkipImageLoad) { switch ($Context) {
     'docker-desktop' {
         # Docker Desktop's kind node has its own containerd image store.
-        $archive = Join-Path $RuntimeRoot 'images.tar'
-        Invoke-Tool docker (@('image', 'save', '-o', $archive) + $images)
+        if ($PSVersionTable.PSVersion -lt [version]'7.4') { throw 'Image streaming requires PowerShell 7.4+ to preserve native binary pipelines.' }
         $nodes = @(Invoke-Kube get nodes -o 'jsonpath={.items[*].metadata.name}') -join ' '
         foreach ($node in $nodes.Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
             Invoke-Tool docker @('inspect', $node, '--format', '{{.Name}}')
-            Invoke-Tool docker @('cp', $archive, "${node}:/clinic-images.tar")
-            Invoke-Tool docker @('exec', $node, 'ctr', '-n', 'k8s.io', 'images', 'import', '/clinic-images.tar')
-            Invoke-Tool docker @('exec', $node, 'rm', '/clinic-images.tar')
+            $architecture = (Invoke-Kube get node $node -o 'jsonpath={.status.nodeInfo.architecture}').Trim()
+            # Stream native bytes directly; copying a large tar through the Windows filesystem is slow.
+            & docker image save --platform "linux/$architecture" @images |
+                & docker exec -i $node ctr -n k8s.io images import --no-unpack - | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "Could not import release images into $node." }
         }
-        Remove-Item -LiteralPath $archive
     }
     'minikube' { foreach ($image in $images) { Invoke-Tool minikube @('image', 'load', $image) } }
     'kind-clinic-ci' { Invoke-Tool kind (@('load', 'docker-image', '--name', 'clinic-ci') + $images) }
-}
+} }
 Invoke-Kube apply -f (Join-Path $KubeRoot 'namespace.yaml') | Out-Host
 $credentialFile = Join-Path $RuntimeRoot "$Context-credentials.json"
 $existingSecret = & kubectl --context $Context -n clinic-local get secret clinic-secrets --ignore-not-found -o name
@@ -70,11 +71,12 @@ if (!$existingSecret) {
 }
 $overlay = Join-Path $RuntimeRoot 'release'
 New-Item -ItemType Directory -Force -Path $overlay | Out-Null
+Invoke-Kube kustomize $KubeRoot | Set-Content (Join-Path $overlay 'base.yaml') -Encoding utf8
 @"
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../..
+  - base.yaml
 commonAnnotations:
   clinic.sabyeguyz/source-revision: '$revision'
   clinic.sabyeguyz/application-source-dirty: '$sourceDirty'
@@ -92,6 +94,6 @@ $imageIds = @{}
 foreach ($image in $images) { $imageIds[$image] = (& docker image inspect $image --format '{{.Id}}').Trim() }
 @{ sourceRevision = $revision; applicationSourceDirty = $sourceDirty; hostBuild = [bool]$HostBuild; imageTag = $ImageTag; images = $imageIds; context = $Context; deployedAt = (Get-Date).ToUniversalTime().ToString('o') } |
     ConvertTo-Json -Depth 5 | Set-Content (Join-Path $RuntimeRoot 'release.json') -Encoding utf8
-Invoke-Kube -n clinic-local get pods,services,ingress,pvc | Out-Host
+Invoke-Kube -n clinic-local get 'pods,services,ingress,pvc' | Out-Host
 Write-Host "Ready. Open: ./deploy/k8s/Open-Local.ps1 -Context $Context"
 Write-Host "Login user: clinic-admin; read MANAGER_PASSWORD locally from $credentialFile"
