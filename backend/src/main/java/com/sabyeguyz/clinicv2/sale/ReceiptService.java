@@ -93,6 +93,10 @@ public class ReceiptService {
         BigDecimal subtotal = lines.stream().map(SalesTransaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
         BigDecimal billAmount = bill.amountOff(subtotal);
+        if (billAmount.signum() > 0 && lines.stream().anyMatch(line ->
+                line.getLineDiscountAmount() != null && line.getLineDiscountAmount().signum() > 0)) {
+            throw new IllegalArgumentException("ไม่สามารถใช้ส่วนลดรายการร่วมกับส่วนลดทั้งบิลได้");
+        }
 
         BigDecimal remaining = billAmount;
         for (int i = 0; i < lines.size(); i++) {

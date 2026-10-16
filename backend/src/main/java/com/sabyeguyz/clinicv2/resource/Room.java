@@ -23,6 +23,9 @@ public class Room {
     @Column(name = "room_type", length = 50)
     private String roomType;
 
+    @Column(name = "capacity")
+    private Integer capacity;
+
     @Column(name = "room_status", nullable = false)
     private boolean roomStatus = true;
 
@@ -39,6 +42,9 @@ public class Room {
     private Long roomUpdateBy;
 
     public Room() {}
+
+    public Integer getCapacity() { return capacity; }
+    public void setCapacity(Integer capacity) { this.capacity = capacity; }
 
     public Long getId() { return id; }
     public Branch getBranch() { return branch; }
