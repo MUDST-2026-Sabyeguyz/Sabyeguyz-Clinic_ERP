@@ -51,11 +51,12 @@ function choose(year: number, monthNumber: string) {
     query: { ...route.query, month: `${year}-${monthNumber}` },
   })
 }
-function chooseMonth(event: Event) {
-  choose(chosenYear.value, (event.target as HTMLSelectElement).value)
-}
 function chooseYear(event: Event) {
   choose(Number((event.target as HTMLSelectElement).value), chosenMonth.value)
+}
+function moveMonth(offset: number) {
+  const date = new Date(chosenYear.value, Number(chosenMonth.value) - 1 + offset, 1)
+  choose(date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'))
 }
 </script>
 
@@ -71,15 +72,11 @@ function chooseYear(event: Event) {
       <div v-if="activeTab !== 'payments'" class="therapist-month-select">
         <span>เดือนที่รักษา</span>
         <div class="therapist-month-pickers">
-          <select aria-label="เดือน" :value="chosenMonth" @change="chooseMonth">
-            <option
-              v-for="(name, index) in monthNames"
-              :key="name"
-              :value="String(index + 1).padStart(2, '0')"
-            >
-              {{ name }}
-            </option>
-          </select>
+          <div class="therapist-month-stepper" aria-label="เลือกเดือน">
+            <button type="button" aria-label="เดือนก่อน" @click="moveMonth(-1)">‹</button>
+            <strong>{{ monthNames[Number(chosenMonth) - 1] }}</strong>
+            <button type="button" aria-label="เดือนถัดไป" @click="moveMonth(1)">›</button>
+          </div>
           <select aria-label="ปี" :value="chosenYear" @change="chooseYear">
             <option v-for="year in years" :key="year" :value="year">
               {{ yearLabel(year) }}
