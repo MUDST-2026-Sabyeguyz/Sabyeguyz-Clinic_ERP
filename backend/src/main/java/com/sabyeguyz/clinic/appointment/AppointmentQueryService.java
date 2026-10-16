@@ -46,7 +46,7 @@ public class AppointmentQueryService {
         if (branchCode == null || branchCode.isBlank()) {
             return null;
         }
-        return branchRepository.findByCodeAndActiveTrue(branchCode.toUpperCase())
+        return branchRepository.findByBranchCodeAndActiveTrue(branchCode.trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"))
                 .getId();
     }
