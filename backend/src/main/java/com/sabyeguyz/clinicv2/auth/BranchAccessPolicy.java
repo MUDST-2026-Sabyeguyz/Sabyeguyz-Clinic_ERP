@@ -43,6 +43,26 @@ public class BranchAccessPolicy {
         return home;
     }
 
+    /** True for a current database Manager. */
+    public boolean isManager() {
+        return roles.findByUserId(actor.requireId()).stream()
+                .anyMatch(role -> "Manager".equalsIgnoreCase(role.getRole().getRoleName()));
+    }
+
+    /** Only the Manager changes an appointment (status, reschedule, cancel); anyone else only views and books their own time. */
+    public void requireManager() {
+        if (!isManager()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "เฉพาะผู้จัดการเท่านั้นที่เปลี่ยนสถานะหรือแก้ไขนัดหมายได้");
+        }
+    }
+
+    /** The staff id of the signed-in user, or null when the account has no staff record. */
+    public Long currentStaffId() {
+        AppUser user = users.findById(actor.requireId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        return user.getStaff() == null ? null : user.getStaff().getId();
+    }
+
     public void requireAccess(Branch branch) {
         scope(branch.getBranchCode());
     }
