@@ -1,0 +1,16 @@
+{
+  "v2Postgres": {
+    "specs": 32,
+    "tests": 316,
+    "failed": 0,
+    "skipped": 0,
+    "passed": 316
+  },
+  "backendRegression": {
+    "specs": 17,
+    "tests": 432,
+    "failed": 0,
+    "skipped": 0,
+    "passed": 432
+  }
+}

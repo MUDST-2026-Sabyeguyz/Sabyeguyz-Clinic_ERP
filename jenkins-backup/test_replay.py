@@ -48,6 +48,10 @@ jobs:
   unsupported:
     steps:
       - uses: unknown/action@v1
+  manual-kubernetes:
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: helm/kind-action@v1
 ''')
             git('add', '.')
             git('commit', '--quiet', '-m', 'CI fixture')
@@ -62,6 +66,8 @@ jobs:
             self.assertEqual([s['status'] for s in summary['jobs'][0]['steps']],
                 ['success', 'success', 'failure', 'skipped', 'success', 'success'])
             self.assertIn('Unsupported action', summary['jobs'][1]['steps'][0]['error'])
+            self.assertEqual(summary['jobs'][2]['result'], 'skipped')
+            self.assertIn('Manual job gate', summary['jobs'][2]['reason'])
             self.assertEqual((output / 'test-failure/artifacts-5/evidence.txt').read_text().strip(), 'cleanup')
             self.assertTrue((output / 'summary.junit.xml').exists())
             self.assertFalse((output / 'test-failure/step.env').exists())
