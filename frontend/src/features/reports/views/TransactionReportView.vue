@@ -3,8 +3,18 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { branchApi, commissionApi, salesApi, type SaleDetail } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 const type = ref<'single' | 'course'>('single')
 const router = useRouter()
+const reportSelection = ref('salesTransaction')
+const reportOptions = [
+  { value: 'revenue', label: 'รายงานยอดขาย' },
+  { value: 'balance', label: 'ยอดคงเหลือคอร์ส' },
+  { value: 'transfer', label: 'ประวัติการโอนคอร์ส' },
+  { value: 'commission', label: 'ค่าคอมมิชชั่น' },
+  { value: 'salesTransaction', label: 'Transaction' },
+  { value: 'payment', label: 'รายงานยอดรับชำระ' },
+]
 const purchaseOnly = ref(false)
 const search = ref('')
 const from = ref('')
@@ -153,12 +163,31 @@ watch([type, from, to], load, { immediate: true })
 watch([type, search, from, to, purchaseOnly], () => {
   page.value = 1
 })
+watch(reportSelection, (report) => {
+  if (report !== 'salesTransaction') {
+    void router.push({ path: '/staff/reports', query: { report } })
+  }
+})
 </script>
 <template>
   <main class="transaction-workspace">
     <header>
-      <h1>Transaction</h1>
-      <p>ดูรายการขายและรายการใช้สิทธิ์คอร์ส โดยเลือกประเภทธุรกรรมที่ต้องการ</p>
+      <div>
+        <h1>Transaction</h1>
+        <p>ดูรายการขายและรายการใช้สิทธิ์คอร์ส โดยเลือกประเภทธุรกรรมที่ต้องการ</p>
+      </div>
+      <label class="transaction-report-select">
+        <span>เลือกรายงาน</span>
+        <FilterDropdown
+          v-model="reportSelection"
+          :options="reportOptions"
+          default-value="salesTransaction"
+          default-label="Transaction"
+          label="เลือกรายงาน"
+          hide-default-option
+          :clear-on-reselect="false"
+        />
+      </label>
     </header>
     <section class="transaction-filters">
       <div>
@@ -399,6 +428,20 @@ watch([type, search, from, to, purchaseOnly], () => {
 .transaction-workspace p {
   color: #52645b;
   margin: 8px 0 0;
+}
+.transaction-workspace > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+.transaction-report-select {
+  display: grid;
+  width: min(280px, 100%);
+  gap: 7px;
+  color: #52645b;
+  font-size: 14px;
+  font-weight: 700;
 }
 .results-actions {
   display: flex;
@@ -686,6 +729,13 @@ watch([type, search, from, to, purchaseOnly], () => {
   .transaction-workspace {
     padding: 28px 16px;
     gap: 20px;
+  }
+  .transaction-workspace > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .transaction-report-select {
+    width: 100%;
   }
   .transaction-filters {
     grid-template-columns: 1fr;
