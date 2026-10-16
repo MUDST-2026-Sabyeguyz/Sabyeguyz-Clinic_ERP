@@ -35,7 +35,8 @@ for ($attempt = 0; $attempt -lt 60; $attempt++) {
     Start-Sleep -Seconds 2
 }
 if ($LASTEXITCODE -ne 0) { throw 'Isolated Docker daemon did not start' }
-docker tag clinic-jenkins-backup-jenkins:latest clinic-ci-worker:local
+docker build -f (Join-Path $PSScriptRoot 'Dockerfile.worker') -t clinic-ci-worker:local $PSScriptRoot
+if ($LASTEXITCODE -ne 0) { throw 'CI worker image build failed' }
 & $env:ComSpec /d /c 'docker image save clinic-ci-worker:local | docker exec -i clinic-jenkins-ci-docker-1 docker image load'
 if ($LASTEXITCODE -ne 0) { throw 'Could not load the CI worker image' }
 docker compose -f $compose exec -T jenkins bash -c 'if [ -f /var/jenkins_home/clinic-source.git/HEAD ]; then git --git-dir=/var/jenkins_home/clinic-source.git fetch /opt/clinic/ci/source/all.bundle "+refs/*:refs/*"; else git clone --mirror /opt/clinic/ci/source/all.bundle /var/jenkins_home/clinic-source.git; fi'

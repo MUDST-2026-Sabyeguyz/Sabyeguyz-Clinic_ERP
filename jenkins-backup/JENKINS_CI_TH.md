@@ -61,6 +61,8 @@ node jenkins-backup/control.cjs monitor
 
 Worker ใช้ Debian, Java 21, Node 24 และ Chromium แทน GitHub Ubuntu/Chrome โดยบันทึกข้อแตกต่างไว้ใน summary คำสั่ง build/test/API/schema/migration มาจาก source commit เดิม รองรับเฉพาะ actions และเงื่อนไขที่ใช้ใน repository นี้ ส่วนที่ไม่รองรับจะรายงานล้มเหลว ไม่ข้ามแล้วแสดงผ่าน
 
+`Dockerfile.worker` เพิ่ม passwordless sudo เฉพาะ container ทดสอบ เพื่อให้คำสั่งเดิมอย่าง `npx playwright install --with-deps chromium` ติดตั้ง OS dependencies ได้เหมือน GitHub runner ตัว Jenkins controller ใช้ image เดิมที่ไม่มี sudo และ worker ไม่ได้รับ credentials ของ controller
+
 ขั้น publish/deploy เก่าที่กำหนดให้รันเฉพาะ `workflow_dispatch` บน `xan` จะไม่รันในการตรวจ CI แบบ push นี้ ฐาน PostgreSQL และ Compose project ของแต่ละ job ใช้ใหม่และล้างเฉพาะทรัพยากรทดสอบที่ job นั้นสร้าง
 
 `summary.junit.xml` สรุปผลระดับ workflow/job รายละเอียดจำนวน test cases ของชุดแอปอยู่ใน log และ artifacts ของ tests นั้น ไม่ควรตีความจำนวน JUnit summary เป็นจำนวน app tests ทั้งหมด
