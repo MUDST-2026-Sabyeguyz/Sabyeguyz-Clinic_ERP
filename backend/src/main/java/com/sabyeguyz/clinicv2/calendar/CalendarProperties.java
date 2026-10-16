@@ -15,7 +15,7 @@ public class CalendarProperties {
     private String refreshToken = "";
     /** Path of the service account JSON key file; when set it is used instead of the OAuth refresh token. */
     private String serviceAccountKeyFile = "";
-    /** The schema keeps no appointment end time yet, so every calendar event lasts this long. */
+    /** Fallback length for appointments that have no stored end time. */
     private int defaultDurationMinutes = 60;
     private String timeZone = "Asia/Bangkok";
     private long pushIntervalMs = 30_000;
