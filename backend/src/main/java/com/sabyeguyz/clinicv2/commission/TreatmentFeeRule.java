@@ -28,6 +28,10 @@ public class TreatmentFeeRule {
     private FeeType feeType;
 
     /** THB amount, or percentage depending on feeType. */
+    /** The name the Manager gave the rule on the settings page (optional). */
+    @Column(name = "rule_name", length = 100)
+    private String ruleName;
+
     @Column(name = "fee_value", precision = 12, scale = 4, nullable = false)
     private BigDecimal feeValue;
 
@@ -59,6 +63,8 @@ public class TreatmentFeeRule {
     public void setPermission(Permission permission) { this.permission = permission; }
     public FeeType getFeeType() { return feeType; }
     public void setFeeType(FeeType feeType) { this.feeType = feeType; }
+    public String getRuleName() { return ruleName; }
+    public void setRuleName(String ruleName) { this.ruleName = ruleName; }
     public BigDecimal getFeeValue() { return feeValue; }
     public void setFeeValue(BigDecimal feeValue) { this.feeValue = feeValue; }
     public LocalDate getEffectiveFrom() { return effectiveFrom; }
