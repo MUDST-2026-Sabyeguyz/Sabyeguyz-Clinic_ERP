@@ -245,13 +245,7 @@ watch([staffId, month], load)
             </div>
           </article>
         </section>
-        <p class="net-note">
-          ยอดสุทธิ = Commission {{ money(commission) }} + ค่ามือ {{ money(treatmentTotal) }} + Adjustment ฿0.00 · ยอดคำนวณโดยระบบ ไม่เปิดให้กรอกแก้โดยตรง
-        </p>
         <footer v-if="!approved" class="detail-actions">
-          <button class="commission-secondary" disabled title="ระบบยังไม่รองรับการส่งกลับแก้ไข">
-            ส่งกลับแก้ไข
-          </button>
           <button class="commission-primary" :disabled="closingId === null" @click="openConfirmation">
             อนุมัติยอด
           </button>
