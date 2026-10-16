@@ -40,6 +40,8 @@ docker tag clinic-jenkins-backup-jenkins:latest clinic-ci-worker:local
 if ($LASTEXITCODE -ne 0) { throw 'Could not load the CI worker image' }
 docker compose -f $compose exec -T jenkins bash -c 'if [ -f /var/jenkins_home/clinic-source.git/HEAD ]; then git --git-dir=/var/jenkins_home/clinic-source.git fetch /opt/clinic/ci/source/all.bundle "+refs/*:refs/*"; else git clone --mirror /opt/clinic/ci/source/all.bundle /var/jenkins_home/clinic-source.git; fi'
 if ($LASTEXITCODE -ne 0) { throw 'Could not initialize CI source' }
+node (Join-Path $PSScriptRoot 'control.cjs') reload
+if ($LASTEXITCODE -ne 0) { throw 'Could not refresh Jenkins jobs' }
 Write-Host 'Jenkins: http://localhost:8086/ (user: clinic-admin)'
 Write-Host 'Read runtime/admin-password locally to sign in. Do not share this file.'
 Write-Host 'Run node jenkins-backup/control.cjs watch once to initialize branch tracking.'
