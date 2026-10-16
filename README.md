@@ -21,7 +21,7 @@ The [Kubernetes GitHub Actions pipeline](.github/workflows/kubernetes-ci.yml) de
 Requirements: Git and Docker with Docker Compose. No local Java, Maven, Node.js, or PostgreSQL installation is required.
 
 ```bash
-git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+git clone --branch develop --single-branch https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
 cd Sabyeguyz-Clinic_ERP
 cp .env.example .env
 # Set unique POSTGRES_PASSWORD and JWT_SECRET values in .env.
@@ -32,11 +32,11 @@ Services:
 
 - Frontend: http://localhost
 - Backend health: http://localhost:8080/actuator/health
-- Swagger UI: http://localhost:8080/swagger-ui/index.html
-- OpenAPI JSON: http://localhost:8080/v3/api-docs
+- Swagger UI: http://localhost:8080/swagger-ui/index.html (protected; anonymous requests return HTTP 401)
+- OpenAPI JSON: http://localhost:8080/v3/api-docs (protected; anonymous requests return HTTP 401)
 - PostgreSQL: localhost:5432
 
-The first startup runs Flyway migrations automatically. PostgreSQL data is stored in the `postgres-data` Docker volume and survives `docker compose down` followed by `docker compose up -d`. Use `docker compose down -v` only when you intentionally want to remove the database volume.
+The first startup runs Flyway migrations automatically. With the default Compose project name, PostgreSQL data is stored in the `sabyeguyz_postgres-v2-data` Docker volume and survives `docker compose down` followed by `docker compose up -d`. A custom Compose project name changes the volume prefix. Use `docker compose down -v` only when you intentionally want to remove the database volume.
 
 The Compose project is named `sabyeguyz`. Data from an older Compose project stays in its previous volume and is not moved into the new project automatically.
 
@@ -53,10 +53,11 @@ docker compose ps
 
 Wait for the backend health endpoint to return `{"status":"UP"}` before using the application:
 
-- Frontend: http://localhost/patients
-- Register patient: http://localhost/patients/register
+- Frontend login: http://localhost/
+- Patient list (after staff login): http://localhost/staff/patients
+- Register patient (after staff login): http://localhost/staff/patients/new
 - Backend health: http://localhost:8080/actuator/health
-- Swagger: http://localhost:8080/swagger-ui/index.html
+- Swagger: http://localhost:8080/swagger-ui/index.html (protected; anonymous requests return HTTP 401)
 
 The frontend serves a production build through nginx. Browser requests to `/api/` are forwarded to the backend on the Compose network. No local Node.js, Java, or Maven installation is required.
 
