@@ -52,10 +52,10 @@ describe('v2 patient receipt history', () => {
   it('reads persisted receipt totals separately from partial payment through either legacy line id', function () {
     cy.registerPatient().then(patient => sale(this.fixtures, patient, {
       items: [{ ...lines(this.fixtures)[0], discountType: 'BAHT', discountValue: 100 }, lines(this.fixtures)[1]],
-      billDiscountType: 'BAHT', billDiscountValue: 100, payments: [{ paymentMethodCode: 'QR', amount: 500 }],
+      payments: [{ paymentMethodCode: 'QR', amount: 500 }],
     }).then(created => {
-      const expected = { receiptId: created.receiptId, subtotalBeforeDiscount: 1900, billDiscountAmount: 100,
-        taxableAmount: 1800, taxAmount: 0, netAmount: 1800, total: 1800, paid: 500, paymentLabel: 'Installment' }
+      const expected = { receiptId: created.receiptId, subtotalBeforeDiscount: 1900, billDiscountAmount: 0,
+        taxableAmount: 1900, taxAmount: 0, netAmount: 1900, total: 1900, paid: 500, paymentLabel: 'Installment' }
       expect(created.receiptId).to.be.a('number')
       expect(created).to.include(expected)
       cy.api('GET', `/api/receipts/${created.id}`).then(({ body }) => {
@@ -70,6 +70,17 @@ describe('v2 patient receipt history', () => {
           id: next.id, receiptId: next.receiptId, receiptNo: next.receiptNo, netAmount: 800,
         })
       })
+    }))
+  })
+  it('rejects combining a line discount with a bill discount', function () {
+    cy.registerPatient().then(patient => cy.api('POST', '/api/payments', {
+      patientId: patient.id, branchCode: '01',
+      items: [{ ...lines(this.fixtures)[0], discountType: 'BAHT', discountValue: 100 }],
+      billDiscountType: 'BAHT', billDiscountValue: 100,
+      payments: [{ paymentMethodCode: 'Cash', amount: 600 }],
+    }).then(({ status, body }) => {
+      expect(status).to.equal(400)
+      expect(body.message).to.contain('ไม่สามารถใช้ส่วนลดรายการร่วมกับส่วนลดทั้งบิลได้')
     }))
   })
   it('reads and lists a persisted historical Assessment without permitting new Assessment sales', function () {

@@ -69,6 +69,7 @@ public class AppointmentService {
         appointment.setRoom(room);
         appointment.setAppointmentDate(appointmentDate);
         appointment.setAppointmentTime(appointmentTime);
+        appointment.setAppointmentEndAt(endAt(appointmentDate, appointmentTime, service, branch));
         appointment.setAppointmentPatientType(AppointmentPatientType.CURRENT);
         appointment.setAppointmentStatus(requireInitialStatus(initialStatus));
         appointment.setAppointmentCreateAt(Instant.now());
@@ -109,6 +110,7 @@ public class AppointmentService {
         appointment.setRoom(room);
         appointment.setAppointmentDate(appointmentDate);
         appointment.setAppointmentTime(appointmentTime);
+        appointment.setAppointmentEndAt(endAt(appointmentDate, appointmentTime, null, branch));
         appointment.setAppointmentStatus(requireInitialStatus(initialStatus));
         appointment.setAppointmentCreateAt(Instant.now());
         appointment.setAppointmentCreateBy(actorId);
@@ -152,6 +154,7 @@ public class AppointmentService {
 
         appointment.setAppointmentDate(newDate);
         appointment.setAppointmentTime(newTime);
+        appointment.setAppointmentEndAt(endAt(newDate, newTime, appointment.getService(), appointment.getBranch()));
         changeStatus(appointment, AppointmentStatus.Confirmed, reason, actorId);
         appointment.setAppointmentUpdateAt(Instant.now());
         appointment.setAppointmentUpdateBy(actorId);
@@ -246,6 +249,11 @@ public class AppointmentService {
     public static Integer effectiveMinutes(Service service, Branch branch) {
         if (service != null && service.getDefaultAppointmentMinutes() != null) return service.getDefaultAppointmentMinutes();
         return branch == null ? null : branch.getDefaultAppointmentMinutes();
+    }
+
+    private static java.time.LocalDateTime endAt(LocalDate date, LocalTime time, Service service, Branch branch) {
+        Integer minutes = effectiveMinutes(service, branch);
+        return minutes == null ? null : date.atTime(time).plusMinutes(minutes);
     }
 
     /** Two appointments overlap when each starts before the other ends (back to back is fine). */
