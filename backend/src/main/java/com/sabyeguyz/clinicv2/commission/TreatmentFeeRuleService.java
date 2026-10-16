@@ -20,8 +20,15 @@ public class TreatmentFeeRuleService {
 
     private final TreatmentFeeRuleRepository rules;
 
+    private com.sabyeguyz.clinicv2.audit.AuditLogService audit;
+
     public TreatmentFeeRuleService(TreatmentFeeRuleRepository rules) {
         this.rules = rules;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAudit(com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -38,6 +45,7 @@ public class TreatmentFeeRuleService {
     public TreatmentFeeRule create(FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
                                     Permission permission, Long actorId) {
         validate(feeType, feeValue, effectiveFrom, effectiveTo);
+        requireNoOtherPending(effectiveFrom);
         retireOverlapping(null, effectiveFrom, effectiveTo, actorId);
 
         TreatmentFeeRule rule = new TreatmentFeeRule();
@@ -52,7 +60,10 @@ public class TreatmentFeeRuleService {
         return rules.save(rule);
     }
 
-    /** A rule in use may only end earlier (or later), never change what it pays. */
+    /**
+     * Edits a rule. A rule in use may only end earlier (or later), never change what it pays. When a rule that has not
+     * started moves to another month, the rule before it follows (it ends the day before the new start).
+     */
     @Transactional
     public TreatmentFeeRule update(Long id, FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom,
                                     LocalDate effectiveTo, Long actorId) {
@@ -60,6 +71,11 @@ public class TreatmentFeeRuleService {
         FeeType newType = feeType != null ? feeType : rule.getFeeType();
         BigDecimal newValue = feeValue != null ? feeValue : rule.getFeeValue();
         LocalDate newFrom = effectiveFrom != null ? effectiveFrom : rule.getEffectiveFrom();
+        // a version that waits to start is edited in its own month: the month is kept, so is its start date
+        if (rule.getEffectiveFrom().isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today())
+                && java.time.YearMonth.from(newFrom).equals(java.time.YearMonth.from(rule.getEffectiveFrom()))) {
+            newFrom = rule.getEffectiveFrom();
+        }
         // an omitted end date keeps the current one; a rule is reopened by creating a new rule
         LocalDate newTo = effectiveTo != null ? effectiveTo : rule.getEffectiveTo();
         validate(newType, newValue, newFrom, newTo);
@@ -74,13 +90,57 @@ public class TreatmentFeeRuleService {
                 throw new IllegalStateException("มีรายการรักษาที่ใช้กฎนี้หลังวันที่สิ้นสุดที่ระบุ");
             }
         }
+        TreatmentFeeRule predecessor = null;
+        LocalDate oldFrom = rule.getEffectiveFrom();
+        if (!newFrom.equals(oldFrom) && oldFrom.isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today())) {
+            requireFutureCycleStart(newFrom);
+            predecessor = rules.findAllByOrderByEffectiveFromDesc().stream()
+                    .filter(other -> !other.getId().equals(id) && oldFrom.minusDays(1).equals(other.getEffectiveTo()))
+                    .findFirst().orElse(null);
+            if (predecessor != null) {
+                if (!newFrom.isAfter(predecessor.getEffectiveFrom())) {
+                    throw new IllegalArgumentException("เดือนที่เริ่มต้องอยู่หลังกฎก่อนหน้า (เริ่ม " + predecessor.getEffectiveFrom() + ")");
+                }
+                if (newFrom.isBefore(oldFrom) && rules.isUsedAfter(predecessor.getId(), newFrom.minusDays(1))) {
+                    throw new IllegalStateException("กฎก่อนหน้าถูกใช้กับการรักษาตั้งแต่วันที่ " + newFrom
+                            + " แล้ว จึงสิ้นสุดก่อนวันนั้นไม่ได้");
+                }
+            }
+        }
         if (rule.isTreatmentFeeRuleStatus()) {
-            requireNoOverlap(id, newFrom, newTo);
+            requireNoOverlap(id, predecessor == null ? null : predecessor.getId(), newFrom, newTo);
+        }
+        if (predecessor != null) {
+            LocalDate previousEnd = predecessor.getEffectiveTo();
+            predecessor.setEffectiveTo(newFrom.minusDays(1));
+            predecessor.setTreatmentFeeRuleUpdateAt(Instant.now());
+            predecessor.setTreatmentFeeRuleUpdateBy(actorId);
+            rules.save(predecessor);
+            if (audit != null) {
+                audit.recordChange("treatment_fee_rule", String.valueOf(predecessor.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("effective_to", previousEnd),
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("effective_to", predecessor.getEffectiveTo(),
+                                "reason", "the next rule now starts " + newFrom), actorId);
+            }
         }
         rule.setFeeType(newType);
         rule.setFeeValue(newValue);
         rule.setEffectiveFrom(newFrom);
         rule.setEffectiveTo(newTo);
+        rule.setTreatmentFeeRuleUpdateAt(Instant.now());
+        rule.setTreatmentFeeRuleUpdateBy(actorId);
+        return rules.save(rule);
+    }
+
+    /** The name is a label only: it can change at any time, even on a rule already used. */
+    @Transactional
+    public TreatmentFeeRule rename(Long id, String name, Long actorId) {
+        TreatmentFeeRule rule = find(id);
+        String clean = name == null || name.isBlank() ? null : name.trim();
+        if (clean != null && clean.length() > 100) {
+            throw new IllegalArgumentException("ชื่อกฎค่ามือยาวเกิน 100 ตัวอักษร");
+        }
+        rule.setRuleName(clean);
         rule.setTreatmentFeeRuleUpdateAt(Instant.now());
         rule.setTreatmentFeeRuleUpdateBy(actorId);
         return rules.save(rule);
@@ -93,7 +153,7 @@ public class TreatmentFeeRuleService {
             return rule;
         }
         if (enabled) {
-            requireNoOverlap(id, rule.getEffectiveFrom(), rule.getEffectiveTo());
+            requireNoOverlap(id, null, rule.getEffectiveFrom(), rule.getEffectiveTo());
         }
         rule.setTreatmentFeeRuleStatus(enabled);
         rule.setTreatmentFeeRuleUpdateAt(Instant.now());
@@ -111,19 +171,49 @@ public class TreatmentFeeRuleService {
             if (!takesOver) {
                 throw new IllegalArgumentException("ช่วงวันที่ซ้อนกับกฎค่ามือที่ใช้งานอยู่ (เริ่ม " + other.getEffectiveFrom() + ")");
             }
+            // the rule in force is replaced from a later cycle, the 1st of a month after the current one
+            requireFutureCycleStart(from);
             if (rules.isUsedAfter(other.getId(), from.minusDays(1))) {
                 throw new IllegalStateException("กฎค่ามือที่ใช้งานอยู่ถูกใช้กับการรักษาตั้งแต่วันที่ " + from
                         + " แล้ว จึงสิ้นสุดก่อนวันนั้นไม่ได้");
             }
+            LocalDate previousEnd = other.getEffectiveTo();
             other.setEffectiveTo(from.minusDays(1));
             other.setTreatmentFeeRuleUpdateAt(Instant.now());
             other.setTreatmentFeeRuleUpdateBy(actorId);
             rules.save(other);
+            if (audit != null) {
+                audit.recordChange("treatment_fee_rule", String.valueOf(other.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("effective_to", previousEnd),
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("effective_to", other.getEffectiveTo(),
+                                "reason", "ended by a newer rule starting " + from), actorId);
+            }
         }
     }
 
-    private void requireNoOverlap(Long selfId, LocalDate from, LocalDate to) {
+    /** A rule starts on the 1st of a month after the current one: the pay rules never change in the middle of a month. */
+    private static void requireFutureCycleStart(LocalDate from) {
+        if (from.getDayOfMonth() != 1) {
+            throw new IllegalArgumentException("กฎค่ามือใหม่ต้องเริ่มวันที่ 1 ของเดือน เพื่อให้ใช้ทั้งรอบ");
+        }
+        java.time.YearMonth current = java.time.YearMonth.from(com.sabyeguyz.clinicv2.config.ClinicTime.today());
+        if (!java.time.YearMonth.from(from).isAfter(current)) {
+            throw new IllegalArgumentException("กฎค่ามือใหม่ใช้ตั้งแต่รอบถัดไป ต้องเริ่มหลังเดือน " + current);
+        }
+    }
+
+    /** Only one rule waits to start: a change while one is waiting is made on that rule. */
+    private void requireNoOtherPending(LocalDate from) {
+        LocalDate today = com.sabyeguyz.clinicv2.config.ClinicTime.today();
+        if (from == null || !from.isAfter(today)) return;
+        if (rules.findAllByOrderByEffectiveFromDesc().stream().anyMatch(rule -> rule.getEffectiveFrom().isAfter(today))) {
+            throw new IllegalStateException("มีกฎค่ามือที่รอเริ่มใช้อยู่แล้ว ให้แก้กฎที่รอนั้นแทนการเพิ่มใหม่");
+        }
+    }
+
+    private void requireNoOverlap(Long selfId, Long alsoIgnoreId, LocalDate from, LocalDate to) {
         for (TreatmentFeeRule other : rules.findByTreatmentFeeRuleStatusTrue()) {
+            if (other.getId().equals(alsoIgnoreId)) continue;
             if (!other.getId().equals(selfId) && overlaps(other.getEffectiveFrom(), other.getEffectiveTo(), from, to)) {
                 throw new IllegalArgumentException("ช่วงวันที่ซ้อนกับกฎค่ามือที่ใช้งานอยู่ (เริ่ม " + other.getEffectiveFrom() + ")");
             }

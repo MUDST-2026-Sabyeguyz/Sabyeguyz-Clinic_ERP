@@ -71,6 +71,21 @@ public class ServiceManagementController {
         service.deactivate(id, actor.currentId());
     }
 
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/activate")
+    public Response activate(@PathVariable Long id) {
+        return toResponse(service.activate(id, actor.currentId()));
+    }
+
+    public record TypeRequest(@NotBlank String type) {}
+
+    /** Changes the item between Single Visit and Course; refused once it has been used. */
+    @org.springframework.web.bind.annotation.PostMapping("/{id}/type")
+    public Response changeType(@PathVariable Long id, @Valid @RequestBody TypeRequest request) {
+        ServiceType type = "Course".equalsIgnoreCase(request.type()) ? ServiceType.Course
+                : "SingleVisit".equalsIgnoreCase(request.type().replace(" ", "")) ? ServiceType.SingleVisit : null;
+        return toResponse(service.changeType(id, type, actor.currentId()));
+    }
+
     private static Integer validMinutes(Integer minutes) {
         if (minutes == null || minutes == 0) return null; // 0 = none, as a response shows it
         if (minutes < 5 || minutes > 480) {
