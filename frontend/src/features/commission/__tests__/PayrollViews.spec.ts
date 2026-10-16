@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import CommissionPaymentsView from '../views/CommissionPaymentsView.vue'
-import CommissionAdjustmentsView from '../views/CommissionAdjustmentsView.vue'
 import CommissionCompensationSettingsView from '../views/CommissionCompensationSettingsView.vue'
+import CommissionAdjustmentsView from '../views/CommissionAdjustmentsView.vue'
 import TherapistCompensationView from '../views/TherapistCompensationView.vue'
 import RefundView from '../../refunds/views/RefundView.vue'
 
+const route = vi.hoisted(() => ({ query: {} as Record<string, string>, params: {} }))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {} }),
+  useRoute: () => route,
   useRouter: () => ({ push: vi.fn() }),
   RouterLink: { template: '<a><slot /></a>' },
 }))
@@ -25,6 +26,7 @@ const stubs = {
   ThaiDatePicker: true,
   CommissionTabs: true,
   FilterDropdown: true,
+  RouterLink: { template: '<a><slot /></a>' },
 }
 
 const payment = (over: Record<string, unknown> = {}) => ({
@@ -46,6 +48,7 @@ const payment = (over: Record<string, unknown> = {}) => ({
 })
 
 beforeEach(() => {
+  route.query = {}
   calls = []
   failing = {}
   responses = {}
@@ -276,25 +279,46 @@ describe('treatment fee rules page', () => {
 })
 
 describe('my compensation page (therapist)', () => {
-  it('shows the amounts of the latest month and waiting when not calculated', async () => {
+  const line = (over: Record<string, unknown> = {}) => ({
+    kind: 'COMMISSION', id: 1, date: '2026-10-03', patientName: 'สมชาย ใจดี', patientHn: '2601080022',
+    item: 'Manual Therapy', role: 'เจ้าของคอร์ส + ผู้รักษา', amount: 92.31, reversal: false, pending: false,
+    paymentStatus: 'OPEN', courseNo: 'C1', totalVisits: 13, grossAmount: 1500, lineDiscount: 300, base: 1200,
+    rate: 0.1, tier: 'Tier 2', pool: 1200, saleNo: 'RE1', saleDate: '2026-10-01', saleType: 'คอร์ส', feeType: null,
+    feeValue: null, feeBase: null, ownerName: null, treatingName: null, visitNo: null, singleVisit: false, ...over,
+  })
+
+  it('shows the amounts of the latest month, the lines behind them and waiting when not calculated', async () => {
+    responses['GET /api/commission/my-payments'] = [
+      payment({ month: '2026-10', courseCommission: null, net: null, pendingSessions: 2, adjustment: -140 }),
+      payment({ id: 2, month: '2026-09', status: 'PAID', paidAt: '2026-10-05T03:00:00Z' }),
+    ]
+    responses['GET /api/commission/my-lines'] = {
+      month: '2026-10', courseCommission: null, singleVisitFee: 45, substituteFee: 0, pendingSessions: 2, lines: [line()],
+    }
+    await mountView(TherapistCompensationView)
+    const summary = page().find('.therapist-summary-card').text()
+    expect(summary).toContain('รอคำนวณ')
+    expect(summary).toContain('2 ครั้งที่เดือนขายคอร์สยังไม่ปิดยอด')
+    expect(summary).toContain('−฿140.00') // a deduction keeps its sign in front of the baht sign
+    expect(page().find('.therapist-line-row').text()).toContain('฿1,200.00 ÷ 13')
+    expect(page().find('.therapist-line-row').text()).toContain('฿92.31')
+  })
+
+  it('lists only the paid months in the history', async () => {
+    route.query = { tab: 'payments' }
     responses['GET /api/commission/my-payments'] = [
       payment({ month: '2026-10', courseCommission: null, net: null, pendingSessions: 2 }),
       payment({ id: 2, month: '2026-09', status: 'PAID', paidAt: '2026-10-05T03:00:00Z' }),
     ]
     await mountView(TherapistCompensationView)
-    expect(page().find('.compensation-summary').text()).toContain('รอคำนวณ')
-    expect(page().find('.compensation-summary').text()).toContain(
-      '2 ครั้งที่เดือนขายคอร์สยังไม่ปิดยอด',
-    )
-    await click('ประวัติการจ่าย')
-    const history = page().find('.payment-history-table')
-    expect(history.findAll('article')).toHaveLength(1) // only the paid month
-    expect(history.text()).toContain('฿120.00')
+    const rows = page().findAll('.therapist-payment-row')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.text()).toContain('฿120.00')
   })
 
-  it('says so when there is no payment yet', async () => {
+  it('says so when there is nothing to show yet', async () => {
     await mountView(TherapistCompensationView)
-    expect(page().text()).toContain('ยังไม่มีงวดค่าตอบแทน')
+    expect(page().text()).toContain('ยังไม่มีรายการค่าตอบแทนในเดือนนี้')
   })
 })
 
