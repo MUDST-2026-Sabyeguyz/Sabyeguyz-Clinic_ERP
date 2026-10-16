@@ -145,16 +145,35 @@ public class AppointmentService {
     /** Moves the same appointment to a new date/time; does not create a new row. */
     @Transactional
     public Appointment reschedule(Long id, LocalDate newDate, LocalTime newTime, String reason, Long actorId) {
-        Appointment appointment = find(id);
+        Appointment appointment = getForUpdate(id);
+        return reschedule(appointment, appointment.getBranch(), appointment.getStaff(), appointment.getService(),
+                newDate, newTime, reason, actorId);
+    }
+
+    /** Updates the booking details while retaining the appointment record and history. */
+    @Transactional
+    public Appointment reschedule(Long id, Branch branch, Staff staff, Service service, LocalDate newDate,
+                                  LocalTime newTime, String reason, Long actorId) {
+        return reschedule(getForUpdate(id), branch, staff, service, newDate, newTime, reason, actorId);
+    }
+
+    private Appointment reschedule(Appointment appointment, Branch branch, Staff staff, Service service,
+                                   LocalDate newDate, LocalTime newTime, String reason, Long actorId) {
         requireNotTerminal(appointment);
+        require(branch != null, "ต้องระบุสาขา");
+        require(staff != null, "ต้องระบุนักกายภาพ");
+        require(branch.getId().equals(staff.getBranch().getId()), "นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
         require(newDate != null, "ต้องระบุวันที่นัดใหม่");
         require(newTime != null, "ต้องระบุเวลานัดใหม่");
-        requireNoConflict(appointment.getStaff().getId(), newDate, newTime, id);
-        requireSlotFits(appointment.getBranch(), appointment.getStaff(), appointment.getService(), newDate, newTime, id);
+        requireNoConflict(staff.getId(), newDate, newTime, appointment.getId());
+        requireSlotFits(branch, staff, service, newDate, newTime, appointment.getId());
 
+        appointment.setBranch(branch);
+        appointment.setStaff(staff);
+        appointment.setService(service);
         appointment.setAppointmentDate(newDate);
         appointment.setAppointmentTime(newTime);
-        appointment.setAppointmentEndAt(endAt(newDate, newTime, appointment.getService(), appointment.getBranch()));
+        appointment.setAppointmentEndAt(endAt(newDate, newTime, service, branch));
         changeStatus(appointment, AppointmentStatus.Confirmed, reason, actorId);
         appointment.setAppointmentUpdateAt(Instant.now());
         appointment.setAppointmentUpdateBy(actorId);

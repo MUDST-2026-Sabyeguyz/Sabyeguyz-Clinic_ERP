@@ -61,6 +61,12 @@ body.therapist-ui .staff-header nav .nav-pill:not(.is-ready) ~ a.router-link-act
   box-shadow: 0 3px 9px rgb(65 48 37 / 16%);
 }
 
+body.therapist-ui .staff-header.formula-route nav a.router-link-active {
+  color: #fff;
+  background: transparent;
+  box-shadow: none;
+}
+
 body.therapist-ui .staff-header nav a {
   z-index: 1;
   padding: 10px 21px;

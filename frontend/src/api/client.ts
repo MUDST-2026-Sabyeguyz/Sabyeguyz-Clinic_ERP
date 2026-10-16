@@ -368,9 +368,17 @@ export const authApi = {
 
 export const patientApi = {
   search: (query = '', page = 0, size = 20, branchCode = '', sort = 'nameAsc') =>
-    api.get<Page<Patient>>(
-      `/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), sort, ...(branchCode ? { branchCode } : {}) })}`,
-    ),
+    api.get<Page<Patient>>(`/api/patients?${new URLSearchParams({
+      query: /^hn[\s:#-]*/i.test(query.trim())
+        ? query.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '')
+        : /^\d[\d\s-]*$/.test(query.trim())
+          ? query.trim().replace(/\D/g, '')
+          : query,
+      page: String(page),
+      size: String(size),
+      sort,
+      ...(branchCode ? { branchCode } : {}),
+    })}`),
   searchAll: async (query = '', branchCode = '') => {
     const first = await patientApi.search(query, 0, 100, branchCode)
     const rest = await Promise.all(
@@ -490,7 +498,16 @@ export const appointmentApi = {
   complete: (id: number) => api.post<Appointment>(`/api/appointments/${id}/complete`, {}),
   cancel: (id: number, reason: string) =>
     api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }),
-  reschedule: (id: number, body: { startAt: string; therapistId?: number }) =>
+  reschedule: (
+    id: number,
+    body: {
+      startAt: string
+      therapistId?: number
+      serviceId?: number
+      branchCode?: string
+      note?: string | null
+    },
+  ) =>
     api.patch<Appointment>(`/api/appointments/${id}`, body),
 }
 

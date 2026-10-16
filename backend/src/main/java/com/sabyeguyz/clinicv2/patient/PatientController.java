@@ -7,6 +7,8 @@ import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.enums.BloodGroup;
 import com.sabyeguyz.clinicv2.enums.CustomerType;
 import com.sabyeguyz.clinicv2.enums.Gender;
+import com.sabyeguyz.clinicv2.masterdata.MasterDataValue;
+import com.sabyeguyz.clinicv2.masterdata.MasterDataValueRepository;
 import java.time.LocalDate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,13 +42,15 @@ public class PatientController {
     private final PatientService service;
     private final PatientRepository repository;
     private final BranchRepository branches;
+    private final MasterDataValueRepository masterDataValues;
     private final CurrentActor actor;
 
     public PatientController(PatientService service, PatientRepository repository, BranchRepository branches,
-                              CurrentActor actor) {
+                              MasterDataValueRepository masterDataValues, CurrentActor actor) {
         this.service = service;
         this.repository = repository;
         this.branches = branches;
+        this.masterDataValues = masterDataValues;
         this.actor = actor;
     }
 
@@ -54,7 +58,8 @@ public class PatientController {
             String branchCode, String customerType, String title, String firstName, String lastName,
             String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
             String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
-            String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email) {}
+            String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email,
+            String customerSource, String insuranceCompany) {}
 
     public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -142,7 +147,8 @@ public class PatientController {
                 parseBloodGroup(request.bloodGroup()),
                 request.nationality(),
                 request.address(),
-                null, null, null, null, middleName);
+                null, resolveMasterDataValue("Referral Channel", request.customerSource()), null,
+                resolveMasterDataValue("Insurance Company", request.insuranceCompany()), middleName);
         Patient patient = service.register(registration, actor.currentId());
         patient.setEmail(validEmail(request.email()));
         return toSummary(patient);
@@ -170,6 +176,12 @@ public class PatientController {
                 passport ? request.identityNumber() : null, request.birthDate(),
                 parseBloodGroup(request.bloodGroup()), request.nationality(), request.address(),
                 middleName, request.middleName() != null, actor.currentId());
+        if (request.customerSource() != null) {
+            patient.setReferralChannel(resolveMasterDataValue("Referral Channel", request.customerSource()));
+        }
+        if (request.insuranceCompany() != null) {
+            patient.setInsuranceCompany(resolveMasterDataValue("Insurance Company", request.insuranceCompany()));
+        }
         if (request.email() != null) patient.setEmail(validEmail(request.email()));
         return toProfile(patient);
     }
@@ -244,6 +256,15 @@ public class PatientController {
         } catch (IllegalArgumentException e) {
             return "ต่างชาติ".equals(value) || "Foreigner".equalsIgnoreCase(value) ? CustomerType.Foreigner : CustomerType.Thai;
         }
+    }
+
+    private MasterDataValue resolveMasterDataValue(String category, String name) {
+        if (name == null || name.isBlank()) return null;
+        return masterDataValues.findAll().stream()
+                .filter(value -> category.equalsIgnoreCase(value.getType().getTypeName())
+                        && name.trim().equalsIgnoreCase(value.getValueName()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบค่า " + name + " ใน " + category));
     }
 
     private static Gender parseGender(String value) {
