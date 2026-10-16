@@ -12,6 +12,24 @@ spec:
       labels: {app: backend}
     spec:
       automountServiceAccountToken: false
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: clinic-config}
+          command:
+            - sh
+            - -c
+            - |
+              for attempt in $(seq 1 60); do
+                pg_isready -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" && exit 0
+                sleep 2
+              done
+              exit 1
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
       containers:
         - name: backend
           image: clinic-backend:local
