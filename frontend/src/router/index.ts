@@ -55,6 +55,24 @@ const router = createRouter({
       meta: { permission: 'Visit' },
     },
     {
+      path: '/staff/appointments/calendar',
+      name: 'staff-appointment-calendar',
+      component: () => import('@/features/appointments/views/AppointmentCalendarView.vue'),
+      meta: { permission: 'Visit' },
+    },
+    {
+      path: '/staff/appointments/new',
+      name: 'staff-appointment-create',
+      component: () => import('@/features/appointments/views/AppointmentView.vue'),
+      meta: { permission: 'Visit' },
+    },
+    {
+      path: '/staff/appointments/:id/edit',
+      name: 'staff-appointment-edit',
+      component: () => import('@/features/appointments/views/AppointmentView.vue'),
+      meta: { permission: 'Visit' },
+    },
+    {
       path: '/staff/services',
       name: 'staff-services',
       component: () => import('@/features/services/views/servicesView.vue'),
@@ -128,12 +146,6 @@ const router = createRouter({
       path: '/staff/reports',
       name: 'staff-reports',
       component: () => import('@/features/reports/views/ReportsView.vue'),
-      meta: { roles: ['manager'] },
-    },
-    {
-      path: '/staff/personnel',
-      name: 'staff-personnel',
-      component: () => import('@/features/commission/views/PersonnelTransactionsView.vue'),
       meta: { roles: ['manager'] },
     },
     {

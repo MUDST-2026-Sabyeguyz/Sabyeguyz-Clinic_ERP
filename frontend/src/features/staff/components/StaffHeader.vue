@@ -4,9 +4,11 @@ import { useRoute } from 'vue-router'
 import logo from '@/assets/sabyeguyz-logo.png'
 import drawerLogo from '@/assets/sabyeguyz-logo2.png'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import { branchApi } from '@/api/client'
 import {
   managerBranches,
   selectedManagerBranch,
+  setManagerBranches,
   setSelectedManagerBranch,
 } from '@/features/staff/data/managerBranch'
 const profileOpen = ref(false)
@@ -17,18 +19,17 @@ const pillReady = ref(false)
 const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0' })
 let readyFrame: number | undefined
 let routeFrame: number | undefined
-let hoverFrame: number | undefined
 let settleFrame: number | undefined
-let hoveredLink: HTMLAnchorElement | null = null
 const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   role?: string
   branchName?: string
 } | null
 const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
-const activeManagerBranch = ref(selectedManagerBranch())
+const activeManagerBranch = computed(() => selectedManagerBranch())
 const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
+const profileBranchLabel = computed(() => storedUser?.branchName || 'สาขาที่ได้รับมอบหมาย')
 const navItems = computed(() =>
   isManager.value
     ? [
@@ -38,7 +39,6 @@ const navItems = computed(() =>
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'รายการธุรกรรม' },
         { to: '/staff/commission', label: 'คอมมิชชั่น' },
-        { to: '/staff/personnel', label: 'บุคลากร' },
         { to: '/staff/reports', label: 'รายงาน' },
         { to: '/staff/settings', label: 'การตั้งค่า' },
       ]
@@ -77,27 +77,6 @@ function movePillToActive() {
     .sort((a, b) => b.pathname.length - a.pathname.length)[0]
   movePill(matchingLink ?? links[0] ?? null)
 }
-function handleNavHover(event: Event) {
-  if (isManager.value) return
-  const target = event.target
-  if (!(target instanceof Element)) return
-  const link = target.closest<HTMLAnchorElement>('a')
-  if (!link || !navRef.value?.contains(link) || link === hoveredLink) return
-  hoveredLink = link
-  pillReady.value = true
-  if (hoverFrame) cancelAnimationFrame(hoverFrame)
-  nextTick(() => {
-    hoverFrame = requestAnimationFrame(() => {
-      if (hoveredLink === link) movePill(link)
-    })
-  })
-}
-function resetHoverToActive() {
-  if (isManager.value) return
-  hoveredLink = null
-  if (hoverFrame) cancelAnimationFrame(hoverFrame)
-  movePillToActive()
-}
 function positionPillWithoutAnimation() {
   pillReady.value = false
   movePillToActive()
@@ -116,29 +95,18 @@ onMounted(() => {
   })
   document.fonts?.ready.then(positionPillWithoutAnimation)
   window.addEventListener('resize', positionPillWithoutAnimation)
-  navRef.value?.addEventListener('mouseover', handleNavHover)
-  navRef.value?.addEventListener('pointerover', handleNavHover)
-  navRef.value?.addEventListener('pointermove', handleNavHover)
-  navRef.value?.addEventListener('focusin', handleNavHover)
-  window.addEventListener('manager-branch-changed', syncActiveManagerBranch)
+  if (isManager.value) void loadManagerBranches()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', positionPillWithoutAnimation)
-  navRef.value?.removeEventListener('mouseover', handleNavHover)
-  navRef.value?.removeEventListener('pointerover', handleNavHover)
-  navRef.value?.removeEventListener('pointermove', handleNavHover)
-  navRef.value?.removeEventListener('focusin', handleNavHover)
-  window.removeEventListener('manager-branch-changed', syncActiveManagerBranch)
   if (readyFrame) cancelAnimationFrame(readyFrame)
   if (routeFrame) cancelAnimationFrame(routeFrame)
-  if (hoverFrame) cancelAnimationFrame(hoverFrame)
   if (settleFrame) cancelAnimationFrame(settleFrame)
 })
 watch(
   () => route.fullPath,
   () => {
     menuOpen.value = false
-    hoveredLink = null
     nextTick(() => {
       if (routeFrame) cancelAnimationFrame(routeFrame)
       routeFrame = requestAnimationFrame(movePillToActive)
@@ -152,14 +120,21 @@ function signOut() {
   localStorage.removeItem('mockStaffRole')
   localStorage.removeItem('mockStaffEmail')
 }
-function syncActiveManagerBranch() {
-  activeManagerBranch.value = selectedManagerBranch()
+async function loadManagerBranches() {
+  try {
+    const branches = (await branchApi.list())
+      .filter((branch) => branch.active)
+      .map((branch) => ({ code: branch.code, name: branch.name, address: branch.address }))
+    setManagerBranches(branches)
+    window.dispatchEvent(new CustomEvent('manager-branch-changed'))
+  } catch {
+    // The page-level requests still show their normal loading error if branch data is unavailable.
+  }
 }
 function switchManagerBranch(code: string) {
-  const branch = managerBranches.find((item) => item.code === code)
+  const branch = managerBranches.value.find((item) => item.code === code)
   if (!branch) return
   setSelectedManagerBranch(branch)
-  activeManagerBranch.value = branch
   window.dispatchEvent(new CustomEvent('manager-branch-changed'))
 }
 </script>
@@ -180,7 +155,6 @@ function switchManagerBranch(code: string) {
       ref="navRef"
       :class="{ 'mobile-open': menuOpen }"
       aria-label="เมนูเจ้าหน้าที่คลินิก"
-      @mouseleave="resetHoverToActive"
     >
       <div class="mobile-menu-head">
         <button type="button" aria-label="ปิดเมนู" @click="menuOpen = false">×</button>
@@ -223,7 +197,7 @@ function switchManagerBranch(code: string) {
       <div v-if="profileOpen" class="profile-menu">
         <div>
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
-          ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : 'สาขาราชพฤกษ์' }}</span>
+          ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : profileBranchLabel }}</span>
         </div>
         <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>
