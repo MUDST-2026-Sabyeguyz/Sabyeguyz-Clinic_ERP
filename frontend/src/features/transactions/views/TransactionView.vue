@@ -2,7 +2,6 @@
 import { salesApi, courseApi } from '@/api/client'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 
 type Tab = 'sales' | 'usage' | 'history'
@@ -94,8 +93,6 @@ const step = ref<Step>('list')
 const rows = ref<Transaction[]>([])
 const selected = ref<Transaction | null>(null)
 const search = ref('')
-const branchFilter = ref('')
-const statusFilter = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const page = ref(1)
@@ -112,10 +109,6 @@ const lastCancelledKey = ref('')
 const showPostCancellationNotice = ref(false)
 let postCancellationNoticeTimer: ReturnType<typeof setTimeout> | undefined
 const branchNames = ref<Record<string, string>>({ BR01: 'แบริ่ง', BR09: 'พระราม 9' })
-const branchOptions = ref<Array<{ code: string; name: string }>>([
-  { code: 'BR01', name: 'แบริ่ง' },
-  { code: 'BR09', name: 'พระราม 9' },
-])
 const cancellationActor = ref('')
 const pageSize = computed(() => (tab.value === 'history' ? 5 : 10))
 
@@ -194,14 +187,8 @@ const visibleRows = computed(() => {
         !term ||
         `${row.number} ${row.patient} ${row.hn} ${row.item}`.toLocaleLowerCase().includes(term),
     )
-    .filter((row) => !branchFilter.value || row.branchCode === branchFilter.value)
     .filter((row) => !startDate.value || new Date(row.date) >= new Date(startDate.value))
     .filter((row) => !endDate.value || new Date(row.date) <= new Date(`${endDate.value}T23:59:59`))
-    .filter(
-      (row) =>
-        !statusFilter.value ||
-        (statusFilter.value === 'void' ? row.status !== 'ปกติ' : row.status === 'ปกติ'),
-    )
     .sort((left, right) => Date.parse(right.date) - Date.parse(left.date))
 })
 const hasCancellationHistory = computed(() =>
@@ -217,7 +204,7 @@ const reason = computed(() =>
 const canReview = computed(() =>
   reasonType.value === 'อื่น ๆ' ? otherReason.value.trim().length >= 10 : Boolean(reasonType.value),
 )
-watch([tab, search, branchFilter, statusFilter, startDate, endDate], () => {
+watch([tab, search, startDate, endDate], () => {
   page.value = 1
 })
 watch(totalPages, (count) => {
@@ -230,9 +217,7 @@ function changeTab(next: Tab) {
   tab.value = next
   step.value = 'list'
   selected.value = null
-  statusFilter.value = ''
   search.value = ''
-  branchFilter.value = ''
   startDate.value = ''
   endDate.value = ''
   expandedOriginal.value = []
@@ -390,36 +375,6 @@ function toggleOriginal(key: string) {
                 placeholder="เลขรายการ / ชื่อผู้ป่วย / HN"
               />
             </label>
-            <div class="transaction-control transaction-select">
-              <span>สาขา</span>
-              <FilterDropdown
-                v-model="branchFilter"
-                label="สาขา"
-                default-label="ทุกสาขา"
-                :options="
-                  branchOptions.map((branch) => ({ value: branch.code, label: branch.name }))
-                "
-              />
-            </div>
-            <div class="transaction-control transaction-select">
-              <span>สถานะ</span>
-              <FilterDropdown
-                v-model="statusFilter"
-                label="สถานะ"
-                default-label="ทุกสถานะ"
-                :options="
-                  tab === 'history'
-                    ? [{ value: 'void', label: 'ยกเลิกแล้ว' }]
-                    : [
-                        {
-                          value: 'normal',
-                          label: tab === 'sales' ? 'ชำระแล้ว' : 'ใช้บริการแล้ว',
-                        },
-                        { value: 'void', label: 'ยกเลิกแล้ว' },
-                      ]
-                "
-              />
-            </div>
             <label class="transaction-control transaction-date">
               <span>วันที่เริ่มต้น</span>
               <ThaiDatePicker v-model="startDate" show-calendar-icon numeric-month hide-caret />
