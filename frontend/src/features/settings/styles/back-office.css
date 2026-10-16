@@ -49,6 +49,82 @@
   text-align: left;
   cursor: pointer;
 }
+.latest-version {
+  padding: 8px 40px 32px;
+}
+.latest-version header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.latest-version h3 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+.latest-version .cycle {
+  margin: 8px 0 16px;
+  color: #68776f;
+}
+.fee-version {
+  margin-bottom: 28px;
+}
+.fee-table td {
+  text-align: left;
+}
+.version-badge {
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.version-badge.current {
+  background: #1e9a8d;
+  color: #fff;
+}
+.version-badge.pending {
+  background: #fdd791;
+  color: #7a4d00;
+}
+.version-badge.ended {
+  background: #e7eae8;
+  color: #55635c;
+}
+.tier-table {
+  width: 100%;
+  border: 1px solid #e6ece8;
+  border-collapse: collapse;
+}
+.tier-table th,
+.tier-table td {
+  padding: 14px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+.tier-table thead th {
+  background: #f1f4f2;
+  color: #25372e;
+}
+.tier-table tbody tr + tr td {
+  border-top: 1px solid #e6ece8;
+}
+.settings-nav-link {
+  display: block;
+  margin-top: 10px;
+  padding: 14px;
+  border-top: 1px solid #e3ebe7;
+  border-radius: 0 0 10px 10px;
+  color: #1e807c;
+  font-weight: 600;
+  text-decoration: none;
+}
+.settings-nav-link:hover {
+  background: #eef5f2;
+}
+@media (max-width: 1000px) {
+  .settings-nav-link {
+    grid-column: 1/-1;
+  }
+}
 .settings-nav button:hover {
   background: #eef5f2;
 }
@@ -149,7 +225,7 @@ tbody tr:nth-child(even) {
 }
 .payment-option {
   display: grid;
-  grid-template-columns: 22px 1fr 28px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   width: 100%;
@@ -160,11 +236,6 @@ tbody tr:nth-child(even) {
   color: #2f4036;
   font: inherit;
   text-align: left;
-  cursor: pointer;
-}
-.payment-option.selected {
-  border-color: #1e807c;
-  background: #eef7f6;
 }
 .payment-option b,
 .payment-option small {
@@ -359,6 +430,8 @@ tbody tr:nth-child(even) {
   font-size: 0.9rem;
 }
 .settings-add {
+  display: inline-block;
+  text-decoration: none;
   padding: 12px 25px;
   border: 0;
   border-radius: 15px;
@@ -485,4 +558,188 @@ tbody tr:nth-child(even) {
   .settings-add {
     width: 100%;
   }
+}
+
+.drawer fieldset.fee-type {
+  margin: 16px 0;
+}
+.drawer fieldset.fee-type .check input {
+  width: 16px;
+  height: 16px;
+}
+
+a.edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+/* the status dropdown looks like the status pill, and still opens to change it */
+.fee-status {
+  display: inline-block;
+  width: auto;
+  min-width: 0;
+}
+.fee-status :deep(.filter-dropdown__button) {
+  width: 130px;
+  height: 38px;
+  min-height: 0;
+  justify-content: center;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.fee-status :deep(.filter-dropdown__chevron) {
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  border-color: currentColor;
+}
+.fee-status.open :deep(.filter-dropdown__button) {
+  box-shadow: 0 0 0 2px #0002;
+}
+.fee-status.status-on :deep(.filter-dropdown__button) {
+  background: #dff3e7;
+  color: #16765d;
+}
+.fee-status.status-off :deep(.filter-dropdown__button) {
+  background: #f8deda;
+  color: #b42318;
+}
+.fee-status :deep(.filter-dropdown__menu) {
+  width: max-content;
+}
+.fee-edit {
+  width: 130px;
+  height: 38px;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.settings-page .settings-status.tier-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 130px;
+  height: 38px;
+  padding: 0 18px;
+  box-sizing: border-box;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-secondary {
+  display: inline-block;
+  padding: 11px 24px;
+  border: 2px solid #1e807c;
+  border-radius: 15px;
+  color: #1e807c;
+  background: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.payment-status {
+  display: inline-flex;
+  gap: 6px;
+}
+.payment-status button {
+  min-width: 96px;
+  padding: 8px 18px;
+  border: 1px solid #d5ddd7;
+  border-radius: 999px;
+  background: #fff;
+  color: #758178;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.payment-status button.enable.on {
+  border-color: #16875b;
+  background: #16875b;
+  color: #fff;
+}
+.payment-status button.disable.on {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
+}
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: #0006;
+}
+.confirm-modal {
+  width: min(420px, calc(100% - 32px));
+  padding: 26px;
+  border-radius: 16px;
+  background: #fff;
+  color: #25372e;
+  box-shadow: 0 12px 40px #0003;
+}
+.confirm-modal h3 {
+  margin: 0 0 10px;
+}
+.confirm-modal p {
+  margin: 0 0 22px;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm-actions button {
+  padding: 10px 24px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.confirm-cancel {
+  border: 1px solid #c9d3cc;
+  background: #fff;
+  color: #3d4f45;
+}
+.confirm-ok {
+  border: 0;
+  background: #1e807c;
+  color: #fff;
+}
+@media (max-width: 700px) {
+  .payment-option {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .payment-status {
+    display: flex;
+  }
+  .payment-status button {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 6px;
+  }
+}
+
+.drawer label.status-field :deep(.filter-dropdown__button) {
+  font-weight: 600;
+}
+.drawer label.status-field.status-on :deep(.filter-dropdown__button) {
+  background: #dff3e7;
+  color: #16765d;
+}
+.drawer label.status-field.status-off :deep(.filter-dropdown__button) {
+  background: #f8deda;
+  color: #b42318;
 }

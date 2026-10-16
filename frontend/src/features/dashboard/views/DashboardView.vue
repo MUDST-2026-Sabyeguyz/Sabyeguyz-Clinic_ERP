@@ -147,7 +147,7 @@ async function loadDashboard() {
 
 onMounted(async () => {
   try {
-    branches.value = await branchApi.list()
+    branches.value = await branchApi.listActive()
   } catch {}
   await loadDashboard()
 })

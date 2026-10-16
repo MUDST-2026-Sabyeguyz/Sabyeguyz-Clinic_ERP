@@ -40,6 +40,7 @@ public class CommissionController {
     private final MonthlyTierSalesService tierSales;
     private final CommissionTierResolver tierResolver;
     private final CommissionSchemeRepository schemes;
+    private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
     private final MonthlyCommissionClosingService closingService;
     private final CommissionSchemeResolver schemeResolver;
     private final MonthlyCommissionClosingRepository closings;
@@ -64,7 +65,9 @@ public class CommissionController {
                                  TreatmentFeeRuleService treatmentFeeService, MonthlyTierSalesService tierSales,
                                  com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
                                  com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
-                                 com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems) {
+                                 com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems,
+                                 com.sabyeguyz.clinicv2.auth.AppUserRepository users) {
+        this.users = users;
         this.refundItems = refundItems;
         this.singleVisitFeeAccrual = singleVisitFeeAccrual;
         this.usageRepository = usageRepository;
@@ -90,9 +93,11 @@ public class CommissionController {
     public record SchemeRequest(String name, String version, LocalDate effectiveFrom, LocalDate effectiveTo,
                                  List<TierInput> tiers) {}
 
+    /** createdBy is the name of the user who recorded the version (history of the commission rules). */
     public record SchemeResponse(Long id, String name, int version, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                  boolean locked) {}
-    public record TierResponse(Long id, int order, BigDecimal minimum, BigDecimal maximum, BigDecimal rate, boolean active) {}
+                                  boolean locked, String createdBy, java.time.Instant createdAt,
+                                  java.time.Instant updatedAt, String updatedBy) {}
+    public record TierResponse(Long id, int order, BigDecimal minimum, BigDecimal maximum, BigDecimal rate) {}
     public record ReportRow(Long staffId, String staffName, String branchCode, String branchName, int saleCount,
                              BigDecimal base, BigDecimal rate, BigDecimal commission) {}
     /** ownerNet and gross are null while the sale month is not closed (the Owner commission is not known yet). */
@@ -105,8 +110,10 @@ public class CommissionController {
                                    String version, BigDecimal rate, String status, String reopenReason,
                                    java.time.Instant reopenedAt) {}
     public record TreatmentFeeResponse(Long id, Long staffId, String feeType, BigDecimal feeValue, String percentageBase,
-                                        LocalDate effectiveFrom, LocalDate effectiveTo, boolean enabled, boolean used) {}
-    public record TreatmentFeeRequest(String feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo) {}
+                                        LocalDate effectiveFrom, LocalDate effectiveTo, boolean enabled, boolean used,
+                                        String name, String lastEditedBy, java.time.Instant lastEditedAt) {}
+    public record TreatmentFeeRequest(String feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
+                                       String name) {}
 
     @GetMapping("/schemes")
     public List<SchemeResponse> schemes() {
@@ -125,20 +132,22 @@ public class CommissionController {
         List<CommissionSchemeService.TierInput> inputs = request.tiers().stream()
                 .map(t -> new CommissionSchemeService.TierInput(t.minimum(), t.maximum(), t.rate(), t.order()))
                 .toList();
-        CommissionScheme scheme = schemeService.create(request.name(), request.effectiveFrom(), request.effectiveTo(),
+        // the end of a version is set by the system (the day before the next one starts), never by the request
+        CommissionScheme scheme = schemeService.create(request.name(), request.effectiveFrom(), null,
                 permission, inputs, actor.currentId());
-        audit.record("commission_scheme", String.valueOf(scheme.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
-                null, "scheme " + scheme.getSchemeName() + " v" + scheme.getSchemeVersion(), actor.currentId());
+        audit.recordChange("commission_scheme", String.valueOf(scheme.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
+                null, schemeSnapshot(scheme), actor.currentId());
         return toSchemeResponse(scheme);
     }
 
     /** A scheme in use keeps its tiers: a request that carries tiers for it is refused with 409. */
     @PutMapping("/schemes/{id}")
     public SchemeResponse updateScheme(@PathVariable Long id, @RequestBody SchemeRequest request) {
+        java.util.Map<String, Object> before = schemes.findById(id).map(this::schemeSnapshot).orElse(null);
         CommissionScheme scheme = schemeService.update(id, request.name(), request.effectiveFrom(),
-                request.effectiveTo(), toInputs(request.tiers()), actor.currentId());
-        audit.record("commission_scheme", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
-                null, "scheme " + scheme.getSchemeName() + " v" + scheme.getSchemeVersion(), actor.currentId());
+                null, toInputs(request.tiers()), actor.currentId());
+        audit.recordChange("commission_scheme", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                before, schemeSnapshot(scheme), actor.currentId());
         return toSchemeResponse(scheme);
     }
 
@@ -146,27 +155,16 @@ public class CommissionController {
     @PostMapping("/schemes/{id}/versions")
     @ResponseStatus(HttpStatus.CREATED)
     public SchemeResponse createSchemeVersion(@PathVariable Long id, @RequestBody SchemeRequest request) {
-        CommissionScheme scheme = schemeService.createVersion(id, request.effectiveFrom(), request.effectiveTo(),
+        CommissionScheme scheme = schemeService.createVersion(id, request.effectiveFrom(), null,
                 toInputs(request.tiers()), actor.currentId());
-        audit.record("commission_scheme", String.valueOf(scheme.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
-                "from scheme " + id, "scheme " + scheme.getSchemeName() + " v" + scheme.getSchemeVersion(), actor.currentId());
+        audit.recordChange("commission_scheme", String.valueOf(scheme.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("from_scheme_id", id), schemeSnapshot(scheme), actor.currentId());
         return toSchemeResponse(scheme);
     }
 
     private static List<CommissionSchemeService.TierInput> toInputs(List<TierInput> tiers) {
         return tiers == null ? null : tiers.stream()
                 .map(t -> new CommissionSchemeService.TierInput(t.minimum(), t.maximum(), t.rate(), t.order())).toList();
-    }
-
-    @PatchMapping("/schemes/{id}/activate")
-    public void activateScheme(@PathVariable Long id) {
-        schemeService.activate(id);
-    }
-
-    @DeleteMapping("/schemes/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deactivateScheme(@PathVariable Long id) {
-        schemeService.deactivate(id);
     }
 
     @GetMapping("/report")
@@ -262,8 +260,13 @@ public class CommissionController {
                     .map(MonthlyCommissionClosing::isClosed).orElse(false);
             if (!alreadyClosed) {
                 MonthlyCommissionClosing closed = closingService.closeMonth(saleMonth, seller, permission, actor.currentId());
-                audit.record("monthly_commission_closing", String.valueOf(closed.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
-                        "Open", "Closed " + saleMonth + " rate " + closed.getLockedCommissionRate(), actor.currentId());
+                audit.recordChange("monthly_commission_closing", String.valueOf(closed.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Open"),
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Closed",
+                                "closing_month", saleMonth, "staff_id", sellerId,
+                                "monthly_course_sales", closed.getMonthlyCourseSales(),
+                                "calculated_commission_rate", closed.getCalculatedCommissionRate(),
+                                "locked_commission_rate", closed.getLockedCommissionRate()), actor.currentId());
             }
         }
         return closings(month);
@@ -279,9 +282,10 @@ public class CommissionController {
         Course course = courses.findById(courseId).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Permission permission = resolveOrCreatePermission("COMMISSION_RATE_OVERRIDE");
         var saved = overrideService.override(course, request.rate(), permission, request.reason(), actor.currentId());
-        audit.record("course", String.valueOf(courseId), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
-                "commission rate " + saved.getOldRate(),
-                "commission rate " + saved.getNewRate() + ": " + request.reason(), actor.currentId());
+        audit.recordChange("course", String.valueOf(courseId), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("locked_commission_rate", saved.getOldRate()),
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("locked_commission_rate", saved.getNewRate(),
+                        "reason", request.reason()), actor.currentId());
         return new OverrideResponse(courseId, saved.getOldRate(), saved.getNewRate(), saved.getReason(),
                 courses.findById(courseId).orElseThrow().getTotalCourseCommissionPool());
     }
@@ -298,7 +302,7 @@ public class CommissionController {
         try {
             CommissionScheme effective = schemeResolver.resolveEffective(today);
             scheme = toSchemeResponse(effective);
-            tierRows = schemeService.tiersOf(effective.getId()).stream().filter(CommissionTier::isTierStatus)
+            tierRows = schemeService.tiersOf(effective.getId()).stream()
                     .map(CommissionController::toTierResponse).toList();
         } catch (RuntimeException noScheme) {
             // nothing in force: the page says so
@@ -319,21 +323,29 @@ public class CommissionController {
     @PostMapping("/treatment-fees")
     @ResponseStatus(HttpStatus.CREATED)
     public TreatmentFeeResponse createTreatmentFee(@RequestBody TreatmentFeeRequest request) {
+        // the end of a rule is set by the system (the day before the next rule starts), never by the request
         TreatmentFeeRule rule = treatmentFeeService.create(parseFeeType(request.feeType()), request.feeValue(),
-                request.effectiveFrom(), request.effectiveTo(), resolveOrCreatePermission("COMMISSION_SCHEME_MANAGE"),
+                request.effectiveFrom(), null, resolveOrCreatePermission("COMMISSION_SCHEME_MANAGE"),
                 actor.currentId());
-        audit.record("treatment_fee_rule", String.valueOf(rule.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
-                null, rule.getFeeType() + " " + rule.getFeeValue() + " from " + rule.getEffectiveFrom(), actor.currentId());
+        if (request.name() != null) {
+            rule = treatmentFeeService.rename(rule.getId(), request.name(), actor.currentId());
+        }
+        audit.recordChange("treatment_fee_rule", String.valueOf(rule.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
+                null, feeSnapshot(rule), actor.currentId());
         return toTreatmentFeeResponse(rule);
     }
 
     @PutMapping("/treatment-fees/{id}")
     public TreatmentFeeResponse updateTreatmentFee(@PathVariable Long id, @RequestBody TreatmentFeeRequest request) {
+        java.util.Map<String, Object> before = treatmentFeeRules.findById(id).map(this::feeSnapshot).orElse(null);
         TreatmentFeeRule rule = treatmentFeeService.update(id,
                 request.feeType() == null ? null : parseFeeType(request.feeType()), request.feeValue(),
-                request.effectiveFrom(), request.effectiveTo(), actor.currentId());
-        audit.record("treatment_fee_rule", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
-                null, rule.getFeeType() + " " + rule.getFeeValue() + " from " + rule.getEffectiveFrom(), actor.currentId());
+                request.effectiveFrom(), null, actor.currentId());
+        if (request.name() != null) {
+            rule = treatmentFeeService.rename(id, request.name(), actor.currentId());
+        }
+        audit.recordChange("treatment_fee_rule", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                before, feeSnapshot(rule), actor.currentId());
         return toTreatmentFeeResponse(rule);
     }
 
@@ -341,17 +353,51 @@ public class CommissionController {
     @PostMapping("/single-visit-fees/backfill")
     public java.util.Map<String, Integer> backfillSingleVisitFees(@RequestParam LocalDate from, @RequestParam LocalDate to) {
         if (to.isBefore(from)) throw new IllegalArgumentException("invalid date range");
-        return java.util.Map.of("recorded", singleVisitFeeAccrual.backfill(from, to, actor.currentId()));
+        int recorded = singleVisitFeeAccrual.backfill(from, to, actor.currentId());
+        if (recorded > 0) {
+            audit.recordChange("single_visit_fee_ledger", from + ".." + to, com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
+                    com.sabyeguyz.clinicv2.audit.AuditLogService.fields("from", from, "to", to, "recorded", recorded), actor.currentId());
+        }
+        return java.util.Map.of("recorded", recorded);
     }
 
     @PatchMapping("/treatment-fees/{id}/enable")
     public TreatmentFeeResponse enableTreatmentFee(@PathVariable Long id) {
-        return toTreatmentFeeResponse(treatmentFeeService.setEnabled(id, true, actor.currentId()));
+        return setTreatmentFeeEnabled(id, true);
     }
 
     @PatchMapping("/treatment-fees/{id}/disable")
     public TreatmentFeeResponse disableTreatmentFee(@PathVariable Long id) {
-        return toTreatmentFeeResponse(treatmentFeeService.setEnabled(id, false, actor.currentId()));
+        return setTreatmentFeeEnabled(id, false);
+    }
+
+    private TreatmentFeeResponse setTreatmentFeeEnabled(Long id, boolean enabled) {
+        java.util.Map<String, Object> before = treatmentFeeRules.findById(id).map(this::feeSnapshot).orElse(null);
+        TreatmentFeeRule rule = treatmentFeeService.setEnabled(id, enabled, actor.currentId());
+        java.util.Map<String, Object> after = feeSnapshot(rule);
+        if (before == null || !before.equals(after)) {
+            audit.recordChange("treatment_fee_rule", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                    before, after, actor.currentId());
+        }
+        return toTreatmentFeeResponse(rule);
+    }
+
+    /** Before/after value of a scheme for Audit_log: the version, its months and its tiers. */
+    private java.util.Map<String, Object> schemeSnapshot(CommissionScheme scheme) {
+        java.util.List<java.util.Map<String, Object>> tierRows = schemeService.tiersOf(scheme.getId()).stream()
+                .map(t -> com.sabyeguyz.clinicv2.audit.AuditLogService.fields("tier_order", t.getTierOrder(),
+                        "minimum_monthly_sales", t.getMinimumMonthlySales(), "maximum_monthly_sales",
+                        t.getMaximumMonthlySales(), "commission_rate", t.getCommissionRate()))
+                .toList();
+        return com.sabyeguyz.clinicv2.audit.AuditLogService.fields("scheme_name", scheme.getSchemeName(),
+                "scheme_version", scheme.getSchemeVersion(), "effective_from", scheme.getEffectiveFrom(),
+                "effective_to", scheme.getEffectiveTo(), "tiers", tierRows);
+    }
+
+    private java.util.Map<String, Object> feeSnapshot(TreatmentFeeRule rule) {
+        return com.sabyeguyz.clinicv2.audit.AuditLogService.fields("rule_name", rule.getRuleName(),
+                "fee_type", rule.getFeeType(), "fee_value", rule.getFeeValue(), "effective_from", rule.getEffectiveFrom(),
+                "effective_to", rule.getEffectiveTo(), "enabled", rule.isTreatmentFeeRuleStatus());
     }
 
     private static com.sabyeguyz.clinicv2.enums.FeeType parseFeeType(String value) {
@@ -366,7 +412,11 @@ public class CommissionController {
         // staffId / percentageBase stay in the response for the screens but are always null: one clinic-wide rule
         return new TreatmentFeeResponse(rule.getId(), null, rule.getFeeType().name(), rule.getFeeValue(), null,
                 rule.getEffectiveFrom(), rule.getEffectiveTo(), rule.isTreatmentFeeRuleStatus(),
-                treatmentFeeService.isUsed(rule.getId()));
+                treatmentFeeService.isUsed(rule.getId()), rule.getRuleName(),
+                recorderName(rule.getTreatmentFeeRuleUpdateBy() != null ? rule.getTreatmentFeeRuleUpdateBy()
+                        : rule.getTreatmentFeeRuleCreateBy()),
+                rule.getTreatmentFeeRuleUpdateAt() != null ? rule.getTreatmentFeeRuleUpdateAt()
+                        : rule.getTreatmentFeeRuleCreateAt());
     }
 
     private Permission resolveOrCreatePermission(String name) {
@@ -383,11 +433,22 @@ public class CommissionController {
 
     private SchemeResponse toSchemeResponse(CommissionScheme scheme) {
         return new SchemeResponse(scheme.getId(), scheme.getSchemeName(), scheme.getSchemeVersion(),
-                scheme.getEffectiveFrom(), scheme.getEffectiveTo(), schemeService.isReferenced(scheme.getId()));
+                scheme.getEffectiveFrom(), scheme.getEffectiveTo(), schemeService.isReferenced(scheme.getId()),
+                recorderName(scheme.getSchemeCreateBy()), scheme.getSchemeCreateAt(), scheme.getSchemeUpdateAt(),
+                recorderName(scheme.getSchemeUpdateBy()));
+    }
+
+    private String recorderName(Long userId) {
+        if (userId == null) return null;
+        return users.findById(userId)
+                .map(user -> user.getStaff() != null
+                        ? user.getStaff().getStaffFname() + " " + user.getStaff().getStaffLname()
+                        : user.getUsername())
+                .orElse(null);
     }
 
     private static TierResponse toTierResponse(CommissionTier tier) {
         return new TierResponse(tier.getId(), tier.getTierOrder(), tier.getMinimumMonthlySales(),
-                tier.getMaximumMonthlySales(), tier.getCommissionRate(), tier.isTierStatus());
+                tier.getMaximumMonthlySales(), tier.getCommissionRate());
     }
 }

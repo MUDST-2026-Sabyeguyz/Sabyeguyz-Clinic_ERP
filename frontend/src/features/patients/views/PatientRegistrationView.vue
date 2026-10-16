@@ -146,7 +146,7 @@ watch(
 )
 onMounted(async () => {
   try {
-    const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.list()])
+    const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.listActive()])
     branches.value = branchList
       .filter((item) => item.active)
       .map((item) => ({ branchCode: item.branchCode, name: item.name }))

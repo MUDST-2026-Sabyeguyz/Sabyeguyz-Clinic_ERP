@@ -87,8 +87,8 @@ public class CypressV2FixturesController {
                 + "effective_from = DATE '2026-01-01', effective_to = NULL");
         jdbc.update("DELETE FROM commission_tier");
         jdbc.update("INSERT INTO commission_tier (commission_scheme_id, permission_id, tier_order, minimum_monthly_sales, "
-                + "maximum_monthly_sales, commission_rate, tier_status, effective_from, tier_create_by) "
-                + "SELECT cs.commission_scheme_id, cs.permission_id, t.tier_order, t.lo, t.hi, t.rate, TRUE, cs.effective_from, "
+                + "maximum_monthly_sales, commission_rate, effective_from, tier_create_by) "
+                + "SELECT cs.commission_scheme_id, cs.permission_id, t.tier_order, t.lo, t.hi, t.rate, cs.effective_from, "
                 + "cs.scheme_create_by FROM commission_scheme cs CROSS JOIN (VALUES "
                 + "(1, 0.00, 59999.99, 0.05), (2, 60000.00, 69999.99, 0.06), (3, 70000.00, 79999.99, 0.07), "
                 + "(4, 80000.00, 89999.99, 0.08), (5, 90000.00, NULL::numeric, 0.10)) AS t(tier_order, lo, hi, rate)");

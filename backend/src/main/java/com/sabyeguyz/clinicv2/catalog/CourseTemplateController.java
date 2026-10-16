@@ -131,6 +131,11 @@ public class CourseTemplateController {
         service.deactivate(id, actor.currentId());
     }
 
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/activate")
+    public Response activate(@PathVariable Long id) {
+        return toResponse(service.activate(id, actor.currentId()));
+    }
+
     private Service find(Long id) {
         return repository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
     }

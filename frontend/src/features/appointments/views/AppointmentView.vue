@@ -378,7 +378,7 @@ async function load() {
     const [a, b, p, s, t] = await Promise.all([
       appointmentApi.search({ page: page.value, size: 20, query: query.value }),
 
-      branchApi.list(),
+      branchApi.listActive(),
       patientApi.searchAll(),
       catalogApi.services(),
       catalogApi.therapists(),

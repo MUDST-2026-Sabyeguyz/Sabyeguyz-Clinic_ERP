@@ -14,7 +14,10 @@ vi.mock('@/api/client', async (original) => {
   return {
     ...actual,
     appointmentApi: { search: vi.fn() },
-    branchApi: { list: vi.fn(async () => [{ branchCode: '01', name: 'Branch', active: true }]) },
+    branchApi: {
+      list: vi.fn(async () => [{ branchCode: '01', name: 'Branch', active: true }]),
+      listActive: vi.fn(async () => [{ branchCode: '01', name: 'Branch', active: true }]),
+    },
     patientApi: { searchAll: vi.fn(async () => []) },
     catalogApi: {
       services: vi.fn(async () => [{ id: 1, name: 'Service' }]),

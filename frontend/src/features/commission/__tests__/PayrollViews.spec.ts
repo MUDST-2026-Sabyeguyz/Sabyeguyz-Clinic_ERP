@@ -238,43 +238,45 @@ describe('treatment fee rules page', () => {
     id: 1,
     feeType: 'Fixed',
     feeValue: 45,
-    effectiveFrom: '2026-01-01',
+    effectiveFrom: '2020-01-01',
     effectiveTo: null,
     enabled: true,
     used: true,
+    lastEditedBy: 'Manager Demo',
+    lastEditedAt: '2026-10-16T08:46:24Z',
   }
 
-  it('lists the rule and locks type and value of a rule already used', async () => {
+  it('lists the rules newest first with their state from the dates and who recorded them last', async () => {
+    responses['GET /api/commission/treatment-fees'] = [
+      rule,
+      { ...rule, id: 2, feeValue: 50, effectiveFrom: '2999-01-01' },
+    ]
+    await mountView(CommissionCompensationSettingsView)
+    const cards = page().findAll('.rule-card')
+    expect(cards).toHaveLength(2)
+    expect(cards[0]!.text()).toContain('฿50')
+    expect(cards[0]!.text()).toContain('รอเริ่มใช้')
+    expect(cards[1]!.text()).toContain('฿45')
+    expect(cards[1]!.text()).toContain('ใช้อยู่')
+    expect(cards[1]!.text()).toContain('บันทึกล่าสุดโดย Manager Demo')
+  })
+
+  it('is read only: the rule is changed in Settings', async () => {
     responses['GET /api/commission/treatment-fees'] = [rule]
     await mountView(CommissionCompensationSettingsView)
-    expect(page().find('.rule-card').text()).toContain('฿45')
-    expect(page().find('.rule-card').text()).toContain('ถูกใช้คำนวณแล้ว')
-    await click('แก้ไข')
-    expect(page().find('.rule-drawer select').attributes('disabled')).toBeDefined()
-    expect(page().find('.rule-drawer input[type="number"]').attributes('disabled')).toBeDefined()
+    expect(page().find('.rule-card button').exists()).toBe(false)
+    expect(page().find('.edit-link').exists()).toBe(true)
+    expect(page().text()).not.toContain('+ เพิ่มกฎค่ามือ')
+    expect(page().find('.rule-drawer').exists()).toBe(false)
   })
 
-  it('rejects a percentage above 100 before calling the server', async () => {
-    responses['GET /api/commission/treatment-fees'] = []
+  it('records the single-visit fees that were missing for the chosen days', async () => {
+    responses['GET /api/commission/treatment-fees'] = [rule]
+    responses['POST /api/commission/single-visit-fees/backfill'] = { recorded: 2 }
     await mountView(CommissionCompensationSettingsView)
-    await click('+ เพิ่มกฎค่ามือ')
-    await page().find('.rule-drawer select').setValue('Percentage')
-    await page().find('.rule-drawer input[type="number"]').setValue(150)
-    await click('บันทึกกฎ')
-    expect(page().find('.drawer-error').text()).toContain('0 ถึง 100')
-    expect(calls.some((c) => c.method === 'POST')).toBe(false)
-  })
-
-  it('sends a new fixed rule', async () => {
-    responses['GET /api/commission/treatment-fees'] = []
-    await mountView(CommissionCompensationSettingsView)
-    await click('+ เพิ่มกฎค่ามือ')
-    await page().find('.rule-drawer input[type="number"]').setValue(60)
-    await click('บันทึกกฎ')
-    const post = calls.find(
-      (c) => c.method === 'POST' && c.url === '/api/commission/treatment-fees',
-    )
-    expect(post?.body).toMatchObject({ feeType: 'Fixed', feeValue: 60 })
+    await click('บันทึกย้อนหลัง')
+    expect(calls.some((c) => c.method === 'POST' && c.url.includes('/single-visit-fees/backfill'))).toBe(true)
+    expect(page().find('.success').text()).toContain('เพิ่ม 2 รายการ')
   })
 })
 

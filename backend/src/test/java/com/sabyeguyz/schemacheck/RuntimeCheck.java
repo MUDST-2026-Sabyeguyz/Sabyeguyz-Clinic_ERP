@@ -33,7 +33,7 @@ public class RuntimeCheck {
                 "--app.bootstrap.manager-password=runtime-test-password")) {
             base = "http://127.0.0.1:" + context.getWebServer().getPort();
             JdbcTemplate db = context.getBean(JdbcTemplate.class);
-            check(db.queryForObject("select count(*) from flyway_schema_history where success", Integer.class) == 10,
+            check(db.queryForObject("select count(*) from flyway_schema_history where success", Integer.class) == 11,
                     "V1, integration V2, reference V3, user email V4, historical Assessment V1001, commission V1002, tier contiguity V1003, branch booking settings V1004 course extension requests V1005 and payment date/reference V1006 must migrate");
             check(db.queryForObject("select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid "
                     + "where t.typname='transaction_type_enum' and e.enumlabel='Assessment'", Integer.class) == 1,

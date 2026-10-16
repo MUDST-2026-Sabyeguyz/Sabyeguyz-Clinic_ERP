@@ -165,7 +165,7 @@ async function load() {
   try {
     const [appointmentPage, branchList, therapistList] = await Promise.all([
       appointmentApi.search({ page: 0, size: 100 }),
-      branchApi.list(),
+      branchApi.listActive(),
       catalogApi.therapists(),
     ])
     appointments.value = appointmentPage.items

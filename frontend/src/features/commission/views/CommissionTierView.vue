@@ -2,18 +2,16 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
 import { commissionApi } from '@/api/client'
 
-type Tier = { order: number; min: number; max: number | null; rate: number; active: boolean }
+type Tier = { order: number; min: number; max: number | null; rate: number }
 const tiers = reactive<Tier[]>([
-  { order: 1, min: 0, max: 59999.99, rate: 5, active: true },
-  { order: 2, min: 60000, max: 69999.99, rate: 6, active: true },
-  { order: 3, min: 70000, max: 79999.99, rate: 7, active: true },
-  { order: 4, min: 80000, max: 89999.99, rate: 8, active: true },
-  { order: 5, min: 90000, max: null, rate: 10, active: true },
+  { order: 1, min: 0, max: 59999.99, rate: 5 },
+  { order: 2, min: 60000, max: 69999.99, rate: 6 },
+  { order: 3, min: 70000, max: 79999.99, rate: 7 },
+  { order: 4, min: 80000, max: 89999.99, rate: 8 },
+  { order: 5, min: 90000, max: null, rate: 10 },
 ])
 const editingIndex = ref(-1)
 const editorOpen = ref(false)
@@ -26,7 +24,7 @@ const scheme = reactive({
   effectiveFrom: '2026-01-01',
   effectiveTo: null as string | null,
 })
-const form = reactive({ min: 0, max: '' as number | '', rate: 5, active: true })
+const form = reactive({ min: 0, max: '' as number | '', rate: 5 })
 // New tiers are a new cycle's rules: they start on the first day of the month after the current one.
 function nextCycleStart() {
   const [year, month] = clinicToday().split('-').map(Number)
@@ -36,22 +34,44 @@ const thaiDate = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
     new Date(`${value}T12:00:00`),
   )
+// The Manager picks only the month a version starts; it begins on the 1st. Its end is the system's: the day before the
+// next version starts, and none for the latest one.
+const monthOf = (date: string) => date.slice(0, 7)
 const schemeForm = reactive({
   name: 'Commission Scheme',
   version: '2',
-  effectiveFrom: nextCycleStart(),
-  effectiveTo: '',
+  fromMonth: monthOf(nextCycleStart()),
 })
-const schemeTiers = reactive<Tier[]>([])
+// rows of the new Scheme Version: the uid keeps a row's inputs when rows before it are added or removed
+type EditorTier = Tier & { uid: number }
+const schemeTiers = reactive<EditorTier[]>([])
+let nextUid = 1
+const renumber = () => schemeTiers.forEach((tier, index) => (tier.order = index + 1))
+function addTier() {
+  const last = schemeTiers[schemeTiers.length - 1]
+  // the new tier continues the ranges: an unbounded last tier is closed one satang below the new one
+  let min = 0
+  if (last) {
+    if (last.max === null) {
+      min = Math.round((last.min + 10000) * 100) / 100
+      last.max = Math.round((min - 0.01) * 100) / 100
+    } else min = Math.round((last.max + 0.01) * 100) / 100
+  }
+  schemeTiers.push({ uid: nextUid++, order: 0, min, max: null, rate: last?.rate ?? 5 })
+  renumber()
+}
+function removeTier(index: number) {
+  if (schemeTiers.length <= 1) return
+  schemeTiers.splice(index, 1)
+  // the top tier has no ceiling: whichever tier is last now covers every higher sale
+  const last = schemeTiers[schemeTiers.length - 1]
+  if (last) last.max = null
+  renumber()
+}
 const loading = ref(false)
 const schemeLocked = computed(() => new Date(`${scheme.effectiveFrom}T00:00:00`) <= new Date())
-const formStatus = computed({
-  get: () => (form.active ? 'active' : 'inactive'),
-  set: (value: string) => {
-    form.active = value === 'active'
-  },
-})
-
+// A version that has not started yet is edited in place: saving it replaces its tiers and dates, no new version is made.
+const editingVersion = computed(() => scheme.id > 0 && !schemeLocked.value)
 function openEditor(index = -1) {
   if (schemeLocked.value) return
   editorType.value = 'tier'
@@ -61,68 +81,81 @@ function openEditor(index = -1) {
   Object.assign(
     form,
     tier
-      ? { min: tier.min, max: tier.max ?? '', rate: tier.rate, active: tier.active }
-      : { min: 0, max: '', rate: 5, active: true },
+      ? { min: tier.min, max: tier.max ?? '', rate: tier.rate }
+      : { min: 0, max: '', rate: 5 },
   )
   editorOpen.value = true
 }
 function openSchemeEditor() {
   editorType.value = 'scheme'
   error.value = ''
-  Object.assign(schemeForm, {
-    name: scheme.name,
-    version: String(Number(scheme.version || 0) + 1),
-    effectiveFrom: nextCycleStart(),
-    effectiveTo: '',
-  })
-  schemeTiers.splice(0, schemeTiers.length, ...tiers.map((tier) => ({ ...tier })))
+  Object.assign(
+    schemeForm,
+    editingVersion.value
+      ? {
+          name: scheme.name,
+          version: String(scheme.version),
+          fromMonth: monthOf(scheme.effectiveFrom),
+        }
+      : {
+          name: scheme.name,
+          version: String(Number(scheme.version || 0) + 1),
+          fromMonth: monthOf(nextCycleStart()),
+        },
+  )
+  schemeTiers.splice(0, schemeTiers.length, ...tiers.map((tier) => ({ ...tier, uid: nextUid++ })))
   editorOpen.value = true
 }
 async function saveSchemeVersion() {
   error.value = ''
-  if (!schemeForm.name.trim() || !schemeForm.version.trim() || !schemeForm.effectiveFrom) {
-    error.value = 'กรุณากรอกชื่อ Version และวันที่เริ่มมีผล'
+  if (!schemeForm.name.trim() || !schemeForm.version.trim() || !schemeForm.fromMonth) {
+    error.value = 'กรุณากรอกชื่อ Version และเดือนที่เริ่มมีผล'
     return
   }
   try {
-    const activeTiers = schemeTiers.filter((t) => t.active).sort((a, b) => a.min - b.min)
-    const invalidTier = activeTiers.some(
+    const ordered: Tier[] = schemeTiers
+      .slice()
+      .sort((a, b) => a.min - b.min)
+      .map(({ order, min, max, rate }) => ({ order, min, max, rate }))
+    const invalidTier = ordered.some(
       (tier, index) =>
         tier.min < 0 ||
         tier.rate <= 0 ||
         (tier.max !== null && tier.min > tier.max) ||
         // two-decimal ranges: the next tier starts exactly one satang above the previous maximum
         (index > 0 &&
-          activeTiers[index - 1]!.max !== null &&
-          Math.round((tier.min - activeTiers[index - 1]!.max!) * 100) !== 1),
+          ordered[index - 1]!.max !== null &&
+          Math.round((tier.min - ordered[index - 1]!.max!) * 100) !== 1),
     )
     if (invalidTier) {
       error.value = 'ตรวจช่วงยอดขายและอัตราของ Tier ให้ต่อเนื่องกัน'
       return
     }
-    const created = (await commissionApi.createScheme({
+    const body = {
       name: schemeForm.name,
       version: schemeForm.version,
-      effectiveFrom: schemeForm.effectiveFrom,
-      effectiveTo: schemeForm.effectiveTo || null,
-      tiers: activeTiers.map((t, index) => ({
+      effectiveFrom: `${schemeForm.fromMonth}-01`,
+      tiers: ordered.map((t, index) => ({
         minimum: t.min,
         maximum: t.max,
         rate: t.rate / 100,
         order: index + 1,
       })),
-    })) as {
+    }
+    const created = (editingVersion.value
+      ? await commissionApi.updateScheme(scheme.id, body)
+      : await commissionApi.createScheme(body)) as {
       id: number
       name: string
       version: string
       effectiveFrom: string
       effectiveTo: string | null
     }
-    tiers.splice(0, tiers.length, ...activeTiers.map((tier) => ({ ...tier })))
+    tiers.splice(0, tiers.length, ...ordered.map((tier) => ({ ...tier })))
     Object.assign(scheme, created)
     editorOpen.value = false
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : 'เพิ่ม Scheme Version ไม่สำเร็จ'
+    error.value = caught instanceof Error ? caught.message : 'บันทึกกฎคอมมิชชันไม่สำเร็จ'
   }
 }
 async function saveTier() {
@@ -133,7 +166,7 @@ async function saveTier() {
     return
   }
   const overlaps = tiers.some((tier, index) => {
-    if (index === editingIndex.value || !tier.active || !form.active) return false
+    if (index === editingIndex.value) return false
     const aMax = maximum ?? Number.POSITIVE_INFINITY
     const bMax = tier.max ?? Number.POSITIVE_INFINITY
     return form.min <= bMax && tier.min <= aMax
@@ -147,19 +180,17 @@ async function saveTier() {
     min: Number(form.min),
     max: maximum,
     rate: Number(form.rate),
-    active: form.active,
   }
   const nextTiers = tiers.map((tier) => ({ ...tier }))
   if (editingIndex.value >= 0) nextTiers[editingIndex.value] = record
   else nextTiers.push(record)
   try {
-    const created = (await commissionApi.createScheme({
+    // only a version that has not started has editable tiers, so this changes that version itself
+    const created = (await commissionApi.updateScheme(scheme.id, {
       name: scheme.name,
-      version: String(Number(scheme.version) + 1),
-      effectiveFrom: nextCycleStart(),
-      effectiveTo: null,
+      effectiveFrom: scheme.effectiveFrom,
       tiers: nextTiers
-        .filter((t) => t.active)
+        .slice()
         .sort((a, b) => a.min - b.min)
         .map((t, index) => ({
           minimum: t.min,
@@ -172,7 +203,7 @@ async function saveTier() {
       id: created.id,
       version: String(created.version),
       effectiveFrom: created.effectiveFrom,
-      effectiveTo: null,
+      effectiveTo: scheme.effectiveTo,
     })
     tiers.splice(0, tiers.length, ...nextTiers)
     editorOpen.value = false
@@ -208,7 +239,6 @@ onMounted(async () => {
             min: tier.minimum,
             max: tier.maximum,
             rate: Math.round(tier.rate * 10000) / 100,
-            active: true,
           })),
         )
       }
@@ -241,20 +271,24 @@ onMounted(async () => {
             </p>
           </div>
           <button class="commission-primary" @click="openSchemeEditor">
-            + เพิ่ม Scheme Version
+            {{ editingVersion ? `แก้ไขเวอร์ชันที่รอเริ่มใช้ V${scheme.version}` : 'แก้กฎคอมมิชชัน' }}
           </button>
         </header>
         <aside class="scheme-cycle-notice" role="note">
-          <b>การปรับ Tier ทำเป็น Scheme Version ใหม่</b>
+          <b>การแก้กฎคอมมิชชันบันทึกเป็นเวอร์ชันใหม่</b>
           <span
             >ต้องปิดยอดคอมมิชชันของรอบปัจจุบันก่อน แล้วเวอร์ชันใหม่จะเริ่มใช้ตั้งแต่ต้นรอบถัดไป (วันที่ 1
-            ของเดือน) ส่วนคอร์สที่ปิดยอดไปแล้วยังใช้เกณฑ์เดิม</span
+            ของเดือน) ส่วนคอร์สที่ปิดยอดไปแล้วยังใช้เกณฑ์เดิม มีเวอร์ชันที่รอเริ่มใช้ได้ครั้งละหนึ่งเวอร์ชัน</span
           >
+        </aside>
+        <aside v-if="editingVersion" class="scheme-cycle-notice" role="note">
+          <b>เวอร์ชันนี้ยังไม่เริ่มใช้</b>
+          <span>แก้ไข Tier และเดือนที่เริ่มมีผลได้เลย บันทึกแล้วไม่สร้างเวอร์ชันใหม่</span>
         </aside>
         <aside v-if="schemeLocked" class="scheme-lock-notice">
           <b>Version นี้เริ่มมีผลแล้ว</b
           ><span
-            >ไม่สามารถแก้ไข Tier โดยตรงได้ หากต้องการปรับเกณฑ์ ให้กด “เพิ่ม Scheme Version”</span
+            >ไม่สามารถแก้ไข Tier ของเวอร์ชันนี้โดยตรงได้ หากต้องการปรับเกณฑ์ ให้กด “แก้กฎคอมมิชชัน”</span
           >
         </aside>
         <p v-if="error" class="validation-error">{{ error }}</p>
@@ -266,7 +300,6 @@ onMounted(async () => {
                 <th>ยอดขายขั้นต่ำ</th>
                 <th>ยอดขายสูงสุด</th>
                 <th>อัตราคอมมิชชัน</th>
-                <th>สถานะ</th>
                 <th v-if="!schemeLocked"></th>
               </tr>
             </thead>
@@ -279,11 +312,6 @@ onMounted(async () => {
                 <td>{{ tier.max === null ? 'ไม่จำกัด' : `฿${tier.max.toLocaleString()}` }}</td>
                 <td>
                   <b>{{ tier.rate }}%</b>
-                </td>
-                <td>
-                  <span class="status" :class="{ void: !tier.active }">{{
-                    tier.active ? 'ใช้งาน' : 'ปิดใช้งาน'
-                  }}</span>
                 </td>
                 <td v-if="!schemeLocked">
                   <button class="commission-secondary" @click="openEditor(index)">แก้ไข</button>
@@ -309,14 +337,18 @@ onMounted(async () => {
               <h2>
                 {{
                   editorType === 'scheme'
-                    ? 'เพิ่ม Scheme Version'
+                    ? editingVersion
+                      ? `แก้ไขเวอร์ชันที่รอเริ่มใช้ V${scheme.version}`
+                      : 'แก้กฎคอมมิชชัน'
                     : `แก้ไข Tier ${editingIndex + 1}`
                 }}
               </h2>
               <p>
                 {{
                   editorType === 'scheme'
-                    ? 'สร้างเกณฑ์ชุดใหม่โดยคัดลอก Tier ปัจจุบัน'
+                    ? editingVersion
+                      ? 'แก้ไขเกณฑ์ที่ยังไม่เริ่มใช้ บันทึกแล้วไม่สร้างเวอร์ชันใหม่'
+                      : 'โหลดกฎปัจจุบันมาให้แก้ บันทึกเป็นเวอร์ชันใหม่ที่เริ่มรอบเดือนถัดไป'
                     : 'ปรับช่วงยอดขายและอัตราคอมมิชชัน'
                 }}
               </p>
@@ -325,23 +357,19 @@ onMounted(async () => {
           </header>
           <div v-if="editorType === 'scheme'" class="drawer-form">
             <label>ชื่อ Scheme<input v-model="schemeForm.name" /></label
-            ><label>Version<input v-model="schemeForm.version" /></label
+            ><label>เวอร์ชัน (ระบบกำหนด)<input :value="schemeForm.version" disabled /></label
             ><label
-              >วันที่เริ่มมีผล<ThaiDatePicker
-                v-model="schemeForm.effectiveFrom"
-                numeric-month
-                show-calendar-icon
-                hide-caret /></label
-            ><label
-              >วันสิ้นสุด (ไม่บังคับ)<ThaiDatePicker
-                v-model="schemeForm.effectiveTo"
-                numeric-month
-                show-calendar-icon
-                hide-caret
+              >เดือนที่เริ่มมีผล (เริ่มวันที่ 1 · วันสิ้นสุดระบบกำหนดให้)<input
+                v-model="schemeForm.fromMonth"
+                type="month"
+                :min="monthOf(nextCycleStart())"
             /></label>
             <section class="scheme-tier-editor">
-              <header><b>Tier ของ Version ใหม่</b><small>คัดลอกจาก Version ปัจจุบัน</small></header>
-              <article v-for="tier in schemeTiers" :key="tier.order">
+              <header>
+                <b>{{ editingVersion ? `Tier ของเวอร์ชัน V${scheme.version}` : 'Tier ของเวอร์ชันใหม่' }}</b
+                ><small>{{ editingVersion ? 'แก้ไขแล้วบันทึกทับเวอร์ชันนี้' : 'โหลดจากกฎปัจจุบัน' }}</small>
+              </header>
+              <article v-for="(tier, index) in schemeTiers" :key="tier.uid">
                 <b>Tier {{ tier.order }}</b
                 ><label
                   >ขั้นต่ำ<input
@@ -365,7 +393,19 @@ onMounted(async () => {
                 ><label
                   >อัตรา (%)<input v-model.number="tier.rate" type="number" min="0.01" step="0.01"
                 /></label>
+                <button
+                  type="button"
+                  class="tier-remove"
+                  :disabled="schemeTiers.length <= 1"
+                  :aria-label="`ลบ Tier ${tier.order}`"
+                  @click="removeTier(index)"
+                >
+                  ลบ
+                </button>
               </article>
+              <button type="button" class="commission-secondary tier-add" @click="addTier">
+                + เพิ่ม Tier
+              </button>
             </section>
           </div>
           <div v-else class="drawer-form">
@@ -388,19 +428,7 @@ onMounted(async () => {
                 type="number"
                 min="0"
                 step="0.01" /></label
-            ><label
-              >สถานะ<FilterDropdown
-                v-model="formStatus"
-                label="สถานะ"
-                default-value="active"
-                default-label="ใช้งาน"
-                hide-default-option
-                :clear-on-reselect="false"
-                :options="[
-                  { value: 'active', label: 'ใช้งาน' },
-                  { value: 'inactive', label: 'ปิดใช้งาน' },
-                ]"
-            /></label>
+            >
           </div>
           <p v-if="error" class="drawer-error">{{ error }}</p>
           <footer>
@@ -609,9 +637,27 @@ onMounted(async () => {
   color: #718078;
 }
 .scheme-tier-editor article {
-  grid-template-columns: 64px minmax(120px, 1fr) minmax(120px, 1fr) minmax(90px, 0.65fr);
+  grid-template-columns: 64px minmax(120px, 1fr) minmax(120px, 1fr) minmax(90px, 0.65fr) auto;
   gap: 12px;
   padding: 14px;
+}
+.tier-remove {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #e3b3ad;
+  border-radius: 10px;
+  background: #fff;
+  color: #b42318;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tier-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.tier-add {
+  justify-self: start;
 }
 .scheme-tier-editor article label {
   min-width: 0;
@@ -632,6 +678,9 @@ onMounted(async () => {
     grid-template-columns: 1fr 1fr;
   }
   .scheme-tier-editor article > b {
+    grid-column: 1/-1;
+  }
+  .tier-remove {
     grid-column: 1/-1;
   }
 }

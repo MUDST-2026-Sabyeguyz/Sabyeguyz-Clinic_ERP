@@ -189,7 +189,7 @@ async function loadTransactions() {
     const [firstPage, usages, branches] = await Promise.all([
       salesApi.list({ page: 0, size: 100 }),
       courseApi.usageTransactions(),
-      branchApi.list(),
+      branchApi.listActive(),
     ])
     const remainingPages = await Promise.all(
       Array.from({ length: Math.max(0, firstPage.totalPages - 1) }, (_, index) =>
