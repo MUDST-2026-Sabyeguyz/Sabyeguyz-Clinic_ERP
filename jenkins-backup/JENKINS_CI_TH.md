@@ -30,6 +30,13 @@ node jenkins-backup/control.cjs watch
 
 Jenkins ต้องเปิดเครื่องและ Docker ไว้ระหว่างตรวจ การหยุดเครื่องทำให้งานตรวจค้าง/หยุดได้
 
+หลังแก้ pipeline สามารถตรวจ syntax และโหลดนิยาม job ใหม่โดยไม่ restart งานที่กำลังรัน:
+
+```powershell
+node jenkins-backup/control.cjs lint
+node jenkins-backup/control.cjs reload
+```
+
 ## ตรวจย้อนหลังเฉพาะ billing
 
 ```powershell

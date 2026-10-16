@@ -7,7 +7,7 @@ const base = 'http://127.0.0.1:8086/'
 const password = fs.readFileSync(path.join(root, 'runtime/admin-password'), 'utf8').trim()
 const authorization = 'Basic ' + Buffer.from('clinic-admin:' + password).toString('base64')
 let crumb
-async function request(route, method = 'GET', body) {
+async function request(route, method = 'GET', body, asText = false) {
   const headers = { Authorization: authorization }
   if (method === 'POST') {
     if (!crumb) crumb = await request('crumbIssuer/api/json')
@@ -17,7 +17,7 @@ async function request(route, method = 'GET', body) {
   }
   const response = await fetch(base + route, { method, headers, body })
   if (!response.ok) throw Error(`${method} ${route}: ${response.status}`)
-  if (method === 'POST') return { location: response.headers.get('location') }
+  if (method === 'POST') return asText ? response.text() : { location: response.headers.get('location') }
   const data = await response.json()
   if (route === 'crumbIssuer/api/json') data.cookie = response.headers.getSetCookie().map(c => c.split(';')[0]).join('; ')
   return data
@@ -36,6 +36,13 @@ async function main(override) {
     builds.push(entry)
     fs.writeFileSync(indexFile, JSON.stringify(builds, null, 2))
     console.log(JSON.stringify(entry))
+  } else if (action === 'lint') {
+    for (const name of ['Replay.Jenkinsfile', 'Watch.Jenkinsfile']) {
+      const data = new URLSearchParams({ jenkinsfile: fs.readFileSync(path.join(root, name), 'utf8') }).toString()
+      const result = await request('pipeline-model-converter/validate', 'POST', data, true)
+      console.log(`${name}: ${result.trim()}`)
+      if (!result.includes('Jenkinsfile successfully validated')) throw Error('Pipeline validation failed')
+    }
   } else if (action === 'reload') {
     const script = fs.readFileSync(path.join(root, 'seed-ci.groovy'), 'utf8')
     console.log(JSON.stringify(await request('scriptText', 'POST', new URLSearchParams({ script }).toString())))
@@ -112,6 +119,6 @@ async function main(override) {
     const queue = await request('queue/api/json?tree=items[id,why,params]')
     console.log(JSON.stringify({ builds: jobs.builds.map(build => ({ number: build.number, result: build.building ? 'RUNNING' : build.result,
       sha: build.actions.flatMap(action => action.parameters || []).find(p => p.name === 'SOURCE_SHA')?.value, url: build.url })), queued: queue.items.length }, null, 2))
-  } else throw Error('Usage: node control.cjs start|enqueue|status|report|monitor|watch|stop NUMBER')
+  } else throw Error('Usage: node control.cjs start|enqueue|status|report|monitor|watch|lint|reload|stop NUMBER')
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1 })

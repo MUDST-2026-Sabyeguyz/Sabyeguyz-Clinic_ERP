@@ -1,5 +1,5 @@
 pipeline {
-  agent { node { customWorkspace '/var/jenkins_home/clinic-watch-workspace' } }
+  agent { node { label 'built-in'; customWorkspace '/var/jenkins_home/clinic-watch-workspace' } }
   options { skipDefaultCheckout(); disableConcurrentBuilds(); timeout(time: 10, unit: 'MINUTES'); buildDiscarder(logRotator(numToKeepStr: '20')) }
   triggers { cron('H/5 * * * *') }
   stages {
