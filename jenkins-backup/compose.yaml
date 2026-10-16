@@ -1,0 +1,45 @@
+name: clinic-jenkins-backup
+services:
+  jenkins:
+    build: .
+    ports:
+      - "127.0.0.1:8085:8080"
+    volumes:
+      - jenkins-home:/var/jenkins_home
+      - ./Jenkinsfile:/opt/clinic/Jenkinsfile:ro
+      - ./deploy.yaml:/opt/clinic/deploy.yaml:ro
+      - ./source:/opt/clinic/source:ro
+      - ./seed-job.groovy:/var/jenkins_home/init.groovy.d/seed-job.groovy:ro
+    restart: unless-stopped
+    environment:
+      DOCKER_HOST: tcp://docker:2375
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clinic_ci
+      POSTGRES_PASSWORD: isolated_local_ci_only
+      POSTGRES_DB: postgres
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinic_ci -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  docker:
+    image: docker:27-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - docker-data:/var/lib/docker
+    ports:
+      - "127.0.0.1:8090:18080"
+      - "127.0.0.1:8091:18081"
+    restart: unless-stopped
+volumes:
+  jenkins-home:
+  docker-data:
