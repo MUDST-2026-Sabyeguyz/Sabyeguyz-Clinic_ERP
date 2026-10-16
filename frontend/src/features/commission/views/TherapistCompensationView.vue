@@ -1,184 +1,109 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import { commissionApi, type StaffPayment } from '@/api/client'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import TherapistCompensationLineList from '../components/TherapistCompensationLineList.vue'
+import TherapistCompensationOverview from '../components/TherapistCompensationOverview.vue'
+import TherapistCompensationPaymentHistory from '../components/TherapistCompensationPaymentHistory.vue'
+import TherapistCompensationShell from '../components/TherapistCompensationShell.vue'
+import { currentMonth, isCommission, monthLabel, statusLabel, useTherapistPay } from '../lib/therapistPay'
+import { resolveTherapistCompensationTab } from '../types/therapistCompensation'
 
-type Tab = 'ภาพรวม' | 'ประวัติการจ่าย'
-const tabs: Tab[] = ['ภาพรวม', 'ประวัติการจ่าย']
-const activeTab = ref<Tab>('ภาพรวม')
-const payments = ref<StaffPayment[]>([])
-const selectedMonth = ref('')
-const loading = ref(false)
-const errorMessage = ref('')
+// "ค่าตอบแทนของฉัน": a therapist's own pay of a month, read only. The formula is fixed by the system and explained on the
+// overview ("หลักการคำนวณ"); nobody sets it from the app.
+const route = useRoute()
+const router = useRouter()
+const { payments, adjustments, data, lines, month, months, payment, loading, errorMessage } =
+  useTherapistPay()
+const activeTab = computed(() => resolveTherapistCompensationTab(route.query.tab))
+const commissionLines = computed(() => lines.value.filter(isCommission))
+const feeLines = computed(() => lines.value.filter((line) => !isCommission(line)))
 
-const statusLabel = (status: StaffPayment['status']) =>
-  status === 'PAID' ? 'จ่ายแล้ว' : status === 'CLOSED' ? 'ปิดงวด รอจ่าย' : 'อยู่ระหว่างคำนวณ'
-const money = (value: number | null) =>
-  value === null ? null : `฿${Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
-const monthLabel = (month: string) => {
-  const [year, number] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(
-    new Date(year!, number! - 1, 1),
-  )
-}
-
-const months = computed(() => payments.value.map((payment) => payment.month))
-const selected = computed(
-  () => payments.value.find((payment) => payment.month === selectedMonth.value) ?? null,
-)
-const paidHistory = computed(() => payments.value.filter((payment) => payment.status === 'PAID'))
-
-onMounted(async () => {
-  loading.value = true
-  try {
-    payments.value = await commissionApi.myPayments()
-    selectedMonth.value = payments.value[0]?.month ?? ''
-  } catch (caught) {
-    errorMessage.value = caught instanceof Error ? caught.message : 'โหลดค่าตอบแทนไม่สำเร็จ'
-  } finally {
-    loading.value = false
+const subtitle = computed(() => {
+  if (activeTab.value === 'payments') {
+    return 'ยอดที่จ่ายแล้วไม่สามารถแก้ไขย้อนหลังได้ การแก้ไขจะทำเป็นใบปรับยอดในงวดถัดไป'
   }
+  return `${monthLabel(month.value)} | ${statusLabel(payment.value?.status)}`
 })
+const title = computed(() => (activeTab.value === 'payments' ? 'ประวัติการจ่าย' : 'ค่าตอบแทนของฉัน'))
 
+// the month and the year are chosen apart, so any month can be looked at, not only the ones that already have a payment
+const monthNames = Array.from({ length: 12 }, (_, index) =>
+  new Intl.DateTimeFormat('th-TH', { month: 'long' }).format(new Date(2026, index, 1)),
+)
+const chosenYear = computed(() => Number(month.value.slice(0, 4)))
+const chosenMonth = computed(() => month.value.slice(5, 7))
+const years = computed(() => {
+  const thisYear = Number(currentMonth().slice(0, 4))
+  const fromPayments = months.value.map((value) => Number(value.slice(0, 4)))
+  const first = Math.min(thisYear - 2, ...fromPayments)
+  const last = Math.max(thisYear, ...fromPayments)
+  return Array.from({ length: last - first + 1 }, (_, index) => last - index)
+})
+const yearLabel = (year: number) => String(year + 543)
+
+function choose(year: number, monthNumber: string) {
+  void router.replace({ query: { ...route.query, month: `${year}-${monthNumber}` } })
+}
+function chooseMonth(event: Event) {
+  choose(chosenYear.value, (event.target as HTMLSelectElement).value)
+}
+function chooseYear(event: Event) {
+  choose(Number((event.target as HTMLSelectElement).value), chosenMonth.value)
+}
 </script>
+
 <template>
-  <div class="therapist-compensation-page">
-    <StaffHeader />
-    <main class="therapist-compensation-main">
-      <header class="therapist-compensation-heading">
-        <div>
-          <h1>{{ activeTab === 'ภาพรวม' ? 'ค่าตอบแทนของฉัน' : 'ประวัติการจ่าย' }}</h1>
-          <p>
-            {{
-              activeTab === 'ภาพรวม'
-                ? 'ค่าคอมมิชชันและค่ามือของคุณในแต่ละเดือนที่รักษา'
-                : 'ยอดที่จ่ายแล้วไม่สามารถแก้ไขย้อนหลังได้ การแก้ไขจะทำเป็นใบปรับยอดในงวดถัดไป'
-            }}
-          </p>
+  <TherapistCompensationShell
+    :title="title"
+    :subtitle="subtitle"
+    :active-tab="activeTab"
+    :error="errorMessage"
+    :loading="loading"
+  >
+    <template #aside>
+      <div v-if="activeTab !== 'payments'" class="therapist-month-select">
+        <span>เดือนที่รักษา</span>
+        <div class="therapist-month-pickers">
+          <select aria-label="เดือน" :value="chosenMonth" @change="chooseMonth">
+            <option v-for="(name, index) in monthNames" :key="name" :value="String(index + 1).padStart(2, '0')">
+              {{ name }}
+            </option>
+          </select>
+          <select aria-label="ปี" :value="chosenYear" @change="chooseYear">
+            <option v-for="year in years" :key="year" :value="year">{{ yearLabel(year) }}</option>
+          </select>
         </div>
-        <div v-if="activeTab === 'ภาพรวม' && selected" class="latest-status">
-          <span>สถานะงวด</span
-          ><b :class="{ paid: selected.status === 'PAID' }">{{ statusLabel(selected.status) }}</b>
+      </div>
+    </template>
 
-        </div>
-        <span class="therapist-status-pill">รอตรวจสอบ</span>
-      </header>
-
-      <nav class="compensation-tabs" aria-label="เมนูค่าตอบแทน">
-        <button
-          v-for="tab in tabs"
-          :key="tab"
-          type="button"
-          :class="{ active: activeTab === tab }"
-          @click="activeTab = tab"
-        >
-          {{ tab }}
-        </button>
-      </nav>
-
-      <p v-if="errorMessage" role="alert" class="compensation-error">{{ errorMessage }}</p>
-      <p v-else-if="loading">กำลังโหลดค่าตอบแทน...</p>
-      <p v-else-if="payments.length === 0" class="empty-row">
-        ยังไม่มีงวดค่าตอบแทน งวดจะปรากฏหลังผู้จัดการเตรียมงวดจ่ายของเดือนที่คุณรักษา
-      </p>
-
-      <template v-else-if="activeTab === 'ภาพรวม' && selected">
-        <section class="compensation-filters">
-          <label
-            ><span>เดือนที่รักษา</span>
-            <select v-model="selectedMonth" aria-label="เดือนที่รักษา">
-              <option v-for="month in months" :key="month" :value="month">
-                {{ monthLabel(month) }}
-              </option>
-            </select></label
-          >
-        </section>
-        <section class="compensation-summary" aria-label="สรุปค่าตอบแทน">
-          <article class="commission-total">
-            <span>ค่าคอมมิชชันคอร์ส</span>
-            <b v-if="selected.courseCommission !== null">{{ money(selected.courseCommission) }}</b>
-            <b v-else>รอคำนวณ</b>
-            <small v-if="selected.courseCommission === null"
-              >{{ selected.pendingSessions }} ครั้งที่เดือนขายคอร์สยังไม่ปิดยอด</small
-            >
-          </article>
-          <article>
-            <span>ค่ามือรายครั้ง</span><b>{{ money(selected.singleVisitFee) ?? '—' }}</b>
-          </article>
-          <article>
-            <span>ค่ารักษาแทน</span><b>{{ money(selected.substituteFee) ?? '—' }}</b>
-          </article>
-          <article>
-            <span>ปรับยอด</span><b>{{ money(selected.adjustment) ?? '—' }}</b>
-          </article>
-          <article class="net-total">
-            <span>ยอดสุทธิ</span>
-            <b v-if="selected.net !== null">{{ money(selected.net) }}</b>
-            <b v-else>รอคำนวณ</b>
-            <small>{{ statusLabel(selected.status) }}</small>
-          </article>
-        </section>
-      </template>
-
-      <template v-else-if="activeTab === 'ประวัติการจ่าย'">
-        <section class="payment-history-table">
-          <header>
-            <span>รอบเดือน</span><span>Commission</span><span>ค่ามือ</span><span>ปรับยอด</span
-            ><span>รวมสุทธิ</span><span>วันที่จ่าย</span>
-          </header>
-          <article v-for="item in paidHistory" :key="item.id">
-            <div>
-              <small>รอบเดือน</small><b>{{ monthLabel(item.month) }}</b>
-            </div>
-            <div>
-              <small>Commission</small><b>{{ money(item.courseCommission) }}</b>
-            </div>
-            <div>
-              <small>ค่ามือ</small
-              ><b>{{ money((item.singleVisitFee ?? 0) + (item.substituteFee ?? 0)) }}</b>
-            </div>
-            <div>
-              <small>ปรับยอด</small><b>{{ money(item.adjustment) }}</b>
-            </div>
-            <div>
-              <small>รวมสุทธิ</small><b>{{ money(item.net) }}</b>
-            </div>
-            <div>
-              <small>วันที่จ่าย</small
-              ><b>{{
-                item.paidDate || item.paidAt
-                  ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(
-                      new Date(item.paidDate ? `${item.paidDate}T12:00:00` : item.paidAt!),
-                    )
-                  : '—'
-              }}</b
-              ><small v-if="item.paymentReference">อ้างอิง {{ item.paymentReference }}</small>
-            </div>
-          </article>
-          <p v-if="paidHistory.length === 0" class="empty-row">ยังไม่มีงวดที่จ่ายแล้ว</p>
-        </section>
-      </template>
-    </main>
-  </div>
+    <TherapistCompensationOverview
+      v-if="activeTab === 'overview'"
+      :payment="payment"
+      :lines="lines"
+      :month="month"
+      :pending-sessions="data?.pendingSessions ?? 0"
+    />
+    <section v-else-if="activeTab === 'commission'" class="therapist-table-card">
+      <h2>ค่าคอมมิชชันของ{{ monthLabel(month) }}</h2>
+      <TherapistCompensationLineList
+        :lines="commissionLines"
+        :month="month"
+        empty-text="ยังไม่มีค่าคอมมิชชันในเดือนนี้"
+      />
+    </section>
+    <section v-else-if="activeTab === 'treatment'" class="therapist-table-card">
+      <h2>ค่ามือของ{{ monthLabel(month) }}</h2>
+      <TherapistCompensationLineList
+        :lines="feeLines"
+        :month="month"
+        empty-text="ยังไม่มีค่ามือในเดือนนี้"
+      />
+    </section>
+    <TherapistCompensationPaymentHistory
+      v-else
+      :payments="payments"
+      :adjustments="adjustments"
+      :month="month"
+    />
+  </TherapistCompensationShell>
 </template>
-
-<style scoped src="../styles/therapist-compensation.css"></style>
-<style scoped>
-.compensation-error {
-  padding: 11px;
-  border-radius: 8px;
-  background: #fff1ef;
-  color: #b42318;
-}
-.compensation-filters select {
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid #b7cecc;
-  border-radius: 9px;
-  background: #fff;
-  font: inherit;
-}
-.compensation-summary {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-</style>

@@ -54,18 +54,19 @@ describe('my compensation page (therapist)', () => {
 
   it('says there is no payment yet', () => {
     cy.visitAs('therapist', '/staff/compensation')
-    cy.contains('ยังไม่มีงวดค่าตอบแทน').should('be.visible')
+    cy.contains('ยังไม่มีรายการค่าตอบแทนในเดือนนี้').should('be.visible')
+    cy.get('.therapist-summary-card').should('contain.text', '฿0.00')
   })
 
   it('shows the commission as waiting until the sale month is closed, then the amount', function () {
     courseWithOneSession(this.fixtures)
     cy.api('POST', `/api/commission/payments/prepare?month=${month}`).its('status').should('equal', 200)
     cy.visitAs('therapist', '/staff/compensation')
-    cy.get('.compensation-summary').should('contain.text', 'รอคำนวณ').and('contain.text', '1 ครั้งที่เดือนขายคอร์สยังไม่ปิดยอด')
+    cy.get('.therapist-summary-card').should('contain.text', 'รอคำนวณ').and('contain.text', '1 ครั้งที่เดือนขายคอร์สยังไม่ปิดยอด')
     cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
     cy.api('POST', `/api/commission/payments/prepare?month=${month}`).its('status').should('equal', 200)
     cy.reload()
-    cy.get('.compensation-summary').should('contain.text', '฿75.00').and('not.contain.text', 'รอคำนวณ')
+    cy.get('.therapist-summary-card').should('contain.text', '฿75.00').and('not.contain.text', 'รอคำนวณ')
   })
 
   it('lists only the months that were paid in the history', function () {
@@ -74,13 +75,37 @@ describe('my compensation page (therapist)', () => {
     cy.api('POST', `/api/commission/payments/prepare?month=${month}`).then(({ body }) => {
       const mine = body.find((row) => row.staffId === this.fixtures.therapistId)
       cy.visitAs('therapist', '/staff/compensation')
-      cy.contains('button', 'ประวัติการจ่าย').click()
+      cy.contains('a', 'ประวัติการจ่าย').click()
       cy.contains('ยังไม่มีงวดที่จ่ายแล้ว').should('be.visible')
       cy.api('POST', `/api/commission/payments/${mine.id}/close`).its('status').should('equal', 200)
       cy.api('POST', `/api/commission/payments/${mine.id}/pay`).its('status').should('equal', 200)
       cy.reload()
-      cy.contains('button', 'ประวัติการจ่าย').click()
-      cy.get('.payment-history-table article').should('have.length', 1).and('contain.text', '฿75.00')
+      cy.contains('a', 'ประวัติการจ่าย').click()
+      cy.get('.therapist-payment-row').should('have.length', 1).and('contain.text', '฿75.00').and('contain.text', 'Paid')
     })
+  })
+
+  it('opens the line behind the amount, then the sale it came from', function () {
+    courseWithOneSession(this.fixtures)
+    cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
+    cy.api('POST', `/api/commission/payments/prepare?month=${month}`).its('status').should('equal', 200)
+    cy.visitAs('therapist', '/staff/compensation')
+    // how the pay is worked out is explained on the page itself, and nothing here can be edited
+    cy.contains('h2', 'หลักการคำนวณ').should('be.visible')
+    // the rules are the Manager's: the therapist is only told in words how the pay is worked out
+    cy.get('.therapist-principle-card').should('not.contain.text', '฿').and('not.contain.text', '%')
+    cy.contains('a', 'ดูรายละเอียดวิธีคำนวณ').click()
+    cy.location('pathname').should('eq', '/staff/commission/formula')
+    cy.contains('h1', 'สูตรคำนวณค่าตอบแทน').should('be.visible')
+    cy.get('input, button[type="submit"]').should('not.exist')
+    cy.go('back')
+    cy.get('.therapist-line-row').should('have.length', 1).and('contain.text', 'เจ้าของคอร์ส').click()
+    cy.contains('h2', 'รายละเอียดค่าคอมมิชชัน').should('be.visible')
+    cy.get('.therapist-calculation-list').should('contain.text', 'Tier 1 (5%)').and('contain.text', '฿75.00')
+    cy.contains('a', 'ดูรายการขายต้นทาง').click()
+    cy.contains('h1', 'รายละเอียดรายการขายต้นทาง').should('be.visible')
+    cy.get('.therapist-source-compensation-card').should('contain.text', 'ฐาน Commission')
+    cy.contains('a', 'กลับรายละเอียดค่าคอมมิชชัน').click()
+    cy.contains('h2', 'รายละเอียดค่าคอมมิชชัน').should('be.visible')
   })
 })

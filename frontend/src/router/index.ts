@@ -149,6 +149,13 @@ const router = createRouter({
       meta: { roles: ['therapist'] },
     },
     {
+      // read only: how the pay is worked out, opened from "หลักการคำนวณ" on the therapist pay page
+      path: '/staff/commission/formula',
+      name: 'commission-formula',
+      component: () => import('@/features/commission/views/CommissionFormulaView.vue'),
+      meta: { roles: ['manager', 'therapist'] },
+    },
+    {
       path: '/staff/commission/tiers',
       name: 'commission-tiers',
       component: () => import('@/features/commission/views/CommissionTierView.vue'),

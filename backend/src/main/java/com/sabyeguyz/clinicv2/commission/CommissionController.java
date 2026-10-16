@@ -286,6 +286,31 @@ public class CommissionController {
                 courses.findById(courseId).orElseThrow().getTotalCourseCommissionPool());
     }
 
+    /** How the pay is worked out: the tiers and the treatment fee in force today, read only, for anyone signed in. */
+    public record Formula(LocalDate asOf, SchemeResponse scheme, List<TierResponse> tiers, TreatmentFeeResponse treatmentFee) {}
+
+    @GetMapping("/formula")
+    @PreAuthorize("isAuthenticated()")
+    public Formula formula() {
+        LocalDate today = com.sabyeguyz.clinicv2.config.ClinicTime.today();
+        SchemeResponse scheme = null;
+        List<TierResponse> tierRows = List.of();
+        try {
+            CommissionScheme effective = schemeResolver.resolveEffective(today);
+            scheme = toSchemeResponse(effective);
+            tierRows = schemeService.tiersOf(effective.getId()).stream().filter(CommissionTier::isTierStatus)
+                    .map(CommissionController::toTierResponse).toList();
+        } catch (RuntimeException noScheme) {
+            // nothing in force: the page says so
+        }
+        TreatmentFeeResponse fee = treatmentFeeService.list().stream()
+                .filter(rule -> rule.isTreatmentFeeRuleStatus() && !rule.getEffectiveFrom().isAfter(today)
+                        && (rule.getEffectiveTo() == null || !rule.getEffectiveTo().isBefore(today)))
+                .max(java.util.Comparator.comparing(TreatmentFeeRule::getEffectiveFrom))
+                .map(this::toTreatmentFeeResponse).orElse(null);
+        return new Formula(today, scheme, tierRows, fee);
+    }
+
     @GetMapping("/treatment-fees")
     public List<TreatmentFeeResponse> treatmentFees() {
         return treatmentFeeService.list().stream().map(this::toTreatmentFeeResponse).toList();
