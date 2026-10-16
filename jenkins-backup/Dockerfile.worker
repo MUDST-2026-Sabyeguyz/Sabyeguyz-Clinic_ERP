@@ -1,0 +1,10 @@
+FROM clinic-jenkins-backup-jenkins:latest
+USER root
+# Original Actions commands such as Playwright --with-deps need the same
+# passwordless sudo available on GitHub-hosted runners. Keep it in workers.
+RUN apt-get update && apt-get install -y --no-install-recommends sudo \
+    && printf '%s\n' 'jenkins ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/jenkins-ci \
+    && chmod 0440 /etc/sudoers.d/jenkins-ci \
+    && visudo -cf /etc/sudoers.d/jenkins-ci \
+    && rm -rf /var/lib/apt/lists/*
+USER jenkins
