@@ -11,7 +11,7 @@ describe('registerPatient', () => {
         ok: true,
         text: () => Promise.resolve(JSON.stringify({
             id: 1,
-            hn: 'RP-000001',
+            hn: 'R9-000001',
             fullName: 'สมชาย',
             phone: '0812345678',
             active: true,
@@ -19,7 +19,7 @@ describe('registerPatient', () => {
       }),
     )
     const result = await registerPatient({} as PatientRegistrationPayload)
-    expect(result.hn).toBe('RP-000001')
+    expect(result.hn).toBe('R9-000001')
     expect(fetch).toHaveBeenCalledWith('/api/patients', expect.objectContaining({ method: 'POST' }))
   })
 
@@ -37,7 +37,7 @@ describe('registerPatient', () => {
     localStorage.setItem('authToken', 'jwt-test')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      text: () => Promise.resolve(JSON.stringify({ id: 1, hn: 'RP-000001', fullName: 'สมชาย', phone: '0812345678', active: true })),
+      text: () => Promise.resolve(JSON.stringify({ id: 1, hn: 'R9-000001', fullName: 'สมชาย', phone: '0812345678', active: true })),
     }))
     await registerPatient({} as PatientRegistrationPayload)
     const [, init] = vi.mocked(fetch).mock.calls[0]!

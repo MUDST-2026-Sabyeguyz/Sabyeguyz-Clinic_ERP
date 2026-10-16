@@ -61,6 +61,14 @@
   border-right: none;
 }
 
+.kpi-summary-box--payment .kpi-col {
+  padding-inline: 34px;
+}
+
+.kpi-summary-box--payment .kpi-amount {
+  font-size: 28px;
+}
+
 .kpi-label {
   display: block;
   margin-bottom: 6px;
@@ -338,6 +346,76 @@
 
 .report-figma-table .text-right {
   text-align: right;
+}
+
+/* Keep the sales report readable at desktop width: monetary values stay compact,
+   while treatment and period get the room needed for their longer labels. */
+.report-figma-table--revenue {
+  table-layout: fixed;
+}
+
+.report-figma-table--revenue th:nth-child(1),
+.report-figma-table--revenue td:nth-child(1) {
+  width: 16%;
+}
+
+.report-figma-table--revenue th:nth-child(2),
+.report-figma-table--revenue td:nth-child(2) {
+  width: 19%;
+}
+
+.report-figma-table--revenue th:nth-child(3),
+.report-figma-table--revenue td:nth-child(3) {
+  width: 12%;
+}
+
+.report-figma-table--revenue th:nth-child(4),
+.report-figma-table--revenue td:nth-child(4) {
+  width: 28%;
+}
+
+.report-figma-table--revenue th:nth-child(5),
+.report-figma-table--revenue td:nth-child(5) {
+  width: 15%;
+}
+
+.report-figma-table--revenue th:nth-child(6),
+.report-figma-table--revenue td:nth-child(6) {
+  width: 10%;
+}
+
+.report-figma-table--payment {
+  table-layout: fixed;
+}
+
+.report-figma-table--payment th:nth-child(1),
+.report-figma-table--payment td:nth-child(1) {
+  width: 20%;
+}
+
+.report-figma-table--payment th:nth-child(2),
+.report-figma-table--payment td:nth-child(2) {
+  width: 19%;
+}
+
+.report-figma-table--payment th:nth-child(3),
+.report-figma-table--payment td:nth-child(3) {
+  width: 14%;
+}
+
+.report-figma-table--payment th:nth-child(4),
+.report-figma-table--payment td:nth-child(4) {
+  width: 18%;
+}
+
+.report-figma-table--payment th:nth-child(5),
+.report-figma-table--payment td:nth-child(5) {
+  width: 19%;
+}
+
+.report-figma-table--payment th:nth-child(6),
+.report-figma-table--payment td:nth-child(6) {
+  width: 10%;
 }
 
 .empty-cell {

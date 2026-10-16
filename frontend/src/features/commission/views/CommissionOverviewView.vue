@@ -20,18 +20,20 @@ type PersonRow = {
 const rows = ref<PersonRow[]>([])
 const errorMessage = ref('')
 const search = ref('')
-const branch = ref('')
 const status = ref('')
 const route = useRoute()
 const selectedMonth = String(route.query.month ?? '')
-const date = ref(/^\d{4}-(0[1-9]|1[0-2])$/.test(selectedMonth) ? `${selectedMonth}-01` : new Date().toISOString().slice(0, 10))
+const date = ref(
+  /^\d{4}-(0[1-9]|1[0-2])$/.test(selectedMonth)
+    ? `${selectedMonth}-01`
+    : new Date().toISOString().slice(0, 10),
+)
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
       (!search.value ||
         row.name.includes(search.value) ||
         row.id.toLowerCase().includes(search.value.toLowerCase())) &&
-      (!branch.value || row.branch === branch.value) &&
       (!status.value || row.status === status.value),
   ),
 )
@@ -75,23 +77,23 @@ watch(date, loadOverview)
     <StaffHeader />
     <main class="commission-manager-main">
       <header class="commission-title">
-        <h1>ค่าคอมมิชชันและค่ารักษาแทน</h1>
-        <p>ตรวจสอบฐานคำนวณ Tier อนุมัติยอด และติดตามการจ่ายค่าตอบแทน</p>
+        <h1>ภาพรวมค่าตอบแทน</h1>
+        <p>ตรวจยอด Commission และค่ามือจากรายการต้นทาง ก่อนปิดรอบและจ่ายค่าตอบแทน</p>
       </header>
       <CommissionTabs active="overview" />
       <p v-if="errorMessage" class="state-card error" role="alert">{{ errorMessage }}</p>
       <section class="commission-metrics">
         <article>
           <span>ยอดขายสุทธิ</span><b>{{ money(sales) }}</b
-          ><small>ฐานหลังหักส่วนลดรายการ</small>
+          ><small>ฐานหลังหักส่วนลดรายรายการ</small>
         </article>
         <article class="highlight">
           <span>Commission Pool</span><b>{{ money(pool) }}</b
           ><small>รวมค่าคอมมิชชันเดือนนี้</small>
         </article>
         <article>
-          <span>ค่ารักษาแทน</span><b>{{ money(treatment) }}</b
-          ><small>18 รายการ</small>
+          <span>ค่ามือ</span><b>{{ money(treatment) }}</b
+          ><small>— รายการ</small>
         </article>
         <article class="warning">
           <span>ยอดรอจ่าย</span><b>{{ money(pool + treatment) }}</b
@@ -101,16 +103,6 @@ watch(date, loadOverview)
       <section class="overview-filters commission-card">
         <label
           >ค้นหานักกายภาพ<input v-model="search" placeholder="ค้นหาชื่อหรือรหัสพนักงาน" /></label
-        ><label
-          >สาขา<FilterDropdown
-            v-model="branch"
-            default-value=""
-            default-label="ทุกสาขา"
-            label="สาขา"
-            :options="[
-              { value: 'BR', label: 'สาขาแบริ่ง' },
-              { value: 'R9', label: 'สาขาพระราม 9' },
-            ]" /></label
         ><label
           >รอบคำนวณ<ThaiDatePicker
             v-model="date"
@@ -137,8 +129,7 @@ watch(date, loadOverview)
               <th>Tier / อัตรา</th>
               <th>ฐานคำนวณ</th>
               <th>Commission</th>
-              <th>ค่ารักษาแทน</th>
-              <th>สถานะ</th>
+              <th>ค่ามือ</th>
               <th></th>
             </tr>
           </thead>
@@ -151,11 +142,6 @@ watch(date, loadOverview)
               <td>{{ money(row.base) }}</td>
               <td>{{ money(row.commission) }}</td>
               <td>{{ money(row.treatment) }}</td>
-              <td>
-                <span class="approval-status" :class="row.status">{{
-                  row.status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ'
-                }}</span>
-              </td>
               <td>
                 <RouterLink
                   class="detail-button"
@@ -178,30 +164,34 @@ watch(date, loadOverview)
 @import '../styles/commission-manager.css';
 .overview-filters {
   display: grid;
-  grid-template-columns: 1.4fr 0.8fr 0.9fr 0.8fr;
-  gap: 18px;
-  padding: 20px;
+  grid-template-columns: minmax(280px, 1.5fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr);
+  gap: 20px;
+  padding: 20px 24px;
   margin-bottom: 24px;
 }
 .overview-filters label {
   display: grid;
   gap: 7px;
-  color: #667a72;
+  color: #25372f;
   font-size: 0.86rem;
+  font-weight: 700;
 }
 .overview-filters input {
   height: 44px;
   padding: 0 14px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid #b9c8c2;
   border-radius: 8px;
   font: inherit;
 }
 .overview-filters :deep(.date-trigger),
 .overview-filters :deep(.filter-dropdown__button) {
   min-height: 44px;
+  border-color: #b9c8c2;
 }
 .detail-button {
   display: inline-flex;
+  justify-content: center;
+  min-width: 116px;
   padding: 10px 18px;
   border-radius: 7px;
   background: #1e8b86;
@@ -231,8 +221,8 @@ watch(date, loadOverview)
   color: #b43a2f;
 }
 .commission-table-wrap footer {
-  padding: 18px;
-  background: #eff5ef;
+  padding: 20px;
+  background: #f0f5ed;
   color: #667a72;
 }
 .overview-table-scroll {
