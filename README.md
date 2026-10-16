@@ -4,9 +4,12 @@ Monorepo: Vue frontend, Spring Boot backend, PostgreSQL database, and deployment
 
 ## Run locally with Docker
 
-Install Docker Desktop with Linux containers and Docker Compose, then run from this repository root:
+Install Docker Desktop with Linux containers and Docker Compose v2. From a clean clone of the `main` branch, run these commands from the repository root:
 
 ```bash
+git clone --branch main --single-branch https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+cd Sabyeguyz-Clinic_ERP
+docker compose -f deploy/docker-compose.yml config --quiet
 docker compose -f deploy/docker-compose.yml up --build -d
 docker compose -f deploy/docker-compose.yml ps
 ```
@@ -19,6 +22,8 @@ Wait for the backend health endpoint to return `{"status":"UP"}` before using th
 - Swagger: http://localhost:8080/swagger-ui/index.html
 
 The frontend serves a production build through nginx. Browser requests to `/api/` are forwarded to the backend on the Compose network. No local Node.js, Java, or Maven installation is required.
+
+For the step-by-step synthetic patient registration, profile readback, page refresh, and persistence check, follow [deployment instructions](deploy/README.md). That run document also covers port overrides, logs, and database details.
 
 ```bash
 docker compose -f deploy/docker-compose.yml logs --tail=100 backend frontend
