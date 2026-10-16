@@ -1,6 +1,9 @@
 """Failure propagation, immutable checkout, command-file env and always() cleanup."""
 import json
+import os
 from pathlib import Path
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -71,6 +74,20 @@ jobs:
             self.assertEqual((output / 'test-failure/artifacts-5/evidence.txt').read_text().strip(), 'cleanup')
             self.assertTrue((output / 'summary.junit.xml').exists())
             self.assertFalse((output / 'test-failure/step.env').exists())
+            if shutil.which('sudo') and subprocess.run(['sudo', '-n', 'true'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+                # A real privileged descendant reproduces cleanup's EPERM case.
+                script = ('import subprocess, sys; '
+                          'child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], '
+                          'stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True); '
+                          'print(child.pid)')
+                pid = int(subprocess.check_output(['sudo', '-n', sys.executable, '-c', script], text=True))
+                try:
+                    with self.assertRaises(PermissionError):
+                        os.killpg(pid, 0)
+                    replay.terminate_group(pid, signal.SIGTERM)
+                finally:
+                    replay.terminate_group(pid, signal.SIGKILL)
 
 
 if __name__ == '__main__':
