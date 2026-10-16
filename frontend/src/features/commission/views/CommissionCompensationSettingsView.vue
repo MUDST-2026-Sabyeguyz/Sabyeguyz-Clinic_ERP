@@ -1,122 +1,72 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { commissionApi } from '@/api/client'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
-import { commissionApi, type TreatmentFeeRule } from '@/api/client'
-import { clinicToday } from '@/utils/clinicDate'
 
-const rules = ref<TreatmentFeeRule[]>([])
-const loading = ref(false)
-const pageError = ref('')
-const drawerOpen = ref(false)
-const editingId = ref<number | null>(null)
-const saving = ref(false)
-const error = ref('')
-const form = reactive({
-  feeType: 'Fixed' as 'Fixed' | 'Percentage',
-  feeValue: 45,
-  effectiveFrom: clinicToday(),
-  effectiveTo: '',
-})
-const editingRule = computed(() => rules.value.find((rule) => rule.id === editingId.value) ?? null)
-// a rule whose value was copied into a ledger keeps its type, value and start: only its end date can change
-const lockedValue = computed(() => Boolean(editingRule.value?.used))
-
-const backfill = reactive({ from: `${clinicToday().slice(0, 8)}01`, to: clinicToday() })
-const backfillMessage = ref('')
-
-const thaiDate = (value: string | null) =>
-  value
-    ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium' }).format(
-        new Date(`${value}T00:00:00`),
-      )
-    : 'ไม่กำหนดวันสิ้นสุด'
-const amountLabel = (rule: TreatmentFeeRule) =>
-  rule.feeType === 'Fixed'
-    ? `฿${Number(rule.feeValue).toLocaleString('th-TH')} / ครั้ง`
-    : `${Number(rule.feeValue)}%`
-
-async function load() {
-  loading.value = true
-  pageError.value = ''
+type Rule = { title: string; detail: string; amount: string }
+const rules = ref<Rule[]>([])
+const loading = ref(true)
+onMounted(async () => {
   try {
-    rules.value = await commissionApi.treatmentFees()
+    const rows = (await commissionApi.treatmentFees()) as Array<{
+      id: number
+      employeeId: number
+      feeType: string
+      feeValue: number
+      active: boolean
+    }>
+    rules.value = rows
+      .filter((row) => row.active)
+      .map((row) => ({
+        title: `พนักงาน #${row.employeeId} · ${row.feeType === 'PERCENTAGE' ? 'Percentage' : 'Fixed'}`,
+        detail: 'ค่าตอบแทนผู้รักษาแทน',
+        amount:
+          row.feeType === 'PERCENTAGE'
+            ? `${row.feeValue}%`
+            : `฿${Number(row.feeValue).toLocaleString('th-TH')} / ครั้ง`,
+      }))
   } catch (caught) {
-    pageError.value = caught instanceof Error ? caught.message : 'โหลดกฎค่ามือไม่สำเร็จ'
+    error.value = caught instanceof Error ? caught.message : 'โหลดกฎค่ามือไม่สำเร็จ'
   } finally {
     loading.value = false
   }
-}
-onMounted(load)
-
-function openDrawer(rule?: TreatmentFeeRule) {
+})
+const drawerOpen = ref(false)
+const error = ref('')
+const form = reactive({
+  name: '',
+  recipient: 'GENERAL',
+  service: 'ALL',
+  calculation: 'FIXED',
+  value: 0,
+  overflow: 'CAP_AT_COMMISSION',
+  effectiveFrom: new Date().toLocaleDateString('en-CA'),
+  effectiveTo: '',
+})
+function openDrawer() {
   error.value = ''
-  editingId.value = rule?.id ?? null
   Object.assign(form, {
-    feeType: rule?.feeType ?? 'Fixed',
-    feeValue: rule ? Number(rule.feeValue) : 45,
-    effectiveFrom: rule?.effectiveFrom ?? clinicToday(),
-    effectiveTo: rule?.effectiveTo ?? '',
+    name: '',
+    recipient: 'GENERAL',
+    service: 'ALL',
+    calculation: 'FIXED',
+    value: 0,
+    overflow: 'CAP_AT_COMMISSION',
+    effectiveFrom: new Date().toLocaleDateString('en-CA'),
+    effectiveTo: '',
   })
   drawerOpen.value = true
 }
-
-async function saveRule() {
+function saveRule() {
   error.value = ''
-  if (!(form.feeValue >= 0) || !form.effectiveFrom) {
-    error.value = 'กรุณากรอกอัตราและวันที่เริ่มใช้งาน'
+  if (!form.name.trim() || form.value <= 0 || !form.effectiveFrom) {
+    error.value = 'กรุณากรอกชื่อ อัตรา และวันที่เริ่มใช้งาน'
     return
   }
-  if (form.feeType === 'Percentage' && form.feeValue > 100) {
-    error.value = 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
-    return
-  }
-  saving.value = true
-  try {
-    if (editingId.value) {
-      await commissionApi.updateTreatmentFee(editingId.value, {
-        feeType: form.feeType,
-        feeValue: form.feeValue,
-        effectiveFrom: form.effectiveFrom,
-        effectiveTo: form.effectiveTo || undefined,
-      })
-    } else {
-      await commissionApi.createTreatmentFee({
-        feeType: form.feeType,
-        feeValue: form.feeValue,
-        effectiveFrom: form.effectiveFrom,
-        effectiveTo: form.effectiveTo || null,
-      })
-    }
-    drawerOpen.value = false
-    await load()
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : 'บันทึกกฎไม่สำเร็จ'
-  } finally {
-    saving.value = false
-  }
-}
-
-async function toggle(rule: TreatmentFeeRule) {
-  pageError.value = ''
-  try {
-    await commissionApi.setTreatmentFeeEnabled(rule.id, !rule.enabled)
-    await load()
-  } catch (caught) {
-    pageError.value = caught instanceof Error ? caught.message : 'เปลี่ยนสถานะกฎไม่สำเร็จ'
-  }
-}
-
-async function runBackfill() {
-  backfillMessage.value = ''
-  pageError.value = ''
-  try {
-    const result = await commissionApi.backfillSingleVisitFees(backfill.from, backfill.to)
-    backfillMessage.value = `บันทึกค่ามือรายครั้งที่ขาดเพิ่ม ${result.recorded} รายการ`
-  } catch (caught) {
-    pageError.value = caught instanceof Error ? caught.message : 'บันทึกค่ามือที่ขาดไม่สำเร็จ'
-  }
+  error.value = 'ยังไม่ได้เชื่อมการบันทึกกฎกับข้อมูลพนักงานจริง'
 }
 </script>
 
@@ -125,63 +75,30 @@ async function runBackfill() {
     <StaffHeader />
     <main class="commission-manager-main">
       <header class="commission-title">
-        <h1>ตั้งค่าค่ารักษาแทน</h1>
-        <p>กฎค่ามือส่วนกลางเดียวสำหรับนักกายภาพทุกคนและทุกบริการ</p>
+        <h1>ตั้งค่าค่ามือ</h1>
+        <p>กำหนดค่าตอบแทนนักกายภาพผู้รักษาแทนแบบจำนวนเงินหรือเปอร์เซ็นต์</p>
       </header>
       <CommissionTabs active="compensation" />
-      <section class="rules-head">
-        <h2>กฎค่ามือ</h2>
-        <p>
-          ใช้เมื่อผู้รักษาไม่ใช่ Owner ของคอร์ส และกับการรักษารายครั้ง จ่ายเต็มตามกฎ ณ วันรักษา
-          ไม่จำกัดด้วยค่าคอมมิชชัน ช่วงวันที่ของกฎที่เปิดใช้งานต้องไม่ซ้อนกัน
-        </p>
-      </section>
-      <p v-if="pageError" class="page-error" role="alert">{{ pageError }}</p>
-      <p v-if="loading">กำลังโหลดกฎค่ามือ...</p>
-      <section class="rules">
-        <article v-for="rule in rules" :key="rule.id" class="commission-card rule-card">
-          <div>
-            <b>{{ rule.feeType === 'Fixed' ? 'จำนวนเงินคงที่ต่อครั้ง' : 'เปอร์เซ็นต์' }}</b
-            ><small
-              >มีผล {{ thaiDate(rule.effectiveFrom) }} – {{ thaiDate(rule.effectiveTo) }} ·
-              {{ rule.enabled ? 'ใช้งาน' : 'ปิดใช้งาน'
-              }}<template v-if="rule.used"> · ถูกใช้คำนวณแล้ว</template></small
-            >
-          </div>
-          <strong>{{ amountLabel(rule) }}</strong>
-          <div class="rule-actions">
-            <button class="commission-secondary" @click="openDrawer(rule)">แก้ไข</button
-            ><button class="commission-secondary" @click="toggle(rule)">
-              {{ rule.enabled ? 'ปิดใช้งาน' : 'เปิดใช้งาน' }}
-            </button>
-          </div>
-        </article>
-        <p v-if="!loading && rules.length === 0" class="empty">
-          ยังไม่มีกฎค่ามือ การรักษาแทนจะบันทึกไม่ได้และค่ามือรายครั้งจะไม่ถูกบันทึกจนกว่าจะเพิ่มกฎ
-        </p>
-      </section>
-      <button class="commission-primary add-rule" @click="openDrawer()">+ เพิ่มกฎค่ามือ</button>
-
-      <section class="commission-card backfill">
-        <h2>บันทึกค่ามือรายครั้งที่ขาด</h2>
-        <p>
-          การขายรายครั้งที่ชำระครบแต่ยังไม่มีกฎ ณ วันนั้นจะไม่มีค่ามือ (ไม่ใส่ 0)
-          หลังเพิ่มกฎแล้วกดบันทึกย้อนหลังได้
-        </p>
-        <div class="backfill-row">
-          <label
-            >ตั้งแต่<ThaiDatePicker
-              v-model="backfill.from"
-              numeric-month
-              show-calendar-icon
-              hide-caret
-          /></label>
-          <label
-            >ถึง<ThaiDatePicker v-model="backfill.to" numeric-month show-calendar-icon hide-caret
-          /></label>
-          <button class="commission-secondary" @click="runBackfill">บันทึกย้อนหลัง</button>
-        </div>
-        <p v-if="backfillMessage" class="success" role="status">{{ backfillMessage }}</p>
+      <section class="commission-card compensation-panel">
+        <header class="rules-head">
+          <h2>กฎค่ามือ</h2>
+          <p>
+            ใช้เมื่อผู้รักษาไม่ใช่ Case Owner และต้องไม่เกิน Gross Commission Allocation ต่อครั้ง
+          </p>
+        </header>
+        <p v-if="loading">กำลังโหลดข้อมูล…</p>
+        <p v-else-if="error" class="drawer-error">{{ error }}</p>
+        <p v-else-if="!rules.length">ยังไม่มีกฎค่ามือ</p>
+        <section class="rules">
+          <article v-for="rule in rules" :key="rule.title" class="commission-card">
+            <div>
+              <b>{{ rule.title }}</b
+              ><small>{{ rule.detail }}</small>
+            </div>
+            <strong>{{ rule.amount }}</strong>
+          </article>
+        </section>
+        <button class="commission-primary add-rule" @click="openDrawer">+ เพิ่มกฎค่ามือ</button>
       </section>
     </main>
     <Teleport to="body"
@@ -189,28 +106,65 @@ async function runBackfill() {
         <aside class="rule-drawer" role="dialog" aria-modal="true">
           <header>
             <div>
-              <h2>{{ editingId ? 'แก้ไขกฎค่ามือ' : 'เพิ่มกฎค่ามือ' }}</h2>
-              <p v-if="lockedValue">
-                กฎนี้ถูกใช้คำนวณแล้ว แก้ได้เฉพาะวันสิ้นสุด ถ้าจะเปลี่ยนอัตราให้เพิ่มกฎใหม่
-              </p>
-              <p v-else>กำหนดวิธีคำนวณ อัตรา และวันที่มีผล</p>
+              <h2>เพิ่มกฎค่ามือ</h2>
+              <p>กำหนดผู้รับ บริการ และวิธีคำนวณ</p>
             </div>
             <button class="drawer-close" @click="drawerOpen = false">×</button>
           </header>
           <div class="rule-form">
-            <label
-              >วิธีคำนวณ<select v-model="form.feeType" :disabled="lockedValue">
-                <option value="Fixed">จำนวนเงินคงที่ต่อครั้ง</option>
-                <option value="Percentage">เปอร์เซ็นต์จากมูลค่าคอร์สต่อครั้ง</option>
-              </select></label
+            <label>ชื่อกฎ<input v-model="form.name" placeholder="เช่น นักกายภาพทั่วไป" /></label
             ><label
-              >{{ form.feeType === 'Fixed' ? 'จำนวนเงินต่อครั้ง (บาท)' : 'อัตรา (%)'
-              }}<input
-                v-model.number="form.feeValue"
-                type="number"
-                min="0"
-                step="0.01"
-                :disabled="lockedValue" /></label
+              >ผู้ได้รับค่ารักษาแทน<FilterDropdown
+                v-model="form.recipient"
+                label="ผู้ได้รับค่ารักษาแทน"
+                default-value="GENERAL"
+                default-label="นักกายภาพทั่วไป"
+                hide-default-option
+                :clear-on-reselect="false"
+                :options="[
+                  { value: 'GENERAL', label: 'นักกายภาพทั่วไป' },
+                  { value: 'SENIOR', label: 'Senior Therapist' },
+                ]" /></label
+            ><label
+              >บริการ<FilterDropdown
+                v-model="form.service"
+                label="บริการ"
+                default-value="ALL"
+                default-label="ทุกบริการ"
+                hide-default-option
+                :clear-on-reselect="false"
+                :options="[
+                  { value: 'ALL', label: 'ทุกบริการ' },
+                  { value: 'Manual Therapy', label: 'Manual Therapy' },
+                  { value: 'Exercise Therapy', label: 'Exercise Therapy' },
+                ]" /></label
+            ><label
+              >วิธีคำนวณ<FilterDropdown
+                v-model="form.calculation"
+                label="วิธีคำนวณ"
+                default-value="FIXED"
+                default-label="จำนวนเงินคงที่ต่อครั้ง"
+                hide-default-option
+                :clear-on-reselect="false"
+                :options="[
+                  { value: 'FIXED', label: 'จำนวนเงินคงที่ต่อครั้ง' },
+                  { value: 'PERCENTAGE', label: 'เปอร์เซ็นต์จากมูลค่าคอร์ส' },
+                ]" /></label
+            ><label
+              >{{ form.calculation === 'FIXED' ? 'จำนวนเงินต่อครั้ง (บาท)' : 'อัตรา (%)'
+              }}<input v-model.number="form.value" type="number" min="0.01" step="0.01" /></label
+            ><label
+              >เมื่อเกินเพดาน<FilterDropdown
+                v-model="form.overflow"
+                label="เมื่อเกินเพดาน"
+                default-value="CAP_AT_COMMISSION"
+                default-label="จำกัดไม่ให้เกินคอมมิชชัน"
+                hide-default-option
+                :clear-on-reselect="false"
+                :options="[
+                  { value: 'CAP_AT_COMMISSION', label: 'จำกัดไม่ให้เกินคอมมิชชัน' },
+                  { value: 'BLOCK_AND_REQUIRE_APPROVAL', label: 'ระงับและรออนุมัติ' },
+                ]" /></label
             ><label
               >วันที่เริ่มใช้งาน<ThaiDatePicker
                 v-model="form.effectiveFrom"
@@ -225,12 +179,10 @@ async function runBackfill() {
                 hide-caret
             /></label>
           </div>
-          <p v-if="error" class="drawer-error" role="alert">{{ error }}</p>
+          <p v-if="error" class="drawer-error">{{ error }}</p>
           <footer>
             <button class="commission-secondary" @click="drawerOpen = false">ยกเลิก</button
-            ><button class="commission-primary" :disabled="saving" @click="saveRule">
-              {{ saving ? 'กำลังบันทึก...' : 'บันทึกกฎ' }}
-            </button>
+            ><button class="commission-primary" @click="saveRule">บันทึกกฎ</button>
           </footer>
         </aside>
       </div></Teleport
@@ -240,7 +192,18 @@ async function runBackfill() {
 
 <style scoped>
 @import '../styles/commission-manager.css';
+.compensation-panel {
+  padding: 28px;
+  min-height: 800px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border-color: #dde6e1;
+  border-radius: 14px;
+  gap: 0;
+}
 .rules-head h2 {
+  font-size: 23px;
   margin: 0;
 }
 .rules-head p {
@@ -249,17 +212,18 @@ async function runBackfill() {
 }
 .rules {
   display: grid;
-  gap: 22px;
+  gap: 24px;
 }
-.rule-card {
-  min-height: 86px;
+.rules article {
+  min-height: 88px;
+  box-sizing: border-box;
   padding: 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
 }
-.rule-card > div:first-child {
+.rules article div {
   display: grid;
   gap: 8px;
 }
@@ -268,55 +232,26 @@ async function runBackfill() {
 }
 .rules strong {
   min-width: 180px;
-  color: #16877f;
-  text-align: center;
-}
-.rule-actions {
-  display: flex;
-  gap: 10px;
+  margin-right: 19%;
+  color: #176c68;
+  text-align: left;
 }
 .add-rule {
   display: block;
-  margin: 40px 0 0 auto;
-}
-.backfill {
-  margin-top: 36px;
-  padding: 22px;
-  grid-column: 1 / -1;
-}
-.backfill h2 {
-  margin: 0 0 6px;
-  font-size: 1.2rem;
-}
-.backfill p {
-  margin: 0 0 14px;
-  color: #667a72;
-}
-.backfill-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: end;
-}
-.backfill-row label {
-  display: grid;
-  gap: 6px;
-  color: #52635b;
-}
-.page-error {
-  padding: 11px;
-  border-radius: 8px;
-  background: #fff1ef;
-  color: #b42318;
-}
-.success {
-  color: #16875b;
-}
-.empty {
-  color: #667a72;
+  margin: auto 0 0 auto;
+  min-height: 48px;
+  min-width: 240px;
+  background: #1f8883;
 }
 @media (max-width: 700px) {
-  .rule-card {
+  .compensation-panel {
+    min-height: 0;
+    padding: 20px;
+  }
+  .rules strong {
+    margin-right: 0;
+  }
+  .rules article {
     align-items: start;
     flex-direction: column;
   }
@@ -326,6 +261,7 @@ async function runBackfill() {
   }
   .add-rule {
     width: 100%;
+    margin-top: 40px;
   }
 }
 </style>
