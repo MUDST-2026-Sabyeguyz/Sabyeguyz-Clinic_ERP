@@ -25,9 +25,19 @@ if (!$SkipBuild) {
         Copy-Item "$RepoRoot/backend/src" "$buildRoot/backend/src" -Recurse
         Invoke-Tool mvn @('--batch-mode', '--no-transfer-progress', '-f', "$buildRoot/backend/pom.xml", 'package', '-Dmaven.test.skip=true')
         Copy-Item "$buildRoot/backend/target/clinic-erp-backend-0.0.1-SNAPSHOT.jar" "$buildRoot/backend/app.jar"
-        Push-Location "$RepoRoot/frontend"
+        $frontendSource = Join-Path $buildRoot 'frontend-source'
+        # Use a separate dependency tree so a rebuild cannot remove modules used by running tests.
+        $frontendFiles = & git -C $RepoRoot -c core.quotepath=false ls-files -- frontend
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate frontend source files.' }
+        foreach ($file in $frontendFiles) {
+            if (!$file.StartsWith('frontend/')) { throw 'Unexpected frontend source path.' }
+            $destination = Join-Path $frontendSource $file.Substring('frontend/'.Length)
+            New-Item -ItemType Directory -Path (Split-Path $destination -Parent) -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $RepoRoot $file) -Destination $destination
+        }
+        Push-Location $frontendSource
         try { Invoke-Tool npm @('ci'); Invoke-Tool npm @('run', 'build') } finally { Pop-Location }
-        Copy-Item "$RepoRoot/frontend/dist" "$buildRoot/frontend/dist" -Recurse
+        Copy-Item "$frontendSource/dist" "$buildRoot/frontend/dist" -Recurse
         Copy-Item "$RepoRoot/frontend/nginx.conf" "$buildRoot/frontend/nginx.conf"
         Invoke-Tool docker @('build', '--label', "org.opencontainers.image.revision=$revision", '-f', "$KubeRoot/backend.runtime.Dockerfile", '-t', $images[0], "$buildRoot/backend")
         Invoke-Tool docker @('build', '--label', "org.opencontainers.image.revision=$revision", '-f', "$KubeRoot/frontend.runtime.Dockerfile", '-t', $images[1], "$buildRoot/frontend")
