@@ -145,7 +145,7 @@ public class CoursePurchaseController {
     public record PatientSummary(Long id, String hn, String fullName) {}
     public record CourseSummary(Long id, String code, String name) {}
 
-    public record Response(Long id, PatientSummary patient, String branchCode, CourseSummary course,
+    public record Response(Long id, PatientSummary patient, PatientSummary purchaser, String branchCode, CourseSummary course,
                             BigDecimal price, int sessions, int bonusSessions, int purchased, int used, int remaining,
                             Instant purchasedAt, Instant expiresAt, boolean expired, boolean usable, String status,
                             String commissionStatus, BigDecimal lockedCommissionRate,
@@ -339,8 +339,9 @@ public class CoursePurchaseController {
         boolean expired = course.getExpiryDate().isBefore(ClinicTime.today());
         boolean usable = !expired && course.getCourseStatus() == CourseStatus.Active && remaining > 0;
         Patient patient = course.getPurchaserPatient();
-        return new Response(course.getId(), new PatientSummary(patient.getId(), patient.getPatientHn(),
-                patient.getPatientFname() + " " + patient.getPatientLname()),
+        PatientSummary purchaser = new PatientSummary(patient.getId(), patient.getPatientHn(),
+                patient.getPatientFname() + " " + patient.getPatientLname());
+        return new Response(course.getId(), purchaser, purchaser,
                 course.getReceipt().getBranch().getBranchCode(),
                 new CourseSummary(course.getService().getId(), course.getCourseNo(), course.getCourseName()),
                 course.getCoursePrice(), course.getPaidVisits(), course.getBonusVisits() == null ? 0 : course.getBonusVisits(),

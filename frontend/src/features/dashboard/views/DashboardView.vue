@@ -1,44 +1,41 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { branchApi, reportApi } from '@/api/client'
+import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import { patientApi, reportApi } from '@/api/client'
+import {
+  clearSelectedManagerBranch,
+  selectedManagerBranch,
+  setSelectedManagerBranch,
+} from '@/features/staff/data/managerBranch'
 
-const from = ref(`${clinicToday().slice(0, 8)}01`)
-const to = ref(clinicToday())
-const branchCode = ref('')
-const branches = ref<Array<{ branchCode: string; name: string }>>([])
-const branchOptions = computed(() =>
-  branches.value.map((branch) => ({ value: branch.branchCode, label: branch.name })),
-)
+const now = new Date()
+const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
+const to = ref(now.toISOString().slice(0, 10))
+const managerBranch = computed(() => selectedManagerBranch())
+const branchCode = computed(() => managerBranch.value?.code ?? '')
+const lastManagerBranch = ref(selectedManagerBranch())
+const selectedPeriod = ref('june-2569')
+const customRangeOpen = ref(false)
+const customFrom = ref(from.value)
+const customTo = ref(to.value)
+const hasCustomRange = ref(false)
+const periodOptions = [
+  { value: 'june-2569', label: 'มิถุนายน 2569' },
+  { value: 'may-2569', label: 'พฤษภาคม 2569' },
+  { value: 'november-2569', label: 'พฤศจิกายน 2569' },
+]
 const loading = ref(true)
 const errorMessage = ref('')
 const patients = ref(0)
 const visits = ref(0)
 const revenue = ref(0)
 const courses = ref(0)
-const newCustomers = ref(0)
-const returningCustomers = ref(0)
-const courseRenewals = ref(0)
-const packageUpdates = ref(0)
-const salesTotal = ref(0)
-const dailySales = ref<Array<{ date: string; amount: number }>>([])
-const maxDailySales = computed(() => Math.max(...dailySales.value.map(row => row.amount), 1))
 const genderBreakdown = ref<Array<{ gender: string; patients: number }>>([])
 const appointmentStatuses = ref<Array<{ status: string; appointments: number }>>([])
 const monthlyRevenue = ref<Array<{ label: string; course: number; singleVisit: number }>>([])
-const statusOrder = [
-  'UNCONFIRMED',
-  'CONFIRMED',
-  'ARRIVED',
-  'IN_SERVICE',
-  'COMPLETED',
-  'CANCELLED',
-  'RESCHEDULED',
-  'NO_SHOW',
-]
+const statusOrder = ['COMPLETED', 'IN_SERVICE', 'NO_SHOW', 'CANCELLED']
 
 const maxMonthlyRevenue = computed(() =>
   Math.max(...monthlyRevenue.value.flatMap((item) => [item.course, item.singleVisit]), 1),
@@ -52,60 +49,61 @@ const chartTicks = computed(() =>
   Array.from({ length: 6 }, (_, index) => Math.round(chartMaximum.value * (1 - index / 5))),
 )
 const dashboardStatuses = computed(() => {
-  const counts = new Map(
-    appointmentStatuses.value.map((item) => [
-      item.status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
-      item.appointments,
-    ]),
-  )
+  const counts = new Map(appointmentStatuses.value.map((item) => [item.status, item.appointments]))
   return statusOrder.map((status) => ({ status, appointments: counts.get(status) ?? 0 }))
 })
 const maxAppointments = computed(() =>
   Math.max(...dashboardStatuses.value.map((item) => item.appointments), 1),
 )
-const branchName = computed(
-  () => branches.value.find((item) => item.branchCode === branchCode.value)?.name ?? 'ทุกสาขา',
+const showNoResults = computed(
+  () =>
+    !loading.value &&
+    hasCustomRange.value &&
+    !errorMessage.value &&
+    patients.value === 0 &&
+    visits.value === 0 &&
+    revenue.value === 0 &&
+    courses.value === 0 &&
+    !monthlyRevenue.value.some((item) => item.course > 0 || item.singleVisit > 0) &&
+    !appointmentStatuses.value.some((item) => item.appointments > 0),
+)
+const branchName = computed(() => managerBranch.value?.name ?? 'ทุกสาขา')
+const dashboardSubtitle = computed(() =>
+  managerBranch.value
+    ? `สรุปการดำเนินงาน · สาขา${managerBranch.value.name} · ข้อมูลตัวอย่าง`
+    : 'สรุปการดำเนินงาน · ทุกสาขา · ข้อมูลตัวอย่าง',
 )
 const genderLabel = (gender: string) =>
   ({ MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่น ๆ', UNKNOWN: 'ไม่ระบุ' })[gender.toUpperCase()] ??
   gender
 const money = (value: number) =>
-  `${value.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`
-const dayLabel = (date: string) => new Intl.DateTimeFormat('th-TH', {
-  day: 'numeric', month: 'short', timeZone: 'Asia/Bangkok',
-}).format(new Date(`${date}T00:00:00+07:00`))
+  `${value.toLocaleString('th-TH', { maximumFractionDigits: 0 })} บาท`
 const statusLabel = (status: string) =>
   ({
-    UNCONFIRMED: 'Unconfirmed',
-    CONFIRMED: 'Confirmed',
-    ARRIVED: 'Arrived',
-    IN_SERVICE: 'In service',
-    COMPLETED: 'Complete',
-    CANCELLED: 'Canceled',
-    RESCHEDULED: 'Rescheduled',
-    NO_SHOW: 'No Show',
-  })[status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()] ?? status
+    CONFIRMED: 'ยืนยันแล้ว',
+    ARRIVED: 'มาถึงแล้ว',
+    IN_SERVICE: 'กำลังให้บริการ',
+    COMPLETED: 'เสร็จสิ้น',
+    CANCELLED: 'ยกเลิก',
+    RESCHEDULED: 'เลื่อนนัด',
+    NO_SHOW: 'ไม่มาตามนัด',
+  })[status] ?? status
 const statusClass = (status: string) => `status-${status.toLowerCase().replaceAll('_', '-')}`
 
 async function loadDashboard() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [summary, appointments, balances, revenueReport] = await Promise.all([
+    const [summary, appointments, balances, patientList, revenueReport] = await Promise.all([
       reportApi.dashboard(from.value, to.value, branchCode.value || undefined),
       reportApi.appointments(from.value, to.value, branchCode.value || undefined),
       reportApi.balances(from.value, to.value, branchCode.value || undefined),
+      patientApi.searchAll('', branchCode.value),
       reportApi.revenue(from.value, to.value, branchCode.value || undefined),
     ])
-    patients.value = summary.uniquePatients
+    patients.value = summary.uniquePatients || patientList.length
     visits.value = summary.visits
-    revenue.value = Number(summary.cashReceived)
-    newCustomers.value = summary.newCustomers
-    returningCustomers.value = summary.returningCustomers
-    courseRenewals.value = summary.courseRenewals
-    packageUpdates.value = summary.packageUpdates
-    salesTotal.value = Number(summary.salesTotal)
-    dailySales.value = summary.dailySales.map(row => ({ date: row.date, amount: Number(row.amount) }))
+    revenue.value = Number(summary.totalRevenue)
     courses.value = balances.purchases
     genderBreakdown.value = summary.patientsByGender ?? []
     appointmentStatuses.value = appointments.byStatus.map((item) => ({
@@ -146,179 +144,325 @@ async function loadDashboard() {
 }
 
 onMounted(async () => {
-  try {
-    branches.value = await branchApi.listActive()
-  } catch {}
   await loadDashboard()
 })
+function showAllBranches() {
+  if (managerBranch.value) lastManagerBranch.value = managerBranch.value
+  clearSelectedManagerBranch()
+  window.dispatchEvent(new CustomEvent('manager-branch-changed'))
+}
+function restoreCurrentBranchView() {
+  if (!lastManagerBranch.value) return
+  setSelectedManagerBranch(lastManagerBranch.value)
+  window.dispatchEvent(new CustomEvent('manager-branch-changed'))
+}
 watch([from, to, branchCode], loadDashboard)
+watch(managerBranch, (branch) => {
+  if (branch) lastManagerBranch.value = branch
+})
+watch(selectedPeriod, () => {
+  hasCustomRange.value = false
+})
+function openCustomRange() {
+  customFrom.value = from.value
+  customTo.value = to.value
+  customRangeOpen.value = true
+}
+
+function closeCustomRange() {
+  customRangeOpen.value = false
+}
+
+function applyCustomRange() {
+  if (!customFrom.value || !customTo.value || customFrom.value >= customTo.value) return
+  const rangeUnchanged = from.value === customFrom.value && to.value === customTo.value
+  loading.value = true
+  errorMessage.value = ''
+  hasCustomRange.value = true
+  from.value = customFrom.value
+  to.value = customTo.value
+  customRangeOpen.value = false
+  if (rangeUnchanged) void loadDashboard()
+}
 </script>
 
 <template>
   <div class="manager-dashboard">
     <StaffHeader />
-    <main class="dashboard-main">
-      <RouterLink class="dashboard-compensation-link" to="/staff/commission">
-        ค่าคอมมิชชันและค่ารักษาแทน
-      </RouterLink>
+    <main
+      v-if="loading"
+      class="dashboard-main dashboard-loading"
+      aria-busy="true"
+      aria-label="กำลังโหลดแดชบอร์ด"
+    >
+      <div class="loading-heading">
+        <span class="skeleton skeleton-title"></span>
+        <span class="skeleton skeleton-subtitle"></span>
+      </div>
+      <section class="loading-section">
+        <span class="skeleton skeleton-section-title"></span>
+        <span class="skeleton skeleton-date"></span>
+        <div class="loading-card-grid">
+          <div v-for="card in 4" :key="card" class="loading-card">
+            <span class="skeleton skeleton-accent"></span>
+            <span class="skeleton skeleton-label"></span>
+            <span class="skeleton skeleton-number"></span>
+            <span class="skeleton skeleton-caption"></span>
+          </div>
+        </div>
+      </section>
+      <section class="loading-section">
+        <div class="loading-section-row">
+          <div>
+            <span class="skeleton skeleton-section-title"></span
+            ><span class="skeleton skeleton-date"></span>
+          </div>
+          <span class="skeleton skeleton-control"></span>
+        </div>
+        <div class="loading-card-grid">
+          <div v-for="card in 4" :key="card" class="loading-card compact">
+            <span class="skeleton skeleton-label"></span
+            ><span class="skeleton skeleton-number"></span>
+          </div>
+        </div>
+      </section>
+      <section class="loading-chart">
+        <span class="skeleton skeleton-section-title"></span
+        ><span class="skeleton skeleton-subtitle"></span
+        ><span class="skeleton skeleton-graph"></span>
+      </section>
+    </main>
+    <main v-else class="dashboard-main">
       <header class="dashboard-heading">
         <div>
           <h1>ภาพรวมแดชบอร์ด</h1>
-          <p>ตรวจสอบข้อมูลจาก Treatment และ Sales Transaction</p>
+          <p>{{ dashboardSubtitle }}</p>
         </div>
-        <div class="dashboard-filters" aria-label="ตัวกรองแดชบอร์ด">
-          <div class="filter-period">
-            <span class="filter-label">ช่วงเวลา</span>
-            <div class="date-range">
-              <ThaiDatePicker v-model="from" numeric-month show-calendar-icon hide-caret />
-              <span>ถึง</span>
-              <div class="date-end">
-                <ThaiDatePicker v-model="to" numeric-month show-calendar-icon hide-caret />
-              </div>
-            </div>
-          </div>
-          <label class="branch-filter"
-            >สาขา<FilterDropdown
-              v-model="branchCode"
-              :options="branchOptions"
-              default-value=""
-              default-label="ทุกสาขา"
-              label="กรองตามสาขา"
-              :clear-on-reselect="false"
-          /></label>
-        </div>
+        <button
+          v-if="managerBranch"
+          class="all-branches-button"
+          type="button"
+          @click="showAllBranches"
+        >
+          ดูภาพรวมทุกสาขา
+        </button>
+        <button
+          v-else-if="lastManagerBranch"
+          class="all-branches-button"
+          type="button"
+          @click="restoreCurrentBranchView"
+        >
+          กลับมุมมองสาขาปัจจุบัน
+        </button>
       </header>
 
-      <p v-if="loading" class="dashboard-feedback">กำลังโหลดข้อมูลจาก backend...</p>
-      <p v-else-if="errorMessage" class="dashboard-feedback error" role="alert">
+      <p v-if="errorMessage && !showNoResults" class="dashboard-feedback error" role="alert">
         {{ errorMessage }}
       </p>
 
-      <section class="summary-layout" aria-label="ข้อมูลสรุป">
-        <div class="summary-column">
-          <article class="summary-card patient-card">
-            <p>ผู้ป่วยที่มาใช้บริการ</p>
-            <b>{{ patients.toLocaleString() }} คน</b>
-            <div class="gender-bar">
-              <span
-                v-for="(gender, index) in genderBreakdown"
-                :key="gender.gender"
-                :style="{ width: `${(gender.patients / Math.max(patients, 1)) * 100}%` }"
-                :class="index ? 'gender-secondary' : ''"
-              ></span>
+      <section v-if="showNoResults" class="no-results" aria-label="ไม่พบข้อมูล">
+        <h2>กำลังโหลดข้อมูล</h2>
+        <p>กำลังดึงข้อมูลของสาขาและช่วงเวลาที่เลือก</p>
+      </section>
+
+      <template v-else>
+        <section class="dashboard-section today-section" aria-label="ภาพรวมวันนี้">
+          <h2>ภาพรวมวันนี้</h2>
+          <p class="section-caption">
+            {{
+              new Date().toLocaleDateString('th-TH', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })
+            }}
+          </p>
+          <div class="today-grid">
+            <article class="today-card">
+              <i></i>
+              <p>ลูกค้าวันนี้</p>
+              <b>{{ patients.toLocaleString() }} คน</b><small>ผู้ป่วยในระบบ</small>
+            </article>
+            <article class="today-card">
+              <i></i>
+              <p>ยอดรับชำระวันนี้</p>
+              <b>{{ revenue ? money(revenue) : 'ยังไม่มีข้อมูล' }}</b
+              ><small>ยอดรับเงินจริงในวันนี้</small>
+            </article>
+            <article class="today-card">
+              <i></i>
+              <p>ยอดขายวันนี้</p>
+              <b>{{ money(revenue) }}</b
+              ><small>ยอดขายหลังส่วนลด ไม่ใช่ยอดรับเงิน</small>
+            </article>
+            <article class="today-card">
+              <i></i>
+              <p>ต่ออายุวันนี้</p>
+              <b>{{ courses.toLocaleString() }} คอร์ส</b><small>กำลังใช้งานอยู่</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="dashboard-section period-section" aria-label="สรุปตามช่วงเวลา">
+          <div class="section-row">
+            <div>
+              <h2>สรุปตามช่วงเวลา</h2>
+              <p class="section-caption">{{ branchName }}</p>
             </div>
-            <div v-if="genderBreakdown.length" class="gender-labels">
-              <small v-for="(gender, index) in genderBreakdown" :key="gender.gender">
-                <i :class="index ? 'secondary' : ''"></i>{{ genderLabel(gender.gender) }}
-                {{ gender.patients.toLocaleString() }} คน
-              </small>
-            </div>
-            <small v-else>ยังไม่มีข้อมูลผู้ป่วยในช่วงนี้</small>
-          </article>
-          <article class="summary-card revenue-summary">
-            <p>เงินรับรวม</p>
-            <b>{{ money(revenue) }}</b
-            ><small>{{ branchName }} · ก่อนหักคืนเงิน</small>
-          </article>
-        </div>
-        <div class="summary-column">
-          <article class="summary-card">
-            <p>จำนวนครั้งที่เข้ารับบริการ</p>
-            <b>{{ visits.toLocaleString() }} ครั้ง</b><small>ในช่วงเวลาที่เลือก</small>
-          </article>
-          <article class="summary-card">
-            <p>คอร์สที่กำลังใช้งาน</p>
-            <b>{{ courses.toLocaleString() }} คอร์ส</b><small>ซื้อในช่วงเวลาที่เลือก</small>
-          </article>
-        </div>
-      </section>
-
-      <section class="activity-summary" aria-label="ยอดขายและกิจกรรมลูกค้า">
-        <article class="summary-card">
-          <p>ยอดขายสุทธิ</p><b>{{ money(salesTotal) }}</b><small>ตามวันขาย · ไม่รวมใบยกเลิก</small>
-        </article>
-        <article class="summary-card">
-          <p>ลูกค้าใหม่</p><b>{{ newCustomers.toLocaleString() }} คน</b><small>ลงทะเบียนในช่วงที่เลือก</small>
-        </article>
-        <article class="summary-card">
-          <p>ลูกค้าเก่า</p><b>{{ returningCustomers.toLocaleString() }} คน</b><small>ลงทะเบียนก่อนช่วงและมาใช้บริการในช่วงนี้</small>
-        </article>
-        <article class="summary-card">
-          <p>ต่ออายุคอร์ส</p><b>{{ courseRenewals.toLocaleString() }} รายการ</b><small>รายการที่บันทึกในช่วงที่เลือก</small>
-        </article>
-        <article class="summary-card">
-          <p>อัปเดตแม่แบบคอร์ส</p><b>{{ packageUpdates.toLocaleString() }} รายการ</b><small>รายการที่บันทึก · ทั้งคลินิก</small>
-        </article>
-      </section>
-
-      <section class="revenue-card">
-        <header><div><h2>ยอดขายรายวัน</h2><p>ยอดสุทธิตามวันขาย รวมวันที่ไม่มียอดขาย</p></div></header>
-        <ol class="daily-sales-chart" aria-label="ยอดขายสุทธิรายวัน">
-          <li v-for="day in dailySales" :key="day.date">
-            <span>{{ dayLabel(day.date) }}</span>
-            <div class="daily-sales-track" aria-hidden="true"><i :style="{ width: `${(day.amount / maxDailySales) * 100}%` }"></i></div>
-            <b>{{ money(day.amount) }}</b>
-          </li>
-        </ol>
-      </section>
-
-      <section class="revenue-card">
-        <header>
-          <div>
-            <h2>เงินรับแยกตามประเภท</h2>
-            <p>เงินรับคอร์สและรายครั้งตามวันรับเงิน ก่อนหักคืนเงิน</p>
-          </div>
-          <div class="chart-legend">
-            <span class="course">รายได้คอร์ส (Course)</span
-            ><span class="visit">รายได้รายครั้ง (Single Visit)</span>
-          </div>
-        </header>
-        <div class="chart-shell" role="img" aria-label="กราฟรายได้แยกตามประเภทในแต่ละเดือน">
-          <div class="chart-axis" aria-hidden="true">
-            <span v-for="(tick, index) in chartTicks" :key="index">{{ tick.toLocaleString() }}</span>
-          </div>
-          <div class="monthly-chart">
-            <div v-for="month in monthlyRevenue" :key="month.label" class="month-group">
-              <div class="bar-area">
-                <i
-                  class="course"
-                  :style="{ height: `${(month.course / chartMaximum) * 100}%` }"
-                  :title="`คอร์ส ${money(month.course)}`"
-                ></i>
-                <i
-                  class="visit"
-                  :style="{ height: `${(month.singleVisit / chartMaximum) * 100}%` }"
-                  :title="`รายครั้ง ${money(month.singleVisit)}`"
-                ></i>
+            <div class="period-actions">
+              <div class="period-picker">
+                <FilterDropdown
+                  v-model="selectedPeriod"
+                  :options="periodOptions"
+                  default-label="เลือกช่วงเวลา"
+                  label="เลือกช่วงเวลา"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
               </div>
-              <span>{{ month.label }}</span>
+              <button class="custom-range-button" type="button" @click="openCustomRange">
+                ระบุช่วงวันที่เอง
+              </button>
             </div>
-            <p v-if="!monthlyRevenue.length" class="empty-state">ยังไม่มีรายได้ในช่วงเวลานี้</p>
           </div>
-        </div>
-      </section>
+          <div class="summary-layout" aria-label="ข้อมูลสรุป">
+            <div class="summary-column">
+              <article class="summary-card">
+                <p>ผู้ป่วยทั้งหมด</p>
+                <b>{{ patients.toLocaleString() }} คน</b>
+              </article>
+              <article class="summary-card">
+                <p>ยอดขายสุทธิ</p>
+                <b>{{ money(revenue) }}</b>
+              </article>
+            </div>
+            <div class="summary-column">
+              <article class="summary-card">
+                <p>เข้ารับบริการ</p>
+                <b>{{ visits.toLocaleString() }} ครั้ง</b>
+              </article>
+              <article class="summary-card">
+                <p>คอร์สที่กำลังใช้งาน</p>
+                <b>{{ courses.toLocaleString() }} คอร์ส</b>
+              </article>
+            </div>
+          </div>
+        </section>
 
-      <section class="lower-grid">
-        <article class="status-card">
+        <section class="revenue-card">
           <header>
             <div>
-              <h2>สถานะการเข้ารับบริการ</h2>
-              <p>จากจำนวน {{ visits.toLocaleString() }} ครั้ง</p>
+              <h2>แนวโน้มยอดขายแยกประเภท</h2>
+              <p>แยกยอดขายคอร์สและรายครั้ง (ไม่ใช่ยอดรับชำระ)</p>
+            </div>
+            <div class="chart-legend">
+              <span class="course">รายได้คอร์ส (Course)</span
+              ><span class="visit">รายได้รายครั้ง (Single Visit)</span>
             </div>
           </header>
-          <div v-for="item in dashboardStatuses" :key="item.status" class="status-row">
-            <span>{{ statusLabel(item.status) }}</span>
-            <div class="status-track">
-              <i
-                :class="statusClass(item.status)"
-                :style="{ width: `${(item.appointments / maxAppointments) * 100}%` }"
-              ></i>
+          <div class="chart-shell" role="img" aria-label="กราฟรายได้แยกตามประเภทในแต่ละเดือน">
+            <div class="chart-axis" aria-hidden="true">
+              <span v-for="tick in chartTicks" :key="tick">{{ tick.toLocaleString() }}</span>
             </div>
-            <b>{{ item.appointments.toLocaleString() }}</b>
+            <div class="monthly-chart">
+              <div v-for="month in monthlyRevenue" :key="month.label" class="month-group">
+                <div class="bar-area">
+                  <i
+                    class="course"
+                    :style="{ height: `${(month.course / chartMaximum) * 100}%` }"
+                    :title="`คอร์ส ${money(month.course)}`"
+                  ></i>
+                  <i
+                    class="visit"
+                    :style="{ height: `${(month.singleVisit / chartMaximum) * 100}%` }"
+                    :title="`รายครั้ง ${money(month.singleVisit)}`"
+                  ></i>
+                </div>
+                <span>{{ month.label }}</span>
+              </div>
+              <p v-if="!monthlyRevenue.length" class="empty-state">ยังไม่มีรายได้ในช่วงเวลานี้</p>
+            </div>
           </div>
-        </article>
-      </section>
+        </section>
+
+        <section class="lower-grid">
+          <article class="status-card">
+            <header>
+              <div>
+                <h2>สถานะการเข้ารับบริการ</h2>
+                <p>จากจำนวน {{ visits.toLocaleString() }} ครั้ง</p>
+              </div>
+            </header>
+            <div v-for="item in dashboardStatuses" :key="item.status" class="status-row">
+              <span>{{ statusLabel(item.status) }}</span>
+              <div class="status-track">
+                <i
+                  :class="statusClass(item.status)"
+                  :style="{ width: `${(item.appointments / maxAppointments) * 100}%` }"
+                ></i>
+              </div>
+              <b>{{ item.appointments.toLocaleString() }}</b>
+            </div>
+          </article>
+        </section>
+      </template>
     </main>
+
+    <div
+      v-if="customRangeOpen"
+      class="custom-range-backdrop"
+      role="presentation"
+      @click.self="closeCustomRange"
+    >
+      <section
+        class="custom-range-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="custom-range-title"
+      >
+        <header>
+          <div>
+            <p class="dialog-eyebrow">สรุปตามช่วงเวลา</p>
+            <h2 id="custom-range-title">ระบุช่วงวันที่เอง</h2>
+            <p>เลือกวันเริ่มต้นและวันสิ้นสุดสำหรับดูข้อมูลสรุป</p>
+          </div>
+          <button class="dialog-close" type="button" aria-label="ปิด" @click="closeCustomRange">
+            ×
+          </button>
+        </header>
+        <div class="custom-range-fields">
+          <label
+            >วันที่เริ่มต้น
+            <ThaiDatePicker v-model="customFrom" show-calendar-icon numeric-month hide-caret />
+          </label>
+          <span class="range-divider" aria-hidden="true">ถึง</span>
+          <label
+            >วันที่สิ้นสุด
+            <ThaiDatePicker
+              v-model="customTo"
+              :min-date="customFrom"
+              show-calendar-icon
+              numeric-month
+              hide-caret
+            />
+          </label>
+        </div>
+        <p v-if="customFrom && customTo && customFrom >= customTo" class="range-error">
+          วันสิ้นสุดต้องหลังวันเริ่มต้นอย่างน้อย 1 วัน
+        </p>
+        <footer>
+          <button class="dialog-cancel" type="button" @click="closeCustomRange">ยกเลิก</button>
+          <button
+            class="dialog-submit"
+            type="button"
+            :disabled="!customFrom || !customTo || customFrom >= customTo"
+            @click="applyCustomRange"
+          >
+            แสดงผล
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -334,41 +478,143 @@ watch([from, to, branchCode], loadDashboard)
   margin: auto;
   padding: 43px 0 72px;
 }
-.dashboard-compensation-link {
-  display: flex;
-  width: max-content;
-  min-width: 230px;
-  min-height: 42px;
-  margin: 0 0 24px auto;
-  padding: 0 22px;
-  align-items: center;
-  justify-content: center;
+.dashboard-loading {
+  animation: loading-enter 0.2s ease-out;
+}
+.skeleton {
+  display: block;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #ece8e2 20%, #f8f6f2 42%, #ece8e2 64%);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.25s ease-in-out infinite;
+}
+.loading-heading {
+  display: grid;
+  gap: 12px;
+}
+.skeleton-title {
+  width: min(340px, 65%);
+  height: 47px;
+}
+.skeleton-subtitle {
+  width: min(440px, 78%);
+  height: 17px;
+}
+.loading-section {
+  margin-top: 47px;
+}
+.loading-section > .skeleton-section-title {
+  width: 150px;
+  height: 27px;
+}
+.loading-section > .skeleton-date {
+  width: 118px;
+  height: 16px;
+  margin-top: 7px;
+}
+.loading-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 18px;
+}
+.loading-card {
+  min-height: 140px;
   box-sizing: border-box;
-  border-radius: 9px;
-  background: #1e918c;
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-decoration: none;
-  transition:
-    background-color 0.18s ease,
-    transform 0.18s ease,
-    box-shadow 0.18s ease;
+  padding: 22px 24px;
+  border: 1px solid #e6e1dc;
+  border-radius: 12px;
+  background: #fff;
 }
-.dashboard-compensation-link:hover {
-  background: #176f6c;
-  box-shadow: 0 6px 16px #1e807c2e;
-  transform: translateY(-1px);
+.loading-card.compact {
+  min-height: 140px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
 }
-.dashboard-compensation-link:focus-visible {
-  outline: 3px solid #87c9e8;
-  outline-offset: 3px;
+.skeleton-accent {
+  width: 32px;
+  height: 3px;
+  margin-bottom: 14px;
+}
+.skeleton-label {
+  width: 42%;
+  height: 16px;
+}
+.skeleton-number {
+  width: 58%;
+  height: 28px;
+  margin-top: 11px;
+}
+.skeleton-caption {
+  width: 72%;
+  height: 13px;
+  margin-top: 9px;
+}
+.loading-section-row {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+.loading-section-row .skeleton-section-title {
+  width: 155px;
+  height: 27px;
+}
+.loading-section-row .skeleton-date {
+  width: 105px;
+  height: 16px;
+  margin-top: 7px;
+}
+.skeleton-control {
+  width: 280px;
+  height: 40px;
+}
+.loading-chart {
+  min-height: 315px;
+  display: grid;
+  align-content: start;
+  gap: 13px;
+  margin-top: 26px;
+  padding: 32px;
+  border: 1px solid #e6e1dc;
+  border-radius: 12px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.loading-chart .skeleton-section-title {
+  width: 250px;
+  height: 27px;
+}
+.loading-chart .skeleton-subtitle {
+  width: 355px;
+  max-width: 70%;
+  height: 16px;
+}
+.skeleton-graph {
+  width: 100%;
+  height: 200px;
+  margin-top: 15px;
+}
+@keyframes skeleton-shimmer {
+  to {
+    background-position: -220% 0;
+  }
+}
+@keyframes loading-enter {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .dashboard-heading {
   display: flex;
   justify-content: space-between;
   gap: 28px;
   align-items: start;
+  flex-wrap: wrap;
 }
 .dashboard-heading h1 {
   margin: 0;
@@ -381,6 +627,239 @@ watch([from, to, branchCode], loadDashboard)
   margin: 10px 0 0;
   color: #56665d;
 }
+.all-branches-button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid #1e918c;
+  border-radius: 10px;
+  color: #167d78;
+  background: #fffdfb;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.all-branches-button:hover {
+  background: #e8f4f0;
+}
+.dashboard-section {
+  margin-top: 42px;
+}
+.dashboard-section h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.35;
+}
+.section-caption {
+  margin: 3px 0 0;
+  color: #56665d;
+  font-size: 0.92rem;
+}
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 18px;
+}
+.today-card {
+  min-height: 140px;
+  padding: 22px 24px;
+  box-sizing: border-box;
+  border: 1px solid #e6e1dc;
+  border-radius: 12px;
+  background: #fff;
+}
+.today-card > i {
+  display: block;
+  width: 32px;
+  height: 3px;
+  margin-bottom: 12px;
+  border-radius: 3px;
+  background: #1e918c;
+}
+.today-card p {
+  margin: 0;
+  color: #56665d;
+  font-size: 0.9rem;
+}
+.today-card b {
+  display: block;
+  margin: 7px 0 4px;
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+.today-card small {
+  color: #56665d;
+  font-size: 0.76rem;
+}
+.period-section .summary-card {
+  min-height: 140px;
+  padding: 22px 24px;
+  border-color: #e6e1dc;
+}
+.period-section .summary-card p {
+  color: #56665d;
+  font-size: 0.9rem;
+}
+.period-section .summary-card b {
+  margin: 7px 0 4px;
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+.section-row {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+.period-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.period-picker {
+  width: 178px;
+}
+.period-picker :deep(.filter-dropdown__button) {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  color: #167d78;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.period-picker :deep(.filter-dropdown__menu) {
+  right: 0;
+  left: auto;
+  width: 100%;
+}
+.custom-range-button {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid #1e918c;
+  border-radius: 8px;
+  color: #167d78;
+  background: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.custom-range-button:hover {
+  background: #e8f4f0;
+}
+.custom-range-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #173f4452;
+}
+.custom-range-dialog {
+  width: min(100%, 540px);
+  box-sizing: border-box;
+  padding: 28px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 60px #173f4433;
+}
+.custom-range-dialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.custom-range-dialog h2 {
+  margin: 2px 0 5px;
+  font-size: 1.5rem;
+}
+.custom-range-dialog header p {
+  margin: 0;
+  color: #66756e;
+  font-size: 0.9rem;
+}
+.custom-range-dialog .dialog-eyebrow {
+  color: #1e918c;
+  font-weight: 700;
+}
+.dialog-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  color: #47615b;
+  background: #edf5f1;
+  font-size: 1.55rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.custom-range-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 13px;
+  align-items: end;
+  margin-top: 25px;
+}
+.custom-range-fields label {
+  display: grid;
+  gap: 7px;
+  color: #294943;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.custom-range-fields :deep(.thai-date-picker) {
+  margin: 0;
+}
+.custom-range-fields :deep(.date-trigger) {
+  min-height: 45px;
+  border-color: #cbd8d3;
+  border-radius: 9px;
+}
+.custom-range-fields :deep(.calendar) {
+  z-index: 110;
+}
+.range-divider {
+  padding-bottom: 12px;
+  color: #6e7f78;
+  font-size: 0.88rem;
+}
+.range-error {
+  margin: 10px 0 0;
+  color: #b34940;
+  font-size: 0.82rem;
+}
+.custom-range-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 28px;
+}
+.custom-range-dialog footer button {
+  min-width: 110px;
+  min-height: 42px;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dialog-cancel {
+  border: 1px solid #cbd8d3;
+  color: #176f6b;
+  background: #fff;
+}
+.dialog-submit {
+  border: 1px solid #1e918c;
+  color: #fff;
+  background: #1e918c;
+}
+.dialog-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .dashboard-filters {
   display: flex;
   align-items: stretch;
@@ -389,6 +868,7 @@ watch([from, to, branchCode], loadDashboard)
   border-radius: 22px;
   background: #fff9f9;
   box-shadow: 0 8px 30px #604f4515;
+  margin-left: auto;
 }
 .dashboard-filters label,
 .filter-period {
@@ -449,68 +929,46 @@ watch([from, to, branchCode], loadDashboard)
   background: #ffebe7;
   color: #a1433b;
 }
+.no-results {
+  display: grid;
+  justify-items: center;
+  min-height: 220px;
+  align-content: center;
+  margin-top: 35px;
+  padding: 28px 24px;
+  background: #fff;
+  text-align: center;
+}
+.no-results h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.no-results p {
+  margin: 7px 0 0;
+  color: #64736d;
+  font-size: 0.78rem;
+}
 .summary-layout {
   display: grid;
-  grid-template-columns: 1.45fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 24px;
-  margin-top: 48px;
+  margin-top: 18px;
 }
 .summary-column {
-  display: grid;
-  gap: 24px;
-}
-.activity-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 16px;
-  margin-top: 24px;
-}
-.activity-summary .summary-card {
-  padding: 24px;
-}
-.activity-summary .summary-card b {
-  font-size: 1.65rem;
-}
-.daily-sales-chart {
-  display: grid;
-  gap: 12px;
-  padding: 0;
-  margin: 24px 0 0;
-  list-style: none;
-}
-.daily-sales-chart li {
-  display: grid;
-  grid-template-columns: 82px minmax(0, 1fr) 115px;
-  gap: 12px;
-  align-items: center;
-  font-size: 0.85rem;
-}
-.daily-sales-chart b {
-  text-align: right;
-}
-.daily-sales-track {
-  height: 12px;
-  border-radius: 6px;
-  background: #e7efeb;
-  overflow: hidden;
-}
-.daily-sales-track i {
-  display: block;
-  height: 100%;
-  background: #1e807c;
-  border-radius: inherit;
+  display: contents;
 }
 .summary-card,
 .revenue-card,
 .status-card {
   border: 1px solid #fff8f8;
-  border-radius: 32px;
-  background: #fff9f9;
-  box-shadow: 0 8px 30px #604f4515;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: none;
 }
 .summary-card {
-  min-height: 158px;
-  padding: 29px 34px;
+  min-height: 116px;
+  padding: 22px 24px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -563,8 +1021,8 @@ watch([from, to, branchCode], loadDashboard)
   background: #1e807c;
 }
 .revenue-card {
-  margin-top: 32px;
-  padding: 34px 42px 30px;
+  margin-top: 26px;
+  padding: 32px;
 }
 .revenue-card header,
 .status-card header {
@@ -657,7 +1115,7 @@ watch([from, to, branchCode], loadDashboard)
   margin-top: 32px;
 }
 .status-card {
-  padding: 34px 42px 38px;
+  padding: 32px;
 }
 .status-card header p {
   margin: 5px 0 0;
@@ -715,6 +1173,12 @@ watch([from, to, branchCode], loadDashboard)
   .summary-layout {
     grid-template-columns: 1fr 1fr;
   }
+  .today-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .loading-card-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 @media (max-width: 700px) {
   .dashboard-main {
@@ -751,6 +1215,21 @@ watch([from, to, branchCode], loadDashboard)
     grid-template-columns: 1fr;
     gap: 15px;
     margin-top: 28px;
+  }
+  .today-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .loading-card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .loading-section-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .skeleton-control {
+    width: 100%;
   }
   .summary-column {
     gap: 15px;
@@ -793,12 +1272,38 @@ watch([from, to, branchCode], loadDashboard)
   .status-row b {
     font-size: 0.78rem;
   }
+  .custom-range-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+  .custom-range-dialog {
+    border-radius: 18px 18px 0 0;
+    padding: 24px 20px;
+  }
+  .custom-range-fields {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+  .range-divider {
+    display: none;
+  }
+  .custom-range-dialog footer button {
+    flex: 1;
+  }
+  .section-row {
+    align-items: stretch;
+  }
+  .period-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .period-picker,
+  .custom-range-button {
+    width: 100%;
+  }
 }
 @media (max-width: 420px) {
-  .dashboard-compensation-link {
-    width: 100%;
-    min-width: 0;
-  }
   .date-range {
     grid-template-columns: 1fr;
   }

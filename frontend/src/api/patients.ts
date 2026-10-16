@@ -8,8 +8,8 @@ export interface PatientRegistrationPayload {
   title: string
   fullName: string
   firstName?: string
-  lastName?: string
   middleName?: string | null
+  lastName?: string
   birthDate: string
   gender: string
   phone: string

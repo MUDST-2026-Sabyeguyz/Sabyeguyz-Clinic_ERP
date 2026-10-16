@@ -146,7 +146,8 @@ public class SaleController {
         if (page < 0 || size < 1 || size > 100) {
             throw new IllegalArgumentException("page must be nonnegative and size must be between 1 and 100");
         }
-        Long branchId = branchCode == null || branchCode.isBlank() ? null : resolveBranch(branchCode).getId();
+        Branch scopedBranch = branchAccess.scope(branchCode);
+        Long branchId = scopedBranch == null ? null : scopedBranch.getId();
         PageRequest paging = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "transactionDate", "id"));
         Page<SalesTransaction> result = receiptsOnly
                 ? transactions.searchReceipts(patientId, branchId, paging)
