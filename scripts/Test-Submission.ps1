@@ -13,6 +13,8 @@ $originalPath = $env:Path
 $envNames = @('DATABASE_URL', 'DATABASE_USERNAME', 'DATABASE_PASSWORD', 'VITE_API_PROXY_TARGET', 'CYPRESS_API_URL', 'MAVEN_OPTS')
 $previousEnvironment = @{}
 foreach ($name in $envNames) { $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
+@{ result = 'RUNNING'; testedAt = (Get-Date).ToUniversalTime().ToString('o') } |
+    ConvertTo-Json | Set-Content "$runtime/summary.json" -Encoding utf8
 function Run([string]$Tool, [string[]]$ToolArgs) {
     & $Tool @ToolArgs
     if ($LASTEXITCODE -ne 0) { throw "$Tool $($ToolArgs -join ' ') failed ($LASTEXITCODE)." }
@@ -68,6 +70,10 @@ try {
     try { Run npx @('cypress', 'run', '--config-file', 'cypress.v2.config.ts') } finally { Pop-Location }
     @{ result = 'PASS'; testedAt = (Get-Date).ToUniversalTime().ToString('o'); sourceRevision = (& git -C $repo rev-parse HEAD).Trim(); checks = @('ESLint', 'Vue TypeScript and production build', 'Vitest with V8 coverage', 'Backend Cypress regression with JaCoCo', 'V2 PostgreSQL API tests with JaCoCo', 'V2 browser E2E on real isolated API') } |
         ConvertTo-Json | Set-Content "$runtime/summary.json" -Encoding utf8
+} catch {
+    @{ result = 'FAIL'; testedAt = (Get-Date).ToUniversalTime().ToString('o') } |
+        ConvertTo-Json | Set-Content "$runtime/summary.json" -Encoding utf8
+    throw
 } finally {
     if ($vite -and !$vite.HasExited) { Stop-Process -Id $vite.Id }
     if ($serverStarted) {
