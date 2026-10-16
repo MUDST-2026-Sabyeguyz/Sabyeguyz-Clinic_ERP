@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import com.sabyeguyz.clinicv2.catalog.ClosedGuard;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.role.PermissionService;
 import java.math.BigDecimal;
@@ -60,8 +61,8 @@ public class RefundController {
         PaymentTransaction payment = payments.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการชำระเงิน"));
         PaymentMethod method = request.paymentMethodCode() == null ? null
-                : paymentMethods.findByMethodNameIgnoreCase(request.paymentMethodCode())
-                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
+                : ClosedGuard.open(paymentMethods.findByMethodNameIgnoreCase(request.paymentMethodCode())
+                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode())));
         var permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
         RefundTransaction refund = refundService.request(payment, request.amount(), method, permission,
                 request.reason(), actor.currentId(), request.items());

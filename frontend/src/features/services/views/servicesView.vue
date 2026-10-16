@@ -74,14 +74,15 @@ async function loadMaster() {
   courses.value = c
   results.value = p
   paymentMethods.value = methods
-  staff.value = staffList
+  // staff whose account or record is closed (ปิดใช้งาน) are not offered
+  staff.value = staffList.filter((person) => person.active !== false)
   selectedServiceId.value = services.value[0]?.id ?? 0
   selectedCourseId.value = c[0]?.id ?? 0
   paymentCode.value = methods[0]?.code ?? ''
-  selectedStaffId.value = staffList[0]?.id
-  treatingStaffId.value = staffList[0]?.id
+  selectedStaffId.value = staff.value[0]?.id
+  treatingStaffId.value = staff.value[0]?.id
   try {
-    branches.value = await branchApi.list()
+    branches.value = await branchApi.listActive()
   } catch {
     branches.value = []
   }
@@ -177,7 +178,8 @@ function paymentMethodCategory(code: string, name = '') {
   if (value.includes('card') || value.includes('บัตร')) return 'card'
   return 'other'
 }
-const salePaymentMethods = computed(() => paymentMethods.value)
+// a closed payment method (ปิดใช้งาน) is not offered at all
+const salePaymentMethods = computed(() => paymentMethods.value.filter((method) => method.active !== false))
 function paymentMethodIcon(code: string, name = '') {
   const category = paymentMethodCategory(code, name)
   if (category === 'bank') return paymentBankIcon
@@ -251,7 +253,7 @@ async function submit() {
         : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
     const sale = await salesApi.create({
       patientId: patient.value.id,
-      branchCode: patient.value.branchCode ?? (await branchApi.list())[0]?.branchCode ?? 'RP',
+      branchCode: patient.value.branchCode ?? (await branchApi.listActive())[0]?.branchCode ?? 'RP',
       salespersonStaffId: selectedStaffId.value,
       treatingStaffId: mode.value === 'single' ? treatingStaffId.value : undefined,
 

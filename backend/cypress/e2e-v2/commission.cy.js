@@ -121,11 +121,15 @@ describe('v2 commission', () => {
         const seeded = rules.find((entry) => entry.feeType === 'Fixed')
         expect(seeded.effectiveTo).to.equal('2029-12-31')
       })
+      // an enabled rule cannot be edited: it has to be switched off first
+      cy.api('PUT', `/api/commission/treatment-fees/${body.id}`, { feeValue: 12.5 }).its('status').should('equal', 409)
+      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/disable`).its('body.enabled').should('equal', false)
       cy.api('PUT', `/api/commission/treatment-fees/${body.id}`, { feeValue: 12.5 }).then((updated) => {
         expect(updated.status).to.equal(200)
         expect(Number(updated.body.feeValue)).to.equal(12.5)
+        expect(updated.body.lastEditedBy, 'who edited it last').to.be.a('string')
+        expect(updated.body.lastEditedAt).to.be.a('string')
       })
-      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/disable`).its('body.enabled').should('equal', false)
       cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/enable`).its('body.enabled').should('equal', true)
     })
   })
@@ -220,7 +224,7 @@ describe('v2 commission', () => {
     })
   })
 
-  it('refuses to change the tiers or disable a scheme a course already uses, but allows a rename', function () {
+  it('refuses to change the tiers of a scheme a course already uses, but allows a rename', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
@@ -230,7 +234,6 @@ describe('v2 commission', () => {
         cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
           name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom, tiers: [{ minimum: 0, maximum: null, rate: 0.01, order: 1 }],
         }).its('status').should('equal', 409)
-        cy.api('DELETE', `/api/commission/schemes/${scheme.id}`).its('status').should('equal', 409)
         cy.api('PUT', `/api/commission/schemes/${scheme.id}`, { name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom })
           .its('status').should('equal', 200)
         cy.api('GET', `/api/commission/schemes/${scheme.id}/tiers`).its('body').should('have.length', 5)

@@ -65,8 +65,15 @@ public class CommissionPayrollController {
     @PostMapping("/closings/{closingId}/reopen")
     public ClosingStateResponse reopenClosing(@PathVariable Long closingId, @RequestBody ReasonRequest request) {
         MonthlyCommissionClosing closing = closingService.reopen(closingId, request.reason(), actor.currentId());
-        audit.record("monthly_commission_closing", String.valueOf(closingId), AuditAction.UPDATE, "Closed",
-                "Open (reopen): " + request.reason().trim(), actor.currentId());
+        audit.recordChange("monthly_commission_closing", String.valueOf(closingId), AuditAction.UPDATE,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Closed"),
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Open",
+                        "reopen_reason", request.reason().trim(), "closing_month", closing.getClosingMonth(),
+                        "staff_id", closing.getStaff().getId(),
+                        "monthly_course_sales", closing.getMonthlyCourseSales(),
+                        "commission_scheme_version", closing.getCommissionSchemeVersion(),
+                        "calculated_commission_rate", closing.getCalculatedCommissionRate(),
+                        "locked_commission_rate", closing.getLockedCommissionRate()), actor.currentId());
         return new ClosingStateResponse(closing.getId(), closing.getClosingMonth(), closing.getStaff().getId(),
                 closing.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT));
     }

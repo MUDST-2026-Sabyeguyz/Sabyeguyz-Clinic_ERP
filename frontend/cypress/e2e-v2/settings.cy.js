@@ -70,14 +70,20 @@ describe('settings', () => {
     cy.apiLogin('newtherapist', 'Secret123').its('status').should('equal', 200)
   })
 
-  it('switches a payment method off and on again', () => {
+  it('sets the status of each payment method after a confirmation', () => {
     cy.visitAs('manager', '/staff/settings')
     sectionButton('การชำระเงิน').click()
-    cy.get('button.payment-option').first().as('switch')
-    cy.get('@switch').should('have.class', 'selected').click()
-    cy.get('@switch').should('not.have.class', 'selected')
-    cy.get('@switch').click()
-    cy.get('@switch').should('have.class', 'selected')
+    cy.get('.payment-option').should('have.length', 3).and('not.contain.text', 'Cash')
+    cy.get('.payment-option button.on').should('have.length', 0)
+    cy.get('.payment-option').eq(1).as('method')
+    cy.get('@method').contains('button', 'Disable').click()
+    cy.get('.confirm-modal').should('be.visible').contains('button', 'ยกเลิก').click()
+    cy.get('@method').contains('button', 'Disable').click()
+    cy.get('.confirm-modal').contains('button', 'ยืนยัน').click()
+    cy.get('@method').find('button.disable').should('have.class', 'on')
+    cy.get('@method').contains('button', 'Enable').click()
+    cy.get('.confirm-modal').contains('button', 'ยืนยัน').click()
+    cy.get('@method').find('button.enable').should('have.class', 'on')
   })
 
   it('adds a treatment room to a branch', () => {

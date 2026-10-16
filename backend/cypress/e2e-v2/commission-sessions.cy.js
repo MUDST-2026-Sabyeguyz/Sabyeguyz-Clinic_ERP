@@ -13,8 +13,12 @@ const flatRate = (rate) => cy.api('GET', '/api/commission/schemes').then(({ body
   }).its('status').should('equal', 200)
 })
 const feeRule = () => cy.api('GET', '/api/commission/treatment-fees').then(({ body }) => body.find((rule) => rule.feeType === 'Fixed' || rule.feeType === 'Percentage'))
-const setFee = (feeType, feeValue) => feeRule().then((rule) => cy.api('PUT', `/api/commission/treatment-fees/${rule.id}`, { feeType, feeValue })
-  .its('status').should('equal', 200))
+// an enabled rule cannot be edited: switch it off, change it, switch it on again
+const setFee = (feeType, feeValue) => feeRule().then((rule) => {
+  cy.api('PATCH', `/api/commission/treatment-fees/${rule.id}/disable`).its('status').should('equal', 200)
+  cy.api('PUT', `/api/commission/treatment-fees/${rule.id}`, { feeType, feeValue }).its('status').should('equal', 200)
+  cy.api('PATCH', `/api/commission/treatment-fees/${rule.id}/enable`).its('status').should('equal', 200)
+})
 const template = (code, price, sessions, bonus = 0) => cy.api('POST', '/api/courses',
   { code, name: `คอร์ส ${code}`, price, sessions, bonusSessions: bonus, validityDays: 365 }).then(({ status, body }) => {
   expect(status, JSON.stringify(body)).to.equal(201)

@@ -22,7 +22,10 @@
     "file": "backend/src/test/java/com/sabyeguyz/clinicv2/audit/AuditLogServiceTest.java",
     "methods": [
       "recordsAnAuditEntry",
-      "rejectsMissingAction"
+      "rejectsMissingAction",
+      "keepsPlainTextAsJson",
+      "namesTheSourceOfAnAutomaticEventWithoutAUser",
+      "storesBeforeAndAfterAsJsonForAUserChange"
     ]
   },
   {

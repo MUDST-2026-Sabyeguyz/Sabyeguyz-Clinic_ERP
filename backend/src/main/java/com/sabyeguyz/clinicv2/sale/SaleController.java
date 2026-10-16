@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import com.sabyeguyz.clinicv2.catalog.ClosedGuard;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
@@ -181,8 +182,8 @@ public class SaleController {
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
         for (ItemRequest item : request.items()) {
-            Service svc = services.findById(item.referenceId())
-                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส"));
+            Service svc = ClosedGuard.open(services.findById(item.referenceId())
+                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส")));
             Discount discount = Discount.of(item.discountType(), item.discountValue());
             if ("COURSE".equalsIgnoreCase(item.type())) {
                 lines.add(salesTransactionService.recordCoursePurchase(receipt, patient, branch, svc, salesperson,
@@ -203,8 +204,8 @@ public class SaleController {
 
         if (request.payments() != null) {
             for (PaymentRequest paymentRequest : request.payments()) {
-                PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(PaymentMethod.canonicalName(paymentRequest.paymentMethodCode()))
-                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode()));
+                PaymentMethod method = ClosedGuard.open(paymentMethods.findByMethodNameIgnoreCase(PaymentMethod.canonicalName(paymentRequest.paymentMethodCode()))
+                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode())));
                 paymentTransactionService.record(patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
             }
             singleVisitFees.accrue(receipt, lines, actor.currentId());
@@ -231,8 +232,8 @@ public class SaleController {
     }
 
     private Branch resolveBranch(String branchCode) {
-        return branches.findByBranchCode(branchCode.trim())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode));
+        return ClosedGuard.open(branches.findByBranchCode(branchCode.trim())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode)));
     }
 
     private Summary toSummary(SalesTransaction t) {
