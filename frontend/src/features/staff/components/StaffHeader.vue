@@ -138,6 +138,9 @@ function switchManagerBranch(code: string) {
   setSelectedManagerBranch(branch)
   window.dispatchEvent(new CustomEvent('manager-branch-changed'))
 }
+function branchLabel(name: string) {
+  return name.replace(/^สาขา\s*/, '')
+}
 </script>
 
 <template>
@@ -174,7 +177,7 @@ function switchManagerBranch(code: string) {
         :options="
           managerBranches.map((branch) => ({
             value: branch.code,
-            label: branch.name,
+            label: branchLabel(branch.name),
           }))
         "
         default-label="เลือกสาขา"
