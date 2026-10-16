@@ -1,0 +1,17 @@
+NAME                                  READY   STATUS    RESTARTS   AGE     IP            NODE                    NOMINATED NODE   READINESS GATES
+pod/backend-89757d54b-swjbj           1/1     Running   0          72s     10.244.0.22   desktop-control-plane   <none>           <none>
+pod/clinic-traefik-8469fd47f8-whhx4   1/1     Running   0          2m49s   10.244.0.18   desktop-control-plane   <none>           <none>
+pod/frontend-c676875dd-9wnsp          1/1     Running   0          2m49s   10.244.0.17   desktop-control-plane   <none>           <none>
+pod/postgres-ccb675956-c7zbg          1/1     Running   0          80s     10.244.0.21   desktop-control-plane   <none>           <none>
+
+NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE     SELECTOR
+service/backend          ClusterIP   10.96.3.99      <none>        8080/TCP   5h25m   app=backend
+service/clinic-ingress   ClusterIP   10.96.164.254   <none>        80/TCP     5h25m   app=clinic-traefik
+service/frontend         ClusterIP   10.96.175.104   <none>        80/TCP     5h25m   app=frontend
+service/postgres         ClusterIP   10.96.253.58    <none>        5432/TCP   5h25m   app=postgres
+
+NAME                               CLASS            HOSTS   ADDRESS   PORTS   AGE
+ingress.networking.k8s.io/clinic   clinic-traefik   *                 80      5h25m
+
+NAME                                  STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE     VOLUMEMODE
+persistentvolumeclaim/postgres-data   Bound    pvc-91e8e9bc-fe2c-4929-940b-e1f9c68ebdf5   2Gi        RWO            standard       <unset>                 5h25m   Filesystem

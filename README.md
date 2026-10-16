@@ -2,12 +2,26 @@
 
 Monorepo: Vue frontend, Spring Boot backend, PostgreSQL database, and deployment configuration.
 
+## Submission and local Kubernetes (16 October 2026)
+
+See the [Thai Kubernetes runbook](deploy/k8s/README_TH.md) for a repeatable local deployment, login, test/coverage commands and troubleshooting. The [submission report](docs/testing/2026-10-16-Local-Kubernetes.md) records observed results. Code standards and quality gates are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+```powershell
+pwsh -File deploy/k8s/Start-Local.ps1
+pwsh -File deploy/k8s/Open-Local.ps1
+# Open http://localhost:18088
+# In another terminal:
+pwsh -File deploy/k8s/Test-Local.ps1 -TestPersistence
+```
+
+The [Kubernetes GitHub Actions pipeline](.github/workflows/kubernetes-ci.yml) defines standards, tests, coverage, image builds, kind deployment, persistent-data acceptance and production browser E2E. Local results and GitHub-hosted CI results are reported separately.
+
 ## Quick Start
 
 Requirements: Git and Docker with Docker Compose. No local Java, Maven, Node.js, or PostgreSQL installation is required.
 
 ```bash
-git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+git clone --branch develop --single-branch https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
 cd Sabyeguyz-Clinic_ERP
 cp .env.example .env
 # Set unique POSTGRES_PASSWORD and JWT_SECRET values in .env.
@@ -18,11 +32,11 @@ Services:
 
 - Frontend: http://localhost
 - Backend health: http://localhost:8080/actuator/health
-- Swagger UI: http://localhost:8080/swagger-ui/index.html
-- OpenAPI JSON: http://localhost:8080/v3/api-docs
+- Swagger UI: http://localhost:8080/swagger-ui/index.html (protected; anonymous requests return HTTP 401)
+- OpenAPI JSON: http://localhost:8080/v3/api-docs (protected; anonymous requests return HTTP 401)
 - PostgreSQL: localhost:5432
 
-The first startup runs Flyway migrations automatically. PostgreSQL data is stored in the `postgres-data` Docker volume and survives `docker compose down` followed by `docker compose up -d`. Use `docker compose down -v` only when you intentionally want to remove the database volume.
+The first startup runs Flyway migrations automatically. With the default Compose project name, PostgreSQL data is stored in the `sabyeguyz_postgres-v2-data` Docker volume and survives `docker compose down` followed by `docker compose up -d`. A custom Compose project name changes the volume prefix. Use `docker compose down -v` only when you intentionally want to remove the database volume.
 
 The Compose project is named `sabyeguyz`. Data from an older Compose project stays in its previous volume and is not moved into the new project automatically.
 
@@ -39,10 +53,11 @@ docker compose ps
 
 Wait for the backend health endpoint to return `{"status":"UP"}` before using the application:
 
-- Frontend: http://localhost/patients
-- Register patient: http://localhost/patients/register
+- Frontend login: http://localhost/
+- Patient list (after staff login): http://localhost/staff/patients
+- Register patient (after staff login): http://localhost/staff/patients/new
 - Backend health: http://localhost:8080/actuator/health
-- Swagger: http://localhost:8080/swagger-ui/index.html
+- Swagger: http://localhost:8080/swagger-ui/index.html (protected; anonymous requests return HTTP 401)
 
 The frontend serves a production build through nginx. Browser requests to `/api/` are forwarded to the backend on the Compose network. No local Node.js, Java, or Maven installation is required.
 
@@ -59,4 +74,10 @@ Create `feat/<feature-name>` branches from `develop`, then open a pull request i
 
 ### Frontend tests
 
-Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. The GitHub Actions workflow starts the backend and Vite server before running the same Cypress command in Chrome.
+Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. Jenkins starts the backend and Vite server when running the corresponding browser checks.
+
+### Jenkins CI
+
+Jenkins is the primary CI runner. See the [Jenkins CI guide](jenkins-backup/JENKINS_CI_TH.md) for setup, branch monitoring, exact-commit replay, reports and GitHub status contexts. The CI dashboard uses http://localhost:8086/; the older backup Jenkins uses port 8085.
+
+The files under `.github/workflows/` remain the test definitions read from each selected commit. GitHub-hosted workflows are disabled separately in repository settings to avoid billing-blocked runs; their historical results are retained.

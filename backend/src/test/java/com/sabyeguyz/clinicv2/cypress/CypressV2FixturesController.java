@@ -46,9 +46,11 @@ public class CypressV2FixturesController {
         jdbc.update("DELETE FROM service WHERE service_code NOT IN ('PHYSIO_30', 'PHYSIO_60', 'COURSE_10', 'COURSE_5')");
         fakeCalendar.reset();
         jdbc.update("UPDATE branch SET google_calendar_id = NULL");
-        jdbc.update("UPDATE branch SET branch_email = NULL, license_no = NULL, booking_open_time = NULL, "
-                + "booking_close_time = NULL, default_appointment_minutes = NULL");
-        jdbc.update("UPDATE service SET default_appointment_minutes = NULL");
+        jdbc.update("UPDATE branch SET branch_email = NULL, email = NULL, license_no = NULL, "
+                + "booking_open_time = NULL, opening_time = NULL, booking_close_time = NULL, "
+                + "closing_time = NULL, default_appointment_minutes = NULL, google_connection_id = NULL, "
+                + "calendar_sync_status = NULL, calendar_last_error = NULL, calendar_last_synced_at = NULL");
+        jdbc.update("UPDATE service SET default_appointment_minutes = NULL, default_duration_minutes = NULL");
         resetReferenceData();
         jdbc.update("""
                 INSERT INTO service (service_type, service_name, service_price, service_code, service_create_by,

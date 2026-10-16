@@ -1,0 +1,131 @@
+name: Local Kubernetes delivery
+
+on:
+  # Keep hosted execution explicit: this repository normally uses local Jenkins.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k8s-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: clinic_k8s_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U clinic -d clinic_k8s_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - name: Frontend standards, unit coverage and production build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint:check
+          npm run test:coverage
+          npm run build
+      - name: Backend regression tests and coverage
+        working-directory: backend
+        run: |
+          npm ci
+          npm run test:coverage
+      - name: Production v2 HTTP integration and coverage on PostgreSQL
+        working-directory: backend
+        env:
+          DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/clinic_k8s_ci
+          DATABASE_USERNAME: clinic
+          DATABASE_PASSWORD: isolated_ci_only
+        run: npm run test:v2:coverage
+      - name: Staff browser regression on the real PostgreSQL API
+        working-directory: backend
+        env:
+          DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/clinic_k8s_ci
+          DATABASE_USERNAME: clinic
+          DATABASE_PASSWORD: isolated_ci_only
+        run: npm run test:browser
+      - name: Archive tests and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-evidence
+          path: |
+            frontend/coverage/
+            backend/target/site/jacoco/
+            backend/cypress/results/
+            frontend/cypress/results/browser-v2-*.xml
+
+  kubernetes:
+    if: github.event_name == 'workflow_dispatch'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: clinic-ci
+      - name: Build images, load into kind, deploy and wait for readiness
+        shell: pwsh
+        run: ./deploy/k8s/Start-Local.ps1 -Context kind-clinic-ci -ImageTag '${{ github.sha }}'
+      - name: Authenticated Ingress and PVC persistence acceptance
+        shell: pwsh
+        run: ./deploy/k8s/Test-Local.ps1 -Context kind-clinic-ci -TestPersistence
+      - name: Browser E2E against Kubernetes production images
+        shell: bash
+        run: |
+          kubectl --context kind-clinic-ci -n clinic-local port-forward --address=127.0.0.1 service/clinic-ingress 18088:80 > /tmp/clinic-forward.log 2>&1 &
+          FORWARD_PID=$!
+          trap 'kill "$FORWARD_PID"' EXIT
+          for attempt in $(seq 1 30); do curl -fsS http://127.0.0.1:18088/healthz && break; sleep 2; done
+          cd frontend
+          npm ci
+          export CYPRESS_BASE_URL=http://127.0.0.1:18088
+          export CLINIC_K8S_CREDENTIALS="$GITHUB_WORKSPACE/deploy/k8s/runtime/kind-clinic-ci-credentials.json"
+          npm run test:e2e:k8s
+      - name: Collect safe cluster diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p deploy/k8s/runtime/evidence
+          kubectl --context kind-clinic-ci -n clinic-local get pods,services,ingress,pvc -o wide > deploy/k8s/runtime/evidence/resources.txt
+          kubectl --context kind-clinic-ci -n clinic-local get events --sort-by=.lastTimestamp > deploy/k8s/runtime/evidence/events.txt
+      - name: Archive Kubernetes acceptance (credentials excluded)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubernetes-evidence
+          path: |
+            deploy/k8s/runtime/release.json
+            deploy/k8s/runtime/acceptance.json
+            deploy/k8s/runtime/evidence/
+            frontend/cypress/results/k8s-*.xml
