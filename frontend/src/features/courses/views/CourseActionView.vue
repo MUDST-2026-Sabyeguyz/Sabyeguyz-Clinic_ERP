@@ -99,11 +99,11 @@ const usageEntries = computed(() =>
     .slice()
     .reverse(),
 )
-const activeCourses = computed(() => patientCourses.value.filter((course) => course.usable))
+const activeCourses = computed(() =>
+  patientCourses.value.filter((course) => course.usable && course.balance > 0),
+)
 const inactiveCourses = computed(() =>
-  patientCourses.value.filter(
-    (course) => course.status === 'ACTIVE' && (course.expired || course.used >= course.purchased),
-  ),
+  patientCourses.value.filter((course) => !course.usable || course.balance <= 0),
 )
 const historyFromInactive = ref(false)
 function branchLabel(patient: Patient | null) {
@@ -252,6 +252,10 @@ async function searchRecipients() {
   }
 }
 async function start(nextAction: CourseAction, course: UiCourse) {
+  if (nextAction === 'use' && (!course.usable || course.balance <= 0)) {
+    errorMessage.value = 'คอร์สนี้ใช้สิทธิ์ครบแล้ว'
+    return
+  }
   const openedFromTransferredCourse = Boolean(transferReceiptId.value)
   action.value = nextAction
   selectedCourse.value = course
@@ -1387,7 +1391,7 @@ function closePrintSuccess() {
           </div>
           <div class="course-after-actions">
             <button type="button" @click="start('history', course)">ดูประวัติคอร์ส</button>
-            <button type="button" :disabled="!course.usable" @click="start('use', course)">
+            <button type="button" :disabled="!course.usable || course.balance <= 0" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
           </div>
@@ -1447,7 +1451,7 @@ function closePrintSuccess() {
           </p>
           <div class="course-manager-actions">
             <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
-            <button type="button" :disabled="!course.usable" @click="start('use', course)">
+            <button type="button" :disabled="!course.usable || course.balance <= 0" @click="start('use', course)">
               ใช้สิทธิ์คอร์ส
             </button>
           </div>
