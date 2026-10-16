@@ -1,0 +1,36 @@
+name: clinic-jenkins-ci
+services:
+  jenkins:
+    build: .
+    image: clinic-jenkins-backup-jenkins:latest
+    ports:
+      - '127.0.0.1:8086:8080'
+    environment:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false -Xmx768m
+      DOCKER_HOST: tcp://docker:2375
+    volumes:
+      - ci-home:/var/jenkins_home
+      - ci-workspace:/var/jenkins_home/workspace
+      - ci-worker-home:/var/jenkins_home/ci-worker-home
+      - ci-source:/var/jenkins_home/clinic-source.git
+      - ./:/opt/clinic/ci:ro
+      - ./seed-ci.groovy:/var/jenkins_home/init.groovy.d/seed-ci.groovy:ro
+    restart: unless-stopped
+  docker:
+    image: docker:27-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ''
+    volumes:
+      - ci-docker:/var/lib/docker
+      - ci-workspace:/var/jenkins_home/workspace
+      - ci-worker-home:/var/jenkins_home/ci-worker-home
+      - ci-source:/var/jenkins_home/clinic-source.git:ro
+      - ./replay.py:/opt/clinic/replay.py:ro
+    restart: unless-stopped
+volumes:
+  ci-home:
+  ci-docker:
+  ci-workspace:
+  ci-worker-home:
+  ci-source:
