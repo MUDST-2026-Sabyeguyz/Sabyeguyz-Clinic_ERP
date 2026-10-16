@@ -1,0 +1,14 @@
+{
+  "context": "docker-desktop",
+  "images": {
+    "clinic-backend:c73c0b091d76-20261016115826": "sha256:0bd80ff4c917adec950b4dba07d6075d3121fb48d8f1c88cec3ba493c92c703f",
+    "clinic-frontend:c73c0b091d76-20261016115826": "sha256:1ad046212c0070451614ebc710016e914998c86a26654823c01410e4a96e74e3",
+    "postgres:16-alpine": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "traefik:v3.7.15": "sha256:de7431ff85f306b709256819aaacd153e189ee25f8e86bb895aef1becbacf628"
+  },
+  "sourceRevision": "c73c0b091d76ab390e6ec7df751ee142aa39ef60",
+  "hostBuild": true,
+  "deployedAt": "2026-10-16T05:06:38.0827717Z",
+  "applicationSourceDirty": false,
+  "imageTag": "c73c0b091d76-20261016115826"
+}

@@ -1,11 +1,7 @@
 name: Local Kubernetes delivery
 
 on:
-  pull_request:
-    branches: [develop]
-  push:
-    branches: [develop, 'codex/**']
-    paths: ['deploy/k8s/**', 'backend/**', 'frontend/**', '.github/workflows/kubernetes-ci.yml']
+  # Keep hosted execution explicit: this repository normally uses local Jenkins.
   workflow_dispatch:
 
 permissions:
@@ -17,6 +13,7 @@ concurrency:
 
 jobs:
   quality:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -64,6 +61,13 @@ jobs:
           DATABASE_USERNAME: clinic
           DATABASE_PASSWORD: isolated_ci_only
         run: npm run test:v2:coverage
+      - name: Staff browser regression on the real PostgreSQL API
+        working-directory: backend
+        env:
+          DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/clinic_k8s_ci
+          DATABASE_USERNAME: clinic
+          DATABASE_PASSWORD: isolated_ci_only
+        run: npm run test:browser
       - name: Archive tests and coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -73,8 +77,10 @@ jobs:
             frontend/coverage/
             backend/target/site/jacoco/
             backend/cypress/results/
+            frontend/cypress/results/browser-v2-*.xml
 
   kubernetes:
+    if: github.event_name == 'workflow_dispatch'
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
