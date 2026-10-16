@@ -2,10 +2,21 @@ name: Compose build
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**']
+    branches: [develop, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'compose.yaml'
+      - 'compose.*.yaml'
+      - 'deploy/**'
+      - '.github/workflows/compose-verify.yml'
   pull_request:
     branches: [develop]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
