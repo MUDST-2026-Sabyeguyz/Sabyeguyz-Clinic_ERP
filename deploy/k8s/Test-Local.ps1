@@ -13,16 +13,21 @@ function Assert-Check([bool]$Condition, [string]$Name) {
     Write-Host "PASS: $Name"
 }
 try {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+    try { $listener.Start() } catch { throw "Port $Port is already in use. Choose a free -Port; acceptance must own its forward." } finally { $listener.Stop() }
     $start = @{FilePath = (Get-Command kubectl).Source; ArgumentList = @('--context', $Context, '-n', 'clinic-local', 'port-forward', '--address=127.0.0.1', 'service/clinic-ingress', "${Port}:80"); PassThru = $true; RedirectStandardOutput = (Join-Path $RuntimeRoot 'test-forward.log'); RedirectStandardError = (Join-Path $RuntimeRoot 'test-forward-error.log')}
     if ($env:OS -eq 'Windows_NT') { $start.WindowStyle = 'Hidden' }
     $forward = Start-Process @start
     $ready = $false
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
+        $forward.Refresh()
         if ($forward.HasExited) { throw 'Port forward exited. Check test-forward-error.log (the port may be busy).' }
         try { $health = Invoke-RestMethod "$base/actuator/health" -TimeoutSec 3; if ($health.status -eq 'UP') { $ready = $true; break } } catch {}
         Start-Sleep -Seconds 2
     }
     Assert-Check $ready 'Ingress reaches backend and PostgreSQL health'
+    $forward.Refresh()
+    if ($forward.HasExited) { throw 'Acceptance port forward exited before readiness was confirmed.' }
     $page = Invoke-WebRequest "$base/" -UseBasicParsing
     Assert-Check ($page.StatusCode -eq 200 -and $page.Content -match '<div id="app">') 'Ingress serves production Vue app'
     $deep = Invoke-WebRequest "$base/staff/patients" -UseBasicParsing
@@ -35,7 +40,7 @@ try {
     $session = Invoke-RestMethod "$base/api/auth/login" -Method Post -ContentType 'application/json' -Body $login
     Assert-Check ($session.role -eq 'MANAGER' -and !!$session.token) 'Real manager login through Ingress'
     $headers = @{ Authorization = "Bearer $($session.token)" }
-    $branches = @(Invoke-RestMethod "$base/api/branches" -Headers $headers)
+    $branches = Invoke-RestMethod "$base/api/branches" -Headers $headers
     if (!($branches | Where-Object branchCode -eq '99')) {
         $branch = @{ branchCode = '99'; name = 'Kubernetes Synthetic Demo'; address = 'Local test data only'; phone = '020000099' } | ConvertTo-Json
         Invoke-RestMethod "$base/api/branches" -Headers $headers -Method Post -ContentType 'application/json' -Body $branch | Out-Null
@@ -56,8 +61,17 @@ try {
         Assert-Check $survived 'PVC preserves patient after PostgreSQL pod replacement'
         Invoke-Kube -n clinic-local rollout restart deployment/backend | Out-Host
         Invoke-Kube -n clinic-local rollout status deployment/backend --timeout=360s | Out-Host
-        $afterRestart = Invoke-RestMethod "$base/api/patients/$($patient.id)" -Headers $headers
-        Assert-Check ($afterRestart.hn -eq $patient.hn) 'Backend rollout retains patient and valid JWT'
+        # Ingress endpoint updates can lag Deployment readiness briefly during a rollout.
+        $backendSurvived = $false
+        for ($attempt = 0; $attempt -lt 45; $attempt++) {
+            try {
+                $afterRestart = Invoke-RestMethod "$base/api/patients/$($patient.id)" -Headers $headers -TimeoutSec 5
+                $backendSurvived = $afterRestart.hn -eq $patient.hn
+                if ($backendSurvived) { break }
+            } catch {}
+            Start-Sleep -Seconds 2
+        }
+        Assert-Check $backendSurvived 'Backend rollout retains patient and valid JWT'
     }
     $pods = Invoke-Kube -n clinic-local get pods -o json | ConvertFrom-Json
     $pvc = Invoke-Kube -n clinic-local get pvc postgres-data -o json | ConvertFrom-Json
@@ -73,6 +87,11 @@ try {
         ConvertTo-Json | Set-Content (Join-Path $RuntimeRoot 'acceptance.json') -Encoding utf8
     throw
 } finally {
-    if ($forward -and !$forward.HasExited) { Stop-Process -Id $forward.Id }
+    if ($forward) {
+        $forward.Refresh()
+        # Windows package-manager shims launch the real kubectl as a child process.
+        if (!$forward.HasExited) { $forward.Kill($true); $forward.WaitForExit() }
+        $forward.Dispose()
+    }
     $session = $null; $headers = $null; $credentials = $null; $login = $null
 }
