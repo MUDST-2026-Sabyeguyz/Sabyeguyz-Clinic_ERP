@@ -125,9 +125,15 @@ public class PatientService {
         if (address != null) patient.setAddress(address);
         if (patient.getCustomerType() == com.sabyeguyz.clinicv2.enums.CustomerType.Thai) {
             if (patient.getPhone() == null) throw new IllegalArgumentException("phone ห้ามว่าง");
+            if (!patient.getPhone().matches("[0-9]{10}")) {
+                throw new IllegalArgumentException("เบอร์โทรต้องเป็นตัวเลข 10 หลัก");
+            }
             if (patient.getNationalId() == null) {
                 throw new IllegalArgumentException("ผู้ป่วยชาวไทยต้องระบุเลขบัตรประชาชน");
             }
+        }
+        if (patient.getPhone() != null && !patient.getPhone().matches("[0-9]{1,10}")) {
+            throw new IllegalArgumentException("เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก");
         }
         patient.setPatientUpdateAt(Instant.now());
         patient.setPatientUpdateBy(actorId);

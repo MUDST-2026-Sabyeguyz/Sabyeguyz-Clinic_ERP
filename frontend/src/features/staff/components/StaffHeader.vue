@@ -54,6 +54,9 @@ const navItems = computed(() =>
         { to: '/staff/compensation', label: 'คอมมิชชัน' },
       ],
 )
+const hasMatchingNavItem = computed(() =>
+  navItems.value.some((item) => route.path === item.to || route.path.startsWith(`${item.to}/`)),
+)
 function movePill(target: HTMLElement | null) {
   if (!target || !navRef.value) return
   const targetBox = target.getBoundingClientRect()
@@ -69,6 +72,13 @@ function movePill(target: HTMLElement | null) {
 }
 function movePillToActive() {
   if (!navRef.value) return
+  if (!hasMatchingNavItem.value) {
+    navRef.value.querySelectorAll<HTMLElement>('a').forEach((link) => {
+      link.classList.remove('pill-target')
+    })
+    pillStyle.value = { ...pillStyle.value, opacity: '0' }
+    return
+  }
   const links = [...navRef.value.querySelectorAll<HTMLAnchorElement>('a')]
   const activePath = route.path.startsWith('/staff/courses') ? '/staff/services' : route.path
   const matchingLink = links
@@ -144,7 +154,10 @@ function branchLabel(name: string) {
 </script>
 
 <template>
-  <header class="staff-header" :class="{ 'manager-header': isManager }">
+  <header
+    class="staff-header"
+    :class="{ 'manager-header': isManager, 'formula-route': route.path === '/staff/commission/formula' }"
+  >
     <RouterLink class="brand" :to="homePath"><img :src="logo" alt="SaByeGuyz" /></RouterLink>
     <button
       class="menu-toggle"
