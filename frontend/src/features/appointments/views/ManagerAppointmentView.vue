@@ -374,7 +374,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   editingId.value = null
   createSource.value = source
   appointmentPatientType.value = 'CURRENT'
-  serviceMode.value = source === 'calendar' ? 'single' : 'course'
+  serviceMode.value = 'single'
   patientCourses.value = []
   selectedCourseId.value = 0
   timeDrawerOpen.value = false
@@ -560,7 +560,7 @@ async function save() {
         branchCode: form.value.branchCode,
         patientId: form.value.patientId,
         therapistId: form.value.therapistId,
-        serviceId: form.value.serviceId,
+        serviceId: form.value.serviceId || undefined,
         startAt: toStartAt(),
         note: form.value.note,
       })
