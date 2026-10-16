@@ -4,7 +4,11 @@ import type { TherapistLine } from '@/api/client'
 import { baht, lineKey, lineStatusText, longDate, percent } from '../lib/therapistPay'
 import TherapistCompensationEmptyState from './TherapistCompensationEmptyState.vue'
 
-const props = defineProps<{ kind: 'sale' | 'treatment'; line: TherapistLine | null; month: string }>()
+const props = defineProps<{
+  kind: 'sale' | 'treatment'
+  line: TherapistLine | null
+  month: string
+}>()
 
 const back = computed(() => ({
   name: props.kind === 'sale' ? 'therapist-commission-detail' : 'therapist-treatment-fee-detail',
@@ -34,10 +38,7 @@ const treatmentRows = computed<[string, string][]>(() => {
 </script>
 
 <template>
-  <section
-    v-if="props.kind === 'sale' && line"
-    class="therapist-source-card therapist-sale-source"
-  >
+  <section v-if="props.kind === 'sale' && line" class="therapist-source-card therapist-sale-source">
     <header class="therapist-source-heading">
       <h1>รายละเอียดรายการขายต้นทาง</h1>
       <p>{{ line.saleNo ?? '—' }} · {{ longDate(line.saleDate) }} · อ่านอย่างเดียว</p>
@@ -77,7 +78,9 @@ const treatmentRows = computed<[string, string][]>(() => {
         <h2>ที่มาของค่าตอบแทน</h2>
         <span>ฐาน Commission</span>
         <strong>{{ baht(line.base) }}</strong>
-        <p v-if="line.rate !== null">{{ line.tier ?? 'Tier' }} (อัตราที่ล็อก {{ percent(line.rate) }})</p>
+        <p v-if="line.rate !== null">
+          {{ line.tier ?? 'Tier' }} (อัตราที่ล็อก {{ percent(line.rate) }})
+        </p>
         <p v-else>รอปิดยอดเดือนที่ขาย จึงยังไม่ล็อกอัตรา</p>
         <b v-if="line.rate !== null"
           >{{ baht(line.base) }} × {{ percent(line.rate) }} = {{ baht(line.pool) }}</b

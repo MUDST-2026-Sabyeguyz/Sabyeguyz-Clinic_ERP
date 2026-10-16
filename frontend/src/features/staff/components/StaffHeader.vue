@@ -3,13 +3,24 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import logo from '@/assets/sabyeguyz-logo.png'
 import drawerLogo from '@/assets/sabyeguyz-logo2.png'
-import { clearSession } from '@/api/client'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import { branchApi } from '@/api/client'
+import {
+  managerBranches,
+  selectedManagerBranch,
+  setManagerBranches,
+  setSelectedManagerBranch,
+} from '@/features/staff/data/managerBranch'
 const profileOpen = ref(false)
 const menuOpen = ref(false)
 const route = useRoute()
 const navRef = ref<HTMLElement | null>(null)
 const pillReady = ref(false)
-const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0' })
+const pillStyle = ref({
+  width: '0px',
+  transform: 'translateX(0px)',
+  opacity: '0',
+})
 let readyFrame: number | undefined
 let routeFrame: number | undefined
 let settleFrame: number | undefined
@@ -19,11 +30,10 @@ const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
 } | null
 const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
+const activeManagerBranch = computed(() => selectedManagerBranch())
 const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
-const branchLabel = computed(() =>
-  isManager.value ? 'เข้าถึงทุกสาขา' : (storedUser?.branchName ?? 'ยังไม่ได้กำหนดสาขา'),
-)
+const profileBranchLabel = computed(() => storedUser?.branchName || 'สาขาที่ได้รับมอบหมาย')
 const navItems = computed(() =>
   isManager.value
     ? [
@@ -31,13 +41,10 @@ const navItems = computed(() =>
         { to: '/staff/patients', label: 'ผู้ป่วย' },
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
-        { to: '/staff/transactions', label: 'ธุรกรรม' },
-        { to: '/staff/refunds', label: 'คืนเงิน' },
-        { to: '/staff/commission', label: 'คอมมิชชัน' },
-        { to: '/staff/personnel', label: 'บุคลากร' },
+        { to: '/staff/transactions', label: 'รายการธุรกรรม' },
+        { to: '/staff/commission', label: 'คอมมิชชั่น' },
         { to: '/staff/reports', label: 'รายงาน' },
-        { to: '/staff/calendar', label: 'ปฏิทิน Google' },
-        { to: '/staff/settings', label: 'ตั้งค่า' },
+        { to: '/staff/settings', label: 'การตั้งค่า' },
       ]
     : [
         { to: '/staff/patients', label: 'ผู้ป่วย' },
@@ -56,9 +63,6 @@ function movePill(target: HTMLElement | null) {
   target.classList.add('pill-target')
   pillStyle.value = {
     width: `${targetBox.width}px`,
-    // The pill is an absolutely positioned child of the scrollable nav. Its
-    // offset is already in that same coordinate space, unlike viewport rects
-    // which can be stale while the centered menu is settling after a refresh.
     transform: `translateX(${target.offsetLeft}px)`,
     opacity: '1',
   }
@@ -85,14 +89,12 @@ function positionPillWithoutAnimation() {
 }
 onMounted(() => {
   positionPillWithoutAnimation()
-  // Centered Manager tabs move slightly after the browser applies loaded fonts.
-  // Measure again after layout settles so the pill never remains at its
-  // pre-refresh position.
   requestAnimationFrame(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
   })
   document.fonts?.ready.then(positionPillWithoutAnimation)
   window.addEventListener('resize', positionPillWithoutAnimation)
+  if (isManager.value) void loadManagerBranches()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', positionPillWithoutAnimation)
@@ -111,9 +113,33 @@ watch(
   },
 )
 function signOut() {
-  clearSession()
+  localStorage.removeItem('authToken')
   localStorage.removeItem('staffRole')
   localStorage.removeItem('staffUsername')
+  localStorage.removeItem('mockStaffRole')
+  localStorage.removeItem('mockStaffEmail')
+}
+async function loadManagerBranches() {
+  try {
+    const branches = (await branchApi.list())
+      .filter((branch) => branch.active)
+      .map((branch) => ({
+        code: branch.code,
+        name: branch.name,
+        address: branch.address,
+      }))
+    setManagerBranches(branches)
+    window.dispatchEvent(new CustomEvent('manager-branch-changed'))
+  } catch {}
+}
+function switchManagerBranch(code: string) {
+  const branch = managerBranches.value.find((item) => item.code === code)
+  if (!branch) return
+  setSelectedManagerBranch(branch)
+  window.dispatchEvent(new CustomEvent('manager-branch-changed'))
+}
+function branchLabel(name: string) {
+  return name.replace(/^สาขา\s*/, '')
 }
 </script>
 
@@ -144,6 +170,23 @@ function signOut() {
         {{ item.label }}
       </RouterLink>
     </nav>
+    <div v-if="isManager" class="branch-switcher">
+      <FilterDropdown
+        class="manager-branch-filter"
+        :model-value="activeManagerBranch?.code ?? ''"
+        :options="
+          managerBranches.map((branch) => ({
+            value: branch.code,
+            label: branchLabel(branch.name),
+          }))
+        "
+        default-label="เลือกสาขา"
+        label="เลือกสาขา"
+        :clear-on-reselect="false"
+        hide-default-option
+        @update:model-value="switchManagerBranch"
+      />
+    </div>
     <div class="profile-wrap">
       <button
         class="profile-trigger"
@@ -159,7 +202,7 @@ function signOut() {
       <div v-if="profileOpen" class="profile-menu">
         <div>
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
-          ><span>{{ branchLabel }}</span>
+          ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : profileBranchLabel }}</span>
         </div>
         <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>

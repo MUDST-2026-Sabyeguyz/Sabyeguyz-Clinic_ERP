@@ -1,39 +1,35 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { clinicToday } from '@/utils/clinicDate'
-
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   appointmentApi,
-  ApiError,
   branchApi,
-  calendarApi,
   catalogApi,
   courseApi,
   patientApi,
   type Appointment,
-  type AppointmentAvailability,
   type AppointmentStatus,
   type Branch,
-  type CalendarStatus,
   type CoursePurchase,
   type Patient,
   type ServiceOption,
   type Therapist,
 } from '@/api/client'
+import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
+
+const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+  role?: string
+  branchCode?: string
+} | null
+const isManager = authUser?.role === 'MANAGER'
 
 const route = useRoute()
 const router = useRouter()
 
 const viewMode = ref<'list' | 'create' | 'edit'>('list')
-const sessionUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string; branchCode?: string } | null
-const isManager = sessionUser?.role === 'MANAGER'
-const homeBranch = sessionUser?.branchCode ?? ''
-const contactPhone = ref('')
-const requestedServiceType = ref<'SingleVisit' | 'Course'>('SingleVisit')
 const createSource = ref<'standard' | 'calendar'>('standard')
 const appointmentPatientType = ref<'CURRENT' | 'NEW'>('CURRENT')
 const serviceMode = ref<'single' | 'course'>('course')
@@ -43,25 +39,11 @@ const timeDrawerOpen = ref(false)
 const scheduleView = ref<'list' | 'day' | 'week'>('list')
 const listServiceMode = ref<'single' | 'course'>('single')
 const calendarSyncOpen = ref(false)
-const googleStatus = ref<CalendarStatus | null>(null)
-const googleMessage = ref('')
-const googleBusy = ref(false)
-const isManagerUser = (() => {
-  try {
-    return JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
-  } catch {
-    return false
-  }
-})()
-const query = ref('')
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
 const startDate = ref('')
 const endDate = ref('')
-type AppointmentUiStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
-const selectedStatus = ref<'ทั้งหมด' | AppointmentUiStatus>('ทั้งหมด')
-const selectedPatientType = ref<'ทั้งหมด' | 'NEW' | 'CURRENT'>('ทั้งหมด')
-
+type AppointmentUiStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
 const selectedTherapistId = ref('ทั้งหมด')
 const sortOrder = ref<'newest' | 'oldest'>('newest')
 const appointments = ref<Appointment[]>([])
@@ -71,10 +53,6 @@ const branches = ref<Branch[]>([])
 const patients = ref<Patient[]>([])
 const services = ref<ServiceOption[]>([])
 const therapists = ref<Therapist[]>([])
-const appointmentMasterReady = computed(
-  () => branches.value.length > 0 && services.value.length > 0 && therapists.value.length > 0,
-)
-
 const patientQuery = ref('')
 const newPatientForm = ref({
   firstName: '',
@@ -87,6 +65,7 @@ const editingId = ref<number | null>(null)
 const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
 const errorMessage = ref('')
+const showRequiredValidation = ref(false)
 const appointmentSuccessMessage = ref('')
 const savingAppointment = ref(false)
 const pendingSaveConfirmation = ref(false)
@@ -96,15 +75,19 @@ const form = ref({
   patientId: 0,
   therapistId: 0,
   serviceId: 0,
-  branchCode: 'RP',
-  date: clinicToday(),
-
+  branchCode: '',
+  date: new Date().toISOString().slice(0, 10),
   time: '09:00',
   note: '',
 })
-const branchOptions = computed(() => branches.value.filter((item) => item.active))
-const bookingTherapists = computed(() => therapists.value.filter((item) => item.branchCode === form.value.branchCode))
-
+const managerBranchCode = computed(() =>
+  isManager ? selectedManagerBranch()?.code : authUser?.branchCode,
+)
+const branchOptions = computed(() =>
+  branches.value.filter(
+    (item) => item.active && (!managerBranchCode.value || item.code === managerBranchCode.value),
+  ),
+)
 const isEditing = computed(() => viewMode.value === 'edit')
 const isCalendarCreate = computed(
   () => viewMode.value === 'create' && createSource.value === 'calendar',
@@ -116,12 +99,24 @@ const originalAppointmentSummary = computed(() => {
   const appointment = editingAppointment.value
   if (!appointment) return ''
   const time = formatTime(appointment.startAt).replace(/^0/, '')
-  return `นัดเดิม: ${formatThaiDate(appointment.startAt)} · ${time} น. · สาขา${branchName(appointment.branchCode)}`
-
+  return `นัดเดิม: ${formatThaiDate(appointment.startAt)} · ${time} น. · สาขา${branchName(appointment.branchCode)} · ${appointmentRoom(appointment)}`
 })
 const patientError = computed(
   () =>
     errorMessage.value.startsWith('กรุณากรอก HN') || errorMessage.value.startsWith('ไม่พบผู้ป่วย'),
+)
+const isCurrentAppointment = computed(() => appointmentPatientType.value === 'CURRENT')
+const missingCurrentPatient = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.patientId,
+)
+const missingCurrentTherapist = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.therapistId,
+)
+const missingCurrentDate = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.date,
+)
+const missingCurrentTime = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.time,
 )
 const scheduleError = computed(() => errorMessage.value.includes('ไม่สามารถจองเวลาย้อนหลัง'))
 const patientResults = computed(() => {
@@ -142,10 +137,10 @@ type AppointmentCourse = CoursePurchase & {
 const availablePatientCourses = computed(() =>
   patientCourses.value.filter((course) => course.usable && !course.expired && course.remaining > 0),
 )
-const selectedPatientCourse = computed(() =>
-  availablePatientCourses.value.find((course) => course.id === selectedCourseId.value) as
-    | AppointmentCourse
-    | undefined,
+const selectedPatientCourse = computed(
+  () =>
+    availablePatientCourses.value.find((course) => course.id === selectedCourseId.value) as
+      AppointmentCourse | undefined,
 )
 const selectedService = computed(() =>
   services.value.find((service) => service.id === form.value.serviceId),
@@ -155,134 +150,76 @@ const selectedTherapist = computed(() =>
 )
 const currentBranchName = computed(() => branchName(form.value.branchCode))
 const currentBranchLabel = computed(() =>
-  currentBranchName.value.startsWith('สาขา') ? currentBranchName.value : `สาขา${currentBranchName.value}`,
-)
-// Free times come from the server (branch booking window, the therapist's other appointments); the fixed list
-// is only the fallback when the lookup is not available.
-const availability = ref<AppointmentAvailability | null>(null)
-const slotOptions = computed(() =>
-  availability.value
-    ? availability.value.slots
-    : timeOptions.map((time) => ({ time, available: true, reason: null })),
-)
-const appointmentMinutes = computed(
-  () => availability.value?.durationMinutes || selectedService.value?.durationMinutes || 60,
+  currentBranchName.value.startsWith('สาขา')
+    ? currentBranchName.value
+    : `สาขา${currentBranchName.value}`,
 )
 const drawerServiceLabel = computed(() => {
-  const label = selectedService.value?.name || selectedPatientCourse.value?.course.name
-  return label
-    ? /นาที/.test(label) ? label : `${label} ${appointmentMinutes.value} นาที`
-    : `ยังไม่ระบุบริการ ${appointmentMinutes.value} นาที`
+  const label = selectedService.value?.name || selectedPatientCourse.value?.course.name || 'บริการ'
+  return /นาที/.test(label)
+    ? label
+    : `${label} ${selectedService.value?.durationMinutes || 60} นาที`
 })
-const morningSlots = computed(() => slotOptions.value.filter((slot) => Number(slot.time.slice(0, 2)) < 12))
-const afternoonSlots = computed(() => slotOptions.value.filter((slot) => Number(slot.time.slice(0, 2)) >= 12))
-// The dropdown offers only the free times (plus the time already chosen, so an edited appointment keeps its own).
-const timeChoices = computed(() => {
-  const free = slotOptions.value.filter((slot) => slot.available).map((slot) => slot.time)
-  return form.value.time && !free.includes(form.value.time) ? [form.value.time, ...free] : free
-})
+const morningTimeOptions = computed(() =>
+  timeOptions.filter((time) => Number(time.slice(0, 2)) < 12),
+)
+const afternoonTimeOptions = computed(() =>
+  timeOptions.filter((time) => Number(time.slice(0, 2)) >= 12),
+)
 const filteredAppointments = computed(() => {
   const direction = sortOrder.value === 'newest' ? -1 : 1
   return appointments.value
     .filter(
       (item) =>
-        (selectedPatientType.value === 'ทั้งหมด' ||
-          patientTypeFor(item) === selectedPatientType.value) &&
-        (selectedStatus.value === 'ทั้งหมด' || uiStatusFor(item.status) === selectedStatus.value) &&
-        (listServiceMode.value === 'course' ? isCourseAppointment(item) : !isCourseAppointment(item)) &&
+        (listServiceMode.value === 'course'
+          ? isCourseAppointment(item)
+          : !isCourseAppointment(item)) &&
         (!startDate.value || item.startAt.slice(0, 10) >= startDate.value) &&
         (!endDate.value || item.startAt.slice(0, 10) <= endDate.value),
-
     )
     .sort(
       (left, right) =>
         direction * (new Date(left.startAt).getTime() - new Date(right.startAt).getTime()),
     )
 })
-function patientTypeFor(item: Appointment): 'NEW' | 'CURRENT' {
-  return item.patientType ?? (item.patient.id == null ? 'NEW' : 'CURRENT')
-}
-function isCourseAppointment(item: Appointment) {
-  return /คอร์ส|course/i.test(item.service.name)
+const isCourseAppointment = (item: Appointment) => {
+  const courseAppointment = item as Appointment & {
+    courseId?: number | null
+    coursePurchaseId?: number | null
+    course?: { id?: number; name?: string } | null
+  }
+  return Boolean(
+    courseAppointment.courseId ||
+    courseAppointment.coursePurchaseId ||
+    courseAppointment.course?.id ||
+    /คอร์ส|course/i.test(item.service.name),
+  )
 }
 const patientPhone = (item: Appointment) =>
-  item.patient.phone || item.contactPhone || patients.value.find((patient) => patient.id === item.patient.id)?.phone || '-'
+  patients.value.find((patient) => patient.id === item.patient.id)?.phone || '-'
+const appointmentRoom = (item: Appointment) => {
+  const appointmentWithRoom = item as Appointment & {
+    roomName?: string
+    room?: { name?: string }
+  }
+  return appointmentWithRoom.roomName || appointmentWithRoom.room?.name || '—'
+}
 const editingPatientPhone = computed(() =>
   editingAppointment.value ? patientPhone(editingAppointment.value) : '-',
 )
 const branchName = (code: string) =>
-  branches.value.find((branch) => branch.branchCode === code)?.name || code
-
+  branches.value.find((branch) => branch.code === code)?.name || code
 const timeOptions = ['09:00', '10:30', '13:00', '14:30', '16:00']
-const uiStatusLabels: Record<AppointmentUiStatus, string> = {
-  PENDING: 'ยังไม่ยืนยันนัด',
-  CONFIRMED: 'ยืนยันนัดหมาย',
-  COMPLETED: 'ใช้บริการแล้ว',
-  CANCELLED: 'ยกเลิก',
-}
-const patientFilterOptions = [
-  ['NEW', 'คนไข้ใหม่'],
-  ['CURRENT', 'คนไข้ปัจจุบัน'],
-] as const
-const statusFilterOptions: [AppointmentUiStatus, string][] = [
-  ['PENDING', 'ยังไม่ยืนยันนัด'],
-  ['CONFIRMED', 'ยืนยันนัดหมาย'],
-  ['COMPLETED', 'ใช้บริการแล้ว'],
+const appointmentStatusOptions: [AppointmentUiStatus, string][] = [
+  ['PENDING', 'ยังไม่ยืนยัน'],
+  ['CONFIRMED', 'ยืนยัน'],
   ['CANCELLED', 'ยกเลิก'],
 ]
 function uiStatusFor(status: AppointmentStatus): AppointmentUiStatus {
-  if (status === 'UNCONFIRMED' || status === 'RESCHEDULED') return 'PENDING'
-  if (status === 'COMPLETED') return 'COMPLETED'
+  if (status === 'RESCHEDULED') return 'PENDING'
   if (status === 'CANCELLED' || status === 'NO_SHOW') return 'CANCELLED'
   return 'CONFIRMED'
 }
-const formatStatus = (status: AppointmentStatus) => uiStatusLabels[uiStatusFor(status)]
-const actionStatusLabels: Record<AppointmentStatus, string> = {
-  UNCONFIRMED: 'รอยืนยัน',
-  CONFIRMED: 'ยืนยันแล้ว',
-  ARRIVED: 'มาถึงคลินิก',
-  IN_SERVICE: 'กำลังรับบริการ',
-  COMPLETED: 'เสร็จสิ้น',
-  CANCELLED: 'ยกเลิก',
-  RESCHEDULED: 'เลื่อนนัด',
-  NO_SHOW: 'ไม่มาตามนัด',
-}
-const statusOptionsFor = (item: Appointment): AppointmentStatus[] => [
-  ...new Set<AppointmentStatus>([
-    item.status,
-    ...(item.status === 'UNCONFIRMED' ? ['CONFIRMED' as const] : []),
-    'ARRIVED',
-    'IN_SERVICE',
-    'COMPLETED',
-    'CANCELLED',
-    'NO_SHOW',
-  ]),
-]
-function changeStatus(event: Event, item: Appointment) {
-  const select = event.target as HTMLSelectElement
-  const status = select.value as AppointmentStatus
-  select.value = item.status
-  if (status === item.status) return
-  if (status === 'CANCELLED') {
-    pendingCancellation.value = { item }
-    cancellationReason.value = ''
-    return
-  }
-  void saveStatus(item, status)
-}
-const patientFilterModel = computed({
-  get: () => selectedPatientType.value,
-  set: (value: string) => {
-    selectedPatientType.value = value as 'ทั้งหมด' | 'NEW' | 'CURRENT'
-  },
-})
-const statusFilterModel = computed({
-  get: () => selectedStatus.value,
-  set: (value: string) => {
-    selectedStatus.value = value as 'ทั้งหมด' | AppointmentUiStatus
-  },
-})
-
 const formServiceModel = computed({
   get: () => String(form.value.serviceId || ''),
   set: (value: string) => {
@@ -295,25 +232,24 @@ const formTherapistModel = computed({
     form.value.therapistId = Number(value) || 0
   },
 })
-const formTimeModel = computed({
-  get: () => form.value.time,
-  set: (value: string) => {
-    form.value.time = value
-    changeSchedule()
-  },
-})
 const formBranchModel = computed({
   get: () => form.value.branchCode,
   set: (value: string) => {
     form.value.branchCode = value
-    form.value.therapistId = bookingTherapists.value[0]?.id ?? 0
-
+  },
+})
+const selectedCourseModel = computed({
+  get: () => String(selectedCourseId.value || ''),
+  set: (value: string) => {
+    selectedCourseId.value = Number(value) || 0
   },
 })
 const formatThaiDate = (value: string) =>
-  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(
-    new Date(value),
-  )
+  new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value))
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString('en-GB', {
     hour: '2-digit',
@@ -323,33 +259,28 @@ const formatTime = (value: string) =>
 const formatTimeRange = (time: string) => {
   if (!time) return 'ยังไม่ได้เลือกเวลา'
   const [hour = 0, minute = 0] = time.split(':').map(Number)
-  const endMinutes = hour * 60 + minute + appointmentMinutes.value
-  return `${time}–${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`
+  const duration = selectedService.value?.durationMinutes || 60
+  const endMinutes = hour * 60 + minute + duration
+  const endHour = Math.floor(endMinutes / 60) % 24
+  const endMinute = endMinutes % 60
+  return `${time}–${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
 }
-const calendarDate = computed(() => selectedDate.value || clinicToday())
-
+const calendarDate = computed(() => selectedDate.value || new Date().toISOString().slice(0, 10))
 const calendarTherapists = computed(() =>
   therapists.value
     .filter(
       (therapist) =>
-        (isManager || therapist.branchCode === homeBranch) &&
-        (selectedTherapistId.value === 'ทั้งหมด' ||
-        String(therapist.id) === selectedTherapistId.value),
+        selectedTherapistId.value === 'ทั้งหมด' ||
+        String(therapist.id) === selectedTherapistId.value,
     )
     .slice(0, 3),
 )
-// An appointment sits in the last slot that starts at or before it, so one moved to an off-grid time
-// (for example 09:45 from Google Calendar) still shows instead of disappearing.
-const slotFor = (startAt: string) => {
-  const time = formatTime(startAt)
-  return [...timeOptions].reverse().find((slot) => slot <= time) ?? timeOptions[0]
-}
 const calendarAppointment = (therapistId: number, time: string) =>
   appointments.value.find(
     (item) =>
       item.therapist.id === therapistId &&
       item.startAt.slice(0, 10) === calendarDate.value &&
-      slotFor(item.startAt) === time &&
+      formatTime(item.startAt) === time &&
       (selectedBranch.value === 'ทั้งหมด' || item.branchCode === selectedBranch.value),
   )
 const calendarSlotState = (item?: Appointment) => {
@@ -363,12 +294,8 @@ const calendarPatientName = (therapistId: number, time: string) =>
   calendarAppointment(therapistId, time)?.patient.fullName || ''
 const calendarTherapistName = (therapistId: number, time: string) =>
   calendarAppointment(therapistId, time)?.therapist.fullName || ''
-const calendarPhone = (therapistId: number, time: string) => {
-  const appointment = calendarAppointment(therapistId, time)
-  return appointment ? patientPhone(appointment) : ''
-}
 function moveCalendarDate(days: number) {
-  const date = new Date(`${calendarDate.value}T12:00:00+07:00`)
+  const date = new Date(`${calendarDate.value}T00:00:00`)
   date.setDate(date.getDate() + days)
   selectedDate.value = date.toISOString().slice(0, 10)
 }
@@ -376,22 +303,26 @@ const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
 async function load() {
   try {
     const [a, b, p, s, t] = await Promise.all([
-      appointmentApi.search({ page: page.value, size: 20, query: query.value }),
-
+      appointmentApi.search({
+        page: page.value,
+        size: 20,
+        branchCode: managerBranchCode.value,
+      }),
       branchApi.listActive(),
-      patientApi.searchAll(),
+      patientApi.searchAll('', managerBranchCode.value),
       catalogApi.services(),
       catalogApi.therapists(),
     ])
     appointments.value = a.items
     totalPages.value = a.totalPages
     branches.value = b
+    if (isManager) setManagerBranches(b.filter((branch) => branch.active))
     patients.value = p
     services.value = s
-    therapists.value = t
-    if (branches.value[0] && !form.value.branchCode)
-      form.value.branchCode = branches.value[0].branchCode
-
+    therapists.value = managerBranchCode.value
+      ? t.filter((therapist) => therapist.branchCode === managerBranchCode.value)
+      : t
+    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
   } catch (error) {
     appointments.value = []
     totalPages.value = 0
@@ -402,172 +333,69 @@ async function load() {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ'
   }
 }
-// Appointments can change outside this page (moved or cancelled in Google Calendar), so refresh the list quietly.
-const refreshIntervalMs = 15000
-let refreshTimer: ReturnType<typeof setInterval> | undefined
-async function refreshAppointments() {
-  if (document.hidden) return
-  try {
-    const a = await appointmentApi.search({ page: page.value, size: 20, query: query.value })
-    appointments.value = a.items
-    totalPages.value = a.totalPages
-  } catch {
-    // keep what is on screen; the next tick tries again
-  }
-}
-const refreshWhenVisible = () => {
-  if (!document.hidden) void refreshAppointments()
-}
-const googleCalendarUrl = (calendarId: string) =>
-  `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}&ctz=Asia%2FBangkok`
-// The main button opens the calendar of the branch picked in the filter, or all connected branches side by side.
-const googleTargets = computed(() =>
-  (googleStatus.value?.branches ?? []).filter(
-    (branch) =>
-      branch.googleCalendarId &&
-      (selectedBranch.value === 'ทั้งหมด' || branch.branchCode === selectedBranch.value),
-  ),
-)
-const googleOpenUrl = computed(
-  () =>
-    'https://calendar.google.com/calendar/embed?' +
-    googleTargets.value
-      .map((branch) => `src=${encodeURIComponent(branch.googleCalendarId ?? '')}`)
-      .join('&') +
-    '&ctz=Asia%2FBangkok',
-)
-const googleOpenLabel = computed(() =>
-  selectedBranch.value === 'ทั้งหมด' ? 'ทุกสาขา' : (googleTargets.value[0]?.branchName ?? 'ทุกสาขา'),
-)
-async function openGoogleCalendar() {
-  calendarSyncOpen.value = true
-  googleMessage.value = ''
-  try {
-    googleStatus.value = await calendarApi.status()
-  } catch (error) {
-    googleMessage.value = error instanceof ApiError ? error.message : 'ตรวจสถานะ Google Calendar ไม่สำเร็จ'
-  }
-}
-async function syncGoogleNow() {
-  googleBusy.value = true
-  googleMessage.value = ''
-  try {
-    const result = await calendarApi.syncNow()
-    googleMessage.value =
-      `ซิงก์แล้ว: ส่งไป Google ${result.pushed}, เลื่อนจาก Google ${result.movedFromGoogle}, ` +
-      `ยกเลิกจาก Google ${result.cancelledFromGoogle}, ล้มเหลว ${result.failed}`
-    googleStatus.value = await calendarApi.status()
-    await refreshAppointments()
-  } catch (error) {
-    googleMessage.value = error instanceof ApiError ? error.message : 'ซิงก์ไม่สำเร็จ'
-  } finally {
-    googleBusy.value = false
-  }
-}
-async function loadGoogleStatus() {
-  try {
-    googleStatus.value = await calendarApi.status()
-  } catch {
-    // the main button simply stays hidden when the status cannot be read
-  }
-}
 onMounted(async () => {
   await load()
-  void loadGoogleStatus()
-  refreshTimer = setInterval(() => void refreshAppointments(), refreshIntervalMs)
-  document.addEventListener('visibilitychange', refreshWhenVisible)
+  window.addEventListener('manager-branch-changed', applyManagerBranch)
   const editId = Number(route.params.id || route.query.edit)
   if (editId) {
     try {
-      const appointment = appointments.value.find((item) => item.id === editId) ?? await appointmentApi.get(editId)
+      const appointment =
+        appointments.value.find((item) => item.id === editId) ?? (await appointmentApi.get(editId))
       openEdit(appointment)
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : 'โหลดนัดหมายไม่สำเร็จ'
     }
   } else if (route.name === 'staff-appointment-create' || route.query.create === 'calendar') {
-    openCreate(route.query.source === 'calendar' || route.query.create === 'calendar' ? 'calendar' : 'standard')
+    openCreate(
+      route.query.source === 'calendar' || route.query.create === 'calendar'
+        ? 'calendar'
+        : 'standard',
+    )
     if (typeof route.query.date === 'string') form.value.date = route.query.date
     if (typeof route.query.time === 'string') form.value.time = route.query.time
     const therapistId = Number(route.query.therapistId)
     if (therapistId) form.value.therapistId = therapistId
   }
 })
-onBeforeUnmount(() => {
-  clearInterval(refreshTimer)
-  document.removeEventListener('visibilitychange', refreshWhenVisible)
-})
-let searchTimer: number | undefined
-watch(query, () => {
-  window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => { page.value = 0; void load() }, 250)
-})
-onUnmounted(() => window.clearTimeout(searchTimer))
+onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
+function applyManagerBranch() {
+  if (!isManager) return
+  selectedBranch.value = selectedManagerBranch()?.code ?? 'ทั้งหมด'
+  page.value = 0
+  void load()
+}
 async function changePage(nextPage: number) {
   if (nextPage >= 0 && nextPage < totalPages.value) {
     page.value = nextPage
     await load()
   }
 }
-let availabilityRequest = 0
-async function loadAvailability() {
-  const { branchCode, therapistId, date, serviceId } = form.value
-  if (viewMode.value === 'list' || !branchCode || !therapistId || !date) {
-    availability.value = null
-    return
-  }
-  const request = ++availabilityRequest
-  try {
-    const result = await appointmentApi.availability({
-      branchCode,
-      therapistId,
-      date,
-      serviceId: serviceId || undefined,
-      excludeAppointmentId: editingId.value ?? undefined,
-    })
-    if (request !== availabilityRequest) return
-    availability.value = result
-    // A time that is no longer free is replaced by the first free one (an edited appointment keeps its own time).
-    const chosen = result.slots.find((slot) => slot.time === form.value.time)
-    if (!chosen?.available && !editingId.value) {
-      form.value.time = result.slots.find((slot) => slot.available)?.time ?? ''
-    }
-  } catch {
-    if (request === availabilityRequest) availability.value = null
-  }
-}
-watch(
-  () =>
-    [
-      viewMode.value,
-      form.value.branchCode,
-      form.value.therapistId,
-      form.value.date,
-      form.value.serviceId,
-    ] as const,
-  () => void loadAvailability(),
-)
 function openCreate(source: 'standard' | 'calendar' = 'standard') {
-  if (!appointmentMasterReady.value) return
   editingId.value = null
   createSource.value = source
   appointmentPatientType.value = 'CURRENT'
-  contactPhone.value = ''
-  requestedServiceType.value = 'SingleVisit'
-
+  serviceMode.value = 'course'
+  patientCourses.value = []
+  selectedCourseId.value = 0
+  timeDrawerOpen.value = false
+  showRequiredValidation.value = false
   patientQuery.value = ''
-  newPatientForm.value = { firstName: '', lastName: '', nickname: '', phone: '' }
+  newPatientForm.value = {
+    firstName: '',
+    lastName: '',
+    nickname: '',
+    phone: '',
+  }
   showPatientResults.value = false
-  const branch = isManager ? branchOptions.value[0] : branchOptions.value.find((item) => item.branchCode === homeBranch)
-  const branchCode = branch?.branchCode ?? ''
-
+  const branch = branchOptions.value[0]
+  const branchCode = branch?.code ?? ''
   form.value = {
     patientId: 0,
-    therapistId: therapists.value.find((item) => item.branchCode === branchCode)?.id ?? 0,
-    serviceId: 0,
+    therapistId: therapists.value[0]?.id ?? 0,
+    serviceId: services.value[0]?.id ?? 0,
     branchCode,
-    date: clinicToday(),
-    time: '09:00',
-
+    date: new Date().toISOString().slice(0, 10),
+    time: '',
     note: '',
   }
   viewMode.value = 'create'
@@ -576,8 +404,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
 function openCalendarSlot(therapist: Therapist, time: string) {
   const item = calendarAppointment(therapist.id, time)
   if (item) {
-    if (item.status === 'CONFIRMED') continueAppointment(item)
-    else if (uiStatusFor(item.status) === 'PENDING') openEdit(item)
+    openEdit(item)
     return
   }
   openCreate('calendar')
@@ -585,17 +412,24 @@ function openCalendarSlot(therapist: Therapist, time: string) {
   form.value.date = calendarDate.value
   form.value.time = time
   form.value.branchCode = therapist.branchCode || form.value.branchCode
-
+}
+async function loadPatientCourses(patientId: number) {
+  patientCourses.value = []
+  selectedCourseId.value = 0
+  if (!patientId) return
+  try {
+    patientCourses.value = await courseApi.patientCourses(patientId)
+    selectedCourseId.value = availablePatientCourses.value[0]?.id ?? 0
+  } catch {
+    patientCourses.value = []
+  }
 }
 function openEdit(item: Appointment) {
-  appointmentPatientType.value = patientTypeFor(item)
   editingId.value = item.id
   createSource.value = 'standard'
-  contactPhone.value = item.contactPhone ?? ''
-  patientQuery.value = patientTypeFor(item) === 'NEW'
-    ? item.contactName ?? item.patient.fullName
-    : `HN ${item.patient.hn} · ${patientPhone(item)}`
-
+  appointmentPatientType.value = 'CURRENT'
+  showRequiredValidation.value = false
+  patientQuery.value = item.patient.fullName
   showPatientResults.value = false
   form.value = {
     patientId: item.patient.id ?? 0,
@@ -640,17 +474,6 @@ function choosePatient(patient: Patient) {
   showPatientResults.value = false
   void loadPatientCourses(patient.id)
 }
-async function loadPatientCourses(patientId: number) {
-  patientCourses.value = []
-  selectedCourseId.value = 0
-  if (!patientId) return
-  try {
-    patientCourses.value = await courseApi.patientCourses(patientId)
-    selectedCourseId.value = availablePatientCourses.value[0]?.id ?? 0
-  } catch {
-    patientCourses.value = []
-  }
-}
 function changePatientQuery() {
   form.value.patientId = 0
   patientCourses.value = []
@@ -663,6 +486,7 @@ function hidePatientResults() {
 }
 function changeAppointmentPatientType() {
   errorMessage.value = ''
+  showRequiredValidation.value = false
   form.value.patientId = 0
   patientQuery.value = ''
   patientCourses.value = []
@@ -680,6 +504,22 @@ function confirmAppointmentTime() {
   timeDrawerOpen.value = false
 }
 function requestSaveConfirmation() {
+  showRequiredValidation.value = true
+  if (appointmentPatientType.value === 'NEW') {
+    errorMessage.value = 'ยังไม่รองรับการบันทึกผู้ป่วย NEW จนกว่าจะเชื่อมต่อ backend'
+    return
+  }
+  if (
+    appointmentPatientType.value === 'CURRENT' &&
+    (!form.value.patientId || !form.value.therapistId || !form.value.date || !form.value.time)
+  ) {
+    errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ'
+    return
+  }
+  if (!editingId.value && serviceMode.value === 'course') {
+    errorMessage.value = 'ยังไม่รองรับการผูกนัดหมายกับสิทธิ์คอร์ส กรุณาใช้บริการรายครั้ง'
+    return
+  }
   if (!savingAppointment.value) pendingSaveConfirmation.value = true
 }
 function confirmSave() {
@@ -698,16 +538,12 @@ async function save() {
         String(item.id) === normalized ||
         `${item.fullName} hn ${item.hn}`.toLowerCase() === normalized,
     )
-    const creatingNew = !editingId.value && appointmentPatientType.value === 'NEW'
-    if (!creatingNew && !editingId.value && !patient)
+    if (!editingId.value && !patient)
       throw new Error('กรุณากรอก HN หรือชื่อผู้ป่วยให้ตรงกับรายการในระบบ')
     form.value.patientId = patient?.id ?? form.value.patientId
-    const editingNew = editingId.value !== null && editingAppointment.value?.patientType === 'NEW'
-    if (!creatingNew && !editingNew && !form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ')
-    if (creatingNew && (!patientQuery.value.trim() || !contactPhone.value.trim())) throw new Error('ต้องระบุชื่อเล่นและเบอร์โทรผู้ป่วยใหม่')
+    if (!form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ')
     if (!form.value.therapistId) throw new Error('กรุณาเลือกนักกายภาพ')
-    if (!form.value.time) throw new Error('กรุณาเลือกเวลาที่ว่าง')
-
+    if (!form.value.date || !form.value.time) throw new Error('กรุณาเลือกวันที่และเวลา')
 
     const wasEditing = editingId.value !== null
     let savedAppointment: Appointment
@@ -715,19 +551,15 @@ async function save() {
       savedAppointment = await appointmentApi.reschedule(editingId.value, {
         startAt: toStartAt(),
         therapistId: form.value.therapistId,
-        note: form.value.note,
       })
     } else {
       savedAppointment = await appointmentApi.create({
         branchCode: form.value.branchCode,
         patientId: form.value.patientId,
         therapistId: form.value.therapistId,
-        serviceId: form.value.serviceId || undefined,
+        serviceId: form.value.serviceId,
         startAt: toStartAt(),
         note: form.value.note,
-        ...(creatingNew ? { patientType: 'NEW' as const, contactName: patientQuery.value,
-          contactPhone: contactPhone.value, requestedServiceType: requestedServiceType.value, status: 'Unconfirmed' }
-          : { patientType: 'CURRENT' as const }),
       })
     }
 
@@ -738,7 +570,6 @@ async function save() {
     sortOrder.value = 'newest'
     page.value = 0
     viewMode.value = 'list'
-    await router.replace({ name: 'staff-appointments' })
     await load()
     appointments.value = [
       savedAppointment,
@@ -749,31 +580,32 @@ async function save() {
     } else {
       appointmentSuccessMessage.value = 'สร้างนัดหมายสำเร็จ'
     }
-    window.setTimeout(() => (appointmentSuccessMessage.value = ''), 2600)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ'
   } finally {
     savingAppointment.value = false
   }
 }
+function dismissAppointmentSuccess() {
+  appointmentSuccessMessage.value = ''
+  void router.replace({ name: 'staff-appointments' })
+}
 async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') {
   savingStatusId.value = item.id
   statusNotice.value = 'กำลังบันทึก...'
   try {
     const result =
-      status === 'CONFIRMED'
-        ? await appointmentApi.confirm(item.id)
-        : status === 'ARRIVED'
-          ? await appointmentApi.checkIn(item.id)
-          : status === 'IN_SERVICE'
-            ? await appointmentApi.startService(item.id)
-            : status === 'COMPLETED'
-              ? await appointmentApi.complete(item.id)
-              : status === 'NO_SHOW'
-                ? await appointmentApi.noShow(item.id)
-                : status === 'CANCELLED'
-                  ? await appointmentApi.cancel(item.id, reason)
-                  : null
+      status === 'ARRIVED'
+        ? await appointmentApi.checkIn(item.id)
+        : status === 'IN_SERVICE'
+          ? await appointmentApi.startService(item.id)
+          : status === 'COMPLETED'
+            ? await appointmentApi.complete(item.id)
+            : status === 'NO_SHOW'
+              ? await appointmentApi.noShow(item.id)
+              : status === 'CANCELLED'
+                ? await appointmentApi.cancel(item.id, reason)
+                : null
     if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น')
     Object.assign(item, result)
     statusNotice.value = 'บันทึกแล้ว'
@@ -790,13 +622,16 @@ function confirmCancellation() {
   pendingCancellation.value = null
   void saveStatus(item, 'CANCELLED', cancellationReason.value.trim())
 }
-function continueAppointment(item: Appointment) {
-  if (patientTypeFor(item) === 'NEW') {
-    void router.push({ path: '/staff/patients/new', query: { appointmentId: item.id } })
-  } else if (item.patient.id != null) {
-    void router.push({ path: '/staff/services', query: { patientId: item.patient.id, appointmentId: item.id } })
-  }
 
+function requestStatusChange(item: Appointment, nextStatus: string) {
+  if (nextStatus === uiStatusFor(item.status)) return
+  if (nextStatus === 'CANCELLED') {
+    cancellationReason.value = ''
+    pendingCancellation.value = { item }
+    return
+  }
+  statusNotice.value = 'รอเชื่อมต่อการเปลี่ยนสถานะกับ backend'
+  window.setTimeout(() => (statusNotice.value = ''), 2200)
 }
 </script>
 <template>
@@ -810,15 +645,12 @@ function continueAppointment(item: Appointment) {
         <h1>นัดหมาย</h1>
         <p>ตรวจสอบตารางนัด สร้าง แก้ไข และอัปเดตสถานะการเข้ารับบริการ</p>
         <div class="appointment-hero-actions">
+          <button class="primary hero-action" @click="goToCreate">+ สร้างนัดหมาย</button>
           <button
-            class="primary hero-action"
-            :disabled="!appointmentMasterReady"
-            @click="goToCreate"
+            class="calendar-entry"
+            type="button"
+            @click="router.push({ name: 'staff-appointment-calendar' })"
           >
-            + สร้างนัดหมาย
-          </button>
-          <button class="calendar-entry" type="button" @click="scheduleView = 'day'">
-
             <img src="/calendar-appointment.svg" alt="" /> ดูปฏิทินนัดหมาย
           </button>
         </div>
@@ -843,9 +675,12 @@ function continueAppointment(item: Appointment) {
             }}
           </h1>
           <p v-if="!isEditing" class="appointment-form-context">
-            {{ currentBranchLabel }}<template v-if="!isCalendarCreate">
-              • บัญชี Therapist ถูกจำกัดเฉพาะสาขานี้</template
-            >
+            <template v-if="appointmentPatientType === 'NEW'">
+              {{ currentBranchLabel }} • เลือกนักกายภาพและช่วงเวลาที่เหมาะสม
+            </template>
+            <template v-else>
+              {{ currentBranchLabel }} • บัญชี Therapist ถูกจำกัดเฉพาะสาขานี้
+            </template>
           </p>
           <p v-if="isEditing" class="appointment-original-summary">
             {{ originalAppointmentSummary }}
@@ -858,7 +693,9 @@ function continueAppointment(item: Appointment) {
               ผู้ป่วย
               <input :value="patientQuery" readonly placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN" />
               <span class="reschedule-patient-meta">
-                HN {{ selectedFormPatient?.hn || editingAppointment?.patient.hn || '-' }} ·
+                HN
+                {{ selectedFormPatient?.hn || editingAppointment?.patient.hn || '-' }}
+                ·
                 {{ selectedFormPatient?.phone || editingPatientPhone }}
               </span>
             </label>
@@ -870,7 +707,12 @@ function continueAppointment(item: Appointment) {
                 label="เลือกประเภทบริการ"
                 default-label="เลือกประเภทบริการ"
                 :clear-on-reselect="false"
-                :options="services.map((service) => ({ value: String(service.id), label: service.name }))"
+                :options="
+                  services.map((service) => ({
+                    value: String(service.id),
+                    label: service.name,
+                  }))
+                "
               />
             </label>
             <label class="reschedule-therapist-field">
@@ -881,7 +723,12 @@ function continueAppointment(item: Appointment) {
                 label="เลือกนักกายภาพ"
                 default-label="เลือกนักกายภาพ"
                 :clear-on-reselect="false"
-                :options="therapists.map((therapist) => ({ value: String(therapist.id), label: therapist.fullName }))"
+                :options="
+                  therapists.map((therapist) => ({
+                    value: String(therapist.id),
+                    label: therapist.fullName,
+                  }))
+                "
               />
             </label>
             <label class="reschedule-date-field">
@@ -902,7 +749,7 @@ function continueAppointment(item: Appointment) {
                 <strong>ดูตารางเวลาว่าง</strong>
               </button>
             </label>
-            <label class="reschedule-branch-field">
+            <label v-if="!isManager" class="reschedule-branch-field">
               สาขา
               <FilterDropdown
                 v-model="formBranchModel"
@@ -910,7 +757,12 @@ function continueAppointment(item: Appointment) {
                 label="เลือกสาขา"
                 default-label="เลือกสาขา"
                 :clear-on-reselect="false"
-                :options="branchOptions.map((branch) => ({ value: branch.branchCode, label: branch.name }))"
+                :options="
+                  branchOptions.map((branch) => ({
+                    value: branch.code,
+                    label: branch.name,
+                  }))
+                "
               />
             </label>
             <label class="reschedule-note-field">
@@ -946,24 +798,23 @@ function continueAppointment(item: Appointment) {
                 </label>
               </div>
             </fieldset>
-            <label class="appointment-patient-field">
-              {{ appointmentPatientType === 'NEW' ? 'ชื่อเล่น' : 'ผู้ป่วย' }} <em>*</em>
-
+            <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-patient-field">
+              ผู้ป่วย
               <div class="appointment-patient-picker">
                 <input
                   v-model.trim="patientQuery"
                   :readonly="isEditing"
-                  :class="{ 'is-invalid': patientError }"
-                  :placeholder="
-                    appointmentPatientType === 'NEW' ? 'กรอกชื่อเล่นผู้ป่วยใหม่' : 'กรอกชื่อผู้ป่วยหรือรหัส HN'
-                  "
+                  :class="{
+                    'is-invalid': patientError || missingCurrentPatient,
+                  }"
+                  placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
                   required
                   @focus="showPatientResults = true"
                   @input="changePatientQuery"
                   @blur="hidePatientResults"
                 />
                 <div
-                  v-if="showPatientResults && patientQuery && !isEditing && appointmentPatientType === 'CURRENT'"
+                  v-if="showPatientResults && patientQuery && !isEditing"
                   class="patient-search-results"
                 >
                   <button
@@ -985,32 +836,120 @@ function continueAppointment(item: Appointment) {
                 </p>
               </div>
             </label>
-            <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-service-field">
-              ประเภทบริการ (ไม่บังคับ)
-
+            <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-phone-field">
+              เบอร์โทรศัพท์
+              <input
+                :value="selectedFormPatient?.phone || ''"
+                readonly
+                placeholder="เบอร์โทรศัพท์"
+              />
+            </label>
+            <div v-else class="appointment-new-patient-fields">
+              <label>
+                <span>ชื่อ <small>(ไม่บังคับ)</small></span>
+                <input
+                  v-model.trim="newPatientForm.firstName"
+                  autocomplete="given-name"
+                  placeholder="กรอกชื่อ"
+                />
+              </label>
+              <label>
+                <span>นามสกุล <small>(ไม่บังคับ)</small></span>
+                <input
+                  v-model.trim="newPatientForm.lastName"
+                  autocomplete="family-name"
+                  placeholder="กรอกนามสกุล"
+                />
+              </label>
+              <label>
+                <span>ชื่อเล่น <em>*</em></span>
+                <input v-model.trim="newPatientForm.nickname" placeholder="กรอกชื่อเล่น" />
+              </label>
+              <label>
+                <span>เบอร์โทรศัพท์ <em>*</em></span>
+                <input
+                  v-model.trim="newPatientForm.phone"
+                  type="tel"
+                  inputmode="numeric"
+                  autocomplete="tel"
+                  pattern="[0-9]*"
+                  maxlength="10"
+                  placeholder="กรอกเบอร์โทรศัพท์"
+                  @input="newPatientForm.phone = newPatientForm.phone.replace(/\D/g, '').slice(0, 10)"
+                />
+              </label>
+              <p>ผู้จอง NEW ยังไม่มี HN และยังไม่เกิดข้อมูลของการชำระล่วงหน้า</p>
+            </div>
+            <fieldset class="appointment-service-mode-field">
+              <legend>ประเภทบริการ <small>(ไม่บังคับ)</small></legend>
+              <div class="appointment-service-mode-options">
+                <button
+                  type="button"
+                  :class="{ active: serviceMode === 'single' }"
+                  @click="serviceMode = 'single'"
+                >
+                  รายครั้ง
+                </button>
+                <button
+                  type="button"
+                  :class="{ active: serviceMode === 'course' }"
+                  @click="serviceMode = 'course'"
+                >
+                  รายคอร์ส
+                </button>
+              </div>
+            </fieldset>
+            <label v-if="serviceMode === 'single'" class="appointment-service-field">
+              {{
+                appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อบริการ'
+              }}
               <FilterDropdown
                 v-model="formServiceModel"
                 class="appointment-form-filter"
                 label="เลือกบริการ"
-                default-label="ยังไม่ระบุบริการ"
+                default-label="เลือกบริการ"
                 :clear-on-reselect="false"
-                :options="services.map((service) => ({ value: String(service.id), label: service.name }))"
+                :options="
+                  services.map((service) => ({
+                    value: String(service.id),
+                    label: service.name,
+                  }))
+                "
               />
             </label>
-            <label v-if="appointmentPatientType === 'NEW' && !isEditing">เบอร์โทร <em>*</em><input v-model.trim="contactPhone" placeholder="เบอร์โทรผู้ป่วยใหม่" /></label>
-            <label v-if="appointmentPatientType === 'NEW' && !isEditing">ประเภทบริการ<FilterDropdown v-model="requestedServiceType" label="เลือกประเภทบริการ" default-label="เลือกประเภทบริการ" :options="[{value:'SingleVisit',label:'รายครั้ง'},{value:'Course',label:'รายคอร์ส'}]" :clear-on-reselect="false" /></label>
-
+            <label v-else class="appointment-course-field">
+              {{ appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อคอร์ส' }}
+              <FilterDropdown
+                v-model="selectedCourseModel"
+                class="appointment-form-filter"
+                label="เลือกคอร์ส"
+                default-label="เลือกคอร์ส"
+                :clear-on-reselect="false"
+                :options="
+                  availablePatientCourses.map((course) => ({
+                    value: String(course.id),
+                    label: course.course.name,
+                  }))
+                "
+              />
+              <span
+                v-if="selectedFormPatient && !availablePatientCourses.length"
+                class="appointment-course-empty"
+              >
+                ไม่พบคอร์สที่ยังใช้งานได้สำหรับผู้ป่วยรายนี้
+              </span>
+            </label>
             <label class="appointment-therapist-field">
               นักกายภาพ <em>*</em>
               <FilterDropdown
                 v-model="formTherapistModel"
                 class="appointment-form-filter"
+                :class="{ 'is-invalid': missingCurrentTherapist }"
                 label="เลือกนักกายภาพ"
-                :disabled="isEditing"
                 default-label="เลือกนักกายภาพ"
                 :clear-on-reselect="false"
                 :options="
-                  bookingTherapists.map((therapist) => ({
+                  therapists.map((therapist) => ({
                     value: String(therapist.id),
                     label: therapist.fullName,
                   }))
@@ -1021,7 +960,7 @@ function continueAppointment(item: Appointment) {
               วันที่ <em>*</em>
               <ThaiDatePicker
                 v-model="form.date"
-                :invalid="scheduleError"
+                :invalid="scheduleError || missingCurrentDate"
                 show-calendar-icon
                 numeric-month
                 hide-caret
@@ -1033,32 +972,10 @@ function continueAppointment(item: Appointment) {
             </label>
             <label class="appointment-time-field">
               เวลา <em>*</em>
-              <FilterDropdown
-                v-model="formTimeModel"
-                class="appointment-form-filter"
-                label="เลือกเวลา"
-                default-label="เลือกเวลา"
-                :clear-on-reselect="false"
-                :options="timeChoices.map((time) => ({ value: time, label: time }))"
-              />
-            </label>
-            <label v-if="isManager" class="appointment-branch-field">
-              สาขา
-              <FilterDropdown
-                v-model="formBranchModel"
-                class="appointment-form-filter"
-                label="เลือกสาขา"
-                :disabled="isEditing"
-                default-label="เลือกสาขา"
-                :clear-on-reselect="false"
-                :options="
-                  branchOptions.map((item) => ({
-                    value: item.branchCode,
-                    label: `${item.name} (${item.branchCode})`,
-                  }))
-                "
-              />
-
+              <span class="appointment-time-picker" :class="{ 'is-invalid': missingCurrentTime }">
+                <span>{{ formatTimeRange(form.time) }}</span>
+                <button type="button" @click="timeDrawerOpen = true">ดูตารางเวลาว่าง</button>
+              </span>
             </label>
             <label class="wide appointment-note-field"
               >หมายเหตุ<textarea
@@ -1068,7 +985,10 @@ function continueAppointment(item: Appointment) {
                 placeholder="ระบุรายละเอียดเพิ่มเติม"
               />
             </label>
-            <article v-if="serviceMode === 'course' && selectedPatientCourse" class="appointment-course-summary">
+            <article
+              v-if="serviceMode === 'course' && selectedPatientCourse"
+              class="appointment-course-summary"
+            >
               <header>
                 <h2>{{ selectedPatientCourse.course.name }}</h2>
                 <span :class="{ shared: selectedPatientCourse.shared }">
@@ -1080,48 +1000,74 @@ function continueAppointment(item: Appointment) {
                 {{ formatThaiDate(selectedPatientCourse.expiresAt) }}
               </p>
               <strong v-if="selectedPatientCourse.shared">
-                ผู้ให้สิทธิ์: {{ selectedPatientCourse.sourcePatientName || 'รอข้อมูลจากระบบ' }}
+                ผู้ให้สิทธิ์:
+                {{ selectedPatientCourse.sourcePatientName || 'รอข้อมูลจากระบบ' }}
               </strong>
               <strong v-else>
-                นักกายภาพประจำคอร์ส: {{ selectedTherapist?.fullName || 'กรุณาเลือกนักกายภาพ' }}
+                นักกายภาพประจำคอร์ส:
+                {{ selectedTherapist?.fullName || 'กรุณาเลือกนักกายภาพ' }}
               </strong>
               <p v-if="selectedPatientCourse.shared">
-                นักกายภาพเดิม: {{ selectedPatientCourse.originalTherapistName || 'รอข้อมูลจากระบบ' }}
+                นักกายภาพเดิม:
+                {{ selectedPatientCourse.originalTherapistName || 'รอข้อมูลจากระบบ' }}
               </p>
-              <small>{{ selectedPatientCourse.shared ? 'เลือกนักกายภาพเดิมหรือคนอื่นได้' : 'เลือกเวลาว่างของนักกายภาพในขั้นตอนถัดไป' }}</small>
+              <small>{{
+                selectedPatientCourse.shared
+                  ? 'เลือกนักกายภาพเดิมหรือคนอื่นได้'
+                  : 'เลือกเวลาว่างของนักกายภาพในขั้นตอนถัดไป'
+              }}</small>
             </article>
           </div>
           <div class="appointment-save">
-            <button v-if="!isEditing" class="secondary" type="button" @click="goToAppointmentList">ยกเลิก</button>
+            <button v-if="!isEditing" class="secondary" type="button" @click="goToAppointmentList">
+              ยกเลิก
+            </button>
             <button class="primary" :disabled="savingAppointment" @click="requestSaveConfirmation">
               {{ savingAppointment ? 'กำลังบันทึก...' : isEditing ? 'บันทึก' : 'บันทึกนัดหมาย' }}
             </button>
           </div>
         </section>
       </div>
-      <div v-if="timeDrawerOpen" class="appointment-time-drawer-backdrop" @click.self="timeDrawerOpen = false">
-        <aside class="appointment-time-drawer" role="dialog" aria-modal="true" aria-labelledby="time-drawer-title">
+      <div
+        v-if="timeDrawerOpen"
+        class="appointment-time-drawer-backdrop"
+        @click.self="timeDrawerOpen = false"
+      >
+        <aside
+          class="appointment-time-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="time-drawer-title"
+        >
           <div class="appointment-time-drawer-content">
             <h2 id="time-drawer-title">เลือกเวลาว่าง</h2>
             <p>{{ drawerServiceLabel }}</p>
-            <strong>นักกายภาพ: {{ selectedTherapist?.fullName || 'ยังไม่ได้เลือก' }}　|　{{ currentBranchLabel }}</strong>
+            <strong
+              >นักกายภาพ: {{ selectedTherapist?.fullName || 'ยังไม่ได้เลือก' }}　|　{{
+                currentBranchLabel
+              }}</strong
+            >
             <label>
               วันที่
-              <ThaiDatePicker v-model="form.date" show-calendar-icon numeric-month hide-caret @update:model-value="changeSchedule" />
+              <ThaiDatePicker
+                v-model="form.date"
+                show-calendar-icon
+                numeric-month
+                hide-caret
+                @update:model-value="changeSchedule"
+              />
             </label>
             <section>
               <h3>ช่วงเช้า</h3>
               <div class="appointment-time-slots">
                 <button
-                  v-for="slot in morningSlots"
-                  :key="slot.time"
+                  v-for="time in morningTimeOptions"
+                  :key="time"
                   type="button"
-                  :disabled="!slot.available"
-                  :title="slot.reason ?? undefined"
-                  :class="{ selected: form.time === slot.time }"
-                  @click="selectAppointmentTime(slot.time)"
+                  :class="{ selected: form.time === time }"
+                  @click="selectAppointmentTime(time)"
                 >
-                  {{ formatTimeRange(slot.time) }}
+                  {{ formatTimeRange(time) }}
                 </button>
               </div>
             </section>
@@ -1129,65 +1075,70 @@ function continueAppointment(item: Appointment) {
               <h3>ช่วงบ่าย</h3>
               <div class="appointment-time-slots">
                 <button
-                  v-for="slot in afternoonSlots"
-                  :key="slot.time"
+                  v-for="time in afternoonTimeOptions"
+                  :key="time"
                   type="button"
-                  :disabled="!slot.available"
-                  :title="slot.reason ?? undefined"
-                  :class="{ selected: form.time === slot.time }"
-                  @click="selectAppointmentTime(slot.time)"
+                  :class="{ selected: form.time === time }"
+                  @click="selectAppointmentTime(time)"
                 >
-                  {{ formatTimeRange(slot.time) }}
+                  {{ formatTimeRange(time) }}
                 </button>
               </div>
             </section>
             <p class="appointment-time-help">
-              ช่วงสีเทาเลือกไม่ได้: นักกายภาพมีนัดอื่นอยู่แล้ว, ติด Busy ใน Google Calendar ของสาขา, เลยเวลาแล้ว หรืออยู่นอกช่วงเปิดรับนัดของสาขา
-              <template v-if="availability?.googleCalendar === 'UNAVAILABLE'">
-                (อ่าน Google Calendar ไม่ได้ในขณะนี้ จึงแสดงเฉพาะนัดในระบบ)
-              </template>
-              <template v-if="availability && !availability.windowConfigured">
-                (สาขานี้ยังไม่ได้ตั้งช่วงเปิดรับนัด จึงแสดง {{ availability.openTime }}–{{ availability.closeTime }} เป็นค่าเริ่มต้น)
-              </template>
+              ช่วงสีเทาไม่สามารถเลือกได้: นัดคลินิก, Google Calendar, เวลาพัก หรือเวลานอกกะ
             </p>
           </div>
           <footer>
             <button type="button" class="secondary" @click="timeDrawerOpen = false">ยกเลิก</button>
-            <button type="button" class="primary" @click="confirmAppointmentTime">ยืนยันเวลา</button>
+            <button type="button" class="primary" @click="confirmAppointmentTime">
+              ยืนยันเวลา
+            </button>
           </footer>
         </aside>
       </div>
       <section v-if="viewMode === 'list'" class="staff-panel appointment-panel">
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-        <label v-show="scheduleView === 'list'" class="appointment-list-search">
-          ค้นหานัดหมาย
-          <input v-model="query" type="search" placeholder="ค้นหาชื่อ เบอร์โทร หรือรหัส HN" />
-        </label>
         <div v-show="scheduleView === 'list'" class="appointment-list-controls">
           <div class="appointment-list-mode-toggle" aria-label="เลือกรูปแบบรายการ">
-            <button type="button" :class="{ active: listServiceMode === 'single' }" @click="listServiceMode = 'single'">รายครั้ง</button>
-            <button type="button" :class="{ active: listServiceMode === 'course' }" @click="listServiceMode = 'course'">รายคอร์ส</button>
+            <button
+              type="button"
+              :class="{ active: listServiceMode === 'single' }"
+              @click="listServiceMode = 'single'"
+            >
+              รายครั้ง
+            </button>
+            <button
+              type="button"
+              :class="{ active: listServiceMode === 'course' }"
+              @click="listServiceMode = 'course'"
+            >
+              รายคอร์ส
+            </button>
           </div>
           <header class="panel-head appointment-list-filters">
-            <label class="appointment-date-range"><span>วันที่เริ่มต้น</span><ThaiDatePicker v-model="startDate" numeric-month show-calendar-icon hide-caret placeholder="วว/ดด/ปปปป" /></label>
-            <label class="appointment-date-range"><span>วันที่สิ้นสุด</span><ThaiDatePicker v-model="endDate" numeric-month show-calendar-icon hide-caret placeholder="วว/ดด/ปปปป" /></label>
-          <FilterDropdown
-            v-model="patientFilterModel"
-            label="กรองประเภทคนไข้"
-            default-value="ทั้งหมด"
-            default-label="คนไข้ทั้งหมด"
-            :options="patientFilterOptions.map(([value, label]) => ({ value, label }))"
-          />
-          <FilterDropdown
-            v-model="statusFilterModel"
-            label="กรองตามสถานะนัดหมาย"
-            default-value="ทั้งหมด"
-            default-label="สถานะทั้งหมด"
-            :options="statusFilterOptions.map(([value, label]) => ({ value, label }))"
-          />
-        </header>
+            <label class="appointment-date-range">
+              <span>วันที่เริ่มต้น</span>
+              <ThaiDatePicker
+                v-model="startDate"
+                numeric-month
+                show-calendar-icon
+                hide-caret
+                placeholder="วว/ดด/ปปปป"
+              />
+            </label>
+            <label class="appointment-date-range">
+              <span>วันที่สิ้นสุด</span>
+              <ThaiDatePicker
+                v-model="endDate"
+                numeric-month
+                show-calendar-icon
+                hide-caret
+                placeholder="วว/ดด/ปปปป"
+              />
+            </label>
+          </header>
         </div>
-
         <section v-if="scheduleView !== 'list'" class="appointment-calendar">
           <header class="calendar-heading">
             <button type="button" class="calendar-list-back" @click="scheduleView = 'list'">
@@ -1212,16 +1163,24 @@ function continueAppointment(item: Appointment) {
               default-value="ทั้งหมด"
               default-label="นักกายภาพ: ทั้งหมด"
               :options="
-                therapists.map((item) => ({ value: String(item.id), label: item.fullName }))
+                therapists.map((item) => ({
+                  value: String(item.id),
+                  label: item.fullName,
+                }))
               "
             />
             <FilterDropdown
-              v-if="isManager"
+              v-if="!isManager"
               v-model="selectedBranch"
               label="กรองสาขา"
               default-value="ทั้งหมด"
               default-label="สาขา: ทั้งหมด"
-              :options="branchOptions.map((item) => ({ value: item.branchCode, label: item.name }))"
+              :options="
+                branchOptions.map((item) => ({
+                  value: item.code,
+                  label: item.name,
+                }))
+              "
             />
             <div class="calendar-view-toggle">
               <button
@@ -1239,17 +1198,8 @@ function continueAppointment(item: Appointment) {
                 รายสัปดาห์
               </button>
             </div>
-            <a
-              v-if="googleStatus?.enabled && googleTargets.length"
-              class="calendar-google"
-              :href="googleOpenUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-cy="google-open-main"
-              >เปิด Google Calendar ({{ googleOpenLabel }})</a
-            >
-            <button class="calendar-google" type="button" @click="openGoogleCalendar">
-              สถานะ Google Calendar
+            <button class="calendar-google" type="button" @click="calendarSyncOpen = true">
+              เชื่อมต่อ Google Calendar
             </button>
           </div>
           <div class="calendar-legend">
@@ -1281,11 +1231,7 @@ function continueAppointment(item: Appointment) {
                   @click="openCalendarSlot(therapist, time)"
                 >
                   <template v-if="calendarAppointment(therapist.id, time)">
-                    <strong
-                      >{{ formatTime(calendarAppointment(therapist.id, time)!.startAt) }}
-                      {{ calendarPatientName(therapist.id, time) }}</strong
-                    >
-                    <small>{{ calendarPhone(therapist.id, time) }}</small>
+                    <strong>{{ time }} {{ calendarPatientName(therapist.id, time) }}</strong>
                     <small>นก. {{ calendarTherapistName(therapist.id, time) }}</small>
                   </template>
                   <template v-else
@@ -1306,8 +1252,6 @@ function continueAppointment(item: Appointment) {
                 <th>เบอร์โทรศัพท์</th>
                 <th>บริการ</th>
                 <th>นักกายภาพ</th>
-                <th>สาขา</th>
-
                 <th>สถานะ</th>
                 <th class="status-notice-cell">
                   <span v-if="statusNotice" class="status-feedback" aria-live="polite">{{
@@ -1328,38 +1272,30 @@ function continueAppointment(item: Appointment) {
                 <td>{{ patientPhone(item) }}</td>
                 <td>{{ item.service.name }}</td>
                 <td>{{ item.therapist.fullName }}</td>
-                <td>{{ branchName(item.branchCode) }}</td>
-
                 <td>
-                  <span class="appointment-status-filter" :data-status="uiStatusFor(item.status)">{{ formatStatus(item.status) }}</span>
+                  <div class="appointment-status-filter" :data-status="uiStatusFor(item.status)">
+                    <FilterDropdown
+                      :model-value="uiStatusFor(item.status)"
+                      :options="
+                        appointmentStatusOptions.map(([value, label]) => ({
+                          value,
+                          label,
+                        }))
+                      "
+                      :default-label="uiStatusFor(item.status)"
+                      :label="`สถานะนัดหมายของ ${item.patient.fullName}`"
+                      :clear-on-reselect="false"
+                      hide-default-option
+                      @update:model-value="requestStatusChange(item, $event)"
+                    />
+                  </div>
                 </td>
                 <td>
-                  <button
-                    v-if="item.status === 'UNCONFIRMED'"
-                    class="appointment-edit"
-                    :disabled="savingStatusId === item.id"
-                    @click="saveStatus(item, 'CONFIRMED')"
-                  >
-                    ยืนยันนัด
-                  </button>
-                  <select
-                    class="status-select"
-                    :value="item.status"
-                    :disabled="savingStatusId === item.id"
-                    :aria-label="`เปลี่ยนสถานะนัดหมายของ ${item.patient.fullName}`"
-                    @change="changeStatus($event, item)"
-                  >
-                    <option v-for="status in statusOptionsFor(item)" :key="status" :value="status">
-                      {{ actionStatusLabels[status] }}
-                    </option>
-                  </select>
-                  <button v-if="uiStatusFor(item.status) === 'PENDING'" class="appointment-edit" @click="goToEdit(item)">แก้ไข</button>
-                  <button v-if="item.status === 'CONFIRMED'" class="appointment-edit" @click="continueAppointment(item)">{{ patientTypeFor(item) === 'NEW' ? 'ลงทะเบียน' : 'ใช้บริการ' }}</button>
+                  <button class="appointment-edit" @click="goToEdit(item)">แก้ไข</button>
                 </td>
               </tr>
               <tr v-if="filteredAppointments.length === 0">
-                <td class="appointment-empty" colspan="9">ไม่พบข้อมูลนัดหมาย</td>
-
+                <td class="appointment-empty" colspan="8">ไม่พบข้อมูลนัดหมาย</td>
               </tr>
             </tbody>
           </table>
@@ -1422,9 +1358,14 @@ function continueAppointment(item: Appointment) {
         </div>
       </section>
     </div>
-    <div v-if="appointmentSuccessMessage" class="status-modal-backdrop">
+    <div
+      v-if="appointmentSuccessMessage"
+      class="status-modal-backdrop"
+      @click.self="dismissAppointmentSuccess"
+    >
       <section class="status-modal appointment-success-modal" role="status" aria-live="polite">
         <h2>{{ appointmentSuccessMessage }}</h2>
+        <button type="button" class="primary" @click="dismissAppointmentSuccess">ตกลง</button>
       </section>
     </div>
     <div
@@ -1433,50 +1374,15 @@ function continueAppointment(item: Appointment) {
       @click.self="calendarSyncOpen = false"
     >
       <section class="status-modal calendar-sync-modal" role="dialog" aria-modal="true">
-        <h2>สถานะ Google Calendar</h2>
-        <div class="calendar-sync-description" data-cy="google-sync-info">
-          <p>ระบบซิงก์นัดหมายกับ Google Calendar 2 ทาง แยก 1 ปฏิทินต่อสาขา เลื่อนหรือยกเลิกนัดใน Google แล้วระบบจะตามให้เอง</p>
-          <p v-if="!isManagerUser">
-            ผู้จัดการเป็นผู้เชื่อมบัญชี Google กลางและตั้งปฏิทินของแต่ละสาขา คุณดูสถานะและเปิดปฏิทินของสาขาที่คลินิกแชร์ให้ได้
-          </p>
-          <template v-if="googleStatus">
-            <p v-if="!googleStatus.enabled">
-              ยังไม่ได้เปิดใช้งานการซิงก์บนเซิร์ฟเวอร์ ให้ผู้ดูแลระบบตั้งค่า APP_CALENDAR_ENABLED ก่อน
-            </p>
-            <ul v-else class="calendar-sync-branches">
-              <li v-for="branch in googleStatus.branches" :key="branch.branchCode">
-                {{ branch.branchName }}:
-                {{ branch.googleCalendarId ? 'เชื่อมต่อแล้ว' : 'ยังไม่ได้ผูกปฏิทิน' }}
-                <template v-if="branch.googleCalendarId">
-                  (รอซิงก์ {{ branch.waiting }}, ล้มเหลว {{ branch.failed }})
-                  <a
-                    :href="googleCalendarUrl(branch.googleCalendarId)"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    :data-cy="`google-open-${branch.branchCode}`"
-                    >เปิดใน Google Calendar</a
-                  >
-                </template>
-              </li>
-            </ul>
-          </template>
-          <p v-if="googleMessage" data-cy="google-sync-message">{{ googleMessage }}</p>
+        <h2>เชื่อมต่อ Google Calendar</h2>
+        <div class="calendar-sync-description">
+          <p>เมื่อเชื่อมต่อ ระบบจะแสดงนัดหมายจากสบายกายใน Google Calendar</p>
         </div>
         <div class="calendar-sync-actions">
-          <button type="button" class="secondary" @click="calendarSyncOpen = false">ปิด</button
-          ><template v-if="isManagerUser"
-            ><router-link class="secondary" to="/staff/calendar" @click="calendarSyncOpen = false"
-              >ตั้งค่าปฏิทิน</router-link
-            ><button
-              type="button"
-              class="primary"
-              data-cy="google-sync-now"
-              :disabled="googleBusy || !googleStatus?.enabled"
-              @click="syncGoogleNow"
-            >
-              {{ googleBusy ? 'กำลังซิงก์...' : 'ซิงก์ทันที' }}
-            </button></template
-          >
+          <button type="button" class="secondary" @click="calendarSyncOpen = false">ยกเลิก</button
+          ><button type="button" class="primary" @click="calendarSyncOpen = false">
+            เชื่อมต่อ
+          </button>
         </div>
       </section>
     </div>

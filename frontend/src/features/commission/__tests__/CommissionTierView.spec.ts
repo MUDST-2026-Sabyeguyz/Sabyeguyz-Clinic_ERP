@@ -137,7 +137,7 @@ describe('new Scheme Version tiers', () => {
       expect(open.text()).toContain('V1')
       await open.trigger('click')
       expect(page().text()).toContain('บันทึกแล้วไม่สร้างเวอร์ชันใหม่')
-      expect(page().get('input[disabled]').exists()).toBe(true) // the version number stays
+      expect(page().get('input[disabled]').element).toBeTruthy() // the version number stays
       await inputs(1)[2]!.setValue('11')
       await button('บันทึก').trigger('click')
       await flushPromises()
@@ -151,7 +151,7 @@ describe('new Scheme Version tiers', () => {
       wrapper = mount(CommissionTierView, { global: { stubs }, attachTo: document.body })
       await flushPromises()
       await wrapper.findAll('tbody button')[0]!.trigger('click')
-      await page().get('.drawer-form input:nth-of-type(1)').exists()
+      expect(page().get('.drawer-form input:nth-of-type(1)').element).toBeTruthy()
       const rate = page().findAll('.drawer-form input')[2]!
       await rate.setValue('6')
       await button('บันทึก').trigger('click')
