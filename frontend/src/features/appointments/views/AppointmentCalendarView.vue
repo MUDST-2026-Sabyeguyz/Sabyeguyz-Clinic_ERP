@@ -33,6 +33,14 @@ function connectGoogleCalendar() {
   calendarSyncOpen.value = true
 }
 
+// only the Manager changes an appointment
+const canChangeAppointments = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+  } catch {
+    return false
+  }
+})()
 const timeOptions = ['09:00', '11:00', '13:00', '15:00', '17:00']
 // the rows of the grid: the usual times plus the time of every appointment, so none of them is left out of the calendar
 const gridTimes = computed(() =>
@@ -154,6 +162,8 @@ function moveDate(direction: number) {
 function openSlot(date: string, time: string, therapist?: Therapist) {
   const item = appointmentFor(date, time, therapist)
   if (item) {
+    // a therapist only looks at a booked slot; only the Manager opens it to change it
+    if (!canChangeAppointments) return
     void router.push({
       name: 'staff-appointment-edit',
       params: { id: item.id },
