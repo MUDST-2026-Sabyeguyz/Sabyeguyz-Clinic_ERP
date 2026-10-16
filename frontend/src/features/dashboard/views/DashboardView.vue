@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -13,8 +13,8 @@ import {
 const now = new Date()
 const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
 const to = ref(now.toISOString().slice(0, 10))
-const branchCode = ref('')
-const managerBranch = ref(selectedManagerBranch())
+const managerBranch = computed(() => selectedManagerBranch())
+const branchCode = computed(() => managerBranch.value?.code ?? '')
 const lastManagerBranch = ref(selectedManagerBranch())
 const selectedPeriod = ref('june-2569')
 const customRangeOpen = ref(false)
@@ -98,7 +98,7 @@ async function loadDashboard() {
       reportApi.dashboard(from.value, to.value, branchCode.value || undefined),
       reportApi.appointments(from.value, to.value, branchCode.value || undefined),
       reportApi.balances(from.value, to.value, branchCode.value || undefined),
-      patientApi.searchAll(),
+      patientApi.searchAll('', branchCode.value),
       reportApi.revenue(from.value, to.value, branchCode.value || undefined),
     ])
     patients.value = summary.uniquePatients || patientList.length
@@ -146,28 +146,20 @@ async function loadDashboard() {
 onMounted(async () => {
   await loadDashboard()
 })
-function syncManagerBranch() {
-  // The current dashboard API only understands branches seeded in its own database.
-  // Keep the manager selection as UI context until those branch records are available.
-  branchCode.value = ''
-  managerBranch.value = selectedManagerBranch()
-  if (managerBranch.value) lastManagerBranch.value = managerBranch.value
-}
 function showAllBranches() {
   if (managerBranch.value) lastManagerBranch.value = managerBranch.value
   clearSelectedManagerBranch()
-  syncManagerBranch()
   window.dispatchEvent(new CustomEvent('manager-branch-changed'))
 }
 function restoreCurrentBranchView() {
   if (!lastManagerBranch.value) return
   setSelectedManagerBranch(lastManagerBranch.value)
-  syncManagerBranch()
   window.dispatchEvent(new CustomEvent('manager-branch-changed'))
 }
-onMounted(() => window.addEventListener('manager-branch-changed', syncManagerBranch))
-onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', syncManagerBranch))
 watch([from, to, branchCode], loadDashboard)
+watch(managerBranch, (branch) => {
+  if (branch) lastManagerBranch.value = branch
+})
 watch(selectedPeriod, () => {
   hasCustomRange.value = false
 })
