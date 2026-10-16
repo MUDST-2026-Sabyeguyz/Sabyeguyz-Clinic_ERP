@@ -1,5 +1,7 @@
 # คู่มือ Jenkins CI/CD สำรองในเครื่อง
 
+สำหรับ Jenkins CI หลักที่รับ SHA ใดก็ได้ ตรวจ workflow ปัจจุบันครบชุด และรันย้อนหลังกรณี GitHub Actions ติด billing ดู [Jenkins CI และการทดสอบย้อนหลัง](JENKINS_CI_TH.md) ชุดด้านล่างเป็น backup pipeline เดิม
+
 ชุดนี้ใช้ `develop` หรือ `feat/backend-v2-integration` เพื่อ build/test ในเครื่อง โดยไม่ใช้โควตา GitHub Actions ไม่ใช่ production deployment ค่าเริ่มต้น `DEPLOY=false`.
 
 ## สิ่งที่ต้องเตรียม
