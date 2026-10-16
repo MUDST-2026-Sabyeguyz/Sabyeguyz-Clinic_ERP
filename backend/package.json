@@ -5,10 +5,13 @@
   "description": "Cypress HTTP API tests for the Spring Boot backend",
   "scripts": {
     "test": "npm run build && npm run test:api",
+    "test:coverage": "node scripts/run-coverage.cjs",
+    "test:v2:coverage": "node scripts/run-coverage.cjs --v2",
     "build": "mvn --batch-mode --no-transfer-progress clean package",
     "test:api": "node scripts/run-api-tests.cjs",
     "test:api:open": "node scripts/run-api-tests.cjs --open",
     "test:v2": "node scripts/run-v2-tests.cjs",
+    "test:browser": "node scripts/run-v2-tests.cjs --frontend",
     "test:v2:open": "node scripts/run-v2-tests.cjs --open"
   },
   "devDependencies": {

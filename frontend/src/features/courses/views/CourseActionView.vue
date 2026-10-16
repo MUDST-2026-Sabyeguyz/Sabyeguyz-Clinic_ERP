@@ -23,6 +23,7 @@ type CourseAction = 'manage' | 'transfer' | 'history' | 'use'
 const route = useRoute()
 const router = useRouter()
 const action = ref<CourseAction>('manage')
+const loading = ref(true)
 const recipientSearch = ref('')
 const recipientSearchOpen = ref(false)
 const selectedRecipient = ref<Patient | null>(null)
@@ -303,6 +304,8 @@ onMounted(async () => {
     await loadOwner()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ'
+  } finally {
+    loading.value = false
   }
 })
 async function searchRecipients() {
@@ -581,8 +584,9 @@ function closePrintSuccess() {
 <template>
   <div class="staff-page course-page">
     <StaffHeader />
+    <main v-if="loading" class="course-manager-main" role="status">กำลังโหลดคอร์ส...</main>
     <main
-      v-if="action === 'use'"
+      v-else-if="action === 'use'"
       class="course-use-main"
       :class="{ 'after-transfer': transferReceiptId }"
     >
