@@ -84,7 +84,7 @@ E2E ต้องตรวจอย่างน้อย Success Case, Validation
 - Backend ย้ายเทสต์ Java ที่เหลืออีก 146 กรณีไป Cypress แล้ว รวม 227 กรณี ไม่มี JUnit/Mockito; Java helpers ใน `src/test` ใช้เตรียมข้อมูลและเข้าถึง logic ภายในเท่านั้น การตรวจผลอยู่ใน Cypress ทั้งหมด
 - Concurrency ใช้ Node task ส่ง HTTP สองคำขอพร้อมกันและตรวจข้อมูลหลังจบ ส่วน specs รันตามลำดับเพื่อไม่ให้ชนการ reset ฐานข้อมูล
 - `npm test` ใน `backend` เป็นคำสั่งตรวจทั้งหมดพร้อม package; `mvn package`/`mvn verify` ไม่ได้รัน Cypress
-- Deploy มี Backend Dockerfile และ Docker Compose สำหรับ PostgreSQL/Backend แล้ว แต่ยังไม่มี Kubernetes manifest
+- Deploy มี Dockerfiles/Compose และ Kubernetes manifests พร้อมสคริปต์ deploy/acceptance และ coverage ดู [Kubernetes runbook](../../deploy/k8s/README_TH.md) และ [ผลตรวจส่งงาน 16 ต.ค.](2026-10-16-Local-Kubernetes.md)
 - Cypress regression profile ใช้ H2 และ legacy migration ถึง V20.1; Backend CI ตรวจ runtime v2 บน PostgreSQL 16 ด้วย production Flyway และ Hibernate validate เพิ่ม ดู [V2 Runtime CI](2026-10-13-V2-Runtime-CI.md)
 - เมื่อมี API Contract ที่ BA/Backend ยืนยันแล้ว ให้เพิ่ม Contract Test ก่อนเชื่อม Frontend กับ Backend
 
