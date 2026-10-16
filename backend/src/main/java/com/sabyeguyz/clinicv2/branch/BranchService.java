@@ -66,7 +66,8 @@ public class BranchService {
     public Branch applySettings(Long id, Settings settings, Long actorId) {
         Branch branch = find(id);
         String email = blankToNull(settings.email());
-        if (email != null && !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+        if (email != null && (email.length() > 254
+                || !email.matches("^[^@.\\s]+(\\.[^@.\\s]+)*@[^@.\\s]+(\\.[^@.\\s]+)+$"))) {
             throw new IllegalArgumentException("รูปแบบอีเมลสาขาไม่ถูกต้อง");
         }
         java.time.LocalTime open = parseTime(settings.bookingOpenTime(), "เวลาเริ่มรับนัด");

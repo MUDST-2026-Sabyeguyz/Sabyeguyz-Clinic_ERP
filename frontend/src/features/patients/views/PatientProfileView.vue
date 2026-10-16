@@ -92,6 +92,24 @@ const saved = ref(false)
 const confirmationOpen = ref(false)
 const titleOptions = patientTitleOptions
 const genderOptions = patientGenderOptions
+const titleOptionValues: Record<string, string> = {
+  นาย: 'นาย',
+  mr: 'นาย',
+  'mr.': 'นาย',
+  นางสาว: 'นางสาว',
+  miss: 'นางสาว',
+  นาง: 'นาง',
+  mrs: 'นาง',
+  'mrs.': 'นาง',
+  เด็กชาย: 'เด็กชาย',
+  boy: 'เด็กชาย',
+  เด็กหญิง: 'เด็กหญิง',
+  girl: 'เด็กหญิง',
+}
+const titleOptionValue = (title: string | null | undefined) => {
+  const normalized = title?.trim().toLocaleLowerCase('en-US')
+  return normalized ? (titleOptionValues[normalized] ?? title ?? '') : ''
+}
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const customerSourceOptions = ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'].map((value) => ({
   value,
@@ -189,6 +207,7 @@ function assignDraft(profile: UiPatientProfile) {
   const foreignPatient = isForeignNationalityValue(profile.nationality)
   const nameParts = splitEditFullName(profile.fullName)
   Object.assign(draft, profile, nameParts, {
+    title: titleOptionValue(profile.title),
     firstName: profile.firstName ?? nameParts.firstName,
     lastName: profile.lastName ?? nameParts.lastName,
     middleName: profile.middleName ?? nameParts.middleName,
