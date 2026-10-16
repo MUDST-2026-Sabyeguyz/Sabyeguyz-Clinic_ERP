@@ -1,0 +1,182 @@
+{
+  "databases": [
+    "p9_1792022187505_33540_source",
+    "p9_1792022187505_33540_a",
+    "p9_1792022187505_33540_b"
+  ],
+  "migrations": [
+    "V1__initial_schema.sql",
+    "V2__integration_runtime_compatibility.sql",
+    "V3__reference_data.sql",
+    "V1001__historical_assessment_transaction_type.sql"
+  ],
+  "checks": [
+    {
+      "actual": "60",
+      "metric": "appointments",
+      "expected": "60"
+    },
+    {
+      "actual": "0",
+      "metric": "course expiry mismatches",
+      "expected": "0"
+    },
+    {
+      "actual": "10",
+      "metric": "course ledger balance",
+      "expected": "10"
+    },
+    {
+      "actual": "0",
+      "metric": "course remaining mismatches",
+      "expected": "0"
+    },
+    {
+      "actual": "3",
+      "metric": "courses",
+      "expected": "3"
+    },
+    {
+      "actual": "0",
+      "metric": "duplicate branch receipt numbers",
+      "expected": "0"
+    },
+    {
+      "actual": "0",
+      "metric": "duplicate patient HNs",
+      "expected": "0"
+    },
+    {
+      "actual": "0",
+      "metric": "entitlement remaining mismatches",
+      "expected": "0"
+    },
+    {
+      "actual": "163",
+      "metric": "patients",
+      "expected": "163"
+    },
+    {
+      "actual": "45800.00",
+      "metric": "payment total",
+      "expected": "45800.00"
+    },
+    {
+      "actual": "47300.00",
+      "metric": "receipt net total (existing line-total mapping)",
+      "expected": "47300.00"
+    },
+    {
+      "actual": "700.00",
+      "metric": "refund total",
+      "expected": "700.00"
+    },
+    {
+      "actual": "0",
+      "metric": "void status mismatches",
+      "expected": "0"
+    }
+  ],
+  "repeatable": true,
+  "sourceReceiptHeaderTotal": 45800,
+  "receiptHeaderDifferences": [
+    [
+      3,
+      "DEMO-000019",
+      700,
+      1200
+    ],
+    [
+      6,
+      "DEMO-000040",
+      700,
+      1200
+    ],
+    [
+      11,
+      "DEMO-000015",
+      1200,
+      700
+    ],
+    [
+      15,
+      "DEMO-000018",
+      1200,
+      700
+    ],
+    [
+      19,
+      "DEMO-000027",
+      1200,
+      700
+    ],
+    [
+      20,
+      "DEMO-000026",
+      700,
+      1200
+    ],
+    [
+      21,
+      "DEMO-000016",
+      700,
+      1200
+    ],
+    [
+      25,
+      "DEMO-000013",
+      700,
+      1200
+    ],
+    [
+      26,
+      "DEMO-000020",
+      700,
+      1200
+    ],
+    [
+      30,
+      "DEMO-000023",
+      700,
+      1200
+    ],
+    [
+      32,
+      "DEMO-000029",
+      700,
+      1200
+    ],
+    [
+      33,
+      "DEMO-000012",
+      1200,
+      700
+    ],
+    [
+      34,
+      "DEMO-000021",
+      1200,
+      700
+    ],
+    [
+      35,
+      "DEMO-000024",
+      1200,
+      700
+    ],
+    [
+      38,
+      "DEMO-000010",
+      700,
+      1200
+    ]
+  ],
+  "corruptionDetected": [
+    "expiry",
+    "receipt total",
+    "foreign key"
+  ],
+  "populatedTargetRejected": true,
+  "releaseReady": false,
+  "releaseNote": "Technical rehearsal only; review header differences and unresolved business/schema gates before release."
+}

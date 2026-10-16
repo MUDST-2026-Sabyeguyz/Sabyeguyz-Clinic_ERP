@@ -31,18 +31,17 @@ describe('AppointmentView', () => {
     expect(controls?.[1]).toContain('class="panel-head appointment-list-filters"')
   })
 
-  it('shows the Figma patient details form when creating an appointment for a new patient', () => {
+  it('keeps the backend-supported contact fields for a new-patient appointment', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
     )
 
     expect(source).toContain('v-if="appointmentPatientType === \'CURRENT\'"')
-    expect(source).toContain('v-model.trim="newPatientForm.firstName"')
-    expect(source).toContain('v-model.trim="newPatientForm.lastName"')
-    expect(source).toContain('v-model.trim="newPatientForm.nickname"')
-    expect(source).toContain('v-model.trim="newPatientForm.phone"')
-    expect(source).not.toContain('ผู้จอง NEW ยังไม่มี HN')
+    expect(source).toContain('v-model.trim="patientQuery"')
+    expect(source).toContain('v-model.trim="contactPhone"')
+    expect(source).toContain("patientType: 'NEW' as const")
+    expect(source).toContain('contactName: patientQuery.value')
   })
 
   it('places service type on the row below patient type for current and new patients', () => {
@@ -78,7 +77,7 @@ describe('AppointmentView', () => {
     expect(source).toContain("isCalendarCreate ? '← กลับไปหน้าปฏิทิน' : '← กลับไปหน้านัดหมาย'")
   })
 
-  it('stops new-patient appointment submission before calling the backend', () => {
+  it('allows the new-patient appointment path to reach the backend', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
@@ -86,21 +85,34 @@ describe('AppointmentView', () => {
 
     const requestSave = source.match(/function requestSaveConfirmation\(\) \{([\s\S]*?)\n\}/)
 
-    expect(requestSave?.[1]).toContain("appointmentPatientType.value === 'NEW'")
-    expect(requestSave?.[1]).toContain('ยังไม่รองรับการบันทึกผู้ป่วย NEW')
-    expect(requestSave?.[1]).toContain('return')
+    expect(requestSave?.[1]).not.toContain('ยังไม่รองรับการบันทึกผู้ป่วย NEW')
+    expect(source).toContain("const creatingNew = !editingId.value && appointmentPatientType.value === 'NEW'")
+    expect(source).toContain("patientType: 'NEW' as const")
   })
 
-  it('keeps required markers beside new-patient field labels', () => {
+  it('marks the new-patient name and phone as required', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
     )
 
-    expect(source).toContain('<span>ชื่อ <em>*</em></span>')
-    expect(source).toContain('<span>นามสกุล <em>*</em></span>')
-    expect(source).toContain('<span>ชื่อเล่น <em>*</em></span>')
-    expect(source).toContain('<span>เบอร์โทรศัพท์ <em>*</em></span>')
+    // a new patient is asked for a nickname (required) and a phone (required); the service is optional
+    expect(source).toContain("appointmentPatientType === 'NEW' ? 'ชื่อเล่น' : 'ผู้ป่วย'")
+    expect(source).toContain('เบอร์โทร <em>*</em>')
+    expect(source).toContain('ประเภทบริการ (ไม่บังคับ)')
+  })
+
+  it('offers the free times of the therapist from the server instead of a fixed list', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
+      'utf8',
+    )
+
+    expect(source).toContain('appointmentApi.availability')
+    expect(source).toContain(':disabled="!slot.available"')
+    expect(source).not.toContain('เวลานอกกะ')
+    expect(source).toContain('ติด Busy ใน Google Calendar ของสาขา')
+    expect(source).toContain("availability?.googleCalendar === 'UNAVAILABLE'")
   })
 
   it('does not show a room column in the appointment list', () => {
@@ -114,15 +126,15 @@ describe('AppointmentView', () => {
     expect(table?.[1]).not.toContain('{{ appointmentRoom(item) }}')
   })
 
-  it('does not show a branch column in the appointment list', () => {
+  it('keeps the branch visible in the appointment list', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
     )
     const table = source.match(/<table class="staff-table">([\s\S]*?)<\/table>/)
 
-    expect(table?.[1]).not.toContain('<th>สาขา</th>')
-    expect(table?.[1]).not.toContain('{{ branchName(item.branchCode) }}')
-    expect(table?.[1]).toContain('colspan="8"')
+    expect(table?.[1]).toContain('<th>สาขา</th>')
+    expect(table?.[1]).toContain('{{ branchName(item.branchCode) }}')
+    expect(table?.[1]).toContain('colspan="9"')
   })
 })
