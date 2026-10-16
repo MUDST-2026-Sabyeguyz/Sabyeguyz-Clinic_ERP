@@ -44,7 +44,7 @@ pwsh -File deploy/k8s/Open-Local.ps1
 pwsh -File deploy/k8s/Start-Local.ps1 -HostBuild
 ```
 
-HostBuild คัดลอก source backend ไป workspace ใหม่ใน runtime แล้ว package ใหม่ และรัน `npm ci`/production build ของ frontend ก่อนสร้าง images จึงไม่ใช้ jar หรือ bundle เก่ามาแทน source ที่เลือก โหมดนี้ใช้ Kubernetes probes ตรวจ health และระบุ `hostBuild: true` ในหลักฐาน release ส่วน GitHub CI ใช้ multi-stage Dockerfiles ตามปกติ
+HostBuild คัดลอก source backend และไฟล์ frontend ที่ Git ติดตามไป workspace ใหม่ใน runtime แล้ว package และรัน `npm ci`/production build ที่นั่นก่อนสร้าง images จึงไม่ใช้ jar หรือ bundle เก่ามาแทน source ที่เลือก และไม่ลบ dependencies ของ test server ที่กำลังรัน โหมดนี้ใช้ Kubernetes probes ตรวจ health และระบุ `hostBuild: true` ในหลักฐาน release ส่วน GitHub CI ใช้ multi-stage Dockerfiles ตามปกติ
 
 ถ้าใช้ Minikube แทน Docker Desktop:
 
