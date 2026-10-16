@@ -5,6 +5,8 @@ Initialize-PrivateRuntime
 $checks = [System.Collections.Generic.List[string]]::new()
 $forward = $null
 $base = "http://127.0.0.1:$Port"
+@{ result = 'RUNNING'; testedAt = (Get-Date).ToUniversalTime().ToString('o') } |
+    ConvertTo-Json | Set-Content (Join-Path $RuntimeRoot 'acceptance.json') -Encoding utf8
 function Assert-Check([bool]$Condition, [string]$Name) {
     if (!$Condition) { throw "FAIL: $Name" }
     $checks.Add($Name)
@@ -66,6 +68,10 @@ try {
     $release = Get-Content (Join-Path $RuntimeRoot 'release.json') -Raw | ConvertFrom-Json
     @{ result = 'PASS'; testedAt = (Get-Date).ToUniversalTime().ToString('o'); checks = $checks.ToArray(); release = $release; pods = @($pods.items | ForEach-Object { @{name = $_.metadata.name; images = @($_.status.containerStatuses | Select-Object image, imageID, ready, restartCount)} }) } |
         ConvertTo-Json -Depth 12 | Set-Content (Join-Path $RuntimeRoot 'acceptance.json') -Encoding utf8
+} catch {
+    @{ result = 'FAIL'; testedAt = (Get-Date).ToUniversalTime().ToString('o'); checks = $checks.ToArray() } |
+        ConvertTo-Json | Set-Content (Join-Path $RuntimeRoot 'acceptance.json') -Encoding utf8
+    throw
 } finally {
     if ($forward -and !$forward.HasExited) { Stop-Process -Id $forward.Id }
     $session = $null; $headers = $null; $credentials = $null; $login = $null

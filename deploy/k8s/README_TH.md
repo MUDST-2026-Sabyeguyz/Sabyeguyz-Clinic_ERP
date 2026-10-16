@@ -6,7 +6,7 @@
 
 - Git, Docker Desktop แบบ Linux containers และ `kubectl`
 - เปิด Kubernetes ใน Docker Desktop เลือก provisioner **kind** แล้วรอ node Ready
-- PowerShell 7 (`pwsh`) สำหรับสคริปต์ทั้ง Windows และ CI Linux
+- PowerShell 7.4+ (`pwsh`) สำหรับสคริปต์ทั้ง Windows และ CI Linux (ใช้ native binary pipeline โหลด images)
 - ถ้ารัน quality suite: Node.js 24.15+ และ JDK 17+; หากไม่มี Maven สคริปต์ทดสอบจะนำ Maven จาก build image มาใช้ในโฟลเดอร์ runtime
 - ต้องมีอินเทอร์เน็ตสำหรับดาวน์โหลด dependencies/images ครั้งแรก แนะนำให้ Docker มี RAM 6–8 GB เมื่อเปิด Jenkins/Compose พร้อมกัน
 
