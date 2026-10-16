@@ -320,11 +320,11 @@ export const patientApi = {
     api.get<Page<Patient>>(
       `/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), sort, ...(branchCode ? { branchCode } : {}) })}`,
     ),
-  searchAll: async (query = '') => {
-    const first = await patientApi.search(query, 0, 100)
+  searchAll: async (query = '', branchCode = '') => {
+    const first = await patientApi.search(query, 0, 100, branchCode)
     const rest = await Promise.all(
       Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
-        patientApi.search(query, index + 1, 100),
+        patientApi.search(query, index + 1, 100, branchCode),
       ),
     )
     return [first, ...rest].flatMap((page) => page.items)

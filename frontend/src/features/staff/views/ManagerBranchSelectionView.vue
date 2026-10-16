@@ -1,15 +1,36 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import buildingIcon from '@/assets/company-building.svg'
-import { managerBranches, setSelectedManagerBranch } from '@/features/staff/data/managerBranch'
+import { branchApi } from '@/api/client'
+import {
+  managerBranches,
+  setManagerBranches,
+  setSelectedManagerBranch,
+} from '@/features/staff/data/managerBranch'
 
 const router = useRouter()
+const loading = ref(true)
+const errorMessage = ref('')
 async function chooseBranch(code: string) {
-  const branch = managerBranches.find((item) => item.code === code)
+  const branch = managerBranches.value.find((item) => item.code === code)
   if (!branch) return
   setSelectedManagerBranch(branch)
   await router.replace('/staff/dashboard')
 }
+async function loadBranches() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const branches = await branchApi.list()
+    setManagerBranches(branches.filter((branch) => branch.active))
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลสาขาไม่สำเร็จ'
+  } finally {
+    loading.value = false
+  }
+}
+onMounted(loadBranches)
 </script>
 
 <template>
@@ -23,8 +44,14 @@ async function chooseBranch(code: string) {
         <small>MANAGER</small>
         <h1>เลือกสาขาที่ต้องการเข้าใช้งาน</h1>
         <p>สามารถสลับสาขาได้ภายหลังจากเมนูด้านบน</p>
+        <p v-if="loading" role="status">กำลังโหลดสาขา…</p>
+        <div v-else-if="errorMessage" role="alert">
+          <p>{{ errorMessage }}</p>
+          <button type="button" @click="loadBranches">ลองใหม่</button>
+        </div>
+        <p v-else-if="!managerBranches.length">ยังไม่มีสาขาที่เปิดใช้งานในระบบ</p>
         <button
-          v-for="branch in managerBranches"
+          v-for="branch in loading || errorMessage ? [] : managerBranches"
           :key="branch.code"
           class="branch-option"
           type="button"
@@ -74,7 +101,9 @@ async function chooseBranch(code: string) {
   padding: 32px;
 }
 .branch-card {
-  width: min(500px, 100%);
+  width: min(600px, 100%);
+  box-sizing: border-box;
+  min-height: 750px;
   padding: 48px 50px;
   border-radius: 24px;
   background: #fff;
@@ -166,6 +195,7 @@ async function chooseBranch(code: string) {
   }
   .branch-card {
     padding: 30px 24px;
+    min-height: 0;
   }
 }
 </style>
