@@ -24,7 +24,7 @@ const recipientSearchOpen = ref(false)
 const selectedRecipient = ref<Patient | null>(null)
 const recipientConfirmed = ref(false)
 const transferAmount = ref(2)
-const transferReason = ref('')
+const transferReason = ref('แชร์สิทธิ์ตามคำขอผู้ป่วย')
 const showReasonError = ref(false)
 const coTherapistId = ref<number | ''>('')
 const primaryShare = ref(50)
@@ -848,17 +848,9 @@ function closePrintSuccess() {
                 ></span
               ></label
             >
-            <label class="course-transfer-reason"
-              >เหตุผลการแชร์ *<input
-                v-model.trim="transferReason"
-                :class="{ invalid: showReasonError && !transferReason.trim() }"
-                :aria-invalid="showReasonError && !transferReason.trim()"
-                @input="showReasonError = false"
-                placeholder="ระบุเหตุผลเพื่อบันทึกในประวัติการแชร์"
-              /><small v-if="showReasonError && !transferReason.trim()"
-                >กรุณาระบุเหตุผลการแชร์</small
-              ></label
-            >
+            <p class="course-transfer-info">
+              สิทธิ์คอร์สที่แชร์จะถูกย้ายให้ผู้รับทันที และผู้ให้ยังคงเหลือสิทธิ์ตามจำนวนที่กำหนด
+            </p>
           </section>
           <section class="course-transfer-recipient">
             <h2>ผู้รับและผู้ดูแลร่วม</h2>
@@ -906,33 +898,8 @@ function closePrintSuccess() {
                 </option></select
               ><small>พิมพ์ชื่อหรือเลือกจากรายชื่อในระบบ</small>
             </label>
-            <div class="course-share-allocation">
-              <strong>สัดส่วนยอดขาย</strong>
-              <label
-                >กภ. ศิริพร<input
-                  v-if="coTherapistId"
-                  v-model.number="primaryShare"
-                  type="number"
-                  min="0"
-                  max="100"
-                /><em v-else>—</em></label
-              >
-              <label
-                >กภ. วีระพงษ์<input
-                  v-if="coTherapistId"
-                  v-model.number="secondaryShare"
-                  type="number"
-                  min="0"
-                  max="100"
-                /><em v-else>—</em></label
-              >
-              <small v-if="coTherapistId" :class="{ invalid: !shareIsValid }"
-                >รวม {{ primaryShare + secondaryShare }}% — ต้องรวมเท่ากับ 100%</small
-              >
-            </div>
-            <p class="course-transfer-allocation-hint">กำหนดสัดส่วนหลังเลือกนักกายภาพคนที่ 2</p>
-            <p class="course-transfer-help">
-              ค่ารักษาแทนคำนวณจากนักกายภาพผู้ให้บริการจริง ไม่ได้แบ่งตามสัดส่วนนี้
+            <p class="course-transfer-info recipient-info">
+              สัดส่วนค่าตอบแทนจะคำนวณตามนักกายภาพผู้ให้บริการจริง และบันทึกไว้ในประวัติการแชร์
             </p>
           </section>
         </div>
@@ -4053,7 +4020,7 @@ function closePrintSuccess() {
   font-weight: 400;
 }
 .course-transfer-source > label:first-of-type {
-  margin-top: 50px;
+  margin-top: 24px;
 }
 .course-transfer-stepper {
   gap: 12px;
@@ -4075,6 +4042,18 @@ function closePrintSuccess() {
 }
 .course-transfer-stepper em {
   margin-left: 6px;
+}
+.course-transfer-info {
+  margin: 26px 0 0;
+  padding: 13px 14px;
+  border-radius: 7px;
+  color: #315c76;
+  background: #ddecfa;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.course-transfer-info.recipient-info {
+  margin-top: 22px;
 }
 .course-transfer-reason {
   margin-top: 24px;
