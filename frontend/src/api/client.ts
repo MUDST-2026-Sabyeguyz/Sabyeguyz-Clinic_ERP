@@ -460,8 +460,11 @@ export const appointmentApi = {
     params: {
       branchCode?: string
       date?: string
+      startDate?: string
+      endDate?: string
       therapistId?: number
       status?: AppointmentStatus
+      sortOrder?: 'newest' | 'oldest'
       page?: number
       size?: number
     } = {},

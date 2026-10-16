@@ -95,19 +95,28 @@ public class AppointmentController {
     public PageResponse search(@RequestParam(required = false) String branchCode,
                                 @RequestParam(defaultValue = "") String query,
                                 @RequestParam(required = false) LocalDate date,
+                                @RequestParam(required = false) LocalDate startDate,
+                                @RequestParam(required = false) LocalDate endDate,
                                 @RequestParam(required = false) Long therapistId,
                                 @RequestParam(required = false) String status,
+                                @RequestParam(defaultValue = "oldest") String sortOrder,
                                 @RequestParam(defaultValue = "0") int page,
                                 @RequestParam(defaultValue = "20") int size) {
         Branch scope = branchAccess.scope(branchCode);
         Long branchId = scope == null ? null : scope.getId();
         AppointmentStatus statusValue = status == null || status.isBlank() ? null : parseStatus(status);
         if (page < 0 || size < 1 || size > 100) throw new IllegalArgumentException("Invalid pagination");
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด");
+        }
+        Sort.Direction direction = "oldest".equalsIgnoreCase(sortOrder) ? Sort.Direction.ASC : Sort.Direction.DESC;
         String keyword = query.trim().toLowerCase(java.util.Locale.ROOT);
-        Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date, therapistId,
+        Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date,
+                startDate != null, startDate == null ? LocalDate.EPOCH : startDate,
+                endDate != null, endDate == null ? LocalDate.EPOCH : endDate, therapistId,
                 statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
                 keyword, "%" + keyword + "%",
-                PageRequest.of(page, size, Sort.by("appointmentDate").ascending().and(Sort.by("appointmentTime").ascending())));
+                PageRequest.of(page, size, Sort.by(direction, "appointmentDate").and(Sort.by("appointmentTime").ascending())));
         return new PageResponse(result.getContent().stream().map(this::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
