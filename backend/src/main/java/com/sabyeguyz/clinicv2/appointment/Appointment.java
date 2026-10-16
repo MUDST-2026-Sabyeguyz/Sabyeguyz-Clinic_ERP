@@ -15,6 +15,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 /**
  * A booked slot. A NEW patient is not registered yet, so patient and service
@@ -60,6 +61,9 @@ public class Appointment {
 
     @Column(name = "appointment_time", nullable = false)
     private LocalTime appointmentTime;
+
+    @Column(name = "appointment_end_at")
+    private LocalDateTime appointmentEndAt;
 
     @Column(name = "appointment_create_at", nullable = false, updatable = false)
     private Instant appointmentCreateAt;
@@ -129,6 +133,8 @@ public class Appointment {
     public void setAppointmentDate(LocalDate appointmentDate) { this.appointmentDate = appointmentDate; }
     public LocalTime getAppointmentTime() { return appointmentTime; }
     public void setAppointmentTime(LocalTime appointmentTime) { this.appointmentTime = appointmentTime; }
+    public LocalDateTime getAppointmentEndAt() { return appointmentEndAt; }
+    public void setAppointmentEndAt(LocalDateTime appointmentEndAt) { this.appointmentEndAt = appointmentEndAt; }
     public Instant getAppointmentCreateAt() { return appointmentCreateAt; }
     public void setAppointmentCreateAt(Instant appointmentCreateAt) { this.appointmentCreateAt = appointmentCreateAt; }
     public Long getAppointmentCreateBy() { return appointmentCreateBy; }
