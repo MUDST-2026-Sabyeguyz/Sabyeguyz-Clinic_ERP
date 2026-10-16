@@ -747,6 +747,31 @@ export type TherapistAdjustment = {
     approvalReference: string | null
   }>
 }
+export type ManagerAdjustment = {
+  id: number
+  staffId: number
+  staffName: string
+  originalMonth: string
+  appliedMonth: string
+  amount: number
+  reason: string
+  status: string
+  processed: number
+  remaining: number
+  allocationId: number | null
+  singleVisitFeeId: number | null
+  courseId: number | null
+  visitId: number | null
+  saleTransactionId: number | null
+  applications: Array<{
+    id: number
+    adjustmentId: number
+    amount: number
+    status: string
+    approved: boolean
+    approvalReference: string | null
+  }>
+}
 export type StaffPayment = {
   id: number
   staffId: number
@@ -835,6 +860,20 @@ export const commissionApi = {
   myLines: (month: string) =>
     api.get<TherapistLines>(`/api/commission/my-lines?month=${encodeURIComponent(month)}`),
   myAdjustments: () => api.get<TherapistAdjustment[]>('/api/commission/my-adjustments'),
+  adjustments: () => api.get<ManagerAdjustment[]>('/api/commission/adjustments'),
+  adjustment: (id: number) => api.get<ManagerAdjustment>(`/api/commission/adjustments/${id}`),
+  createAdjustment: (body: {
+    staffId: number
+    originalMonth: string
+    appliedMonth: string
+    amount: number
+    reason: string
+    allocationId?: number
+    singleVisitFeeId?: number
+    courseId?: number
+    visitId?: number
+    saleTransactionId?: number
+  }) => api.post<ManagerAdjustment>('/api/commission/adjustments', body),
 }
 
 export type ClinicResource = {
