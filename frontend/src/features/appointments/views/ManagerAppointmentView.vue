@@ -570,7 +570,6 @@ async function save() {
     sortOrder.value = 'newest'
     page.value = 0
     viewMode.value = 'list'
-    await router.replace({ name: 'staff-appointments' })
     await load()
     appointments.value = [
       savedAppointment,
@@ -586,6 +585,10 @@ async function save() {
   } finally {
     savingAppointment.value = false
   }
+}
+function dismissAppointmentSuccess() {
+  appointmentSuccessMessage.value = ''
+  void router.replace({ name: 'staff-appointments' })
 }
 async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') {
   savingStatusId.value = item.id
@@ -1358,11 +1361,11 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
     <div
       v-if="appointmentSuccessMessage"
       class="status-modal-backdrop"
-      @click.self="appointmentSuccessMessage = ''"
+      @click.self="dismissAppointmentSuccess"
     >
       <section class="status-modal appointment-success-modal" role="status" aria-live="polite">
         <h2>{{ appointmentSuccessMessage }}</h2>
-        <button type="button" class="primary" @click="appointmentSuccessMessage = ''">ตกลง</button>
+        <button type="button" class="primary" @click="dismissAppointmentSuccess">ตกลง</button>
       </section>
     </div>
     <div
