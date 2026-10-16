@@ -6,7 +6,8 @@ const cypress = require('cypress')
 process.chdir(path.resolve(__dirname, '..'))
 
 function maven(goal) {
-  const result = spawnSync('mvn', ['--batch-mode', '--no-transfer-progress', '-Pcypress-api', ...goal], {
+  const profile = process.env.CLINIC_TEST_COVERAGE === '1' ? '-Pcypress-api,coverage' : '-Pcypress-api'
+  const result = spawnSync('mvn', ['--batch-mode', '--no-transfer-progress', profile, ...goal], {
     stdio: 'inherit',
     shell: process.platform === 'win32',
     windowsHide: true,

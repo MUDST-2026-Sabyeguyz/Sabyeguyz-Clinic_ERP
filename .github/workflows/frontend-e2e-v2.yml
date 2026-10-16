@@ -96,7 +96,7 @@ jobs:
           wait-on: 'http://localhost:5173'
           wait-on-timeout: 120
           browser: chrome
-          config-file: cypress.v2.config.ts
+          config-file: cypress.v2.config.cjs
 
       - name: Stop the backend
         if: always()
@@ -109,4 +109,12 @@ jobs:
         with:
           name: frontend-e2e-screenshots
           path: frontend/cypress/screenshots
+          if-no-files-found: ignore
+
+      - name: Upload browser JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-v2-browser-results
+          path: frontend/cypress/results/browser-v2-*.xml
           if-no-files-found: ignore

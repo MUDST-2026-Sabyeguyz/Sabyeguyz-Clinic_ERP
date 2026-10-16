@@ -2,6 +2,20 @@
 
 Monorepo: Vue frontend, Spring Boot backend, PostgreSQL database, and deployment configuration.
 
+## Submission and local Kubernetes (16 October 2026)
+
+See the [Thai Kubernetes runbook](deploy/k8s/README_TH.md) for a repeatable local deployment, login, test/coverage commands and troubleshooting. The [submission report](docs/testing/2026-10-16-Local-Kubernetes.md) records observed results. Code standards and quality gates are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+```powershell
+pwsh -File deploy/k8s/Start-Local.ps1
+pwsh -File deploy/k8s/Open-Local.ps1
+# Open http://localhost:18088
+# In another terminal:
+pwsh -File deploy/k8s/Test-Local.ps1 -TestPersistence
+```
+
+The [Kubernetes GitHub Actions pipeline](.github/workflows/kubernetes-ci.yml) defines standards, tests, coverage, image builds, kind deployment, persistent-data acceptance and production browser E2E. Local results and GitHub-hosted CI results are reported separately.
+
 ## Quick Start
 
 Requirements: Git and Docker with Docker Compose. No local Java, Maven, Node.js, or PostgreSQL installation is required.

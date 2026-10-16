@@ -26,3 +26,4 @@ __screenshots__/
 /cypress/videos/
 /cypress/screenshots/
 /cypress/downloads/
+/cypress/results/
