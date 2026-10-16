@@ -1142,7 +1142,10 @@ function continueAppointment(item: Appointment) {
               </div>
             </section>
             <p class="appointment-time-help">
-              ช่วงสีเทาเลือกไม่ได้: นักกายภาพมีนัดอื่นอยู่แล้ว (รวมนัดที่ซิงก์กับ Google Calendar), เลยเวลาแล้ว หรืออยู่นอกช่วงเปิดรับนัดของสาขา
+              ช่วงสีเทาเลือกไม่ได้: นักกายภาพมีนัดอื่นอยู่แล้ว, ติด Busy ใน Google Calendar ของสาขา, เลยเวลาแล้ว หรืออยู่นอกช่วงเปิดรับนัดของสาขา
+              <template v-if="availability?.googleCalendar === 'UNAVAILABLE'">
+                (อ่าน Google Calendar ไม่ได้ในขณะนี้ จึงแสดงเฉพาะนัดในระบบ)
+              </template>
               <template v-if="availability && !availability.windowConfigured">
                 (สาขานี้ยังไม่ได้ตั้งช่วงเปิดรับนัด จึงแสดง {{ availability.openTime }}–{{ availability.closeTime }} เป็นค่าเริ่มต้น)
               </template>
