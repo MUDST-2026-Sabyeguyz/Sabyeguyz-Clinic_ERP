@@ -36,11 +36,12 @@ const years = computed(() => {
   const last = Math.max(thisYear, ...seen)
   return Array.from({ length: last - first + 1 }, (_, index) => last - index)
 })
-const chooseMonth = (event: Event) => {
-  chosen.value = `${chosenYear.value}-${(event.target as HTMLSelectElement).value}`
-}
 const chooseYear = (event: Event) => {
   chosen.value = `${(event.target as HTMLSelectElement).value}-${chosenMonth.value}`
+}
+const moveMonth = (offset: number) => {
+  const date = new Date(chosenYear.value, Number(chosenMonth.value) - 1 + offset, 1)
+  chosen.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 const paid = computed(() => allPaid.value.filter((row) => row.month === chosen.value))
 const adjustmentOfMonth = computed(
@@ -65,15 +66,11 @@ const paidOn = (payment: StaffPayment) =>
   <section class="therapist-payment-filter">
     <label>รอบเดือน</label>
     <div class="therapist-payment-range">
-      <select aria-label="เดือน" :value="chosenMonth" @change="chooseMonth">
-        <option
-          v-for="(name, index) in monthNames"
-          :key="name"
-          :value="String(index + 1).padStart(2, '0')"
-        >
-          {{ name }}
-        </option>
-      </select>
+      <div class="therapist-month-stepper" aria-label="เลือกเดือน">
+        <button type="button" aria-label="เดือนก่อน" @click="moveMonth(-1)">‹</button>
+        <strong>{{ monthNames[Number(chosenMonth) - 1] }}</strong>
+        <button type="button" aria-label="เดือนถัดไป" @click="moveMonth(1)">›</button>
+      </div>
       <select aria-label="ปี" :value="chosenYear" @change="chooseYear">
         <option v-for="year in years" :key="year" :value="year">
           {{ year + 543 }}
