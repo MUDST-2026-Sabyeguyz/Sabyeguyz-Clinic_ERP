@@ -130,7 +130,4 @@ const paidOn = (payment: StaffPayment) =>
     >
     <p v-else class="therapist-payment-formula">ยังไม่มี Adjustment</p>
   </section>
-  <p class="therapist-payment-note">
-    อ่านอย่างเดียว · ยอดที่จ่ายแล้วถูกล็อก หากพบข้อมูลไม่ถูกต้อง กรุณาแจ้ง Manager นอกระบบ
-  </p>
 </template>
