@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { formatPaymentMethod } from '@/features/payments/format'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -36,9 +35,6 @@ const printResult = ref<'success' | 'error' | null>(null)
 const receiptGross = computed(
   () => selectedReceipt.value?.items.reduce((sum, item) => sum + item.lineTotal, 0) ?? 0,
 )
-const page = ref(0)
-const totalPages = ref(0)
-const totalElements = ref(0)
 const loading = ref(true)
 const errorMessage = ref('')
 const filteredPayments = computed(() => {
@@ -74,9 +70,7 @@ const paymentDescription = (item: SaleSummary) =>
   paymentDetails.value[item.id]?.items.map((entry) => entry.description).join(', ') ||
   '-'
 const paymentMethod = (item: SaleSummary) =>
-  paymentDetails.value[item.id]?.payments
-    .map((entry) => formatPaymentMethod(entry.paymentMethodCode))
-    .join(', ') || '-'
+  paymentDetails.value[item.id]?.payments.map((entry) => entry.paymentMethodCode).join(', ') || '-'
 const paymentMethodLabel = (code: string) => {
   const labels: Record<string, string> = {
     CASH: 'เงินสด',
@@ -88,7 +82,6 @@ const paymentMethodLabel = (code: string) => {
   }
   return labels[code] || code
 }
-
 const paymentStatus = (status: string) => {
   const labels: Record<string, string> = {
     PAID: 'ชำระแล้ว',
@@ -118,6 +111,10 @@ const courseDisplayStatus = (item: CoursePurchase) => {
 const openReceipt = (item: SaleSummary) => {
   selectedReceipt.value = paymentDetails.value[item.id] || null
   receiptView.value = Boolean(selectedReceipt.value)
+}
+const openPrint = (item: SaleSummary) => {
+  selectedReceipt.value = paymentDetails.value[item.id] || null
+  printConfirm.value = Boolean(selectedReceipt.value)
 }
 const openReceiptPrint = () => {
   printConfirm.value = true
@@ -156,22 +153,27 @@ watch(activeTab, () => {
   typeFilter.value = ''
 })
 
-async function loadPayments(targetPage = 0) {
-  loading.value = true
-  errorMessage.value = ''
-  payments.value = []
-  paymentDetails.value = {}
+onMounted(async () => {
+  const id = Number(route.params.id)
+  if (!Number.isInteger(id)) {
+    errorMessage.value = 'รหัสผู้ป่วยไม่ถูกต้อง'
+    loading.value = false
+    return
+  }
   try {
-    const paymentPage = await salesApi.list({
-      patientId: Number(route.params.id),
-      receiptsOnly: true,
-      page: targetPage,
-      size: 20,
-    })
-    page.value = targetPage
-    totalPages.value = paymentPage.totalPages
-    totalElements.value = paymentPage.totalItems
+    const [profile, paymentPage, courseList] = await Promise.all([
+      patientApi.get(id),
+      salesApi.list({ patientId: id, size: 100 }),
+      courseApi.patientCourses(id),
+    ])
+    patient.value = profile
+    try {
+      receiptBranch.value = await branchApi.get(profile.branch.id)
+    } catch {
+      receiptBranch.value = null
+    }
     payments.value = paymentPage.items
+    courses.value = courseList
     const details = await Promise.allSettled(paymentPage.items.map((item) => salesApi.get(item.id)))
     paymentDetails.value = Object.fromEntries(
       details.flatMap((result, index) =>
@@ -179,32 +181,10 @@ async function loadPayments(targetPage = 0) {
       ),
     )
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดประวัติใบเสร็จไม่สำเร็จ'
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดประวัติการรักษาไม่สำเร็จ'
   } finally {
     loading.value = false
   }
-}
-onMounted(async () => {
-  const id = Number(route.params.id)
-  if (!Number.isInteger(id) || id <= 0) {
-    errorMessage.value = 'รหัสผู้ป่วยไม่ถูกต้อง'
-    loading.value = false
-    return
-  }
-  await Promise.allSettled([
-    patientApi.get(id).then(async (profile) => {
-      patient.value = profile
-      try {
-        receiptBranch.value = await branchApi.get(profile.branch.id)
-      } catch {
-        receiptBranch.value = null
-      }
-    }),
-    courseApi.patientCourses(id).then((items) => {
-      courses.value = items
-    }),
-    loadPayments(),
-  ])
 })
 </script>
 
@@ -226,6 +206,10 @@ onMounted(async () => {
             </h1>
             <p>ที่อยู่: {{ receiptBranch?.address?.trim() || '—' }}</p>
             <p>โทร: {{ receiptBranch?.phone?.trim() || '—' }}</p>
+            <p>
+              เลขที่ใบอนุญาต: {{ receiptBranch?.licenseNumber?.trim() || '—' }}　 อีเมล:
+              {{ receiptBranch?.email?.trim() || '—' }}
+            </p>
           </div>
           <div class="receipt-document">
             <h2>ใบเสร็จรับเงิน</h2>
@@ -325,7 +309,6 @@ onMounted(async () => {
       </section>
     </main>
     <main v-show="!receiptView" class="history-page-content">
-
       <RouterLink class="back-link" :to="`/staff/patients/${route.params.id}`"
         >← กลับข้อมูลผู้ป่วย</RouterLink
       >
@@ -339,7 +322,6 @@ onMounted(async () => {
         </button>
       </nav>
       <section class="history-card">
-        <p v-if="activeTab === 'payments'">ค้นหาและตัวกรองด้านล่างใช้เฉพาะใบเสร็จในหน้านี้</p>
         <div class="history-filters">
           <input v-model="query" placeholder="ค้นหาเลขที่ใบเสร็จหรือชื่อคอร์ส" />
           <ThaiDatePicker v-model="dateFilter" show-calendar-icon numeric-month hide-caret />
@@ -375,18 +357,11 @@ onMounted(async () => {
                 <td>{{ item.receiptNo }}</td>
                 <td>{{ paymentDescription(item) }}</td>
                 <td>{{ item.branchCode }}</td>
-                <td>฿{{ item.total.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
-                <td><span class="history-status">{{ paymentStatus(item.status) }}</span> · {{ paymentMethod(item) }}</td>
+                <td>฿{{ item.paid.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
+                <td>{{ paymentMethod(item) }}</td>
                 <td class="history-actions">
-                  <button type="button" class="history-row-action" @click="openReceipt(item)">รายละเอียด</button>
-                  <RouterLink class="history-row-action" :to="`/staff/receipts/${item.id}`"
-                    >ดูใบเสร็จ</RouterLink
-                  >
-                  <RouterLink
-                    class="history-row-action outline"
-                    :to="{ path: `/staff/receipts/${item.id}`, query: { print: '1' } }"
-                    >พิมพ์</RouterLink
-                  >
+                  <button type="button" @click="openReceipt(item)">ดูใบเสร็จ</button>
+                  <button type="button" class="outline" @click="openPrint(item)">พิมพ์</button>
                 </td>
               </tr>
               <tr v-if="!filteredPayments.length">
@@ -459,23 +434,10 @@ onMounted(async () => {
         <p v-if="!loading && !errorMessage" class="history-result-count">
           {{
             activeTab === 'payments'
-              ? `แสดง ${filteredPayments.length} จาก ${payments.length} ใบเสร็จในหน้านี้ · ทั้งหมด ${totalElements} ใบเสร็จ`
+              ? `แสดง ${filteredPayments.length} รายการล่าสุด`
               : 'สิทธิ์คงเหลือเป็นข้อมูลล่าสุดหลังการใช้บริการและการแชร์คอร์ส'
           }}
         </p>
-        <nav v-if="activeTab === 'payments'" aria-label="หน้าใบเสร็จ">
-          <button type="button" :disabled="loading || page <= 0" @click="loadPayments(page - 1)">
-            ก่อนหน้า
-          </button>
-          <span>หน้า {{ totalPages ? page + 1 : 0 }} / {{ totalPages }}</span>
-          <button
-            type="button"
-            :disabled="loading || page + 1 >= totalPages"
-            @click="loadPayments(page + 1)"
-          >
-            ถัดไป
-          </button>
-        </nav>
       </section>
     </main>
     <Teleport to="body">
@@ -520,8 +482,49 @@ onMounted(async () => {
         </section>
       </div>
     </Teleport>
-
   </div>
 </template>
 
 <style scoped src="../styles/patient-history.css"></style>
+<style src="../../services/styles/services.css"></style>
+<style>
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  body.therapist-ui .patient-workspace::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  .patient-history-page .history-page-content {
+    display: none !important;
+  }
+
+  .patient-history-page .printable-receipt-screen {
+    display: block !important;
+  }
+
+  .patient-history-page .staff-header,
+  .patient-history-page .staff-header *,
+  .patient-history-page .profile-menu,
+  .patient-history-page .profile-dropdown {
+    display: none !important;
+    box-shadow: none !important;
+  }
+
+  body.therapist-ui .patient-history-page > .receipt-page-main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.therapist-ui .patient-history-page .receipt-page-main .printable-receipt {
+    height: 265mm;
+    max-height: 265mm;
+    padding: 8mm 12mm 7mm;
+  }
+}
+</style>

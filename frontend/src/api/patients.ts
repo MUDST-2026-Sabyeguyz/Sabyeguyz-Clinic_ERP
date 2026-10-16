@@ -7,9 +7,6 @@ export interface PatientRegistrationPayload {
   email: string
   title: string
   fullName: string
-  firstName?: string
-  lastName?: string
-  middleName?: string | null
   birthDate: string
   gender: string
   phone: string
