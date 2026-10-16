@@ -57,6 +57,11 @@ const thaiDate = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(
     new Date(`${value}T00:00:00`),
   )
+const monthLabel = computed(() =>
+  new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(
+    new Date(`${month.value}-01T00:00:00`),
+  ),
+)
 async function load() {
   loading.value = true
   errorMessage.value = ''
@@ -145,11 +150,8 @@ watch([staffId, month], load)
     <main class="commission-manager-main">
       <header class="detail-head">
         <div>
-          <button @click="router.push({ path: '/staff/commission', query: { month: month } })">
-            ← กลับหน้าภาพรวม
-          </button>
           <h1>รายละเอียดค่าตอบแทนรายบุคคล</h1>
-          <p v-if="name">{{ name }} · รหัส {{ employeeCode }} · {{ branchName }}</p>
+          <p v-if="name">{{ name }} · {{ employeeCode }} · {{ branchName }} · งวด{{ monthLabel }}</p>
         </div>
         <span
           v-if="!loading && !errorMessage"
@@ -175,7 +177,7 @@ watch([staffId, month], load)
             >
           </article>
           <article>
-            <span>ค่ารักษาแทน</span><b>{{ money(treatmentTotal) }}</b
+            <span>ค่ามือ</span><b>{{ money(treatmentTotal) }}</b
             ><small>{{ treatments.length }} รายการ</small>
           </article>
           <article class="warning">
@@ -229,35 +231,33 @@ watch([staffId, month], load)
                 <dd>—</dd>
               </div>
             </dl>
-            <p class="breakdown-note">ระบบยังไม่ส่งยอดก่อนส่วนลดและยอดส่วนลดแยกรายบุคคล</p>
           </article>
           <article class="commission-card treatment-detail">
-            <h2>ค่ารักษาแทน</h2>
-            <p>รายการที่เข้ารักษาแทนนักกายภาพเจ้าของเคส</p>
+            <h2>รายละเอียดค่ามือ</h2>
+            <p>ค่าตอบแทนจากการรักษาที่ให้บริการจริง · {{ treatments.length }} รายการ</p>
             <p v-if="!treatments.length" class="empty-treatment">ไม่มีรายการรักษาแทนในรอบนี้</p>
             <div v-for="item in treatments" :key="item.id" class="treatment-row">
-              <span>{{ thaiDate(item.visitDate) }} · {{ item.courseCode }}</span
+              <span>{{ thaiDate(item.visitDate) }} {{ item.courseCode }}</span
               ><b>{{ money(Number(item.treatmentFee)) }}</b>
             </div>
             <div class="treatment-total">
-              <b>รวมค่ารักษาแทน</b><b>{{ money(treatmentTotal) }}</b>
+              <b>รวมค่ามือ</b><b>{{ money(treatmentTotal) }}</b>
             </div>
-            <footer v-if="!approved">
-              <button class="commission-secondary" disabled title="ระบบยังไม่รองรับการส่งกลับแก้ไข">
-                ส่งกลับแก้ไข
-              </button>
-              <button
-                class="commission-primary"
-                :disabled="closingId === null"
-                @click="openConfirmation"
-              >
-                อนุมัติยอด
-              </button>
-            </footer>
-            <p v-if="!approved" class="breakdown-note">การส่งกลับแก้ไขยังไม่เปิดให้บริการ</p>
-            <p v-else class="approved-note">✓ อนุมัติยอดเรียบร้อยแล้ว</p>
           </article>
-        </section></template
+        </section>
+        <p class="net-note">
+          ยอดสุทธิ = Commission {{ money(commission) }} + ค่ามือ {{ money(treatmentTotal) }} + Adjustment ฿0.00 · ยอดคำนวณโดยระบบ ไม่เปิดให้กรอกแก้โดยตรง
+        </p>
+        <footer v-if="!approved" class="detail-actions">
+          <button class="commission-secondary" disabled title="ระบบยังไม่รองรับการส่งกลับแก้ไข">
+            ส่งกลับแก้ไข
+          </button>
+          <button class="commission-primary" :disabled="closingId === null" @click="openConfirmation">
+            อนุมัติยอด
+          </button>
+        </footer>
+        <p v-else class="approved-note">✓ อนุมัติยอดเรียบร้อยแล้ว</p>
+      </template
       >
     </main>
     <Teleport to="body"
@@ -284,40 +284,39 @@ watch([staffId, month], load)
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  align-items: start;
-}
-.detail-head button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #667a72;
-  cursor: pointer;
+  align-items: flex-start;
 }
 .detail-head h1 {
-  margin: 14px 0 0;
-  font-size: 2.4rem;
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 2.15rem);
+  line-height: 1.3;
 }
 .detail-head p {
-  margin: 5px 0;
-  color: #667a72;
+  margin: 4px 0 0;
+  color: #63706b;
 }
 .detail-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 24px;
 }
 .detail-columns article {
-  padding: 24px;
+  min-height: 620px;
+  box-sizing: border-box;
+  padding: 28px;
+  border-color: #dbded6;
 }
 .detail-columns h2 {
-  margin: 0 0 18px;
+  margin: 0 0 16px;
+  color: #1f2e29;
+  font-size: 1.38rem;
 }
 .tier-box {
-  max-width: 390px;
+  width: 100%;
   box-sizing: border-box;
   display: grid;
   gap: 12px;
-  padding: 18px;
+  padding: 20px;
   border: 1px solid #d9e1dc;
   border-radius: 10px;
 }
@@ -330,7 +329,7 @@ watch([staffId, month], load)
   font-style: normal;
 }
 .tier-progress {
-  height: 7px;
+  height: 8px;
   border-radius: 99px;
   background: #e2ebe6;
   overflow: hidden;
@@ -346,7 +345,7 @@ watch([staffId, month], load)
   color: #667a72;
 }
 .tier-detail h3 {
-  margin: 20px 0 8px;
+  margin: 16px 0 8px;
   font-size: 18px;
 }
 .tier-detail dd {
@@ -360,36 +359,62 @@ watch([staffId, month], load)
 .tier-detail dl div {
   display: flex;
   justify-content: space-between;
-  padding: 12px;
+  min-height: 40px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0 12px;
 }
 .tier-detail .total {
   border-radius: 8px;
-  background: #e7f4ef;
+  background: #eaf5f1;
   font-weight: 700;
 }
 .treatment-detail > p {
-  color: #667a72;
+  margin: -6px 0 6px;
+  color: #63706b;
 }
 .treatment-row,
 .treatment-total {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 15px 8px;
+  min-height: 40px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0 12px;
 }
 .treatment-total {
-  margin-top: 8px;
+  min-height: 50px;
+  margin-top: 10px;
   border-radius: 8px;
-  background: #e7f4ef;
+  background: #eaf5f1;
 }
-.treatment-detail footer {
+.net-note {
+  min-height: 48px;
+  margin: 0;
+  color: #13635e;
+  font-size: 1rem;
+  font-weight: 500;
+}
+.detail-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
-  margin-top: 16px;
+  margin: -4px 0 0;
 }
-.treatment-detail footer button:disabled {
+.detail-actions button {
+  min-width: 200px;
+  min-height: 48px;
+  justify-content: center;
+}
+.detail-actions .commission-secondary {
+  width: 220px;
+  border: 0;
+  background: #56665d33;
+}
+.detail-actions button:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 1;
 }
 .approved-note {
   margin-top: 16px !important;
@@ -473,34 +498,13 @@ watch([staffId, month], load)
   }
 }
 @media (max-width: 480px) {
-  .treatment-detail footer,
+  .detail-actions,
   .action-modal > div {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
-  .treatment-detail footer button {
+  .detail-actions button {
     width: 100%;
   }
-}
-.detail-head button {
-  display: inline-flex;
-  align-items: center;
-  min-height: 42px;
-  padding: 9px 16px;
-  border: 1px solid #1e8b86;
-  border-radius: 999px;
-  background: #e8f5f2;
-  color: #176f6b;
-  font-weight: 700;
-  box-shadow: 0 2px 8px #1e8b8617;
-  transition:
-    background 0.2s,
-    color 0.2s,
-    transform 0.2s;
-}
-.detail-head button:hover {
-  background: #1e8b86;
-  color: #fff;
-  transform: translateX(-2px);
 }
 </style>
