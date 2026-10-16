@@ -15,7 +15,7 @@ describe('production app through local Kubernetes Ingress', () => {
   })
 
   it('logs in a real manager and opens persisted patient data after a route refresh', () => {
-    cy.task<{ username: string; password: string }>('managerCredentials', null, { log: false })
+    cy.task('managerCredentials', null, { log: false })
       .then((credentials) => {
         cy.visit('/')
         cy.get('input[autocomplete="username"]').type(credentials.username)

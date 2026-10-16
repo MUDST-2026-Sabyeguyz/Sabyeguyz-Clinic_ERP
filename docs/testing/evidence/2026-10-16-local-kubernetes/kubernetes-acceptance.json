@@ -1,0 +1,90 @@
+{
+  "testedAt": "2026-10-16T05:07:25.7825862Z",
+  "release": {
+    "context": "docker-desktop",
+    "images": {
+      "clinic-backend:c73c0b091d76-20261016115826": "sha256:0bd80ff4c917adec950b4dba07d6075d3121fb48d8f1c88cec3ba493c92c703f",
+      "clinic-frontend:c73c0b091d76-20261016115826": "sha256:1ad046212c0070451614ebc710016e914998c86a26654823c01410e4a96e74e3",
+      "postgres:16-alpine": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+      "traefik:v3.7.15": "sha256:de7431ff85f306b709256819aaacd153e189ee25f8e86bb895aef1becbacf628"
+    },
+    "sourceRevision": "c73c0b091d76ab390e6ec7df751ee142aa39ef60",
+    "hostBuild": true,
+    "deployedAt": "2026-10-16T05:06:38.0827717Z",
+    "applicationSourceDirty": false,
+    "imageTag": "c73c0b091d76-20261016115826"
+  },
+  "pods": [
+    {
+      "images": [
+        {
+          "image": "docker.io/library/clinic-backend:c73c0b091d76-20261016115826",
+          "imageID": "sha256:39128da80d70cc16c3cacfdfc9824762e2cb144e76238df122f32f81db4a6abf",
+          "ready": true,
+          "restartCount": 0
+        }
+      ],
+      "name": "backend-6d97bcc9b4-tpg9g"
+    },
+    {
+      "images": [
+        {
+          "image": "docker.io/library/clinic-backend:c73c0b091d76-20261016115826",
+          "imageID": "sha256:39128da80d70cc16c3cacfdfc9824762e2cb144e76238df122f32f81db4a6abf",
+          "ready": true,
+          "restartCount": 0
+        }
+      ],
+      "name": "backend-8776b79cd-d9crt"
+    },
+    {
+      "images": [
+        {
+          "image": "docker.io/library/traefik:v3.7.15",
+          "imageID": "sha256:7c0b0dc249c40e4f5edd4e5827cc4b634879e14a89da53d675ae9248ecac819a",
+          "ready": true,
+          "restartCount": 0
+        }
+      ],
+      "name": "clinic-traefik-5f64c4fcdb-7h7f2"
+    },
+    {
+      "images": [
+        {
+          "image": "docker.io/library/clinic-frontend:c73c0b091d76-20261016115826",
+          "imageID": "sha256:76fe255df934b7e88f168e71db7f22128797d09d7b779e2e9a618242cb87c3d4",
+          "ready": true,
+          "restartCount": 0
+        }
+      ],
+      "name": "frontend-74dd8bff89-gmrxt"
+    },
+    {
+      "images": [
+        {
+          "image": "docker.io/library/postgres:16-alpine",
+          "imageID": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+          "ready": true,
+          "restartCount": 0
+        }
+      ],
+      "name": "postgres-7c5b785555-qwjl2"
+    }
+  ],
+  "checks": [
+    "Ingress reaches backend and PostgreSQL health",
+    "Ingress serves production Vue app",
+    "Vue route refresh fallback",
+    "Protected API rejects anonymous requests",
+    "Real manager login through Ingress",
+    "Authenticated patient create and readback",
+    "PVC preserves patient after PostgreSQL pod replacement",
+    "Backend rollout retains patient and valid JWT",
+    "PersistentVolumeClaim is Bound",
+    "Pod Ready: backend",
+    "Pod Ready: clinic-traefik",
+    "Pod Ready: frontend",
+    "Pod Ready: postgres"
+  ],
+  "result": "PASS"
+}

@@ -59,6 +59,8 @@ node jenkins-backup/control.cjs monitor
 
 ## ขอบเขตผลทดสอบ
 
+`kubernetes-ci.yml` เป็น manual workflow แยกสำหรับ build/deploy kind และ production browser acceptance ตัว replay ในโหมด push ข้าม jobs ที่มี `if: github.event_name == 'workflow_dispatch'` และบันทึก `skipped` พร้อมเหตุผลอย่างชัดเจน ใช้ [Kubernetes runbook](../deploy/k8s/README_TH.md) สำหรับผล local จริง การที่ Jenkins tests อื่นผ่านไม่ใช่หลักฐานว่า Kubernetes manual workflow ผ่านแล้ว
+
 Worker ใช้ Debian, Java 21, Node 24 และ Chromium แทน GitHub Ubuntu/Chrome โดยบันทึกข้อแตกต่างไว้ใน summary คำสั่ง build/test/API/schema/migration มาจาก source commit เดิม รองรับเฉพาะ actions และเงื่อนไขที่ใช้ใน repository นี้ ส่วนที่ไม่รองรับจะรายงานล้มเหลว ไม่ข้ามแล้วแสดงผ่าน
 
 ขั้น publish/deploy เก่าที่กำหนดให้รันเฉพาะ `workflow_dispatch` บน `xan` จะไม่รันในการตรวจ CI แบบ push นี้ ฐาน PostgreSQL และ Compose project ของแต่ละ job ใช้ใหม่และล้างเฉพาะทรัพยากรทดสอบที่ job นั้นสร้าง
