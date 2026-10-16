@@ -235,6 +235,7 @@ export type AppointmentPage = Page<Appointment>
 export type CoursePurchase = {
   id: number
   patient: Patient
+  purchaser?: { id: number; hn: string; fullName: string }
   branchCode: string
   course: { id: number; code: string; name: string }
   price: number
