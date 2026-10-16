@@ -60,7 +60,6 @@ onMounted(loadBranches)
           <span class="branch-icon"><img :src="buildingIcon" alt="" /></span>
           <span
             ><b>{{ branch.name }}</b
-            ><em>{{ branch.address }}</em
             ><strong>เข้าสู่สาขา{{ branch.name }} →</strong></span
           >
         </button>
@@ -165,12 +164,6 @@ onMounted(loadBranches)
 }
 .branch-option b {
   font-size: 26px;
-}
-.branch-option em {
-  color: #52645b;
-  font-size: 15px;
-  font-style: normal;
-  line-height: 1.35;
 }
 .branch-option strong {
   color: #1e807c;
