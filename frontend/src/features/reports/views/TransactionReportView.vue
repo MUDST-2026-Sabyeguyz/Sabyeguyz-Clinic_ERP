@@ -18,7 +18,8 @@ const sales = ref<SaleDetail[]>([])
 const treatments = ref<Awaited<ReturnType<typeof commissionApi.treatmentReport>>>([])
 const branchNames = ref<Record<string, string>>({})
 let requestId = 0
-const money = (n: number) => `฿${Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
+const money = (n: number | null | undefined) =>
+  n == null ? '—' : `฿${Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
 const date = (v: string) =>
   new Date(v).toLocaleDateString('th-TH', {
     day: 'numeric',
