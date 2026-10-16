@@ -25,12 +25,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Matches frontend/src/api/client.ts's appointmentApi. Known gap, flagged
- * for the team: v2's Appointment has no end time/duration column (the
- * Service catalog dict has none either), so {@code endAt} in the response
- * always equals {@code startAt} - the frontend calendar/list views that
- * show an appointment's span will need a real fix once a duration source
- * exists (Q8). Notes use appointment.notes; cancellation reasons are read from status history.
+ * Matches frontend/src/api/client.ts's appointmentApi. End times are stored
+ * when a service or branch duration is configured; older appointments without
+ * an end time retain the previous response fallback. Notes use appointment.notes;
+ * cancellation reasons are read from status history.
  */
 @Transactional
 @RestController
@@ -296,10 +294,13 @@ public class AppointmentController {
                 ? new ServiceSummary(null, appointment.getRequestedServiceType() == null ? null
                         : appointment.getRequestedServiceType().name(), duration)
                 : new ServiceSummary(svc.getId(), svc.getServiceName(), duration);
+        Instant endAt = appointment.getAppointmentEndAt() == null
+                ? startAt.plusSeconds(duration * 60L)
+                : appointment.getAppointmentEndAt().atZone(CLINIC_ZONE).toInstant();
         return new Response(appointment.getId(), appointment.getBranch().getBranchCode(), patientSummary,
                 new TherapistSummary(appointment.getStaff().getId(),
                         appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname()),
-                serviceSummary, startAt, startAt.plusSeconds(duration * 60L), apiStatus(appointment.getAppointmentStatus()), appointment.getNotes(),
+                serviceSummary, startAt, endAt, apiStatus(appointment.getAppointmentStatus()), appointment.getNotes(),
                 history.findFirstByAppointmentIdAndToStatusOrderByChangedAtDescIdDesc(appointment.getId(), AppointmentStatus.Cancelled)
                         .map(AppointmentStatusHistory::getReason).orElse(null),
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clinic-config
+data:
+  POSTGRES_DB: clinic_erp_k8s
+  POSTGRES_USER: clinic
+  SPRING_PROFILES_ACTIVE: docker
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/clinic_erp_k8s
+  JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=65.0
