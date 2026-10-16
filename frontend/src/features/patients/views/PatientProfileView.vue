@@ -5,6 +5,7 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import { patientTitleOptions, patientGenderOptions } from '../data/patientRegistration'
 
 const route = useRoute()
 type UiPatientProfile = PatientProfile & {
@@ -89,8 +90,8 @@ const errorMessage = ref('')
 const editing = ref(false)
 const saved = ref(false)
 const confirmationOpen = ref(false)
-const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
-const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
+const titleOptions = patientTitleOptions
+const genderOptions = patientGenderOptions
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const customerSourceOptions = ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'].map((value) => ({
   value,
@@ -172,20 +173,6 @@ watch(
     draft.identityNumber = ''
   },
 )
-watch(
-  () => draft.title,
-  (title) => {
-    if (title === 'นาย') draft.gender = 'ชาย'
-    else if (title === 'นาง' || title === 'นางสาว') draft.gender = 'หญิง'
-  },
-)
-watch(
-  () => draft.gender,
-  (gender) => {
-    if (gender === 'ชาย') draft.title = 'นาย'
-    else if (gender === 'หญิง') draft.title = 'นางสาว'
-  },
-)
 function normalizeProfile(profile: PatientProfile): UiPatientProfile {
   return {
     ...profile,
@@ -200,7 +187,12 @@ function normalizeProfile(profile: PatientProfile): UiPatientProfile {
 }
 function assignDraft(profile: UiPatientProfile) {
   const foreignPatient = isForeignNationalityValue(profile.nationality)
-  Object.assign(draft, profile, splitEditFullName(profile.fullName), {
+  const nameParts = splitEditFullName(profile.fullName)
+  Object.assign(draft, profile, nameParts, {
+    firstName: profile.firstName ?? nameParts.firstName,
+    lastName: profile.lastName ?? nameParts.lastName,
+    middleName: profile.middleName ?? nameParts.middleName,
+
     nationality: foreignPatient ? 'ต่างชาติ' : profile.nationality,
     identityDocumentType:
       foreignPatient || profile.identityDocumentType === 'PASSPORT'
@@ -224,9 +216,11 @@ async function saveEdit() {
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
-      fullName: `${draft.firstName} ${draft.middleName} ${draft.lastName}`
-        .replace(/\s+/g, ' ')
-        .trim(),
+      firstName: draft.firstName,
+      lastName: draft.lastName,
+      middleName: draft.middleName || null,
+      fullName: [draft.firstName, draft.middleName, draft.lastName].filter(Boolean).join(' '),
+
       birthDate: draft.birthDateInput,
       gender: draft.gender,
       phone: draft.phone,
@@ -309,7 +303,7 @@ onMounted(async () => {
             >ข้อมูลส่วนตัว</RouterLink
           >
           <RouterLink :to="`/staff/patients/${patient.id}/history`">ประวัติการรักษา</RouterLink>
-          <RouterLink :to="{ path: '/staff/services', query: { patientId: patient.id } }"
+          <RouterLink :to="{ path: `/staff/patients/${patient.id}/history`, query: { tab: 'courses' } }"
             >คอร์ส</RouterLink
           >
         </nav>
@@ -319,6 +313,7 @@ onMounted(async () => {
         <h1 class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
         <section class="patient-edit-summary" aria-label="สรุปผู้ป่วยที่กำลังแก้ไข">
           <div class="patient-edit-avatar" aria-hidden="true">{{ profileInitials }}</div>
+
           <div>
             <h2>{{ patient.title }}{{ patient.fullName }}</h2>
             <p>
@@ -480,6 +475,7 @@ onMounted(async () => {
             </div>
           </dl>
         </section>
+
       </section>
       <Teleport to="body">
         <Transition name="save-success">
