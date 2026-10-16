@@ -486,11 +486,15 @@ export const appointmentApi = {
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
   create: (body: {
     branchCode: string
-    patientId: number
+    patientId?: number
     therapistId: number
     serviceId?: number
     startAt: string
     note?: string
+    patientType?: 'CURRENT' | 'NEW'
+    contactName?: string
+    contactPhone?: string
+    requestedServiceType?: 'SingleVisit' | 'Course'
   }) => api.post<Appointment>('/api/appointments', body),
   checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}),
   startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}),
