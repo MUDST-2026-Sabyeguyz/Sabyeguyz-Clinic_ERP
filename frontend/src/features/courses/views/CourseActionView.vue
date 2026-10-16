@@ -117,6 +117,16 @@ function courseUsagePercent(course: UiCourse) {
     Math.max(0, Math.round(((course.total - course.balance) / course.total) * 100)),
   )
 }
+function isSharedCourse(course: UiCourse) {
+  return Boolean(owner.value && course.purchaser && course.purchaser.id !== owner.value.id)
+}
+function purchaseDate(course: UiCourse) {
+  return new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(course.purchasedAt))
+}
 async function loadOwner() {
   const [patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
   owners.value = patientList
@@ -1307,8 +1317,8 @@ function closePrintSuccess() {
         :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
         >← กลับไปหน้าบริการ</RouterLink
       >
-      <h1>จัดการคอร์สผู้ป่วย</h1>
-      <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ ใช้สิทธิ์ ดูประวัติ และแชร์คอร์ส</p>
+      <h1>คอร์สของผู้ป่วย</h1>
+      <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
       <section v-if="transferReceiptId" class="course-after-patient">
         <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
         <span>HN {{ owner?.hn || '-' }}</span>
@@ -1389,32 +1399,36 @@ function closePrintSuccess() {
             ← ดูรายการแชร์ล่าสุด
           </button>
         </section>
-        <section v-else class="course-manager-card">
-          <span>ใช้งานได้ · {{ course.course.code }}</span>
-          <h2>{{ course.name }}</h2>
-          <p>
-            ซื้อเมื่อ
-            {{
-              new Date(course.purchasedAt).toLocaleDateString('th-TH', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })
-            }}
-            · Bonus {{ course.bonusSessions }} ครั้ง
-          </p>
-          <div class="course-manager-metrics" :class="{ transferred: transferReceiptId }">
+        <section v-else class="course-manager-card" :class="{ 'is-shared': isSharedCourse(course) }">
+          <header class="course-manager-card-header">
+            <div>
+              <span>{{ isSharedCourse(course) ? 'แชร์คอร์ส' : 'ใช้งานได้' }} · {{ course.course.code }}</span>
+              <h2>{{ course.name }} (คอร์ส {{ course.total }} ครั้ง)</h2>
+              <p v-if="isSharedCourse(course)">
+                ได้รับสิทธิ์จาก {{ course.purchaser?.fullName }} · {{ course.branchCode }}
+              </p>
+              <p v-else>ซื้อเมื่อ {{ purchaseDate(course) }} · {{ branchLabel(owner) }}</p>
+            </div>
+            <button
+              v-if="!isSharedCourse(course)"
+              class="course-share-button"
+              type="button"
+              @click="start('transfer', course)"
+            >แชร์คอร์ส</button>
+          </header>
+          <div class="course-manager-metrics">
             <article>
               <small>ทั้งหมด</small><strong>{{ course.total }} ครั้ง</strong>
             </article>
             <article>
               <small>ใช้แล้ว</small><strong>{{ course.total - course.balance }} ครั้ง</strong>
             </article>
-            <article v-if="transferReceiptId">
-              <small>แชร์ออก</small><strong>{{ transferAmount }} ครั้ง</strong>
-            </article>
             <article>
               <small>คงเหลือ</small><strong>{{ course.balance }} ครั้ง</strong>
+            </article>
+            <article class="course-expiry-metric">
+              <small>{{ isSharedCourse(course) ? 'วันหมดอายุสิทธิ์ของผู้รับ' : 'วันหมดอายุคอร์ส' }}</small>
+              <strong>{{ course.expiry }}</strong>
             </article>
           </div>
           <div
@@ -1427,16 +1441,16 @@ function closePrintSuccess() {
           >
             <i :style="{ width: `${courseUsagePercent(course)}%` }" />
           </div>
-          <p class="course-manager-used">
-            ใช้ไปแล้ว <strong>{{ courseUsagePercent(course) }}%</strong> ของคอร์ส
+          <p class="course-manager-used">ใช้แล้ว {{ course.total - course.balance }} จาก {{ course.total }} ครั้ง</p>
+          <p v-if="isSharedCourse(course)" class="course-shared-note">
+            ทุกผู้ถือสิทธิ์ใช้วันหมดอายุร่วมกัน · การต่ออายุต้องดำเนินการโดยเจ้าของคอร์ส
           </p>
           <div class="course-manager-actions">
+            <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
             <button type="button" :disabled="!course.usable" @click="start('use', course)">
-              ใช้สิทธิ์</button
-            ><button type="button" @click="start('history', course)">ดูประวัติการใช้</button
-            ><button type="button" @click="start('transfer', course)">แชร์คอร์ส</button>
+              ใช้สิทธิ์คอร์ส
+            </button>
           </div>
-          <small class="course-manager-expiry">หมดอายุ {{ course.expiry }}</small>
           <button
             v-if="transferReceiptId"
             class="course-manager-latest-transfer"
@@ -4913,6 +4927,155 @@ function closePrintSuccess() {
   }
   .course-after-history-totals > div {
     grid-template-columns: 1fr;
+  }
+}
+.course-manager-main {
+  width: min(1280px, calc(100% - 48px));
+  padding-top: 28px;
+}
+.course-manager-main > h1 {
+  margin: 26px 0 4px;
+  font-size: 32px;
+}
+.course-manager-intro {
+  margin: 0 0 24px;
+  color: #71837c;
+}
+.course-manager-main .course-use-patient {
+  min-height: 110px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 24px 22px;
+  border: 0;
+  border-left: 5px solid #1e918a;
+  border-radius: 13px;
+  background: #fff;
+}
+.course-status-tabs {
+  margin: 20px 0 22px;
+}
+.course-manager-card {
+  min-height: 0;
+  gap: 0;
+  margin: 0 0 42px;
+  padding: 22px;
+  border: 1px solid #dce6e1;
+  border-radius: 13px;
+}
+.course-manager-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.course-manager-card-header > div {
+  min-width: 0;
+}
+.course-manager-card-header span {
+  color: #267557;
+  font-size: 14px;
+  font-weight: 700;
+}
+.course-manager-card h2 {
+  margin: 10px 0 5px;
+  font-size: 24px;
+}
+.course-manager-card-header p {
+  margin: 0;
+  color: #71837c;
+  font-size: 14px;
+}
+.course-share-button {
+  min-width: 116px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  color: #344f55;
+  background: #dceaff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.course-manager-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(230px, 1.45fr);
+  gap: 16px;
+  margin-top: 26px;
+}
+.course-manager-metrics article {
+  min-height: 82px;
+  padding: 14px 16px;
+  border-radius: 10px;
+}
+.course-manager-metrics strong {
+  font-size: 20px;
+}
+.course-manager-metrics .course-expiry-metric {
+  background: #fff2cc;
+}
+.course-expiry-metric small {
+  color: #8c7a43;
+}
+.course-expiry-metric strong {
+  font-size: 17px;
+}
+.course-manager-card > .course-progress {
+  height: 8px;
+  margin-top: 24px;
+}
+.course-manager-used {
+  margin: 8px 0 0 !important;
+}
+.course-shared-note {
+  margin: 22px 0 0 !important;
+  padding: 13px 16px;
+  border-radius: 8px;
+  color: #4d71a7 !important;
+  background: #e7f0ff;
+  font-size: 13px !important;
+}
+.course-manager-actions {
+  position: static;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+.course-manager-actions button {
+  min-width: 190px;
+  min-height: 48px;
+  border-radius: 10px;
+}
+.course-manager-actions button:first-child {
+  border-color: #d8e1de;
+  color: #25372f;
+  background: #fff;
+}
+.course-manager-actions button:last-child {
+  border-color: #1f8f89;
+  color: #fff;
+  background: #1f8f89;
+}
+@media (max-width: 820px) {
+  .course-manager-main {
+    width: min(100% - 28px, 1280px);
+  }
+  .course-manager-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .course-manager-card-header,
+  .course-manager-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .course-manager-metrics {
+    grid-template-columns: 1fr;
+  }
+  .course-manager-actions button {
+    width: 100%;
   }
 }
 @media print {
