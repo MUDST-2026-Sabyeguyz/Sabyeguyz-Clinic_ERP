@@ -6,6 +6,10 @@ Status: Update User story
 ### Document Link:
 [Sabyeguyz_Userstories-Phase1](https://docs.google.com/document/d/1-2WLmgEvaAiSM-U2VmLGoWfkPSYMEkQpCTOxS1uiqOQ/edit?usp=sharing)
 
+### PDF:
+[Sabyeguyz_Userstories-Phase1.pdf](https://github.com/user-attachments/files/33579123/Sabyeguyz_Userstories-Phase1.pdf)
+
+
 ## Template
 
 ```text
