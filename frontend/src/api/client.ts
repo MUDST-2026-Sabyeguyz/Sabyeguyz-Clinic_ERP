@@ -1,6 +1,9 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
-export type ApiErrorBody = { message?: string; fields?: Record<string, string> }
+export type ApiErrorBody = {
+  message?: string
+  fields?: Record<string, string>
+}
 
 export class ApiError extends Error {
   constructor(
@@ -178,8 +181,18 @@ export type Course = {
   validityDays: number
   active: boolean
 }
-export type Therapist = { id: number; code: string; fullName: string; branchCode: string }
-export type PaymentMethod = { id: number; code: string; name: string; active: boolean }
+export type Therapist = {
+  id: number
+  code: string
+  fullName: string
+  branchCode: string
+}
+export type PaymentMethod = {
+  id: number
+  code: string
+  name: string
+  active: boolean
+}
 export type AppointmentStatus =
   'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
 export type Appointment = {
@@ -235,7 +248,12 @@ export type SaleDetail = SaleReceipt & {
     quantity: number
     lineTotal: number
   }>
-  payments: Array<{ id: number; type: string; paymentMethodCode: string; amount: number }>
+  payments: Array<{
+    id: number
+    type: string
+    paymentMethodCode: string
+    amount: number
+  }>
 }
 export type CourseUsageTransaction = {
   id: number
@@ -310,9 +328,17 @@ export type TransferRecord = {
 
 export const authApi = {
   login: (identifier: string, password: string) =>
-    api.post<AuthResponse>('/api/auth/login', { username: identifier, password }),
+    api.post<AuthResponse>('/api/auth/login', {
+      username: identifier,
+      password,
+    }),
   register: (username: string, password: string, role: 'MANAGER' | 'THERAPIST', email?: string) =>
-    api.post<AuthResponse>('/api/auth/register', { username, email, password, role }),
+    api.post<AuthResponse>('/api/auth/register', {
+      username,
+      email,
+      password,
+      role,
+    }),
 }
 
 export const patientApi = {
@@ -361,7 +387,13 @@ export const catalogApi = {
     >('/api/lookups/services'),
   lookupTherapists: (branchCode?: string) =>
     api.get<
-      Array<{ id: number; code: string; fullName: string; branchCode: string; active: boolean }>
+      Array<{
+        id: number
+        code: string
+        fullName: string
+        branchCode: string
+        active: boolean
+      }>
     >(
       `/api/lookups/therapists${branchCode ? `?branchCode=${encodeURIComponent(branchCode)}` : ''}`,
     ),
@@ -453,12 +485,19 @@ export const courseApi = {
         commissionAllocationPerVisit?: number
       }
       movements: unknown[]
-      allocations: Array<{ visitDate: string; gross: number; fee: number; ownerNet: number }>
+      allocations: Array<{
+        visitDate: string
+        gross: number
+        fee: number
+        ownerNet: number
+      }>
     }>(`/api/course-purchases/${id}`),
   use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) =>
     api.post<CoursePurchase>('/api/course-usages', body),
   reverse: (movementId: number, reason: string) =>
-    api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, { reason }),
+    api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, {
+      reason,
+    }),
   cancel: (id: number, reason: string) =>
     api.post<CoursePurchase>(`/api/course-purchases/${id}/cancel`, { reason }),
   transfer: (body: {
@@ -473,7 +512,12 @@ export const courseApi = {
 
 export const salesApi = {
   list: (
-    params: { patientId?: number; branchCode?: string; page?: number; size?: number } = {},
+    params: {
+      patientId?: number
+      branchCode?: string
+      page?: number
+      size?: number
+    } = {},
   ) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
@@ -504,7 +548,12 @@ export const staffApi = {
     api.post<Staff>('/api/staff', body),
   update: (
     id: number,
-    body: { userId: number; employeeCode: string; fullName: string; phone?: string },
+    body: {
+      userId: number
+      employeeCode: string
+      fullName: string
+      phone?: string
+    },
   ) => api.put<Staff>(`/api/staff/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/staff/${id}`),
 }
@@ -573,6 +622,118 @@ export const reportApi = {
     ),
 }
 
+export type CommissionFormula = {
+  asOf: string
+  scheme: {
+    id: number
+    name: string
+    version: number
+    effectiveFrom: string
+    effectiveTo: string | null
+  } | null
+  tiers: Array<{
+    id: number
+    order: number
+    minimum: number
+    maximum: number | null
+    rate: number
+    active: boolean
+  }>
+  treatmentFee: {
+    id: number
+    feeType: 'Fixed' | 'Percentage'
+    feeValue: number
+    effectiveFrom: string
+    effectiveTo: string | null
+    enabled: boolean
+    used: boolean
+  } | null
+}
+export type TherapistLine = {
+  kind: 'COMMISSION' | 'FEE'
+  id: number
+  date: string
+  patientName: string
+  patientHn: string | null
+  item: string
+  role: string
+  amount: number | null
+  reversal: boolean
+  pending: boolean
+  paymentStatus: 'OPEN' | 'CLOSED' | 'PAID' | null
+  courseNo: string | null
+  totalVisits: number | null
+  grossAmount: number | null
+  lineDiscount: number | null
+  base: number | null
+  rate: number | null
+  tier: string | null
+  pool: number | null
+  saleNo: string | null
+  saleDate: string | null
+  saleType: string | null
+  feeType: 'Fixed' | 'Percentage' | null
+  feeValue: number | null
+  feeBase: number | null
+  ownerName: string | null
+  treatingName: string | null
+  visitNo: string | null
+  singleVisit: boolean
+}
+export type TherapistLines = {
+  month: string
+  courseCommission: number | null
+  singleVisitFee: number
+  substituteFee: number
+  pendingSessions: number
+  lines: TherapistLine[]
+}
+export type TherapistAdjustment = {
+  id: number
+  originalMonth: string
+  appliedMonth: string
+  amount: number
+  reason: string
+  status: string
+  processed: number
+  remaining: number
+  reference: string | null
+  approvedBy: string | null
+  applications: Array<{
+    id: number
+    month: string | null
+    amount: number
+    status: string
+    approvedBy: string | null
+    approvalReference: string | null
+  }>
+}
+export type StaffPayment = {
+  id: number
+  staffId: number
+  staffName: string
+  month: string
+  status: 'OPEN' | 'CLOSED' | 'PAID'
+  courseCommission: number | null
+  singleVisitFee: number | null
+  substituteFee: number | null
+  adjustment: number | null
+  net: number | null
+  paidAt: string | null
+  paidDate?: string | null
+  paymentReference?: string | null
+  closingId: number | null
+  pendingSessions: number
+  applications: Array<{
+    id: number
+    adjustmentId: number
+    amount: number
+    status: string
+    approved: boolean
+    approvalReference: string | null
+  }>
+}
+
 export const commissionApi = {
   schemes: () => api.get('/api/commission/schemes'),
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
@@ -580,6 +741,7 @@ export const commissionApi = {
   updateScheme: (id: number, body: unknown) => api.put(`/api/commission/schemes/${id}`, body),
   activateScheme: (id: number) => api.patch(`/api/commission/schemes/${id}/activate`, {}),
   deactivateScheme: (id: number) => api.delete(`/api/commission/schemes/${id}`),
+  formula: () => api.get<CommissionFormula>('/api/commission/formula'),
   report: (from: string, to: string) =>
     api.get<
       Array<{
@@ -630,6 +792,10 @@ export const commissionApi = {
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
   closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
+  myPayments: () => api.get<StaffPayment[]>('/api/commission/my-payments'),
+  myLines: (month: string) =>
+    api.get<TherapistLines>(`/api/commission/my-lines?month=${encodeURIComponent(month)}`),
+  myAdjustments: () => api.get<TherapistAdjustment[]>('/api/commission/my-adjustments'),
 }
 
 export type ClinicResource = {
@@ -666,4 +832,9 @@ export const masterDataApi = {
 
 export const auditApi = {
   list: (page = 0, size = 50) => api.get(`/api/audit-logs?page=${page}&size=${size}`),
+}
+
+export const calendarIntegrationApi = {
+  startGoogleConnect: () =>
+    api.post<{ authorizationUrl: string }>('/api/calendar/google/connect', {}),
 }

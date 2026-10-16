@@ -16,7 +16,11 @@ const menuOpen = ref(false)
 const route = useRoute()
 const navRef = ref<HTMLElement | null>(null)
 const pillReady = ref(false)
-const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0' })
+const pillStyle = ref({
+  width: '0px',
+  transform: 'translateX(0px)',
+  opacity: '0',
+})
 let readyFrame: number | undefined
 let routeFrame: number | undefined
 let settleFrame: number | undefined
@@ -47,6 +51,7 @@ const navItems = computed(() =>
         { to: '/staff/appointments', label: 'นัดหมาย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
+        { to: '/staff/compensation', label: 'คอมมิชชัน' },
       ],
 )
 function movePill(target: HTMLElement | null) {
@@ -58,9 +63,6 @@ function movePill(target: HTMLElement | null) {
   target.classList.add('pill-target')
   pillStyle.value = {
     width: `${targetBox.width}px`,
-    // The pill is an absolutely positioned child of the scrollable nav. Its
-    // offset is already in that same coordinate space, unlike viewport rects
-    // which can be stale while the centered menu is settling after a refresh.
     transform: `translateX(${target.offsetLeft}px)`,
     opacity: '1',
   }
@@ -87,9 +89,6 @@ function positionPillWithoutAnimation() {
 }
 onMounted(() => {
   positionPillWithoutAnimation()
-  // Centered Manager tabs move slightly after the browser applies loaded fonts.
-  // Measure again after layout settles so the pill never remains at its
-  // pre-refresh position.
   requestAnimationFrame(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
   })
@@ -124,12 +123,14 @@ async function loadManagerBranches() {
   try {
     const branches = (await branchApi.list())
       .filter((branch) => branch.active)
-      .map((branch) => ({ code: branch.code, name: branch.name, address: branch.address }))
+      .map((branch) => ({
+        code: branch.code,
+        name: branch.name,
+        address: branch.address,
+      }))
     setManagerBranches(branches)
     window.dispatchEvent(new CustomEvent('manager-branch-changed'))
-  } catch {
-    // The page-level requests still show their normal loading error if branch data is unavailable.
-  }
+  } catch {}
 }
 function switchManagerBranch(code: string) {
   const branch = managerBranches.value.find((item) => item.code === code)
@@ -151,11 +152,7 @@ function switchManagerBranch(code: string) {
     >
       <span></span><span></span><span></span>
     </button>
-    <nav
-      ref="navRef"
-      :class="{ 'mobile-open': menuOpen }"
-      aria-label="เมนูเจ้าหน้าที่คลินิก"
-    >
+    <nav ref="navRef" :class="{ 'mobile-open': menuOpen }" aria-label="เมนูเจ้าหน้าที่คลินิก">
       <div class="mobile-menu-head">
         <button type="button" aria-label="ปิดเมนู" @click="menuOpen = false">×</button>
         <img :src="drawerLogo" alt="SaByeGuyz" />
@@ -174,7 +171,12 @@ function switchManagerBranch(code: string) {
       <FilterDropdown
         class="manager-branch-filter"
         :model-value="activeManagerBranch?.code ?? ''"
-        :options="managerBranches.map((branch) => ({ value: branch.code, label: branch.name }))"
+        :options="
+          managerBranches.map((branch) => ({
+            value: branch.code,
+            label: branch.name,
+          }))
+        "
         default-label="เลือกสาขา"
         label="เลือกสาขา"
         :clear-on-reselect="false"
