@@ -3,10 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import {
   appointmentApi,
   branchApi,
-  calendarIntegrationApi,
   catalogApi,
   type Appointment,
   type Branch,
@@ -28,24 +28,16 @@ const branches = ref<Branch[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
 const calendarSyncOpen = ref(false)
-const calendarConnecting = ref(false)
-const calendarSyncMessage = ref('')
 
-async function connectGoogleCalendar() {
+function connectGoogleCalendar() {
   calendarSyncOpen.value = true
-  calendarConnecting.value = true
-  calendarSyncMessage.value = 'กำลังเริ่มการเชื่อมต่อ…'
-  try {
-    const { authorizationUrl } = await calendarIntegrationApi.startGoogleConnect()
-    window.location.assign(authorizationUrl)
-  } catch {
-    calendarSyncMessage.value = 'ระบบเชื่อมต่อยังรอการเปิดใช้งานจาก backend'
-  } finally {
-    calendarConnecting.value = false
-  }
 }
 
 const timeOptions = ['09:00', '11:00', '13:00', '15:00', '17:00']
+// the rows of the grid: the usual times plus the time of every appointment, so none of them is left out of the calendar
+const gridTimes = computed(() =>
+  [...new Set([...timeOptions, ...appointments.value.map((item) => formatTime(item.startAt))])].sort(),
+)
 const branchOptions = computed(() => branches.value.filter((branch) => branch.active))
 const visibleTherapists = computed(() =>
   therapists.value
@@ -272,7 +264,7 @@ onMounted(() => void load())
         <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1) }">
           <div class="time-column">
             <b>เวลา</b>
-            <span v-for="time in timeOptions" :key="time">{{ time }}</span>
+            <span v-for="time in gridTimes" :key="time">{{ time }}</span>
           </div>
           <div v-for="column in columns" :key="column.key" class="schedule-column">
             <header>
@@ -280,7 +272,7 @@ onMounted(() => void load())
               <small v-if="column.sublabel">{{ column.sublabel }}</small>
             </header>
             <button
-              v-for="time in timeOptions"
+              v-for="time in gridTimes"
               :key="time"
               type="button"
               class="schedule-slot"
@@ -322,10 +314,8 @@ onMounted(() => void load())
         aria-labelledby="calendar-sync-title"
       >
         <h2 id="calendar-sync-title">เชื่อมต่อ Google Calendar</h2>
-        <p>{{ calendarSyncMessage }}</p>
-        <button type="button" :disabled="calendarConnecting" @click="calendarSyncOpen = false">
-          {{ calendarConnecting ? 'กำลังเชื่อมต่อ…' : 'รับทราบ' }}
-        </button>
+        <GoogleCalendarPanel />
+        <button type="button" @click="calendarSyncOpen = false">ปิด</button>
       </section>
     </div>
   </div>
