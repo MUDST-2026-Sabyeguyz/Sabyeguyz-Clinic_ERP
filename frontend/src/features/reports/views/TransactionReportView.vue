@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { branchApi, commissionApi, salesApi, type SaleDetail } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 const type = ref<'single' | 'course'>('single')
+const router = useRouter()
 const purchaseOnly = ref(false)
 const search = ref('')
 const from = ref('')
@@ -11,13 +13,18 @@ const page = ref(1)
 const loading = ref(false)
 const error = ref('')
 const updated = ref('')
+const sourceTierOpen = ref(false)
 const sales = ref<SaleDetail[]>([])
 const treatments = ref<Awaited<ReturnType<typeof commissionApi.treatmentReport>>>([])
 const branchNames = ref<Record<string, string>>({})
 let requestId = 0
 const money = (n: number) => `฿${Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
 const date = (v: string) =>
-  new Date(v).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+  new Date(v).toLocaleDateString('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
 const title = computed(() =>
   type.value === 'single' ? 'Single Visit Transaction' : 'Course Transaction',
 )
@@ -62,6 +69,51 @@ const metrics = computed(() =>
         ['ค่ามือรวม', money(courseRows.value.reduce((n, r) => n + Number(r.treatmentFee), 0))],
       ],
 )
+const tierBase = computed(() =>
+  type.value === 'single'
+    ? salesRows.value.reduce((total, row) => total + Number(row.total), 0)
+    : courseRows.value.reduce((total, row) => total + Number(row.gross), 0),
+)
+const sourceDetail = computed(() => {
+  if (type.value === 'single') {
+    const row = salesRows.value[0]
+    if (!row) return null
+    const course = row.items.find((item) => item.type === 'COURSE')
+    return {
+      receipt: row.receiptNo,
+      course: course?.description || row.items.map((item) => item.description).join(', ') || '—',
+      seller: row.salesperson?.fullName || '—',
+      branch: branchNames.value[row.branchCode] || row.branchCode,
+      soldAt: date(row.soldAt),
+      gross: row.items.reduce((total, item) => total + Number(item.lineTotal), 0),
+      net: Number(row.total),
+    }
+  }
+
+  const row = courseRows.value[0]
+  if (!row) return null
+  return {
+    receipt: row.courseCode,
+    course: row.courseCode || '—',
+    seller: row.treatingStaffName || '—',
+    branch: row.branchName || row.branchCode,
+    soldAt: date(row.visitDate),
+    gross: Number(row.gross),
+    net: Number(row.gross),
+  }
+})
+function openTierRoundDetails() {
+  sourceTierOpen.value = false
+  void router.push({
+    name: 'transaction-tier-round',
+    query: {
+      type: type.value,
+      base: String(tierBase.value),
+      from: from.value,
+      to: to.value,
+    },
+  })
+}
 async function load() {
   const id = ++requestId
   loading.value = true
@@ -156,9 +208,15 @@ watch([type, search, from, to, purchaseOnly], () => {
             }}
           </p>
         </div>
-        <button v-if="type === 'single'" class="action" @click="purchaseOnly = !purchaseOnly">
-          ประเภท: {{ purchaseOnly ? 'รายครั้ง' : 'ซื้อคอร์ส' }}</button
-        ><RouterLink v-else class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
+        <div class="results-actions">
+          <button class="action" type="button" @click="sourceTierOpen = true">
+            ดูต้นทางยอดขายและฐาน Tier
+          </button>
+          <button v-if="type === 'single'" class="action" @click="purchaseOnly = !purchaseOnly">
+            ประเภท: {{ purchaseOnly ? 'รายครั้ง' : 'ซื้อคอร์ส' }}
+          </button>
+          <RouterLink v-else class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
+        </div>
       </header>
       <p v-if="error" role="alert">{{ error }}</p>
       <div class="transaction-table">
@@ -240,6 +298,82 @@ watch([type, search, from, to, purchaseOnly], () => {
         ><span v-if="updated">อัปเดตล่าสุด {{ updated }}</span>
       </footer>
     </section>
+
+    <div
+      v-if="sourceTierOpen"
+      class="transaction-modal-backdrop"
+      @click.self="sourceTierOpen = false"
+    >
+      <section
+        class="transaction-source-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transaction-source-title"
+      >
+        <header>
+          <div>
+            <h2 id="transaction-source-title">รายละเอียดต้นทางยอดขายและฐาน Tier</h2>
+          </div>
+          <button
+            type="button"
+            class="modal-close"
+            aria-label="ปิด"
+            @click="sourceTierOpen = false"
+          >
+            ×
+          </button>
+        </header>
+
+        <dl v-if="sourceDetail" class="source-detail-list">
+          <div>
+            <dt>เลขที่ / ใบเสร็จ</dt>
+            <dd>{{ sourceDetail.receipt }}</dd>
+          </div>
+          <div>
+            <dt>คอร์ส</dt>
+            <dd>{{ sourceDetail.course }}</dd>
+          </div>
+          <div>
+            <dt>ผู้ขาย / สาขา / วันขาย</dt>
+            <dd>
+              {{ sourceDetail.seller }} · {{ sourceDetail.branch }} ·
+              {{ sourceDetail.soldAt }}
+            </dd>
+          </div>
+          <div>
+            <dt>ราคาก่อนลด / ส่วนลดรายการ</dt>
+            <dd>
+              {{ money(sourceDetail.gross) }} /
+              {{ money(Math.max(0, sourceDetail.gross - sourceDetail.net)) }}
+            </dd>
+            <small>ราคาหลังหักส่วนลด: {{ money(sourceDetail.net) }}</small>
+          </div>
+          <div>
+            <dt>มูลค่าสุทธิสำหรับ Tier</dt>
+            <dd>{{ money(sourceDetail.net) }} / {{ money(sourceDetail.net) }}</dd>
+            <small>มูลค่าหลังหักส่วนลดที่นำไปคิดฐาน Tier</small>
+          </div>
+          <div>
+            <dt>ยอดขายคอร์สรอบเดือน / Tier</dt>
+            <dd>{{ money(tierBase) }} / —</dd>
+            <small>Tier จะแสดงเมื่อมีข้อมูล Scheme ของรอบนั้น</small>
+          </div>
+          <p class="source-detail-note">
+            หมายเหตุ:
+            {{ type === 'single' ? 'CoursePurchase' : 'Course Transaction' }} ·
+            ยอดและค่าคอมมิชชั่นจะอิงจากรายการที่บันทึกในระบบ
+          </p>
+        </dl>
+        <p v-else class="source-detail-empty">ไม่พบรายการที่ใช้คำนวณฐาน Tier</p>
+
+        <footer>
+          <button type="button" class="modal-back" @click="sourceTierOpen = false">กลับ</button>
+          <button type="button" class="modal-done" @click="openTierRoundDetails">
+            ดูรายละเอียดรอบและฐาน Tier
+          </button>
+        </footer>
+      </section>
+    </div>
   </main>
 </template>
 <style scoped>
@@ -265,6 +399,12 @@ watch([type, search, from, to, purchaseOnly], () => {
 .transaction-workspace p {
   color: #52645b;
   margin: 8px 0 0;
+}
+.results-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
 }
 .transaction-filters {
   display: grid;
@@ -427,6 +567,113 @@ watch([type, search, from, to, purchaseOnly], () => {
   color: #52645b;
   font-size: 14px;
 }
+.transaction-modal-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(21 42 40 / 58%);
+}
+.transaction-source-modal {
+  width: min(560px, 100%);
+  max-height: min(740px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 43 40 / 28%);
+}
+.transaction-source-modal > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 26px 14px;
+  border-bottom: 1px solid #e0e9e6;
+}
+.transaction-source-modal h2 {
+  margin: 0;
+  font-size: 19px;
+}
+.modal-close {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: #eef6f3;
+  color: #23615d;
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+}
+.source-detail-list {
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 0 26px 18px;
+}
+.source-detail-list > div {
+  padding: 12px 0;
+  border-bottom: 1px solid #dce8e5;
+}
+.source-detail-list dt {
+  margin-bottom: 8px;
+  color: #28514d;
+  font-size: 13px;
+  font-weight: 700;
+}
+.source-detail-list dd {
+  margin: 0;
+  color: #263e3b;
+  font-size: 14px;
+}
+.source-detail-list small,
+.source-detail-note {
+  display: block;
+  margin-top: 7px;
+  color: #718984;
+  font-size: 12px;
+}
+.source-detail-note {
+  margin-bottom: 0;
+  padding-top: 14px;
+}
+.source-detail-empty {
+  padding: 26px;
+  color: #718984;
+}
+.transaction-source-modal > footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 26px 20px;
+  border-top: 1px solid #e0e9e6;
+}
+.modal-done {
+  min-width: 118px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: #1d8b85;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.modal-back {
+  min-width: 118px;
+  min-height: 42px;
+  border: 1px solid #b8cbc6;
+  border-radius: 8px;
+  background: #fff;
+  color: #267e78;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
 @media (max-width: 1200px) {
   .transaction-filters {
     grid-template-columns: 1fr 1fr;
@@ -460,6 +707,24 @@ watch([type, search, from, to, purchaseOnly], () => {
   .results-heading {
     align-items: start;
     flex-direction: column;
+  }
+  .results-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .results-actions .action {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+  .transaction-modal-backdrop {
+    padding: 12px;
+  }
+  .transaction-source-modal > header,
+  .transaction-source-modal > footer {
+    padding-inline: 18px;
+  }
+  .source-detail-list {
+    padding-inline: 18px;
   }
   .transaction-workspace footer {
     flex-direction: column;
