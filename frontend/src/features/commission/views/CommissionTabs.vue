@@ -1,9 +1,10 @@
 <script setup lang="ts">
-defineProps<{ active: 'overview' | 'closing' | 'tiers' | 'compensation' }>()
+defineProps<{ active: 'overview' | 'closing' | 'tiers' | 'compensation' | 'adjustments' }>()
 const tabs = [
   { key: 'overview', label: 'ภาพรวม', to: '/staff/commission' },
   { key: 'closing', label: 'ปิดรอบรายเดือน', to: '/staff/commission/closing' },
   { key: 'tiers', label: 'ตั้งค่ากฎค่าตอบแทน ↗', to: '/staff/settings?section=commission' },
+  { key: 'adjustments', label: 'รายการปรับปรุงค่าตอบแทน', to: '/staff/commission/adjustments' },
 ] as const
 </script>
 <template>
@@ -20,7 +21,7 @@ const tabs = [
 <style scoped>
 .commission-tabs {
   display: grid;
-  grid-template-columns: 215px 215px 300px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin: 20px 0 28px;
   overflow: hidden;
