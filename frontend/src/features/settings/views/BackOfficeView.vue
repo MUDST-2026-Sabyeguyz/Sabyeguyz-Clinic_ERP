@@ -1,21 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import {
-  branchApi,
-  commissionApi,
-  courseApi,
-  paymentMethodApi,
-  resourceApi,
-  masterDataApi,
-  serviceManagementApi,
-  userManagementApi,
-} from '@/api/client'
+import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 
 type SectionKey = 'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'master'
-// Rows are edited generically from form fields of different shapes, so their values stay loosely typed.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
 const sections: Array<{ key: SectionKey; label: string }> = [
   { key: 'branches', label: 'สาขา' },
@@ -26,18 +16,20 @@ const sections: Array<{ key: SectionKey; label: string }> = [
   { key: 'commission', label: 'Commission Rule' },
   { key: 'master', label: 'Master Data' },
 ]
-const section = ref<SectionKey>('branches'),
+const route = useRoute()
+const initialSection = sections.find((item) => item.key === route.query.section)?.key ?? 'branches'
+const section = ref<SectionKey>(initialSection),
   drawerOpen = ref(false),
   editingIndex = ref<number | null>(null),
   savedMessage = ref(''),
   saveModalOpen = ref(false)
 const permissions = ['Patient', 'Visit', 'Treatment', 'Course', 'Transaction', 'Commission']
+const selectedPermissions = ref<string[]>(['Treatment'])
 const fieldErrors = reactive<Record<string, boolean>>({})
 const validationMessage = ref('')
-const loadError = ref('')
 const option = (value: string) => ({ value, label: value })
 const statusOptions = computed(() => {
-  if (section.value === 'rooms') return [option('พร้อมใช้งาน'), option('ไม่ว่าง'), option('ซ่อม')]
+  if (section.value === 'rooms') return [option('พร้อมใช้งาน'), option('ไม่พร้อมใช้งาน')]
   if (section.value === 'commission') return [option('เปิดใช้งาน'), option('ปิดใช้งาน')]
   return [option('ใช้งาน'), option('ปิดใช้งาน')]
 })
@@ -49,151 +41,7 @@ const data = reactive<Record<Exclude<SectionKey, 'payments'>, Row[]>>({
   commission: [],
   master: [],
 })
-const paymentMethods = reactive<Array<{ id: number; name: string; note: string; active: boolean }>>(
-  [],
-)
-const branchOptions = computed(() => data.branches.map((branch) => option(branch.name)))
-const resourceStatuses: Record<string, string> = {
-  AVAILABLE: 'พร้อมใช้งาน',
-  IN_USE: 'ไม่ว่าง',
-  MAINTENANCE: 'ซ่อม',
-  ACTIVE: 'พร้อมใช้งาน',
-  INACTIVE: 'ปิดใช้งาน',
-}
-const status = (active: boolean) => (active ? 'ใช้งาน' : 'ปิดใช้งาน')
-const branchRow = (item: Awaited<ReturnType<typeof branchApi.create>>) => ({
-  id: item.id,
-  code: item.branchCode,
-  name: item.name,
-  address: item.address,
-  contact: item.phone,
-  email: item.email ?? '',
-  licenseNo: item.licenseNo ?? '',
-  openTime: item.bookingOpenTime ?? '',
-  closeTime: item.bookingCloseTime ?? '',
-  appointmentMinutes: item.defaultAppointmentMinutes ? String(item.defaultAppointmentMinutes) : '',
-  status: status(item.active),
-})
-const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => ({
-  ...item,
-  code: item.employeeCode,
-  name: item.fullName,
-  role: item.role === 'MANAGER' ? 'Manager' : 'Therapist',
-  branch: item.branchName ?? 'ทุกสาขา',
-  permission: item.role === 'MANAGER' ? permissions.join(' ') : 'Patient Visit Treatment',
-  status: status(item.active),
-})
-const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>>) => ({
-  ...item,
-  type: 'Single Visit',
-  // a single visit is always one visit; its own field is the optional appointment length
-  sessions: '1',
-  duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
-  status: status(item.active),
-})
-const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
-  ...item,
-  type: 'Course',
-  sessions: String(item.sessions),
-  duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
-  validityValue: item.validityValue ?? item.validityDays,
-  validityUnit: item.validityUnit ?? 'Day',
-  status: status(Boolean(item.active)),
-})
-const resourceRow = (item: Awaited<ReturnType<typeof resourceApi.create>>) => ({
-  ...item,
-  branch: item.branchName,
-  type: item.type === 'ROOM' ? 'Treatment Room' : 'Resource',
-  status: resourceStatuses[item.status] ?? item.status,
-})
-const masterRow = (item: Awaited<ReturnType<typeof masterDataApi.create>>) => ({
-  ...item,
-  count: 1,
-  examples: item.name,
-  status: status(item.active),
-})
-async function loadBackendSettings() {
-  const [branches, users, services, courses, payments, resources, master] =
-    await Promise.allSettled([
-      branchApi.list(),
-      userManagementApi.list(),
-      serviceManagementApi.list(),
-      courseApi.list(),
-      paymentMethodApi.list(),
-      resourceApi.list(),
-      masterDataApi.list(),
-    ])
-  const failures: string[] = []
-  const results = [branches, users, services, courses, payments, resources, master]
-  const names = [
-    'สาขา',
-    'ผู้ใช้งาน',
-    'บริการ',
-    'คอร์ส',
-    'การชำระเงิน',
-    'Room / Resource',
-    'Master Data',
-  ]
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') failures.push(names[index]!)
-  })
-  if (branches.status === 'fulfilled')
-    data.branches.splice(0, data.branches.length, ...branches.value.map(branchRow))
-  if (users.status === 'fulfilled')
-    data.users.splice(0, data.users.length, ...users.value.map(userRow))
-  data.services.splice(
-    0,
-    data.services.length,
-    ...(services.status === 'fulfilled' ? services.value.map(serviceRow) : []),
-    ...(courses.status === 'fulfilled' ? courses.value.map(courseRow) : []),
-  )
-  if (payments.status === 'fulfilled')
-    paymentMethods.splice(
-      0,
-      paymentMethods.length,
-      ...payments.value.map((item) => ({ ...item, note: 'ช่องทางรับชำระเงิน' })),
-    )
-  if (resources.status === 'fulfilled')
-    data.rooms.splice(0, data.rooms.length, ...resources.value.map(resourceRow))
-  if (master.status === 'fulfilled')
-    data.master.splice(0, data.master.length, ...master.value.map(masterRow))
-  try {
-    const schemes = (await commissionApi.schemes()) as Array<{
-      id: number
-      name: string
-      active: boolean
-    }>
-    if (schemes[0]) {
-      const scheme = schemes[0]
-      const tiers = (await commissionApi.tiers(scheme.id)) as Array<{ order: number; rate: number }>
-      data.commission.splice(
-        0,
-        data.commission.length,
-        ...tiers.map((tier) => ({
-          name: `${scheme.name} Tier ${tier.order}`,
-          recipient: 'ผู้ขาย',
-          calculation: `${tier.rate * 100}% ของยอดขาย`,
-          status: scheme.active ? 'เปิดใช้งาน' : 'ปิดใช้งาน',
-        })),
-      )
-    }
-  } catch {
-    failures.push('Commission Rule')
-  }
-  loadError.value = failures.length ? `ยังโหลดข้อมูลไม่ได้: ${failures.join(', ')}` : ''
-  fillDefaultBranch()
-}
-// A form opened before the branches arrived starts without a branch: give it the default one as soon as it is known.
-function fillDefaultBranch() {
-  if (
-    drawerOpen.value &&
-    editingIndex.value === null &&
-    (section.value === 'users' || section.value === 'rooms') &&
-    !String(form.branch ?? '').trim()
-  )
-    form.branch = data.branches[0]?.name ?? ''
-}
-onMounted(loadBackendSettings)
+const paymentMethods = reactive<Array<{ name: string; note: string; active: boolean }>>([])
 const copy = computed(
   () =>
     ({
@@ -243,33 +91,32 @@ const keys = computed(() => {
   return values[section.value]
 })
 const form = reactive<Row>({})
-const rolePermissions = computed(() =>
-  form.role === 'Manager' ? permissions : ['Patient', 'Visit', 'Treatment'],
-)
+type CommissionTier = { minimum: string; maximum: string; rate: string }
+const commissionTiers = ref<CommissionTier[]>([])
+const defaultTiers = (): CommissionTier[] => [
+  { minimum: '0', maximum: '49,999', rate: '4%' },
+  { minimum: '50,000', maximum: '79,999', rate: '6%' },
+  { minimum: '80,000', maximum: '119,999', rate: '8%' },
+  { minimum: '120,000', maximum: 'ไม่จำกัด', rate: '12%' },
+]
+function changeCompensationType() {
+  form.rateFormat = form.compensationType === 'course' ? 'เปอร์เซ็นต์ (%)' : 'บาท / ครั้ง'
+  form.basis =
+    form.compensationType === 'course' ? 'ยอดขายคอร์สหลังส่วนลดรายการ' : 'จำนวนครั้งที่ให้บริการ'
+}
 function defaults() {
   if (section.value === 'branches')
-    Object.assign(form, {
-      code: '',
-      name: '',
-      address: '',
-      contact: '',
-      email: '',
-      licenseNo: '',
-      openTime: '',
-      closeTime: '',
-      appointmentMinutes: '',
-      status: 'ใช้งาน',
-    })
+    Object.assign(form, { code: '', name: '', contact: '', address: '', status: 'ใช้งาน' })
   if (section.value === 'users')
     Object.assign(form, {
       name: '',
-      role: 'Therapist',
-      username: '',
+      firstName: '',
+      lastName: '',
       email: '',
+      username: '',
       password: '',
-      code: '',
-      phone: '',
-      branch: data.branches[0]?.name ?? '',
+      role: 'Therapist',
+      branch: 'แบริ่ง',
       permission: '',
       status: 'ใช้งาน',
     })
@@ -278,17 +125,15 @@ function defaults() {
       name: '',
       type: 'Single Visit',
       price: '',
-      sessions: '10',
-      duration: '',
-      bonusSessions: 0,
-      validityValue: 365,
-      validityUnit: 'Day',
+      sessions: '1 ครั้ง',
+      unit: 'ครั้ง',
+      expiry: '365 วัน',
       status: 'ใช้งาน',
     })
   if (section.value === 'rooms')
     Object.assign(form, {
       name: '',
-      branch: data.branches[0]?.name ?? '',
+      branch: 'แบริ่ง',
       type: 'Treatment Room',
       capacity: 1,
       status: 'พร้อมใช้งาน',
@@ -296,8 +141,16 @@ function defaults() {
   if (section.value === 'commission')
     Object.assign(form, {
       name: '',
-      recipient: 'นักกายภาพบำบัด',
+      schemeName: '',
+      recipient: 'รายพนักงาน',
       calculation: '',
+      compensationType: 'course',
+      basis: 'ยอดขายคอร์สหลังส่วนลดรายการ',
+      rateFormat: 'เปอร์เซ็นต์ (%)',
+      calculationMethod: '',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      amount: '300',
       status: 'เปิดใช้งาน',
     })
   if (section.value === 'master')
@@ -312,30 +165,40 @@ function openDrawer(index: number | null) {
     index === null ? undefined : data[section.value as Exclude<SectionKey, 'payments'>]?.[index]
   if (row) Object.assign(form, row)
   else defaults()
+  if (section.value === 'users') {
+    const [firstName = '', ...lastName] = String(form.name ?? '')
+      .trim()
+      .split(/\s+/)
+    form.firstName = form.firstName ?? firstName
+    form.lastName = form.lastName ?? lastName.join(' ')
+    form.password = ''
+  }
+  if (section.value === 'commission') {
+    commissionTiers.value = form.tiers
+      ? form.tiers.map((tier: CommissionTier) => ({ ...tier }))
+      : defaultTiers()
+  }
+  selectedPermissions.value = String(form.permission ?? '')
+    .split(/[,\s]+/)
+    .filter(Boolean)
   drawerOpen.value = true
 }
-const textOrUndefined = (value: unknown) => String(value ?? '').trim() || undefined
-const numberOrUndefined = (value: unknown) => {
-  const text = String(value ?? '').trim()
-  return text === '' ? undefined : Number(text)
-}
-// Appointment lengths are optional whole minutes from 5 to 480.
-function invalidMinutes(value: unknown) {
-  const text = String(value ?? '').trim()
-  if (text === '') return false
-  const minutes = Number(text)
-  return !Number.isInteger(minutes) || minutes < 5 || minutes > 480
-}
-async function save() {
-  fillDefaultBranch()
+function save() {
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
   validationMessage.value = ''
   const required: Record<Exclude<SectionKey, 'payments'>, string[]> = {
-    branches: ['code', 'name', 'address', 'contact'],
-    users: ['name', 'role', 'branch', 'username', 'code'],
-    services: ['name', 'type', 'price'],
-    rooms: ['name', 'branch', 'type'],
-    commission: ['name', 'recipient', 'calculation'],
+    branches: ['code', 'name', 'contact'],
+    users: ['firstName', 'lastName', 'email', 'username', 'role', 'branch'],
+    services: ['name', 'type', 'price', 'unit', 'sessions', 'expiry'],
+    rooms: ['name', 'branch', 'type', 'capacity'],
+    commission: [
+      'schemeName',
+      'recipient',
+      'basis',
+      'rateFormat',
+      'calculationMethod',
+      'startDate',
+    ],
     master: ['category', 'examples'],
   }
   required[section.value as Exclude<SectionKey, 'payments'>].forEach((key) => {
@@ -347,182 +210,86 @@ async function save() {
     fieldErrors.contact =
       !/^[0-9 -]+$/.test(phone) || (phoneDigits.length !== 9 && phoneDigits.length !== 10)
   }
-  if (section.value === 'branches') {
-    fieldErrors.code = !/^\d{2}$/.test(String(form.code))
-    const email = String(form.email ?? '').trim()
-    fieldErrors.email = email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    const open = String(form.openTime ?? '').trim()
-    const close = String(form.closeTime ?? '').trim()
-    // the booking window needs both ends, opening before closing
-    fieldErrors.openTime = (open === '') !== (close === '') || (open !== '' && open >= close)
-    fieldErrors.closeTime = fieldErrors.openTime
-    fieldErrors.appointmentMinutes = invalidMinutes(form.appointmentMinutes)
+  if (section.value === 'users' && !selectedPermissions.value.length) fieldErrors.permission = true
+  if (section.value === 'users') {
+    if (!fieldErrors.email)
+      fieldErrors.email = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(form.email))
+    if (editingIndex.value === null && !String(form.password ?? '').trim())
+      fieldErrors.password = true
   }
-  if (section.value === 'services') {
-    fieldErrors.price = !Number.isFinite(Number(form.price)) || Number(form.price) < 0
-    fieldErrors.duration = invalidMinutes(form.duration)
-    if (form.type === 'Course') {
-      fieldErrors.sessions = !Number.isInteger(Number(form.sessions)) || Number(form.sessions) < 1
-      fieldErrors.validityValue =
-        !Number.isInteger(Number(form.validityValue)) || Number(form.validityValue) < 1
+  if (section.value === 'commission') {
+    if (form.endDate && form.endDate < form.startDate) {
+      validationMessage.value = 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มมีผล'
+      return
+    }
+    const number = (value: string) => Number(value.replace(/[,\s%]/g, ''))
+    if (form.compensationType === 'course') {
+      let next = 0
+      for (const [index, tier] of commissionTiers.value.entries()) {
+        const minimum = number(tier.minimum)
+        const unlimited = tier.maximum.trim() === 'ไม่จำกัด'
+        const maximum = unlimited ? Infinity : number(tier.maximum)
+        const rate = number(tier.rate)
+        if (
+          !tier.minimum.trim() ||
+          !tier.maximum.trim() ||
+          !tier.rate.trim() ||
+          !Number.isFinite(minimum) ||
+          minimum !== next ||
+          maximum < minimum ||
+          Number.isNaN(maximum) ||
+          !Number.isFinite(rate) ||
+          rate <= 0 ||
+          rate > 100 ||
+          (unlimited && index !== commissionTiers.value.length - 1)
+        ) {
+          validationMessage.value =
+            'กรุณากำหนด Tier ให้ต่อเนื่อง ไม่ซ้อนทับ และอัตรามากกว่า 0 ถึง 100%'
+          return
+        }
+        next = maximum + 1
+      }
+    } else if (
+      !String(form.amount).trim() ||
+      !Number.isFinite(number(String(form.amount))) ||
+      number(String(form.amount)) <= 0
+    ) {
+      validationMessage.value = 'กรุณาระบุค่าตอบแทนต่อครั้งให้มากกว่า 0'
+      return
     }
   }
   if (Object.values(fieldErrors).some(Boolean)) {
     validationMessage.value = fieldErrors.contact
       ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
-      : fieldErrors.openTime
-        ? 'ช่วงเปิดรับนัดต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด'
-        : fieldErrors.email
-          ? 'รูปแบบอีเมลสาขาไม่ถูกต้อง'
-          : fieldErrors.appointmentMinutes || fieldErrors.duration
-            ? 'ระยะเวลานัดต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (เว้นว่างได้)'
-            : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
+      : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }
-  if (
-    section.value === 'users' &&
-    editingIndex.value === null &&
-    String(form.password ?? '').length < 8
-  ) {
-    validationMessage.value = 'ผู้ใช้ใหม่ต้องมีรหัสผ่านอย่างน้อย 8 ตัวอักษร'
-    return
+  if (section.value === 'master') {
+    form.count = String(form.examples)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean).length
+  }
+  if (section.value === 'users') {
+    form.permission = selectedPermissions.value.join(', ')
+    form.name = `${String(form.firstName).trim()} ${String(form.lastName).trim()}`
+    delete form.password
+  }
+  if (section.value === 'commission') {
+    form.tiers = commissionTiers.value.map((tier) => ({ ...tier }))
+    form.calculation =
+      form.compensationType === 'course'
+        ? `Tier ${commissionTiers.value.map((t) => `${t.rate.replace(/%/g, '').trim()}%`).join(' / ')}`
+        : `${form.amount} บาท / ครั้ง`
   }
   const rows = data[section.value as Exclude<SectionKey, 'payments'>]
-  const existing = editingIndex.value === null ? undefined : rows[editingIndex.value]
-  try {
-    let record: Row
-    if (section.value === 'branches') {
-      const body = {
-        branchCode: existing?.code ?? form.code,
-        name: form.name,
-        address: form.address,
-        phone: form.contact,
-        email: textOrUndefined(form.email),
-        licenseNo: textOrUndefined(form.licenseNo),
-        bookingOpenTime: textOrUndefined(form.openTime),
-        bookingCloseTime: textOrUndefined(form.closeTime),
-        defaultAppointmentMinutes: numberOrUndefined(form.appointmentMinutes),
-      }
-      record = branchRow(
-        existing?.id ? await branchApi.update(existing.id, body) : await branchApi.create(body),
-      )
-    } else if (section.value === 'users') {
-      const body = {
-        username: form.username,
-        email: form.email || undefined,
-        ...(form.password ? { password: form.password } : {}),
-        role: form.role === 'Manager' ? ('MANAGER' as const) : ('THERAPIST' as const),
-        employeeCode: form.code,
-        fullName: form.name,
-        phone: form.phone || undefined,
-        branchCode:
-          data.branches.find((branch) => branch.name === form.branch)?.code ??
-          data.branches[0]?.code,
-      }
-      record = userRow(
-        existing?.id
-          ? await userManagementApi.update(existing.id, body)
-          : await userManagementApi.create({ ...body, password: form.password }),
-      )
-    } else if (section.value === 'services') {
-      const code = existing?.code || form.code || `SV-${Date.now()}`
-      if (form.type === 'Course') {
-        const body = {
-          code,
-          name: form.name,
-          price: Number(form.price),
-          sessions: Number(form.sessions),
-          bonusSessions: Number(form.bonusSessions ?? 0),
-          validityDays: Number(form.validityValue ?? 365),
-          validityValue: Number(form.validityValue ?? 365),
-          validityUnit: (form.validityUnit ?? 'Day') as 'Day' | 'Month' | 'Year',
-          defaultDurationMinutes: numberOrUndefined(form.duration),
-        }
-        record = courseRow(
-          existing?.id ? await courseApi.update(existing.id, body) : await courseApi.create(body),
-        )
-      } else {
-        const body = {
-          code,
-          name: form.name,
-          price: Number(form.price),
-          defaultDurationMinutes: numberOrUndefined(form.duration),
-        }
-        record = serviceRow(
-          existing?.id
-            ? await serviceManagementApi.update(existing.id, body)
-            : await serviceManagementApi.create(body),
-        )
-      }
-    } else if (section.value === 'rooms') {
-      const body = {
-        branchCode: data.branches.find((branch) => branch.name === form.branch)?.code,
-        code: existing?.code || form.code || `RES-${Date.now()}`,
-        name: form.name,
-        type: form.type === 'Treatment Room' ? 'ROOM' : 'EQUIPMENT',
-        status:
-          Object.keys(resourceStatuses).find((key) => resourceStatuses[key] === form.status) ??
-          'AVAILABLE',
-      }
-      record = resourceRow(
-        existing?.id ? await resourceApi.update(existing.id, body) : await resourceApi.create(body),
-      )
-    } else if (section.value === 'master') {
-      const body = {
-        category: form.category,
-        code: existing?.code || form.code || `ITEM-${Date.now()}`,
-        name: String(form.examples).trim(),
-      }
-      record = masterRow(
-        existing?.id
-          ? await masterDataApi.update(existing.id, body)
-          : await masterDataApi.create(body),
-      )
-    } else {
-      validationMessage.value = 'ยังไม่มี API สำหรับบันทึกเกณฑ์คอมมิชชัน'
-      return
-    }
-    if (editingIndex.value === null) rows.push(record)
-    else rows[editingIndex.value] = record
-    drawerOpen.value = false
-    saveModalOpen.value = true
-    window.setTimeout(() => {
-      saveModalOpen.value = false
-    }, 1800)
-  } catch (error) {
-    validationMessage.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ'
-  }
-}
-function notify(message: string) {
-  savedMessage.value = message
+  if (editingIndex.value === null) rows.push({ ...form })
+  else rows[editingIndex.value] = { ...form }
+  drawerOpen.value = false
+  saveModalOpen.value = true
   window.setTimeout(() => {
-    savedMessage.value = ''
-  }, 2200)
-}
-async function togglePayment(index: number) {
-  const method = paymentMethods[index]
-  if (!method || (method.active && !window.confirm(`ยืนยันการปิดใช้งาน ${method.name} หรือไม่?`)))
-    return
-  try {
-    if (method.active) await paymentMethodApi.deactivate(method.id)
-    else await paymentMethodApi.activate(method.id)
-    method.active = !method.active
-    notify(`บันทึก ${method.name} อัตโนมัติแล้ว`)
-  } catch (error) {
-    notify(error instanceof Error ? error.message : 'เปลี่ยนสถานะไม่สำเร็จ')
-  }
-}
-async function toggleUser(user: Row) {
-  const active = user.status === 'ใช้งาน'
-  if (active && !window.confirm(`ยืนยันการปิดใช้งาน ${user.username} หรือไม่?`)) return
-  try {
-    if (active) await userManagementApi.deactivate(user.id)
-    else await userManagementApi.activate(user.id)
-    user.status = active ? 'ปิดใช้งาน' : 'ใช้งาน'
-    notify('บันทึกสถานะผู้ใช้แล้ว')
-  } catch (error) {
-    notify(error instanceof Error ? error.message : 'เปลี่ยนสถานะไม่สำเร็จ')
-  }
+    saveModalOpen.value = false
+  }, 1800)
 }
 const drawerTitle = computed(() => {
   const labels: Record<SectionKey, string> = {
@@ -531,7 +298,7 @@ const drawerTitle = computed(() => {
     services: 'คอร์ส',
     payments: 'การชำระเงิน',
     rooms: 'ห้อง/ทรัพยากร',
-    commission: 'เกณฑ์คอมมิชชัน',
+    commission: form.compensationType === 'course' ? 'Commission Tier' : 'Commission Rule',
     master: 'Master Data',
   }
   return `${editingIndex.value === null ? 'เพิ่ม' : 'แก้ไข'} ${labels[section.value]}`
@@ -567,22 +334,20 @@ const drawerTitle = computed(() => {
             <button v-if="actionLabel" class="settings-add" @click="openDrawer(null)">
               {{ actionLabel }}
             </button>
-            <p v-else-if="section === 'payments'" class="auto-save-note">
-              {{ savedMessage || 'การเปลี่ยนแปลงจะบันทึกอัตโนมัติ' }}
-            </p>
           </header>
-          <p v-if="loadError" class="validation-message" role="alert">{{ loadError }}</p>
           <div v-if="section === 'payments'" class="payment-list">
             <button
-              v-for="(method, index) in paymentMethods"
+              v-for="method in paymentMethods"
               :key="method.name"
               class="payment-option"
               :class="{ selected: method.active }"
-              @click="togglePayment(index)"
+              disabled
             >
               <span class="radio" aria-hidden="true"></span
               ><span
-                ><b>{{ method.name }}</b
+                ><span class="payment-title"
+                  ><b>{{ method.name }}</b
+                  ><span class="payment-unavailable">ยังไม่เปิดให้บริการ</span></span
                 ><small>{{ method.note }}</small></span
               ><i v-if="method.active">✓</i>
             </button>
@@ -610,19 +375,15 @@ const drawerTitle = computed(() => {
                           String(row[key]).startsWith('ไม่พร้อม'),
                       }"
                       >{{ row[key] }}</span
+                    ><template v-else-if="key === 'permission'">{{
+                      String(row[key] ?? '')
+                        .split(/[,\s]+/)
+                        .filter(Boolean)
+                        .join(', ')
+                    }}</template
                     ><template v-else>{{ row[key] }}</template>
                   </td>
-                  <td>
-                    <button v-if="section !== 'commission'" class="edit" @click="openDrawer(index)">
-                      แก้ไข</button
-                    ><button
-                      v-if="section === 'users'"
-                      class="edit user-toggle"
-                      @click="toggleUser(row)"
-                    >
-                      {{ row.status === 'ใช้งาน' ? 'ปิดใช้งาน' : 'เปิดใช้งาน' }}
-                    </button>
-                  </td>
+                  <td><button class="edit" @click="openDrawer(index)">แก้ไข</button></td>
                 </tr>
               </tbody>
             </table>
@@ -637,7 +398,7 @@ const drawerTitle = computed(() => {
       <div class="save-success-modal" role="status">บันทึกเรียบร้อยแล้ว</div>
     </div>
     <div v-if="drawerOpen" class="drawer-backdrop" @click.self="drawerOpen = false">
-      <aside class="drawer">
+      <aside class="drawer" :class="{ 'commission-drawer': section === 'commission' }">
         <header>
           <h2>{{ drawerTitle }}</h2>
           <button aria-label="ปิด" @click="drawerOpen = false">×</button>
@@ -647,19 +408,12 @@ const drawerTitle = computed(() => {
             >รหัสสาขา<input
               v-model="form.code"
               :class="{ invalid: fieldErrors.code }"
-              :disabled="editingIndex !== null"
-              maxlength="2"
-              placeholder="เช่น 01" /></label
+              placeholder="เช่น BR03" /></label
           ><label
             >ชื่อสาขา<input
               v-model="form.name"
               :class="{ invalid: fieldErrors.name }"
               placeholder="ระบุชื่อสาขา" /></label
-          ><label
-            >ที่อยู่<input
-              v-model="form.address"
-              :class="{ invalid: fieldErrors.address }"
-              placeholder="ที่อยู่สาขา" /></label
           ><label
             >ข้อมูลติดต่อ<input
               v-model="form.contact"
@@ -668,51 +422,45 @@ const drawerTitle = computed(() => {
               maxlength="12"
               :class="{ invalid: fieldErrors.contact }"
               placeholder="เบอร์โทรศัพท์สาขา" /></label
-          ><label
-            >อีเมลสาขา<input
+          ><label>ที่อยู่<input v-model="form.address" placeholder="ระบุที่อยู่สาขา" /></label
+        ></template>
+        <template v-else-if="section === 'users'"
+          ><div class="user-name-fields">
+            <label
+              >ชื่อ<input
+                v-model="form.firstName"
+                :class="{ invalid: fieldErrors.firstName }"
+                placeholder="ระบุชื่อ"
+                autocomplete="given-name"
+            /></label>
+            <label
+              >นามสกุล<input
+                v-model="form.lastName"
+                :class="{ invalid: fieldErrors.lastName }"
+                placeholder="ระบุนามสกุล"
+                autocomplete="family-name"
+            /></label>
+          </div>
+          <label
+            >Email<input
               v-model="form.email"
               type="email"
               :class="{ invalid: fieldErrors.email }"
-              placeholder="ไม่บังคับ" /></label
+              placeholder="ระบุ email ของผู้ใช้งาน"
+              autocomplete="email" /></label
           ><label
-            >เลขใบอนุญาต<input v-model="form.licenseNo" maxlength="50" placeholder="ไม่บังคับ" /></label
-          ><label
-            >เปิดรับนัดตั้งแต่<input
-              v-model="form.openTime"
-              type="time"
-              :class="{ invalid: fieldErrors.openTime }" /></label
-          ><label
-            >ถึงเวลา<input
-              v-model="form.closeTime"
-              type="time"
-              :class="{ invalid: fieldErrors.closeTime }" /></label
-          ><label
-            >ระยะเวลานัดเริ่มต้น (นาที)<input
-              v-model="form.appointmentMinutes"
-              inputmode="numeric"
-              :class="{ invalid: fieldErrors.appointmentMinutes }"
-              placeholder="ไม่บังคับ เช่น 60" /></label
-        ></template>
-        <template v-else-if="section === 'users'"
-          ><label
-            >ชื่อผู้ใช้งาน<input
-              v-model="form.name"
-              :class="{ invalid: fieldErrors.name }"
-              placeholder="ระบุชื่อผู้ใช้งาน" /></label
-          ><label
-            >Username<input
+            >username<input
               v-model="form.username"
-              :class="{ invalid: fieldErrors.username }" /></label
-          ><label>อีเมล<input v-model="form.email" type="email" /></label
+              :class="{ invalid: fieldErrors.username }"
+              placeholder="ระบุ username"
+              autocomplete="off" /></label
           ><label
             >รหัสผ่าน<input
               v-model="form.password"
               type="password"
-              autocomplete="new-password"
-              placeholder="เว้นว่างได้เมื่อแก้ไข" /></label
-          ><label
-            >รหัสพนักงาน<input v-model="form.code" :class="{ invalid: fieldErrors.code }" /></label
-          ><label>โทรศัพท์<input v-model="form.phone" type="tel" /></label
+              :class="{ invalid: fieldErrors.password }"
+              placeholder="ระบุรหัสผ่าน"
+              autocomplete="new-password" /></label
           ><label :class="{ 'invalid-field': fieldErrors.role }"
             >Role<FilterDropdown
               v-model="form.role"
@@ -723,23 +471,21 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false" /></label
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
-            >สาขาที่เข้า<FilterDropdown
+            >สาขา<FilterDropdown
               v-model="form.branch"
-              :options="[option('ทุกสาขา'), ...branchOptions]"
-              :default-value="data.branches[0]?.name ?? ''"
-              :default-label="data.branches[0]?.name ?? 'เลือกสาขา'"
+              :options="[option('แบริ่ง'), option('พระราม 9')]"
+              default-value="แบริ่ง"
+              default-label="แบริ่ง"
               label="สาขาที่เข้า"
               hide-default-option
               :clear-on-reselect="false"
           /></label>
-          <fieldset disabled>
-            <legend>สิทธิ์ตามบทบาท</legend>
+          <fieldset :class="{ 'invalid-fieldset': fieldErrors.permission }">
+            <legend>สิทธิ์การเข้าถึง</legend>
             <label v-for="permission in permissions" :key="permission" class="check"
-              ><input
-                :checked="rolePermissions.includes(permission)"
-                type="checkbox"
-                :value="permission"
-              />{{ permission }}</label
+              ><input v-model="selectedPermissions" type="checkbox" :value="permission" />{{
+                permission
+              }}</label
             >
           </fieldset></template
         >
@@ -752,11 +498,7 @@ const drawerTitle = computed(() => {
           ><label :class="{ 'invalid-field': fieldErrors.type }"
             >ประเภท<FilterDropdown
               v-model="form.type"
-              :options="
-                editingIndex === null
-                  ? [option('Single Visit'), option('Course')]
-                  : [option(form.type)]
-              "
+              :options="[option('Single Visit'), option('Course')]"
               default-value="Single Visit"
               default-label="Single Visit"
               label="ประเภท"
@@ -767,33 +509,21 @@ const drawerTitle = computed(() => {
               v-model="form.price"
               :class="{ invalid: fieldErrors.price }"
               placeholder="ระบุราคา" /></label
-          ><template v-if="form.type === 'Course'"
-            ><label
-              >จำนวนครั้งรวม<input
-                v-model="form.sessions"
-                :class="{ invalid: fieldErrors.sessions }"
-                placeholder="ระบุจำนวนครั้งรวม" /></label
-            ><label>Bonus<input v-model="form.bonusSessions" type="number" min="0" /></label
-            ><label
-              >อายุคอร์ส<input
-                v-model="form.validityValue"
-                type="number"
-                min="1"
-                :class="{ invalid: fieldErrors.validityValue }" /></label
-            ><label
-              >หน่วย<select v-model="form.validityUnit" aria-label="หน่วยอายุคอร์ส">
-                <option value="Day">วัน</option>
-                <option value="Month">เดือน</option>
-                <option value="Year">ปี</option>
-              </select></label
-            ></template
-          ><p v-else class="hint">Single Visit คือ 1 ครั้งต่อรายการ และไม่มีวันหมดอายุ</p
           ><label
-            >ระยะเวลานัดเริ่มต้น (นาที)<input
-              v-model="form.duration"
-              inputmode="numeric"
-              :class="{ invalid: fieldErrors.duration }"
-              placeholder="ไม่บังคับ เช่น 60" /></label
+            >หน่วย<input
+              v-model="form.unit"
+              :class="{ invalid: fieldErrors.unit }"
+              placeholder="เช่น ครั้ง" /></label
+          ><label
+            >จำนวน<input
+              v-model="form.sessions"
+              :class="{ invalid: fieldErrors.sessions }"
+              placeholder="ระบุจำนวนครั้ง" /></label
+          ><label
+            >วันหมดอายุ<input
+              v-model="form.expiry"
+              :class="{ invalid: fieldErrors.expiry }"
+              placeholder="เช่น 365 วัน" /></label
         ></template>
         <template v-else-if="section === 'rooms'"
           ><label
@@ -804,9 +534,9 @@ const drawerTitle = computed(() => {
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
             >สาขา<FilterDropdown
               v-model="form.branch"
-              :options="branchOptions"
-              :default-value="data.branches[0]?.name ?? ''"
-              :default-label="data.branches[0]?.name ?? 'เลือกสาขา'"
+              :options="[option('แบริ่ง'), option('พระราม 9')]"
+              default-value="แบริ่ง"
+              default-label="แบริ่ง"
               label="สาขา"
               hide-default-option
               :clear-on-reselect="false" /></label
@@ -819,26 +549,82 @@ const drawerTitle = computed(() => {
               label="ประเภท"
               hide-default-option
               :clear-on-reselect="false" /></label
-        ></template>
-        <template v-else-if="section === 'commission'"
           ><label
-            >ชื่อเกณฑ์คอมมิชชัน<input
-              v-model="form.name"
-              :class="{ invalid: fieldErrors.name }" /></label
-          ><label :class="{ 'invalid-field': fieldErrors.recipient }"
+            >ความจุ (คน)<input
+              v-model="form.capacity"
+              :class="{ invalid: fieldErrors.capacity }"
+              type="number"
+              min="1" /></label
+        ></template>
+        <template v-else-if="section === 'commission'">
+          <fieldset class="compensation-types">
+            <legend>ประเภทค่าตอบแทน</legend>
+            <label
+              ><input
+                v-model="form.compensationType"
+                type="radio"
+                value="course"
+                @change="changeCompensationType"
+              />คอมมิชชันการขายคอร์ส</label
+            >
+            <label
+              ><input
+                v-model="form.compensationType"
+                type="radio"
+                value="service"
+                @change="changeCompensationType"
+              />บริการรายครั้ง</label
+            >
+          </fieldset>
+          <label
+            >ชื่อ Scheme<input
+              v-model="form.schemeName"
+              :class="{ invalid: fieldErrors.schemeName }"
+              placeholder="ระบุชื่อ Scheme"
+          /></label>
+          <label
             >ผู้ได้รับค่าคอมมิชชัน<FilterDropdown
               v-model="form.recipient"
               :options="[option('นักกายภาพบำบัด'), option('รายพนักงาน')]"
-              default-value="นักกายภาพบำบัด"
-              default-label="นักกายภาพบำบัด"
               label="ผู้ได้รับค่าคอมมิชชัน"
+              default-label="เลือกผู้ได้รับค่าคอมมิชชัน"
               hide-default-option
-              :clear-on-reselect="false" /></label
-          ><label
+              :clear-on-reselect="false"
+          /></label>
+          <label
+            >ฐานคำนวณ<input v-model="form.basis" :class="{ invalid: fieldErrors.basis }"
+          /></label>
+          <label>รูปแบบอัตรา<input v-model="form.rateFormat" readonly /></label>
+          <label
             >วิธีคำนวณ<input
-              v-model="form.calculation"
-              :class="{ invalid: fieldErrors.calculation }" /></label
-        ></template>
+              v-model="form.calculationMethod"
+              :class="{ invalid: fieldErrors.calculationMethod }"
+              placeholder="วิธีคำนวณ"
+          /></label>
+          <div v-if="form.compensationType === 'course'" class="commission-tier-fields">
+            <div class="commission-tier-head">
+              <span>ยอดขายขั้นต่ำ</span><span>ยอดขายสูงสุด</span><span>อัตรา (%)</span>
+            </div>
+            <div v-for="(tier, index) in commissionTiers" :key="index" class="commission-tier-row">
+              <input
+                v-model="tier.minimum"
+                :aria-label="`Tier ${index + 1} ยอดขายขั้นต่ำ`"
+                inputmode="decimal"
+              />
+              <input v-model="tier.maximum" :aria-label="`Tier ${index + 1} ยอดขายสูงสุด`" />
+              <input v-model="tier.rate" :aria-label="`Tier ${index + 1} อัตรา`" />
+            </div>
+          </div>
+          <label v-else
+            >ค่าตอบแทนต่อครั้ง (บาท)<input v-model="form.amount" inputmode="decimal"
+          /></label>
+          <div class="commission-dates">
+            <label
+              >วันที่เริ่มมีผล<ThaiDatePicker v-model="form.startDate" show-calendar-icon
+            /></label>
+            <label>วันที่สิ้นสุด<ThaiDatePicker v-model="form.endDate" show-calendar-icon /></label>
+          </div>
+        </template>
         <template v-else-if="section === 'master'"
           ><label :class="{ 'invalid-field': fieldErrors.category }"
             >ประเภทข้อมูล<FilterDropdown
@@ -857,9 +643,9 @@ const drawerTitle = computed(() => {
             >ตัวอย่างรายการ<input
               v-model="form.examples"
               :class="{ invalid: fieldErrors.examples }"
-              placeholder="ระบุชื่อรายการ" /></label
+              placeholder="ระบุรายการตัวอย่าง คั่นด้วยจุลภาค" /></label
         ></template>
-        <label v-if="section === 'rooms'"
+        <label
           >สถานะ<FilterDropdown
             v-model="form.status"
             :options="statusOptions"
