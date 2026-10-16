@@ -5,11 +5,15 @@ import TherapistCompensationLineList from '../components/TherapistCompensationLi
 import TherapistCompensationOverview from '../components/TherapistCompensationOverview.vue'
 import TherapistCompensationPaymentHistory from '../components/TherapistCompensationPaymentHistory.vue'
 import TherapistCompensationShell from '../components/TherapistCompensationShell.vue'
-import { currentMonth, isCommission, monthLabel, statusLabel, useTherapistPay } from '../lib/therapistPay'
+import {
+  currentMonth,
+  isCommission,
+  monthLabel,
+  statusLabel,
+  useTherapistPay,
+} from '../lib/therapistPay'
 import { resolveTherapistCompensationTab } from '../types/therapistCompensation'
 
-// "ค่าตอบแทนของฉัน": a therapist's own pay of a month, read only. The formula is fixed by the system and explained on the
-// overview ("หลักการคำนวณ"); nobody sets it from the app.
 const route = useRoute()
 const router = useRouter()
 const { payments, adjustments, data, lines, month, months, payment, loading, errorMessage } =
@@ -24,9 +28,10 @@ const subtitle = computed(() => {
   }
   return `${monthLabel(month.value)} | ${statusLabel(payment.value?.status)}`
 })
-const title = computed(() => (activeTab.value === 'payments' ? 'ประวัติการจ่าย' : 'ค่าตอบแทนของฉัน'))
+const title = computed(() =>
+  activeTab.value === 'payments' ? 'ประวัติการจ่าย' : 'ค่าตอบแทนของฉัน',
+)
 
-// the month and the year are chosen apart, so any month can be looked at, not only the ones that already have a payment
 const monthNames = Array.from({ length: 12 }, (_, index) =>
   new Intl.DateTimeFormat('th-TH', { month: 'long' }).format(new Date(2026, index, 1)),
 )
@@ -42,13 +47,16 @@ const years = computed(() => {
 const yearLabel = (year: number) => String(year + 543)
 
 function choose(year: number, monthNumber: string) {
-  void router.replace({ query: { ...route.query, month: `${year}-${monthNumber}` } })
-}
-function chooseMonth(event: Event) {
-  choose(chosenYear.value, (event.target as HTMLSelectElement).value)
+  void router.replace({
+    query: { ...route.query, month: `${year}-${monthNumber}` },
+  })
 }
 function chooseYear(event: Event) {
   choose(Number((event.target as HTMLSelectElement).value), chosenMonth.value)
+}
+function moveMonth(offset: number) {
+  const date = new Date(chosenYear.value, Number(chosenMonth.value) - 1 + offset, 1)
+  choose(date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'))
 }
 </script>
 
@@ -64,13 +72,15 @@ function chooseYear(event: Event) {
       <div v-if="activeTab !== 'payments'" class="therapist-month-select">
         <span>เดือนที่รักษา</span>
         <div class="therapist-month-pickers">
-          <select aria-label="เดือน" :value="chosenMonth" @change="chooseMonth">
-            <option v-for="(name, index) in monthNames" :key="name" :value="String(index + 1).padStart(2, '0')">
-              {{ name }}
-            </option>
-          </select>
+          <div class="therapist-month-stepper" aria-label="เลือกเดือน">
+            <button type="button" aria-label="เดือนก่อน" @click="moveMonth(-1)">‹</button>
+            <strong>{{ monthNames[Number(chosenMonth) - 1] }}</strong>
+            <button type="button" aria-label="เดือนถัดไป" @click="moveMonth(1)">›</button>
+          </div>
           <select aria-label="ปี" :value="chosenYear" @change="chooseYear">
-            <option v-for="year in years" :key="year" :value="year">{{ yearLabel(year) }}</option>
+            <option v-for="year in years" :key="year" :value="year">
+              {{ yearLabel(year) }}
+            </option>
           </select>
         </div>
       </div>

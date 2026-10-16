@@ -126,6 +126,20 @@ async function review(kind: 'sale' | 'usage' = 'sale') {
   await click('ยืนยันการยกเลิก')
 }
 
+it('reverses course usage through the new cancellation screens and keeps backend failure visible', async () => {
+  reverseFails = true
+  await render()
+  await click('รายการใช้บริการ')
+  await click('ยกเลิก')
+  await click('ดำเนินการยกเลิก')
+  await click('ตรวจสอบก่อนยืนยัน')
+  await click('ยืนยันการยกเลิก')
+  await click('ยืนยันการยกเลิก')
+  expect(calls.some((call) => call.path === '/api/course-movements/31/reverse')).toBe(true)
+  expect(wrapper.text()).toContain('Backend refused reversal')
+  expect(wrapper.text()).not.toContain('ยกเลิกรายการสำเร็จ')
+})
+
 describe('TransactionView backend integration', () => {
   it.each([
     ['FullyPaid', 'ชำระเต็ม'],

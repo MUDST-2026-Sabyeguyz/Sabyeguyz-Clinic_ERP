@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { branchApi, patientApi, type Branch, type Patient } from '@/api/client'
+import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
 
+const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const query = ref('')
 const branch = ref('ทั้งหมด')
 const sortOrder = ref('asc')
@@ -84,8 +86,20 @@ onMounted(() => {
 })
 onMounted(async () => {
   branches.value = (await branchApi.list()).filter((item) => item.active)
+  if (isManager) {
+    setManagerBranches(branches.value)
+    applyManagerBranch()
+  }
   await loadPatients()
 })
+function applyManagerBranch() {
+  if (!isManager) return
+  branch.value = selectedManagerBranch()?.code ?? 'ทั้งหมด'
+  page.value = 0
+  void loadPatients()
+}
+onMounted(() => window.addEventListener('manager-branch-changed', applyManagerBranch))
+onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
 watch(branch, () => {
   page.value = 0
   void loadPatients()
@@ -123,12 +137,13 @@ watch(sortOrder, () => {
             />
           </div>
           <FilterDropdown
+            v-if="!isManager"
             v-model="branch"
             class="branch-filter"
             label="กรองตามสาขา"
             default-value="ทั้งหมด"
             default-label="สาขาทั้งหมด"
-            :options="branches.map((item) => ({ value: item.branchCode, label: item.name }))"
+            :options="branches.map((item) => ({ value: item.code, label: item.name }))"
           />
           <FilterDropdown
             v-model="sortOrder"

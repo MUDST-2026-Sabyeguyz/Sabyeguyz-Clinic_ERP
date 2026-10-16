@@ -11,7 +11,6 @@ const props = defineProps<{
   pendingSessions: number
 }>()
 
-// How the pay is worked out is only explained here; the rules themselves are set by the Manager on the settings page.
 const commission = computed(() => props.payment?.courseCommission ?? null)
 const treatment = computed(
   () => (props.payment?.singleVisitFee ?? 0) + (props.payment?.substituteFee ?? 0),
@@ -38,7 +37,9 @@ const net = computed(() => props.payment?.net ?? null)
         </div>
         <div>
           <dt>Adjustment</dt>
-          <dd :class="{ negative: adjustment < 0 }">{{ signedBaht(adjustment) }}</dd>
+          <dd :class="{ negative: adjustment < 0 }">
+            {{ signedBaht(adjustment) }}
+          </dd>
         </div>
         <div class="net">
           <dt>Net Payout</dt>

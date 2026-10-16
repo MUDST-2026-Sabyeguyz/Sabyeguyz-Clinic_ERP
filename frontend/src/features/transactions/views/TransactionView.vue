@@ -1,26 +1,14 @@
 <script setup lang="ts">
+import { salesApi, courseApi } from '@/api/client'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { formatPaymentLabel, formatPaymentMethod } from '@/features/payments/format'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
-import {
-  branchApi,
-  courseApi,
-  salesApi,
-  type CourseUsageTransaction,
-  type SaleDetail,
-  type SaleSummary,
-} from '@/api/client'
 
-// One list for sales and course usage (filtered by type); the cancellation history is the other tab.
-type Tab = 'all' | 'history'
-type RowType = 'course-sale' | 'single-sale' | 'sale' | 'usage'
+type Tab = 'sales' | 'usage' | 'history'
 type Step = 'list' | 'detail' | 'history-detail' | 'reason' | 'confirm' | 'success'
 type Transaction = {
   key: string
   kind: 'sale' | 'usage'
-  rowType: RowType
   id: number
   number: string
   date: string
@@ -32,43 +20,88 @@ type Transaction = {
   status: 'ปกติ' | 'ยกเลิก (Void)'
   performedBy: string
   paymentMethod: string
-  paymentLabel?: SaleSummary['paymentLabel']
   voidedAt?: string
   voidReason?: string
   voidNumber?: string
-  phone?: string
-  detail?: SaleDetail
 }
 
-const sessionUser = (() => {
-  try {
-    return JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
-      role?: string
-      branchCode?: string
-    } | null
-  } catch {
-    return null
-  }
-})()
-const isManager = sessionUser?.role === 'MANAGER'
-// A therapist sees the transactions of every branch but can cancel only those of the home branch.
-function canCancel(row: Transaction) {
-  return isManager || !sessionUser?.branchCode || row.branchCode === sessionUser.branchCode
+type VoidTransactionCommand = { key: string; reason: string; actor: string }
+interface TransactionRepository {
+  list(): Promise<Transaction[]>
+  void(command: VoidTransactionCommand): Promise<Transaction>
 }
-const typeLabels: Record<RowType, string> = {
-  'course-sale': 'ขายคอร์ส',
-  'single-sale': 'ขายบริการรายครั้ง',
-  sale: 'รายการขาย',
-  usage: 'ใช้สิทธิ์คอร์ส',
+
+const transactionRepository: TransactionRepository = {
+  async list() {
+    const first = await salesApi.list({ page: 0, size: 100 })
+    const sales = [...first.items]
+    for (let page = 1; page < first.totalPages; page++)
+      sales.push(...(await salesApi.list({ page, size: 100 })).items)
+    const usages = await courseApi.usageTransactions()
+    return [
+      ...sales.map((row): Transaction => ({
+        key: `sale-${row.id}`,
+        kind: 'sale',
+        id: row.id,
+        number: row.receiptNo,
+        date: row.soldAt,
+        patient: row.patient.fullName,
+        hn: row.patient.hn,
+        item: row.itemDescription || '—',
+        branchCode: row.branchCode,
+        quantity: `฿${Number(row.total).toLocaleString('th-TH')}`,
+        status: row.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ',
+        performedBy: row.salesperson?.fullName || '—',
+        paymentMethod: '—',
+        voidedAt: row.voidedAt,
+        voidReason: row.voidReason,
+      })),
+      ...usages.map((row): Transaction => ({
+        key: `usage-${row.id}`,
+        kind: 'usage',
+        id: row.id,
+        number: String(row.id),
+        date: row.usedAt,
+        patient: row.patientName,
+        hn: row.patientHn,
+        item: row.courseName,
+        branchCode: row.branchCode,
+        quantity: '1 ครั้ง',
+        status: row.voidedAt ? 'ยกเลิก (Void)' : 'ปกติ',
+        performedBy: '—',
+        paymentMethod: '—',
+        voidedAt: row.voidedAt || undefined,
+        voidReason: row.voidReason || undefined,
+      })),
+    ]
+  },
+  async void(command) {
+    const row = rows.value.find((item) => item.key === command.key)
+    if (!row) throw new Error('ไม่พบรายการที่ต้องการยกเลิก')
+    if (row.kind === 'usage') {
+      await courseApi.reverse(row.id, command.reason)
+      const saved = (await courseApi.usageTransactions()).find((item) => item.id === row.id)
+      return {
+        ...row,
+        status: 'ยกเลิก (Void)',
+        voidedAt: saved?.voidedAt || undefined,
+        voidReason: saved?.voidReason || command.reason,
+      }
+    }
+    const saved = await salesApi.reverse(row.id, command.reason)
+    return {
+      ...row,
+      status: 'ยกเลิก (Void)',
+      voidedAt: saved.voidedAt,
+      voidReason: saved.voidReason,
+    } as Transaction
+  },
 }
-const typeFilter = ref('')
-const tab = ref<Tab>('all')
+const tab = ref<Tab>('sales')
 const step = ref<Step>('list')
 const rows = ref<Transaction[]>([])
 const selected = ref<Transaction | null>(null)
 const search = ref('')
-const branchFilter = ref('')
-const statusFilter = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const page = ref(1)
@@ -84,8 +117,7 @@ const expandedOriginal = ref<string[]>([])
 const lastCancelledKey = ref('')
 const showPostCancellationNotice = ref(false)
 let postCancellationNoticeTimer: ReturnType<typeof setTimeout> | undefined
-const branchNames = ref<Record<string, string>>({})
-const branchOptions = ref<Array<{ code: string; name: string }>>([])
+const branchNames = ref<Record<string, string>>({ BR01: 'แบริ่ง', BR09: 'พระราม 9' })
 const cancellationActor = ref('')
 const pageSize = computed(() => (tab.value === 'history' ? 5 : 10))
 
@@ -133,88 +165,11 @@ function branchName(code: string) {
   return branchNames.value[code] ?? code
 }
 
-function saleRow(sale: SaleSummary): Transaction {
-  return {
-    key: `sale-${sale.id}`,
-    kind: 'sale',
-    rowType:
-      sale.itemType === 'CoursePurchase'
-        ? 'course-sale'
-        : sale.itemType === 'SingleVisit' || sale.itemType === 'Assessment'
-          ? 'single-sale'
-          : 'sale',
-    id: sale.id,
-    number: sale.receiptNo,
-    date: sale.soldAt,
-    patient: sale.patient.fullName,
-    hn: sale.patient.hn,
-    phone: sale.patient.phone,
-    item: sale.itemDescription || 'รายการขายบริการ / คอร์ส',
-    branchCode: sale.branchCode,
-    quantity: `฿${Number(sale.total).toLocaleString('th-TH')}`,
-    status: sale.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ',
-    performedBy: sale.salesperson?.fullName ?? 'ไม่ระบุ',
-    paymentMethod: '—',
-    paymentLabel: sale.paymentLabel,
-    voidedAt: sale.voidedAt,
-    voidReason: sale.voidReason,
-  }
-}
-
-function usageRow(usage: CourseUsageTransaction): Transaction {
-  return {
-    key: `usage-${usage.id}`,
-    kind: 'usage',
-    rowType: 'usage',
-    id: usage.id,
-    number: `USE-${usage.id}`,
-    date: usage.usedAt,
-    patient: usage.patientName,
-    hn: usage.patientHn,
-    item: usage.courseName,
-    branchCode: usage.branchCode,
-    quantity: '1 ครั้ง',
-    status: usage.voidedAt ? 'ยกเลิก (Void)' : 'ปกติ',
-    performedBy: 'ไม่ระบุ',
-    paymentMethod: 'ใช้สิทธิ์คอร์ส',
-    voidedAt: usage.voidedAt ?? undefined,
-    voidReason: usage.voidReason ?? undefined,
-  }
-}
-
 async function loadTransactions() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [firstPage, usages, branches] = await Promise.all([
-      salesApi.list({ page: 0, size: 100 }),
-      courseApi.usageTransactions(),
-      branchApi.listActive(),
-    ])
-    const remainingPages = await Promise.all(
-      Array.from({ length: Math.max(0, firstPage.totalPages - 1) }, (_, index) =>
-        salesApi.list({ page: index + 1, size: 100 }),
-      ),
-    )
-    branchNames.value = Object.fromEntries(
-      branches.map((branch) => [branch.branchCode, branch.name]),
-    )
-    branchOptions.value = branches
-      .filter((branch) => branch.active)
-      .map(({ branchCode, name }) => ({ code: branchCode, name }))
-    const sales = [firstPage, ...remainingPages].flatMap((result) => result.items)
-    rows.value = [...sales.map(saleRow), ...usages.map(usageRow)]
-    const voidedSales = rows.value.filter((row) => row.kind === 'sale' && row.status !== 'ปกติ')
-    await Promise.all(
-      voidedSales.map(async (row) => {
-        try {
-          const detail = await salesApi.get(row.id)
-          updateFromDetail(row, detail)
-        } catch {
-          // A failed detail request must not hide the transaction from the list.
-        }
-      }),
-    )
+    rows.value = await transactionRepository.list()
     if (selected.value) {
       selected.value = rows.value.find((row) => row.key === selected.value?.key) ?? selected.value
     }
@@ -225,40 +180,24 @@ async function loadTransactions() {
   }
 }
 
-function updateFromDetail(row: Transaction, detail: SaleDetail) {
-  row.detail = detail
-  row.status = detail.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ'
-  row.phone = detail.patient.phone
-  row.item = detail.items.map((item) => item.description).join(', ') || row.item
-  row.paymentLabel = detail.paymentLabel
-  row.paymentMethod = formatPaymentMethod(
-    detail.payments.find((payment) => payment.type !== 'REFUND')?.paymentMethodCode,
-  )
-  row.voidReason = detail.voidReason
-  row.voidedAt = detail.voidedAt
-}
-
 onMounted(loadTransactions)
 onBeforeUnmount(() => clearTimeout(postCancellationNoticeTimer))
 
 const visibleRows = computed(() => {
   const term = search.value.trim().toLocaleLowerCase()
   return rows.value
-    .filter((row) => tab.value !== 'history' || row.status === 'ยกเลิก (Void)')
-    .filter((row) => !typeFilter.value || row.rowType === typeFilter.value)
+    .filter((row) =>
+      tab.value === 'history'
+        ? row.status === 'ยกเลิก (Void)'
+        : row.kind === (tab.value === 'sales' ? 'sale' : 'usage'),
+    )
     .filter(
       (row) =>
         !term ||
         `${row.number} ${row.patient} ${row.hn} ${row.item}`.toLocaleLowerCase().includes(term),
     )
-    .filter((row) => !branchFilter.value || row.branchCode === branchFilter.value)
     .filter((row) => !startDate.value || new Date(row.date) >= new Date(startDate.value))
     .filter((row) => !endDate.value || new Date(row.date) <= new Date(`${endDate.value}T23:59:59`))
-    .filter(
-      (row) =>
-        !statusFilter.value ||
-        (statusFilter.value === 'void' ? row.status !== 'ปกติ' : row.status === 'ปกติ'),
-    )
     .sort((left, right) => Date.parse(right.date) - Date.parse(left.date))
 })
 const hasCancellationHistory = computed(() =>
@@ -274,7 +213,7 @@ const reason = computed(() =>
 const canReview = computed(() =>
   reasonType.value === 'อื่น ๆ' ? otherReason.value.trim().length >= 10 : Boolean(reasonType.value),
 )
-watch([tab, search, branchFilter, statusFilter, typeFilter, startDate, endDate], () => {
+watch([tab, search, startDate, endDate], () => {
   page.value = 1
 })
 watch(totalPages, (count) => {
@@ -287,10 +226,7 @@ function changeTab(next: Tab) {
   tab.value = next
   step.value = 'list'
   selected.value = null
-  statusFilter.value = ''
-  typeFilter.value = ''
   search.value = ''
-  branchFilter.value = ''
   startDate.value = ''
   endDate.value = ''
   expandedOriginal.value = []
@@ -300,20 +236,12 @@ async function openDetail(row: Transaction) {
   selected.value = row
   errorMessage.value = ''
   expandedOriginal.value = []
-  if (row.kind === 'sale' && !row.detail) {
-    try {
-      updateFromDetail(row, await salesApi.get(row.id))
-    } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : 'โหลดรายละเอียดไม่สำเร็จ'
-      return
-    }
-  }
   step.value = tab.value === 'history' ? 'history-detail' : 'detail'
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function startCancellation() {
-  reasonType.value = ''
+  reasonType.value = 'ลงรายการหรือเลือกบริการผิด'
   otherReason.value = ''
   internalNote.value = ''
   errorMessage.value = ''
@@ -339,14 +267,12 @@ async function confirmCancellation() {
   showCancelWarning.value = false
   errorMessage.value = ''
   try {
-    if (row.kind === 'sale') {
-      updateFromDetail(row, await salesApi.reverse(row.id, reason.value))
-    } else {
-      await courseApi.reverse(row.id, reason.value)
-      row.status = 'ยกเลิก (Void)'
-      row.voidReason = reason.value
-      row.voidedAt = new Date().toISOString()
-    }
+    const updated = await transactionRepository.void({
+      key: row.key,
+      reason: reason.value,
+      actor: cancellationActor.value || 'พนักงานหน้าร้าน',
+    })
+    Object.assign(row, updated)
     lastCancelledKey.value = row.key
     try {
       const user = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
@@ -366,7 +292,7 @@ async function confirmCancellation() {
 }
 
 function backToList(next: Tab = tab.value) {
-  const shouldShowNotice = step.value === 'success' && next === 'all'
+  const shouldShowNotice = step.value === 'success' && next === 'sales'
   showCancelWarning.value = false
   step.value = 'list'
   tab.value = next
@@ -405,14 +331,17 @@ function toggleOriginal(key: string) {
           <p v-if="tab === 'history' && !loading && !hasCancellationHistory">
             ตรวจสอบรายการที่ถูกยกเลิกและข้อมูลย้อนหลัง
           </p>
-          <p v-else-if="tab === 'all' && showPostCancellationNotice">
-            รายการหลังดำเนินการยกเลิก
+          <p v-else-if="tab === 'sales' && showPostCancellationNotice">
+            รายการขายหลังดำเนินการยกเลิก
           </p>
           <p v-else>ค้นหา ตรวจสอบ และยกเลิกรายการที่บันทึกผิด โดยยังคงประวัติการทำรายการไว้</p>
         </header>
         <nav class="transaction-tabs" aria-label="ประเภทของธุรกรรม">
-          <button type="button" :class="{ active: tab === 'all' }" @click="changeTab('all')">
-            รายการทั้งหมด
+          <button type="button" :class="{ active: tab === 'sales' }" @click="changeTab('sales')">
+            รายการขาย
+          </button>
+          <button type="button" :class="{ active: tab === 'usage' }" @click="changeTab('usage')">
+            รายการใช้บริการ
           </button>
           <button
             type="button"
@@ -423,7 +352,7 @@ function toggleOriginal(key: string) {
           </button>
         </nav>
         <div
-          v-if="tab === 'all' && showPostCancellationNotice"
+          v-if="tab === 'sales' && showPostCancellationNotice"
           class="transaction-cancelled-notice"
           role="status"
         >
@@ -440,7 +369,7 @@ function toggleOriginal(key: string) {
           <span aria-hidden="true">⌕</span>
           <h2>ยังไม่มีประวัติการยกเลิก</h2>
           <p>เมื่อมีการยกเลิกรายการ ประวัติและข้อมูลตรวจสอบย้อนหลังจะแสดงที่นี่</p>
-          <button class="transaction-primary" type="button" @click="changeTab('all')">
+          <button class="transaction-primary" type="button" @click="changeTab('sales')">
             ไปหน้ารายการ
           </button>
         </section>
@@ -455,49 +384,6 @@ function toggleOriginal(key: string) {
                 placeholder="เลขรายการ / ชื่อผู้ป่วย / HN"
               />
             </label>
-            <div class="transaction-control transaction-select">
-              <span>สาขา</span>
-              <FilterDropdown
-                v-model="branchFilter"
-                label="สาขา"
-                default-label="ทุกสาขา"
-                :options="
-                  branchOptions.map((branch) => ({ value: branch.code, label: branch.name }))
-                "
-              />
-            </div>
-            <div v-if="tab !== 'history'" class="transaction-control transaction-select">
-              <span>ประเภท</span>
-              <FilterDropdown
-                v-model="typeFilter"
-                label="ประเภท"
-                default-label="ทุกประเภท"
-                :options="[
-                  { value: 'course-sale', label: typeLabels['course-sale'] },
-                  { value: 'single-sale', label: typeLabels['single-sale'] },
-                  { value: 'usage', label: typeLabels.usage },
-                ]"
-              />
-            </div>
-            <div class="transaction-control transaction-select">
-              <span>สถานะ</span>
-              <FilterDropdown
-                v-model="statusFilter"
-                label="สถานะ"
-                default-label="ทุกสถานะ"
-                :options="
-                  tab === 'history'
-                    ? [{ value: 'void', label: 'ยกเลิกแล้ว' }]
-                    : [
-                        {
-                          value: 'normal',
-                          label: 'ปกติ',
-                        },
-                        { value: 'void', label: 'ยกเลิกแล้ว' },
-                      ]
-                "
-              />
-            </div>
             <label class="transaction-control transaction-date">
               <span>วันที่เริ่มต้น</span>
               <ThaiDatePicker v-model="startDate" show-calendar-icon numeric-month hide-caret />
@@ -507,8 +393,8 @@ function toggleOriginal(key: string) {
               <ThaiDatePicker v-model="endDate" show-calendar-icon numeric-month hide-caret />
             </label>
           </div>
-          <p v-if="typeFilter" class="transaction-filter-note">
-            กรองตามประเภท: {{ typeLabels[typeFilter as RowType] }} • ยกเลิกการเลือกเพื่อกลับมาแสดงทั้งหมด
+          <p v-if="tab === 'usage'" class="transaction-filter-note">
+            ค่าเริ่มต้นแสดงทั้งหมด • ยกเลิกการเลือกเพื่อกลับมาแสดงทั้งหมด
           </p>
           <div v-if="loading" class="transaction-empty" role="status">
             กำลังโหลดรายการธุรกรรม...
@@ -610,7 +496,13 @@ function toggleOriginal(key: string) {
                   <td v-else>
                     <span>{{ row.item }}</span
                     ><small>{{
-                      row.kind === 'sale' ? typeLabels[row.rowType] : 'ใช้สิทธิ์คอร์ส 1 ครั้ง'
+                      row.kind === 'sale'
+                        ? row.id === 84
+                          ? 'คอร์ส 10 ครั้ง'
+                          : 'รายครั้ง'
+                        : row.item === 'Manual Therapy'
+                          ? 'ใช้สิทธิ์ 1 ครั้ง'
+                          : 'รายครั้ง'
                     }}</small>
                   </td>
                   <td>{{ branchName(row.branchCode) }}</td>
@@ -620,11 +512,11 @@ function toggleOriginal(key: string) {
                       class="transaction-status"
                       :class="{
                         void: row.status !== 'ปกติ',
-                        usage: row.kind === 'usage' && row.status === 'ปกติ',
+                        usage: tab === 'usage' && row.status === 'ปกติ',
                       }"
                       >{{
                         row.status === 'ปกติ'
-                          ? row.kind === 'sale'
+                          ? tab === 'sales'
                             ? 'ชำระแล้ว'
                             : 'ใช้บริการแล้ว'
                           : 'ยกเลิกแล้ว'
@@ -642,9 +534,7 @@ function toggleOriginal(key: string) {
                         tab === 'history'
                           ? 'ดูรายละเอียด'
                           : row.status === 'ปกติ'
-                            ? canCancel(row)
-                              ? 'ตรวจสอบ'
-                              : 'ดูรายละเอียด'
+                            ? 'ยกเลิก'
                             : 'ยกเลิกแล้ว'
                       }}
                     </button>
@@ -653,9 +543,8 @@ function toggleOriginal(key: string) {
               </tbody>
             </table>
           </div>
-          <p v-if="tab === 'all' && visibleRows.length" class="transaction-list-note">
+          <p v-if="tab === 'usage' && visibleRows.length" class="transaction-list-note">
             แสดงรายการล่าสุดก่อน • รายการที่ยกเลิกแล้วไม่สามารถยกเลิกซ้ำได้
-            <template v-if="!isManager"> • รายการของสาขาอื่นดูรายละเอียดได้อย่างเดียว</template>
           </p>
           <nav
             v-if="totalPages > 1"
@@ -723,7 +612,7 @@ function toggleOriginal(key: string) {
                     <dt>รายละเอียด</dt>
                     <dd>
                       {{ selected.item }} ·
-                      {{ selected.kind === 'sale' ? 'รายการขาย' : 'ใช้สิทธิ์คอร์ส' }}
+                      {{ selected.kind === 'sale' ? 'คอร์ส 10 ครั้ง' : 'ใช้สิทธิ์คอร์ส' }}
                     </dd>
                   </div>
                   <div>
@@ -749,7 +638,7 @@ function toggleOriginal(key: string) {
                   </div>
                   <div>
                     <dt>เบอร์โทรศัพท์</dt>
-                    <dd>{{ selected.phone || '—' }}</dd>
+                    <dd>089-123-4567</dd>
                   </div>
                 </dl>
               </section>
@@ -758,7 +647,7 @@ function toggleOriginal(key: string) {
                 <dl class="transaction-audit-cancellation">
                   <div>
                     <dt>เลขที่อ้างอิง</dt>
-                    <dd>{{ selected.voidNumber || '—' }}</dd>
+                    <dd>{{ selected.voidNumber }}</dd>
                   </div>
                   <div>
                     <dt>เหตุผล</dt>
@@ -779,7 +668,6 @@ function toggleOriginal(key: string) {
         </template>
 
         <template v-else-if="step === 'detail'">
-          <RouterLink v-if="selected.kind === 'sale'" :to="`/staff/receipts/${selected.id}`">ดูใบเสร็จ</RouterLink>
           <div class="transaction-progress" aria-label="ขั้นตอนการยกเลิกรายการ">
             <div class="active"><b>1</b><span>ตรวจสอบรายการ</span></div>
             <i></i>
@@ -835,39 +723,28 @@ function toggleOriginal(key: string) {
                   <dt>ช่องทางชำระ</dt>
                   <dd>{{ selected.paymentMethod }}</dd>
                 </div>
-                <div v-if="selected.kind === 'sale'">
-                  <dt>ประเภทการชำระเงิน</dt>
-                  <dd>{{ formatPaymentLabel(selected.paymentLabel) }}</dd>
-                </div>
               </dl>
             </section>
             <aside class="transaction-review-patient">
               <b>ผู้ป่วย</b><strong>{{ selected.patient }}</strong
               ><span>HN{{ selected.hn }}</span
-              ><small>☎ {{ selected.phone || '—' }}</small>
+              ><small>☎ 089-123-4567</small>
             </aside>
           </div>
           <section class="transaction-service-detail">
             <h2>รายละเอียดบริการ</h2>
             <div>
               <strong>{{ selected.item }}</strong
-              ><span>{{ selected.kind === 'sale' ? 'รายการขาย' : 'ใช้สิทธิ์ 1 ครั้ง' }}</span>
+              ><span>{{
+                selected.kind === 'sale' && selected.id === 84
+                  ? 'คอร์ส 10 ครั้ง'
+                  : 'ใช้สิทธิ์ 1 ครั้ง'
+              }}</span>
             </div>
             <dl>
               <div>
                 <dt>จำนวน</dt>
-                <dd>
-                  {{
-                    selected.kind === 'sale'
-                      ? (selected.detail?.items.reduce((sum, item) => sum + item.quantity, 0) ??
-                        '—')
-                      : 1
-                  }}
-                </dd>
-              </div>
-              <div>
-                <dt>ช่องทาง / ประเภท</dt>
-                <dd>{{ selected.paymentMethod }}</dd>
+                <dd>1</dd>
               </div>
               <div>
                 <dt>ยอดสุทธิ</dt>
@@ -880,20 +757,13 @@ function toggleOriginal(key: string) {
               ย้อนกลับ
             </button>
             <button
-              v-if="selected.status === 'ปกติ' && canCancel(selected)"
+              v-if="selected.status === 'ปกติ'"
               class="transaction-primary"
               type="button"
               @click="startCancellation"
             >
               ดำเนินการยกเลิก
             </button>
-            <p
-              v-else-if="selected.status === 'ปกติ'"
-              class="transaction-readonly-note"
-              role="note"
-            >
-              รายการของ{{ branchName(selected.branchCode) }} ดูรายละเอียดได้อย่างเดียว ยกเลิกได้เฉพาะสาขาของตัวเองหรือ Manager
-            </p>
           </div>
         </template>
 
@@ -940,12 +810,11 @@ function toggleOriginal(key: string) {
                 </p>
               </div>
               <label class="transaction-note-field" for="transaction-note"
-                >หมายเหตุภายใน (ยังไม่เปิดใช้งาน)</label
+                >หมายเหตุภายใน (ไม่บังคับ)</label
               >
               <textarea
                 id="transaction-note"
                 v-model="internalNote"
-                disabled
                 rows="3"
                 placeholder="ข้อมูลเพิ่มเติมสำหรับเจ้าหน้าที่"
               />
@@ -994,7 +863,7 @@ function toggleOriginal(key: string) {
                   <dt>รายละเอียด</dt>
                   <dd>
                     {{ selected.item }} ·
-                    {{ selected.kind === 'sale' ? 'รายการขาย' : 'ใช้สิทธิ์คอร์ส' }}
+                    {{ selected.kind === 'sale' ? 'คอร์ส 10 ครั้ง' : 'ใช้สิทธิ์คอร์ส' }}
                   </dd>
                 </div>
                 <div>
@@ -1034,16 +903,12 @@ function toggleOriginal(key: string) {
             <p>รายการถูกบันทึกในประวัติเรียบร้อยแล้ว</p>
             <dl>
               <div>
-                <dt>เหตุผล</dt>
-                <dd>{{ selected.voidReason || '—' }}</dd>
-              </div>
-              <div>
                 <dt>สถานะ</dt>
                 <dd>ยกเลิกแล้ว</dd>
               </div>
               <div>
                 <dt>เลขที่อ้างอิง</dt>
-                <dd>{{ selected.voidNumber || '—' }}</dd>
+                <dd>{{ selected.voidNumber }}</dd>
               </div>
               <div>
                 <dt>ผู้ดำเนินการ</dt>

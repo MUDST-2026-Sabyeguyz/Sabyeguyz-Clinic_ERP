@@ -152,6 +152,9 @@ export type Page<T> = {
 export type Branch = {
   id: number
   branchCode: string
+  code: string
+  numericCode: string
+  licenseNumber?: string | null
   name: string
   address: string
   phone: string
@@ -236,6 +239,7 @@ export type AppointmentPage = Page<Appointment>
 export type CoursePurchase = {
   id: number
   patient: Patient
+  purchaser?: { id: number; hn: string; fullName: string }
   branchCode: string
   course: { id: number; code: string; name: string }
   price: number
@@ -382,11 +386,11 @@ export const patientApi = {
     api.get<Page<Patient>>(
       `/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), sort, ...(branchCode ? { branchCode } : {}) })}`,
     ),
-  searchAll: async (query = '') => {
-    const first = await patientApi.search(query, 0, 100)
+  searchAll: async (query = '', branchCode = '') => {
+    const first = await patientApi.search(query, 0, 100, branchCode)
     const rest = await Promise.all(
       Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
-        patientApi.search(query, index + 1, 100),
+        patientApi.search(query, index + 1, 100, branchCode),
       ),
     )
     return [first, ...rest].flatMap((page) => page.items)
@@ -397,11 +401,15 @@ export const patientApi = {
     api.put<PatientProfile>(`/api/patients/${id}`, payload),
 }
 
+function normalizeBranch(branch: Branch): Branch {
+  return { ...branch, code: branch.branchCode, numericCode: branch.branchCode, licenseNumber: branch.licenseNo }
+}
+
 export const branchApi = {
-  list: () => api.get<Branch[]>('/api/branches'),
+  list: () => api.get<Branch[]>('/api/branches').then((branches) => branches.map(normalizeBranch)),
   // what the other screens offer to choose: a closed branch (ปิดใช้งาน) is not listed
-  listActive: async () => (await api.get<Branch[]>('/api/branches')).filter((branch) => branch.active !== false),
-  get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
+  listActive: async () => (await branchApi.list()).filter((branch) => branch.active !== false),
+  get: (id: number) => api.get<Branch>(`/api/branches/${id}`).then(normalizeBranch),
   create: (body: BranchRequest) => api.post<Branch>('/api/branches', body),
   update: (id: number, body: BranchRequest) => api.put<Branch>(`/api/branches/${id}`, body),
   activate: (id: number) => api.patch<Branch>(`/api/branches/${id}/activate`, {}),
@@ -919,6 +927,7 @@ export const commissionApi = {
     api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, body),
   adjustments: (staffId?: number) =>
     api.get<PayAdjustment[]>(`/api/commission/adjustments${staffId ? `?staffId=${staffId}` : ''}`),
+  adjustment: (id: number) => api.get<ManagerAdjustment>(`/api/commission/adjustments/${id}`),
   createAdjustment: (body: AdjustmentInput) =>
     api.post<PayAdjustment>('/api/commission/adjustments', body),
   approveAdjustment: (id: number) =>
@@ -1225,4 +1234,10 @@ export const calendarApi = {
       googleCalendarId,
     }),
   syncNow: () => api.post<CalendarSyncResult>('/api/calendar/sync', {}),
+}
+
+export type ManagerAdjustment = PayAdjustment
+
+export const calendarIntegrationApi = {
+  startGoogleConnect: () => api.post<{ authorizationUrl: string }>('/api/calendar/google/connect', {}),
 }
