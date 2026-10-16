@@ -233,6 +233,24 @@ const router = createRouter({
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
       meta: { permission: 'Setup' },
     },
+    {
+      path: '/staff/settings/audit-log',
+      name: 'staff-audit-log',
+      component: () => import('@/features/settings/views/AuditLogView.vue'),
+      meta: { permission: 'Setup' },
+    },
+    {
+      path: '/staff/settings/fee-history',
+      name: 'staff-fee-history',
+      component: () => import('@/features/settings/views/FeeRuleHistoryView.vue'),
+      meta: { permission: 'Setup' },
+    },
+    {
+      path: '/staff/settings/commission-history',
+      name: 'staff-commission-history',
+      component: () => import('@/features/settings/views/CommissionVersionHistoryView.vue'),
+      meta: { permission: 'Setup' },
+    },
   ],
 })
 

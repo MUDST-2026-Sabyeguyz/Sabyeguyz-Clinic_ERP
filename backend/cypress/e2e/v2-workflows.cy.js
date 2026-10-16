@@ -85,6 +85,32 @@ describe('clinicv2 AuditLogServiceTest migrated assertions', () => {
     value('audit', 'record').should('include', { tableName: 'branch', action: 'UPDATE' })
   })
   it('rejectsMissingAction', () => rejected('audit', 'missing-action'))
+  // Data Dictionary Audit_log: JSON values, changed_by only for a user, source for an automatic event
+  it('keepsPlainTextAsJson', () => {
+    value('audit', 'plain-text').then((log) => {
+      expect(JSON.parse(log.oldValue)).to.deep.equal({ summary: 'Active' })
+      expect(JSON.parse(log.newValue)).to.deep.equal({ summary: 'Cancelled' })
+      expect(log.changedBy).to.equal(1)
+    })
+  })
+  it('namesTheSourceOfAnAutomaticEventWithoutAUser', () => {
+    value('audit', 'automatic').then((log) => {
+      expect(log.changedBy).to.equal(null)
+      expect(JSON.parse(log.newValue)).to.deep.equal({ status: 'Cancelled', source: 'System' })
+    })
+    value('audit', 'google').then((log) => {
+      expect(log.changedBy).to.equal(null)
+      expect(JSON.parse(log.newValue)).to.deep.equal({ source: 'GoogleCalendar', appointment_status: 'Cancelled' })
+      expect(JSON.parse(log.oldValue)).to.deep.equal({ appointment_status: 'Confirmed' })
+    })
+  })
+  it('storesBeforeAndAfterAsJsonForAUserChange', () => {
+    value('audit', 'change').then((log) => {
+      expect(JSON.parse(log.oldValue)).to.deep.equal({ effective_to: null })
+      expect(JSON.parse(log.newValue)).to.deep.equal({ effective_to: '2026-10-31', reason: 'ended by the new version' })
+      expect(log.changedBy).to.equal(1)
+    })
+  })
 })
 
 describe('clinicv2 CourseTransferServiceTest migrated assertions', () => {

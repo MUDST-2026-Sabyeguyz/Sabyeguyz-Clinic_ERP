@@ -67,7 +67,7 @@ async function load() {
     receipt.value = detail
     // Customer and branch enrichment are independent of the persisted receipt document.
     await Promise.allSettled([
-      branchApi.list().then((items) => {
+      branchApi.listActive().then((items) => {
         if (current === generation)
           branch.value = items.find((item) => item.branchCode === detail.branchCode) ?? null
       }),

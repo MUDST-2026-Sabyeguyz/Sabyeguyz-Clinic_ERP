@@ -429,9 +429,9 @@ function isRightAligned(colIndex: number) {
 
 onMounted(async () => {
   try {
-    const [branchList, courseList] = await Promise.all([branchApi.list(), courseApi.list()])
+    const [branchList, courseList] = await Promise.all([branchApi.listActive(), courseApi.list()])
     branches.value = branchList
-    courseOptions.value = courseList.map((c) => ({ id: c.id, name: c.name }))
+    courseOptions.value = courseList.filter((c) => c.active !== false).map((c) => ({ id: c.id, name: c.name }))
   } catch (error) {
     branches.value = []
     courseOptions.value = []

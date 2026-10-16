@@ -12,7 +12,7 @@ describe('commission tiers', () => {
 
   it('saves a changed rate as a new scheme version and keeps it after a reload', () => {
     cy.visitAs('manager', '/staff/commission/tiers')
-    cy.contains('button', '+ เพิ่ม Scheme Version').click()
+    cy.contains('button', 'แก้กฎคอมมิชชัน').click()
     cy.get('.scheme-tier-editor article').first().contains('label', 'อัตรา (%)').find('input').clear().type('5.5')
     cy.get('.tier-drawer footer').contains('button', 'บันทึก').click()
     cy.noAlert()
@@ -28,7 +28,7 @@ describe('commission tiers', () => {
 
   it('refuses a tier whose range overlaps another', () => {
     cy.visitAs('manager', '/staff/commission/tiers')
-    cy.contains('button', '+ เพิ่ม Scheme Version').click()
+    cy.contains('button', 'แก้กฎคอมมิชชัน').click()
     cy.get('.scheme-tier-editor article').first().contains('label', 'สูงสุด').find('input').clear().type('65000')
     cy.get('.scheme-tier-editor article').eq(1).contains('label', 'ขั้นต่ำ').find('input').should('have.value', '60000')
     cy.get('.tier-drawer footer').contains('button', 'บันทึก').click()
@@ -38,7 +38,7 @@ describe('commission tiers', () => {
 
   it('refuses a minimum above the maximum', () => {
     cy.visitAs('manager', '/staff/commission/tiers')
-    cy.contains('button', '+ เพิ่ม Scheme Version').click()
+    cy.contains('button', 'แก้กฎคอมมิชชัน').click()
     cy.get('.scheme-tier-editor article').first().contains('label', 'ขั้นต่ำ').find('input').clear().type('200000')
     cy.get('.scheme-tier-editor article').first().contains('label', 'สูงสุด').find('input').clear().type('100000')
     cy.get('.tier-drawer footer').contains('button', 'บันทึก').click()

@@ -83,7 +83,9 @@ public class CourseTransferController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการโอน"));
         var permission = permissions.getOrCreate("COURSE_REVERSE", "Course", actor.currentId());
         CourseTransfer reversed = service.reverse(transfer, permission, request.reason(), actor.currentId());
-        audit.record("course_transfer", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Completed", "Reversed: " + request.reason(),
+        audit.recordChange("course_transfer", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("transfer_status", "Completed"),
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("transfer_status", "Reversed", "reason", request.reason()),
                 actor.currentId());
         return toResponse(reversed);
     }

@@ -1,42 +1,64 @@
 /* oxlint-disable vitest/valid-expect -- Cypress assertions use Chai, not Vitest. */
-describe('treatment fee rules page', () => {
-  it('shows the seeded rule and edits it while it is unused', () => {
-    cy.visitAs('manager', '/staff/commission/compensation-settings')
-    cy.contains('h1', 'ตั้งค่าค่ารักษาแทน').should('be.visible')
-    cy.get('.rule-card').should('have.length', 1).and('contain.text', '฿45').and('contain.text', 'ใช้งาน')
-    cy.get('.rule-card').contains('button', 'แก้ไข').click()
-    cy.get('.rule-drawer select').should('not.be.disabled')
-    cy.get('.rule-drawer').contains('label', 'จำนวนเงินต่อครั้ง').find('input').clear().type('50')
-    cy.get('.rule-drawer').contains('button', 'บันทึกกฎ').click()
-    cy.noAlert()
-    cy.get('.rule-card').should('contain.text', '฿50')
-    cy.api('GET', '/api/commission/treatment-fees').its('body.0.feeValue').should('equal', 50)
-  })
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+const nextMonthStart = () => {
+  const [year, month] = today.split('-').map(Number)
+  return new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10)
+}
 
-  it('adds a percentage rule that takes over from today, and rejects 150%', () => {
-    cy.visitAs('manager', '/staff/commission/compensation-settings')
-    cy.contains('button', '+ เพิ่มกฎค่ามือ').click()
-    cy.get('.rule-drawer select').select('Percentage')
-    cy.get('.rule-drawer').contains('label', 'อัตรา (%)').find('input').clear().type('150')
-    cy.get('.rule-drawer').contains('button', 'บันทึกกฎ').click()
-    cy.get('.drawer-error').should('contain.text', '0 ถึง 100')
-    cy.get('.rule-drawer').contains('label', 'อัตรา (%)').find('input').clear().type('10')
-    cy.get('.rule-drawer').contains('button', 'บันทึกกฎ').click()
+describe('treatment fee rule (settings)', () => {
+  it('shows the rule in force and saves a change as a new version for the next month', () => {
+    cy.visitAs('manager', '/staff/settings?section=commission')
+    cy.contains('.settings-panel-head h2', 'กฎค่ามือ').should('be.visible')
+    cy.get('.fee-version').should('have.length', 1).and('contain.text', '45 บาท / ครั้ง').and('contain.text', 'ใช้อยู่')
+    // the form opens with the current values: nothing starts from an empty form
+    cy.get('.settings-panel-head').contains('button', 'แก้กฎค่ามือ').click()
+    cy.get('.drawer input[type="number"]').should('have.value', '45').clear().type('50')
+    cy.get('.drawer input[type="month"]').invoke('val').should('match', /^[0-9]{4}-[0-9]{2}$/)
+    cy.get('.drawer .save').click()
     cy.noAlert()
-    cy.get('.rule-card').should('have.length', 2).and('contain.text', '10%')
+    cy.get('.fee-version').should('have.length', 2).and('contain.text', 'รอเริ่มใช้').and('contain.text', '50 บาท / ครั้ง')
     cy.api('GET', '/api/commission/treatment-fees').then(({ body }) => {
-      expect(body.map((rule) => rule.feeType).sort()).to.deep.equal(['Fixed', 'Percentage'])
+      expect(body).to.have.length(2)
+      const next = body.find((rule) => Number(rule.feeValue) === 50)
+      expect(next.effectiveFrom).to.equal(nextMonthStart())
+      expect(body.find((rule) => Number(rule.feeValue) === 45).effectiveTo, 'the rule in force ends the day before').to.be.a('string')
     })
   })
 
-  it('disables and enables a rule', () => {
-    cy.visitAs('manager', '/staff/commission/compensation-settings')
-    cy.get('.rule-card').contains('button', 'ปิดใช้งาน').click()
-    cy.get('.rule-card').should('contain.text', 'ปิดใช้งาน').contains('button', 'เปิดใช้งาน').click()
-    cy.get('.rule-card').should('contain.text', 'ใช้งาน')
-    cy.api('GET', '/api/commission/treatment-fees').its('body.0.enabled').should('equal', true)
+  it('edits the rule that waits to start instead of adding another one', () => {
+    cy.api('POST', '/api/commission/treatment-fees', { feeType: 'Percentage', feeValue: 10, effectiveFrom: nextMonthStart() })
+      .its('status').should('equal', 201)
+    cy.visitAs('manager', '/staff/settings?section=commission')
+    cy.get('.fee-version').should('have.length', 2)
+    cy.get('.settings-panel-head').contains('button', 'แก้กฎค่ามือ').click()
+    cy.get('.drawer h2').should('contain.text', 'แก้ไขเวอร์ชันที่รอเริ่มใช้')
+    cy.get('.drawer input[type="number"]').should('have.value', '10').clear().type('12')
+    cy.get('.drawer .save').click()
+    cy.noAlert()
+    cy.get('.fee-version').should('have.length', 2).and('contain.text', '12%')
+    cy.api('GET', '/api/commission/treatment-fees').its('body').should('have.length', 2)
   })
 
+  it('rejects 150% before saving', () => {
+    cy.visitAs('manager', '/staff/settings?section=commission')
+    cy.get('.settings-panel-head').contains('button', 'แก้กฎค่ามือ').click()
+    cy.get('.drawer input[type="radio"][value="Percentage"]').check()
+    cy.get('.drawer input[type="number"]').clear().type('150')
+    cy.get('.drawer .save').click()
+    cy.get('.validation-message').should('contain.text', '0 ถึง 100')
+    cy.api('GET', '/api/commission/treatment-fees').its('body').should('have.length', 1)
+  })
+
+  it('lists the versions of the rule on the history page, read only', () => {
+    cy.visitAs('manager', '/staff/settings/fee-history')
+    cy.contains('h1', 'ประวัติเวอร์ชันกฎค่ามือ').should('be.visible')
+    cy.get('table.versions tbody tr').should('have.length', 1).and('contain.text', 'V1').and('contain.text', 'ใช้อยู่')
+    cy.get('.detail').should('contain.text', 'อ่านอย่างเดียว').and('contain.text', '45 บาท / ครั้ง')
+    cy.get('.detail').find('input, select, textarea').should('not.exist')
+  })
+})
+
+describe('treatment fee backfill page', () => {
   it('backfills the single-visit fee that was missing when no rule applied', function () {
     cy.api('GET', '/api/commission/treatment-fees').then(({ body }) =>
       cy.api('PATCH', `/api/commission/treatment-fees/${body[0].id}/disable`, {}).its('status').should('equal', 200))

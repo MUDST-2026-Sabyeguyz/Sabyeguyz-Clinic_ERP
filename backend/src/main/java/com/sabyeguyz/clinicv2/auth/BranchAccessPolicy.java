@@ -33,14 +33,23 @@ public class BranchAccessPolicy {
         boolean manager = roles.findByUserId(userId).stream()
                 .anyMatch(role -> "Manager".equalsIgnoreCase(role.getRole().getRoleName()));
         if (manager) {
-            return code == null ? null : branches.findByBranchCode(code)
-                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + code));
+            if (code == null) return null;
+            return requireOpen(branches.findByBranchCode(code)
+                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + code)));
         }
         Branch home = user.getStaff() == null ? null : user.getStaff().getBranch();
         if (home == null || (code != null && !home.getBranchCode().equals(code))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ไม่มีสิทธิ์เข้าถึงนัดหมายของสาขานี้");
         }
-        return home;
+        return requireOpen(home);
+    }
+
+    /** A branch that is closed (ปิดใช้งาน) allows nothing at all: nobody can work in it until it is opened again. */
+    private static Branch requireOpen(Branch branch) {
+        if (!branch.isBranchStatus()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "สาขา " + branch.getBranchName() + " ปิดใช้งาน ไม่สามารถทำรายการที่สาขานี้ได้");
+        }
+        return branch;
     }
 
     public void requireAccess(Branch branch) {

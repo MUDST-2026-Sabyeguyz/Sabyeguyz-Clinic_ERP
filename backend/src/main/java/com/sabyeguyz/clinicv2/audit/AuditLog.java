@@ -31,7 +31,7 @@ public class AuditLog {
     @Column(name = "new_value", columnDefinition = "text")
     private String newValue;
 
-    @Column(name = "changed_by", nullable = false)
+    @Column(name = "changed_by")
     private Long changedBy;
 
     @Column(name = "changed_at", nullable = false)

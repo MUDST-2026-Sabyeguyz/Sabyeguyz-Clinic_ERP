@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.appointment;
 
+import com.sabyeguyz.clinicv2.catalog.ClosedGuard;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
@@ -164,8 +165,8 @@ public class AppointmentController {
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         // The service is optional: an appointment can be made before anyone decides what will be done.
-        Service svc = request.serviceId() == null ? null : services.findById(request.serviceId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
+        Service svc = request.serviceId() == null ? null : ClosedGuard.open(services.findById(request.serviceId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ")));
         Appointment appointment = service.book(patient, branch, therapist, svc, null,
                 local.toLocalDate(), local.toLocalTime(), initial, actor.currentId());
         return createdResponse(appointment, request.note());

@@ -154,10 +154,30 @@ public class V2WorkflowScenariosController {
     public Map<String, Object> audit(@PathVariable String scenario) {
         var repository = new V2RepositoryStub<>(AuditLogRepository.class);
         return V2RepositoryStub.outcome(() -> {
-            var log = new AuditLogService(repository.proxy()).record("branch", "1",
-                    scenario.equals("missing-action") ? null : AuditAction.UPDATE,
-                    "{\"phone\":\"080\"}", "{\"phone\":\"081\"}", 1L);
-            return Map.of("tableName", log.getTableName(), "action", log.getAction());
+            var service = new AuditLogService(repository.proxy());
+            var log = switch (scenario) {
+                // plain text is kept as JSON (Data Dictionary: old_value/new_value are JSON)
+                case "plain-text" -> service.record("course", "7", AuditAction.UPDATE, "Active", "Cancelled", 1L);
+                // an automatic event has no user and always names its source
+                case "automatic" -> service.record("appointment", "5", AuditAction.UPDATE, "{\"status\":\"Confirmed\"}",
+                        "{\"status\":\"Cancelled\"}", null);
+                case "google" -> service.recordAutomatic("appointment", "5", AuditAction.UPDATE,
+                        AuditLogService.fields("appointment_status", "Confirmed"),
+                        AuditLogService.fields("appointment_status", "Cancelled"), "GoogleCalendar");
+                case "change" -> service.recordChange("commission_scheme", "3", AuditAction.UPDATE,
+                        AuditLogService.fields("effective_to", null), AuditLogService.fields("effective_to", "2026-10-31",
+                                "reason", "ended by the new version"), 1L);
+                default -> service.record("branch", "1",
+                        scenario.equals("missing-action") ? null : AuditAction.UPDATE,
+                        "{\"phone\":\"080\"}", "{\"phone\":\"081\"}", 1L);
+            };
+            Map<String, Object> saved = new java.util.LinkedHashMap<>();
+            saved.put("tableName", log.getTableName());
+            saved.put("action", log.getAction());
+            saved.put("oldValue", log.getOldValue());
+            saved.put("newValue", log.getNewValue());
+            saved.put("changedBy", log.getChangedBy());
+            return saved;
         });
     }
 

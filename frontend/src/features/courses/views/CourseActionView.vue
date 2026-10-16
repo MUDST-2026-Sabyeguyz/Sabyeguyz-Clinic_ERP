@@ -193,7 +193,7 @@ async function loadOwner() {
   owners.value = patientList
   therapists.value = staffList.filter((person) => person.role === 'THERAPIST' && person.active)
   try {
-    branches.value = await branchApi.list()
+    branches.value = await branchApi.listActive()
   } catch {
     branches.value = []
   }

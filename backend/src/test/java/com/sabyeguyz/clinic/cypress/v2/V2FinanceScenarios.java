@@ -85,7 +85,7 @@ public class V2FinanceScenarios {
     }
     private static CommissionTierResolver tierResolver() {
         return new CommissionTierResolver(new V2RepositoryStub<>(CommissionTierRepository.class)
-                .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder", a -> tiers()).proxy());
+                .on("findByCommissionSchemeIdOrderByTierOrder", a -> tiers()).proxy());
     }
     private Object override(String scenario) {
         var audits = new V2RepositoryStub<>(CommissionRateOverrideAuditRepository.class);
@@ -197,9 +197,8 @@ public class V2FinanceScenarios {
             return V2RepositoryStub.outcome(() -> service.create("Bad", LocalDate.parse("2026-01-01"), null,
                     new Permission(), bad, 1L));
         }
-        if (scenario.equals("schemecrud-referenced-tiers") || scenario.equals("schemecrud-referenced-rename")
-                || scenario.equals("schemecrud-referenced-deactivate")) {
-            // a scheme a course already points at: tiers, start date and deactivation are refused, the name may change
+        if (scenario.equals("schemecrud-referenced-tiers") || scenario.equals("schemecrud-referenced-rename")) {
+            // a scheme a course already points at: tiers and start date are refused, the name may change
             var used = schemeVersion(1, "2026-01-01", null);
             used.setSchemeName("Used");
             schemesStub.on("findById", a -> Optional.of(used));
@@ -207,9 +206,6 @@ public class V2FinanceScenarios {
             coursesStub.on("existsByCommissionSchemeId", a -> true);
             if (scenario.equals("schemecrud-referenced-tiers")) {
                 return V2RepositoryStub.outcome(() -> service.update(1L, null, null, null, validTiers, 9L));
-            }
-            if (scenario.equals("schemecrud-referenced-deactivate")) {
-                return V2RepositoryStub.outcome(() -> { service.deactivate(1L); return "deactivated"; });
             }
             service.update(1L, "Renamed", null, null, null, 9L);
             return Map.of("name", used.getSchemeName(), "tiersDeleted", tiersStub.calls("deleteAll"));
@@ -240,7 +236,7 @@ public class V2FinanceScenarios {
     private Object tier(String scenario) {
         if (scenario.equals("tier-satang-edges")) {
             var edges = new V2RepositoryStub<>(CommissionTierRepository.class)
-                    .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder", a -> tiers());
+                    .on("findByCommissionSchemeIdOrderByTierOrder", a -> tiers());
             var resolver = new CommissionTierResolver(edges.proxy());
             var scheme = new CommissionScheme();
             return Map.of("topOfTier1", resolver.resolve(scheme, decimal("59999.99")).getCommissionRate(),
@@ -251,12 +247,12 @@ public class V2FinanceScenarios {
         if (scenario.equals("tier-overlap")) {
             // two tiers both covering 100.00: the amount must never find two tiers
             var clash = new V2RepositoryStub<>(CommissionTierRepository.class)
-                    .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder",
+                    .on("findByCommissionSchemeIdOrderByTierOrder",
                             a -> List.of(tierValue(1,"0.00","200.00","0.05"), tierValue(2,"100.00",null,"0.10")));
             return new CommissionTierResolver(clash.proxy()).resolve(new CommissionScheme(), decimal("100.00")).getCommissionRate();
         }
         var repository = new V2RepositoryStub<>(CommissionTierRepository.class)
-                .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder", a -> scenario.equals("tier-missing") ? List.of() : tiers());
+                .on("findByCommissionSchemeIdOrderByTierOrder", a -> scenario.equals("tier-missing") ? List.of() : tiers());
         return new CommissionTierResolver(repository.proxy()).resolve(new CommissionScheme(),
                 decimal(scenario.equals("tier-top") ? "500000" : scenario.equals("tier-missing") ? "1000" : "75000")).getCommissionRate();
     }
@@ -367,13 +363,13 @@ public class V2FinanceScenarios {
             }
             case "feeadmin-takes-over" -> {
                 repository.on("findByTreatmentFeeRuleStatusTrue", a -> List.of(existing));
-                var created = service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, permission, 1L);
+                var created = service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2027,7,1), null, permission, 1L);
                 return Map.of("predecessorEnds", existing.getEffectiveTo().toString(), "newStarts", created.getEffectiveFrom().toString());
             }
             case "feeadmin-takeover-used" -> {
                 repository.on("findByTreatmentFeeRuleStatusTrue", a -> List.of(existing));
                 repository.on("isUsedAfter", a -> true);
-                return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, permission, 1L));
+                return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2027,7,1), null, permission, 1L));
             }
             case "feeadmin-used-immutable" -> {
                 repository.on("findById", a -> Optional.of(existing));

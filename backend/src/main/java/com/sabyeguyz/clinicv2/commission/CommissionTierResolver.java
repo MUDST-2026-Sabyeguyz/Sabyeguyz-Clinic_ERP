@@ -21,7 +21,7 @@ public class CommissionTierResolver {
     @Transactional(readOnly = true)
     public CommissionTier resolve(CommissionScheme scheme, BigDecimal monthlySales) {
         BigDecimal sales = monthlySales.setScale(2, RoundingMode.HALF_UP);
-        List<CommissionTier> covering = tiers.findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder(scheme.getId()).stream()
+        List<CommissionTier> covering = tiers.findByCommissionSchemeIdOrderByTierOrder(scheme.getId()).stream()
                 .filter(tier -> sales.compareTo(tier.getMinimumMonthlySales()) >= 0
                         && (tier.getMaximumMonthlySales() == null
                             || sales.compareTo(tier.getMaximumMonthlySales()) <= 0))

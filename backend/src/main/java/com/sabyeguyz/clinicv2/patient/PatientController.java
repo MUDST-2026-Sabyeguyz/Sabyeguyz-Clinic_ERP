@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.patient;
 
+import com.sabyeguyz.clinicv2.catalog.ClosedGuard;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
@@ -116,8 +117,8 @@ public class PatientController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PatientSummary register(@RequestBody RegisterRequest request) {
-        Branch branch = branches.findByBranchCode(requireText(request.branchCode(), "branchCode"))
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
+        Branch branch = ClosedGuard.open(branches.findByBranchCode(requireText(request.branchCode(), "branchCode"))
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode())));
         String middleName = middleNameOf(request);
         if (middleName != null && !middleName.isBlank()
                 && (request.firstName() == null || request.firstName().isBlank()

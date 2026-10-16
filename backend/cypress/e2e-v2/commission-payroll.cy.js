@@ -123,8 +123,12 @@ describe('v2 commission: the monthly payment of a staff member', () => {
         cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('status').should('equal', 409)
       })
       // a substitute session and a single visit by the same PT add the other two kinds
-      cy.api('GET', '/api/commission/treatment-fees').then(({ body }) => cy.api('PUT', `/api/commission/treatment-fees/${body[0].id}`,
-        { feeType: 'Fixed', feeValue: 45 }).its('status').should('equal', 200))
+      cy.api('GET', '/api/commission/treatment-fees').then(({ body }) => {
+        const id = body[0].id
+        cy.api('PATCH', `/api/commission/treatment-fees/${id}/disable`).its('status').should('equal', 200)
+        cy.api('PUT', `/api/commission/treatment-fees/${id}`, { feeType: 'Fixed', feeValue: 45 }).its('status').should('equal', 200)
+        cy.api('PATCH', `/api/commission/treatment-fees/${id}/enable`).its('status').should('equal', 200)
+      })
       use(course.id, { treatingStaffId: this.fixtures.managerStaffId }).its('status').should('equal', 200)
       cy.api('POST', '/api/payments', {
         patientId: course.patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId, treatingStaffId: this.fixtures.therapistId,

@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.course;
 
+import com.sabyeguyz.clinicv2.catalog.ClosedGuard;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitRepository;
@@ -165,10 +166,10 @@ public class CoursePurchaseController {
     public Response purchase(@RequestBody PurchaseRequest request) {
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
-        Branch branch = branches.findByBranchCode(request.branchCode().trim())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
-        Service courseTemplate = services.findById(request.courseId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        Branch branch = ClosedGuard.open(branches.findByBranchCode(request.branchCode().trim())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode())));
+        Service courseTemplate = ClosedGuard.open(services.findById(request.courseId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส")));
         if (request.shares() != null && !request.shares().isEmpty()) {
             throw new IllegalArgumentException("ไม่รองรับการแบ่งเครดิตยอดขายแล้ว เจ้าของคอร์สคือผู้ขายคนเดียว");
         }
@@ -288,7 +289,9 @@ public class CoursePurchaseController {
             saved.setCourseUpdateBy(actor.currentId());
             saved = courses.save(saved);
         }
-        audit.record("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Active", "Cancelled: " + request.reason(),
+        audit.recordChange("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("course_status", "Active"),
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("course_status", "Cancelled", "reason", request.reason()),
                 actor.currentId());
         return toResponse(saved, saved.getPurchaserPatient().getId());
     }

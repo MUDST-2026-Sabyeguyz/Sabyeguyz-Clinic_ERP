@@ -399,9 +399,12 @@ export const patientApi = {
 
 export const branchApi = {
   list: () => api.get<Branch[]>('/api/branches'),
+  // what the other screens offer to choose: a closed branch (ปิดใช้งาน) is not listed
+  listActive: async () => (await api.get<Branch[]>('/api/branches')).filter((branch) => branch.active !== false),
   get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
   create: (body: BranchRequest) => api.post<Branch>('/api/branches', body),
   update: (id: number, body: BranchRequest) => api.put<Branch>(`/api/branches/${id}`, body),
+  activate: (id: number) => api.patch<Branch>(`/api/branches/${id}/activate`, {}),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }
 
@@ -445,6 +448,10 @@ export const serviceManagementApi = {
   update: (id: number, body: ManagedServiceRequest) =>
     api.put<ManagedService>(`/api/services/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
+  activate: (id: number) => api.patch<ManagedService>(`/api/services/${id}/activate`, {}),
+  // Single Visit <-> Course; refused by the server once the item has been used
+  changeType: (id: number, type: 'SingleVisit' | 'Course') =>
+    api.post<ManagedService>(`/api/services/${id}/type`, { type }),
 }
 
 // The v2 backend names statuses in PascalCase (Confirmed, InService, NoShow); the screens use UPPER_SNAKE.
@@ -621,6 +628,7 @@ export const courseApi = {
   update: (id: number, body: Omit<Course, 'id' | 'active'>) =>
     api.put<Course>(`/api/courses/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/courses/${id}`),
+  activate: (id: number) => api.patch<Course>(`/api/courses/${id}/activate`, {}),
   patientCourses: (patientId: number) =>
     api.get<CoursePurchase[]>(`/api/patients/${patientId}/courses`),
   purchase: (body: { patientId: number; courseId: number; branchCode: string }) =>
@@ -810,8 +818,6 @@ export const commissionApi = {
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
   createScheme: (body: unknown) => api.post('/api/commission/schemes', body),
   updateScheme: (id: number, body: unknown) => api.put(`/api/commission/schemes/${id}`, body),
-  activateScheme: (id: number) => api.patch(`/api/commission/schemes/${id}/activate`, {}),
-  deactivateScheme: (id: number) => api.delete(`/api/commission/schemes/${id}`),
   // How the pay is worked out (the tiers and the treatment fee in force today); read only, for anyone signed in
   formula: () => api.get<CommissionFormula>('/api/commission/formula'),
   report: (from: string, to: string) =>
@@ -943,8 +949,14 @@ export type TreatmentFeeRule = {
   enabled: boolean
   /** a ledger row already copied the rule: its type, value and start can no longer change */
   used: boolean
+  /** the name the Manager gave the rule */
+  name?: string | null
+  /** who recorded the rule last (its editor, otherwise its creator) and when */
+  lastEditedBy?: string | null
+  lastEditedAt?: string | null
 }
 export type TreatmentFeeInput = {
+  name?: string
   feeType: 'Fixed' | 'Percentage'
   feeValue: number
   effectiveFrom: string
@@ -1146,8 +1158,41 @@ export const masterDataApi = {
   activate: (id: number) => api.patch<MasterData>(`/api/master-data/${id}/activate`, {}),
 }
 
+export type AuditEntry = {
+  id: number
+  tableName: string
+  recordId: string
+  action: 'INSERT' | 'UPDATE' | 'DELETE'
+  oldValue: string | null
+  newValue: string | null
+  changedBy: number | null
+  changedAt: string
+  changedByName: string | null
+}
+export type AuditPage = {
+  items: AuditEntry[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+export type AuditFilter = {
+  tableName?: string
+  recordId?: string
+  action?: string
+  changedBy?: number
+  from?: string
+  to?: string
+}
 export const auditApi = {
-  list: (page = 0, size = 50) => api.get(`/api/audit-logs?page=${page}&size=${size}`),
+  list: (page = 0, size = 50, filter: AuditFilter = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) })
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return api.get<AuditPage>(`/api/audit-logs?${params}`)
+  },
+  tables: () => api.get<string[]>('/api/audit-logs/tables'),
 }
 
 export type CalendarBranchStatus = {
