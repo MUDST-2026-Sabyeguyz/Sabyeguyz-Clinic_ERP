@@ -130,7 +130,7 @@ describe('v2 a monthly payment keeps its payment date and reference', () => {
   })
 })
 
-describe("v2 how the pay is worked out can be read by a therapist, the rules and money screens are the Manager's", () => {
+describe('v2 how the pay is worked out can be read by a therapist, the rules and money screens are the Manager's', () => {
   it('lets a therapist read the tiers and the treatment fee in force, nothing else', () => {
     cy.login('therapist', 'therapist123').its('body.token').then((token) => {
       cy.apiAs(token, 'GET', '/api/commission/formula').its('status').should('equal', 200)
@@ -150,7 +150,7 @@ describe("v2 how the pay is worked out can be read by a therapist, the rules and
 describe('v2 a therapist reads the lines behind their own pay', () => {
   const sessions = (fx, count) => cy.registerPatient().then((patient) => buy(fx, patient).then((course) => {
     for (let i = 0; i < count; i++) cy.api('POST', '/api/course-usages', { coursePurchaseId: course.id }).its('status').should('equal', 200)
-    return cy.wrap(course)
+    return course
   }))
 
   it('lists each session with its base, rate and amount once the sale month is closed', function () {

@@ -12,15 +12,12 @@ async function signIn() {
   submitting.value = true
   errorMessage.value = ''
   try {
+    // A new login must never reuse credentials from an earlier local backend.
     clearSession()
     const result = await authApi.login(form.username, form.password)
     localStorage.setItem('authToken', result.token)
     localStorage.setItem('authUser', JSON.stringify(result))
-    localStorage.removeItem('managerSelectedBranch')
-    const managerHome = router.hasRoute('manager-branch-selection')
-      ? '/staff/select-branch'
-      : '/staff/dashboard'
-    await router.push(result.role === 'MANAGER' ? managerHome : '/staff/patients')
+    await router.push(result.role === 'MANAGER' ? '/staff/dashboard' : '/staff/patients')
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'เข้าสู่ระบบไม่สำเร็จ'
   } finally {

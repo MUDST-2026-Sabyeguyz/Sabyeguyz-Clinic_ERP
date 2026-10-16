@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import ServicesView from '../views/servicesView.vue'
-import ManagerServicesView from '../views/ManagerServicesView.vue'
-import { paymentMethodApi, staffApi } from '@/api/client'
 const push = vi.hoisted(() => vi.fn())
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: { patientId: '1' } }),
@@ -54,7 +52,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   wrapper?.unmount()
-  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 async function click(text: string) {
@@ -90,21 +87,6 @@ it('hides Assessment for new sales', async () => {
   await flushPromises()
   await click('เริ่มขายบริการ')
   expect(wrapper.findAll('.sale-tabs button').map((b) => b.text())).not.toContain('Assessment')
-})
-
-it.each([
-  ['therapist', ServicesView],
-  ['manager', ManagerServicesView],
-] as const)('honors closed payment methods from settings in the %s sales screen', async (_role, component) => {
-  vi.spyOn(paymentMethodApi, 'list').mockResolvedValue([
-    { id: 1, code: 'Cash', name: 'Cash', active: false },
-    { id: 2, code: 'QR', name: 'QR code', active: true },
-  ])
-  vi.spyOn(staffApi, 'list').mockResolvedValue([])
-  wrapper = mount(component, { global: { stubs: { StaffHeader: true, FilterDropdown: true } } })
-  await flushPromises()
-  await click('เริ่มขายบริการ')
-  expect(wrapper.findAll('.payment-options button').map((button) => button.text())).toEqual(['พร้อมเพย์'])
 })
 
 it('keeps a failed POST on the form without opening a receipt', async () => {

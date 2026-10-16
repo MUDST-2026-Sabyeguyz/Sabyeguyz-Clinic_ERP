@@ -5,11 +5,6 @@ import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { branchApi, courseApi, reportApi, type RevenueReport } from '@/api/client'
 import { clinicToday } from '@/utils/clinicDate'
 
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}))
-
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 it('shows a lookup error instead of invented branch and course filters', async () => {

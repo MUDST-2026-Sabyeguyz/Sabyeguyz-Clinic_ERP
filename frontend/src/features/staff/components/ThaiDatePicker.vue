@@ -6,7 +6,6 @@ const props = withDefaults(
     modelValue: string
     disabled?: boolean
     invalid?: boolean
-    minDate?: string
     showCalendarIcon?: boolean
     numericMonth?: boolean
     hideCaret?: boolean
@@ -15,7 +14,6 @@ const props = withDefaults(
   {
     disabled: false,
     invalid: false,
-    minDate: '',
     showCalendarIcon: false,
     numericMonth: false,
     hideCaret: false,
@@ -122,17 +120,10 @@ onUnmounted(() => {
 })
 
 function choose(day: number) {
-  if (isDisabled(day)) return
   const year = viewDate.value.getFullYear()
   const month = String(viewDate.value.getMonth() + 1).padStart(2, '0')
   emit('update:modelValue', `${year}-${month}-${String(day).padStart(2, '0')}`)
   open.value = false
-}
-
-function isDisabled(day: number) {
-  if (!props.minDate) return false
-  const candidate = `${viewDate.value.getFullYear()}-${String(viewDate.value.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-  return candidate <= props.minDate
 }
 
 function isSelected(day: number) {
@@ -184,8 +175,7 @@ function isSelected(day: number) {
           <button
             v-if="day"
             type="button"
-            :class="{ selected: isSelected(day), disabled: isDisabled(day) }"
-            :disabled="isDisabled(day)"
+            :class="{ selected: isSelected(day) }"
             @click="choose(day)"
           >
             {{ day }}
@@ -326,13 +316,6 @@ function isSelected(day: number) {
 .days button.selected {
   color: #fff;
   background: #1e807c;
-}
-
-.days button.disabled,
-.days button.disabled:hover {
-  color: #b5bfba;
-  background: transparent;
-  cursor: not-allowed;
 }
 
 @media (max-width: 600px) {
