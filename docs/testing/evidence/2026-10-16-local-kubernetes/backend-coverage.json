@@ -1,0 +1,41 @@
+{
+  "scope": "com.sabyeguyz.clinicv2 production classes; backend HTTP regression and v2 PostgreSQL integration",
+  "counters": [
+    {
+      "type": "INSTRUCTION",
+      "covered": 29502,
+      "missed": 4468,
+      "percentage": 86.85
+    },
+    {
+      "type": "BRANCH",
+      "covered": 1776,
+      "missed": 832,
+      "percentage": 68.1
+    },
+    {
+      "type": "LINE",
+      "covered": 5389,
+      "missed": 716,
+      "percentage": 88.27
+    },
+    {
+      "type": "COMPLEXITY",
+      "covered": 2456,
+      "missed": 1114,
+      "percentage": 68.8
+    },
+    {
+      "type": "METHOD",
+      "covered": 1840,
+      "missed": 418,
+      "percentage": 81.49
+    },
+    {
+      "type": "CLASS",
+      "covered": 307,
+      "missed": 7,
+      "percentage": 97.77
+    }
+  ]
+}

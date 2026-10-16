@@ -11,7 +11,7 @@
 - ต้องมีอินเทอร์เน็ตสำหรับดาวน์โหลด dependencies/images ครั้งแรก แนะนำให้ Docker มี RAM 6–8 GB เมื่อเปิด Jenkins/Compose พร้อมกัน
 
 ```powershell
-git clone https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+git clone --branch codex/local-kubernetes https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
 cd Sabyeguyz-Clinic_ERP
 kubectl config get-contexts
 kubectl --context docker-desktop get nodes
@@ -87,6 +87,8 @@ pwsh -File scripts/Test-Submission.ps1
 
 ชุดนี้ตรวจ ESLint, TypeScript/build, Vitest/V8 coverage, backend Cypress/H2 regression, v2 API/PostgreSQL พร้อม JaCoCo และ frontend v2 browser E2E เปิดฐานชั่วคราวที่ `127.0.0.1:15439`, test API `18080`, JMX `19001`, Vite `5173` จึงต้องให้พอร์ตเหล่านี้ว่างก่อน สคริปต์หยุดเฉพาะ process/container ที่ตนสร้างเมื่อจบ ไม่ใช้ฐาน Kubernetes หรือ Compose ในการ reset fixtures
 
+รันเฉพาะ browser regression ใหม่ได้ด้วย `pwsh -File scripts/Test-Submission.ps1 -Mode Browser` ซึ่งสร้างฐานทดสอบแยกเช่นกัน และรายงานเฉพาะ scope ที่รันรอบนั้น Cypress configs ใช้ `.cjs` เพื่อหลีกเลี่ยง native TypeScript config loader ที่มีปัญหาบน Windows ARM
+
 อ่านรายงาน coverage:
 
 | รายงาน | ตำแหน่ง |
@@ -95,6 +97,7 @@ pwsh -File scripts/Test-Submission.ps1
 | Frontend summary | `frontend/coverage/coverage-summary.json` |
 | Backend HTML/XML | `backend/target/site/jacoco/index.html`, `jacoco.xml` |
 | Backend Cypress JUnit | `backend/cypress/results/` |
+| Frontend v2 browser JUnit | `frontend/cypress/results/browser-v2-*.xml` |
 | Kubernetes browser JUnit | `frontend/cypress/results/k8s-*.xml` |
 
 Frontend coverage รวม `src/**/*.ts,vue` ยกเว้น tests, declarations และ entry point Backend JaCoCo วัดเฉพาะ production package `com.sabyeguyz.clinicv2` จาก HTTP tests ใน JVM จริง รายงานของ H2 และ v2 สามารถสะสมในรอบเดียวโดย `test:v2:coverage` ไม่ clean target หลังจบรอบแรก Coverage เป็นค่าที่วัดได้ ไม่ได้ตั้งเกณฑ์ผ่านแทนอาจารย์ และไม่แปลว่าทุก business flow ผ่านแล้ว
@@ -103,7 +106,9 @@ Frontend coverage รวม `src/**/*.ts,vue` ยกเว้น tests, declarat
 
 ไฟล์ [kubernetes-ci.yml](../../.github/workflows/kubernetes-ci.yml) ทำ quality/tests/coverage → build images → สร้าง kind cluster ชั่วคราว → deploy → health/authenticated/PVC tests → browser E2E → upload artifacts โดยไม่อัปโหลด credentials
 
-รองรับ PR เข้า develop, push develop/codex branches และ manual `workflow_dispatch` ใช้ GitHub-hosted runner จึงไม่ต้องส่ง kubeconfig เครื่องส่วนตัวขึ้น GitHub หากบัญชีติด billing หรือ workflow ถูก disable ต้องแก้สถานะนั้นก่อนรันบน GitHub ผล local ไม่ใช่ผล GitHub Actions การใช้ Jenkins ย้อนหลังเดิมยังเป็นอีกชุดหนึ่ง
+เรียกผ่าน manual `workflow_dispatch` เพื่อคงการรันปกติไว้บน Jenkins ในเครื่องตามแนวทางของ repo ไม่เปิด hosted runs ใหม่ทุก push ใช้ GitHub-hosted runner เมื่อสั่งรัน จึงไม่ต้องส่ง kubeconfig เครื่องส่วนตัวขึ้น GitHub หากบัญชีติด billing หรือ workflow ถูก disable ต้องแก้สถานะนั้นก่อนรันบน GitHub ผล local ไม่ใช่ผล GitHub Actions
+
+Jenkins replay ในโหมด push แสดง jobs ของ workflow นี้เป็น `skipped` พร้อมเหตุผลว่าเป็น manual gate ไม่แสดง Kubernetes ผ่านโดยไม่ได้รัน ให้ดูผล `Test-Local.ps1`, browser E2E และ artifacts ของ workflow เมื่อสั่งรันแยก
 
 ## ตรวจสถานะ / logs / rollback / หยุด
 
