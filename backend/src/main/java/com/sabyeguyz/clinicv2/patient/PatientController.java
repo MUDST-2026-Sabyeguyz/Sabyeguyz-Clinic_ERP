@@ -54,7 +54,7 @@ public class PatientController {
             String branchCode, String customerType, String title, String firstName, String lastName,
             String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
             String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
-            String fullName, com.fasterxml.jackson.databind.JsonNode middleName) {}
+            String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email) {}
 
     public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -70,7 +70,7 @@ public class PatientController {
             String emergencyContactName, String emergencyContactRelationship, String emergencyContactPhone,
             boolean privacyConsent, String nickname, String bloodGroup, String nationality,
             String customerType, String customerSource, String insuranceCompany, String customerTypeCode,
-            String firstName, String lastName, String middleName) {}
+            String firstName, String lastName, String middleName, String email) {}
 
     public record IdentityPatientSummary(Long id, String hn, String fullName) {}
     public record IdentityLookupResponse(boolean exists, IdentityPatientSummary patient) {}
@@ -144,6 +144,7 @@ public class PatientController {
                 request.address(),
                 null, null, null, null, middleName);
         Patient patient = service.register(registration, actor.currentId());
+        patient.setEmail(validEmail(request.email()));
         return toSummary(patient);
     }
 
@@ -169,6 +170,7 @@ public class PatientController {
                 passport ? request.identityNumber() : null, request.birthDate(),
                 parseBloodGroup(request.bloodGroup()), request.nationality(), request.address(),
                 middleName, request.middleName() != null, actor.currentId());
+        if (request.email() != null) patient.setEmail(validEmail(request.email()));
         return toProfile(patient);
     }
 
@@ -211,7 +213,16 @@ public class PatientController {
                 patient.getReferralChannel() == null ? null : patient.getReferralChannel().getValueName(),
                 patient.getInsuranceCompany() == null ? null : patient.getInsuranceCompany().getValueName(),
                 patient.getCustomerType() == null ? null : patient.getCustomerType().name(),
-                patient.getPatientFname(), patient.getPatientLname(), patient.getPatientMiddleName());
+                patient.getPatientFname(), patient.getPatientLname(), patient.getPatientMiddleName(), patient.getEmail());
+    }
+
+    private static String validEmail(String value) {
+        if (value == null || value.isBlank()) return null;
+        String email = value.trim();
+        if (email.length() > 254 || !email.matches("^[^@.\\s]+(\\.[^@.\\s]+)*@[^@.\\s]+(\\.[^@.\\s]+)+$")) {
+            throw new IllegalArgumentException("รูปแบบอีเมลผู้ป่วยไม่ถูกต้อง");
+        }
+        return email;
     }
 
     private static String middleNameOf(RegisterRequest request) {
