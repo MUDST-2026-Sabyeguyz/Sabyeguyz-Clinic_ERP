@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -210,6 +211,9 @@ const editingPatientPhone = computed(() =>
 const branchName = (code: string) =>
   branches.value.find((branch) => branch.code === code)?.name || code
 const timeOptions = ['09:00', '10:30', '13:00', '14:30', '16:00']
+const calendarTimes = computed(() =>
+  [...new Set([...timeOptions, ...appointments.value.map((item) => formatTime(item.startAt))])].sort(),
+)
 const appointmentStatusOptions: [AppointmentUiStatus, string][] = [
   ['PENDING', 'ยังไม่ยืนยัน'],
   ['CONFIRMED', 'ยืนยัน'],
@@ -1251,7 +1255,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
           <div class="calendar-grid-scroll">
             <div class="calendar-grid day">
               <div class="calendar-time">
-                <b>เวลา</b><span v-for="time in timeOptions" :key="time">{{ time }}</span>
+                <b>เวลา</b><span v-for="time in calendarTimes" :key="time">{{ time }}</span>
               </div>
               <div
                 v-for="therapist in calendarTherapists"
@@ -1263,7 +1267,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                   ><small>{{ branchName(therapist.branchCode) }}</small>
                 </header>
                 <button
-                  v-for="time in timeOptions"
+                  v-for="time in calendarTimes"
                   :key="time"
                   type="button"
                   class="calendar-slot"
@@ -1415,14 +1419,9 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
     >
       <section class="status-modal calendar-sync-modal" role="dialog" aria-modal="true">
         <h2>เชื่อมต่อ Google Calendar</h2>
-        <div class="calendar-sync-description">
-          <p>เมื่อเชื่อมต่อ ระบบจะแสดงนัดหมายจากสบายกายใน Google Calendar</p>
-        </div>
+        <GoogleCalendarPanel />
         <div class="calendar-sync-actions">
-          <button type="button" class="secondary" @click="calendarSyncOpen = false">ยกเลิก</button
-          ><button type="button" class="primary" @click="calendarSyncOpen = false">
-            เชื่อมต่อ
-          </button>
+          <button type="button" class="secondary" @click="calendarSyncOpen = false">ปิด</button>
         </div>
       </section>
     </div>
