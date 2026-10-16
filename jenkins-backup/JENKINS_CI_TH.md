@@ -65,6 +65,8 @@ Worker ใช้ Debian, Java 21, Node 24 และ Chromium แทน GitHub Ub
 
 `Dockerfile.worker` เพิ่ม passwordless sudo เฉพาะ container ทดสอบ เพื่อให้คำสั่งเดิมอย่าง `npx playwright install --with-deps chromium` ติดตั้ง OS dependencies ได้เหมือน GitHub runner ตัว Jenkins controller ใช้ image เดิมที่ไม่มี sudo และ worker ไม่ได้รับ credentials ของ controller
 
+Worker ใช้ `psql`, `pg_dump` และ `pg_restore` รุ่น 16 ให้ตรงกับ PostgreSQL 16 ใน workflow เดิม การใช้ `pg_dump` รุ่นใหม่กว่าอาจสร้างคำสั่ง SQL ที่ server 16 ไม่รองรับ และต้องจัดเป็นปัญหาเครื่องมือ CI ไม่ใช่ข้อบกพร่องของ migration แอป
+
 ขั้น publish/deploy เก่าที่กำหนดให้รันเฉพาะ `workflow_dispatch` บน `xan` จะไม่รันในการตรวจ CI แบบ push นี้ ฐาน PostgreSQL และ Compose project ของแต่ละ job ใช้ใหม่และล้างเฉพาะทรัพยากรทดสอบที่ job นั้นสร้าง
 
 `summary.junit.xml` สรุปผลระดับ workflow/job รายละเอียดจำนวน test cases ของชุดแอปอยู่ใน log และ artifacts ของ tests นั้น ไม่ควรตีความจำนวน JUnit summary เป็นจำนวน app tests ทั้งหมด
