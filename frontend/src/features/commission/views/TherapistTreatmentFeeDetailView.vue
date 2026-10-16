@@ -1,13 +1,20 @@
 <script setup lang="ts">
-import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import { useRoute } from 'vue-router'
 import TherapistCompensationDetail from '../components/TherapistCompensationDetail.vue'
+import TherapistCompensationShell from '../components/TherapistCompensationShell.vue'
+import { useTherapistLine } from '../lib/therapistPay'
+
+const route = useRoute()
+const { line, month, loading, errorMessage } = useTherapistLine(() => String(route.params.id ?? ''))
 </script>
 <template>
-  <div class="therapist-compensation-page">
-    <StaffHeader />
-    <main class="therapist-compensation-main therapist-detail-page">
-      <TherapistCompensationDetail kind="treatment" />
-    </main>
-  </div>
+  <TherapistCompensationShell
+    title="รายละเอียดค่ามือ"
+    subtitle="รายละเอียดจากรายการรักษาจริง · ระบบคำนวณให้อัตโนมัติและไม่สามารถแก้ไขโดยตรง"
+    active-tab="treatment"
+    :error="errorMessage"
+    :loading="loading"
+  >
+    <TherapistCompensationDetail kind="treatment" :line="line" :month="month" />
+  </TherapistCompensationShell>
 </template>
-<style src="../styles/therapist-compensation-workspace.css"></style>

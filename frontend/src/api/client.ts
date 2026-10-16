@@ -812,6 +812,8 @@ export const commissionApi = {
   updateScheme: (id: number, body: unknown) => api.put(`/api/commission/schemes/${id}`, body),
   activateScheme: (id: number) => api.patch(`/api/commission/schemes/${id}/activate`, {}),
   deactivateScheme: (id: number) => api.delete(`/api/commission/schemes/${id}`),
+  // How the pay is worked out (the tiers and the treatment fee in force today); read only, for anyone signed in
+  formula: () => api.get<CommissionFormula>('/api/commission/formula'),
   report: (from: string, to: string) =>
     api.get<
       Array<{
@@ -896,6 +898,10 @@ export const commissionApi = {
   reopenClosing: (id: number, reason: string) =>
     api.post<{ id: number; status: string }>(`/api/commission/closings/${id}/reopen`, { reason }),
   myPayments: () => api.get<StaffPayment[]>('/api/commission/my-payments'),
+  // the lines behind a month of the signed-in therapist's own pay, and their own pay adjustments (read only)
+  myLines: (month: string) =>
+    api.get<TherapistLines>('/api/commission/my-lines?month=' + encodeURIComponent(month)),
+  myAdjustments: () => api.get<TherapistAdjustment[]>('/api/commission/my-adjustments'),
   payments: (month: string) => api.get<StaffPayment[]>(`/api/commission/payments?month=${month}`),
   preparePayments: (month: string) =>
     api.post<StaffPayment[]>(`/api/commission/payments/prepare?month=${month}`, {}),
@@ -944,6 +950,25 @@ export type TreatmentFeeInput = {
   effectiveFrom: string
   effectiveTo?: string | null
 }
+export type CommissionFormula = {
+  asOf: string
+  scheme: {
+    id: number
+    name: string
+    version: number
+    effectiveFrom: string
+    effectiveTo: string | null
+  } | null
+  tiers: Array<{
+    id: number
+    order: number
+    minimum: number
+    maximum: number | null
+    rate: number
+    active: boolean
+  }>
+  treatmentFee: TreatmentFeeRule | null
+}
 export type AdjustmentApplicationRow = {
   id: number
   adjustmentId: number
@@ -951,6 +976,66 @@ export type AdjustmentApplicationRow = {
   status: 'Draft' | 'Applied' | 'Cancelled'
   approved: boolean
   approvalReference: string | null
+}
+export type TherapistLine = {
+  kind: 'COMMISSION' | 'FEE'
+  id: number
+  date: string
+  patientName: string
+  patientHn: string | null
+  item: string
+  role: string
+  /** null = the sale month is not closed yet */
+  amount: number | null
+  reversal: boolean
+  pending: boolean
+  paymentStatus: 'OPEN' | 'CLOSED' | 'PAID' | null
+  courseNo: string | null
+  totalVisits: number | null
+  grossAmount: number | null
+  lineDiscount: number | null
+  base: number | null
+  rate: number | null
+  tier: string | null
+  pool: number | null
+  saleNo: string | null
+  saleDate: string | null
+  saleType: string | null
+  feeType: 'Fixed' | 'Percentage' | null
+  feeValue: number | null
+  feeBase: number | null
+  ownerName: string | null
+  treatingName: string | null
+  visitNo: string | null
+  singleVisit: boolean
+}
+export type TherapistLines = {
+  month: string
+  courseCommission: number | null
+  singleVisitFee: number
+  substituteFee: number
+  pendingSessions: number
+  lines: TherapistLine[]
+}
+export type TherapistAdjustment = {
+  id: number
+  originalMonth: string
+  appliedMonth: string
+  amount: number
+  reason: string
+  status: string
+  processed: number
+  remaining: number
+  reference: string | null
+  approvedBy: string | null
+  applications: Array<{
+    id: number
+    month: string | null
+    amount: number
+    status: string
+    approvedBy: string | null
+    approvalReference: string | null
+  }>
 }
 export type StaffPayment = {
   id: number

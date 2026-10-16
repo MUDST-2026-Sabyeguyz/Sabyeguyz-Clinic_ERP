@@ -487,3 +487,203 @@
     padding: 20px;
   }
 }
+
+/* live data of the therapist pay pages */
+.therapist-error {
+  padding: 11px;
+  border-radius: 8px;
+  background: #fff1ef;
+  color: #b42318;
+}
+.therapist-month-select {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7d76;
+}
+.therapist-month-select select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #b7cecc;
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+  color: #193b3a;
+}
+.negative {
+  color: #b42318;
+}
+.therapist-pending-note,
+.therapist-payment-ref {
+  display: block;
+  margin-top: 8px;
+  color: #6b7d76;
+  font-size: 12px;
+}
+.therapist-tier-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #667573;
+  font-size: 13px;
+  display: grid;
+  gap: 3px;
+}
+.therapist-line-table {
+  overflow-x: auto;
+}
+.therapist-line-head,
+.therapist-line-row {
+  display: grid;
+  grid-template-columns: 0.7fr 1.7fr 1.9fr 1.4fr 1.4fr 1fr;
+  gap: 12px;
+  min-width: 860px;
+  padding: 14px 12px;
+  align-items: center;
+}
+.therapist-line-head {
+  color: #6b7d76;
+  font-size: 13px;
+  font-weight: 700;
+}
+.therapist-line-row {
+  margin-bottom: 8px;
+  border: 1px solid #d3e3e0;
+  color: #25372e;
+  font-size: 14px;
+  text-decoration: none;
+}
+.therapist-line-row:hover {
+  background: #f3f9f8;
+}
+.therapist-line-row .amount {
+  color: #1f8a85;
+  font-weight: 700;
+}
+.therapist-line-row .amount.negative {
+  color: #b42318;
+}
+.therapist-line-empty {
+  padding: 36px 12px;
+  text-align: center;
+  color: #788481;
+}
+.therapist-payment-row {
+  background: #fff;
+  border-bottom: 1px solid #e4ece9;
+}
+.therapist-paid-status {
+  color: #1f8a85;
+}
+.therapist-payment-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.therapist-adjustment-status {
+  color: #1f8a85;
+  font-size: 14px;
+}
+.therapist-adjustment-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.therapist-adjustment-tiles article {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 10px;
+  background: #eef4f0;
+}
+.therapist-adjustment-tiles span {
+  color: #6b7d76;
+  font-size: 13px;
+}
+.therapist-adjustment-tiles b {
+  font-size: 28px;
+}
+.therapist-progress {
+  height: 8px;
+  border-radius: 99px;
+  background: #dce8e5;
+  overflow: hidden;
+}
+.therapist-progress i {
+  display: block;
+  height: 100%;
+  background: #1f8a85;
+}
+.therapist-adjustment-history-head {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 14px 12px;
+}
+.therapist-adjustment-history-head:first-child {
+  background: #eef4f0;
+  color: #6b7d76;
+  font-size: 13px;
+}
+.therapist-adjustment-note {
+  color: #6b7d76;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .therapist-adjustment-tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+.therapist-formula-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: #137d78;
+  font-weight: 700;
+}
+
+.therapist-figma-detail-card h2 {
+  margin-bottom: 6px;
+}
+.therapist-figma-detail-card .therapist-detail-period {
+  margin: 0 0 22px;
+}
+
+.therapist-adjustment-card {
+  display: grid;
+  gap: 18px;
+  max-width: 1280px;
+}
+.therapist-adjustment-card h1,
+.therapist-adjustment-card h2,
+.therapist-adjustment-card p {
+  margin: 0;
+}
+.therapist-adjustment-card h2 {
+  margin-top: 8px;
+  font-size: 20px;
+}
+.therapist-adjustment-history-head + .therapist-adjustment-history-head {
+  border-bottom: 1px solid #e4ece9;
+}
+.therapist-adjustment-card .therapist-primary-action {
+  justify-self: start;
+}
+
+.therapist-month-pickers {
+  display: flex;
+  gap: 8px;
+}
+
+.therapist-payment-range select,
+.therapist-month-pickers select {
+  width: auto;
+  min-width: 130px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #b7cecc;
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+  color: #193b3a;
+}

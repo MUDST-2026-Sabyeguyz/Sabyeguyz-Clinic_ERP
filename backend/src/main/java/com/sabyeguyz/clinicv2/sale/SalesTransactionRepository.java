@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface SalesTransactionRepository extends JpaRepository<SalesTransaction, Long> {
     long countByReceiptId(Long receiptId);
 
+    List<SalesTransaction> findByVisitId(Long visitId);
+
     List<SalesTransaction> findByReceiptId(Long receiptId);
 
     @Query("select t from SalesTransaction t where "

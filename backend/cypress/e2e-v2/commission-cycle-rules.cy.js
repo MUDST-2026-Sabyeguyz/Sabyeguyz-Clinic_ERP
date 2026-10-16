@@ -129,3 +129,71 @@ describe('v2 a monthly payment keeps its payment date and reference', () => {
     })
   })
 })
+
+describe('v2 how the pay is worked out can be read by a therapist, the rules and money screens are the Manager's', () => {
+  it('lets a therapist read the tiers and the treatment fee in force, nothing else', () => {
+    cy.login('therapist', 'therapist123').its('body.token').then((token) => {
+      cy.apiAs(token, 'GET', '/api/commission/formula').its('status').should('equal', 200)
+    })
+  })
+
+  it('keeps them closed to a therapist', () => {
+    cy.login('therapist', 'therapist123').its('body.token').then((token) => {
+      for (const url of ['/api/commission/schemes', '/api/commission/treatment-fees',
+        '/api/commission/report?from=2026-01-01&to=2026-12-31', `/api/commission/closings?month=${month}`]) {
+        cy.apiAs(token, 'GET', url).its('status').should('equal', 403)
+      }
+    })
+  })
+})
+
+describe('v2 a therapist reads the lines behind their own pay', () => {
+  const sessions = (fx, count) => cy.registerPatient().then((patient) => buy(fx, patient).then((course) => {
+    for (let i = 0; i < count; i++) cy.api('POST', '/api/course-usages', { coursePurchaseId: course.id }).its('status').should('equal', 200)
+    return course
+  }))
+
+  it('lists each session with its base, rate and amount once the sale month is closed', function () {
+    sessions(this.fixtures, 2)
+    closeMonth()
+    cy.login('therapist', 'therapist123').its('body.token').then((token) => {
+      cy.apiAs(token, 'GET', `/api/commission/my-lines?month=${month}`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        const commission = body.lines.filter((row) => row.kind === 'COMMISSION')
+        expect(commission).to.have.length(2)
+        commission.forEach((row) => {
+          expect(row.role).to.equal('เจ้าของคอร์ส + ผู้รักษา')
+          expect(row.rate).to.be.a('number')
+          expect(row.tier).to.match(/^Tier \d$/)
+          expect(row.base).to.equal(row.grossAmount - row.lineDiscount)
+          expect(row.patientHn).to.be.a('string')
+        })
+        const sum = commission.reduce((total, row) => total + row.amount, 0)
+        expect(Math.round(sum * 100)).to.equal(Math.round(body.courseCommission * 100))
+      })
+      cy.apiAs(token, 'GET', '/api/commission/my-adjustments').its('status').should('equal', 200)
+    })
+  })
+
+  it('shows a therapist only their own lines', function () {
+    sessions(this.fixtures, 1)
+    closeMonth()
+    cy.login('therapist2', 'therapist123').its('body.token').then((token) => {
+      cy.apiAs(token, 'GET', `/api/commission/my-lines?month=${month}`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body.lines).to.have.length(0)
+      })
+    })
+  })
+
+  it('keeps the sessions of an unclosed sale month out of the commission', function () {
+    sessions(this.fixtures, 1)
+    cy.login('therapist', 'therapist123').its('body.token').then((token) => {
+      cy.apiAs(token, 'GET', `/api/commission/my-lines?month=${month}`).then(({ body }) => {
+        expect(body.courseCommission).to.equal(null)
+        expect(body.pendingSessions).to.equal(1)
+        expect(body.lines.filter((row) => row.kind === 'COMMISSION')).to.have.length(0)
+      })
+    })
+  })
+})

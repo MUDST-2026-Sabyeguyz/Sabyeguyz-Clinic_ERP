@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import TherapistCompensationPaymentHistory from '../components/TherapistCompensationPaymentHistory.vue'
+import TherapistCompensationShell from '../components/TherapistCompensationShell.vue'
+import { useTherapistPay } from '../lib/therapistPay'
+
+const { payments, adjustments, month, loading, errorMessage } = useTherapistPay()
 </script>
 <template>
-  <div class="therapist-compensation-page">
-    <StaffHeader />
-    <main class="therapist-compensation-main"><TherapistCompensationPaymentHistory /></main>
-  </div>
+  <TherapistCompensationShell
+    title="ประวัติการจ่าย"
+    subtitle="ตรวจสอบ Commission ค่ามือ และ Adjustment ที่จ่ายแล้วในแต่ละงวด"
+    active-tab="payments"
+    :error="errorMessage"
+    :loading="loading"
+  >
+    <TherapistCompensationPaymentHistory :payments="payments" :adjustments="adjustments" :month="month" />
+  </TherapistCompensationShell>
 </template>
-<style src="../styles/therapist-compensation-workspace.css"></style>

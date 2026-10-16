@@ -6,6 +6,18 @@ const viewSource = readFileSync(
   resolve(process.cwd(), 'src/features/commission/views/TherapistCompensationView.vue'),
   'utf-8',
 )
+const libSource = readFileSync(
+  resolve(process.cwd(), 'src/features/commission/lib/therapistPay.ts'),
+  'utf-8',
+)
+const overviewSource = readFileSync(
+  resolve(process.cwd(), 'src/features/commission/components/TherapistCompensationOverview.vue'),
+  'utf-8',
+)
+const shellSource = readFileSync(
+  resolve(process.cwd(), 'src/features/commission/components/TherapistCompensationShell.vue'),
+  'utf-8',
+)
 const routerSource = readFileSync(resolve(process.cwd(), 'src/router/index.ts'), 'utf-8')
 const tabsSource = readFileSync(
   resolve(process.cwd(), 'src/features/commission/components/TherapistCompensationTabs.vue'),
@@ -44,10 +56,29 @@ const detailViewSources = [
 
 describe('Therapist compensation workspace', () => {
   it('keeps the live compensation overview and registers route-driven detail tabs', () => {
-    expect(viewSource).toContain('commissionApi.myPayments()')
+    expect(libSource).toContain('commissionApi.myPayments()')
+    expect(libSource).toContain('commissionApi.myLines(')
+    expect(viewSource).toContain('useTherapistPay')
     expect(viewSource).not.toContain('EMPTY_COMPENSATION_COPY')
     expect(tabsSource).toContain("name: 'therapist-compensation'")
     expect(tabsSource).toContain('query: { ...route.query, tab: tab.key }')
+  })
+
+  it('explains how the pay is worked out in words, links to the read-only detail page, and offers nothing to change', () => {
+    expect(overviewSource).toContain('หลักการคำนวณ')
+    expect(overviewSource).toContain('/staff/commission/formula')
+    for (const cue of ['commissionApi', '<input', '<button', '.post(', '.put(']) {
+      expect(overviewSource).not.toContain(cue)
+    }
+  })
+
+  it('shows a deduction in red with the minus sign in front of the baht sign', () => {
+    expect(libSource).toContain('`−${baht(Math.abs(amount))}`')
+    expect(overviewSource).toContain("negative: adjustment < 0")
+  })
+
+  it('shares one frame for the pay pages', () => {
+    expect(shellSource).toContain('TherapistCompensationTabs')
   })
 
   it('registers Therapist-only detail routes', () => {
@@ -64,9 +95,10 @@ describe('Therapist compensation workspace', () => {
     )
   })
 
-  it('loads workspace CSS globally on the new detail routes', () => {
+  it('loads workspace CSS globally through the shared frame', () => {
+    expect(shellSource).toContain('<style src="../styles/therapist-compensation-workspace.css"></style>')
     detailViewSources.forEach((source) => {
-      expect(source).toContain('<style src="../styles/therapist-compensation-workspace.css"></style>')
+      expect(source).toContain('TherapistCompensationShell')
     })
   })
 
