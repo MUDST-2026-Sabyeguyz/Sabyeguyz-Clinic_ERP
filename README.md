@@ -1,5 +1,7 @@
 # Sabyeguyz Clinic ERP — Phase 1 review
 
+[การรวม branch สำรอง DevOps และเอกสารย้อนหลัง](docs/archive/devops-phase1/README.md)
+
 Vue 3/TypeScript frontend, Spring Boot `clinicv2`, PostgreSQL 16/Flyway, Docker Compose, Vitest, JUnit, Cypress and GitHub Actions.
 
 **ชุดเตรียมส่งตรวจ 16 Oct 2026:** branch `backup/draft-phase1` อิง develop ล่าสุด ยังไม่ merge เข้า main จนเพื่อนยืนยัน และไม่ใช่คำยืนยันว่า business requirements/Phase 1 ครบทั้งหมด
