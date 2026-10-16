@@ -20,7 +20,11 @@ import {
 } from '@/api/client'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
 
-const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+  role?: string
+  branchCode?: string
+} | null
+const isManager = authUser?.role === 'MANAGER'
 
 const route = useRoute()
 const router = useRouter()
@@ -76,7 +80,9 @@ const form = ref({
   time: '09:00',
   note: '',
 })
-const managerBranchCode = computed(() => (isManager ? selectedManagerBranch()?.code : undefined))
+const managerBranchCode = computed(() =>
+  isManager ? selectedManagerBranch()?.code : authUser?.branchCode,
+)
 const branchOptions = computed(() =>
   branches.value.filter(
     (item) => item.active && (!managerBranchCode.value || item.code === managerBranchCode.value),
