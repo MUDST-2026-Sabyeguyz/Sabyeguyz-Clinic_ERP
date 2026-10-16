@@ -476,6 +476,8 @@ export type AppointmentAvailability = {
   durationMinutes: number | null
   stepMinutes: number
   slots: AppointmentSlot[]
+  // NOT_CONNECTED: the branch has no Google Calendar; CHECKED: its Busy time was read; UNAVAILABLE: Google could not be read
+  googleCalendar?: 'NOT_CONNECTED' | 'CHECKED' | 'UNAVAILABLE'
 }
 export const appointmentApi = {
   availability: (params: {

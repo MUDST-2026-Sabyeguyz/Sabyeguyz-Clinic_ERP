@@ -83,6 +83,40 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
         return events;
     }
 
+    @Override
+    public List<BusyBlock> busyBlocks(String calendarId, LocalDateTime from, LocalDateTime to) {
+        ZoneId zone = ZoneId.of(properties.getTimeZone());
+        List<BusyBlock> blocks = new ArrayList<>();
+        String pageToken = null;
+        do {
+            String url = eventsUrl(calendarId) + "?singleEvents=true&orderBy=startTime&maxResults=250"
+                    + "&timeMin=" + encode(from.atZone(zone).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                    + "&timeMax=" + encode(to.atZone(zone).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                    + (pageToken == null ? "" : "&pageToken=" + encode(pageToken));
+            JsonNode page = call("GET", url, null);
+            for (JsonNode item : page.path("items")) {
+                if ("cancelled".equals(item.path("status").asText())) continue;
+                if ("transparent".equals(item.path("transparency").asText())) continue; // shown as Free
+                JsonNode privateProperties = item.path("extendedProperties").path("private");
+                if (privateProperties.hasNonNull("appointmentId") || "clinic-erp".equals(privateProperties.path("source").asText())) {
+                    continue; // written by this system: it is an appointment already
+                }
+                LocalDateTime start = boundary(item.path("start"), zone);
+                LocalDateTime end = boundary(item.path("end"), zone);
+                if (start != null && end != null && end.isAfter(start)) blocks.add(new BusyBlock(start, end));
+            }
+            pageToken = page.hasNonNull("nextPageToken") ? page.get("nextPageToken").asText() : null;
+        } while (pageToken != null);
+        return blocks;
+    }
+
+    /** A start or end of an event: a date-time in the clinic zone, or the start of a day for an all-day event. */
+    private static LocalDateTime boundary(JsonNode moment, ZoneId zone) {
+        if (moment.hasNonNull("dateTime")) return start(moment, zone);
+        if (moment.hasNonNull("date")) return java.time.LocalDate.parse(moment.get("date").asText()).atStartOfDay();
+        return null;
+    }
+
     private static LocalDateTime start(JsonNode start, ZoneId zone) {
         if (!start.hasNonNull("dateTime")) return null; // all-day event, never one of ours
         String value = start.get("dateTime").asText();
