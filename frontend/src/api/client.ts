@@ -488,7 +488,7 @@ export const appointmentApi = {
     branchCode: string
     patientId: number
     therapistId: number
-    serviceId: number
+    serviceId?: number
     startAt: string
     note?: string
   }) => api.post<Appointment>('/api/appointments', body),
