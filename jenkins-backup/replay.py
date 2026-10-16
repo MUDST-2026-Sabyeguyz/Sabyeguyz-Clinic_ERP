@@ -290,9 +290,10 @@ def main():
         raw = subprocess.check_output(['git', '--git-dir=' + args.repository, 'show', f'{args.sha}:{workflow.as_posix()}'], text=True)
         for job_id, job in yaml.safe_load(raw).get('jobs', {}).items():
             condition = job.get('if', '')
-            if condition == "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/xan'":
+            if condition in ("github.event_name == 'workflow_dispatch'",
+                             "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/xan'"):
                 summary['jobs'].append({'workflow': str(workflow), 'job': job_id, 'sha': args.sha, 'result': 'skipped', 'steps': [],
-                    'reason': 'Manual publication/deployment gate is false for push CI replay'})
+                    'reason': 'Manual job gate is false for push CI replay; run the dedicated workflow or local acceptance separately'})
             elif condition and condition != "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository":
                 summary['jobs'].append({'workflow': str(workflow), 'job': job_id, 'sha': args.sha, 'result': 'failure', 'steps': [],
                     'error': 'Unsupported job condition: ' + str(condition)})

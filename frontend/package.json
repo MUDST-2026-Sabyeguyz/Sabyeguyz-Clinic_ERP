@@ -10,7 +10,7 @@
     "test:unit": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint:check": "eslint .",
-    "test:e2e:k8s": "cypress run --config-file cypress.k8s.config.ts",
+    "test:e2e:k8s": "cypress run --config-file cypress.k8s.config.cjs",
     "test:e2e": "cypress run",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
