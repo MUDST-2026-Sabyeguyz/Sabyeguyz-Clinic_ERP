@@ -1,0 +1,97 @@
+param(
+    [string]$Context = 'docker-desktop',
+    [string]$ImageTag = '',
+    [switch]$SkipBuild,
+    [switch]$HostBuild,
+    [ValidateSet('default', 'host')][string]$BuildNetwork = 'default'
+)
+. "$PSScriptRoot/Common.ps1"
+Assert-LocalContext $Context
+Initialize-PrivateRuntime
+$revision = (& git -C $RepoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Cannot determine source revision.' }
+$sourceDirty = [bool](& git -C $RepoRoot status --porcelain -- backend frontend)
+if (!$ImageTag) { $ImageTag = $revision.Substring(0, 12) + '-' + (Get-Date -Format 'yyyyMMddHHmmss') }
+if ($ImageTag -notmatch '^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$') { throw 'Invalid image tag.' }
+$images = @("clinic-backend:$ImageTag", "clinic-frontend:$ImageTag", 'postgres:16-alpine', 'traefik:v3.7.15')
+if (!$SkipBuild) {
+    if ($HostBuild) {
+        Initialize-MavenTool
+        $buildRoot = Join-Path $RuntimeRoot "host-build-$ImageTag"
+        New-Item -ItemType Directory -Path "$buildRoot/backend", "$buildRoot/frontend" -Force | Out-Null
+        Copy-Item "$RepoRoot/backend/pom.xml" "$buildRoot/backend/pom.xml"
+        Copy-Item "$RepoRoot/backend/src" "$buildRoot/backend/src" -Recurse
+        Invoke-Tool mvn @('--batch-mode', '--no-transfer-progress', '-f', "$buildRoot/backend/pom.xml", 'package', '-Dmaven.test.skip=true')
+        Copy-Item "$buildRoot/backend/target/clinic-erp-backend-0.0.1-SNAPSHOT.jar" "$buildRoot/backend/app.jar"
+        Push-Location "$RepoRoot/frontend"
+        try { Invoke-Tool npm @('ci'); Invoke-Tool npm @('run', 'build') } finally { Pop-Location }
+        Copy-Item "$RepoRoot/frontend/dist" "$buildRoot/frontend/dist" -Recurse
+        Copy-Item "$RepoRoot/frontend/nginx.conf" "$buildRoot/frontend/nginx.conf"
+        Invoke-Tool docker @('build', '--label', "org.opencontainers.image.revision=$revision", '-f', "$KubeRoot/backend.runtime.Dockerfile", '-t', $images[0], "$buildRoot/backend")
+        Invoke-Tool docker @('build', '--label', "org.opencontainers.image.revision=$revision", '-f', "$KubeRoot/frontend.runtime.Dockerfile", '-t', $images[1], "$buildRoot/frontend")
+    } else {
+        Invoke-Tool docker @('build', '--network', $BuildNetwork, '--label', "org.opencontainers.image.revision=$revision", '-t', $images[0], (Join-Path $RepoRoot 'backend'))
+        Invoke-Tool docker @('build', '--network', $BuildNetwork, '--label', "org.opencontainers.image.revision=$revision", '-t', $images[1], (Join-Path $RepoRoot 'frontend'))
+    }
+}
+foreach ($image in $images[2..3]) { Invoke-Tool docker @('pull', $image) }
+switch ($Context) {
+    'docker-desktop' {
+        # Docker Desktop's kind node has its own containerd image store.
+        $archive = Join-Path $RuntimeRoot 'images.tar'
+        Invoke-Tool docker (@('image', 'save', '-o', $archive) + $images)
+        $nodes = @(Invoke-Kube get nodes -o 'jsonpath={.items[*].metadata.name}') -join ' '
+        foreach ($node in $nodes.Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+            Invoke-Tool docker @('inspect', $node, '--format', '{{.Name}}')
+            Invoke-Tool docker @('cp', $archive, "${node}:/clinic-images.tar")
+            Invoke-Tool docker @('exec', $node, 'ctr', '-n', 'k8s.io', 'images', 'import', '/clinic-images.tar')
+            Invoke-Tool docker @('exec', $node, 'rm', '/clinic-images.tar')
+        }
+        Remove-Item -LiteralPath $archive
+    }
+    'minikube' { foreach ($image in $images) { Invoke-Tool minikube @('image', 'load', $image) } }
+    'kind-clinic-ci' { Invoke-Tool kind (@('load', 'docker-image', '--name', 'clinic-ci') + $images) }
+}
+Invoke-Kube apply -f (Join-Path $KubeRoot 'namespace.yaml') | Out-Host
+$credentialFile = Join-Path $RuntimeRoot "$Context-credentials.json"
+$existingSecret = & kubectl --context $Context -n clinic-local get secret clinic-secrets --ignore-not-found -o name
+if ($LASTEXITCODE -ne 0) { throw 'Cannot check existing Secret.' }
+if (!$existingSecret) {
+    if (Test-Path $credentialFile) { $credentials = Get-Content $credentialFile -Raw | ConvertFrom-Json }
+    else {
+        $credentials = [ordered]@{ POSTGRES_PASSWORD = New-RandomSecret; JWT_SECRET = New-RandomSecret; MANAGER_USERNAME = 'clinic-admin'; MANAGER_PASSWORD = New-RandomSecret }
+        $credentials | ConvertTo-Json | Set-Content -LiteralPath $credentialFile -Encoding utf8
+    }
+    $secret = @{ apiVersion = 'v1'; kind = 'Secret'; metadata = @{name = 'clinic-secrets'; namespace = 'clinic-local'}; type = 'Opaque'; stringData = $credentials }
+    $secret | ConvertTo-Json -Depth 8 | & kubectl --context $Context create -f - | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot create application Secret.' }
+} elseif (!(Test-Path $credentialFile)) {
+    throw 'Existing Secret has no matching local credentials file. Keep the Secret and restore your private credentials file; do not rotate the DB password automatically.'
+}
+$overlay = Join-Path $RuntimeRoot 'release'
+New-Item -ItemType Directory -Force -Path $overlay | Out-Null
+@"
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../..
+commonAnnotations:
+  clinic.sabyeguyz/source-revision: '$revision'
+  clinic.sabyeguyz/application-source-dirty: '$sourceDirty'
+images:
+  - name: clinic-backend
+    newTag: $ImageTag
+  - name: clinic-frontend
+    newTag: $ImageTag
+"@ | Set-Content (Join-Path $overlay 'kustomization.yaml') -Encoding utf8
+Invoke-Kube apply -k $overlay | Out-Host
+foreach ($deployment in @('postgres', 'backend', 'frontend', 'clinic-traefik')) {
+    Invoke-Kube -n clinic-local rollout status "deployment/$deployment" --timeout=360s | Out-Host
+}
+$imageIds = @{}
+foreach ($image in $images) { $imageIds[$image] = (& docker image inspect $image --format '{{.Id}}').Trim() }
+@{ sourceRevision = $revision; applicationSourceDirty = $sourceDirty; hostBuild = [bool]$HostBuild; imageTag = $ImageTag; images = $imageIds; context = $Context; deployedAt = (Get-Date).ToUniversalTime().ToString('o') } |
+    ConvertTo-Json -Depth 5 | Set-Content (Join-Path $RuntimeRoot 'release.json') -Encoding utf8
+Invoke-Kube -n clinic-local get pods,services,ingress,pvc | Out-Host
+Write-Host "Ready. Open: ./deploy/k8s/Open-Local.ps1 -Context $Context"
+Write-Host "Login user: clinic-admin; read MANAGER_PASSWORD locally from $credentialFile"

@@ -8,7 +8,8 @@ process.chdir(path.resolve(__dirname, '..'))
 // Starts the v2 application (mvn -Pcypress-v2) on 127.0.0.1:18080 against the PostgreSQL given by
 // DATABASE_URL / DATABASE_USERNAME / DATABASE_PASSWORD, runs the v2 Cypress specs, then stops it.
 function maven(goal) {
-  const result = spawnSync('mvn', ['--batch-mode', '--no-transfer-progress', '-Pcypress-v2', ...goal], {
+  const profile = process.env.CLINIC_TEST_COVERAGE === '1' ? '-Pcypress-v2,coverage' : '-Pcypress-v2'
+  const result = spawnSync('mvn', ['--batch-mode', '--no-transfer-progress', profile, ...goal], {
     stdio: 'inherit',
     shell: process.platform === 'win32',
     windowsHide: true,
