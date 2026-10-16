@@ -65,6 +65,25 @@ const report = ref<ReportKey>(
     ? (initialReport as ReportKey)
     : 'revenue',
 )
+watch(
+  () => route.query.report,
+  (value) => {
+    const next = String(value ?? 'revenue')
+    if (
+      [
+        'revenue',
+        'balance',
+        'transfer',
+        'commission',
+        'salesTransaction',
+        'treatmentTransaction',
+        'payment',
+      ].includes(next)
+    ) {
+      report.value = next as ReportKey
+    }
+  },
+)
 const filters = reactive({
   patient: '',
   staff: '',
