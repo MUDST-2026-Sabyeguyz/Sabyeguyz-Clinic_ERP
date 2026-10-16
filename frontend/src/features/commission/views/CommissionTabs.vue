@@ -1,16 +1,9 @@
 <script setup lang="ts">
-defineProps<{
-  active:
-    'overview' | 'transactions' | 'closing' | 'payments' | 'adjustments' | 'tiers' | 'compensation'
-}>()
+defineProps<{ active: 'overview' | 'closing' | 'tiers' | 'compensation' }>()
 const tabs = [
   { key: 'overview', label: 'ภาพรวม', to: '/staff/commission' },
-  { key: 'transactions', label: 'รายการขายและรักษา', to: '/staff/commission/transactions' },
   { key: 'closing', label: 'ปิดรอบรายเดือน', to: '/staff/commission/closing' },
-  { key: 'payments', label: 'งวดจ่าย', to: '/staff/commission/payments' },
-  { key: 'adjustments', label: 'ใบปรับยอด', to: '/staff/commission/adjustments' },
-  { key: 'tiers', label: 'ตั้งค่า Tier', to: '/staff/commission/tiers' },
-  { key: 'compensation', label: 'ค่ารักษาแทน', to: '/staff/commission/compensation-settings' },
+  { key: 'tiers', label: 'ตั้งค่ากฎค่าตอบแทน ↗', to: '/staff/settings?section=commission' },
 ] as const
 </script>
 <template>
@@ -27,21 +20,21 @@ const tabs = [
 <style scoped>
 .commission-tabs {
   display: grid;
-  grid-template-columns: repeat(7, minmax(125px, 170px));
-  gap: 10px;
-  margin: 18px 0 26px;
-  overflow-x: auto;
+  grid-template-columns: 215px 215px 300px;
+  gap: 12px;
+  margin: 20px 0 28px;
+  overflow: hidden;
 }
 .commission-tabs a {
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 48px;
+  padding: 0 18px;
   display: flex;
   align-items: center;
   border: 1px solid #dde6e1;
-  border-radius: 9px;
+  border-radius: 10px;
   background: #fff;
   color: #25372f;
-  font-size: 0.94rem;
+  font-size: 1rem;
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
