@@ -864,8 +864,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                   type="tel"
                   inputmode="numeric"
                   autocomplete="tel"
+                  pattern="[0-9]*"
                   maxlength="10"
                   placeholder="กรอกเบอร์โทรศัพท์"
+                  @input="newPatientForm.phone = newPatientForm.phone.replace(/\D/g, '').slice(0, 10)"
                 />
               </label>
               <p>ผู้จอง NEW ยังไม่มี HN และยังไม่เกิดข้อมูลของการชำระล่วงหน้า</p>
