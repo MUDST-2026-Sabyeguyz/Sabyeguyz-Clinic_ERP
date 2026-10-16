@@ -235,7 +235,7 @@ watch(reportSelection, (report) => {
           </p>
         </div>
         <div class="results-actions">
-          <button class="action" type="button" @click="sourceTierOpen = true">
+          <button v-if="type === 'single'" class="action" type="button" @click="sourceTierOpen = true">
             ดูต้นทางยอดขายและฐาน Tier
           </button>
           <RouterLink v-else class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
