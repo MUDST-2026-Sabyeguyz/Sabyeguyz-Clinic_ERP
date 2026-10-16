@@ -36,7 +36,7 @@ public record CoursePurchaseResponse(
                 purchase.getId(),
                 new PatientSummary(purchase.getPatient().getId(), purchase.getPatient().getHn(),
                         purchase.getPatient().getFullName()),
-                purchase.getBranch().getCode(),
+                purchase.getBranch().getBranchCode(),
                 new CourseSummary(purchase.getCourse().getId(), purchase.getCourseCode(), purchase.getCourseName()),
                 purchase.getPrice(),
                 purchase.getSessions(),

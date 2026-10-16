@@ -1,0 +1,78 @@
+# การซิงก์ Google Calendar แบบ 2 ทาง
+
+ระบบนัดหมายเขียนนัดลง Google Calendar ของแต่ละสาขา และรับการ **เลื่อนเวลา / ยกเลิก** ที่ทำใน Google กลับมาที่ระบบ
+(1 ปฏิทินต่อสาขา, ใช้บัญชี Gmail กลางของคลินิก 1 บัญชี) ปิดอยู่เป็นค่าเริ่มต้น
+
+## ทำงานอย่างไร
+
+**ระบบ → Google** (ทุก 30 วินาที)
+- นัดที่สร้าง/ยืนยัน/เลื่อน/เช็คอิน ถูกเขียนเป็นกิจกรรมในปฏิทินของสาขานั้น
+- นัดที่ยกเลิกหรือไม่มาตามนัด ถูกลบออกจากปฏิทิน
+- เขียนไม่สำเร็จ (เช่น Google ล่ม) นัดยังจองได้ตามปกติ ระบบลองเขียนใหม่เองในรอบถัดไป สถานะเห็นได้ที่ `GET /api/calendar/status`
+- ชื่อกิจกรรม: `HN ชื่อต้น - บริการ` (นัดที่ยังไม่ยืนยันขึ้นต้น `[รอยืนยัน]`) ไม่ใส่นามสกุล เบอร์โทร และเลขบัตร
+- ใช้ `appointment_end_at` เมื่อมีระยะเวลาบริการหรือสาขากำหนดไว้; นัดเดิมที่ยังไม่มีเวลาสิ้นสุดใช้ `app.calendar.default-duration-minutes`
+
+**Google → ระบบ** (ทุก 60 วินาที ดึงการเปลี่ยนแปลง ไม่ต้องมีที่อยู่ HTTPS สาธารณะ)
+- รับเฉพาะกิจกรรมที่ระบบสร้างไว้ และเฉพาะ 2 อย่าง: **ย้ายเวลา** และ **ลบ/ยกเลิก**
+- ย้ายเวลา: นัดต้องยังเป็น "ยังไม่ยืนยัน/ยืนยัน" และเวลาใหม่ต้องไม่ชนกับนัดอื่นของนักกายภาพคนเดิม
+- ถ้าไม่ผ่านเงื่อนไข (เช็คอินแล้ว เสร็จแล้ว เวลาชน) ระบบ **ไม่รับ** และเขียนเวลาเดิมกลับลง Google
+- ลบกิจกรรมของนัดที่เช็คอินแล้ว: ระบบสร้างกิจกรรมกลับคืน
+- การแก้อย่างอื่น (ชื่อ รายละเอียด) ไม่มีผลกับระบบ และการสร้างกิจกรรมใหม่ใน Google ไม่สร้างนัดในระบบ
+
+ระบบเป็นแหล่งข้อมูลหลักเสมอ การเปลี่ยนที่มาจาก Google บันทึกในประวัติสถานะนัดว่า "เลื่อนจาก Google Calendar" / "ยกเลิกจาก Google Calendar"
+
+## สิ่งที่ Manager ต้องเตรียม (ทำครั้งเดียว) — แนะนำ Service account
+1. สร้างบัญชี Gmail ใหม่สำหรับระบบนัดหมายโดยเฉพาะ (เก็บรหัสผ่านเป็นความลับ ผูกเบอร์โทรกู้คืน และมีผู้ดูแลสำรอง 1 คนรู้วิธีกู้บัญชี)
+2. เข้าสู่ระบบบัญชีนั้น แล้วสร้างปฏิทิน 1 อัน ต่อ 1 สาขา (พระราม 9, แบริ่ง) จากนั้นเปิด *การตั้งค่าและการแชร์* ของแต่ละปฏิทิน และคัดลอก **Calendar ID** (รูปแบบ `xxxx@group.calendar.google.com`)
+3. สร้างโปรเจกต์ใน [Google Cloud Console](https://console.cloud.google.com) เปิดใช้ **Google Calendar API**
+4. ไปที่ *IAM & Admin > Service Accounts* กด *Create service account* ตั้งชื่อ `calendar-sync` (ไม่ต้องกำหนด Role) แล้วเข้าไปที่แท็บ *Keys > Add key > Create new key > JSON* จะได้ไฟล์ `.json` ดาวน์โหลดลงเครื่อง **ไฟล์นี้เป็นความลับ** (เหมือนรหัสผ่าน) เก็บไว้ในที่ปลอดภัย ไม่ส่งในแชท/อีเมล และไม่ใส่ในโปรเจกต์
+5. คัดลอกอีเมลของ service account (หน้าตาแบบ `calendar-sync@<โปรเจกต์>.iam.gserviceaccount.com`) แล้วกลับไปที่ Google Calendar ของบัญชี Gmail กลาง เปิด *การตั้งค่าและการแชร์* ของ **แต่ละปฏิทินสาขา** > *แชร์กับบุคคลหรือกลุ่มที่ระบุ* > เพิ่มอีเมลนั้นด้วยสิทธิ์ **"ทำการเปลี่ยนแปลงกิจกรรม" (Make changes to events)**
+
+แบบนี้ไม่ต้องผ่านหน้า OAuth consent screen / Publish app และไม่มีสิทธิ์ที่หมดอายุทุก 7 วัน
+
+### ทางเลือกเดิม: OAuth refresh token ของบัญชี Gmail
+ใช้ได้ แต่ต้องกด **Publish app เป็น "In production"** ที่ OAuth consent screen ไม่เช่นนั้นสิทธิ์จะหมดอายุทุก 7 วันและการซิงก์หยุดเอง: สร้าง *OAuth client ID* ชนิด Web application เพิ่ม redirect URI `https://developers.google.com/oauthplayground` แล้วใช้ [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) (Use your own OAuth credentials, scope `https://www.googleapis.com/auth/calendar`) เพื่อขอ Refresh token ถ้าตั้ง `APP_CALENDAR_SERVICE_ACCOUNT_KEY_FILE` ระบบจะใช้ service account และไม่สนใจค่า OAuth
+
+**ความปลอดภัย:** ไฟล์คีย์ service account, Client secret และ Refresh token เป็นความลับ ห้ามส่งในแชท/อีเมล หรือใส่ในไฟล์ในโปรเจกต์ ใส่ในตัวแปรสภาพแวดล้อม/ไฟล์บนเซิร์ฟเวอร์เท่านั้น
+
+## การตั้งค่าบนเซิร์ฟเวอร์
+| ตัวแปรสภาพแวดล้อม | ความหมาย |
+|---|---|
+| `APP_CALENDAR_ENABLED=true` | เปิดการซิงก์ (ไม่ตั้ง = ปิด ระบบทำงานเหมือนเดิม) |
+| `APP_CALENDAR_SERVICE_ACCOUNT_KEY_FILE` | ที่อยู่ของไฟล์คีย์ JSON ของ service account บนเซิร์ฟเวอร์ (แนะนำ) |
+| `APP_CALENDAR_CLIENT_ID` | (ทางเลือกเดิม) OAuth Client ID |
+| `APP_CALENDAR_CLIENT_SECRET` | (ทางเลือกเดิม) OAuth Client secret |
+| `APP_CALENDAR_REFRESH_TOKEN` | (ทางเลือกเดิม) Refresh token ของบัญชี Gmail กลาง |
+| `APP_CALENDAR_DEFAULT_DURATION_MINUTES` | ระยะเวลากิจกรรม (ค่าเริ่มต้น 60) |
+| `APP_CALENDAR_ACTOR_USER_ID` | รหัสผู้ใช้ที่บันทึกเป็นผู้ทำการเลื่อน/ยกเลิกที่มาจาก Google (ค่าเริ่มต้น 1 = ผู้ใช้ `system`) |
+
+จากนั้นล็อกอินเป็น Manager แล้วผูกปฏิทินกับสาขา (ส่ง Calendar ID ของแต่ละสาขา):
+
+```
+PUT /api/calendar/branches/01      { "googleCalendarId": "xxxx@group.calendar.google.com" }
+GET /api/calendar/status           ดูสถานะ: เปิดอยู่ไหม, ต่อสาขามีกี่นัดรอซิงก์/ซิงก์ล้มเหลว
+POST /api/calendar/sync            สั่งซิงก์ทันที (ไม่ต้องรอรอบเวลา)
+```
+
+ทั้งสามคำสั่งใช้ได้เฉพาะ Manager ส่ง Calendar ID ว่างเพื่อเลิกซิงก์สาขานั้น
+
+## ข้อจำกัดที่ควรรู้
+- Manager ตั้งค่าได้ที่เมนู "ปฏิทิน Google" (`/staff/calendar`): ดูสถานะ ผูก Calendar ID กับสาขา และสั่งซิงก์ทันที (ใช้ API ข้างบนแทนได้)
+- การเชื่อมต่อปฏิทินยังใช้ Calendar ID และ credential ของ service account ตามการตั้งค่าเดิม; ตาราง `google_calendar_connection` และ `calendar_busy_block` ที่เพิ่มใน V1007 ยังไม่มี flow จัดการบัญชีหรือเก็บ Busy ลงฐานข้อมูล
+- เครื่องที่เปิดระบบต้องออกอินเทอร์เน็ตไปที่ Google ได้ ถ้าติดต่อไม่ได้ นัดจะค้างรอซิงก์แล้วส่งเมื่อกลับมาใช้ได้
+- ชุดทดสอบ (`backend/cypress/e2e-v2/calendar.cy.js`) ใช้ Google จำลองในหน่วยความจำ **ยังไม่ได้ทดสอบกับ Google จริง** ต้องลองด้วยมือกับปฏิทินทดสอบก่อนใช้งานจริง
+
+## ตรวจว่าตั้งค่าถูกก่อนเปิดใช้งาน (ไม่ต้องส่งรหัสให้ใคร)
+1. สร้างไฟล์ `.env.calendar` ที่โฟลเดอร์หลักของโปรเจกต์ (ถูก git ละเว้นอยู่แล้ว จะไม่ถูกอัปโหลด) ใส่บรรทัดนี้ (ที่อยู่ไฟล์คีย์ service account; ต้องมี openssl และ curl) วางค่าจริงเอง:
+   ```
+   APP_CALENDAR_SERVICE_ACCOUNT_KEY_FILE=C:/path/to/calendar-sync-key.json
+   ```
+   (แบบ OAuth เดิมใช้ `APP_CALENDAR_CLIENT_ID` / `APP_CALENDAR_CLIENT_SECRET` / `APP_CALENDAR_REFRESH_TOKEN` แทน; สคริปต์ต้องมี `openssl` และ `curl` ซึ่งมีมากับ Git Bash)
+2. รันใน Git Bash ที่โฟลเดอร์หลัก (ใส่ Calendar ID ของแต่ละสาขา คั่นด้วยเว้นวรรค):
+   ```
+   bash backend/scripts/calendar-check.sh <CalendarID-แบริ่ง> <CalendarID-พระราม9>
+   ```
+3. สคริปต์จะลองล็อกอิน เปิดปฏิทินแต่ละอัน สร้างกิจกรรมทดสอบแล้วลบทิ้ง และบอกผลเป็นข้อความ (ไม่พิมพ์รหัสออกมา) ถ้ามีข้อผิดพลาด จะบอกสาเหตุที่น่าจะเป็น ส่งข้อความผลลัพธ์นั้นมาให้ผู้ช่วยดูได้ปลอดภัย
+4. เมื่อขึ้น `ALL GOOD` จึงนำค่าเดียวกันไปตั้งเป็นตัวแปรสภาพแวดล้อมของเซิร์ฟเวอร์ (ตารางด้านบน)
+
+การติดตั้งบนเซิร์ฟเวอร์จริง (Docker Compose) ดู [deploy-calendar-sync.md](deploy-calendar-sync.md)

@@ -2,10 +2,17 @@ name: Backend CI
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**']
+    branches: [develop, dev-backed, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
-    branches: [develop]
+    branches: [develop, dev-backed]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,6 +26,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic_ci_only
+          POSTGRES_DB: clinic_v2_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clinic -d clinic_v2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DB_URL: jdbc:postgresql://127.0.0.1:5432/clinic_v2_ci
+      DB_USER: clinic
+      DB_PASSWORD: clinic_ci_only
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,5 +58,49 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
 
-      - name: Test and package
-        run: mvn --batch-mode --no-transfer-progress verify
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install API test dependencies
+        run: npm ci
+
+      - name: Install Cypress binary
+        run: npx cypress install
+
+      - name: Package backend and run all Cypress tests
+        run: npm test
+
+      - name: Resolve PostgreSQL runtime test classpath
+        run: >-
+          mvn --batch-mode --no-transfer-progress dependency:build-classpath
+          -Dmdep.outputFile=target/test-classpath.txt -Dmdep.includeScope=test
+
+      - name: Check latest v2 migrations and real HTTP contracts
+        run: |
+          set -o pipefail
+          java -cp "target/classes:target/test-classes:$(cat target/test-classpath.txt)" com.sabyeguyz.schemacheck.RuntimeCheck | tee target/runtime-check.log
+
+      - name: Validate all v2 mappings and wiring against PostgreSQL
+        run: |
+          set -o pipefail
+          java -cp "target/classes:target/test-classes:$(cat target/test-classpath.txt)" com.sabyeguyz.schemacheck.SchemaCheck | tee target/schema-check.log
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            backend/cypress/results/
+            backend/cypress/screenshots/
+            backend/target/runtime-check.log
+            backend/target/schema-check.log
+          if-no-files-found: ignore
+
+      - name: Stop isolated API test server
+        if: always()
+        run: mvn --batch-mode --no-transfer-progress -Pcypress-api spring-boot:stop

@@ -2,3 +2,8 @@ target
 .git
 .gitignore
 *.log
+node_modules
+cypress/results
+cypress/screenshots
+cypress/videos
+cypress/downloads
