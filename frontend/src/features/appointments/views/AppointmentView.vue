@@ -61,6 +61,7 @@ const editingId = ref<number | null>(null)
 const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
 const errorMessage = ref('')
+const showRequiredValidation = ref(false)
 const appointmentSuccessMessage = ref('')
 const savingAppointment = ref(false)
 const pendingSaveConfirmation = ref(false)
@@ -97,6 +98,19 @@ const originalAppointmentSummary = computed(() => {
 const patientError = computed(
   () =>
     errorMessage.value.startsWith('กรุณากรอก HN') || errorMessage.value.startsWith('ไม่พบผู้ป่วย'),
+)
+const isCurrentAppointment = computed(() => appointmentPatientType.value === 'CURRENT')
+const missingCurrentPatient = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.patientId,
+)
+const missingCurrentTherapist = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.therapistId,
+)
+const missingCurrentDate = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.date,
+)
+const missingCurrentTime = computed(
+  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.time,
 )
 const scheduleError = computed(() => errorMessage.value.includes('ไม่สามารถจองเวลาย้อนหลัง'))
 const patientResults = computed(() => {
@@ -225,9 +239,11 @@ const selectedCourseModel = computed({
   },
 })
 const formatThaiDate = (value: string) =>
-  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(
-    new Date(value),
-  )
+  new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value))
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString('en-GB', {
     hour: '2-digit',
@@ -281,7 +297,11 @@ const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
 async function load() {
   try {
     const [a, b, p, s, t] = await Promise.all([
-      appointmentApi.search({ page: page.value, size: 20, branchCode: managerBranchCode.value }),
+      appointmentApi.search({
+        page: page.value,
+        size: 20,
+        branchCode: managerBranchCode.value,
+      }),
       branchApi.list(),
       patientApi.searchAll('', managerBranchCode.value),
       catalogApi.services(),
@@ -352,8 +372,14 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   patientCourses.value = []
   selectedCourseId.value = 0
   timeDrawerOpen.value = false
+  showRequiredValidation.value = false
   patientQuery.value = ''
-  newPatientForm.value = { firstName: '', lastName: '', nickname: '', phone: '' }
+  newPatientForm.value = {
+    firstName: '',
+    lastName: '',
+    nickname: '',
+    phone: '',
+  }
   showPatientResults.value = false
   const branch = branchOptions.value[0]
   const branchCode = branch?.code ?? ''
@@ -389,7 +415,6 @@ async function loadPatientCourses(patientId: number) {
     patientCourses.value = await courseApi.patientCourses(patientId)
     selectedCourseId.value = availablePatientCourses.value[0]?.id ?? 0
   } catch {
-    // The UI is ready for the patient-course endpoint; appointments can still be made per visit.
     patientCourses.value = []
   }
 }
@@ -397,6 +422,7 @@ function openEdit(item: Appointment) {
   editingId.value = item.id
   createSource.value = 'standard'
   appointmentPatientType.value = 'CURRENT'
+  showRequiredValidation.value = false
   patientQuery.value = item.patient.fullName
   showPatientResults.value = false
   form.value = {
@@ -454,6 +480,7 @@ function hidePatientResults() {
 }
 function changeAppointmentPatientType() {
   errorMessage.value = ''
+  showRequiredValidation.value = false
   form.value.patientId = 0
   patientQuery.value = ''
   patientCourses.value = []
@@ -471,8 +498,16 @@ function confirmAppointmentTime() {
   timeDrawerOpen.value = false
 }
 function requestSaveConfirmation() {
+  showRequiredValidation.value = true
   if (appointmentPatientType.value === 'NEW') {
     errorMessage.value = 'ยังไม่รองรับการบันทึกผู้ป่วย NEW จนกว่าจะเชื่อมต่อ backend'
+    return
+  }
+  if (
+    appointmentPatientType.value === 'CURRENT' &&
+    (!form.value.patientId || !form.value.therapistId || !form.value.date || !form.value.time)
+  ) {
+    errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ'
     return
   }
   if (!editingId.value && serviceMode.value === 'course') {
@@ -632,8 +667,12 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             }}
           </h1>
           <p v-if="!isEditing" class="appointment-form-context">
-            {{ currentBranchLabel
-            }}<template v-if="!isCalendarCreate"> • บัญชี Therapist ถูกจำกัดเฉพาะสาขานี้</template>
+            <template v-if="appointmentPatientType === 'NEW'">
+              {{ currentBranchLabel }} • เลือกนักกายภาพและช่วงเวลาที่เหมาะสม
+            </template>
+            <template v-else>
+              {{ currentBranchLabel }} • บัญชี Therapist ถูกจำกัดเฉพาะสาขานี้
+            </template>
           </p>
           <p v-if="isEditing" class="appointment-original-summary">
             {{ originalAppointmentSummary }}
@@ -646,7 +685,9 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               ผู้ป่วย
               <input :value="patientQuery" readonly placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN" />
               <span class="reschedule-patient-meta">
-                HN {{ selectedFormPatient?.hn || editingAppointment?.patient.hn || '-' }} ·
+                HN
+                {{ selectedFormPatient?.hn || editingAppointment?.patient.hn || '-' }}
+                ·
                 {{ selectedFormPatient?.phone || editingPatientPhone }}
               </span>
             </label>
@@ -659,7 +700,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 default-label="เลือกประเภทบริการ"
                 :clear-on-reselect="false"
                 :options="
-                  services.map((service) => ({ value: String(service.id), label: service.name }))
+                  services.map((service) => ({
+                    value: String(service.id),
+                    label: service.name,
+                  }))
                 "
               />
             </label>
@@ -706,7 +750,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 default-label="เลือกสาขา"
                 :clear-on-reselect="false"
                 :options="
-                  branchOptions.map((branch) => ({ value: branch.code, label: branch.name }))
+                  branchOptions.map((branch) => ({
+                    value: branch.code,
+                    label: branch.name,
+                  }))
                 "
               />
             </label>
@@ -749,7 +796,9 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 <input
                   v-model.trim="patientQuery"
                   :readonly="isEditing"
-                  :class="{ 'is-invalid': patientError }"
+                  :class="{
+                    'is-invalid': patientError || missingCurrentPatient,
+                  }"
                   placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
                   required
                   @focus="showPatientResults = true"
@@ -789,7 +838,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             </label>
             <div v-else class="appointment-new-patient-fields">
               <label>
-                <span>ชื่อ <em>*</em></span>
+                <span>ชื่อ <small>(ไม่บังคับ)</small></span>
                 <input
                   v-model.trim="newPatientForm.firstName"
                   autocomplete="given-name"
@@ -797,7 +846,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 />
               </label>
               <label>
-                <span>นามสกุล <em>*</em></span>
+                <span>นามสกุล <small>(ไม่บังคับ)</small></span>
                 <input
                   v-model.trim="newPatientForm.lastName"
                   autocomplete="family-name"
@@ -819,9 +868,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                   placeholder="กรอกเบอร์โทรศัพท์"
                 />
               </label>
+              <p>ผู้จอง NEW ยังไม่มี HN และยังไม่เกิดข้อมูลของการชำระล่วงหน้า</p>
             </div>
             <fieldset class="appointment-service-mode-field">
-              <legend>ประเภทบริการ</legend>
+              <legend>ประเภทบริการ <small>(ไม่บังคับ)</small></legend>
               <div class="appointment-service-mode-options">
                 <button
                   type="button"
@@ -840,7 +890,9 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               </div>
             </fieldset>
             <label v-if="serviceMode === 'single'" class="appointment-service-field">
-              รายชื่อบริการ
+              {{
+                appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อบริการ'
+              }}
               <FilterDropdown
                 v-model="formServiceModel"
                 class="appointment-form-filter"
@@ -848,12 +900,15 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 default-label="เลือกบริการ"
                 :clear-on-reselect="false"
                 :options="
-                  services.map((service) => ({ value: String(service.id), label: service.name }))
+                  services.map((service) => ({
+                    value: String(service.id),
+                    label: service.name,
+                  }))
                 "
               />
             </label>
             <label v-else class="appointment-course-field">
-              รายชื่อคอร์ส
+              {{ appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อคอร์ส' }}
               <FilterDropdown
                 v-model="selectedCourseModel"
                 class="appointment-form-filter"
@@ -875,10 +930,11 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               </span>
             </label>
             <label class="appointment-therapist-field">
-              นักกายภาพ
+              นักกายภาพ <em>*</em>
               <FilterDropdown
                 v-model="formTherapistModel"
                 class="appointment-form-filter"
+                :class="{ 'is-invalid': missingCurrentTherapist }"
                 label="เลือกนักกายภาพ"
                 default-label="เลือกนักกายภาพ"
                 :clear-on-reselect="false"
@@ -891,10 +947,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               />
             </label>
             <label class="appointment-date-field">
-              วันที่
+              วันที่ <em>*</em>
               <ThaiDatePicker
                 v-model="form.date"
-                :invalid="scheduleError"
+                :invalid="scheduleError || missingCurrentDate"
                 show-calendar-icon
                 numeric-month
                 hide-caret
@@ -905,8 +961,8 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               </p>
             </label>
             <label class="appointment-time-field">
-              เวลา
-              <span class="appointment-time-picker">
+              เวลา <em>*</em>
+              <span class="appointment-time-picker" :class="{ 'is-invalid': missingCurrentTime }">
                 <span>{{ formatTimeRange(form.time) }}</span>
                 <button type="button" @click="timeDrawerOpen = true">ดูตารางเวลาว่าง</button>
               </span>
@@ -934,10 +990,12 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 {{ formatThaiDate(selectedPatientCourse.expiresAt) }}
               </p>
               <strong v-if="selectedPatientCourse.shared">
-                ผู้ให้สิทธิ์: {{ selectedPatientCourse.sourcePatientName || 'รอข้อมูลจากระบบ' }}
+                ผู้ให้สิทธิ์:
+                {{ selectedPatientCourse.sourcePatientName || 'รอข้อมูลจากระบบ' }}
               </strong>
               <strong v-else>
-                นักกายภาพประจำคอร์ส: {{ selectedTherapist?.fullName || 'กรุณาเลือกนักกายภาพ' }}
+                นักกายภาพประจำคอร์ส:
+                {{ selectedTherapist?.fullName || 'กรุณาเลือกนักกายภาพ' }}
               </strong>
               <p v-if="selectedPatientCourse.shared">
                 นักกายภาพเดิม:
@@ -1095,7 +1153,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               default-value="ทั้งหมด"
               default-label="นักกายภาพ: ทั้งหมด"
               :options="
-                therapists.map((item) => ({ value: String(item.id), label: item.fullName }))
+                therapists.map((item) => ({
+                  value: String(item.id),
+                  label: item.fullName,
+                }))
               "
             />
             <FilterDropdown
@@ -1104,7 +1165,12 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               label="กรองสาขา"
               default-value="ทั้งหมด"
               default-label="สาขา: ทั้งหมด"
-              :options="branchOptions.map((item) => ({ value: item.code, label: item.name }))"
+              :options="
+                branchOptions.map((item) => ({
+                  value: item.code,
+                  label: item.name,
+                }))
+              "
             />
             <div class="calendar-view-toggle">
               <button
@@ -1201,7 +1267,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                     <FilterDropdown
                       :model-value="uiStatusFor(item.status)"
                       :options="
-                        appointmentStatusOptions.map(([value, label]) => ({ value, label }))
+                        appointmentStatusOptions.map(([value, label]) => ({
+                          value,
+                          label,
+                        }))
                       "
                       :default-label="uiStatusFor(item.status)"
                       :label="`สถานะนัดหมายของ ${item.patient.fullName}`"
@@ -1211,7 +1280,9 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                     />
                   </div>
                 </td>
-                <td><button class="appointment-edit" @click="goToEdit(item)">แก้ไข</button></td>
+                <td>
+                  <button class="appointment-edit" @click="goToEdit(item)">แก้ไข</button>
+                </td>
               </tr>
               <tr v-if="filteredAppointments.length === 0">
                 <td class="appointment-empty" colspan="8">ไม่พบข้อมูลนัดหมาย</td>

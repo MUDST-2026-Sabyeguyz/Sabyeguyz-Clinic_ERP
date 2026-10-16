@@ -6,9 +6,6 @@ export type ManagerBranch = {
   address?: string
 }
 
-// Branches are populated from the same master data the clinical screens use.
-// Keeping the selected code here lets the Manager header scope every shared
-// Therapist screen without changing the Therapist experience.
 export const managerBranches = ref<ManagerBranch[]>([])
 
 const storageKey = 'managerSelectedBranch'
@@ -29,8 +26,14 @@ export function clearSelectedManagerBranch() {
   localStorage.removeItem(storageKey)
 }
 
-export function setManagerBranches(branches: ManagerBranch[]) {
-  managerBranches.value = branches
+export function setManagerBranches(
+  branches: Array<ManagerBranch | { branchCode: string; name: string; address?: string }>,
+) {
+  managerBranches.value = branches.map((branch) =>
+    'branchCode' in branch
+      ? { code: branch.branchCode, name: branch.name, address: branch.address }
+      : branch,
+  )
   const selected = selectedManagerBranch()
-  if (!selected && branches[0]) setSelectedManagerBranch(branches[0])
+  if (!selected && managerBranches.value[0]) setSelectedManagerBranch(managerBranches.value[0])
 }
