@@ -90,14 +90,17 @@ describe('appointment branch authorization (R1–R3)', () => {
     })
   }
 
-  it('allows home-branch creation with a global patient and the entire attendance lifecycle', function () {
+  it('lets a therapist book a free time of their own with a global patient; the Manager runs the attendance lifecycle', function () {
     cy.apiAs(this.staff01, 'POST', '/api/appointments', {
       branchCode: '01', therapistId: this.fixtures.therapistId, patientId: this.patient02.id,
       serviceId: this.fixtures.serviceId, startAt: at(this.fixtures, '10:00'),
     }).then(({ status, body }) => {
       expect(status).to.equal(201)
+      for (const action of ['check-in', 'start-service', 'complete']) {
+        cy.apiAs(this.staff01, 'POST', `/api/appointments/${body.id}/${action}`).its('status').should('equal', 403)
+      }
       for (const [action, expected] of [['check-in', 'ARRIVED'], ['start-service', 'IN_SERVICE'], ['complete', 'COMPLETED']]) {
-        cy.apiAs(this.staff01, 'POST', `/api/appointments/${body.id}/${action}`).then((response) => {
+        cy.api('POST', `/api/appointments/${body.id}/${action}`).then((response) => {
           expect(response.status).to.equal(200)
           expect(response.body.status).to.equal(expected)
         })
@@ -106,6 +109,22 @@ describe('appointment branch authorization (R1–R3)', () => {
     cy.apiAs(this.staff01, 'GET', `/api/patients/${this.patient02.id}`).its('status').should('equal', 200)
     cy.apiAs(this.staff01, 'GET', `/api/patients?query=${this.patient02.hn}`).its('body.items')
       .should('satisfy', (items) => items.some((patient) => patient.id === this.patient02.id))
+  })
+
+  it('refuses a therapist booking for someone else and any change of an appointment of the branch', function () {
+    // the Manager of the branch is another bookable person: a therapist may not book for them
+    cy.apiAs(this.staff01, 'POST', '/api/appointments', {
+      branchCode: '01', therapistId: this.fixtures.managerStaffId, patientId: this.patient02.id,
+      serviceId: this.fixtures.serviceId, startAt: at(this.fixtures, '13:00'),
+    }).its('status').should('equal', 403)
+    const id = this.appointment01.id
+    for (const [method, path] of [
+      ['POST', `/api/appointments/${id}/confirm`], ['POST', `/api/appointments/${id}/no-show`],
+      ['POST', `/api/appointments/${id}/cancel`], ['PATCH', `/api/appointments/${id}`],
+    ]) {
+      cy.apiAs(this.staff01, method, path, { reason: 'therapist', startAt: at(this.fixtures, '15:00') }).its('status').should('equal', 403)
+    }
+    cy.apiAs(this.staff01, 'GET', `/api/appointments/${id}`).its('status').should('equal', 200)
   })
 
   it('allows Manager reads, filtering and writes across both branches', function () {
