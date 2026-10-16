@@ -16,6 +16,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -73,6 +74,20 @@ def should_run(condition, failed, outcomes):
     raise ValueError('Unsupported step condition: ' + condition)
 
 
+def terminate_group(pid, signum):
+    try:
+        os.killpg(pid, signum)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # Browser dependency installation may leave root-owned descendants.
+        # Only signal the session created for this exact CI step.
+        script = ('import os, sys\n'
+                  'try: os.killpg(int(sys.argv[1]), int(sys.argv[2]))\n'
+                  'except ProcessLookupError: pass\n')
+        command(['sudo', '-n', sys.executable, '-c', script, str(pid), str(int(signum))])
+
+
 def run_shell(script, cwd, env, log, timeout, processes):
     # Every step has its own session, so background Java/Vite processes can be
     # reaped without touching another job or the user's running applications.
@@ -83,7 +98,7 @@ def run_shell(script, cwd, env, log, timeout, processes):
         try:
             code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
+            terminate_group(process.pid, signal.SIGKILL)
             raise RuntimeError(f'Step timed out after {timeout}s')
     if code:
         print('\n'.join(log.read_text(errors='replace').splitlines()[-25:]), flush=True)
@@ -239,9 +254,10 @@ def execute_job(workflow, job_id, job, args, base, output):
     finally:
         for pid in processes:
             try:
-                os.killpg(pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+                terminate_group(pid, signal.SIGTERM)
+            except Exception as error:
+                result.setdefault('cleanupErrors', []).append(str(error))
+                result['result'] = 'failure'
         # Scope cleanup to this job's unique Compose project and owned services.
         cleanup_env = dict(env)
         update_env(Path(env['GITHUB_ENV']), cleanup_env)
