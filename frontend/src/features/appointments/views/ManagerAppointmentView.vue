@@ -374,7 +374,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   editingId.value = null
   createSource.value = source
   appointmentPatientType.value = 'CURRENT'
-  serviceMode.value = 'course'
+  serviceMode.value = source === 'calendar' ? 'single' : 'course'
   patientCourses.value = []
   selectedCourseId.value = 0
   timeDrawerOpen.value = false
@@ -516,7 +516,7 @@ function requestSaveConfirmation() {
     errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ'
     return
   }
-  if (!editingId.value && serviceMode.value === 'course') {
+  if (!editingId.value && serviceMode.value === 'course' && createSource.value !== 'calendar') {
     errorMessage.value = 'ยังไม่รองรับการผูกนัดหมายกับสิทธิ์คอร์ส กรุณาใช้บริการรายครั้ง'
     return
   }
@@ -551,6 +551,9 @@ async function save() {
       savedAppointment = await appointmentApi.reschedule(editingId.value, {
         startAt: toStartAt(),
         therapistId: form.value.therapistId,
+        serviceId: form.value.serviceId || undefined,
+        branchCode: form.value.branchCode,
+        note: form.value.note,
       })
     } else {
       savedAppointment = await appointmentApi.create({

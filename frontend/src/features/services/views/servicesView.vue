@@ -284,7 +284,19 @@ async function choose(p: Patient) {
   }
 }
 function searchPatients() {
-  if (query.value.trim()) searched.value = true
+  const keyword = query.value.trim()
+  if (!keyword) return
+  window.clearTimeout(searchTimer)
+  searched.value = true
+  void patientApi
+    .search(keyword, 0, 20, managerBranchCode.value)
+    .then((page) => {
+      results.value = page.items
+    })
+    .catch((error) => {
+      results.value = []
+      errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
+    })
 }
 function openPatientCourses() {
   if (patient.value) router.push({ path: '/staff/courses', query: { patientId: patient.value.id } })
