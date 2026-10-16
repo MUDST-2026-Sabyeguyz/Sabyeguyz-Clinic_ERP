@@ -188,3 +188,61 @@ describe('v2 appointment without a service', () => {
     }))
   })
 })
+
+describe('v2 free times and Busy time in the branch Google Calendar', () => {
+  const CAL = 'busy-branch01@group.calendar.google.com'
+  const window9to12 = () => branch01().then((branch) => putBranch(branch, {
+    bookingOpenTime: '09:00', bookingCloseTime: '12:00', defaultAppointmentMinutes: 60,
+  }).its('status').should('equal', 200))
+  const connect = () => cy.api('PUT', '/api/calendar/branches/01', { googleCalendarId: CAL }).its('status').should('equal', 200)
+  const busy = (fx, from, to) => cy.api('POST', '/__cypress/calendar/busy', {
+    calendarId: CAL, start: `${fx.tomorrow}T${from}`, end: `${fx.tomorrow}T${to}`,
+  }).its('status').should('equal', 200)
+  const book = (fx, patient, time) => cy.api('POST', '/api/appointments', {
+    branchCode: '01', patientId: patient.id, therapistId: fx.therapistId, startAt: at(fx, time),
+  })
+
+  it('says so when the branch has no calendar', function () {
+    slots(this.fixtures, this.fixtures.therapistId).its('googleCalendar').should('equal', 'NOT_CONNECTED')
+  })
+
+  it('takes a Busy event typed by hand in Google away from every therapist of the branch', function () {
+    window9to12()
+    connect()
+    busy(this.fixtures, '10:00', '11:00')
+    for (const therapistId of [this.fixtures.therapistId]) {
+      slots(this.fixtures, therapistId).then((result) => {
+        expect(result.googleCalendar).to.equal('CHECKED')
+        const bySlot = Object.fromEntries(result.slots.map((slot) => [slot.time, slot]))
+        expect(Object.fromEntries(Object.entries(bySlot).map(([time, slot]) => [time, slot.available])))
+          .to.deep.equal({ '09:00': true, '09:30': false, '10:00': false, '10:30': false, '11:00': true })
+        expect(bySlot['10:00'].reason).to.contain('Google Calendar')
+      })
+    }
+  })
+
+  it('refuses a booking on Busy time and accepts one right beside it', function () {
+    window9to12()
+    connect()
+    busy(this.fixtures, '10:00', '11:00')
+    cy.registerPatient().then((patient) => {
+      book(this.fixtures, patient, '10:00').then(({ status }) => expect(status).to.equal(400))
+      book(this.fixtures, patient, '09:30').its('status').should('equal', 400)
+      book(this.fixtures, patient, '09:00').its('status').should('equal', 201)
+      book(this.fixtures, patient, '11:00').its('status').should('equal', 201)
+    })
+  })
+
+  it('does not block a booking and says so when Google cannot be read', function () {
+    window9to12()
+    connect()
+    busy(this.fixtures, '10:00', '11:00')
+    cy.api('POST', '/__cypress/calendar/fail-busy?count=1').its('status').should('equal', 200)
+    slots(this.fixtures, this.fixtures.therapistId).then((result) => {
+      expect(result.googleCalendar).to.equal('UNAVAILABLE')
+      expect(result.slots.every((slot) => slot.available)).to.equal(true)
+    })
+    cy.api('POST', '/__cypress/calendar/fail-busy?count=1').its('status').should('equal', 200)
+    cy.registerPatient().then((patient) => book(this.fixtures, patient, '10:00').its('status').should('equal', 201))
+  })
+})
