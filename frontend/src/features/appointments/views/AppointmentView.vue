@@ -512,18 +512,31 @@ function confirmAppointmentTime() {
 }
 function requestSaveConfirmation() {
   showRequiredValidation.value = true
-  if (appointmentPatientType.value === 'NEW') {
-    errorMessage.value = 'ยังไม่รองรับการบันทึกผู้ป่วย NEW จนกว่าจะเชื่อมต่อ backend'
+  const newPatientName = [newPatientForm.value.firstName, newPatientForm.value.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim() || newPatientForm.value.nickname.trim()
+  if (
+    appointmentPatientType.value === 'NEW' &&
+    (!newPatientName || !newPatientForm.value.phone)
+  ) {
+    errorMessage.value = 'กรุณากรอกชื่อหรือชื่อเล่น และเบอร์โทรศัพท์ของผู้ป่วยใหม่'
     return
   }
-  if (
-    appointmentPatientType.value === 'CURRENT' &&
-    (!form.value.patientId || !form.value.therapistId || !form.value.date || !form.value.time)
-  ) {
+  if (appointmentPatientType.value === 'CURRENT' && !form.value.patientId) {
+    errorMessage.value = 'กรุณาเลือกผู้ป่วย'
+    return
+  }
+  if (!form.value.therapistId || !form.value.date || !form.value.time) {
     errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ'
     return
   }
-  if (!editingId.value && serviceMode.value === 'course' && createSource.value !== 'calendar') {
+  if (
+    !editingId.value &&
+    appointmentPatientType.value === 'CURRENT' &&
+    serviceMode.value === 'course' &&
+    createSource.value !== 'calendar'
+  ) {
     errorMessage.value = 'ยังไม่รองรับการผูกนัดหมายกับสิทธิ์คอร์ส กรุณาใช้บริการรายครั้ง'
     return
   }
@@ -537,18 +550,27 @@ async function save() {
   errorMessage.value = ''
   savingAppointment.value = true
   try {
+    const isNewPatient = appointmentPatientType.value === 'NEW' && !editingId.value
     const normalized = patientQuery.value.trim().toLowerCase()
-    const patient = patients.value.find(
-      (item) =>
-        item.hn.toLowerCase() === normalized ||
-        item.fullName.toLowerCase() === normalized ||
-        String(item.id) === normalized ||
-        `${item.fullName} hn ${item.hn}`.toLowerCase() === normalized,
-    )
-    if (!editingId.value && !patient)
+    const patient = isNewPatient
+      ? undefined
+      : patients.value.find(
+          (item) =>
+            item.hn.toLowerCase() === normalized ||
+            item.fullName.toLowerCase() === normalized ||
+            String(item.id) === normalized ||
+            `${item.fullName} hn ${item.hn}`.toLowerCase() === normalized,
+        )
+    if (!isNewPatient && !editingId.value && !patient)
       throw new Error('กรุณากรอก HN หรือชื่อผู้ป่วยให้ตรงกับรายการในระบบ')
-    form.value.patientId = patient?.id ?? form.value.patientId
-    if (!form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ')
+    if (!isNewPatient) form.value.patientId = patient?.id ?? form.value.patientId
+    if (!isNewPatient && !form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ')
+    const contactName = [newPatientForm.value.firstName, newPatientForm.value.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || newPatientForm.value.nickname.trim()
+    if (isNewPatient && (!contactName || !newPatientForm.value.phone))
+      throw new Error('กรุณากรอกชื่อหรือชื่อเล่น และเบอร์โทรศัพท์ของผู้ป่วยใหม่')
     if (!form.value.therapistId) throw new Error('กรุณาเลือกนักกายภาพ')
     if (!form.value.date || !form.value.time) throw new Error('กรุณาเลือกวันที่และเวลา')
 
@@ -565,11 +587,19 @@ async function save() {
     } else {
       savedAppointment = await appointmentApi.create({
         branchCode: form.value.branchCode,
-        patientId: form.value.patientId,
+        patientId: isNewPatient ? undefined : form.value.patientId,
         therapistId: form.value.therapistId,
         serviceId: form.value.serviceId || undefined,
         startAt: toStartAt(),
         note: form.value.note,
+        ...(isNewPatient
+          ? {
+              patientType: 'NEW' as const,
+              contactName,
+              contactPhone: newPatientForm.value.phone,
+              requestedServiceType: serviceMode.value === 'course' ? 'Course' : 'SingleVisit',
+            }
+          : {}),
       })
     }
 
