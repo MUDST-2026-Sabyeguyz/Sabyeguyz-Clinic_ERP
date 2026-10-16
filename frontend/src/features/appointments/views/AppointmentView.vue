@@ -26,6 +26,8 @@ const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   branchCode?: string
 } | null
 const isManager = authUser?.role === 'MANAGER'
+// only the Manager changes an appointment; a therapist views the branch calendar and books a free time of their own
+const canChangeAppointments = isManager
 
 const route = useRoute()
 const router = useRouter()
@@ -415,7 +417,8 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
 function openCalendarSlot(therapist: Therapist, time: string) {
   const item = calendarAppointment(therapist.id, time)
   if (item) {
-    openEdit(item)
+    // a therapist only looks at a booked slot; the Manager opens it to change it
+    if (canChangeAppointments) openEdit(item)
     return
   }
   openCreate('calendar')
@@ -1317,7 +1320,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                 <td>{{ item.service.name }}</td>
                 <td>{{ item.therapist.fullName }}</td>
                 <td>
-                  <div class="appointment-status-filter" :data-status="uiStatusFor(item.status)">
+                  <div v-if="!canChangeAppointments" class="appointment-status-filter appointment-status-readonly" :data-status="uiStatusFor(item.status)">
+                    {{ appointmentStatusOptions.find(([value]) => value === uiStatusFor(item.status))?.[1] }}
+                  </div>
+                  <div v-else class="appointment-status-filter" :data-status="uiStatusFor(item.status)">
                     <FilterDropdown
                       :model-value="uiStatusFor(item.status)"
                       :options="
@@ -1335,7 +1341,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                   </div>
                 </td>
                 <td>
-                  <button class="appointment-edit" @click="goToEdit(item)">แก้ไข</button>
+                  <button v-if="canChangeAppointments" class="appointment-edit" @click="goToEdit(item)">แก้ไข</button>
                 </td>
               </tr>
               <tr v-if="filteredAppointments.length === 0">
