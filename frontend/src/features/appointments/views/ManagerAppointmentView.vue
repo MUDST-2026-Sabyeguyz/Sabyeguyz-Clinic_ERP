@@ -581,7 +581,6 @@ async function save() {
     } else {
       appointmentSuccessMessage.value = 'สร้างนัดหมายสำเร็จ'
     }
-    window.setTimeout(() => (appointmentSuccessMessage.value = ''), 2600)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ'
   } finally {
@@ -1356,9 +1355,14 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
         </div>
       </section>
     </div>
-    <div v-if="appointmentSuccessMessage" class="status-modal-backdrop">
+    <div
+      v-if="appointmentSuccessMessage"
+      class="status-modal-backdrop"
+      @click.self="appointmentSuccessMessage = ''"
+    >
       <section class="status-modal appointment-success-modal" role="status" aria-live="polite">
         <h2>{{ appointmentSuccessMessage }}</h2>
+        <button type="button" class="primary" @click="appointmentSuccessMessage = ''">ตกลง</button>
       </section>
     </div>
     <div
