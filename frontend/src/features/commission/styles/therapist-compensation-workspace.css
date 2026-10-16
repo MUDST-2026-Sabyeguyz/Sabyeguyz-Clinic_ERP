@@ -674,6 +674,37 @@
   gap: 8px;
 }
 
+.therapist-month-stepper {
+  display: flex;
+  align-items: center;
+  min-width: 130px;
+  min-height: 42px;
+  border: 1px solid #b7cecc;
+  border-radius: 9px;
+  background: #fff;
+  color: #193b3a;
+}
+.therapist-month-stepper strong {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+.therapist-month-stepper button {
+  display: grid;
+  width: 34px;
+  min-height: 40px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #137d78;
+  font: inherit;
+  font-size: 22px;
+  cursor: pointer;
+}
+.therapist-month-stepper button:hover {
+  background: #eef6f4;
+}
 .therapist-payment-range select,
 .therapist-month-pickers select {
   width: auto;
