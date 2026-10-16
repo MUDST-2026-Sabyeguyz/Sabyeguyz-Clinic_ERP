@@ -54,6 +54,9 @@ public class Patient {
     @Column(length = 20, nullable = false)
     private String phone;
 
+    @Column(name = "email", length = 254)
+    private String email;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "branch_id")
     private Branch branch;
@@ -115,6 +118,8 @@ public class Patient {
     public Patient() {}
 
     public Long getId() { return id; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
     public String getPatientHn() { return patientHn; }
     public void setPatientHn(String patientHn) { this.patientHn = patientHn; }
     public CustomerType getCustomerType() { return customerType; }

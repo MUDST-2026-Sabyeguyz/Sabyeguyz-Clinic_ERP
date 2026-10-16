@@ -63,7 +63,7 @@ public class Service {
     private String unitName = "ครั้ง";
 
     /** Length of an appointment for this service; null = use the branch default. */
-    @Column(name = "default_appointment_minutes")
+    @Column(name = "default_duration_minutes")
     private Integer defaultAppointmentMinutes;
 
     public Service() {}

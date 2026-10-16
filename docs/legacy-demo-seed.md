@@ -3,7 +3,7 @@
 ไฟล์: `backend/src/main/resources/db/seed_v2_legacy/V1100__legacy_demo_data.sql`
 
 ข้อมูลตัวอย่างเดิมคือ `clinic_erp_demo.sql` บน `develop` (ผู้ป่วย 160 ราย นัดหมาย 60 รายการ ใบเสร็จ 41 ใบ ฯลฯ)
-ถูกแปลงเข้า schema ล่าสุด (V1, V2, V3, V4, V1001, V1002, V1003 ซึ่งตรงกับ Data Dictionary_Sabyeguyz.xlsx 53 ชีต)
+ถูกแปลงเข้า schema ล่าสุด (V1–V4 และ V1001–V1007 เทียบกับ Data Dictionary_Sabyeguyz_afterFB3.4.xlsx 49 ชีต)
 แล้วเติมช่องที่ระบบเดิมไม่มีข้อมูลด้วยค่าตัวอย่าง
 
 ## วิธีใช้
@@ -30,6 +30,7 @@ APP_V2_FLYWAY_EXTRA_LOCATIONS=,classpath:db/seed_v2_legacy
 | `patient_visit`, `sales_transaction` | Visit ที่ Completed มีเวลาออกและผู้รักษา; บรรทัดขายแบบครั้งเดียวผูก visit (walk-in 1 ชั่วโมง) และผู้รักษา ตามข้อบังคับของ schema ใหม่ |
 | `refund_transaction` | ผู้อนุมัติ/เวลาอนุมัติของการคืนเงินที่เสร็จแล้ว |
 | คอร์ส | บริการ `COURSE_10`, `COURSE_5`, กฎค่ามือผู้รักษาแทน 45 บาท และคอร์ส 2 ใบ |
+| คอลัมน์ใหม่ของ dictionary afterFB3.4 | `appointment.appointment_end_at` (เวลาสิ้นสุดเดิม, NOT NULL), `app_user.email` ของ system (NOT NULL), `branch` เวลาเปิด-ปิด/ช่วงจองเริ่มต้น/อีเมล/เลขใบอนุญาต/สถานะปฏิทิน (`Disabled`), `room.capacity`, `service.default_duration_minutes` (ระยะเวลาเดิมของบริการ), `patient.email`, `receipt.note` (หมายเหตุใบขายเดิม), `treatment_fee_rule.rule_name`, `appointment.course_id` (นัดของเจ้าของคอร์ส RE26090013 1 รายการ) |
 | โอนสิทธิ์/ต่ออายุ/ใบตัดคอร์ส | `course_transfer` (โอน 2 ครั้งให้ผู้ป่วย 3 พร้อม ledger ทั้งสองฝั่ง), `course_extension` (+1 เดือน), `course_usage_print` + `course_usage_print_event` (Issued/Reprint) |
 | ค่าตอบแทนรายเดือน | `single_visit_fee_ledger` (ค่ามือ 45 ต่อครั้งเดี่ยวที่ชำระแล้ว), `staff_monthly_payment` (ต.ค. สถานะ Open เชื่อมกับ allocation), `staff_pay_adjustment` + `adjustment_application` (ปรับ +100 รอจ่าย ต.ค.) |
 | อื่นๆ | `user_permission` (therapist2 ถูกปฏิเสธ COURSE_REVERSE), `audit_log` 3 รายการ |
@@ -50,3 +51,5 @@ APP_V2_FLYWAY_EXTRA_LOCATIONS=,classpath:db/seed_v2_legacy
   ต้องปรับสำเนาชั่วคราวของสคริปต์ ข้อมูลเดิมไม่มีคอร์ส/ledger/กฎค่ามือ จึงข้ามส่วนนั้นได้ แต่ถ้าจะย้ายข้อมูลจริงที่มีคอร์ส ต้องปรับสคริปต์จริงก่อน
 - dump เดิมบน `develop` เป็น UTF-16 และข้อความไทยถูกแปลงรหัสซ้ำ (mojibake) ต้องแก้ก่อนโหลด seed นี้จึงเป็นข้อความไทยที่ถูกต้อง
 - ไฟล์ `clinic_erp_demo.sql` เดิมยังอยู่ที่รากของ `develop` ไม่ได้ลบ
+- ตาราง `google_calendar_connection`, `calendar_busy_block` และ `branch.google_connection_id`/`google_calendar_id` ว่างโดยตั้งใจ เพราะต้องมาจากการเชื่อม Google จริง
+- คอลัมน์ที่มีใน migration แต่ไม่อยู่ใน dictionary (เช่น `branch.booking_open_time`/`booking_close_time`/`branch_email` และ `service.default_appointment_minutes` จาก V1004 ที่ V1007 คัดลอกไปคอลัมน์ชื่อตาม dictionary แล้ว, `staff_monthly_payment.paid_date`/`payment_reference`, `monthly_commission_closing.reopen_*`, ตาราง `course_extension_request`) ไม่ได้ใส่ข้อมูล
