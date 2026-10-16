@@ -59,4 +59,10 @@ Create `feat/<feature-name>` branches from `develop`, then open a pull request i
 
 ### Frontend tests
 
-Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. The GitHub Actions workflow starts the backend and Vite server before running the same Cypress command in Chrome.
+Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. Jenkins starts the backend and Vite server when running the corresponding browser checks.
+
+### Jenkins CI
+
+Jenkins is the primary CI runner. See the [Jenkins CI guide](jenkins-backup/JENKINS_CI_TH.md) for setup, branch monitoring, exact-commit replay, reports and GitHub status contexts. The CI dashboard uses http://localhost:8086/; the older backup Jenkins uses port 8085.
+
+The files under `.github/workflows/` remain the test definitions read from each selected commit. GitHub-hosted workflows are disabled separately in repository settings to avoid billing-blocked runs; their historical results are retained.
