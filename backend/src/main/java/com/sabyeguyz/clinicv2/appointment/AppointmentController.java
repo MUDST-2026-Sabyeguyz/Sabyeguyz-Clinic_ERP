@@ -79,7 +79,8 @@ public class AppointmentController {
 
     public record CancelRequest(String reason) {}
 
-    public record RescheduleRequest(OffsetDateTime startAt, Long therapistId, com.fasterxml.jackson.databind.JsonNode note) {}
+    public record RescheduleRequest(OffsetDateTime startAt, Long therapistId, Long serviceId, String branchCode,
+                                    com.fasterxml.jackson.databind.JsonNode note) {}
 
     public record PatientSummary(Long id, String hn, String fullName, String phone) {}
     public record TherapistSummary(Long id, String fullName) {}
@@ -230,14 +231,21 @@ public class AppointmentController {
 
     @PatchMapping("/{id}")
     public Response reschedule(@PathVariable Long id, @RequestBody RescheduleRequest request) {
-        requireAppointmentAccess(id);
         if (request.startAt() == null) throw new IllegalArgumentException("ต้องระบุเวลานัดใหม่");
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
-        Appointment current = service.get(id);
-        availability.requireNoGoogleBusy(current.getBranch(), current.getService(), local.toLocalDate(), local.toLocalTime());
-        // Reassigning the therapist on reschedule is not supported yet (AppointmentService.reschedule
-        // only moves date/time) - request.therapistId() is accepted but ignored, flagged for the team.
-        Appointment appointment = service.reschedule(id, local.toLocalDate(), local.toLocalTime(),
+        Appointment current = service.getForUpdate(id);
+        branchAccess.requireAccess(current.getBranch());
+        Branch branch = request.branchCode() == null || request.branchCode().isBlank()
+                ? current.getBranch() : branchAccess.scope(request.branchCode());
+        Staff therapist = request.therapistId() == null ? current.getStaff()
+                : staff.findById(request.therapistId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ให้บริการ"));
+        Service chosen = request.serviceId() == null ? current.getService()
+                : services.findById(request.serviceId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
+        if (!branch.getId().equals(therapist.getBranch().getId())) {
+            throw new IllegalArgumentException("นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
+        }
+        availability.requireNoGoogleBusy(branch, chosen, local.toLocalDate(), local.toLocalTime());
+        Appointment appointment = service.reschedule(id, branch, therapist, chosen, local.toLocalDate(), local.toLocalTime(),
                 "เลื่อนนัดผ่าน API", actor.currentId());
         if (request.note() != null) {
             if (!request.note().isNull() && !request.note().isTextual()) {

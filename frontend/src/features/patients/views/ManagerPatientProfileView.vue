@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
+import { masterDataApi, patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 
 const route = useRoute()
@@ -101,11 +101,8 @@ const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((va
   value,
   label: value,
 }))
-const customerSourceOptions = ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'].map((value) => ({
-  value,
-  label: value,
-}))
-const insuranceOptions = [{ value: 'AIA', label: 'AIA' }]
+const customerSourceOptions = ref<Array<{ value: string; label: string }>>([])
+const insuranceOptions = ref<Array<{ value: string; label: string }>>([])
 function splitFullName(fullName: string) {
   const [firstName = '', ...lastName] = fullName.trim().split(/\s+/)
   return { firstName, lastName: lastName.join(' ') }
@@ -172,6 +169,9 @@ const isForeignNationalityValue = (value: string) =>
   ['ต่างชาติ', 'FOREIGN', 'FOREIGNER', 'NON_THAI'].includes(value.trim().toUpperCase())
 const isForeignNationality = computed(() => isForeignNationalityValue(draft.nationality))
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
+const phoneIsValid = computed(() =>
+  isForeignNationality.value ? draft.phone.length <= 10 : /^\d{10}$/.test(draft.phone),
+)
 watch(
   () => draft.nationality,
   (nationality) => {
@@ -230,6 +230,12 @@ function cancelEdit() {
 async function saveEdit() {
   if (!patient.value) return
   errorMessage.value = ''
+  if (!phoneIsValid.value) {
+    errorMessage.value = isForeignNationality.value
+      ? 'เบอร์โทรต้องไม่เกิน 10 หลัก'
+      : 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก'
+    return
+  }
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
@@ -278,7 +284,20 @@ onMounted(async () => {
     return
   }
   try {
-    patient.value = normalizeProfile(await patientApi.get(id))
+    const [profile, masterData] = await Promise.all([
+      patientApi.get(id),
+      masterDataApi.list().catch(() => []),
+    ])
+    patient.value = normalizeProfile(profile)
+    const optionsFor = (category: string, currentValue: string) => {
+      const values = masterData
+        .filter((item) => item.active && item.category === category)
+        .map((item) => item.name)
+      if (currentValue && !values.includes(currentValue)) values.unshift(currentValue)
+      return values.map((value) => ({ value, label: value }))
+    }
+    customerSourceOptions.value = optionsFor('Referral Channel', patient.value.customerSource)
+    insuranceOptions.value = optionsFor('Insurance Company', patient.value.insuranceCompany)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ'
   } finally {
@@ -425,8 +444,18 @@ onMounted(async () => {
             <div class="patient-edit-two-column-grid">
               <label>
                 เบอร์โทร <em v-if="!isForeignNationality">*</em>
-                <input v-model.trim="draft.phone" type="tel" :required="!isForeignNationality" />
+                <input
+                  v-model.trim="draft.phone"
+                  type="tel"
+                  inputmode="numeric"
+                  maxlength="10"
+                  :required="!isForeignNationality"
+                  @input="draft.phone = digitsOnly(draft.phone).slice(0, 10)"
+                />
               </label>
+              <small v-if="draft.phone && !phoneIsValid" class="required-error">
+                {{ isForeignNationality ? 'เบอร์โทรต้องไม่เกิน 10 หลัก' : 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก' }}
+              </small>
               <label>อีเมล<input v-model.trim="draft.email" type="text" inputmode="email" /></label>
               <label class="wide"
                 >ที่อยู่<textarea v-model.trim="draft.address" rows="4" required />
