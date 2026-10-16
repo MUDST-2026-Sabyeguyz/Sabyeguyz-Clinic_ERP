@@ -1,2 +1,5 @@
 source/
 *.env
+results/
+runtime/
+__pycache__/
