@@ -9,6 +9,6 @@ public record PatientResponse(Long id, String hn, String fullName, String phone,
     static PatientResponse from(Patient patient) {
         var branch = patient.getBranch();
         return new PatientResponse(patient.getId(), patient.getHn(), patient.getFullName(), patient.getPhone(),
-                patient.isActive(), branch.getId(), branch.getCode(), branch.getName());
+                patient.isActive(), branch.getId(), branch.getBranchCode(), branch.getName());
     }
 }
