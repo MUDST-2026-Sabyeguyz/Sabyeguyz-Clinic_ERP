@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { salesApi, courseApi } from '@/api/client'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
@@ -31,121 +32,63 @@ interface TransactionRepository {
   void(command: VoidTransactionCommand): Promise<Transaction>
 }
 
-const seedTransactions: Transaction[] = [
-  {
-    key: 'sale-84',
-    kind: 'sale',
-    id: 84,
-    number: 'SL-2569-0084',
-    date: '2026-09-10T10:15:00+07:00',
-    patient: 'นายสมชาย ใจดี',
-    hn: '2601080022',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '฿10,000',
-    status: 'ปกติ',
-    performedBy: 'กัญญา ใจดี',
-    paymentMethod: 'โอนเงิน',
-  },
-  {
-    key: 'sale-81',
-    kind: 'sale',
-    id: 81,
-    number: 'SL-2569-0081',
-    date: '2026-09-08T14:30:00+07:00',
-    patient: 'นางวรรณา มั่นคง',
-    hn: '2601080023',
-    item: 'Exercise Therapy',
-    branchCode: 'BR09',
-    quantity: '฿1,500',
-    status: 'ปกติ',
-    performedBy: 'พิมพ์ชนก',
-    paymentMethod: 'โอนเงิน',
-  },
-  {
-    key: 'usage-31',
-    kind: 'usage',
-    id: 31,
-    number: 'USE-2569-0031',
-    date: '2026-09-17T09:00:00+07:00',
-    patient: 'สมชาย ใจดี',
-    hn: '2601080022',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '1 ครั้ง',
-    status: 'ปกติ',
-    performedBy: 'กภ. ศิริพร',
-    paymentMethod: 'ใช้สิทธิ์คอร์ส',
-  },
-  {
-    key: 'usage-42',
-    kind: 'usage',
-    id: 42,
-    number: 'USE-2569-0042',
-    date: '2026-09-10T09:00:00+07:00',
-    patient: 'นายสมชาย ใจดี',
-    hn: '2601080022',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '1 ครั้ง',
-    status: 'ปกติ',
-    performedBy: 'กภ. ศิริพร',
-    paymentMethod: 'ใช้สิทธิ์คอร์ส',
-  },
-  {
-    key: 'sale-76',
-    kind: 'sale',
-    id: 76,
-    number: 'SL-2569-0076',
-    date: '2026-09-05T11:20:00+07:00',
-    patient: 'นายกิตติ วัฒนา',
-    hn: '2601080018',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '฿2,000',
-    status: 'ยกเลิก (Void)',
-    performedBy: 'พิมพ์ชนก',
-    paymentMethod: 'QR PromptPay',
-    voidedAt: '2026-09-12T11:42:00+07:00',
-    voidReason: 'ลงรายการผิด',
-    voidNumber: 'VOID-2569-0014',
-  },
-  {
-    key: 'usage-32',
-    kind: 'usage',
-    id: 32,
-    number: 'USE-2569-0032',
-    date: '2026-09-05T11:20:00+07:00',
-    patient: 'นายกิตติ วัฒนา',
-    hn: '2601080018',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '1 ครั้ง',
-    status: 'ยกเลิก (Void)',
-    performedBy: 'กภ. ศิริพร',
-    paymentMethod: 'ใช้สิทธิ์คอร์ส',
-    voidedAt: '2026-09-05T11:40:00+07:00',
-    voidReason: 'ผู้ป่วยไม่ได้รับบริการ',
-    voidNumber: 'VOID-2569-0012',
-  },
-]
-
-/** Backend seam: replace only this adapter with an API implementation later. */
 const transactionRepository: TransactionRepository = {
   async list() {
-    return structuredClone(seedTransactions.filter((row) => row.status === 'ปกติ'))
+    const first = await salesApi.list({ page: 0, size: 100 })
+    const sales = [...first.items]
+    for (let page = 1; page < first.totalPages; page++)
+      sales.push(...(await salesApi.list({ page, size: 100 })).items)
+    const usages = await courseApi.usageTransactions()
+    return [
+      ...sales.map((row): Transaction => ({
+        key: `sale-${row.id}`,
+        kind: 'sale',
+        id: row.id,
+        number: row.receiptNo,
+        date: row.soldAt,
+        patient: row.patient.fullName,
+        hn: row.patient.hn,
+        item: row.itemDescription || '—',
+        branchCode: row.branchCode,
+        quantity: `฿${Number(row.total).toLocaleString('th-TH')}`,
+        status: row.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ',
+        performedBy: row.salesperson?.fullName || '—',
+        paymentMethod: '—',
+        voidedAt: row.voidedAt,
+        voidReason: row.voidReason,
+      })),
+      ...usages.map((row): Transaction => ({
+        key: `usage-${row.id}`,
+        kind: 'usage',
+        id: row.id,
+        number: String(row.id),
+        date: row.usedAt,
+        patient: row.patientName,
+        hn: row.patientHn,
+        item: row.courseName,
+        branchCode: row.branchCode,
+        quantity: '1 ครั้ง',
+        status: row.voidedAt ? 'ยกเลิก (Void)' : 'ปกติ',
+        performedBy: '—',
+        paymentMethod: '—',
+        voidedAt: row.voidedAt || undefined,
+        voidReason: row.voidReason || undefined,
+      })),
+    ]
   },
   async void(command) {
     const row = rows.value.find((item) => item.key === command.key)
     if (!row) throw new Error('ไม่พบรายการที่ต้องการยกเลิก')
-    row.status = 'ยกเลิก (Void)'
-    row.voidReason = command.reason
-    row.voidedAt = new Date().toISOString()
-    row.voidNumber = `VOID-${new Date().getFullYear() + 543}-${String(row.id).padStart(4, '0')}`
-    return { ...row }
+    if (row.kind === 'usage') throw new Error('ยังไม่รองรับการยกเลิกใช้สิทธิ์จากหน้านี้')
+    const saved = await salesApi.reverse(row.id, command.reason)
+    return {
+      ...row,
+      status: 'ยกเลิก (Void)',
+      voidedAt: saved.voidedAt,
+      voidReason: saved.voidReason,
+    } as Transaction
   },
 }
-
 const tab = ref<Tab>('sales')
 const step = ref<Step>('list')
 const rows = ref<Transaction[]>([])
@@ -627,7 +570,7 @@ function toggleOriginal(key: string) {
                         tab === 'history'
                           ? 'ดูรายละเอียด'
                           : row.status === 'ปกติ'
-                            ? 'ตรวจสอบ'
+                            ? 'ยกเลิก'
                             : 'ยกเลิกแล้ว'
                       }}
                     </button>
