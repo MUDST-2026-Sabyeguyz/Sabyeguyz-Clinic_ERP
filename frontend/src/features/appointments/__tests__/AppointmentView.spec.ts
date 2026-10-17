@@ -42,7 +42,7 @@ describe('AppointmentView', () => {
     expect(source).toContain('v-model.trim="newPatientForm.lastName"')
     expect(source).toContain('v-model.trim="newPatientForm.nickname"')
     expect(source).toContain('v-model.trim="newPatientForm.phone"')
-    expect(source).not.toContain('ผู้จอง NEW ยังไม่มี HN')
+    expect(source).toContain('ผู้จอง NEW ยังไม่มี HN')
   })
 
   it('places service type on the row below patient type for current and new patients', () => {
@@ -57,10 +57,9 @@ describe('AppointmentView', () => {
       /\.appointment-create-card \.appointment-create-grid\.is-new-patient \{([\s\S]*?)\n\}/,
     )
 
-    expect(createGrid?.[1]).toContain("'patient-type selection'")
-    expect(createGrid?.[1]).toContain("'service-mode therapist'")
-    expect(newPatientGrid?.[1]).toContain("'patient-type selection'")
-    expect(newPatientGrid?.[1]).toContain("'service-mode therapist'")
+    expect(createGrid?.[1]).toContain("'patient-type summary'")
+    expect(newPatientGrid?.[1]).toContain("'patient-type service-mode'")
+    expect(newPatientGrid?.[1]).toContain("'new-patient selection'")
   })
 
   it('returns calendar-created appointments to the calendar instead of the list', () => {
@@ -78,7 +77,7 @@ describe('AppointmentView', () => {
     expect(source).toContain("isCalendarCreate ? '← กลับไปหน้าปฏิทิน' : '← กลับไปหน้านัดหมาย'")
   })
 
-  it('stops new-patient appointment submission before calling the backend', () => {
+  it('allows a new-patient appointment after validating its contact details', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
@@ -87,8 +86,9 @@ describe('AppointmentView', () => {
     const requestSave = source.match(/function requestSaveConfirmation\(\) \{([\s\S]*?)\n\}/)
 
     expect(requestSave?.[1]).toContain("appointmentPatientType.value === 'NEW'")
-    expect(requestSave?.[1]).toContain('ยังไม่รองรับการบันทึกผู้ป่วย NEW')
-    expect(requestSave?.[1]).toContain('return')
+    expect(requestSave?.[1]).toContain('isContactPhoneValid(newPatientForm.value.phone)')
+    expect(source).toContain("patientType: 'NEW' as const")
+    expect(source).not.toContain('ยังไม่รองรับการบันทึกผู้ป่วย NEW')
   })
 
   it('keeps required markers beside new-patient field labels', () => {
@@ -97,8 +97,8 @@ describe('AppointmentView', () => {
       'utf8',
     )
 
-    expect(source).toContain('<span>ชื่อ <em>*</em></span>')
-    expect(source).toContain('<span>นามสกุล <em>*</em></span>')
+    expect(source).toContain('<span>ชื่อ <small>(ไม่บังคับ)</small></span>')
+    expect(source).toContain('<span>นามสกุล <small>(ไม่บังคับ)</small></span>')
     expect(source).toContain('<span>ชื่อเล่น <em>*</em></span>')
     expect(source).toContain('<span>เบอร์โทรศัพท์ <em>*</em></span>')
   })

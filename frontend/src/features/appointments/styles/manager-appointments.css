@@ -852,6 +852,8 @@
 }
 .appointment-status-filter :deep(.filter-dropdown__menu) {
   min-width: 150px;
+  top: auto;
+  bottom: calc(100% + 5px);
   font-size: 14px;
 }
 .appointment-edit {

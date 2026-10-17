@@ -104,9 +104,11 @@ public class PatientController {
         Long branchId = branchCode == null || branchCode.isBlank() ? null
                 : branches.findByBranchCode(branchCode.trim())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode)).getId();
-        Sort sortOrder = "nameDesc".equals(sort)
-                ? Sort.by("patientFname").descending().and(Sort.by("patientLname").descending())
-                : Sort.by("patientFname").ascending().and(Sort.by("patientLname").ascending());
+        Sort sortOrder = switch (sort) {
+            case "newest" -> Sort.by("registeredAt").descending().and(Sort.by("id").descending());
+            case "nameDesc" -> Sort.by("patientFname").descending().and(Sort.by("patientLname").descending());
+            default -> Sort.by("patientFname").ascending().and(Sort.by("patientLname").ascending());
+        };
 
         Page<Patient> result = repository.search(query, branchId, PageRequest.of(page, size, sortOrder));
         return new PageResponse<>(result.getContent().stream().map(PatientController::toSummary).toList(),
