@@ -53,7 +53,6 @@ async function signIn() {
             autocomplete="current-password"
             required
         /></label>
-        <p class="role-note">ระบบจะใช้บทบาทจริงจากบัญชีผู้ใช้ที่ backend ส่งกลับ</p>
         <button type="submit" :disabled="submitting || !form.username || !form.password">
           {{ submitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ' }}
         </button>

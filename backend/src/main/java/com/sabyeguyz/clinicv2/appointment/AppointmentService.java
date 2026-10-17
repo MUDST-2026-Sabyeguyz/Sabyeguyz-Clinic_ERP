@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.appointment;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.Service;
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
 import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
 import com.sabyeguyz.clinicv2.enums.RequestedServiceType;
@@ -58,6 +59,7 @@ public class AppointmentService {
         require(staff != null, "ต้องระบุผู้ให้บริการ");
         require(appointmentDate != null, "ต้องระบุวันที่นัด");
         require(appointmentTime != null, "ต้องระบุเวลานัด");
+        requireFuture(appointmentDate, appointmentTime);
         requireNoConflict(staff.getId(), appointmentDate, appointmentTime, null);
         requireSlotFits(branch, staff, service, appointmentDate, appointmentTime, null);
 
@@ -87,17 +89,28 @@ public class AppointmentService {
                                        RequestedServiceType requestedServiceType, Room room,
                                        LocalDate appointmentDate, LocalTime appointmentTime,
                                        AppointmentStatus initialStatus, Long actorId) {
+        return bookNewPatient(contactName, contactPhone, branch, staff, requestedServiceType, null, room,
+                appointmentDate, appointmentTime, initialStatus, actorId);
+    }
+
+    @Transactional
+    public Appointment bookNewPatient(String contactName, String contactPhone, Branch branch, Staff staff,
+                                       RequestedServiceType requestedServiceType, Service service, Room room,
+                                       LocalDate appointmentDate, LocalTime appointmentTime,
+                                       AppointmentStatus initialStatus, Long actorId) {
         String name = contactName == null ? "" : contactName.trim();
         String phone = contactPhone == null || contactPhone.isBlank() ? null : contactPhone.trim();
         require(!name.isEmpty(), "ต้องระบุชื่อ-นามสกุล หรือชื่อเล่นของผู้ป่วยใหม่");
         require(phone != null, "ต้องระบุเบอร์โทรผู้ป่วยใหม่");
+        require(phone.matches("[0-9]{1,10}"), "เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก");
         require(name.contains(" ") || phone != null, "หากระบุเพียงชื่อเล่นต้องระบุเบอร์โทรด้วย");
         require(branch != null, "ต้องระบุสาขา");
         require(staff != null, "ต้องระบุผู้ให้บริการ");
         require(appointmentDate != null, "ต้องระบุวันที่นัด");
         require(appointmentTime != null, "ต้องระบุเวลานัด");
+        requireFuture(appointmentDate, appointmentTime);
         requireNoConflict(staff.getId(), appointmentDate, appointmentTime, null);
-        requireSlotFits(branch, staff, null, appointmentDate, appointmentTime, null);
+        requireSlotFits(branch, staff, service, appointmentDate, appointmentTime, null);
 
         Appointment appointment = new Appointment();
         appointment.setPatient(null);
@@ -107,10 +120,11 @@ public class AppointmentService {
         appointment.setRequestedServiceType(requestedServiceType);
         appointment.setBranch(branch);
         appointment.setStaff(staff);
+        appointment.setService(service);
         appointment.setRoom(room);
         appointment.setAppointmentDate(appointmentDate);
         appointment.setAppointmentTime(appointmentTime);
-        appointment.setAppointmentEndAt(endAt(appointmentDate, appointmentTime, null, branch));
+        appointment.setAppointmentEndAt(endAt(appointmentDate, appointmentTime, service, branch));
         appointment.setAppointmentStatus(requireInitialStatus(initialStatus));
         appointment.setAppointmentCreateAt(Instant.now());
         appointment.setAppointmentCreateBy(actorId);
@@ -120,7 +134,9 @@ public class AppointmentService {
     @Transactional
     public Appointment confirm(Long id, Long actorId) {
         Appointment appointment = find(id);
-        require(appointment.getAppointmentStatus() == AppointmentStatus.Unconfirmed, "นัดหมายนี้ไม่ได้อยู่ในสถานะยังไม่ยืนยัน");
+        require(appointment.getAppointmentStatus() == AppointmentStatus.Unconfirmed
+                        || appointment.getAppointmentStatus() == AppointmentStatus.Rescheduled,
+                "นัดหมายนี้ไม่ได้อยู่ในสถานะยังไม่ยืนยัน");
         changeStatus(appointment, AppointmentStatus.Confirmed, "ยืนยันนัดหมาย", actorId);
         appointment.setAppointmentUpdateAt(Instant.now());
         appointment.setAppointmentUpdateBy(actorId);
@@ -165,6 +181,9 @@ public class AppointmentService {
         require(branch.getId().equals(staff.getBranch().getId()), "นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
         require(newDate != null, "ต้องระบุวันที่นัดใหม่");
         require(newTime != null, "ต้องระบุเวลานัดใหม่");
+        if (!newDate.equals(appointment.getAppointmentDate()) || !newTime.equals(appointment.getAppointmentTime())) {
+            requireFuture(newDate, newTime);
+        }
         requireNoConflict(staff.getId(), newDate, newTime, appointment.getId());
         requireSlotFits(branch, staff, service, newDate, newTime, appointment.getId());
 
@@ -321,6 +340,13 @@ public class AppointmentService {
     private static void require(boolean condition, String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
+        }
+    }
+
+    private static void requireFuture(LocalDate date, LocalTime time) {
+        LocalDate today = ClinicTime.today();
+        if (date.isBefore(today) || (date.equals(today) && !time.isAfter(ClinicTime.now().toLocalTime()))) {
+            throw new IllegalArgumentException("ไม่สามารถจองเวลาย้อนหลังได้");
         }
     }
 }

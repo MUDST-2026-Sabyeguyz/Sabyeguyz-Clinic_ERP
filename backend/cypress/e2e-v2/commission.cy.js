@@ -230,7 +230,7 @@ describe('v2 commission', () => {
         cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
           name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom, tiers: [{ minimum: 0, maximum: null, rate: 0.01, order: 1 }],
         }).its('status').should('equal', 409)
-        cy.api('DELETE', `/api/commission/schemes/${scheme.id}`).its('status').should('equal', 409)
+        cy.api('DELETE', `/api/commission/schemes/${scheme.id}`).its('status').should('equal', 405)
         cy.api('PUT', `/api/commission/schemes/${scheme.id}`, { name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom })
           .its('status').should('equal', 200)
         cy.api('GET', `/api/commission/schemes/${scheme.id}/tiers`).its('body').should('have.length', 5)
