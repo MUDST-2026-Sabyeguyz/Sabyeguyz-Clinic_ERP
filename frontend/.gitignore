@@ -4,7 +4,25 @@
 !.env.example
 node_modules/
 dist/
+dist-ssr/
 coverage/
 *.log
+*.tsbuildinfo
+*.timestamp-*-*.mjs
+.eslintcache
+.DS_Store
 .idea/
-.vscode/settings.json
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Test output
+test-results/
+__screenshots__/
+/cypress/videos/
+/cypress/screenshots/
+/cypress/downloads/
