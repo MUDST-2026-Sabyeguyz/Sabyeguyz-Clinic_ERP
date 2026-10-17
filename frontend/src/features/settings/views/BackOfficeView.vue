@@ -8,6 +8,7 @@ import {
   commissionApi,
   courseApi,
   paymentMethodApi,
+  paymentStatusApi,
   resourceApi,
   masterDataApi,
   serviceManagementApi,
@@ -61,6 +62,7 @@ const data = reactive<Record<Exclude<SectionKey, 'payments'>, Row[]>>({
 const paymentMethods = reactive<Array<{ id: number; name: string; note: string; active: boolean }>>(
   [],
 )
+const paymentStatuses = reactive<Array<{ code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID'; label: string; enabled: boolean }>>([])
 // a closed branch (ปิดใช้งาน) is not offered anywhere: not for a user, a room or a resource
 const openBranches = computed(() => data.branches.filter((branch) => branch.status === 'ใช้งาน'))
 const branchOptions = computed(() => openBranches.value.map((branch) => option(String(branch.name))))
@@ -195,24 +197,26 @@ function nextCycleMonth() {
   return new Date(Date.UTC(year!, month!, 1)).toISOString().slice(0, 7)
 }
 async function loadBackendSettings() {
-  const [branches, users, services, courses, payments, resources, master] =
+  const [branches, users, services, courses, payments, paymentStatusOptions, resources, master] =
     await Promise.allSettled([
       branchApi.list(),
       userManagementApi.list(),
       serviceManagementApi.list(),
       courseApi.list(),
       paymentMethodApi.list(),
+      paymentStatusApi.list(),
       resourceApi.list(),
       masterDataApi.list(),
     ])
   const failures: string[] = []
-  const results = [branches, users, services, courses, payments, resources, master]
+  const results = [branches, users, services, courses, payments, paymentStatusOptions, resources, master]
   const names = [
     'สาขา',
     'ผู้ใช้งาน',
     'บริการ',
     'คอร์ส',
     'การชำระเงิน',
+    'สถานะการชำระเงิน',
     'Room / Resource',
     'Master Data',
   ]
@@ -238,6 +242,8 @@ async function loadBackendSettings() {
         .filter((item) => item.name !== 'Cash')
         .map((item) => ({ ...item, note: 'ช่องทางรับชำระเงิน' })),
     )
+  if (paymentStatusOptions.status === 'fulfilled')
+    paymentStatuses.splice(0, paymentStatuses.length, ...paymentStatusOptions.value)
   if (resources.status === 'fulfilled')
     data.rooms.splice(0, data.rooms.length, ...resources.value.map(resourceRow))
   if (master.status === 'fulfilled')
@@ -263,7 +269,7 @@ const copy = computed(
       branches: ['จัดการสาขา', 'ข้อมูลสาขาทั้งหมดในระบบ'],
       users: ['ผู้ใช้งานและสิทธิ์', 'จัดการผู้ใช้งานและสิทธิ์การเข้าถึงระบบ'],
       services: ['บริการและคอร์ส', 'จัดการรายการบริการและคอร์สทั้งหมดในระบบ'],
-      payments: ['การชำระเงิน', 'เลือกวิธีการชำระเงินที่เปิดให้บริการในระบบ'],
+      payments: ['การชำระเงิน', 'เลือกช่องทางและสถานะการชำระเงินที่เปิดให้บริการในระบบ'],
       rooms: ['Room / Resource', 'จัดการห้องและทรัพยากรที่ใช้ในการให้บริการ'],
       commission: ['กฎค่ามือ', 'ค่ามือของผู้รักษาแทนและการรักษารายครั้ง ใช้กฎกลางเดียวกับนักกายภาพทุกคน'],
       tiers: ['กฎค่าคอมมิชชัน', 'อัตราค่าคอมมิชชันตามยอดขายคอร์สรายเดือนของพนักงาน'],
@@ -662,8 +668,6 @@ const paymentNotes: Record<string, string> = {
 }
 const paymentNote = (name: string) => paymentNotes[name] ?? 'ช่องทางรับชำระเงิน'
 const paymentChange = ref<{ index: number; enable: boolean } | null>(null)
-// a status takes its colour (green Enable, red Disable) only once it has been chosen here; until then both stay plain
-const paymentChosen = reactive(new Set<string>())
 function askPaymentStatus(index: number, enable: boolean) {
   const method = paymentMethods[index]
   if (!method) return
@@ -674,17 +678,23 @@ async function confirmPaymentStatus() {
   paymentChange.value = null
   const method = change ? paymentMethods[change.index] : undefined
   if (!change || !method) return
-  // choosing the status a method already has changes nothing on the server, but it is the choice: it takes its colour
-  if (method.active === change.enable) {
-    paymentChosen.add(method.name)
-    return
-  }
+  if (method.active === change.enable) return
   try {
     if (change.enable) await paymentMethodApi.activate(method.id)
     else await paymentMethodApi.deactivate(method.id)
     method.active = change.enable
-    paymentChosen.add(method.name)
     notify(`บันทึก ${paymentLabel(method.name)} อัตโนมัติแล้ว`)
+  } catch (error) {
+    notify(error instanceof Error ? error.message : 'เปลี่ยนสถานะไม่สำเร็จ')
+  }
+}
+async function setPaymentStatusEnabled(index: number, enabled: boolean) {
+  const option = paymentStatuses[index]
+  if (!option || option.enabled === enabled) return
+  try {
+    const saved = await paymentStatusApi.setEnabled(option.code, enabled)
+    option.enabled = saved.enabled
+    notify(`บันทึกสถานะ${saved.label}อัตโนมัติแล้ว`)
   } catch (error) {
     notify(error instanceof Error ? error.message : 'เปลี่ยนสถานะไม่สำเร็จ')
   }
@@ -764,7 +774,7 @@ const drawerTitle = computed(() => {
                 <button
                   type="button"
                   class="enable"
-                  :class="{ on: paymentChosen.has(method.name) && method.active }"
+                  :class="{ on: method.active }"
                   :aria-pressed="method.active"
                   @click="askPaymentStatus(index, true)"
                 >
@@ -773,7 +783,7 @@ const drawerTitle = computed(() => {
                 <button
                   type="button"
                   class="disable"
-                  :class="{ on: paymentChosen.has(method.name) && !method.active }"
+                  :class="{ on: !method.active }"
                   :aria-pressed="!method.active"
                   @click="askPaymentStatus(index, false)"
                 >
@@ -782,6 +792,16 @@ const drawerTitle = computed(() => {
               </span>
             </div>
           </div>
+          <section v-if="section === 'payments'" class="payment-list payment-status-settings">
+            <h3>สถานะการชำระเงิน</h3>
+            <div v-for="(option, index) in paymentStatuses" :key="option.code" class="payment-option">
+              <span><b>{{ option.label }}</b><small>{{ option.enabled ? 'แสดงในหน้าบริการ' : 'ซ่อนจากหน้าบริการ' }}</small></span>
+              <span class="payment-status" role="group" :aria-label="`สถานะ ${option.label}`">
+                <button type="button" class="enable" :class="{ on: option.enabled }" :aria-pressed="option.enabled" @click="setPaymentStatusEnabled(index, true)">Enable</button>
+                <button type="button" class="disable" :class="{ on: !option.enabled }" :aria-pressed="!option.enabled" @click="setPaymentStatusEnabled(index, false)">Disable</button>
+              </span>
+            </div>
+          </section>
           <section v-else-if="section === 'tiers'" class="latest-version">
             <p v-if="!latestVersion" class="empty">ยังไม่มีเวอร์ชันของกฎค่าคอมมิชชันที่ใช้อยู่ในตอนนี้</p>
             <template v-else>
