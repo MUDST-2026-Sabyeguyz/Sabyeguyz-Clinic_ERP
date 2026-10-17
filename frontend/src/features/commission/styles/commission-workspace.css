@@ -1,0 +1,152 @@
+.commission-nav {
+  display: flex;
+  gap: 8px;
+  margin: -42px 0 24px;
+  padding: 12px;
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--physio-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 30px #214e4817;
+}
+.commission-nav a {
+  padding: 10px 15px;
+  border-radius: 9px;
+  color: var(--physio-text);
+  white-space: nowrap;
+  font-weight: 700;
+}
+.commission-nav a.router-link-exact-active {
+  color: #fff;
+  background: var(--physio-blue);
+}
+.commission-page-panel {
+  margin-bottom: 28px;
+}
+.commission-page-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--physio-line);
+}
+.commission-page-panel h2,
+.commission-page-panel p {
+  margin: 2px 0;
+}
+.commission-page-panel header small,
+.muted-copy {
+  color: var(--physio-muted);
+}
+.commission-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.commission-form {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  padding: 20px 24px;
+  background: #f5f9f7;
+}
+.commission-form label {
+  color: var(--physio-text);
+  font-weight: 700;
+}
+.commission-form input,
+.commission-form select {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--physio-line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+}
+.commission-form .form-wide {
+  grid-column: span 2;
+}
+.form-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.validation-error {
+  margin: 0;
+  padding: 12px 24px;
+  color: #a84e45;
+  background: #fff0ed;
+}
+.locked {
+  color: #5f765d;
+  background: #eaf0e5;
+}
+.open-status {
+  color: #91691e;
+  background: #fff3d8;
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.metric-grid article {
+  padding: 20px;
+  border: 1px solid var(--physio-line);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 9px 24px #214e4810;
+}
+.metric-grid small,
+.metric-grid span {
+  display: block;
+  color: var(--physio-muted);
+}
+.metric-grid b {
+  display: block;
+  margin: 5px 0;
+  color: var(--physio-blue);
+  font-size: 28px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--physio-line);
+}
+.detail-grid article {
+  padding: 18px 20px;
+  background: #fff;
+}
+.detail-grid span {
+  display: block;
+  color: var(--physio-muted);
+}
+.detail-grid b {
+  color: var(--physio-blue);
+}
+@media (max-width: 900px) {
+  .commission-form,
+  .metric-grid,
+  .detail-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .commission-nav {
+    margin-top: 20px;
+  }
+}
+@media (max-width: 560px) {
+  .commission-form,
+  .metric-grid,
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .commission-form .form-wide {
+    grid-column: auto;
+  }
+}
