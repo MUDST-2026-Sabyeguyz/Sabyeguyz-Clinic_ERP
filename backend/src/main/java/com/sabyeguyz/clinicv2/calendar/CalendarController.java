@@ -24,7 +24,6 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @RestController
 @RequestMapping("/api/calendar")
-@PreAuthorize("hasRole('MANAGER')")
 public class CalendarController {
     public record BranchStatus(String branchCode, String branchName, String googleCalendarId, long waiting, long failed) {}
 
@@ -68,6 +67,7 @@ public class CalendarController {
 
     /** Sets (or, with an empty value, clears) the calendar of one branch; its appointments are then synced. */
     @PutMapping("/branches/{branchCode}")
+    @PreAuthorize("hasRole('MANAGER')")
     @Transactional
     public BranchStatus setCalendar(@PathVariable String branchCode, @RequestBody CalendarRequest request) {
         Branch branch = branches.findByBranchCode(branchCode.trim())
@@ -79,6 +79,7 @@ public class CalendarController {
     }
 
     @PostMapping("/sync")
+    @PreAuthorize("hasRole('MANAGER')")
     public CalendarSyncService.Result syncNow() {
         if (!sync.isEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "การซิงก์ Google Calendar ยังไม่ได้เปิดใช้งานหรือยังตั้งค่าไม่ครบ");

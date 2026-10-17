@@ -159,7 +159,7 @@
 .time-column,
 .schedule-column {
   display: grid;
-  grid-template-rows: 80px repeat(5, 112px);
+  grid-template-rows: 80px repeat(var(--time-count, 5), 112px);
 }
 
 .time-column > b,
@@ -225,6 +225,7 @@
 .schedule-slot[data-state='confirmed'] { border-color: #dceafb; background: #dceafb; }
 .schedule-slot[data-state='completed'] { border-color: #d7f6e0; background: #d7f6e0; }
 .schedule-slot[data-state='cancelled'] { border-color: #fbdede; background: #fbdede; }
+.schedule-slot:disabled { color: #a5b2ae; background: #f1f3f2; cursor: not-allowed; }
 
 .calendar-empty,
 .calendar-loading,
@@ -300,6 +301,6 @@
     padding-inline: 10px;
   }
   .time-column,
-  .schedule-column { grid-template-rows: 66px repeat(5, 102px); }
+  .schedule-column { grid-template-rows: 66px repeat(var(--time-count, 5), 102px); }
   .schedule-slot { height: 78px; }
 }
