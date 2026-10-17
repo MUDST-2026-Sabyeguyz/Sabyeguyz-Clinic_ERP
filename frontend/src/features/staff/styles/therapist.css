@@ -67,6 +67,11 @@ body.therapist-ui .staff-header.formula-route nav a.router-link-active {
   box-shadow: none;
 }
 
+body.therapist-ui .staff-header.formula-route nav .nav-pill {
+  visibility: hidden;
+  opacity: 0 !important;
+}
+
 body.therapist-ui .staff-header nav a {
   z-index: 1;
   padding: 10px 21px;

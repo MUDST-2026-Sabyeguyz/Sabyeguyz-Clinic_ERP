@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import {
+  ApiError,
   appointmentApi,
   branchApi,
-  calendarIntegrationApi,
+  calendarApi,
   catalogApi,
   type Appointment,
   type Branch,
+  type CalendarStatus,
   type Therapist,
 } from '@/api/client'
 
@@ -21,32 +24,66 @@ const toDateValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 const anchorDate = ref(toDateValue(new Date()))
 const selectedTherapistId = ref('ทั้งหมด')
-const selectedBranch = ref('ทั้งหมด')
+const authUser = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string; branchCode?: string } | null
+  } catch {
+    return null
+  }
+})()
+const isManager = authUser?.role === 'MANAGER'
+const homeBranchCode = authUser?.branchCode ?? ''
+const selectedBranch = ref(isManager ? 'ทั้งหมด' : homeBranchCode)
 const appointments = ref<Appointment[]>([])
+const availability = ref<Record<string, string[]>>({})
+const availabilityLoading = ref(false)
 const therapists = ref<Therapist[]>([])
 const branches = ref<Branch[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
 const calendarSyncOpen = ref(false)
-const calendarConnecting = ref(false)
+const calendarSyncLoading = ref(false)
+const calendarSyncStatus = ref<CalendarStatus | null>(null)
 const calendarSyncMessage = ref('')
 
-async function connectGoogleCalendar() {
+async function showGoogleCalendarStatus() {
   calendarSyncOpen.value = true
-  calendarConnecting.value = true
-  calendarSyncMessage.value = 'กำลังเริ่มการเชื่อมต่อ…'
+  calendarSyncLoading.value = true
+  calendarSyncStatus.value = null
+  calendarSyncMessage.value = 'กำลังตรวจสถานะ Google Calendar...'
   try {
-    const { authorizationUrl } = await calendarIntegrationApi.startGoogleConnect()
-    window.location.assign(authorizationUrl)
-  } catch {
-    calendarSyncMessage.value = 'ระบบเชื่อมต่อยังรอการเปิดใช้งานจาก backend'
+    const status = await calendarApi.status()
+    calendarSyncStatus.value = status
+    const branch = status.branches[0]
+    if (!status.enabled) {
+      calendarSyncMessage.value = 'ระบบซิงก์ยังไม่เปิดใช้งานบนเซิร์ฟเวอร์ กรุณาแจ้งผู้ดูแลระบบ'
+    } else if (!branch) {
+      calendarSyncMessage.value = 'ไม่พบสาขาที่เชื่อมกับบัญชีผู้ใช้นี้'
+    } else if (!branch.googleCalendarId) {
+      calendarSyncMessage.value = `ยังไม่ได้กำหนด Calendar ID ให้สาขา${branch.branchName} กรุณาแจ้ง Manager`
+    } else {
+      calendarSyncMessage.value = `ระบบเปิดซิงก์สำหรับสาขา${branch.branchName}แล้ว`
+    }
+  } catch (error) {
+    calendarSyncStatus.value = null
+    calendarSyncMessage.value =
+      error instanceof ApiError ? error.message : 'ตรวจสถานะ Google Calendar ไม่สำเร็จ'
   } finally {
-    calendarConnecting.value = false
+    calendarSyncLoading.value = false
   }
 }
 
-const timeOptions = ['09:00', '11:00', '13:00', '15:00', '17:00']
-const branchOptions = computed(() => branches.value.filter((branch) => branch.active))
+// only the Manager changes an appointment
+const canChangeAppointments = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+  } catch {
+    return false
+  }
+})()
+const branchOptions = computed(() =>
+  branches.value.filter((branch) => branch.active && (isManager || branch.code === homeBranchCode)),
+)
 const visibleTherapists = computed(() =>
   therapists.value
     .filter(
@@ -56,7 +93,8 @@ const visibleTherapists = computed(() =>
     )
     .filter(
       (therapist) =>
-        selectedBranch.value === 'ทั้งหมด' || therapist.branchCode === selectedBranch.value,
+        (isManager && selectedBranch.value === 'ทั้งหมด') ||
+        therapist.branchCode === (selectedBranch.value === 'ทั้งหมด' ? homeBranchCode : selectedBranch.value),
     )
     .slice(0, 5),
 )
@@ -94,6 +132,34 @@ const weekColumns = computed(() =>
 )
 
 const columns = computed(() => (mode.value === 'week' ? weekColumns.value : dayColumns.value))
+function therapistsForSlot(columnTherapist?: Therapist) {
+  return mode.value === 'week' ? visibleTherapists.value : columnTherapist ? [columnTherapist] : []
+}
+function therapistForSlot(date: string, time: string, columnTherapist?: Therapist) {
+  return therapistsForSlot(columnTherapist).find(
+    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
+  ) ?? columnTherapist
+}
+function slotInBranchWindow(date: string, time: string, columnTherapist?: Therapist) {
+  return therapistsForSlot(columnTherapist).some(
+    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
+  )
+}
+const timeOptions = computed(() => {
+  const times = new Set<string>()
+  for (const column of columns.value) {
+    const dayTherapists = mode.value === 'week' ? visibleTherapists.value : [column.therapist]
+    for (const therapist of dayTherapists) {
+      if (!therapist) continue
+      for (const time of availability.value[`${column.date}:${therapist.id}`] ?? []) times.add(time)
+    }
+  }
+  const visibleDates = new Set(columns.value.map((column) => column.date))
+  for (const item of appointments.value) {
+    if (visibleDates.has(dateInBangkok(item.startAt))) times.add(formatTime(item.startAt))
+  }
+  return [...times].sort()
+})
 
 function branchName(code: string) {
   return branches.value.find((branch) => branch.code === code)?.name || code
@@ -105,6 +171,12 @@ function formatTime(value: string) {
     minute: '2-digit',
     timeZone: 'Asia/Bangkok',
   })
+}
+
+function dateInBangkok(value: string) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Bangkok',
+  }).format(new Date(value))
 }
 
 function formatWeekday(value: string) {
@@ -135,7 +207,7 @@ const dateLabel = computed(() => {
 function appointmentFor(date: string, time: string, therapist?: Therapist) {
   return appointments.value.find(
     (item) =>
-      item.startAt.slice(0, 10) === date &&
+      dateInBangkok(item.startAt) === date &&
       formatTime(item.startAt) === time &&
       (mode.value === 'week'
         ? selectedTherapistId.value === 'ทั้งหมด' ||
@@ -162,6 +234,8 @@ function moveDate(direction: number) {
 function openSlot(date: string, time: string, therapist?: Therapist) {
   const item = appointmentFor(date, time, therapist)
   if (item) {
+    // a therapist only looks at a booked slot; only the Manager opens it to change it
+    if (!canChangeAppointments) return
     void router.push({
       name: 'staff-appointment-edit',
       params: { id: item.id },
@@ -184,19 +258,51 @@ async function load() {
   errorMessage.value = ''
   try {
     const [appointmentPage, branchList, therapistList] = await Promise.all([
-      appointmentApi.search({ page: 0, size: 100 }),
+      appointmentApi.search({ page: 0, size: 100, ...(isManager ? {} : { branchCode: homeBranchCode }) }),
       branchApi.list(),
       catalogApi.therapists(),
     ])
     appointments.value = appointmentPage.items
     branches.value = branchList
     therapists.value = therapistList
+    if (!isManager && !homeBranchCode) {
+      errorMessage.value = 'ไม่พบสาขาประจำบัญชีผู้ใช้ กรุณาติดต่อ Manager'
+      return
+    }
+    await loadAvailability()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดปฏิทินนัดหมายไม่สำเร็จ'
   } finally {
     loading.value = false
   }
 }
+
+async function loadAvailability() {
+  availabilityLoading.value = true
+  const next: Record<string, string[]> = {}
+  try {
+    const requests = columns.value.flatMap((column) => {
+      const dayTherapists = mode.value === 'week' ? visibleTherapists.value : [column.therapist]
+      return dayTherapists.flatMap((therapist) => {
+        const branchCode = therapist?.branchCode ?? (selectedBranch.value !== 'ทั้งหมด' ? selectedBranch.value : '')
+        if (!therapist || !branchCode) return []
+        const key = `${column.date}:${therapist.id}`
+        return [appointmentApi.availability({ branchCode, therapistId: therapist.id, date: column.date })
+          .then((result) => { next[key] = result.slots.map((slot) => slot.time) })]
+      })
+    })
+    await Promise.all(requests)
+    availability.value = next
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดช่วงเวลาไม่สำเร็จ'
+  } finally {
+    availabilityLoading.value = false
+  }
+}
+
+watch([anchorDate, mode, selectedTherapistId, selectedBranch], () => {
+  if (branches.value.length) void loadAvailability()
+})
 
 onMounted(() => void load())
 </script>
@@ -251,8 +357,8 @@ onMounted(() => void load())
             รายสัปดาห์
           </button>
         </div>
-        <button class="calendar-google" type="button" @click="connectGoogleCalendar">
-          เชื่อมต่อ Google Calendar
+        <button class="calendar-google" type="button" @click="showGoogleCalendarStatus">
+          สถานะ Google Calendar
         </button>
       </section>
 
@@ -269,10 +375,11 @@ onMounted(() => void load())
       </p>
       <div v-else-if="loading" class="calendar-loading">กำลังโหลดปฏิทิน...</div>
       <div v-else class="calendar-grid-scroll">
-        <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1) }">
+        <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1), '--time-count': Math.max(timeOptions.length, 1) }">
           <div class="time-column">
             <b>เวลา</b>
-            <span v-for="time in timeOptions" :key="time">{{ time }}</span>
+          <span v-for="time in timeOptions" :key="time">{{ time }}</span>
+          <span v-if="availabilityLoading" class="calendar-time-loading">…</span>
           </div>
           <div v-for="column in columns" :key="column.key" class="schedule-column">
             <header>
@@ -285,12 +392,13 @@ onMounted(() => void load())
               type="button"
               class="schedule-slot"
               :data-state="slotState(appointmentFor(column.date, time, column.therapist))"
-              @click="openSlot(column.date, time, column.therapist)"
+              :disabled="!appointmentFor(column.date, time, column.therapist) && !slotInBranchWindow(column.date, time, column.therapist)"
+              @click="openSlot(column.date, time, therapistForSlot(column.date, time, column.therapist))"
             >
               <template v-if="appointmentFor(column.date, time, column.therapist)">
                 <strong>
                   {{ time }}
-                  {{ appointmentFor(column.date, time, column.therapist)?.patient.fullName }}
+                  {{ appointmentFor(column.date, time, column.therapist)?.patient?.fullName || appointmentFor(column.date, time, column.therapist)?.contactName || 'ผู้ป่วยไม่ประจำ' }}
                 </strong>
                 <small
                   >นก.
@@ -306,6 +414,9 @@ onMounted(() => void load())
             </button>
           </div>
           <div v-if="columns.length === 0" class="calendar-empty">ไม่พบนักกายภาพตามตัวกรอง</div>
+          <div v-else-if="!availabilityLoading && timeOptions.length === 0" class="calendar-empty">
+            ไม่พบช่วงเวลารับนัดของสาขานี้
+          </div>
         </div>
       </div>
     </main>
@@ -321,10 +432,17 @@ onMounted(() => void load())
         aria-modal="true"
         aria-labelledby="calendar-sync-title"
       >
-        <h2 id="calendar-sync-title">เชื่อมต่อ Google Calendar</h2>
-        <p>{{ calendarSyncMessage }}</p>
-        <button type="button" :disabled="calendarConnecting" @click="calendarSyncOpen = false">
-          {{ calendarConnecting ? 'กำลังเชื่อมต่อ…' : 'รับทราบ' }}
+        <h2 id="calendar-sync-title">สถานะ Google Calendar</h2>
+        <GoogleCalendarPanel />
+        <p aria-live="polite">{{ calendarSyncMessage }}</p>
+        <ul v-if="calendarSyncStatus?.branches.length" class="calendar-sync-branches">
+          <li v-for="branch in calendarSyncStatus.branches" :key="branch.branchCode">
+            {{ branch.branchName }} · {{ branch.googleCalendarId ? 'ตั้งค่า Calendar ID แล้ว' : 'ยังไม่ตั้ง Calendar ID' }}
+            · รอซิงก์ {{ branch.waiting }} · ล้มเหลว {{ branch.failed }}
+          </li>
+        </ul>
+        <button type="button" :disabled="calendarSyncLoading" @click="calendarSyncOpen = false">
+          {{ calendarSyncLoading ? 'กำลังตรวจสอบ...' : 'ปิด' }}
         </button>
       </section>
     </div>
