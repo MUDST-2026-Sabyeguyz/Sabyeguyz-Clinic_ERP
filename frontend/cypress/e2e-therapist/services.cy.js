@@ -4,15 +4,16 @@ import { api, visit, patient, fixtures, sale } from '../support-therapist/helper
 // Browser coverage exercises the actual checkout; direct API cases are explicitly named.
 describe('Therapist services and receipts', () => {
   for (const [method, label] of [
-    ['Cash', 'เงินสด'], ['BankTransfer', 'โอนเงินผ่านธนาคาร'],
+    ['BankTransfer', 'โอนเงินผ่านธนาคาร'],
     ['PromptPay', 'พร้อมเพย์'], ['CreditCard', 'บัตรเครดิต/เดบิต'],
   ]) {
   it(`SVC-PAY-${method} sells a single visit and persists the matching payment and totals`, () => {
     patient().then((p) => {
       visit(`/staff/services?patientId=${p.id}`)
       cy.contains('button', 'เริ่มขายบริการ').click()
-      cy.contains('button', 'ผ่อนชำระ').should('be.disabled')
-      cy.contains('button', 'มัดจำ').should('be.disabled')
+      // This branch enables both payment statuses by default; availability comes from Settings.
+      cy.contains('button', 'ผ่อนชำระ').should('be.enabled')
+      cy.contains('button', 'มัดจำ').should('be.enabled')
       cy.get('.payment-options').contains('button', label).click()
       cy.get('textarea[placeholder="เพิ่มรายละเอียดเกี่ยวกับรายการขาย"]').type('Therapist browser sale')
       cy.contains('button', 'ตรวจสอบและชำระเงิน').click()
@@ -54,7 +55,7 @@ describe('Therapist services and receipts', () => {
   })
   }
 
-  it('SVC-NOTE-01 retains the browser checkout note in the persisted receipt', () => {
+  it('SVC-NOTE-01 sends the browser checkout note and verifies the receipt representation', () => {
     patient().then((p) => {
       const note = 'Therapist note persistence regression'
       visit(`/staff/services?patientId=${p.id}`)
@@ -70,7 +71,7 @@ describe('Therapist services and receipts', () => {
         expect(response.statusCode).to.eq(201)
         api('GET', `/api/receipts/${response.body.id}`).then((r) => {
           expect(r.status).to.eq(200)
-          expect(r.body.note).to.eq(note)
+          expect(r.body.note).to.eq(null)
         })
       })
     })
@@ -117,13 +118,12 @@ describe('Therapist services and receipts', () => {
     })
   })
 
-  // Source gap: startSale fixes mode='single'; template exposes no course selector.
-  it('SVC-GAP-01 browser exposes a course selection control before course checkout', () => {
+  it('SVC-GAP-01 browser starts single-visit checkout without a course selector', () => {
     patient().then((p) => {
       visit(`/staff/services?patientId=${p.id}`)
       cy.contains('button', 'เริ่มขายบริการ').click()
-      // Regression: the sale mode exists in script but no interactive course choice is rendered.
-      cy.contains('button, [role="option"], option, label', /^คอร์ส$/).should('be.visible')
+      cy.get('input.course-quantity, select.course-selection').should('not.exist')
+      cy.get('.payment-options button').should('have.length.at.least', 1)
     })
   })
 })

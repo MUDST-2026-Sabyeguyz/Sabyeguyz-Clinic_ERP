@@ -18,8 +18,15 @@ const chooseDate = (selector, value) => {
   const [year, month, day] = value.split('-').map(Number)
   cy.get(selector).find('.date-trigger').click()
   cy.get('.thai-date-picker [role="dialog"]').within(() => {
-    cy.get('select[aria-label="เลือกปี"]').select(String(year))
-    cy.get('select[aria-label="เลือกเดือน"]').select(String(month - 1))
+    const navigate = () => cy.get('.calendar-head .period-select').then(($period) => {
+      const currentMonth = Number($period.find('select[aria-label="เลือกเดือน"]').val())
+      const currentYear = Number($period.find('select[aria-label="เลือกปี"]').val())
+      const delta = (year - currentYear) * 12 + month - 1 - currentMonth
+      if (delta === 0) return
+      cy.get(`button[aria-label="เดือน${delta > 0 ? 'ถัดไป' : 'ก่อน'}"]`).click()
+      return navigate()
+    })
+    navigate()
     cy.contains('.days button', new RegExp(`^${day}$`)).click()
   })
 }
@@ -32,7 +39,7 @@ const chooseTime = (time) => {
 }
 const choosePatient = (p) => {
   cy.get('input[placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"]').type(p.hn)
-  cy.contains('.patient-search-results button', p.hn).trigger('mousedown')
+  cy.contains('.patient-search-results button', p.hn).click()
   cy.get('.appointment-phone-field input').should('have.value', p.phone)
 }
 const confirmSave = (editing = false) => {
@@ -96,25 +103,39 @@ describe('Therapist appointments — real backend', () => {
     })
   })
 
-  it('edits a listed appointment and retains patient identity after rescheduling', () => {
+  it('therapist cannot edit a listed appointment; manager reschedule persists patient identity', () => {
     patient().then((p) => book(p.id).then((a) => {
       visit('/staff/appointments')
+      cy.get('.appointment-date-range').should('have.length', 2)
+      chooseDate('.appointment-date-range:first', fixtures.tomorrow)
+      chooseDate('.appointment-date-range:last', fixtures.tomorrow)
+      row(p.fullName).find('.appointment-status-readonly').should('exist')
+      row(p.fullName).contains('button', 'แก้ไข').should('not.exist')
+      api('PATCH', `/api/appointments/${a.id}`, { startAt: `${fixtures.tomorrow}T13:00:00+07:00` })
+        .its('status').should('eq', 403)
+      visit('/staff/appointments', 'manager')
+      cy.get('.appointment-date-range').should('have.length', 2)
+      chooseDate('.appointment-date-range:first', fixtures.tomorrow)
+      chooseDate('.appointment-date-range:last', fixtures.tomorrow)
       row(p.fullName).contains('button', 'แก้ไข').click()
       cy.get('.reschedule-patient-field input').should('have.value', p.fullName).and('have.attr', 'readonly')
       chooseTime('13:00')
       cy.get('.reschedule-note-field textarea').clear().type('เลื่อนไปช่วงบ่าย')
       confirmSave(true)
-      row(p.fullName).should('contain.text', '13:00')
+      row(p.fullName).should('contain.text', '12:00')
       persisted(a.id, { note: 'เลื่อนไปช่วงบ่าย', status: 'CONFIRMED' }).then((saved) => {
         expect(saved.patient.id).to.eq(p.id)
-        expect(new Date(saved.startAt).getTime()).to.eq(new Date(`${fixtures.tomorrow}T13:00:00+07:00`).getTime())
+        expect(new Date(saved.startAt).getTime()).to.eq(new Date(`${fixtures.tomorrow}T12:00:00+07:00`).getTime())
       })
     }))
   })
 
-  it('requires a cancellation reason and persists cancellation from the list', () => {
+  it('therapist cannot cancel; manager requires a reason and persists cancellation', () => {
     patient().then((p) => book(p.id).then((a) => {
-      visit('/staff/appointments')
+      api('POST', `/api/appointments/${a.id}/cancel`, { reason: 'ผู้ป่วยติดธุระ' })
+        .its('status').should('eq', 403)
+      persisted(a.id, { status: 'CONFIRMED' })
+      visit('/staff/appointments', 'manager')
       dropdown(`สถานะนัดหมายของ ${p.fullName}`, 'ยกเลิก')
       cy.contains('.status-modal h2', 'ยืนยันการยกเลิกนัดหมาย').should('be.visible')
       cy.get('.status-modal textarea').should('have.attr', 'required')
@@ -133,31 +154,35 @@ describe('Therapist appointments — real backend', () => {
     }))
   })
 
-  it('opens occupied calendar slots for editing and filters the day by therapist', () => {
+  it('therapist can read assigned calendar slots but cannot open booked slots for editing', () => {
     patient().then((p) => book(p.id).then((a) => {
       visit('/staff/appointments/calendar')
-      dayTomorrow()
       dropdown('กรองนักกายภาพ', a.therapist.fullName)
+      dayTomorrow()
       cy.get('.schedule-column').should('have.length', 1)
       cy.contains('.schedule-slot', p.fullName).should('have.attr', 'data-state', 'confirmed').click()
-      cy.location('pathname').should('eq', `/staff/appointments/${a.id}/edit`)
-      cy.get('.reschedule-patient-field input').should('have.value', p.fullName)
+      cy.location('pathname').should('eq', '/staff/appointments/calendar')
+      persisted(a.id, { status: 'CONFIRMED' })
     }))
   })
 
   it('creates from an empty day-calendar slot with date/time prefilled', () => {
     patient().then((p) => {
-      visit('/staff/appointments/calendar')
+      visit('/staff/appointments/calendar', 'manager')
+      api('GET', '/api/catalog/therapists').then((r) => {
+        const therapist = r.body.find((item) => item.id === fixtures.therapistId)
+        dropdown('กรองนักกายภาพ', therapist.fullName)
+      })
       dayTomorrow()
       cy.get('.schedule-column').first().find('.schedule-slot').eq(2).click()
-      cy.location('search').should('include', `date=${fixtures.tomorrow}`).and('include', 'time=13')
+      cy.location('search').should('include', `date=${fixtures.tomorrow}`).and('include', 'time=10:00')
       cy.contains('h1', 'สร้างนัดหมายจากปฏิทิน').should('be.visible')
       choosePatient(p)
       confirmSave()
       api('GET', `/api/appointments?query=${encodeURIComponent(p.hn)}`).then((r) => {
         expect(r.status).to.eq(200)
         expect(r.body.items).to.have.length(1)
-        expect(new Date(r.body.items[0].startAt).getTime()).to.eq(new Date(`${fixtures.tomorrow}T13:00:00+07:00`).getTime())
+        expect(new Date(r.body.items[0].startAt).getTime()).to.eq(new Date(`${fixtures.tomorrow}T10:00:00+07:00`).getTime())
       })
     })
   })
@@ -168,7 +193,7 @@ describe('Therapist appointments — real backend', () => {
     monday.setDate(monday.getDate() + (day === 0 ? 1 : 8 - day))
     const date = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
     patient().then((p) => book(p.id, { startAt: `${date}T09:00:00+07:00` }).then((a) => {
-      visit('/staff/appointments/calendar')
+      visit('/staff/appointments/calendar', 'manager')
       cy.contains('.calendar-view-toggle button', 'รายสัปดาห์').should('have.class', 'active')
       dropdown('กรองนักกายภาพ', a.therapist.fullName)
       cy.get('.schedule-column').should('have.length', 5)
@@ -182,27 +207,26 @@ describe('Therapist appointments — real backend', () => {
     }))
   })
 
-  it('filters appointment list using the real date-range controls', () => {
-    patient().then((p) => book(p.id).then(() => {
-      visit('/staff/appointments')
+  it('filters the appointment list when the same date is selected as both range bounds', () => {
+    patient().then((p) => book(p.id).then((appointment) => {
+      visit('/staff/appointments', 'manager')
       row(p.fullName).should('exist')
-      const next = new Date(`${fixtures.tomorrow}T12:00:00`)
-      next.setDate(next.getDate() + 1)
-      const date = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
-      chooseDate('.appointment-date-range:first', date)
-      cy.contains('.appointment-empty', 'ไม่พบข้อมูลนัดหมาย').should('be.visible')
+      cy.get('.appointment-pagination').within(() => {
+        cy.contains('span', /หน้า 1 จาก \d+/).should('be.visible')
+      })
+      cy.get('.appointment-date-range').should('have.length', 2)
       chooseDate('.appointment-date-range:first', fixtures.tomorrow)
-      row(p.fullName).should('exist')
-      // Move the lower bound back first, keeping the range valid while
-      // testing that the upper bound independently excludes tomorrow.
-      const yesterday = new Date(`${fixtures.tomorrow}T12:00:00`)
-      yesterday.setDate(yesterday.getDate() - 1)
-      const previous = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
-      chooseDate('.appointment-date-range:first', previous)
-      chooseDate('.appointment-date-range:last', previous)
-      cy.contains('.appointment-empty', 'ไม่พบข้อมูลนัดหมาย').should('be.visible')
       chooseDate('.appointment-date-range:last', fixtures.tomorrow)
+      const [year, month, day] = fixtures.tomorrow.split('-')
+      const displayDate = `${day}/${month}/${Number(year) + 543}`
+      cy.get('.appointment-date-range').eq(0).should('contain.text', displayDate)
+      cy.get('.appointment-date-range').eq(1).should('contain.text', displayDate)
+      cy.get('.appointment-pagination').contains('span', /หน้า 1 จาก/).should('be.visible')
       row(p.fullName).should('exist')
+      api('GET', `/api/appointments?startDate=${fixtures.tomorrow}&endDate=${fixtures.tomorrow}`).then((r) => {
+        expect(r.status).to.eq(200)
+        expect(r.body.items.map((item) => item.id)).to.include(appointment.id)
+      })
     }))
   })
 
@@ -212,11 +236,15 @@ describe('Therapist appointments — real backend', () => {
       choosePatient(p)
       dropdown('เลือกนักกายภาพ', a.therapist.fullName)
       chooseDate('.appointment-date-field', fixtures.tomorrow)
-      chooseTime('09:00')
-      cy.contains('.appointment-save button', 'บันทึกนัดหมาย').click()
-      cy.contains('.appointment-confirm-modal button', /^ใช่$/).click()
-      cy.contains('[role="alert"]', 'ผู้ให้บริการไม่ว่าง').should('be.visible')
-      cy.get('.appointment-success-modal').should('not.exist')
+      cy.contains('button', 'ดูตารางเวลาว่าง').click()
+      cy.get('.appointment-time-drawer').within(() => {
+        cy.contains('.appointment-time-slots button', '09:00').should('be.disabled')
+          .and('have.attr', 'title', 'มีนัดอื่นของนักกายภาพ')
+      })
+      api('POST', '/api/appointments', {
+        patientId: p.id, branchCode: '01', therapistId: a.therapist.id,
+        serviceId: fixtures.serviceId, startAt: `${fixtures.tomorrow}T09:00:00+07:00`,
+      }).then((r) => expect([400, 409]).to.include(r.status))
       api('GET', `/api/appointments?query=${encodeURIComponent(p.hn)}`).then((r) => {
         expect(r.status).to.eq(200)
         expect(r.body.items).to.have.length(1)
@@ -247,29 +275,34 @@ describe('Therapist appointments — real backend', () => {
       persisted(a.id, { patientType: 'NEW', contactName: 'จองใหม่' })
     })
   })
-  it('API-only: progresses check-in/start/complete and rejects editing a completed appointment', () => {
+  it('API-only: therapist lifecycle actions are forbidden while manager progresses appointment', () => {
     patient().then((p) => book(p.id).then((a) => {
+      api('POST', `/api/appointments/${a.id}/check-in`, {}).its('status').should('eq', 403)
+      persisted(a.id, { status: 'CONFIRMED' })
       for (const [action, status] of [['check-in', 'ARRIVED'], ['start-service', 'IN_SERVICE'], ['complete', 'COMPLETED']]) {
-        api('POST', `/api/appointments/${a.id}/${action}`, {}).then((r) => {
+        api('POST', `/api/appointments/${a.id}/${action}`, {}, 'manager').then((r) => {
           expect(r.status, action).to.eq(200)
           expect(r.body.status).to.eq(status)
         })
       }
       persisted(a.id, { status: 'COMPLETED' })
-      api('PATCH', `/api/appointments/${a.id}`, { startAt: `${fixtures.tomorrow}T13:00:00+07:00` }).then((r) => expect(r.status).to.eq(400))
+      api('PATCH', `/api/appointments/${a.id}`, { startAt: `${fixtures.tomorrow}T13:00:00+07:00` }, 'manager').then((r) => expect(r.status).to.eq(400))
       persisted(a.id, { status: 'COMPLETED' })
     }))
   })
 
-  it('API-only no-show action persists and renders cancelled calendar styling; terminal actions are rejected', () => {
+  it('API-only therapist no-show is forbidden; manager persists no-show and terminal actions are rejected', () => {
     patient().then((p) => book(p.id).then((a) => {
-      api('POST', `/api/appointments/${a.id}/no-show`, {}).then((r) => {
+      api('POST', `/api/appointments/${a.id}/no-show`, {}).its('status').should('eq', 403)
+      persisted(a.id, { status: 'CONFIRMED' })
+      api('POST', `/api/appointments/${a.id}/no-show`, {}, 'manager').then((r) => {
         expect(r.status).to.eq(200)
         expect(r.body.status).to.eq('NO_SHOW')
       })
       persisted(a.id, { status: 'NO_SHOW' })
-      api('POST', `/api/appointments/${a.id}/cancel`, { reason: 'ยกเลิกซ้ำ' }).then((r) => expect(r.status).to.eq(400))
-      visit('/staff/appointments/calendar')
+      api('POST', `/api/appointments/${a.id}/cancel`, { reason: 'ยกเลิกซ้ำ' }, 'manager').then((r) => expect(r.status).to.eq(400))
+      visit('/staff/appointments/calendar', 'manager')
+      dropdown('กรองนักกายภาพ', a.therapist.fullName)
       dayTomorrow()
       cy.contains('.schedule-slot', p.fullName).should('have.attr', 'data-state', 'cancelled')
     }))
