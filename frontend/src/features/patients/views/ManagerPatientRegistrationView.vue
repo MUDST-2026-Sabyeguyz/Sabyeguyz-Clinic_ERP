@@ -8,6 +8,7 @@ import { registerPatient } from '@/api/patients'
 import { branchApi, masterDataApi, patientApi, type PatientProfile } from '@/api/client'
 import { type PatientRegistrationForm } from '../data/managerPatientRegistration'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
+import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 
 const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 
@@ -111,7 +112,7 @@ const thaiNameIsValid = (value: string) => /^[\u0E00-\u0E7F\s]+$/.test(value.tri
 const personNameIsValid = (value: string) =>
   isForeign.value ? /^[\p{L}\s.'-]+$/u.test(value.trim()) : thaiNameIsValid(value)
 const phoneIsValid = computed(() =>
-  isForeign.value && !form.phone ? true : /^\d{10}$/.test(form.phone),
+  isForeign.value ? isOptionalPhoneValid(form.phone) : /^[0-9]{10}$/.test(form.phone),
 )
 const birthDateIsValid = computed(() =>
   isForeign.value && !form.birthDate
@@ -489,10 +490,12 @@ async function submit() {
                 >เบอร์โทร <em v-if="!isForeign">*</em
                 ><input
                   v-model.trim="form.phone"
+                  type="tel"
                   inputmode="numeric"
+                  pattern="[0-9]*"
                   maxlength="10"
-                  placeholder="xxx-xxx-xxxx"
-                  @input="form.phone = digitsOnly(form.phone)"
+                  placeholder="กรอกตัวเลขไม่เกิน 10 หลัก"
+                  @input="form.phone = limitPhoneDigits(form.phone)"
                 /><small v-if="submitted && !isForeign && !form.phone" class="required-error"
                   >กรุณากรอกข้อมูล</small
                 ><small v-else-if="submitted && !phoneIsValid" class="required-error"

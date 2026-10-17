@@ -244,21 +244,39 @@ export type PaymentMethod = {
   name: string
   active: boolean
 }
+export type PaymentStatusOption = {
+  code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID'
+  label: string
+  enabled: boolean
+}
 export type AppointmentStatus =
-  'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
+  'UNCONFIRMED' | 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
 export type Appointment = {
   id: number
   branchCode: string
-  patient: { id: number; hn: string; fullName: string }
+  patient: { id: number | null; hn: string | null; fullName: string | null } | null
   therapist: { id: number; fullName: string }
-  service: { id: number; name: string; durationMinutes: number }
+  service: { id: number | null; name: string | null; durationMinutes: number }
   startAt: string
   endAt: string
   status: AppointmentStatus
   note?: string
   cancelReason?: string
+  patientType?: 'CURRENT' | 'NEW'
+  contactName?: string | null
+  contactPhone?: string | null
 }
 export type AppointmentPage = Page<Appointment>
+export type AppointmentAvailability = {
+  date: string
+  openTime: string
+  closeTime: string
+  windowConfigured: boolean
+  durationMinutes: number | null
+  stepMinutes: number
+  slots: Array<{ time: string; available: boolean; reason: string | null }>
+  googleCalendar: 'NOT_CONNECTED' | 'CHECKED' | 'UNAVAILABLE'
+}
 export type CoursePurchase = {
   id: number
   patient: Patient
@@ -497,8 +515,7 @@ export const serviceManagementApi = {
 }
 
 export const appointmentApi = {
-  search: (
-    params: {
+  search: (params: {
       branchCode?: string
       date?: string
       startDate?: string
@@ -508,8 +525,7 @@ export const appointmentApi = {
       sortOrder?: 'newest' | 'oldest'
       page?: number
       size?: number
-    } = {},
-  ) => {
+  } = {}) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
       if (value !== undefined && value !== '') query.set(key, String(value))
@@ -517,6 +533,22 @@ export const appointmentApi = {
     return api.get<AppointmentPage>(`/api/appointments?${query}`)
   },
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
+  availability: (params: {
+    branchCode: string
+    therapistId: number
+    date: string
+    serviceId?: number
+    excludeAppointmentId?: number
+  }) => {
+    const query = new URLSearchParams({
+      branchCode: params.branchCode,
+      therapistId: String(params.therapistId),
+      date: params.date,
+      ...(params.serviceId ? { serviceId: String(params.serviceId) } : {}),
+      ...(params.excludeAppointmentId ? { excludeAppointmentId: String(params.excludeAppointmentId) } : {}),
+    })
+    return api.get<AppointmentAvailability>(`/api/appointments/availability?${query}`)
+  },
   create: (body: {
     branchCode: string
     patientId?: number
@@ -529,6 +561,7 @@ export const appointmentApi = {
     contactPhone?: string
     requestedServiceType?: 'SingleVisit' | 'Course'
   }) => api.post<Appointment>('/api/appointments', body),
+  confirm: (id: number) => api.post<Appointment>(`/api/appointments/${id}/confirm`, {}),
   checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}),
   startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}),
   noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}),
@@ -635,6 +668,12 @@ export const paymentMethodApi = {
     api.put<PaymentMethod>(`/api/payment-methods/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/payment-methods/${id}`),
   activate: (id: number) => api.patch<PaymentMethod>(`/api/payment-methods/${id}/activate`, {}),
+}
+
+export const paymentStatusApi = {
+  list: () => api.get<PaymentStatusOption[]>('/api/payment-statuses'),
+  setEnabled: (code: PaymentStatusOption['code'], enabled: boolean) =>
+    api.patch<PaymentStatusOption>(`/api/payment-statuses/${code}`, { enabled }),
 }
 
 export const staffApi = {
@@ -1023,12 +1062,14 @@ export type AuditFilter = {
   to?: string
 }
 export const auditApi = {
-  list: (page = 0, size = 50) => api.get(`/api/audit-logs?page=${page}&size=${size}`),
-}
-
-export const calendarIntegrationApi = {
-  startGoogleConnect: () =>
-    api.post<{ authorizationUrl: string }>('/api/calendar/google/connect', {}),
+  list: (page = 0, size = 50, filter: AuditFilter = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) })
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return api.get<AuditPage>(`/api/audit-logs?${params}`)
+  },
+  tables: () => api.get<string[]>('/api/audit-logs/tables'),
 }
 
 export type CalendarBranchStatus = {
@@ -1053,7 +1094,6 @@ export type CalendarStatus = {
   lastResult: CalendarSyncResult | null
   branches: CalendarBranchStatus[]
 }
-
 export const calendarApi = {
   status: () => api.get<CalendarStatus>('/api/calendar/status'),
   setBranchCalendar: (branchCode: string, googleCalendarId: string) =>

@@ -12,6 +12,7 @@ import {
   courseApi,
   patientApi,
   type Appointment,
+  type AppointmentAvailability,
   type AppointmentStatus,
   type Branch,
   type CoursePurchase,
@@ -20,6 +21,7 @@ import {
   type Therapist,
 } from '@/api/client'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
+import { isContactPhoneValid, limitPhoneDigits } from '@/utils/phone'
 
 const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   role?: string
@@ -39,6 +41,10 @@ const serviceMode = ref<'single' | 'course'>('course')
 const patientCourses = ref<CoursePurchase[]>([])
 const selectedCourseId = ref(0)
 const timeDrawerOpen = ref(false)
+const availabilitySlots = ref<AppointmentAvailability['slots']>([])
+const availabilityLoading = ref(false)
+const availabilityError = ref('')
+let availabilityRequest = 0
 const scheduleView = ref<'list' | 'day' | 'week'>('list')
 const listServiceMode = ref<'single' | 'course'>('single')
 const calendarSyncOpen = ref(false)
@@ -50,6 +56,7 @@ type AppointmentUiStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
 const selectedTherapistId = ref('ทั้งหมด')
 const sortOrder = ref<'newest' | 'oldest'>('newest')
 const appointments = ref<Appointment[]>([])
+let appointmentLoadRequest = 0
 const page = ref(0)
 const totalPages = ref(0)
 const branches = ref<Branch[]>([])
@@ -65,12 +72,14 @@ const newPatientForm = ref({
 })
 const showPatientResults = ref(false)
 const editingId = ref<number | null>(null)
+const originalEditingAppointment = ref<Appointment | null>(null)
 const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
 const errorMessage = ref('')
 const showRequiredValidation = ref(false)
 const appointmentSuccessMessage = ref('')
 const savingAppointment = ref(false)
+const checkingAvailability = ref(false)
 const pendingSaveConfirmation = ref(false)
 const pendingCancellation = ref<{ item: Appointment } | null>(null)
 const cancellationReason = ref('')
@@ -96,7 +105,8 @@ const isCalendarCreate = computed(
   () => viewMode.value === 'create' && createSource.value === 'calendar',
 )
 const editingAppointment = computed(() =>
-  appointments.value.find((appointment) => appointment.id === editingId.value),
+  appointments.value.find((appointment) => appointment.id === editingId.value) ??
+  (originalEditingAppointment.value?.id === editingId.value ? originalEditingAppointment.value : undefined),
 )
 const originalAppointmentSummary = computed(() => {
   const appointment = editingAppointment.value
@@ -164,10 +174,10 @@ const drawerServiceLabel = computed(() => {
     : `${label} ${selectedService.value?.durationMinutes || 60} นาที`
 })
 const morningTimeOptions = computed(() =>
-  timeOptions.filter((time) => Number(time.slice(0, 2)) < 12),
+  availabilitySlots.value.filter((slot) => Number(slot.time.slice(0, 2)) < 12),
 )
 const afternoonTimeOptions = computed(() =>
-  timeOptions.filter((time) => Number(time.slice(0, 2)) >= 12),
+  availabilitySlots.value.filter((slot) => Number(slot.time.slice(0, 2)) >= 12),
 )
 const filteredAppointments = computed(() => {
   const direction = sortOrder.value === 'newest' ? -1 : 1
@@ -176,13 +186,12 @@ const filteredAppointments = computed(() => {
       (item) =>
         (listServiceMode.value === 'course'
           ? isCourseAppointment(item)
-          : !isCourseAppointment(item)) &&
-        (!startDate.value || item.startAt.slice(0, 10) >= startDate.value) &&
-        (!endDate.value || item.startAt.slice(0, 10) <= endDate.value),
+          : !isCourseAppointment(item)),
     )
     .sort(
       (left, right) =>
-        direction * (new Date(left.startAt).getTime() - new Date(right.startAt).getTime()),
+        direction *
+        (new Date(left.startAt).getTime() - new Date(right.startAt).getTime() || left.id - right.id),
     )
 })
 const isCourseAppointment = (item: Appointment) => {
@@ -195,11 +204,11 @@ const isCourseAppointment = (item: Appointment) => {
     courseAppointment.courseId ||
     courseAppointment.coursePurchaseId ||
     courseAppointment.course?.id ||
-    /คอร์ส|course/i.test(item.service.name),
+    /คอร์ส|course/i.test(item.service.name ?? ''),
   )
 }
 const patientPhone = (item: Appointment) =>
-  patients.value.find((patient) => patient.id === item.patient.id)?.phone || '-'
+  patients.value.find((patient) => patient.id === item.patient?.id)?.phone || item.contactPhone || '-'
 const appointmentRoom = (item: Appointment) => {
   const appointmentWithRoom = item as Appointment & {
     roomName?: string
@@ -222,7 +231,7 @@ const appointmentStatusOptions: [AppointmentUiStatus, string][] = [
   ['CANCELLED', 'ยกเลิก'],
 ]
 function uiStatusFor(status: AppointmentStatus): AppointmentUiStatus {
-  if (status === 'RESCHEDULED') return 'PENDING'
+  if (status === 'UNCONFIRMED' || status === 'RESCHEDULED') return 'PENDING'
   if (status === 'CANCELLED' || status === 'NO_SHOW') return 'CANCELLED'
   return 'CONFIRMED'
 }
@@ -262,6 +271,14 @@ const formatTime = (value: string) =>
     minute: '2-digit',
     timeZone: 'Asia/Bangkok',
   })
+const dateInBangkok = (value: string) =>
+  new Intl.DateTimeFormat('sv-SE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Bangkok',
+  }).format(new Date(value))
+const normalizeHn = (value: string) => value.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '').toLowerCase()
 const formatTimeRange = (time: string) => {
   if (!time) return 'ยังไม่ได้เลือกเวลา'
   const [hour = 0, minute = 0] = time.split(':').map(Number)
@@ -285,7 +302,7 @@ const calendarAppointment = (therapistId: number, time: string) =>
   appointments.value.find(
     (item) =>
       item.therapist.id === therapistId &&
-      item.startAt.slice(0, 10) === calendarDate.value &&
+      dateInBangkok(item.startAt) === calendarDate.value &&
       formatTime(item.startAt) === time &&
       (selectedBranch.value === 'ทั้งหมด' || item.branchCode === selectedBranch.value),
   )
@@ -297,7 +314,8 @@ const calendarSlotState = (item?: Appointment) => {
   return 'pending'
 }
 const calendarPatientName = (therapistId: number, time: string) =>
-  calendarAppointment(therapistId, time)?.patient.fullName || ''
+  calendarAppointment(therapistId, time)?.patient?.fullName ||
+  calendarAppointment(therapistId, time)?.contactName || ''
 const calendarTherapistName = (therapistId: number, time: string) =>
   calendarAppointment(therapistId, time)?.therapist.fullName || ''
 function moveCalendarDate(days: number) {
@@ -307,6 +325,7 @@ function moveCalendarDate(days: number) {
 }
 const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
 async function load() {
+  const requestId = ++appointmentLoadRequest
   try {
     const [a, b, p, s, t] = await Promise.all([
       appointmentApi.search({
@@ -322,6 +341,7 @@ async function load() {
       catalogApi.services(),
       catalogApi.therapists(),
     ])
+    if (requestId !== appointmentLoadRequest) return
     appointments.value = a.items
     totalPages.value = a.totalPages
     branches.value = b
@@ -333,6 +353,7 @@ async function load() {
       : t
     if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
   } catch (error) {
+    if (requestId !== appointmentLoadRequest) return
     appointments.value = []
     totalPages.value = 0
     branches.value = []
@@ -371,6 +392,10 @@ watch([startDate, endDate], () => {
   page.value = 0
   void load()
 })
+watch(listServiceMode, () => {
+  page.value = 0
+  void load()
+})
 function applyManagerBranch() {
   if (!isManager) return
   selectedBranch.value = selectedManagerBranch()?.code ?? 'ทั้งหมด'
@@ -385,6 +410,7 @@ async function changePage(nextPage: number) {
 }
 function openCreate(source: 'standard' | 'calendar' = 'standard') {
   editingId.value = null
+  originalEditingAppointment.value = null
   createSource.value = source
   appointmentPatientType.value = 'CURRENT'
   serviceMode.value = 'single'
@@ -440,15 +466,16 @@ async function loadPatientCourses(patientId: number) {
 }
 function openEdit(item: Appointment) {
   editingId.value = item.id
+  originalEditingAppointment.value = item
   createSource.value = 'standard'
-  appointmentPatientType.value = 'CURRENT'
+  appointmentPatientType.value = item.patientType === 'NEW' || !item.patient ? 'NEW' : 'CURRENT'
   showRequiredValidation.value = false
-  patientQuery.value = item.patient.fullName
+  patientQuery.value = item.patient?.fullName ?? item.contactName ?? ''
   showPatientResults.value = false
   form.value = {
-    patientId: item.patient.id,
+    patientId: item.patient?.id ?? 0,
     therapistId: item.therapist.id,
-    serviceId: item.service.id,
+    serviceId: item.service.id ?? 0,
     branchCode: item.branchCode,
     date: item.startAt.slice(0, 10),
     time: new Date(item.startAt).toLocaleTimeString('en-GB', {
@@ -514,18 +541,54 @@ function selectAppointmentTime(time: string) {
   form.value.time = time
   changeSchedule()
 }
+async function loadTimeAvailability() {
+  const requestId = ++availabilityRequest
+  availabilitySlots.value = []
+  availabilityError.value = ''
+  if (!form.value.branchCode || !form.value.therapistId || !form.value.date) {
+    availabilityError.value = 'เลือกสาขา นักกายภาพ และวันที่ก่อน'
+    return
+  }
+  availabilityLoading.value = true
+  try {
+    const result = await appointmentApi.availability({
+      branchCode: form.value.branchCode,
+      therapistId: form.value.therapistId,
+      date: form.value.date,
+      serviceId: form.value.serviceId || undefined,
+      excludeAppointmentId: editingId.value ?? undefined,
+    })
+    if (requestId === availabilityRequest) availabilitySlots.value = result.slots
+  } catch (error) {
+    if (requestId === availabilityRequest) {
+      availabilityError.value = error instanceof Error ? error.message : 'โหลดเวลาว่างไม่สำเร็จ'
+    }
+  } finally {
+    if (requestId === availabilityRequest) availabilityLoading.value = false
+  }
+}
+function openTimeDrawer() {
+  timeDrawerOpen.value = true
+  void loadTimeAvailability()
+}
 function confirmAppointmentTime() {
   timeDrawerOpen.value = false
 }
-function requestSaveConfirmation() {
+watch(
+  [() => form.value.date, () => form.value.therapistId, () => form.value.serviceId, () => form.value.branchCode],
+  () => {
+    if (timeDrawerOpen.value) void loadTimeAvailability()
+  },
+)
+async function requestSaveConfirmation() {
   showRequiredValidation.value = true
   const newPatientName = [newPatientForm.value.firstName, newPatientForm.value.lastName]
     .filter(Boolean)
     .join(' ')
     .trim() || newPatientForm.value.nickname.trim()
   if (
-    appointmentPatientType.value === 'NEW' &&
-    (!newPatientName || !newPatientForm.value.phone)
+    appointmentPatientType.value === 'NEW' && !editingId.value &&
+    (!newPatientName || !isContactPhoneValid(newPatientForm.value.phone))
   ) {
     errorMessage.value = 'กรุณากรอกชื่อหรือชื่อเล่น และเบอร์โทรศัพท์ของผู้ป่วยใหม่'
     return
@@ -547,7 +610,41 @@ function requestSaveConfirmation() {
     errorMessage.value = 'ยังไม่รองรับการผูกนัดหมายกับสิทธิ์คอร์ส กรุณาใช้บริการรายครั้ง'
     return
   }
-  if (!savingAppointment.value) pendingSaveConfirmation.value = true
+  if (savingAppointment.value || checkingAvailability.value) return
+  const original = originalEditingAppointment.value
+  const scheduleChanged =
+    !original ||
+    form.value.date !== original.startAt.slice(0, 10) ||
+    form.value.time !== formatTime(original.startAt) ||
+    form.value.therapistId !== original.therapist.id ||
+    form.value.serviceId !== (original.service.id ?? 0) ||
+    form.value.branchCode !== original.branchCode
+  if (!scheduleChanged) {
+    pendingSaveConfirmation.value = true
+    return
+  }
+  checkingAvailability.value = true
+  try {
+    const availability = await appointmentApi.availability({
+      branchCode: form.value.branchCode,
+      therapistId: form.value.therapistId,
+      date: form.value.date,
+      serviceId: form.value.serviceId || undefined,
+      excludeAppointmentId: editingId.value ?? undefined,
+    })
+    const slot = availability.slots.find((item) => item.time === form.value.time)
+    if (!slot?.available) {
+      errorMessage.value = slot?.reason
+        ? `เลือกเวลานี้ไม่ได้: ${slot.reason}`
+        : 'เวลานี้ไม่อยู่ในช่วงเปิดรับนัด กรุณาเลือกเวลาใหม่'
+      return
+    }
+    pendingSaveConfirmation.value = true
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'ตรวจสอบเวลานัดไม่สำเร็จ'
+  } finally {
+    checkingAvailability.value = false
+  }
 }
 function confirmSave() {
   pendingSaveConfirmation.value = false
@@ -557,13 +654,15 @@ async function save() {
   errorMessage.value = ''
   savingAppointment.value = true
   try {
-    const isNewPatient = appointmentPatientType.value === 'NEW' && !editingId.value
+    const isNewPatient = appointmentPatientType.value === 'NEW'
+    const isNewBooking = isNewPatient && !editingId.value
     const normalized = patientQuery.value.trim().toLowerCase()
+    const normalizedHn = normalizeHn(patientQuery.value)
     const patient = isNewPatient
       ? undefined
       : patients.value.find(
           (item) =>
-            item.hn.toLowerCase() === normalized ||
+            normalizeHn(item.hn) === normalizedHn ||
             item.fullName.toLowerCase() === normalized ||
             String(item.id) === normalized ||
             `${item.fullName} hn ${item.hn}`.toLowerCase() === normalized,
@@ -576,7 +675,7 @@ async function save() {
       .filter(Boolean)
       .join(' ')
       .trim() || newPatientForm.value.nickname.trim()
-    if (isNewPatient && (!contactName || !newPatientForm.value.phone))
+    if (isNewBooking && (!contactName || !isContactPhoneValid(newPatientForm.value.phone)))
       throw new Error('กรุณากรอกชื่อหรือชื่อเล่น และเบอร์โทรศัพท์ของผู้ป่วยใหม่')
     if (!form.value.therapistId) throw new Error('กรุณาเลือกนักกายภาพ')
     if (!form.value.date || !form.value.time) throw new Error('กรุณาเลือกวันที่และเวลา')
@@ -599,7 +698,7 @@ async function save() {
         serviceId: form.value.serviceId || undefined,
         startAt: toStartAt(),
         note: form.value.note,
-        ...(isNewPatient
+        ...(isNewBooking
           ? {
               patientType: 'NEW' as const,
               contactName,
@@ -672,13 +771,24 @@ function confirmCancellation() {
 
 function requestStatusChange(item: Appointment, nextStatus: string) {
   if (nextStatus === uiStatusFor(item.status)) return
+  if (nextStatus === 'CONFIRMED' && canChangeAppointments) {
+    const patientId = item.patient?.id
+    if (!patientId) {
+      statusNotice.value = 'นัดหมายนี้ยังไม่มีข้อมูลผู้ป่วยที่ลงทะเบียน'
+      window.setTimeout(() => (statusNotice.value = ''), 2200)
+      return
+    }
+    void router.push({
+      name: 'staff-services',
+      query: { patientId: String(patientId), appointmentId: String(item.id) },
+    })
+    return
+  }
   if (nextStatus === 'CANCELLED') {
     cancellationReason.value = ''
     pendingCancellation.value = { item }
     return
   }
-  statusNotice.value = 'รอเชื่อมต่อการเปลี่ยนสถานะกับ backend'
-  window.setTimeout(() => (statusNotice.value = ''), 2200)
 }
 </script>
 <template>
@@ -741,7 +851,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               <input :value="patientQuery" readonly placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN" />
               <span class="reschedule-patient-meta">
                 HN
-                {{ selectedFormPatient?.hn || editingAppointment?.patient.hn || '-' }}
+                {{ selectedFormPatient?.hn || editingAppointment?.patient?.hn || (appointmentPatientType === 'NEW' ? 'ผู้ป่วยไม่ประจำ' : '-') }}
                 ·
                 {{ selectedFormPatient?.phone || editingPatientPhone }}
               </span>
@@ -791,7 +901,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             </label>
             <label class="reschedule-time-field">
               เวลา
-              <button class="reschedule-time-trigger" type="button" @click="timeDrawerOpen = true">
+              <button class="reschedule-time-trigger" type="button" @click="openTimeDrawer">
                 <span>{{ formatTimeRange(form.time) }}</span>
                 <strong>ดูตารางเวลาว่าง</strong>
               </button>
@@ -922,7 +1032,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                   pattern="[0-9]*"
                   maxlength="10"
                   placeholder="กรอกเบอร์โทรศัพท์"
-                  @input="newPatientForm.phone = newPatientForm.phone.replace(/\D/g, '').slice(0, 10)"
+                  @input="newPatientForm.phone = limitPhoneDigits(newPatientForm.phone)"
                 />
               </label>
               <p>ผู้จอง NEW ยังไม่มี HN และยังไม่เกิดข้อมูลของการชำระล่วงหน้า</p>
@@ -1021,7 +1131,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               เวลา <em>*</em>
               <span class="appointment-time-picker" :class="{ 'is-invalid': missingCurrentTime }">
                 <span>{{ formatTimeRange(form.time) }}</span>
-                <button type="button" @click="timeDrawerOpen = true">ดูตารางเวลาว่าง</button>
+                <button type="button" @click="openTimeDrawer">ดูตารางเวลาว่าง</button>
               </span>
             </label>
             <label class="wide appointment-note-field"
@@ -1069,8 +1179,20 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             <button v-if="!isEditing" class="secondary" type="button" @click="goToAppointmentList">
               ยกเลิก
             </button>
-            <button class="primary" :disabled="savingAppointment" @click="requestSaveConfirmation">
-              {{ savingAppointment ? 'กำลังบันทึก...' : isEditing ? 'บันทึก' : 'บันทึกนัดหมาย' }}
+            <button
+              class="primary"
+              :disabled="savingAppointment || checkingAvailability"
+              @click="requestSaveConfirmation"
+            >
+              {{
+                savingAppointment
+                  ? 'กำลังบันทึก...'
+                  : checkingAvailability
+                    ? 'กำลังตรวจเวลาว่าง...'
+                    : isEditing
+                      ? 'บันทึก'
+                      : 'บันทึกนัดหมาย'
+              }}
             </button>
           </div>
         </section>
@@ -1108,13 +1230,15 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               <h3>ช่วงเช้า</h3>
               <div class="appointment-time-slots">
                 <button
-                  v-for="time in morningTimeOptions"
-                  :key="time"
+                  v-for="slot in morningTimeOptions"
+                  :key="slot.time"
                   type="button"
-                  :class="{ selected: form.time === time }"
-                  @click="selectAppointmentTime(time)"
+                  :disabled="availabilityLoading || !slot.available"
+                  :title="slot.reason || ''"
+                  :class="{ selected: form.time === slot.time, unavailable: !slot.available }"
+                  @click="selectAppointmentTime(slot.time)"
                 >
-                  {{ formatTimeRange(time) }}
+                  {{ formatTimeRange(slot.time) }}
                 </button>
               </div>
             </section>
@@ -1122,16 +1246,27 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               <h3>ช่วงบ่าย</h3>
               <div class="appointment-time-slots">
                 <button
-                  v-for="time in afternoonTimeOptions"
-                  :key="time"
+                  v-for="slot in afternoonTimeOptions"
+                  :key="slot.time"
                   type="button"
-                  :class="{ selected: form.time === time }"
-                  @click="selectAppointmentTime(time)"
+                  :disabled="availabilityLoading || !slot.available"
+                  :title="slot.reason || ''"
+                  :class="{ selected: form.time === slot.time, unavailable: !slot.available }"
+                  @click="selectAppointmentTime(slot.time)"
                 >
-                  {{ formatTimeRange(time) }}
+                  {{ formatTimeRange(slot.time) }}
                 </button>
               </div>
             </section>
+            <p v-if="availabilityLoading" class="appointment-time-help" aria-live="polite">
+              กำลังตรวจสอบเวลาว่าง...
+            </p>
+            <p v-else-if="availabilityError" class="appointment-time-help" role="alert">
+              {{ availabilityError }}
+            </p>
+            <p v-else-if="availabilitySlots.length === 0" class="appointment-time-help">
+              ไม่มีช่วงเวลาที่เปิดรับนัดในวันนี้
+            </p>
             <p class="appointment-time-help">
               ช่วงสีเทาไม่สามารถเลือกได้: นัดคลินิก, Google Calendar, เวลาพัก หรือเวลานอกกะ
             </p>
@@ -1314,10 +1449,10 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                   <b>{{ formatTime(item.startAt) }}</b>
                 </td>
                 <td>
-                  <b>{{ item.patient.fullName }}</b>
+                  <b>{{ item.patient?.fullName || item.contactName || 'ผู้ป่วยไม่ประจำ' }}</b>
                 </td>
                 <td>{{ patientPhone(item) }}</td>
-                <td>{{ item.service.name }}</td>
+                <td>{{ item.service.name || 'ยังไม่ระบุบริการ' }}</td>
                 <td>{{ item.therapist.fullName }}</td>
                 <td>
                   <div v-if="!canChangeAppointments" class="appointment-status-filter appointment-status-readonly" :data-status="uiStatusFor(item.status)">
@@ -1333,7 +1468,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                         }))
                       "
                       :default-label="uiStatusFor(item.status)"
-                      :label="`สถานะนัดหมายของ ${item.patient.fullName}`"
+                      :label="`สถานะนัดหมายของ ${item.patient?.fullName || item.contactName || 'ผู้ป่วยไม่ประจำ'}`"
                       :clear-on-reselect="false"
                       hide-default-option
                       @update:model-value="requestStatusChange(item, $event)"
@@ -1373,7 +1508,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
       <form class="status-modal" @submit.prevent="confirmCancellation">
         <h2>ยืนยันการยกเลิกนัดหมาย</h2>
         <p>
-          {{ pendingCancellation.item.patient.fullName }} เวลา
+          {{ pendingCancellation.item.patient?.fullName || pendingCancellation.item.contactName || 'ผู้ป่วยไม่ประจำ' }} เวลา
           {{ formatTime(pendingCancellation.item.startAt) }}
         </p>
         <label
