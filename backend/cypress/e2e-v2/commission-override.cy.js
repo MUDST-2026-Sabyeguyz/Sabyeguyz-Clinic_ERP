@@ -56,7 +56,8 @@ describe('v2 commission rate override and credited staff sales', () => {
         cy.api('POST', `/api/commission/courses/${purchase.id}/override-rate`, { rate: 0.07, reason: 'ปรับตามตกลง' })
           .its('status').should('equal', 200)
         cy.api('GET', '/api/audit-logs?size=100').its('body.items').then((items) => {
-          const entry = items.find((item) => item.tableName === 'course' && /commission rate/.test(item.newValue || ''))
+          const entry = items.find((item) => item.tableName === 'course' && item.recordId === String(purchase.id)
+            && JSON.parse(item.newValue || '{}').reason === 'ปรับตามตกลง')
           expect(entry, 'override audit entry').to.exist
         })
       })

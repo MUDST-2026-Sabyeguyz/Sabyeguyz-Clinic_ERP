@@ -26,8 +26,8 @@ const errorMessage = ref('')
 const thaiDate = (value?: string) =>
   value ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'long' }).format(new Date(value)) : '-'
 const filteredPatients = computed(() => {
+  if (sortOrder.value === 'newest') return [...patients.value]
   return [...patients.value].sort((left, right) => {
-    if (sortOrder.value === 'newest') return right.id - left.id
     const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
     return sortOrder.value === 'asc' ? comparison : -comparison
   })
