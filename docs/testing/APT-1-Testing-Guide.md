@@ -12,7 +12,7 @@
 | หัวข้อ | รายละเอียด |
 |---|---|
 | Endpoint | `POST /api/appointments` |
-| ผลลัพธ์ | สร้างนัดหมายสถานะ `SCHEDULED` |
+| ผลลัพธ์ | สร้างนัดหมายสถานะ `CONFIRMED` |
 | Business Rule หลัก | Therapist คนเดียวกันห้ามมีนัดทับช่วงเวลากัน |
 | ยังไม่อยู่ในขอบเขต | `GET`, `PATCH`, check-in, complete, cancel (อยู่ใน APT-2 ถึง APT-6) |
 
@@ -141,7 +141,7 @@ mvn -f  pom.xml test -Dtest=AppointmentApiTest #rejectsOverlappingAppointmentWit
 
 | Test | พิสูจน์ |
 |---|---|
-| `createsScheduledAppointmentUsingServiceDuration` | สร้างสำเร็จ, `SCHEDULED`, `endAt` คำนวณจาก duration ของ Service |
+| `createsConfirmedAppointmentUsingServiceDuration` | สร้างสำเร็จ, `CONFIRMED`, `endAt` คำนวณจาก duration ของ Service |
 | `rejectsOverlappingAppointmentForSameTherapist` | ห้ามจองเวลาซ้ำ |
 | `allowsBackToBackAppointmentForSameTherapist` | นัดติดกันจองได้ทั้ง Pipeline |
 | `rejectsStartTimeInThePast` | ห้ามจองย้อนหลัง |
@@ -171,9 +171,10 @@ Automated Test ทั้งหมดรันบน **H2** ซึ่งเป็
 
 ### B.1 เปิดฐานข้อมูลและ Backend
 
+ก่อนรัน Backend แยก ให้ตั้ง `DATABASE_PASSWORD` ให้ตรงกับ `POSTGRES_PASSWORD` ใน `.env` และตั้ง `JWT_SECRET` ใน shell ที่ใช้รัน Maven
+
 ```powershell
-cd ./deploy
-docker compose -f docker-compose.yml up -d postgres
+docker compose up -d postgres
 
 cd ./backend
 mvn -f pom.xml spring-boot:run
@@ -268,7 +269,7 @@ curl -i -X POST http://localhost:8080/api/appointments -H "Content-Type: applica
 
 | # | เปลี่ยนอะไรจาก Request มาตรฐาน | Status | ข้อความที่คาด |
 |---|---|---|---|
-| 1 | `09:00` (ครั้งแรก) | **201** | `status: SCHEDULED`, มี `Location` header |
+| 1 | `09:00` (ครั้งแรก) | **201** | `status: CONFIRMED`, มี `Location` header |
 | 2 | `09:30` | **409** | `นักกายภาพบำบัดมีนัดหมายในช่วงเวลานี้แล้ว` |
 | 3 | `10:00` | **201** | นัดติดกันพอดีจองได้ |
 | 4 | `therapistId: 2` เวลา `09:00` | **201** | คนละ Therapist ไม่ชนกัน |
@@ -286,7 +287,7 @@ curl -i -X POST http://localhost:8080/api/appointments -H "Content-Type: applica
 ### B.6 ตรวจข้อมูลในฐานข้อมูล
 
 ```powershell
-docker exec deploy-postgres-1 psql -U clinic -d clinic_erp -c "SELECT id, therapist_id, start_at, end_at, status FROM appointments ORDER BY id;"
+docker compose exec postgres psql -U clinic -d clinic_erp -c "SELECT id, therapist_id, start_at, end_at, status FROM appointments ORDER BY id;"
 ```
 
 ตัวอย่างผลที่ถูกต้อง
@@ -294,8 +295,8 @@ docker exec deploy-postgres-1 psql -U clinic -d clinic_erp -c "SELECT id, therap
 ```text
  id | therapist_id |        start_at        |         end_at         |  status
 ----+--------------+------------------------+------------------------+-----------
-  1 |            1 | 2026-10-05 02:00:00+00 | 2026-10-05 03:00:00+00 | SCHEDULED
-  2 |            1 | 2026-10-05 03:00:00+00 | 2026-10-05 04:00:00+00 | SCHEDULED
+  1 |            1 | 2026-10-05 02:00:00+00 | 2026-10-05 03:00:00+00 | CONFIRMED
+  2 |            1 | 2026-10-05 03:00:00+00 | 2026-10-05 04:00:00+00 | CONFIRMED
 ```
 
 **สิ่งที่ต้องตรวจ 3 อย่าง**
@@ -308,7 +309,7 @@ docker exec deploy-postgres-1 psql -U clinic -d clinic_erp -c "SELECT id, therap
 ดูข้อมูล Master ประกอบ
 
 ```powershell
-docker exec deploy-postgres-1 psql -U clinic -d clinic_erp -c "SELECT id, code, full_name FROM therapists ORDER BY id;" -c "SELECT id, code, name, default_duration_minutes FROM services ORDER BY id;"
+docker compose exec postgres psql -U clinic -d clinic_erp -c "SELECT id, code, full_name FROM therapists ORDER BY id;" -c "SELECT id, code, name, default_duration_minutes FROM services ORDER BY id;"
 ```
 
 ### B.7 ตรวจเอกสาร API
@@ -340,7 +341,7 @@ docker exec deploy-postgres-1 psql -U clinic -d clinic_erp -c "SELECT id, code, 
 | ได้ 409 ทั้งที่ควรได้ 201 | เวลานั้นถูกจองจากการทดสอบรอบก่อน | เปลี่ยนวันหรือเวลา หรือล้างข้อมูลตามหัวข้อ 5 |
 | ภาษาไทยกลายเป็น `??????` | Terminal ของ Windows แปลง Argument ก่อนส่ง **ไม่ใช่บั๊กของระบบ** | เขียน Body ลงไฟล์แล้วใช้ `curl --data-binary @body.json` หรือใช้ Postman ซึ่งส่ง UTF-8 อยู่แล้ว |
 | ได้ 404 ทุก Request | Backend ที่รันอยู่เป็นโค้ดเก่า | ปิดแล้วรัน `spring-boot:run` ใหม่ ตรวจด้วย `/v3/api-docs` |
-| `Connection refused` | PostgreSQL ยังไม่ขึ้น | `docker ps` ต้องเห็น `deploy-postgres-1` สถานะ healthy |
+| `Connection refused` | PostgreSQL ยังไม่ขึ้น | `docker compose ps` ต้องเห็น `postgres` สถานะ healthy |
 | ได้ 500 แทน 400 | ขาด Exception Handler | ตรวจ `ApiExceptionHandler` ว่าดัก `HttpMessageNotReadableException` แล้ว |
 
 ---
@@ -348,8 +349,8 @@ docker exec deploy-postgres-1 psql -U clinic -d clinic_erp -c "SELECT id, code, 
 ## 5. ล้างข้อมูลทดสอบ
 
 ```powershell
-docker compose -f D:\uni_year3\DevOps\ProJect\SabyeGuyz\deploy\docker-compose.yml down -v
-docker compose -f D:\uni_year3\DevOps\ProJect\SabyeGuyz\deploy\docker-compose.yml up -d postgres
+docker compose down -v
+docker compose up -d postgres
 ```
 
 `-v` ลบ Volume ด้วย ทำให้ Flyway สร้าง Schema และ Seed Data ใหม่ทั้งหมด
