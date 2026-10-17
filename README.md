@@ -74,6 +74,10 @@ docker compose down
 
 Database data remains in the Compose volume after `down`. See [deployment instructions](deploy/README.md) for port overrides, test steps, and database details.
 
+## Jenkins deployment to local Kubernetes
+
+For the Windows presentation machine with Docker Desktop Kubernetes and Jenkins on port 8085, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-jenkins-kubernetes.ps1`. It connects a Windows agent, creates the `Clinic-Kubernetes` Pipeline and queues the build/deployment. See [Kubernetes presentation instructions](deploy/kubernetes/README.md).
+
 ## Development workflow
 
 Create `feat/<feature-name>` branches from `develop`, then open a pull request into `develop` after verification.
