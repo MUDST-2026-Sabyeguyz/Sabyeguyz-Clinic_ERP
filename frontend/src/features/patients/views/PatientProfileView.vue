@@ -5,6 +5,7 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { masterDataApi, patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 
 const route = useRoute()
 type UiPatientProfile = PatientProfile & {
@@ -161,7 +162,7 @@ const isForeignNationalityValue = (value: string) =>
 const isForeignNationality = computed(() => isForeignNationalityValue(draft.nationality))
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
 const phoneIsValid = computed(() =>
-  isForeignNationality.value ? draft.phone.length <= 10 : /^\d{10}$/.test(draft.phone),
+  isForeignNationality.value ? isOptionalPhoneValid(draft.phone) : /^[0-9]{10}$/.test(draft.phone),
 )
 watch(
   () => draft.nationality,
@@ -417,6 +418,7 @@ onMounted(async () => {
                   :maxlength="isForeignNationality ? 20 : 13"
                   :placeholder="isForeignNationality ? 'กรอกเลขพาสปอร์ต' : 'x-xxxx-xxxxx-xx-x'"
                   :required="!isForeignNationality"
+                  autocomplete="tel"
                   @input="
                     draft.identityNumber = isForeignNationality
                       ? draft.identityNumber.replace(/[^A-Za-z0-9]/g, '')
@@ -435,9 +437,10 @@ onMounted(async () => {
                   v-model.trim="draft.phone"
                   type="tel"
                   inputmode="numeric"
+                  pattern="[0-9]*"
                   maxlength="10"
                   :required="!isForeignNationality"
-                  @input="draft.phone = digitsOnly(draft.phone).slice(0, 10)"
+                  @input="draft.phone = limitPhoneDigits(draft.phone)"
                 />
               </label>
               <small v-if="draft.phone && !phoneIsValid" class="required-error">
