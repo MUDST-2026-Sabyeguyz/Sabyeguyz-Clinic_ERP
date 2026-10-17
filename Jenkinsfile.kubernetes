@@ -1,0 +1,60 @@
+pipeline {
+    agent { label 'clinic-present' }
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timeout(time: 40, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+    stages {
+        stage('Checkout local main snapshot') {
+            steps {
+                dir('source') {
+                    deleteDir()
+                    powershell '''
+                        $ErrorActionPreference = 'Stop'
+                        if (-not $env:CLINIC_SOURCE_REPO) { throw 'Run scripts/start-jenkins-kubernetes.ps1 on the presentation machine first.' }
+                        $revision = (& git -C $env:CLINIC_SOURCE_REPO rev-parse refs/heads/main).Trim()
+                        if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve local main.' }
+                        & git clone --no-hardlinks --no-checkout -- $env:CLINIC_SOURCE_REPO .
+                        if ($LASTEXITCODE -ne 0) { throw 'Source checkout failed.' }
+                        & git checkout --detach $revision
+                        if ($LASTEXITCODE -ne 0) { throw 'Cannot checkout the captured revision.' }
+                        Write-Host "SOURCE_SHA=$revision"
+                    '''
+                }
+            }
+        }
+        stage('Frontend unit tests') {
+            steps {
+                dir('source') {
+                    powershell '''
+                        $ErrorActionPreference = 'Stop'
+                        $frontend = Join-Path (Get-Location).Path 'frontend'
+                        & docker run --rm --mount "type=bind,source=$frontend,target=/app" --mount type=volume,target=/app/node_modules -w /app node:24-alpine sh -c 'npm ci && npm run test:unit -- --run'
+                        if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed; deployment stopped.' }
+                    '''
+                }
+            }
+        }
+        stage('Build and deploy Kubernetes') {
+            steps {
+                dir('source') {
+                    powershell '''
+                        $sha = (& git rev-parse --short=12 HEAD).Trim()
+                        if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the deployment revision.' }
+                        & ./scripts/deploy-kubernetes.ps1 -ImageTag "$sha-b$env:BUILD_NUMBER"
+                    '''
+                }
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Kubernetes rollout is Ready. Open localhost:38001 after starting the documented port-forward command.'
+        }
+        failure {
+            echo 'Build or Kubernetes rollout failed. See the failing stage and Kubernetes events in this build.'
+        }
+    }
+}
