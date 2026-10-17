@@ -12,6 +12,7 @@ import {
   catalogApi,
   patientApi,
   paymentMethodApi,
+  paymentStatusApi,
   salesApi,
   staffApi,
   type Course,
@@ -19,6 +20,7 @@ import {
   type Patient,
   type PatientProfile,
   type PaymentMethod,
+  type PaymentStatusOption,
   type ServiceOption,
   type Staff,
 } from '@/api/client'
@@ -35,10 +37,12 @@ const query = ref(''),
   loading = ref(false),
   errorMessage = ref('')
 const results = ref<Patient[]>([])
+const allPatients = ref<Patient[]>([])
 const patientProfile = ref<PatientProfile | null>(null)
 const services = ref<ServiceOption[]>([])
 const courses = ref<Course[]>([])
 const paymentMethods = ref<PaymentMethod[]>([])
+const paymentStatuses = ref<PaymentStatusOption[]>([])
 const staff = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
 const selectedServiceId = ref(0),
@@ -47,6 +51,7 @@ const selectedServiceId = ref(0),
 const paymentCode = ref(''),
   note = ref('')
 const paymentStatus = ref<'INSTALLMENT' | 'DEPOSIT' | 'PAID'>('PAID')
+const paymentAmount = ref(0)
 const searched = ref(false)
 const receiptNo = ref('')
 const paymentDialogOpen = ref(false)
@@ -80,17 +85,24 @@ const receiptBranchLabel = computed(() => {
 })
 const managerBranchCode = computed(() => (isManager ? (selectedManagerBranch()?.code ?? '') : ''))
 async function loadMaster() {
-  const [s, c, p, methods, staffList] = await Promise.all([
+  const [s, c, p, methods, statuses, staffList] = await Promise.all([
     catalogApi.services(),
     catalogApi.courses(),
     patientApi.searchAll('', managerBranchCode.value),
     paymentMethodApi.list(),
+    paymentStatusApi.list(),
     staffApi.list(),
   ])
   services.value = s
   courses.value = c
+  allPatients.value = p
   results.value = p
   paymentMethods.value = methods
+  paymentStatuses.value = statuses
+  const enabledStatuses = statuses.filter((status) => status.enabled)
+  if (!enabledStatuses.some((status) => status.code === paymentStatus.value))
+    paymentStatus.value = enabledStatuses[0]?.code ?? statuses[0]?.code ?? 'PAID'
+  paymentAmount.value = 0
   staff.value = staffList
   selectedServiceId.value = s[0]?.id ?? 0
   selectedCourseId.value = c[0]?.id ?? 0
@@ -125,6 +137,34 @@ function applyManagerBranch() {
   void loadMaster()
 }
 let searchTimer: number | undefined
+let patientSearchRequest = 0
+function normalizePatientSearch(value: string) {
+  return value.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '').toLowerCase()
+}
+async function searchPatientsByKeyword(keyword: string) {
+  const requestId = ++patientSearchRequest
+  const normalized = normalizePatientSearch(keyword)
+  const digits = normalized.replace(/\D/g, '')
+  const localMatches = allPatients.value.filter((item) => {
+    const hn = normalizePatientSearch(item.hn)
+    return (
+      hn.includes(normalized) ||
+      item.fullName.toLocaleLowerCase().includes(keyword.toLocaleLowerCase()) ||
+      (digits.length > 0 && (item.phone ?? '').replace(/\D/g, '').includes(digits))
+    )
+  })
+  try {
+    const page = await patientApi.search(keyword, 0, 100, managerBranchCode.value)
+    if (requestId !== patientSearchRequest || query.value.trim() !== keyword) return
+    results.value = [...new Map([...page.items, ...localMatches].map((item) => [item.id, item])).values()]
+  } catch (error) {
+    if (requestId !== patientSearchRequest || query.value.trim() !== keyword) return
+    results.value = localMatches
+    if (!localMatches.length)
+      errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
+  }
+  if (requestId === patientSearchRequest && query.value.trim() === keyword) searched.value = true
+}
 watch(query, () => {
   window.clearTimeout(searchTimer)
   const keyword = query.value.trim()
@@ -133,14 +173,7 @@ watch(query, () => {
     return
   }
   searchTimer = window.setTimeout(async () => {
-    try {
-      results.value = (await patientApi.search(keyword, 0, 20, managerBranchCode.value)).items
-      searched.value = true
-    } catch (error) {
-      results.value = []
-      searched.value = true
-      errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
-    }
+    await searchPatientsByKeyword(keyword)
   }, 250)
 })
 const item = computed(() =>
@@ -161,6 +194,10 @@ const itemDiscount = computed(() => 0)
 const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
 const billDiscount = computed(() => 0)
 const netAmount = computed(() => Math.max(afterItemDiscount.value - billDiscount.value, 0))
+const receivedAmount = computed(() => paymentStatus.value === 'PAID'
+  ? netAmount.value
+  : paymentStatus.value === 'INSTALLMENT' ? Math.min(paymentAmount.value, netAmount.value) : 0)
+const remainingAmount = computed(() => Math.max(netAmount.value - receivedAmount.value, 0))
 const commissionAmount = computed(() => afterItemDiscount.value * 0.1)
 const receiptPayable = computed(() => netAmount.value)
 const money = (value: number) =>
@@ -220,9 +257,7 @@ function paymentMethodCategory(code: string, name = '') {
   if (value.includes('card') || value.includes('บัตร')) return 'card'
   return 'other'
 }
-const salePaymentMethods = computed(() => {
-  return paymentMethods.value.filter((method) => method.active !== false)
-})
+const salePaymentMethods = computed(() => paymentMethods.value)
 function paymentMethodIcon(code: string, name = '') {
   const category = paymentMethodCategory(code, name)
   if (category === 'bank') return paymentBankIcon
@@ -238,14 +273,18 @@ function paymentMethodLabel(code: string, name = '') {
   return name
 }
 const selectedPaymentLabel = computed(() => {
-  const method = salePaymentMethods.value.find((item) => item.code === paymentCode.value)
+  const method = salePaymentMethods.value.find((item) => item.code === paymentCode.value && item.active !== false)
   return method ? paymentMethodLabel(method.code, method.name) : '-'
 })
 const paymentStatusLabel = computed(() => {
-  if (paymentStatus.value === 'INSTALLMENT') return 'ผ่อนชำระ'
-  if (paymentStatus.value === 'DEPOSIT') return 'มัดจำ'
-  return 'ชำระเต็มจำนวน'
+  return paymentStatuses.value.find((status) => status.code === paymentStatus.value)?.label ?? '-'
 })
+const enabledPaymentStatuses = computed(() => paymentStatuses.value)
+function selectPaymentStatus(status: PaymentStatusOption['code']) {
+  paymentStatus.value = status
+  if (status === 'INSTALLMENT' && (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value))
+    paymentAmount.value = Math.max(0.01, Math.round(netAmount.value / 2 * 100) / 100)
+}
 const receiptIssuedAt = computed(() =>
   new Intl.DateTimeFormat('th-TH', {
     day: '2-digit',
@@ -276,15 +315,7 @@ function searchPatients() {
   if (!keyword) return
   window.clearTimeout(searchTimer)
   searched.value = true
-  void patientApi
-    .search(keyword, 0, 20, managerBranchCode.value)
-    .then((page) => {
-      results.value = page.items
-    })
-    .catch((error) => {
-      results.value = []
-      errorMessage.value = error instanceof Error ? error.message : 'ค้นหาผู้ป่วยไม่สำเร็จ'
-    })
+  void searchPatientsByKeyword(keyword)
 }
 function openPatientCourses() {
   if (patient.value) router.push({ path: '/staff/courses', query: { patientId: patient.value.id } })
@@ -319,11 +350,14 @@ async function submit() {
   errorMessage.value = ''
   confirmed.value = false
   try {
-    const availablePaymentMethod =
-      salePaymentMethods.value.find((method) => method.code === paymentCode.value) ??
-      salePaymentMethods.value[0]
-    if (!availablePaymentMethod) throw new Error('ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager')
-    paymentCode.value = availablePaymentMethod.code
+    if (!enabledPaymentStatuses.value.some((status) => status.code === paymentStatus.value && status.enabled))
+      throw new Error('สถานะการชำระเงินนี้ถูกปิดใช้งาน กรุณาเลือกสถานะอื่น')
+    const availablePaymentMethod = paymentStatus.value === 'DEPOSIT'
+      ? undefined
+      : salePaymentMethods.value.find((method) => method.code === paymentCode.value && method.active !== false) ?? salePaymentMethods.value.find((method) => method.active !== false)
+    if (paymentStatus.value !== 'DEPOSIT' && !availablePaymentMethod)
+      throw new Error('ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager')
+    if (availablePaymentMethod) paymentCode.value = availablePaymentMethod.code
     const type =
       mode.value === 'assessment'
         ? 'ASSESSMENT'
@@ -341,6 +375,8 @@ async function submit() {
       mode.value === 'course'
         ? (courses.value.find((c) => c.id === referenceId)?.price ?? 0)
         : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
+    if (paymentStatus.value === 'INSTALLMENT' && (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value))
+      throw new Error('ยอดผ่อนชำระต้องมากกว่า 0 และน้อยกว่ายอดสุทธิ')
     const sale = await salesApi.create({
       patientId: patient.value.id,
       branchCode:
@@ -348,8 +384,8 @@ async function submit() {
       salespersonStaffId: selectedStaffId.value,
       note: note.value,
       items: [{ type, referenceId, quantity: 1 }],
-      payments: [
-        { paymentMethodCode: paymentCode.value, amount: Math.min(price, netAmount.value) },
+      payments: paymentStatus.value === 'DEPOSIT' ? [] : [
+        { paymentMethodCode: paymentCode.value, amount: paymentStatus.value === 'INSTALLMENT' ? paymentAmount.value : Math.min(price, netAmount.value) },
       ],
     })
     receiptNo.value = sale.receiptNo
@@ -496,8 +532,9 @@ async function submit() {
             </div>
             <div>
               <span>สถานะการชำระเงิน</span><b>{{ paymentStatusLabel }}</b
-              ><span>ช่องทางการชำระ</span><b>{{ selectedPaymentLabel }}</b
-              ><strong>ยอดสุทธิ</strong><strong>{{ money(receiptPayable) }}</strong>
+              ><span>ช่องทางการชำระ</span><b>{{ paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel }}</b
+              ><span>รับชำระครั้งนี้</span><b>{{ money(receivedAmount) }}</b
+              ><strong>ยอดคงเหลือ</strong><strong>{{ money(remainingAmount) }}</strong>
             </div>
           </section>
           <section class="receipt-balance">
@@ -637,21 +674,22 @@ async function submit() {
                 <legend>สถานะการชำระเงิน</legend>
                 <div>
                   <button
-                    v-for="status in [
-                      { value: 'INSTALLMENT', label: 'ผ่อนชำระ' },
-                      { value: 'DEPOSIT', label: 'มัดจำ' },
-                      { value: 'PAID', label: 'ชำระเต็มจำนวน' },
-                    ] as const"
-                    :key="status.value"
+                    v-for="status in paymentStatuses"
+                    :key="status.code"
                     type="button"
-                    :class="{ active: paymentStatus === status.value }"
-                    :disabled="status.value !== 'PAID'"
-                    :title="status.value !== 'PAID' ? 'ยังไม่รองรับการบันทึกชำระบางส่วน' : ''"
-                    @click="paymentStatus = status.value"
+                    :class="{ active: paymentStatus === status.code, disabled: !status.enabled }"
+                    :disabled="!status.enabled"
+                    @click="selectPaymentStatus(status.code)"
                   >
                     {{ status.label }}
                   </button>
                 </div>
+                <label v-if="paymentStatus === 'INSTALLMENT'" class="payment-installment-amount">
+                  ยอดที่รับชำระครั้งนี้
+                  <input v-model.number="paymentAmount" type="number" min="0.01" :max="netAmount - 0.01" step="0.01" />
+                </label>
+                <small v-else-if="paymentStatus === 'DEPOSIT'">ยังไม่รับชำระเงิน ระบบจะบันทึกยอดค้างชำระ</small>
+                <small v-if="!enabledPaymentStatuses.some((status) => status.enabled)" class="service-error">ไม่มีสถานะการชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager</small>
               </fieldset>
               <div class="payment-group">
                 <span>ช่องทางชำระเงิน</span>
@@ -660,7 +698,8 @@ async function submit() {
                     v-for="method in salePaymentMethods"
                     :key="method.code"
                     type="button"
-                    :class="{ active: paymentCode === method.code }"
+                    :class="{ active: paymentCode === method.code, disabled: method.active === false }"
+                    :disabled="method.active === false"
                     @click="paymentCode = method.code"
                   >
                     <img
@@ -671,7 +710,7 @@ async function submit() {
                     <span>{{ paymentMethodLabel(method.code, method.name) }}</span>
                   </button>
                 </div>
-                  <small v-if="!salePaymentMethods.length" class="service-error">
+                  <small v-if="!salePaymentMethods.some((method) => method.active !== false)" class="service-error">
                     ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager
                   </small>
               </div>
@@ -736,7 +775,8 @@ async function submit() {
               >
             </section>
             <section>
-              <span>ยอดชำระ</span><strong>{{ money(netAmount) }}</strong>
+              <span>รับชำระครั้งนี้</span><strong>{{ money(receivedAmount) }}</strong>
+              <span>ยอดคงเหลือ</span><strong>{{ money(remainingAmount) }}</strong>
             </section>
           </div>
           <footer>
@@ -755,8 +795,9 @@ async function submit() {
             <p>โปรดตรวจสอบอีกครั้งก่อนบันทึกการขาย</p>
             <div>
               <section>
-                <span>ยอดที่ลูกค้าชำระ</span><strong>{{ money(netAmount) }}</strong
-                ><small>ช่องทางการชำระเงิน　{{ selectedPaymentLabel }}</small>
+                <span>ยอดที่รับชำระครั้งนี้</span><strong>{{ money(receivedAmount) }}</strong
+                ><small v-if="remainingAmount > 0">ยอดคงเหลือ {{ money(remainingAmount) }}</small
+                ><small>ช่องทางการชำระเงิน　{{ paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel }}</small>
               </section>
               <section>
                 <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b
