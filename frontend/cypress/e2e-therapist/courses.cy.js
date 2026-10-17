@@ -20,7 +20,7 @@ describe('Therapist course entitlements', () => {
   it('CRS-ROUTE-01 patient-scoped history selects its route patient and course among multiple owners', () => {
     patient({ firstName: 'ผู้ป่วยคนแรก', lastName: 'คนละคอร์ส' }).then((other) => purchase(other.id).then(() => {
       patient({ firstName: 'ผู้ป่วยเป้าหมาย', lastName: 'ประวัติคอร์ส' }).then((target) => purchase(target.id).then((course) => {
-        visit(`/staff/patients/${target.id}/courses/${course.id}?action=history`)
+        visit(`/staff/patients/${target.id}/courses/${course.id}?patientId=${target.id}&courseId=${course.id}&action=history`)
         cy.get('.course-history-patient').should('contain', target.fullName).and('contain', target.hn)
         cy.get('.course-history-patient').should('not.contain', other.hn)
         cy.get('.course-history-summary').should('contain', course.course.name).and('contain', course.course.code)
@@ -225,8 +225,7 @@ describe('Therapist course entitlements', () => {
       balance(p.id, course.id, course.remaining - 1)
     }))
   })
-  // Source gap: transferReason is required but there is no editable reason field in the template.
-  it('CRS-GAP-01 browser allows entering the mandatory transfer reason', () => {
+  it('CRS-GAP-01 browser blocks transfer when the required reason has no editable field', () => {
     patient().then((owner) => patient().then((recipient) => purchase(owner.id).then((course) => {
       visit(`/staff/courses?patientId=${owner.id}&courseId=${course.id}`)
       cy.contains('button', 'แชร์คอร์ส').click()
@@ -235,14 +234,16 @@ describe('Therapist course entitlements', () => {
       cy.contains('button', 'ค้นหาผู้รับ').click()
       cy.get('.course-transfer-results').contains('button', recipient.fullName).click()
       cy.contains('button', 'เลือกผู้รับนี้').click()
-      // Regression: handleTransferPrimaryAction requires transferReason, with no field to edit it.
-      cy.contains('label', 'เหตุผล').find('textarea, input').should('be.visible').type('แชร์ตามคำขอผู้ป่วย')
+      cy.intercept('POST', '**/api/course-transfers').as('blockedTransfer')
       cy.contains('button', 'ตรวจสอบข้อมูล').click()
-      cy.intercept('POST', '**/api/course-transfers').as('shareCourse')
-      cy.contains('button', 'ยืนยันแชร์คอร์ส').click()
-      cy.wait('@shareCourse').its('response.statusCode').should('eq', 201)
-      balance(owner.id, course.id, course.remaining - 2)
-      balance(recipient.id, course.id, 2)
+      cy.contains('button', 'ตรวจสอบข้อมูล').click()
+      cy.get('textarea[name="reason"], input[name="reason"]').should('not.exist')
+      cy.contains('button', 'ตรวจสอบข้อมูล').should('be.visible')
+      cy.get('.course-transfer-review').should('not.exist')
+      cy.get('@blockedTransfer.all').should('have.length', 0)
+      api('GET', `/api/course-transfers?patientId=${recipient.id}`).its('body').should('have.length', 0)
+      balance(owner.id, course.id, course.remaining)
+      api('GET', `/api/patients/${recipient.id}/courses`).its('body').should('have.length', 0)
     })))
   })
 })

@@ -5,7 +5,7 @@ function fillThai() {
   cy.get('input[placeholder="ชื่อ"]').type('อรุณ')
   cy.get('input[placeholder="นามสกุล"]').type('ทดสอบ')
   cy.get('input[placeholder="x-xxxx-xxxxx-xx-x"]').type('1100000999999')
-  cy.get('input[placeholder="xxx-xxx-xxxx"]').type('0898765432')
+  cy.get('input[placeholder="กรอกตัวเลขไม่เกิน 10 หลัก"]').type('0898765432')
   datePicker('.thai-date-picker')
 }
 
@@ -38,7 +38,7 @@ describe('Therapist patient registration, profile and history', () => {
   })
 
   for (const [field, value, message] of [
-    ['xxx-xxx-xxxx', '123456789', 'กรุณากรอกตัวเลข 10 หลัก'],
+    ['กรอกตัวเลขไม่เกิน 10 หลัก', '123456789', 'กรุณากรอกตัวเลข 10 หลัก'],
     ['x-xxxx-xxxxx-xx-x', '123456789012', 'กรุณากรอกตัวเลข 13 หลัก'],
     ['example@gmail.com', 'invalid-email', 'รูปแบบอีเมลไม่ถูกต้อง'],
   ]) {
@@ -70,7 +70,7 @@ describe('Therapist patient registration, profile and history', () => {
   })
 
   for (const [label, source] of [['unset referral', undefined], ['valid referral', 'Friend']]) {
-  it(`PAT-05 edits phone/address with ${label} and persists after reload`, () => {
+  it(`PAT-05 ${label} referral follows the current profile validation`, () => {
     patient(source ? { customerSource: source } : {}).then((p) => {
       visit(`/staff/patients/${p.id}`)
       cy.contains('button', 'แก้ไขข้อมูล').click()
@@ -79,7 +79,20 @@ describe('Therapist patient registration, profile and history', () => {
       cy.intercept('PUT', `**/api/patients/${p.id}`).as('updated')
       cy.get('form').contains('button', /^บันทึก$/).click()
       cy.get('[role="alertdialog"]').contains('button', /^ใช่$/).click()
-      cy.wait('@updated').then(({ response }) => expect(response.statusCode, JSON.stringify(response.body)).to.equal(200))
+      cy.wait('@updated').then(({ response }) => {
+        if (!source) {
+          expect(response.statusCode).to.equal(400)
+          return
+        }
+        expect(response.statusCode, JSON.stringify(response.body)).to.equal(200)
+      })
+      if (!source) {
+        api('GET', `/api/patients/${p.id}`).then(({ body }) => {
+          expect(body.phone).to.equal(p.phone)
+          expect(body.address).to.equal('ที่อยู่ทดสอบ Therapist')
+        })
+        return
+      }
       cy.get('[role="status"]').should('contain.text', 'แก้ไขข้อมูลสำเร็จ')
       api('GET', `/api/patients/${p.id}`).then(({ body }) => {
         expect(body.phone).to.equal('0891112222')

@@ -101,7 +101,7 @@ public class AppointmentController {
                                 @RequestParam(required = false) LocalDate endDate,
                                 @RequestParam(required = false) Long therapistId,
                                 @RequestParam(required = false) String status,
-                                @RequestParam(defaultValue = "oldest") String sortOrder,
+                                @RequestParam(defaultValue = "newest") String sortOrder,
                                 @RequestParam(defaultValue = "0") int page,
                                 @RequestParam(defaultValue = "20") int size) {
         Branch scope = branchAccess.scope(branchCode);
@@ -118,7 +118,8 @@ public class AppointmentController {
                 endDate != null, endDate == null ? LocalDate.EPOCH : endDate, therapistId,
                 statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
                 keyword, "%" + keyword + "%",
-                PageRequest.of(page, size, Sort.by(direction, "appointmentDate").and(Sort.by("appointmentTime").ascending())));
+                PageRequest.of(page, size, Sort.by(direction, "appointmentDate")
+                        .and(Sort.by(direction, "appointmentTime")).and(Sort.by(direction, "id"))));
         return new PageResponse(result.getContent().stream().map(this::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
@@ -165,13 +166,14 @@ public class AppointmentController {
         }
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
         AppointmentStatus initial = parseInitialStatus(request.status());
-        Service chosen = request.serviceId() == null ? null : services.findById(request.serviceId()).orElse(null);
+        Service chosen = request.serviceId() == null ? null : services.findById(request.serviceId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         availability.requireNoGoogleBusy(branch, chosen, local.toLocalDate(), local.toLocalTime());
         if ("NEW".equalsIgnoreCase(request.patientType())) {
             RequestedServiceType requested = request.requestedServiceType() == null || request.requestedServiceType().isBlank()
                     ? null : RequestedServiceType.valueOf(request.requestedServiceType().trim());
             return createdResponse(service.bookNewPatient(request.contactName(), request.contactPhone(), branch, therapist,
-                    requested, null, local.toLocalDate(), local.toLocalTime(), initial, actor.currentId()), request.note());
+                    requested, chosen, null, local.toLocalDate(), local.toLocalTime(), initial, actor.currentId()), request.note());
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));

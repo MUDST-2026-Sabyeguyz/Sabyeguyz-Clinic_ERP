@@ -27,6 +27,8 @@ export function visit(path, role = 'therapist') {
     if (sessions[role]) {
       win.localStorage.setItem('authToken', sessions[role].token)
       win.localStorage.setItem('authUser', JSON.stringify(sessions[role]))
+      // These fixtures and THP-001 belong to branch 01; keep Manager E2E scoped to that branch.
+      if (role === 'manager') win.localStorage.setItem('managerSelectedBranch', '01')
     }
   } }))
 }
