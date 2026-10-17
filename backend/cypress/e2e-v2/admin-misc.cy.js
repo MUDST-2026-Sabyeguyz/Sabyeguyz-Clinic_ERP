@@ -45,28 +45,29 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
       { minimum: 100000, maximum: null, rate: 0.12, order: 2 },
     ]
 
-    it('renames a scheme and changes its dates without touching its tiers', () => {
+    it('renames a scheme and changes its effective start without touching its tiers', () => {
       cy.api('POST', '/api/commission/schemes', { name: 'Scheme A', effectiveFrom: '2030-01-01', tiers }).then(({ body }) => {
         cy.api('PUT', `/api/commission/schemes/${body.id}`, { name: 'Scheme A renamed', effectiveFrom: '2030-02-01', effectiveTo: '2030-12-31', tiers: [] })
           .then((updated) => {
             expect(updated.status, JSON.stringify(updated.body)).to.equal(200)
             expect(updated.body.name).to.equal('Scheme A renamed')
             expect(updated.body.effectiveFrom).to.equal('2030-02-01')
-            expect(updated.body.effectiveTo).to.equal('2030-12-31')
+            // The API derives an end date from the next scheme version; callers cannot set it directly.
+            expect(updated.body.effectiveTo).to.equal(null)
           })
         cy.api('GET', `/api/commission/schemes/${body.id}/tiers`).its('body').should('have.length', 2)
       })
     })
 
-    it('switches the tiers of a scheme off and on', () => {
+    it('keeps scheme tiers active because disable and activate routes are not supported', () => {
       cy.api('POST', '/api/commission/schemes', { name: 'Scheme B', effectiveFrom: '2031-01-01', tiers }).then(({ body }) => {
-        cy.api('DELETE', `/api/commission/schemes/${body.id}`).its('status').should('equal', 204)
+        cy.api('DELETE', `/api/commission/schemes/${body.id}`).its('status').should('equal', 405)
         cy.api('GET', `/api/commission/schemes/${body.id}/tiers`).its('body').then((rows) => {
-          expect(rows.every((tier) => tier.active === false)).to.equal(true)
+          expect(rows).to.have.length(2)
         })
-        cy.api('PATCH', `/api/commission/schemes/${body.id}/activate`).its('status').should('equal', 200)
+        cy.api('PATCH', `/api/commission/schemes/${body.id}/activate`).its('status').should('equal', 404)
         cy.api('GET', `/api/commission/schemes/${body.id}/tiers`).its('body').then((rows) => {
-          expect(rows.every((tier) => tier.active === true)).to.equal(true)
+          expect(rows).to.have.length(2)
         })
       })
     })

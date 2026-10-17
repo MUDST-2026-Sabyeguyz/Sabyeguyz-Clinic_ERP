@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   appointmentApi,
   branchApi,
-  calendarIntegrationApi,
   catalogApi,
   type Appointment,
   type Branch,
@@ -23,29 +22,16 @@ const anchorDate = ref(toDateValue(new Date()))
 const selectedTherapistId = ref('ทั้งหมด')
 const selectedBranch = ref('ทั้งหมด')
 const appointments = ref<Appointment[]>([])
+const availability = ref<Record<string, string[]>>({})
+const availabilityLoading = ref(false)
 const therapists = ref<Therapist[]>([])
 const branches = ref<Branch[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
-const calendarSyncOpen = ref(false)
-const calendarConnecting = ref(false)
-const calendarSyncMessage = ref('')
-
-async function connectGoogleCalendar() {
-  calendarSyncOpen.value = true
-  calendarConnecting.value = true
-  calendarSyncMessage.value = 'กำลังเริ่มการเชื่อมต่อ…'
-  try {
-    const { authorizationUrl } = await calendarIntegrationApi.startGoogleConnect()
-    window.location.assign(authorizationUrl)
-  } catch {
-    calendarSyncMessage.value = 'ระบบเชื่อมต่อยังรอการเปิดใช้งานจาก backend'
-  } finally {
-    calendarConnecting.value = false
-  }
+function openGoogleCalendarSettings() {
+  void router.push({ name: 'staff-calendar' })
 }
 
-const timeOptions = ['09:00', '11:00', '13:00', '15:00', '17:00']
 const branchOptions = computed(() => branches.value.filter((branch) => branch.active))
 const visibleTherapists = computed(() =>
   therapists.value
@@ -94,6 +80,34 @@ const weekColumns = computed(() =>
 )
 
 const columns = computed(() => (mode.value === 'week' ? weekColumns.value : dayColumns.value))
+function therapistsForSlot(columnTherapist?: Therapist) {
+  return mode.value === 'week' ? visibleTherapists.value : columnTherapist ? [columnTherapist] : []
+}
+function therapistForSlot(date: string, time: string, columnTherapist?: Therapist) {
+  return therapistsForSlot(columnTherapist).find(
+    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
+  ) ?? columnTherapist
+}
+function slotInBranchWindow(date: string, time: string, columnTherapist?: Therapist) {
+  return therapistsForSlot(columnTherapist).some(
+    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
+  )
+}
+const timeOptions = computed(() => {
+  const times = new Set<string>()
+  for (const column of columns.value) {
+    const dayTherapists = mode.value === 'week' ? visibleTherapists.value : [column.therapist]
+    for (const therapist of dayTherapists) {
+      if (!therapist) continue
+      for (const time of availability.value[`${column.date}:${therapist.id}`] ?? []) times.add(time)
+    }
+  }
+  const visibleDates = new Set(columns.value.map((column) => column.date))
+  for (const item of appointments.value) {
+    if (visibleDates.has(dateInBangkok(item.startAt))) times.add(formatTime(item.startAt))
+  }
+  return [...times].sort()
+})
 
 function branchName(code: string) {
   return branches.value.find((branch) => branch.code === code)?.name || code
@@ -105,6 +119,12 @@ function formatTime(value: string) {
     minute: '2-digit',
     timeZone: 'Asia/Bangkok',
   })
+}
+
+function dateInBangkok(value: string) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Bangkok',
+  }).format(new Date(value))
 }
 
 function formatWeekday(value: string) {
@@ -135,7 +155,7 @@ const dateLabel = computed(() => {
 function appointmentFor(date: string, time: string, therapist?: Therapist) {
   return appointments.value.find(
     (item) =>
-      item.startAt.slice(0, 10) === date &&
+      dateInBangkok(item.startAt) === date &&
       formatTime(item.startAt) === time &&
       (mode.value === 'week'
         ? selectedTherapistId.value === 'ทั้งหมด' ||
@@ -191,12 +211,40 @@ async function load() {
     appointments.value = appointmentPage.items
     branches.value = branchList
     therapists.value = therapistList
+    await loadAvailability()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดปฏิทินนัดหมายไม่สำเร็จ'
   } finally {
     loading.value = false
   }
 }
+
+async function loadAvailability() {
+  availabilityLoading.value = true
+  const next: Record<string, string[]> = {}
+  try {
+    const requests = columns.value.flatMap((column) => {
+      const dayTherapists = mode.value === 'week' ? visibleTherapists.value : [column.therapist]
+      return dayTherapists.flatMap((therapist) => {
+        const branchCode = therapist?.branchCode ?? (selectedBranch.value !== 'ทั้งหมด' ? selectedBranch.value : '')
+        if (!therapist || !branchCode) return []
+        const key = `${column.date}:${therapist.id}`
+        return [appointmentApi.availability({ branchCode, therapistId: therapist.id, date: column.date })
+          .then((result) => { next[key] = result.slots.map((slot) => slot.time) })]
+      })
+    })
+    await Promise.all(requests)
+    availability.value = next
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดช่วงเวลาไม่สำเร็จ'
+  } finally {
+    availabilityLoading.value = false
+  }
+}
+
+watch([anchorDate, mode, selectedTherapistId, selectedBranch], () => {
+  if (branches.value.length) void loadAvailability()
+})
 
 onMounted(() => void load())
 </script>
@@ -251,8 +299,8 @@ onMounted(() => void load())
             รายสัปดาห์
           </button>
         </div>
-        <button class="calendar-google" type="button" @click="connectGoogleCalendar">
-          เชื่อมต่อ Google Calendar
+        <button class="calendar-google" type="button" @click="openGoogleCalendarSettings">
+          ตั้งค่า Google Calendar
         </button>
       </section>
 
@@ -269,10 +317,11 @@ onMounted(() => void load())
       </p>
       <div v-else-if="loading" class="calendar-loading">กำลังโหลดปฏิทิน...</div>
       <div v-else class="calendar-grid-scroll">
-        <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1) }">
+        <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1), '--time-count': Math.max(timeOptions.length, 1) }">
           <div class="time-column">
             <b>เวลา</b>
-            <span v-for="time in timeOptions" :key="time">{{ time }}</span>
+          <span v-for="time in timeOptions" :key="time">{{ time }}</span>
+          <span v-if="availabilityLoading" class="calendar-time-loading">…</span>
           </div>
           <div v-for="column in columns" :key="column.key" class="schedule-column">
             <header>
@@ -285,12 +334,13 @@ onMounted(() => void load())
               type="button"
               class="schedule-slot"
               :data-state="slotState(appointmentFor(column.date, time, column.therapist))"
-              @click="openSlot(column.date, time, column.therapist)"
+              :disabled="!appointmentFor(column.date, time, column.therapist) && !slotInBranchWindow(column.date, time, column.therapist)"
+              @click="openSlot(column.date, time, therapistForSlot(column.date, time, column.therapist))"
             >
               <template v-if="appointmentFor(column.date, time, column.therapist)">
                 <strong>
                   {{ time }}
-                  {{ appointmentFor(column.date, time, column.therapist)?.patient.fullName }}
+                  {{ appointmentFor(column.date, time, column.therapist)?.patient?.fullName || appointmentFor(column.date, time, column.therapist)?.contactName || 'ผู้ป่วยไม่ประจำ' }}
                 </strong>
                 <small
                   >นก.
@@ -306,28 +356,13 @@ onMounted(() => void load())
             </button>
           </div>
           <div v-if="columns.length === 0" class="calendar-empty">ไม่พบนักกายภาพตามตัวกรอง</div>
+          <div v-else-if="!availabilityLoading && timeOptions.length === 0" class="calendar-empty">
+            ไม่พบช่วงเวลารับนัดของสาขานี้
+          </div>
         </div>
       </div>
     </main>
 
-    <div
-      v-if="calendarSyncOpen"
-      class="calendar-modal-backdrop"
-      @click.self="calendarSyncOpen = false"
-    >
-      <section
-        class="calendar-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="calendar-sync-title"
-      >
-        <h2 id="calendar-sync-title">เชื่อมต่อ Google Calendar</h2>
-        <p>{{ calendarSyncMessage }}</p>
-        <button type="button" :disabled="calendarConnecting" @click="calendarSyncOpen = false">
-          {{ calendarConnecting ? 'กำลังเชื่อมต่อ…' : 'รับทราบ' }}
-        </button>
-      </section>
-    </div>
   </div>
 </template>
 
