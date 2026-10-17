@@ -14,7 +14,14 @@ public class AppointmentLifecycleService {
     @Transactional
     public AppointmentResponse checkIn(long id) {
         Appointment appointment = require(id);
-        appointment.checkIn();
+        appointment.markArrived();
+        return AppointmentResponse.from(appointment);
+    }
+
+    @Transactional
+    public AppointmentResponse startService(long id) {
+        Appointment appointment = require(id);
+        appointment.startService();
         return AppointmentResponse.from(appointment);
     }
 
@@ -32,8 +39,15 @@ public class AppointmentLifecycleService {
         return AppointmentResponse.from(appointment);
     }
 
+    @Transactional
+    public AppointmentResponse markNoShow(long id) {
+        Appointment appointment = require(id);
+        appointment.markNoShow();
+        return AppointmentResponse.from(appointment);
+    }
+
     private Appointment require(long id) {
-        return appointmentRepository.findById(id)
+        return appointmentRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new AppointmentNotFoundException(id));
     }
 }

@@ -1,13 +1,16 @@
+> หมายเหตุ 13 ต.ค. 2026: เอกสารนี้เก็บรายละเอียด handoff เดิมไว้ ขณะนี้ default runtime เปลี่ยนเป็น clinicv2 และใช้ schema ล่าสุด V1 + V2 แล้ว ดู [รายงาน runtime/CI](testing/2026-10-13-V2-Runtime-CI.md) สำหรับสถานะและผลตรวจปัจจุบัน.
+
 # Appointment Module — Handoff (Frontend + Data)
 
-สรุปทุกอย่างที่ทีม Frontend และ Data ต้องรู้เกี่ยวกับฟีเจอร์ Appointment (APT-1 ถึง APT-6) ตรวจสอบตรงกับซอร์สโค้ดจริงในบรานช์ `feature/appointment-status` ณ commit `02fe930` (3 ก.ย. 2026)
+สรุปทุกอย่างที่ทีม Frontend และ Data ต้องรู้เกี่ยวกับฟีเจอร์ Appointment (APT-1 ถึง APT-6) ตรวจสอบตรงกับซอร์สโค้ดจริงในบรานช์ `feature/appointment-status-brief-v1` (8 ก.ย. 2026)
 
 ## 0. สถานะปัจจุบัน
 
-- Branch: `feature/appointment-status` — **ยังไม่ได้ merge เข้า `develop`** และยังไม่ได้เปิด PR
-- Backend tests: 91 tests ผ่านทั้งหมด (`mvn test`)
-- ครอบคลุม: สร้างนัด (APT-1), ค้นหา/ดูรายละเอียด (APT-2), check-in/complete/cancel (APT-3/4/5), เลื่อนนัด (APT-6)
-- Base URL ตอน dev: `http://localhost:8080` (frontend อ่านจาก env var `VITE_API_BASE_URL`, ดู [frontend/sabyeguyz/src/api/patients.ts](Sabyeguyz-Clinic_ERP/frontend/sabyeguyz/src/api/patients.ts) เป็นตัวอย่าง pattern ที่ใช้อยู่)
+- Branch: `feature/appointment-status-brief-v1` — **ยังไม่ได้ merge เข้า `develop`** และยังไม่ได้เปิด PR
+- Backend tests: 116 tests ผ่านทั้งหมด (`mvn clean test`)
+- ครอบคลุม: สร้างนัด (APT-1), ค้นหา/ดูรายละเอียด (APT-2), check-in/start-service/complete/no-show/cancel (APT-3/4/5), เลื่อนนัด (APT-6)
+- **สถานะนัดหมายครบ 7 ค่าตาม Workflow Brief V1 §4 แล้ว** — ชื่อเดิม `SCHEDULED`/`CHECKED_IN` ถูกเปลี่ยนเป็น `CONFIRMED`/`ARRIVED` (breaking change, migration `V10` ย้ายข้อมูลเดิมให้แล้ว)
+- Base URL ตอน dev: `http://localhost:8080` (frontend อ่านจาก env var `VITE_API_BASE_URL`, ดู [frontend/src/api/patients.ts](Sabyeguyz-Clinic_ERP/frontend/src/api/patients.ts) เป็นตัวอย่าง pattern ที่ใช้อยู่)
 - Swagger/OpenAPI สด: `GET /v3/api-docs`, UI ที่ `/swagger-ui/index.html`
 
 ---
@@ -38,13 +41,13 @@ Content-Type: application/json
 ### 1.2 ค้นหา/ลิสต์นัดหมาย
 
 ```
-GET /api/appointments?branchCode=RP&date=2026-09-05&therapistId=1&status=SCHEDULED&page=0&size=20
+GET /api/appointments?branchCode=RP&date=2026-09-05&therapistId=1&status=CONFIRMED&page=0&size=20
 ```
 
 ทุก query param เป็น **optional** ยกเว้น `page`/`size` มี default (`0`/`20`, สูงสุด `size=100`)
 
 - `date` คือวันที่ตามเวลาไทย (`Asia/Bangkok`, ดู §5) กรองด้วย `startAt` ของนัด ไม่ใช่ UTC date
-- `status` ต้องเป็นหนึ่งใน `SCHEDULED | CHECKED_IN | COMPLETED | CANCELLED` (ตัวพิมพ์ใหญ่ตรงตัว) ส่งค่าอื่นได้ `400`
+- `status` ต้องเป็นหนึ่งใน `CONFIRMED | ARRIVED | IN_SERVICE | COMPLETED | CANCELLED | RESCHEDULED | NO_SHOW` (ตัวพิมพ์ใหญ่ตรงตัว) ส่งค่าอื่นได้ `400`
 - ผลลัพธ์เรียงตาม `startAt` ก่อน แล้วตาม `id` (กันกรณีเวลาเท่ากัน)
 
 Response `200`:
@@ -69,26 +72,31 @@ GET /api/appointments/{id}
 ### 1.4 เปลี่ยนสถานะ / เลื่อนนัด
 
 ```
-POST  /api/appointments/{id}/check-in                → SCHEDULED → CHECKED_IN
-POST  /api/appointments/{id}/complete                 → CHECKED_IN → COMPLETED
-POST  /api/appointments/{id}/cancel                   → SCHEDULED หรือ CHECKED_IN → CANCELLED
+POST  /api/appointments/{id}/check-in                 → CONFIRMED หรือ RESCHEDULED → ARRIVED
+POST  /api/appointments/{id}/start-service            → ARRIVED → IN_SERVICE
+POST  /api/appointments/{id}/complete                 → IN_SERVICE → COMPLETED
+POST  /api/appointments/{id}/no-show                  → CONFIRMED หรือ RESCHEDULED → NO_SHOW
+POST  /api/appointments/{id}/cancel                   → CONFIRMED, RESCHEDULED หรือ ARRIVED → CANCELLED
       Body: {"reason": "string ไม่ว่าง (max 500)"}
-PATCH /api/appointments/{id}                          → เปลี่ยน startAt และ/หรือ therapistId (SCHEDULED เท่านั้น)
+PATCH /api/appointments/{id}                          → เปลี่ยน startAt และ/หรือ therapistId แล้วย้ายเป็น RESCHEDULED
       Body: {"startAt": "2026-09-05T14:00:00+07:00", "therapistId": 2}   // therapistId ไม่ส่ง = ใช้คนเดิม
 ```
 
-ทั้ง 4 endpoint คืน `200` + `AppointmentResponse` ที่อัปเดตแล้ว (ไม่ใช่ 204 — ตั้งใจให้ frontend เอา response ไปอัปเดตหน้าจอได้เลยโดยไม่ต้อง GET ซ้ำ)
+ทุก endpoint คืน `200` + `AppointmentResponse` ที่อัปเดตแล้ว (ไม่ใช่ 204 — ตั้งใจให้ frontend เอา response ไปอัปเดตหน้าจอได้เลยโดยไม่ต้อง GET ซ้ำ)
 
-**State machine** (ดูรายละเอียดเหตุผลใน §6 — ยังเป็น Assumption รอ BA ยืนยัน):
+**State machine** — 7 สถานะตาม Workflow Brief V1 §4 (Confirmed Requirement):
 
-| จากสถานะ | check-in | complete | cancel | PATCH (reschedule) |
-|---|---|---|---|---|
-| `SCHEDULED` | → `CHECKED_IN` | `409` | → `CANCELLED` | ✅ |
-| `CHECKED_IN` | `409` | → `COMPLETED` | → `CANCELLED` | `409` |
-| `COMPLETED` | `409` | `409` | `409` | `409` |
-| `CANCELLED` | `409` | `409` | `409` | `409` |
+| จากสถานะ | check-in | start-service | complete | no-show | cancel | PATCH (reschedule) |
+|---|---|---|---|---|---|---|
+| `CONFIRMED` | → `ARRIVED` | `409` | `409` | → `NO_SHOW` | → `CANCELLED` | → `RESCHEDULED` |
+| `RESCHEDULED` | → `ARRIVED` | `409` | `409` | → `NO_SHOW` | → `CANCELLED` | → `RESCHEDULED` |
+| `ARRIVED` | `409` | → `IN_SERVICE` | `409` | `409` | → `CANCELLED` | `409` |
+| `IN_SERVICE` | `409` | `409` | → `COMPLETED` | `409` | `409` | `409` |
+| `COMPLETED` | `409` | `409` | `409` | `409` | `409` | `409` |
+| `CANCELLED` | `409` | `409` | `409` | `409` | `409` | `409` |
+| `NO_SHOW` | `409` | `409` | `409` | `409` | `409` | `409` |
 
-ยกเลิกนัดสำเร็จแล้ว **ช่วงเวลานั้นว่างให้จองนัดใหม่ทันที** (การนับ overlap ไม่รวมนัดที่ `CANCELLED`)
+`CANCELLED` และ `NO_SHOW` **คืนช่วงเวลาให้จองใหม่ได้ทันที** — สถานะอื่นทั้งหมดยังกันเวลาไว้ (รวม `RESCHEDULED` ที่ย้ายไปกันเวลาช่วงใหม่แทน) กติกานี้บังคับ 2 ชั้น: JPA overlap check และ PostgreSQL exclusion constraint `excl_appointments_therapist_overlap`
 
 ### 1.5 `AppointmentResponse` (shape ที่ endpoint เกือบทั้งหมดคืนกลับ)
 
@@ -101,7 +109,7 @@ interface AppointmentResponse {
   service: { id: number; name: string; durationMinutes: number }
   startAt: string   // ISO-8601 UTC เช่น "2026-09-05T02:00:00Z"
   endAt: string      // ISO-8601 UTC
-  status: "SCHEDULED" | "CHECKED_IN" | "COMPLETED" | "CANCELLED"
+  status: "CONFIRMED" | "ARRIVED" | "IN_SERVICE" | "COMPLETED" | "CANCELLED" | "RESCHEDULED" | "NO_SHOW"
   note: string | null
 }
 ```
@@ -164,7 +172,7 @@ appointments
   service_id     BIGINT NOT NULL FK → services(id)
   start_at       TIMESTAMPTZ NOT NULL
   end_at         TIMESTAMPTZ NOT NULL
-  status         VARCHAR(20) NOT NULL   -- SCHEDULED | CHECKED_IN | COMPLETED | CANCELLED
+  status         VARCHAR(20) NOT NULL   -- CONFIRMED | ARRIVED | IN_SERVICE | COMPLETED | CANCELLED | RESCHEDULED | NO_SHOW
   note           TEXT NULL
   cancel_reason  TEXT NULL              -- มีค่าเฉพาะแถวที่ status = CANCELLED
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -208,7 +216,8 @@ INDEX idx_appointments_branch_start    (branch_id, start_at)
 | State machine | `backend/src/main/java/com/sabyeguyz/clinic/appointment/Appointment.java` |
 | Response DTO | `backend/src/main/java/com/sabyeguyz/clinic/appointment/AppointmentResponse.java` |
 | Error handling | `backend/src/main/java/com/sabyeguyz/clinic/api/ApiExceptionHandler.java` |
-| Schema | `backend/src/main/resources/db/migration/V4__appointment.sql` |
-| ตัวอย่าง fetch client pattern | `frontend/sabyeguyz/src/api/patients.ts` |
+| Schema ที่ Appointment API ปัจจุบันใช้งาน | `../backend/src/main/resources/db/migration` |
+| Schema v2 ล่าสุดจากทีมฐานข้อมูล (เปิดใช้งานแล้ว) | `../backend/src/main/resources/db/migration/V1__initial_schema.sql` |
+| ตัวอย่าง fetch client pattern | `frontend/src/api/patients.ts` |
 
 (path ทั้งหมดอยู่ใต้ `Sabyeguyz-Clinic_ERP/` — repo monorepo ปัจจุบัน)
