@@ -19,7 +19,7 @@
 
     <properties>
         <java.version>17</java.version>
-        <byte-buddy.version>1.17.8</byte-buddy.version>
+        <start-class>com.sabyeguyz.clinicv2.ClinicV2Application</start-class>
     </properties>
 
     <dependencies>
@@ -49,6 +49,10 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
@@ -62,28 +66,77 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>cypress-api</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <mainClass>com.sabyeguyz.clinic.cypress.CypressApiApplication</mainClass>
+                            <useTestClasspath>true</useTestClasspath>
+                            <classesDirectory>${project.build.testOutputDirectory}</classesDirectory>
+                            <additionalClasspathElements>
+                                <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
+                            </additionalClasspathElements>
+                            <jmxPort>19001</jmxPort>
+                            <wait>500</wait>
+                            <maxAttempts>120</maxAttempts>
+                            <arguments>
+                                <argument>--spring.profiles.active=cypress</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>cypress-v2</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <mainClass>com.sabyeguyz.clinicv2.ClinicV2Application</mainClass>
+                            <useTestClasspath>true</useTestClasspath>
+                            <classesDirectory>${project.build.testOutputDirectory}</classesDirectory>
+                            <additionalClasspathElements>
+                                <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
+                            </additionalClasspathElements>
+                            <jmxPort>19001</jmxPort>
+                            <wait>500</wait>
+                            <maxAttempts>120</maxAttempts>
+                            <arguments>
+                                <argument>--spring.profiles.active=v2,cypress-v2</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>v2</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <mainClass>com.sabyeguyz.clinicv2.ClinicV2Application</mainClass>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>
-            <!--
-                Mockito uses Byte Buddy to instrument Spring test beans. JDK 21+
-                restricts dynamic agent loading; enabling it keeps the test
-                runtime compatible when developers accidentally run with a newer
-                JDK, while the project source/target remains Java 17.
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

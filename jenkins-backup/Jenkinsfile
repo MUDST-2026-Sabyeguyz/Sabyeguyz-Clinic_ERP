@@ -1,0 +1,82 @@
+pipeline {
+  agent any
+  options { disableConcurrentBuilds(); timeout(time: 90, unit: 'MINUTES'); buildDiscarder(logRotator(numToKeepStr: '10')) }
+  parameters {
+    booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to local test app after checks pass (test-only by default)')
+    booleanParam(name: 'LOCAL_SNAPSHOT', defaultValue: true, description: 'Use develop snapshot refreshed by Refresh-Source.ps1')
+    choice(name: 'SOURCE_BRANCH', choices: ['develop', 'feat/backend-v2-integration'], description: 'Branch to test; local integration bundle is required for unpushed commits')
+    string(name: 'GIT_CREDENTIAL_ID', defaultValue: 'github-read', description: 'Jenkins read-only GitHub credential; used when LOCAL_SNAPSHOT=false')
+  }
+  stages {
+    stage('Checkout selected branch') {
+      steps {
+        deleteDir()
+        script {
+          if (params.LOCAL_SNAPSHOT) {
+            def bundle = params.SOURCE_BRANCH == 'develop' ? 'develop.bundle' : 'integration.bundle'
+            def sourceRef = params.SOURCE_BRANCH == 'develop' ? 'refs/remotes/origin/develop' : "refs/heads/${params.SOURCE_BRANCH}"
+            sh "git init && git fetch /opt/clinic/source/${bundle} '${sourceRef}:refs/heads/${params.SOURCE_BRANCH}' && git checkout '${params.SOURCE_BRANCH}'"
+          } else {
+            git branch: params.SOURCE_BRANCH, credentialsId: params.GIT_CREDENTIAL_ID, url: 'https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git'
+          }
+        }
+        script { env.SOURCE_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim(); env.CI_PROJECT = "clinic-ci-${env.BUILD_NUMBER}" }
+        sh 'git rev-parse HEAD > source-sha.txt; docker info >/dev/null'
+      }
+    }
+    stage('Backend verify') { steps { dir('backend') { sh 'mvn --batch-mode --no-transfer-progress verify' } } }
+    stage('Frontend unit and build') { steps { dir('frontend') { sh 'npm ci && npm run test:unit -- --run && npm run build' } } }
+    stage('Build images') { steps { sh 'docker build -t clinic-backend:$SOURCE_SHA backend && docker build -t clinic-frontend:$SOURCE_SHA frontend' } }
+    stage('PostgreSQL and browser acceptance') {
+      steps {
+        writeFile file: 'ci-images.yaml', text: 'services:\n  backend:\n    image: clinic-backend:${SOURCE_SHA}\n  frontend:\n    image: clinic-frontend:${SOURCE_SHA}\n'
+        sh '''#!/bin/bash
+set -euo pipefail
+umask 077
+mkdir -p /var/jenkins_home/clinic-ci
+ENVFILE=/var/jenkins_home/clinic-ci/$CI_PROJECT.env
+printf 'POSTGRES_PASSWORD=%s\nJWT_SECRET=%s\nPOSTGRES_DB=clinic_ci\nPOSTGRES_PORT=15432\nBACKEND_PORT=18083\nFRONTEND_PORT=18082\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "$ENVFILE"
+docker compose --env-file "$ENVFILE" -f compose.yaml -f ci-images.yaml -p "$CI_PROJECT" up --no-build --wait --wait-timeout 240 -d
+'''
+        dir('frontend') { sh 'CYPRESS_BASE_URL=http://docker:18082 npx cypress run --browser /usr/bin/chromium' }
+      }
+    }
+    stage('Deploy local test app') {
+      when { expression { params.DEPLOY } }
+      steps {
+        sh '''#!/bin/bash
+set -euo pipefail
+umask 077
+mkdir -p /var/jenkins_home/clinic-deploy
+SECRET=/var/jenkins_home/clinic-deploy/local.env
+if [ ! -f "$SECRET" ]; then
+  printf 'POSTGRES_PASSWORD=%s\nJWT_SECRET=%s\nPOSTGRES_DB=clinic_local\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "$SECRET"
+fi
+docker compose --env-file "$SECRET" -f /opt/clinic/deploy.yaml -p clinic-local up --wait --wait-timeout 240 -d
+curl --fail --retry 10 --retry-delay 3 http://docker:18080/healthz
+curl --fail --retry 10 --retry-delay 3 http://docker:18081/actuator/health
+printf '%s\n' "$SOURCE_SHA" > /var/jenkins_home/clinic-deploy/deployed-sha.txt
+'''
+      }
+    }
+  }
+  post {
+    always {
+      junit allowEmptyResults: true, testResults: 'backend/target/surefire-reports/TEST-*.xml'
+      archiveArtifacts artifacts: 'source-sha.txt,backend/target/surefire-reports/**,frontend/cypress/screenshots/**', allowEmptyArchive: true
+      script {
+        if (env.CI_PROJECT && fileExists('compose.yaml')) {
+          sh '''#!/bin/bash
+ENVFILE=/var/jenkins_home/clinic-ci/$CI_PROJECT.env
+if [ -f "$ENVFILE" ]; then
+ docker compose --env-file "$ENVFILE" -p "$CI_PROJECT" logs --no-color --tail=100 > ci-services.log 2>&1 || true
+ docker compose --env-file "$ENVFILE" -p "$CI_PROJECT" down -v --remove-orphans || true
+ rm -f "$ENVFILE"
+fi
+'''
+          archiveArtifacts artifacts: 'ci-services.log', allowEmptyArchive: true
+        }
+      }
+    }
+  }
+}
