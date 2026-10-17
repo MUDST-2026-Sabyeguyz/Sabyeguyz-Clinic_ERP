@@ -852,6 +852,8 @@
 }
 .appointment-status-filter :deep(.filter-dropdown__menu) {
   min-width: 150px;
+  top: auto;
+  bottom: calc(100% + 5px);
   font-size: 14px;
 }
 .appointment-edit {
@@ -1843,6 +1845,12 @@
   border: 2px solid #218b85;
   background: #e7f6f2;
   font-weight: 600;
+}
+.appointment-time-slots button:disabled {
+  border-color: #d4d9d7;
+  color: #7b8582;
+  background: #eef0ef;
+  cursor: not-allowed;
 }
 .appointment-time-help {
   margin-top: 36px !important;
