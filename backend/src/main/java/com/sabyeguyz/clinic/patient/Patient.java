@@ -55,6 +55,12 @@ public class Patient {
     private String emergencyContactPhone;
     @Column(name = "privacy_consent")
     private boolean privacyConsent;
+    private String nickname;
+    @Column(name = "blood_group") private String bloodGroup;
+    private String nationality;
+    @Column(name = "customer_type") private String customerType;
+    @Column(name = "customer_source") private String customerSource;
+    @Column(name = "insurance_company") private String insuranceCompany;
     private boolean active;
     @Column(name = "created_at")
     private Instant createdAt;
@@ -83,6 +89,8 @@ public class Patient {
         this.emergencyContactRelationship = request.emergencyContactRelationship();
         this.emergencyContactPhone = request.emergencyContactPhone();
         this.privacyConsent = request.privacyConsent();
+        this.nickname = request.nickname(); this.bloodGroup = request.bloodGroup(); this.nationality = request.nationality();
+        this.customerType = request.customerType(); this.customerSource = request.customerSource(); this.insuranceCompany = request.insuranceCompany();
         this.active = true;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
@@ -90,6 +98,23 @@ public class Patient {
 
     public void assignHn(String generatedHn) {
         if (this.hn == null) this.hn = generatedHn;
+    }
+    public void update(PatientUpdateRequest request) {
+        this.title = request.title(); this.fullName = request.fullName().trim(); this.birthDate = request.birthDate();
+        this.gender = request.gender(); this.phone = request.phone().trim();
+        this.identityDocumentType = request.identityDocumentType().trim(); this.identityNumber = request.identityNumber().trim();
+        this.address = request.address().trim(); this.drugAllergy = request.drugAllergy(); this.foodAllergy = request.foodAllergy();
+        this.chronicDisease = request.chronicDisease(); this.emergencyContactName = request.emergencyContactName().trim();
+        this.emergencyContactRelationship = request.emergencyContactRelationship().trim();
+        this.emergencyContactPhone = request.emergencyContactPhone().trim(); this.privacyConsent = request.privacyConsent();
+        if (request.nickname() != null) this.nickname = request.nickname().trim();
+        if (request.email() != null) this.email = request.email().trim();
+        if (request.bloodGroup() != null) this.bloodGroup = request.bloodGroup().trim();
+        if (request.nationality() != null) this.nationality = request.nationality().trim();
+        if (request.customerType() != null) this.customerType = request.customerType().trim();
+        if (request.customerSource() != null) this.customerSource = request.customerSource().trim();
+        if (request.insuranceCompany() != null) this.insuranceCompany = request.insuranceCompany().trim();
+        this.active = request.active(); this.updatedAt = Instant.now();
     }
     public Long getId() { return id; }
     public String getHn() { return hn; }
@@ -110,4 +135,11 @@ public class Patient {
     public String getEmergencyContactRelationship() { return emergencyContactRelationship; }
     public String getEmergencyContactPhone() { return emergencyContactPhone; }
     public boolean isPrivacyConsent() { return privacyConsent; }
+    public String getNickname() { return nickname; }
+    public String getEmail() { return email; }
+    public String getBloodGroup() { return bloodGroup; }
+    public String getNationality() { return nationality; }
+    public String getCustomerType() { return customerType; }
+    public String getCustomerSource() { return customerSource; }
+    public String getInsuranceCompany() { return insuranceCompany; }
 }

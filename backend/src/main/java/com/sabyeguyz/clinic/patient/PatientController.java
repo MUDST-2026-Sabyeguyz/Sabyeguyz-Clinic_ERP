@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -53,9 +54,11 @@ public class PatientController {
     public PatientSearchResponse search(
             @Parameter(description = "Text matched against HN, full name, phone, and identity number")
             @RequestParam(defaultValue = "") String query,
+            @RequestParam(required = false) String branchCode,
+            @RequestParam(defaultValue = "nameAsc") String sort,
             @Parameter(description = "Zero-based page number") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size from 1 to 100") @RequestParam(defaultValue = "20") int size) {
-        return queryService.search(query, page, size);
+        return queryService.search(query, branchCode, sort, page, size);
     }
 
     @GetMapping("/{id}")
@@ -68,5 +71,10 @@ public class PatientController {
     public PatientProfileResponse getProfile(
             @Parameter(description = "Patient database identifier", required = true) @PathVariable long id) {
         return queryService.getProfile(id);
+    }
+
+    @PutMapping("/{id}")
+    public PatientProfileResponse update(@PathVariable long id, @Valid @RequestBody PatientUpdateRequest request) {
+        return queryService.update(id, request);
     }
 }
