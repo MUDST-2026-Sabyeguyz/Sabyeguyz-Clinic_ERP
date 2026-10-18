@@ -6,6 +6,7 @@ import { ApiError, calendarApi, type CalendarStatus } from '@/api/client'
 // move or delete in Google comes back. A therapist sees the status and opens the calendars; the Manager also syncs on demand.
 const status = ref<CalendarStatus | null>(null)
 const message = ref('')
+const loading = ref(true)
 const busy = ref(false)
 const isManager = (() => {
   try {
@@ -14,16 +15,29 @@ const isManager = (() => {
     return false
   }
 })()
-const calendars = computed(() => (status.value?.branches ?? []).filter((branch) => branch.googleCalendarId))
+const calendars = computed(() =>
+  (status.value?.branches ?? []).filter((branch) => branch.googleCalendarId),
+)
 const openUrl = (calendarId: string) =>
   `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}&ctz=Asia%2FBangkok`
 
 async function load() {
+  loading.value = true
   try {
     status.value = await calendarApi.status()
   } catch (error) {
-    message.value = error instanceof ApiError ? error.message : 'ตรวจสถานะ Google Calendar ไม่สำเร็จ'
+    status.value = null
+    message.value =
+      error instanceof ApiError ? error.message : 'ตรวจสถานะ Google Calendar ไม่สำเร็จ'
+  } finally {
+    loading.value = false
   }
+}
+function formatTime(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 }
 async function syncNow() {
   busy.value = true
@@ -45,23 +59,36 @@ onMounted(load)
 
 <template>
   <div class="google-calendar-panel">
-    <p v-if="status && !status.enabled">ยังไม่เปิดการซิงก์กับ Google Calendar</p>
+    <p v-if="loading">กำลังตรวจสถานะ…</p>
+    <p v-else-if="status && !status.enabled">ยังไม่เปิดการซิงก์กับ Google Calendar</p>
     <ul v-else-if="status" class="google-calendar-list">
       <li v-for="branch in status.branches" :key="branch.branchCode">
         <b>{{ branch.branchName }}</b>
         <template v-if="branch.googleCalendarId">
-          · รอซิงก์ {{ branch.waiting }} · ล้มเหลว {{ branch.failed }} ·
-          <a :href="openUrl(branch.googleCalendarId)" target="_blank" rel="noopener noreferrer">เปิด Google Calendar</a>
+          · เปิดใช้งานการซิงก์ · รอซิงก์ {{ branch.waiting }} · ล้มเหลว {{ branch.failed }} ·
+          <a :href="openUrl(branch.googleCalendarId)" target="_blank" rel="noopener noreferrer"
+            >เปิด Google Calendar</a
+          >
         </template>
         <template v-else> · ยังไม่ได้ผูกปฏิทิน</template>
       </li>
       <li v-if="calendars.length === 0">ยังไม่มีสาขาที่ผูกปฏิทิน</li>
     </ul>
-    <p v-else>กำลังตรวจสถานะ…</p>
+    <p v-if="!loading && status?.enabled">
+      {{
+        status.lastRunAt
+          ? `ตรวจซิงก์ล่าสุด: ${formatTime(status.lastRunAt)}`
+          : 'ยังไม่มีข้อมูลการซิงก์ล่าสุด'
+      }}
+    </p>
     <p v-if="message" role="status">{{ message }}</p>
-    <p v-if="!isManager" class="google-calendar-note">การตั้งค่าและการซิงก์ทันทีทำได้เฉพาะผู้จัดการ</p>
+    <p v-if="!isManager" class="google-calendar-note">
+      การตั้งค่าและการซิงก์ทันทีทำได้เฉพาะผู้จัดการ
+    </p>
     <div v-else class="google-calendar-actions">
-      <button type="button" :disabled="busy || !status?.enabled" @click="syncNow">ซิงก์ทันที</button>
+      <button type="button" :disabled="busy || !status?.enabled" @click="syncNow">
+        ซิงก์ทันที
+      </button>
       <RouterLink to="/staff/calendar">ตั้งค่าปฏิทิน Google</RouterLink>
     </div>
   </div>

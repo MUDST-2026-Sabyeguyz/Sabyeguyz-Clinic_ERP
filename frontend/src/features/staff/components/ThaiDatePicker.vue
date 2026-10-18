@@ -7,6 +7,8 @@ const props = withDefaults(
     disabled?: boolean
     invalid?: boolean
     minDate?: string
+    inclusiveMin?: boolean
+    disableSunday?: boolean
     showCalendarIcon?: boolean
     numericMonth?: boolean
     hideCaret?: boolean
@@ -16,6 +18,8 @@ const props = withDefaults(
     disabled: false,
     invalid: false,
     minDate: '',
+    inclusiveMin: false,
+    disableSunday: false,
     showCalendarIcon: false,
     numericMonth: false,
     hideCaret: false,
@@ -130,9 +134,14 @@ function choose(day: number) {
 }
 
 function isDisabled(day: number) {
+  if (
+    props.disableSunday &&
+    new Date(viewDate.value.getFullYear(), viewDate.value.getMonth(), day).getDay() === 0
+  )
+    return true
   if (!props.minDate) return false
   const candidate = `${viewDate.value.getFullYear()}-${String(viewDate.value.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-  return candidate <= props.minDate
+  return props.inclusiveMin ? candidate < props.minDate : candidate <= props.minDate
 }
 
 function isSelected(day: number) {

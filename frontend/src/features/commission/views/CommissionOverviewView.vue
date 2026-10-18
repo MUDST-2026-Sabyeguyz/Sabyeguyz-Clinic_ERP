@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
 import { commissionApi } from '@/api/client'
 
@@ -28,6 +28,12 @@ const date = ref(
     ? `${selectedMonth}-01`
     : new Date().toISOString().slice(0, 10),
 )
+const monthFilter = computed({
+  get: () => date.value.slice(0, 7),
+  set: (month: string) => {
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) date.value = `${month}-01`
+  },
+})
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
@@ -102,14 +108,13 @@ watch(date, loadOverview)
       </section>
       <section class="overview-filters commission-card">
         <label
-          >ค้นหานักกายภาพ<input v-model="search" placeholder="ค้นหาชื่อหรือรหัสพนักงาน" /></label
-        ><label
-          >รอบคำนวณ<ThaiDatePicker
-            v-model="date"
-            numeric-month
-            show-calendar-icon
-            hide-caret /></label
-        ><label
+          >ค้นหานักกายภาพ<input v-model="search" placeholder="ค้นหาชื่อหรือรหัสพนักงาน"
+        /></label>
+        <div class="overview-filter-field">
+          <span>รอบคำนวณ</span
+          ><MonthFilterPicker v-model="monthFilter" :past-years="3" :future-years="0" />
+        </div>
+        <label
           >สถานะ<FilterDropdown
             v-model="status"
             default-value=""
@@ -169,7 +174,8 @@ watch(date, loadOverview)
   padding: 20px 24px;
   margin-bottom: 24px;
 }
-.overview-filters label {
+.overview-filters label,
+.overview-filter-field {
   display: grid;
   gap: 7px;
   color: #25372f;

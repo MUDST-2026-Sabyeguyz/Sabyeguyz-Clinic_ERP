@@ -1,24 +1,24 @@
 <script setup lang="ts">
+import { loadAppointmentTherapists } from '../therapists'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
+import CalendarSyncIndicator from '../components/CalendarSyncIndicator.vue'
 import {
   ApiError,
   appointmentApi,
   branchApi,
-  calendarApi,
-  catalogApi,
   type Appointment,
   type Branch,
-  type CalendarStatus,
   type Therapist,
 } from '@/api/client'
 
 type CalendarMode = 'day' | 'week'
 
 const router = useRouter()
+const route = useRoute()
 const mode = ref<CalendarMode>('week')
 const toDateValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -26,7 +26,10 @@ const anchorDate = ref(toDateValue(new Date()))
 const selectedTherapistId = ref('ทั้งหมด')
 const authUser = (() => {
   try {
-    return JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string; branchCode?: string } | null
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+      role?: string
+      branchCode?: string
+    } | null
   } catch {
     return null
   }
@@ -42,41 +45,16 @@ const branches = ref<Branch[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
 const calendarSyncOpen = ref(false)
-const calendarSyncLoading = ref(false)
-const calendarSyncStatus = ref<CalendarStatus | null>(null)
-const calendarSyncMessage = ref('')
-
-async function showGoogleCalendarStatus() {
+function showGoogleCalendarStatus() {
   calendarSyncOpen.value = true
-  calendarSyncLoading.value = true
-  calendarSyncStatus.value = null
-  calendarSyncMessage.value = 'กำลังตรวจสถานะ Google Calendar...'
-  try {
-    const status = await calendarApi.status()
-    calendarSyncStatus.value = status
-    const branch = status.branches[0]
-    if (!status.enabled) {
-      calendarSyncMessage.value = 'ระบบซิงก์ยังไม่เปิดใช้งานบนเซิร์ฟเวอร์ กรุณาแจ้งผู้ดูแลระบบ'
-    } else if (!branch) {
-      calendarSyncMessage.value = 'ไม่พบสาขาที่เชื่อมกับบัญชีผู้ใช้นี้'
-    } else if (!branch.googleCalendarId) {
-      calendarSyncMessage.value = `ยังไม่ได้กำหนด Calendar ID ให้สาขา${branch.branchName} กรุณาแจ้ง Manager`
-    } else {
-      calendarSyncMessage.value = `ระบบเปิดซิงก์สำหรับสาขา${branch.branchName}แล้ว`
-    }
-  } catch (error) {
-    calendarSyncStatus.value = null
-    calendarSyncMessage.value =
-      error instanceof ApiError ? error.message : 'ตรวจสถานะ Google Calendar ไม่สำเร็จ'
-  } finally {
-    calendarSyncLoading.value = false
-  }
 }
 
 // only the Manager changes an appointment
 const canChangeAppointments = (() => {
   try {
-    return JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+    return ['MANAGER', 'THERAPIST'].includes(
+      JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role,
+    )
   } catch {
     return false
   }
@@ -94,7 +72,8 @@ const visibleTherapists = computed(() =>
     .filter(
       (therapist) =>
         (isManager && selectedBranch.value === 'ทั้งหมด') ||
-        therapist.branchCode === (selectedBranch.value === 'ทั้งหมด' ? homeBranchCode : selectedBranch.value),
+        therapist.branchCode ===
+          (selectedBranch.value === 'ทั้งหมด' ? homeBranchCode : selectedBranch.value),
     )
     .slice(0, 5),
 )
@@ -104,7 +83,7 @@ const weekDays = computed(() => {
   const offset = selected.getDay() === 0 ? -6 : 1 - selected.getDay()
   const monday = new Date(selected)
   monday.setDate(selected.getDate() + offset)
-  return Array.from({ length: 5 }, (_, index) => {
+  return Array.from({ length: 6 }, (_, index) => {
     const date = new Date(monday)
     date.setDate(monday.getDate() + index)
     return toDateValue(date)
@@ -136,13 +115,15 @@ function therapistsForSlot(columnTherapist?: Therapist) {
   return mode.value === 'week' ? visibleTherapists.value : columnTherapist ? [columnTherapist] : []
 }
 function therapistForSlot(date: string, time: string, columnTherapist?: Therapist) {
-  return therapistsForSlot(columnTherapist).find(
-    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
-  ) ?? columnTherapist
+  return (
+    therapistsForSlot(columnTherapist).find((therapist) =>
+      availability.value[`${date}:${therapist.id}`]?.includes(time),
+    ) ?? columnTherapist
+  )
 }
 function slotInBranchWindow(date: string, time: string, columnTherapist?: Therapist) {
-  return therapistsForSlot(columnTherapist).some(
-    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
+  return therapistsForSlot(columnTherapist).some((therapist) =>
+    availability.value[`${date}:${therapist.id}`]?.includes(time),
   )
 }
 const timeOptions = computed(() => {
@@ -175,7 +156,10 @@ function formatTime(value: string) {
 
 function dateInBangkok(value: string) {
   return new Intl.DateTimeFormat('sv-SE', {
-    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Bangkok',
   }).format(new Date(value))
 }
 
@@ -197,7 +181,7 @@ const dateLabel = computed(() => {
     }).format(new Date(`${anchorDate.value}T00:00:00`))
   }
   const start = new Date(`${weekDays.value[0]}T00:00:00`)
-  const end = new Date(`${weekDays.value[4]}T00:00:00`)
+  const end = new Date(`${weekDays.value[5]}T00:00:00`)
   return `${start.getDate()}–${end.getDate()} ${new Intl.DateTimeFormat('th-TH', {
     month: 'long',
     year: 'numeric',
@@ -207,6 +191,7 @@ const dateLabel = computed(() => {
 function appointmentFor(date: string, time: string, therapist?: Therapist) {
   return appointments.value.find(
     (item) =>
+      item.status !== 'CANCELLED' &&
       dateInBangkok(item.startAt) === date &&
       formatTime(item.startAt) === time &&
       (mode.value === 'week'
@@ -258,9 +243,13 @@ async function load() {
   errorMessage.value = ''
   try {
     const [appointmentPage, branchList, therapistList] = await Promise.all([
-      appointmentApi.search({ page: 0, size: 100, ...(isManager ? {} : { branchCode: homeBranchCode }) }),
+      appointmentApi.search({
+        page: 0,
+        size: 100,
+        ...(isManager ? {} : { branchCode: homeBranchCode }),
+      }),
       branchApi.list(),
-      catalogApi.therapists(),
+      loadAppointmentTherapists(),
     ])
     appointments.value = appointmentPage.items
     branches.value = branchList
@@ -284,11 +273,17 @@ async function loadAvailability() {
     const requests = columns.value.flatMap((column) => {
       const dayTherapists = mode.value === 'week' ? visibleTherapists.value : [column.therapist]
       return dayTherapists.flatMap((therapist) => {
-        const branchCode = therapist?.branchCode ?? (selectedBranch.value !== 'ทั้งหมด' ? selectedBranch.value : '')
+        const branchCode =
+          therapist?.branchCode ?? (selectedBranch.value !== 'ทั้งหมด' ? selectedBranch.value : '')
         if (!therapist || !branchCode) return []
         const key = `${column.date}:${therapist.id}`
-        return [appointmentApi.availability({ branchCode, therapistId: therapist.id, date: column.date })
-          .then((result) => { next[key] = result.slots.map((slot) => slot.time) })]
+        return [
+          appointmentApi
+            .availability({ branchCode, therapistId: therapist.id, date: column.date })
+            .then((result) => {
+              next[key] = result.slots.map((slot) => slot.time)
+            }),
+        ]
       })
     })
     await Promise.all(requests)
@@ -304,7 +299,16 @@ watch([anchorDate, mode, selectedTherapistId, selectedBranch], () => {
   if (branches.value.length) void loadAvailability()
 })
 
-onMounted(() => void load())
+onMounted(() => {
+  void load()
+})
+watch(
+  () => route.query.googleCalendar,
+  (value) => {
+    if (value === 'status') void showGoogleCalendarStatus()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -357,10 +361,9 @@ onMounted(() => void load())
             รายสัปดาห์
           </button>
         </div>
-        <button class="calendar-google" type="button" @click="showGoogleCalendarStatus">
-          สถานะ Google Calendar
-        </button>
       </section>
+
+      <CalendarSyncIndicator :branch-code="selectedBranch" />
 
       <div class="calendar-legend">
         <span data-status="empty">ว่าง</span>
@@ -375,11 +378,17 @@ onMounted(() => void load())
       </p>
       <div v-else-if="loading" class="calendar-loading">กำลังโหลดปฏิทิน...</div>
       <div v-else class="calendar-grid-scroll">
-        <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1), '--time-count': Math.max(timeOptions.length, 1) }">
+        <div
+          class="schedule-grid"
+          :style="{
+            '--column-count': Math.max(columns.length, 1),
+            '--time-count': Math.max(timeOptions.length, 1),
+          }"
+        >
           <div class="time-column">
             <b>เวลา</b>
-          <span v-for="time in timeOptions" :key="time">{{ time }}</span>
-          <span v-if="availabilityLoading" class="calendar-time-loading">…</span>
+            <span v-for="time in timeOptions" :key="time">{{ time }}</span>
+            <span v-if="availabilityLoading" class="calendar-time-loading">…</span>
           </div>
           <div v-for="column in columns" :key="column.key" class="schedule-column">
             <header>
@@ -392,13 +401,22 @@ onMounted(() => void load())
               type="button"
               class="schedule-slot"
               :data-state="slotState(appointmentFor(column.date, time, column.therapist))"
-              :disabled="!appointmentFor(column.date, time, column.therapist) && !slotInBranchWindow(column.date, time, column.therapist)"
-              @click="openSlot(column.date, time, therapistForSlot(column.date, time, column.therapist))"
+              :disabled="
+                !appointmentFor(column.date, time, column.therapist) &&
+                !slotInBranchWindow(column.date, time, column.therapist)
+              "
+              @click="
+                openSlot(column.date, time, therapistForSlot(column.date, time, column.therapist))
+              "
             >
               <template v-if="appointmentFor(column.date, time, column.therapist)">
                 <strong>
                   {{ time }}
-                  {{ appointmentFor(column.date, time, column.therapist)?.patient?.fullName || appointmentFor(column.date, time, column.therapist)?.contactName || 'ผู้ป่วยไม่ประจำ' }}
+                  {{
+                    appointmentFor(column.date, time, column.therapist)?.patient?.fullName ||
+                    appointmentFor(column.date, time, column.therapist)?.contactName ||
+                    'ผู้ป่วยไม่ประจำ'
+                  }}
                 </strong>
                 <small
                   >นก.
@@ -434,16 +452,7 @@ onMounted(() => void load())
       >
         <h2 id="calendar-sync-title">สถานะ Google Calendar</h2>
         <GoogleCalendarPanel />
-        <p aria-live="polite">{{ calendarSyncMessage }}</p>
-        <ul v-if="calendarSyncStatus?.branches.length" class="calendar-sync-branches">
-          <li v-for="branch in calendarSyncStatus.branches" :key="branch.branchCode">
-            {{ branch.branchName }} · {{ branch.googleCalendarId ? 'ตั้งค่า Calendar ID แล้ว' : 'ยังไม่ตั้ง Calendar ID' }}
-            · รอซิงก์ {{ branch.waiting }} · ล้มเหลว {{ branch.failed }}
-          </li>
-        </ul>
-        <button type="button" :disabled="calendarSyncLoading" @click="calendarSyncOpen = false">
-          {{ calendarSyncLoading ? 'กำลังตรวจสอบ...' : 'ปิด' }}
-        </button>
+        <button type="button" @click="calendarSyncOpen = false">ปิด</button>
       </section>
     </div>
   </div>
