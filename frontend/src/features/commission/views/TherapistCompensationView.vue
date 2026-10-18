@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import TherapistCompensationLineList from '../components/TherapistCompensationLineList.vue'
 import TherapistCompensationOverview from '../components/TherapistCompensationOverview.vue'
 import TherapistCompensationPaymentHistory from '../components/TherapistCompensationPaymentHistory.vue'
@@ -51,8 +52,8 @@ function choose(year: number, monthNumber: string) {
     query: { ...route.query, month: `${year}-${monthNumber}` },
   })
 }
-function chooseYear(event: Event) {
-  choose(Number((event.target as HTMLSelectElement).value), chosenMonth.value)
+function chooseYear(value: string) {
+  choose(Number(value), chosenMonth.value)
 }
 function moveMonth(offset: number) {
   const date = new Date(chosenYear.value, Number(chosenMonth.value) - 1 + offset, 1)
@@ -77,11 +78,15 @@ function moveMonth(offset: number) {
             <strong>{{ monthNames[Number(chosenMonth) - 1] }}</strong>
             <button type="button" aria-label="เดือนถัดไป" @click="moveMonth(1)">›</button>
           </div>
-          <select aria-label="ปี" :value="chosenYear" @change="chooseYear">
-            <option v-for="year in years" :key="year" :value="year">
-              {{ yearLabel(year) }}
-            </option>
-          </select>
+          <FilterDropdown
+            :model-value="String(chosenYear)"
+            :options="years.map((year) => ({ value: String(year), label: yearLabel(year) }))"
+            label="ปี"
+            default-label="เลือกปี"
+            :clear-on-reselect="false"
+            hide-default-option
+            @update:model-value="chooseYear"
+          />
         </div>
       </div>
     </template>

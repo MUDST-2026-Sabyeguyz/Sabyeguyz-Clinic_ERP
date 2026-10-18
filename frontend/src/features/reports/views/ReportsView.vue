@@ -399,7 +399,7 @@ const tableRows = computed<string[][]>(() => {
     return list.map((row) => {
       const share = total > 0 ? Math.round((Number(row.amount) / total) * 100) : 0
       return [
-        CATEGORY_NAMES[row.type] ?? row.type,
+        row.type === 'ASSESSMENT' ? '—' : (CATEGORY_NAMES[row.type] ?? row.type),
         getTreatmentName(row.type),
         getBranchName(),
         formatPeriod(filters.from, filters.to),

@@ -673,6 +673,10 @@
   display: flex;
   gap: 8px;
 }
+.therapist-month-pickers > .filter-dropdown,
+.therapist-payment-range > .filter-dropdown {
+  width: 130px;
+}
 
 .therapist-month-stepper {
   display: flex;
