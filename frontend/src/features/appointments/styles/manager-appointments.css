@@ -712,14 +712,15 @@
 .appointment-list-controls {
   display: flex;
   align-items: end;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 32px;
+  gap: 16px 24px;
   padding: 0 0 20px;
 }
 .appointment-panel .appointment-list-filters {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 252px));
-  gap: 40px;
+  grid-template-columns: minmax(260px, 1.6fr) repeat(2, minmax(150px, 1fr));
+  gap: 12px;
   align-items: end;
   margin-left: auto;
   padding: 0;
@@ -737,13 +738,24 @@
 }
 .appointment-date-range {
   display: grid;
-  grid-template-columns: auto minmax(140px, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
   align-items: center;
   color: #25372e;
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+}
+.appointment-date-range input[type='month'] {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  padding: 0 12px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  background: #fff;
+  color: #26433e;
+  font: inherit;
 }
 .appointment-date-range :deep(.thai-date-picker) {
   margin: 0;
@@ -883,6 +895,7 @@
   .appointment-panel .appointment-list-filters {
     grid-template-columns: 1fr;
     margin-left: 0;
+    width: 100%;
   }
 }
 .appointment-view-switch {
@@ -1390,11 +1403,13 @@
   display: grid;
   grid-template-columns: minmax(0, 500px) minmax(0, 520px);
   grid-template-areas:
-    'patient-type summary'
-    'patient therapist'
-    'phone date'
-    'service-mode time'
-    'selection note';
+    'patient-type service-mode'
+    'patient selection'
+    'phone therapist'
+    '. date'
+    '. time'
+    '. note'
+    '. summary';
   justify-content: space-between;
   gap: 16px 80px;
 }
@@ -1605,6 +1620,15 @@
 }
 .appointment-create-card :deep(.appointment-form-filter.is-invalid .filter-dropdown__button),
 .appointment-time-picker.is-invalid {
+  border-color: #d84b4b;
+  box-shadow: 0 0 0 3px rgb(216 75 75 / 14%);
+}
+.appointment-create-card .appointment-form-error {
+  color: #c63b3b;
+  margin: 10px 0;
+}
+.appointment-create-card .reschedule-time-trigger.is-invalid,
+.appointment-create-card .form-grid input.is-invalid {
   border-color: #d84b4b;
   box-shadow: 0 0 0 3px rgb(216 75 75 / 14%);
 }
@@ -1845,6 +1869,12 @@
   border: 2px solid #218b85;
   background: #e7f6f2;
   font-weight: 600;
+}
+.appointment-time-slots button:disabled {
+  border-color: #d4d9d7;
+  color: #7b8582;
+  background: #eef0ef;
+  cursor: not-allowed;
 }
 .appointment-time-help {
   margin-top: 36px !important;

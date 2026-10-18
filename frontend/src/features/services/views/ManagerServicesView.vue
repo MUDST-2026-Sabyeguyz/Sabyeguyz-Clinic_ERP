@@ -10,7 +10,6 @@ import saleSuccessCheck from '@/assets/sale-success-check.svg'
 import {
   branchApi,
   catalogApi,
-  appointmentApi,
   patientApi,
   paymentMethodApi,
   paymentStatusApi,
@@ -56,6 +55,9 @@ const paymentAmount = ref(0)
 const searched = ref(false)
 const receiptNo = ref('')
 const appointmentStatusMessage = ref('')
+const patientLoading = ref(Boolean(route.query.patientId))
+const patientLoadError = ref('')
+const masterLoadError = ref('')
 const paymentDialogOpen = ref(false)
 const receiptPrintModal = ref<'confirm' | 'success' | 'error' | null>(null)
 const screen = ref<'search' | 'menu' | 'sale' | 'receipt'>(
@@ -116,32 +118,50 @@ async function loadMaster() {
   } catch {
     branches.value = []
   }
+}
+async function loadSelectedPatient() {
   const patientId = Number(route.query.patientId)
   if (Number.isInteger(patientId) && patientId > 0) {
-    const profile = await patientApi.get(patientId)
-    patient.value = profile
-    patientProfile.value = profile
-    screen.value = 'menu'
+    try {
+      const profile = await patientApi.get(patientId)
+      patient.value = profile
+      patientProfile.value = profile
+      screen.value = 'menu'
+    } catch {
+      patientLoadError.value = 'ไม่สามารถโหลดข้อมูลผู้ป่วยได้ กรุณากลับไปหน้านัดหมายแล้วลองอีกครั้ง'
+    } finally {
+      patientLoading.value = false
+    }
+  } else if (route.query.patientId) {
+    patientLoadError.value = 'ไม่พบข้อมูลผู้ป่วยที่ระบุ กรุณากลับไปหน้านัดหมายแล้วลองอีกครั้ง'
+    patientLoading.value = false
   }
 }
 onMounted(async () => {
-  try {
-    await loadMaster()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ'
-  }
+  await Promise.all([
+    loadSelectedPatient(),
+    loadMaster().catch(() => {
+      masterLoadError.value = 'โหลดข้อมูลบริการบางส่วนไม่สำเร็จ กรุณาลองใหม่ก่อนทำรายการ'
+    }),
+  ])
   window.addEventListener('manager-branch-changed', applyManagerBranch)
 })
 onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
 function applyManagerBranch() {
   if (!isManager) return
   clearPatient()
-  void loadMaster()
+  void loadMaster().catch(() => {
+    masterLoadError.value = 'โหลดข้อมูลบริการบางส่วนไม่สำเร็จ กรุณาลองใหม่ก่อนทำรายการ'
+  })
 }
 let searchTimer: number | undefined
 let patientSearchRequest = 0
 function normalizePatientSearch(value: string) {
-  return value.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '').toLowerCase()
+  return value
+    .trim()
+    .replace(/^hn[\s:#-]*/i, '')
+    .replace(/[\s-]/g, '')
+    .toLowerCase()
 }
 async function searchPatientsByKeyword(keyword: string) {
   const requestId = ++patientSearchRequest
@@ -158,7 +178,9 @@ async function searchPatientsByKeyword(keyword: string) {
   try {
     const page = await patientApi.search(keyword, 0, 100, managerBranchCode.value)
     if (requestId !== patientSearchRequest || query.value.trim() !== keyword) return
-    results.value = [...new Map([...page.items, ...localMatches].map((item) => [item.id, item])).values()]
+    results.value = [
+      ...new Map([...page.items, ...localMatches].map((item) => [item.id, item])).values(),
+    ]
   } catch (error) {
     if (requestId !== patientSearchRequest || query.value.trim() !== keyword) return
     results.value = localMatches
@@ -196,9 +218,13 @@ const itemDiscount = computed(() => 0)
 const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
 const billDiscount = computed(() => 0)
 const netAmount = computed(() => Math.max(afterItemDiscount.value - billDiscount.value, 0))
-const receivedAmount = computed(() => paymentStatus.value === 'PAID'
-  ? netAmount.value
-  : paymentStatus.value === 'INSTALLMENT' ? Math.min(paymentAmount.value, netAmount.value) : 0)
+const receivedAmount = computed(() =>
+  paymentStatus.value === 'PAID'
+    ? netAmount.value
+    : paymentStatus.value === 'INSTALLMENT'
+      ? Math.min(paymentAmount.value, netAmount.value)
+      : 0,
+)
 const remainingAmount = computed(() => Math.max(netAmount.value - receivedAmount.value, 0))
 const commissionAmount = computed(() => afterItemDiscount.value * 0.1)
 const receiptPayable = computed(() => netAmount.value)
@@ -278,7 +304,9 @@ function paymentMethodLabel(code: string, name = '') {
   return name
 }
 const selectedPaymentLabel = computed(() => {
-  const method = salePaymentMethods.value.find((item) => item.code === paymentCode.value && item.active !== false)
+  const method = salePaymentMethods.value.find(
+    (item) => item.code === paymentCode.value && item.active !== false,
+  )
   return method ? paymentMethodLabel(method.code, method.name) : '-'
 })
 const paymentStatusLabel = computed(() => {
@@ -287,8 +315,11 @@ const paymentStatusLabel = computed(() => {
 const enabledPaymentStatuses = computed(() => paymentStatuses.value)
 function selectPaymentStatus(status: PaymentStatusOption['code']) {
   paymentStatus.value = status
-  if (status === 'INSTALLMENT' && (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value))
-    paymentAmount.value = Math.max(0.01, Math.round(netAmount.value / 2 * 100) / 100)
+  if (
+    status === 'INSTALLMENT' &&
+    (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value)
+  )
+    paymentAmount.value = Math.max(0.01, Math.round((netAmount.value / 2) * 100) / 100)
 }
 const receiptIssuedAt = computed(() =>
   new Intl.DateTimeFormat('th-TH', {
@@ -363,11 +394,18 @@ async function submit() {
   errorMessage.value = ''
   confirmed.value = false
   try {
-    if (!enabledPaymentStatuses.value.some((status) => status.code === paymentStatus.value && status.enabled))
+    if (
+      !enabledPaymentStatuses.value.some(
+        (status) => status.code === paymentStatus.value && status.enabled,
+      )
+    )
       throw new Error('สถานะการชำระเงินนี้ถูกปิดใช้งาน กรุณาเลือกสถานะอื่น')
-    const availablePaymentMethod = paymentStatus.value === 'DEPOSIT'
-      ? undefined
-      : salePaymentMethods.value.find((method) => method.code === paymentCode.value && method.active !== false) ?? salePaymentMethods.value.find((method) => method.active !== false)
+    const availablePaymentMethod =
+      paymentStatus.value === 'DEPOSIT'
+        ? undefined
+        : (salePaymentMethods.value.find(
+            (method) => method.code === paymentCode.value && method.active !== false,
+          ) ?? salePaymentMethods.value.find((method) => method.active !== false))
     if (paymentStatus.value !== 'DEPOSIT' && !availablePaymentMethod)
       throw new Error('ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager')
     if (availablePaymentMethod) paymentCode.value = availablePaymentMethod.code
@@ -388,7 +426,10 @@ async function submit() {
       mode.value === 'course'
         ? (courses.value.find((c) => c.id === referenceId)?.price ?? 0)
         : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
-    if (paymentStatus.value === 'INSTALLMENT' && (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value))
+    if (
+      paymentStatus.value === 'INSTALLMENT' &&
+      (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value)
+    )
       throw new Error('ยอดผ่อนชำระต้องมากกว่า 0 และน้อยกว่ายอดสุทธิ')
     const sale = await salesApi.create({
       patientId: patient.value.id,
@@ -397,23 +438,20 @@ async function submit() {
       salespersonStaffId: selectedStaffId.value,
       note: note.value,
       items: [{ type, referenceId, quantity: 1 }],
-      payments: paymentStatus.value === 'DEPOSIT' ? [] : [
-        {
-          paymentMethodCode: paymentCode.value,
-          amount: paymentStatus.value === 'INSTALLMENT' ? paymentAmount.value : Math.min(price, netAmount.value),
-        },
-      ],
+      payments:
+        paymentStatus.value === 'DEPOSIT'
+          ? []
+          : [
+              {
+                paymentMethodCode: paymentCode.value,
+                amount:
+                  paymentStatus.value === 'INSTALLMENT'
+                    ? paymentAmount.value
+                    : Math.min(price, netAmount.value),
+              },
+            ],
     })
     receiptNo.value = sale.receiptNo
-    const appointmentId = Number(route.query.appointmentId)
-    if (Number.isInteger(appointmentId) && appointmentId > 0) {
-      try {
-        await appointmentApi.confirm(appointmentId)
-        appointmentStatusMessage.value = 'อัปเดตสถานะนัดหมายเป็นยืนยันแล้ว'
-      } catch (statusError) {
-        appointmentStatusMessage.value = `บันทึกการขายแล้ว แต่อัปเดตสถานะนัดหมายไม่สำเร็จ: ${statusError instanceof Error ? statusError.message : 'กรุณาลองอีกครั้ง'}`
-      }
-    }
     confirmed.value = true
     reviewing.value = false
     paymentDialogOpen.value = false
@@ -428,7 +466,12 @@ async function submit() {
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <template v-if="screen === 'search'">
+      <p v-if="patientLoading" role="status">กำลังโหลดข้อมูลผู้ป่วย...</p>
+      <div v-else-if="patientLoadError" role="alert">
+        <p class="error">{{ patientLoadError }}</p>
+        <button type="button" @click="returnToAppointments">กลับหน้านัดหมาย</button>
+      </div>
+      <template v-else-if="screen === 'search'">
         <h1>บริการและคอร์ส</h1>
         <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
         <section class="service-search">
@@ -560,7 +603,8 @@ async function submit() {
             </div>
             <div>
               <span>สถานะการชำระเงิน</span><b>{{ paymentStatusLabel }}</b
-              ><span>ช่องทางการชำระ</span><b>{{ paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel }}</b
+              ><span>ช่องทางการชำระ</span
+              ><b>{{ paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel }}</b
               ><span>รับชำระครั้งนี้</span><b>{{ money(receivedAmount) }}</b
               ><strong>ยอดคงเหลือ</strong><strong>{{ money(remainingAmount) }}</strong>
             </div>
@@ -721,10 +765,22 @@ async function submit() {
                 </div>
                 <label v-if="paymentStatus === 'INSTALLMENT'" class="payment-installment-amount">
                   ยอดที่รับชำระครั้งนี้
-                  <input v-model.number="paymentAmount" type="number" min="0.01" :max="netAmount - 0.01" step="0.01" />
+                  <input
+                    v-model.number="paymentAmount"
+                    type="number"
+                    min="0.01"
+                    :max="netAmount - 0.01"
+                    step="0.01"
+                  />
                 </label>
-                <small v-else-if="paymentStatus === 'DEPOSIT'">ยังไม่รับชำระเงิน ระบบจะบันทึกยอดค้างชำระ</small>
-                <small v-if="!enabledPaymentStatuses.some((status) => status.enabled)" class="service-error">ไม่มีสถานะการชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager</small>
+                <small v-else-if="paymentStatus === 'DEPOSIT'"
+                  >ยังไม่รับชำระเงิน ระบบจะบันทึกยอดค้างชำระ</small
+                >
+                <small
+                  v-if="!enabledPaymentStatuses.some((status) => status.enabled)"
+                  class="service-error"
+                  >ไม่มีสถานะการชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager</small
+                >
               </fieldset>
               <div class="payment-group">
                 <span>ช่องทางชำระเงิน</span>
@@ -733,7 +789,10 @@ async function submit() {
                     v-for="method in salePaymentMethods"
                     :key="method.code"
                     type="button"
-                    :class="{ active: paymentCode === method.code, disabled: method.active === false }"
+                    :class="{
+                      active: paymentCode === method.code,
+                      disabled: method.active === false,
+                    }"
                     :disabled="method.active === false"
                     @click="paymentCode = method.code"
                   >
@@ -745,7 +804,10 @@ async function submit() {
                     <span>{{ paymentMethodLabel(method.code, method.name) }}</span>
                   </button>
                 </div>
-                <small v-if="!salePaymentMethods.some((method) => method.active !== false)" class="service-error">
+                <small
+                  v-if="!salePaymentMethods.some((method) => method.active !== false)"
+                  class="service-error"
+                >
                   ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager
                 </small>
               </div>
@@ -818,7 +880,9 @@ async function submit() {
           <footer>
             <button type="button" @click="screen = 'receipt'">ดูและพิมพ์ใบเสร็จ</button
             ><button type="button" @click="backToServiceMenu">กลับหน้าบริการ</button
-            ><button v-if="route.query.appointmentId" type="button" @click="returnToAppointments">กลับหน้านัดหมาย</button>
+            ><button v-if="route.query.appointmentId" type="button" @click="returnToAppointments">
+              กลับหน้านัดหมาย
+            </button>
           </footer>
         </section>
 
@@ -834,7 +898,11 @@ async function submit() {
               <section>
                 <span>ยอดที่รับชำระครั้งนี้</span><strong>{{ money(receivedAmount) }}</strong
                 ><small v-if="remainingAmount > 0">ยอดคงเหลือ {{ money(remainingAmount) }}</small
-                ><small>ช่องทางการชำระเงิน　{{ paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel }}</small>
+                ><small
+                  >ช่องทางการชำระเงิน　{{
+                    paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel
+                  }}</small
+                >
               </section>
               <section>
                 <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b

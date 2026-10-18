@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { loadAppointmentTherapists } from '../therapists'
 import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   appointmentApi,
@@ -50,6 +52,21 @@ const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
 const startDate = ref('')
 const endDate = ref('')
+const selectedMonth = ref('')
+const yesterday = new Date()
+yesterday.setDate(yesterday.getDate() - 1)
+const minimumAppointmentDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+watch(selectedMonth, (month) => {
+  if (!month) {
+    startDate.value = ''
+    endDate.value = ''
+    return
+  }
+  const [year, number] = month.split('-').map(Number)
+  if (!year || !number) return
+  startDate.value = `${month}-01`
+  endDate.value = `${month}-${String(new Date(year, number, 0).getDate()).padStart(2, '0')}`
+})
 type AppointmentUiStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
 const selectedTherapistId = ref('ทั้งหมด')
 const sortOrder = ref<'newest' | 'oldest'>('newest')
@@ -102,9 +119,12 @@ const isEditing = computed(() => viewMode.value === 'edit')
 const isCalendarCreate = computed(
   () => viewMode.value === 'create' && createSource.value === 'calendar',
 )
-const editingAppointment = computed(() =>
-  appointments.value.find((appointment) => appointment.id === editingId.value) ??
-  (originalEditingAppointment.value?.id === editingId.value ? originalEditingAppointment.value : undefined),
+const editingAppointment = computed(
+  () =>
+    appointments.value.find((appointment) => appointment.id === editingId.value) ??
+    (originalEditingAppointment.value?.id === editingId.value
+      ? originalEditingAppointment.value
+      : undefined),
 )
 const originalAppointmentSummary = computed(() => {
   const appointment = editingAppointment.value
@@ -121,14 +141,10 @@ const missingCurrentPatient = computed(
   () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.patientId,
 )
 const missingCurrentTherapist = computed(
-  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.therapistId,
+  () => showRequiredValidation.value && !form.value.therapistId,
 )
-const missingCurrentDate = computed(
-  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.date,
-)
-const missingCurrentTime = computed(
-  () => showRequiredValidation.value && isCurrentAppointment.value && !form.value.time,
-)
+const missingCurrentDate = computed(() => showRequiredValidation.value && !form.value.date)
+const missingCurrentTime = computed(() => showRequiredValidation.value && !form.value.time)
 const scheduleError = computed(() => errorMessage.value.includes('ไม่สามารถจองเวลาย้อนหลัง'))
 const patientResults = computed(() => {
   const term = patientQuery.value.trim().toLowerCase()
@@ -180,16 +196,14 @@ const afternoonTimeOptions = computed(() =>
 const filteredAppointments = computed(() => {
   const direction = sortOrder.value === 'newest' ? -1 : 1
   return appointments.value
-    .filter(
-      (item) =>
-        (listServiceMode.value === 'course'
-          ? isCourseAppointment(item)
-          : !isCourseAppointment(item)),
+    .filter((item) =>
+      listServiceMode.value === 'course' ? isCourseAppointment(item) : !isCourseAppointment(item),
     )
     .sort(
       (left, right) =>
         direction *
-        (new Date(left.startAt).getTime() - new Date(right.startAt).getTime() || left.id - right.id),
+        (new Date(left.startAt).getTime() - new Date(right.startAt).getTime() ||
+          left.id - right.id),
     )
 })
 const isCourseAppointment = (item: Appointment) => {
@@ -206,7 +220,9 @@ const isCourseAppointment = (item: Appointment) => {
   )
 }
 const patientPhone = (item: Appointment) =>
-  patients.value.find((patient) => patient.id === item.patient?.id)?.phone || item.contactPhone || '-'
+  patients.value.find((patient) => patient.id === item.patient?.id)?.phone ||
+  item.contactPhone ||
+  '-'
 const appointmentRoom = (item: Appointment) => {
   const appointmentWithRoom = item as Appointment & {
     roomName?: string
@@ -222,7 +238,9 @@ const branchName = (code: string) =>
 const timeOptions = ['09:00', '10:30', '13:00', '14:30', '16:00']
 // the rows of the calendar grid: the usual times plus the time of every appointment (for example one moved in Google Calendar)
 const calendarTimes = computed(() =>
-  [...new Set([...timeOptions, ...appointments.value.map((item) => formatTime(item.startAt))])].sort(),
+  [
+    ...new Set([...timeOptions, ...appointments.value.map((item) => formatTime(item.startAt))]),
+  ].sort(),
 )
 const appointmentStatusOptions: [AppointmentUiStatus, string][] = [
   ['PENDING', 'ยังไม่ยืนยัน'],
@@ -277,7 +295,12 @@ const dateInBangkok = (value: string) =>
     day: '2-digit',
     timeZone: 'Asia/Bangkok',
   }).format(new Date(value))
-const normalizeHn = (value: string) => value.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '').toLowerCase()
+const normalizeHn = (value: string) =>
+  value
+    .trim()
+    .replace(/^hn[\s:#-]*/i, '')
+    .replace(/[\s-]/g, '')
+    .toLowerCase()
 const formatTimeRange = (time: string) => {
   if (!time) return 'ยังไม่ได้เลือกเวลา'
   const [hour = 0, minute = 0] = time.split(':').map(Number)
@@ -314,7 +337,8 @@ const calendarSlotState = (item?: Appointment) => {
 }
 const calendarPatientName = (therapistId: number, time: string) =>
   calendarAppointment(therapistId, time)?.patient?.fullName ||
-  calendarAppointment(therapistId, time)?.contactName || ''
+  calendarAppointment(therapistId, time)?.contactName ||
+  ''
 const calendarTherapistName = (therapistId: number, time: string) =>
   calendarAppointment(therapistId, time)?.therapist.fullName || ''
 function moveCalendarDate(days: number) {
@@ -338,7 +362,7 @@ async function load() {
       branchApi.list(),
       patientApi.searchAll('', managerBranchCode.value),
       catalogApi.services(),
-      catalogApi.therapists(),
+      loadAppointmentTherapists(),
     ])
     if (requestId !== appointmentLoadRequest) return
     appointments.value = a.items
@@ -531,6 +555,11 @@ function changeAppointmentPatientType() {
 function changeSchedule() {
   if (scheduleError.value) errorMessage.value = ''
 }
+function changeAppointmentDate(date: string) {
+  if (form.value.date !== date) form.value.time = ''
+  form.value.date = date
+  changeSchedule()
+}
 function selectAppointmentTime(time: string) {
   form.value.time = time
   changeSchedule()
@@ -569,19 +598,26 @@ function confirmAppointmentTime() {
   timeDrawerOpen.value = false
 }
 watch(
-  [() => form.value.date, () => form.value.therapistId, () => form.value.serviceId, () => form.value.branchCode],
+  [
+    () => form.value.date,
+    () => form.value.therapistId,
+    () => form.value.serviceId,
+    () => form.value.branchCode,
+  ],
   () => {
     if (timeDrawerOpen.value) void loadTimeAvailability()
   },
 )
 async function requestSaveConfirmation() {
   showRequiredValidation.value = true
-  const newPatientName = [newPatientForm.value.firstName, newPatientForm.value.lastName]
-    .filter(Boolean)
-    .join(' ')
-    .trim() || newPatientForm.value.nickname.trim()
+  const newPatientName =
+    [newPatientForm.value.firstName, newPatientForm.value.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || newPatientForm.value.nickname.trim()
   if (
-    appointmentPatientType.value === 'NEW' && !editingId.value &&
+    appointmentPatientType.value === 'NEW' &&
+    !editingId.value &&
     (!newPatientName || !isContactPhoneValid(newPatientForm.value.phone))
   ) {
     errorMessage.value = 'กรุณากรอกชื่อหรือชื่อเล่น และเบอร์โทรศัพท์ของผู้ป่วยใหม่'
@@ -593,6 +629,12 @@ async function requestSaveConfirmation() {
   }
   if (!form.value.therapistId || !form.value.date || !form.value.time) {
     errorMessage.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ'
+    return
+  }
+  const today = new Date()
+  const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  if (isEditing.value && form.value.date < todayValue) {
+    errorMessage.value = 'ไม่สามารถเลื่อนนัดหมายไปวันย้อนหลังได้'
     return
   }
   if (
@@ -665,14 +707,18 @@ async function save() {
       throw new Error('กรุณากรอก HN หรือชื่อผู้ป่วยให้ตรงกับรายการในระบบ')
     if (!isNewPatient) form.value.patientId = patient?.id ?? form.value.patientId
     if (!isNewPatient && !form.value.patientId) throw new Error('ไม่พบผู้ป่วยที่ระบุ')
-    const contactName = [newPatientForm.value.firstName, newPatientForm.value.lastName]
-      .filter(Boolean)
-      .join(' ')
-      .trim() || newPatientForm.value.nickname.trim()
+    const contactName =
+      [newPatientForm.value.firstName, newPatientForm.value.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || newPatientForm.value.nickname.trim()
     if (isNewBooking && (!contactName || !isContactPhoneValid(newPatientForm.value.phone)))
       throw new Error('กรุณากรอกชื่อหรือชื่อเล่น และเบอร์โทรศัพท์ของผู้ป่วยใหม่')
     if (!form.value.therapistId) throw new Error('กรุณาเลือกนักกายภาพ')
     if (!form.value.date || !form.value.time) throw new Error('กรุณาเลือกวันที่และเวลา')
+    if (new Date(`${form.value.date}T00:00:00`).getDay() === 0)
+      throw new Error('ไม่สามารถนัดหมายในวันอาทิตย์ได้')
+    if (new Date(toStartAt()).getTime() < Date.now()) throw new Error('ไม่สามารถจองเวลาย้อนหลังได้')
 
     const wasEditing = editingId.value !== null
     let savedAppointment: Appointment
@@ -705,6 +751,7 @@ async function save() {
 
     selectedBranch.value = 'ทั้งหมด'
     selectedDate.value = ''
+    selectedMonth.value = ''
     startDate.value = ''
     endDate.value = ''
     sortOrder.value = 'newest'
@@ -735,22 +782,26 @@ async function saveStatus(item: Appointment, status: AppointmentStatus, reason =
   statusNotice.value = 'กำลังบันทึก...'
   try {
     const result =
-      status === 'ARRIVED'
-        ? await appointmentApi.checkIn(item.id)
-        : status === 'IN_SERVICE'
-          ? await appointmentApi.startService(item.id)
-          : status === 'COMPLETED'
-            ? await appointmentApi.complete(item.id)
-            : status === 'NO_SHOW'
-              ? await appointmentApi.noShow(item.id)
-              : status === 'CANCELLED'
-                ? await appointmentApi.cancel(item.id, reason)
-                : null
+      status === 'CONFIRMED'
+        ? await appointmentApi.confirm(item.id)
+        : status === 'ARRIVED'
+          ? await appointmentApi.checkIn(item.id)
+          : status === 'IN_SERVICE'
+            ? await appointmentApi.startService(item.id)
+            : status === 'COMPLETED'
+              ? await appointmentApi.complete(item.id)
+              : status === 'NO_SHOW'
+                ? await appointmentApi.noShow(item.id)
+                : status === 'CANCELLED'
+                  ? await appointmentApi.cancel(item.id, reason)
+                  : null
     if (!result) throw new Error('backend รองรับการเปลี่ยนสถานะผ่าน action ที่กำหนดเท่านั้น')
     Object.assign(item, result)
     statusNotice.value = 'บันทึกแล้ว'
+    return true
   } catch (error) {
     statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ'
+    return false
   } finally {
     savingStatusId.value = null
     window.setTimeout(() => (statusNotice.value = ''), 2200)
@@ -763,9 +814,10 @@ function confirmCancellation() {
   void saveStatus(item, 'CANCELLED', cancellationReason.value.trim())
 }
 
-function requestStatusChange(item: Appointment, nextStatus: string) {
+async function requestStatusChange(item: Appointment, nextStatus: string) {
   if (nextStatus === uiStatusFor(item.status)) return
   if (nextStatus === 'CONFIRMED') {
+    if (!(await saveStatus(item, 'CONFIRMED'))) return
     const patientId = item.patient?.id
     if (!patientId) {
       statusNotice.value = 'นัดหมายนี้ยังไม่มีข้อมูลผู้ป่วยที่ลงทะเบียน'
@@ -836,16 +888,29 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
           <p v-if="isEditing" class="appointment-original-summary">
             {{ originalAppointmentSummary }}
           </p>
-          <p v-if="errorMessage && !patientError && !scheduleError" class="error" role="alert">
+          <p
+            v-if="errorMessage && !patientError && !scheduleError"
+            class="appointment-form-error"
+            role="alert"
+          >
             {{ errorMessage }}
           </p>
           <div v-if="isEditing" class="form-grid appointment-reschedule-grid">
             <label class="reschedule-patient-field">
               ผู้ป่วย
-              <input :value="patientQuery" readonly placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN" />
+              <input
+                :value="patientQuery"
+                :class="{ 'is-invalid': missingCurrentPatient }"
+                readonly
+                placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
+              />
               <span class="reschedule-patient-meta">
                 HN
-                {{ selectedFormPatient?.hn || editingAppointment?.patient?.hn || (appointmentPatientType === 'NEW' ? 'ผู้ป่วยไม่ประจำ' : '-') }}
+                {{
+                  selectedFormPatient?.hn ||
+                  editingAppointment?.patient?.hn ||
+                  (appointmentPatientType === 'NEW' ? 'ผู้ป่วยไม่ประจำ' : '-')
+                }}
                 ·
                 {{ selectedFormPatient?.phone || editingPatientPhone }}
               </span>
@@ -871,6 +936,7 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
               <FilterDropdown
                 v-model="formTherapistModel"
                 class="appointment-form-filter"
+                :class="{ 'is-invalid': missingCurrentTherapist }"
                 label="เลือกนักกายภาพ"
                 default-label="เลือกนักกายภาพ"
                 :clear-on-reselect="false"
@@ -885,17 +951,25 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             <label class="reschedule-date-field">
               วันที่
               <ThaiDatePicker
-                v-model="form.date"
-                :invalid="scheduleError"
+                :model-value="form.date"
+                :min-date="minimumAppointmentDate"
+                disable-sunday
+                :invalid="scheduleError || missingCurrentDate"
                 show-calendar-icon
                 numeric-month
                 hide-caret
-                @update:model-value="changeSchedule"
+                @update:model-value="changeAppointmentDate"
               />
             </label>
             <label class="reschedule-time-field">
               เวลา
-              <button class="reschedule-time-trigger" type="button" @click="openTimeDrawer">
+              <button
+                class="reschedule-time-trigger"
+                :class="{ 'is-invalid': missingCurrentTime }"
+                :aria-invalid="missingCurrentTime"
+                type="button"
+                @click="openTimeDrawer"
+              >
                 <span>{{ formatTimeRange(form.time) }}</span>
                 <strong>ดูตารางเวลาว่าง</strong>
               </button>
@@ -1110,12 +1184,14 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             <label class="appointment-date-field">
               วันที่ <em>*</em>
               <ThaiDatePicker
-                v-model="form.date"
+                :model-value="form.date"
+                :min-date="minimumAppointmentDate"
+                disable-sunday
                 :invalid="scheduleError || missingCurrentDate"
                 show-calendar-icon
                 numeric-month
                 hide-caret
-                @update:model-value="changeSchedule"
+                @update:model-value="changeAppointmentDate"
               />
               <p v-if="scheduleError" class="appointment-input-error" role="alert">
                 {{ errorMessage }}
@@ -1213,11 +1289,13 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             <label>
               วันที่
               <ThaiDatePicker
-                v-model="form.date"
+                :model-value="form.date"
+                :min-date="minimumAppointmentDate"
+                disable-sunday
                 show-calendar-icon
                 numeric-month
                 hide-caret
-                @update:model-value="changeSchedule"
+                @update:model-value="changeAppointmentDate"
               />
             </label>
             <section>
@@ -1293,6 +1371,15 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
             </button>
           </div>
           <header class="panel-head appointment-list-filters">
+            <div class="appointment-date-range appointment-month-filter">
+              <span>เดือน</span>
+              <MonthFilterPicker
+                v-model="selectedMonth"
+                clearable
+                :past-years="3"
+                :future-years="0"
+              />
+            </div>
             <label class="appointment-date-range">
               <span>วันที่เริ่มต้น</span>
               <ThaiDatePicker
@@ -1453,10 +1540,15 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
                     <FilterDropdown
                       :model-value="uiStatusFor(item.status)"
                       :options="
-                        appointmentStatusOptions.map(([value, label]) => ({
-                          value,
-                          label,
-                        }))
+                        appointmentStatusOptions
+                          .filter(
+                            ([value]) =>
+                              value !== 'PENDING' || uiStatusFor(item.status) === 'PENDING',
+                          )
+                          .map(([value, label]) => ({
+                            value,
+                            label,
+                          }))
                       "
                       :default-label="uiStatusFor(item.status)"
                       :label="`สถานะนัดหมายของ ${item.patient?.fullName || item.contactName || 'ผู้ป่วยไม่ประจำ'}`"
@@ -1499,7 +1591,12 @@ function requestStatusChange(item: Appointment, nextStatus: string) {
       <form class="status-modal" @submit.prevent="confirmCancellation">
         <h2>ยืนยันการยกเลิกนัดหมาย</h2>
         <p>
-          {{ pendingCancellation.item.patient?.fullName || pendingCancellation.item.contactName || 'ผู้ป่วยไม่ประจำ' }} เวลา
+          {{
+            pendingCancellation.item.patient?.fullName ||
+            pendingCancellation.item.contactName ||
+            'ผู้ป่วยไม่ประจำ'
+          }}
+          เวลา
           {{ formatTime(pendingCancellation.item.startAt) }}
         </p>
         <label

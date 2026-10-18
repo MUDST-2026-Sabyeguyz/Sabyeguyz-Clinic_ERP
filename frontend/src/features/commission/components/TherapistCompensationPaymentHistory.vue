@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import type { StaffPayment, TherapistAdjustment } from '@/api/client'
 import { baht, currentMonth, longDate, monthLabel, signedBaht } from '../lib/therapistPay'
 
@@ -36,8 +37,8 @@ const years = computed(() => {
   const last = Math.max(thisYear, ...seen)
   return Array.from({ length: last - first + 1 }, (_, index) => last - index)
 })
-const chooseYear = (event: Event) => {
-  chosen.value = `${(event.target as HTMLSelectElement).value}-${chosenMonth.value}`
+const chooseYear = (value: string) => {
+  chosen.value = `${value}-${chosenMonth.value}`
 }
 const moveMonth = (offset: number) => {
   const date = new Date(chosenYear.value, Number(chosenMonth.value) - 1 + offset, 1)
@@ -71,11 +72,15 @@ const paidOn = (payment: StaffPayment) =>
         <strong>{{ monthNames[Number(chosenMonth) - 1] }}</strong>
         <button type="button" aria-label="เดือนถัดไป" @click="moveMonth(1)">›</button>
       </div>
-      <select aria-label="ปี" :value="chosenYear" @change="chooseYear">
-        <option v-for="year in years" :key="year" :value="year">
-          {{ year + 543 }}
-        </option>
-      </select>
+      <FilterDropdown
+        :model-value="String(chosenYear)"
+        :options="years.map((year) => ({ value: String(year), label: String(year + 543) }))"
+        label="ปี"
+        default-label="เลือกปี"
+        :clear-on-reselect="false"
+        hide-default-option
+        @update:model-value="chooseYear"
+      />
     </div>
   </section>
   <section class="therapist-payment-card">
