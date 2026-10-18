@@ -66,18 +66,22 @@ function closeOnOutsideClick(event: MouseEvent) {
   const target = event.target as Node
   if (!root.value?.contains(target) && !menu.value?.contains(target)) open.value = false
 }
-function closeOnScrollOrResize() {
+function closeOnScroll(event: Event) {
+  if (event.target instanceof Node && menu.value?.contains(event.target)) return
+  if (open.value) open.value = false
+}
+function closeOnResize() {
   if (open.value) open.value = false
 }
 onMounted(() => {
   document.addEventListener('click', closeOnOutsideClick)
-  window.addEventListener('scroll', closeOnScrollOrResize, true)
-  window.addEventListener('resize', closeOnScrollOrResize)
+  window.addEventListener('scroll', closeOnScroll, true)
+  window.addEventListener('resize', closeOnResize)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeOnOutsideClick)
-  window.removeEventListener('scroll', closeOnScrollOrResize, true)
-  window.removeEventListener('resize', closeOnScrollOrResize)
+  window.removeEventListener('scroll', closeOnScroll, true)
+  window.removeEventListener('resize', closeOnResize)
 })
 </script>
 
@@ -96,49 +100,128 @@ onBeforeUnmount(() => {
       ><span class="filter-dropdown__chevron" aria-hidden="true"></span>
     </button>
     <Teleport to="body">
-    <div v-if="open" ref="menu" class="filter-dropdown__menu" :style="menuStyle" role="listbox" :aria-label="label">
-      <button
-        v-if="!hideDefaultOption"
-        class="filter-dropdown__option"
-        type="button"
-        role="option"
-        :aria-selected="modelValue === defaultValue"
-        @click="select(defaultValue)"
+      <div
+        v-if="open"
+        ref="menu"
+        class="filter-dropdown__menu"
+        :style="menuStyle"
+        role="listbox"
+        :aria-label="label"
       >
-        <span class="filter-dropdown__check" aria-hidden="true">{{
-          modelValue === defaultValue ? '✓' : ''
-        }}</span
-        ><span>{{ defaultLabel }}</span>
-      </button>
-      <button
-        v-for="option in options"
-        :key="option.value"
-        class="filter-dropdown__option"
-        type="button"
-        role="option"
-        :aria-selected="modelValue === option.value"
-        @click="select(option.value)"
-      >
-        <span class="filter-dropdown__check" aria-hidden="true">{{
-          modelValue === option.value ? '✓' : ''
-        }}</span
-        ><span>{{ option.label }}</span>
-      </button>
-    </div>
+        <button
+          v-if="!hideDefaultOption"
+          class="filter-dropdown__option"
+          type="button"
+          role="option"
+          :aria-selected="modelValue === defaultValue"
+          @click="select(defaultValue)"
+        >
+          <span class="filter-dropdown__check" aria-hidden="true">{{
+            modelValue === defaultValue ? '✓' : ''
+          }}</span
+          ><span>{{ defaultLabel }}</span>
+        </button>
+        <button
+          v-for="option in options"
+          :key="option.value"
+          class="filter-dropdown__option"
+          type="button"
+          role="option"
+          :aria-selected="modelValue === option.value"
+          @click="select(option.value)"
+        >
+          <span class="filter-dropdown__check" aria-hidden="true">{{
+            modelValue === option.value ? '✓' : ''
+          }}</span
+          ><span>{{ option.label }}</span>
+        </button>
+      </div>
     </Teleport>
   </div>
 </template>
 
 <style scoped>
-.filter-dropdown { position: relative; width: 100%; min-width: 0; color: #153738; font: inherit; }
-.filter-dropdown__button { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 46px; padding: 0 20px 0 16px; border: 1px solid #b7cecc; border-radius: 10px; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.filter-dropdown.open .filter-dropdown__button { border-color: #1e8883; box-shadow: 0 0 0 1px #1e8883; }
-.filter-dropdown__chevron { width: 8px; height: 8px; margin-left: 14px; border-right: 2px solid #16827d; border-bottom: 2px solid #16827d; transform: translateY(-2px) rotate(45deg); transition: transform 0.16s ease; }
-.filter-dropdown.open .filter-dropdown__chevron { transform: translateY(2px) rotate(225deg); }
-.filter-dropdown__menu { position: fixed; z-index: 1000; width: max-content; max-width: calc(100vw - 16px); overflow: hidden; padding: 6px; border: 1px solid #d8e2e1; border-radius: 10px; background: #fff; box-shadow: 0 10px 24px rgb(20 55 56 / 16%); }
-.filter-dropdown__option { display: grid; grid-template-columns: 20px 1fr; align-items: center; width: 100%; min-height: 40px; padding: 7px 12px 7px 8px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; text-align: left; white-space: nowrap; cursor: pointer; }
-.filter-dropdown__option:hover, .filter-dropdown__option[aria-selected='true'] { background: #e8f1f0; }
-.filter-dropdown__check { color: #16827d; font-weight: 700; }
-.filter-dropdown.disabled { opacity: 0.55; }
-.filter-dropdown__button:disabled { cursor: not-allowed; }
+.filter-dropdown {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  color: #153738;
+  font: inherit;
+}
+.filter-dropdown__button {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 20px 0 16px;
+  border: 1px solid #b7cecc;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.filter-dropdown.open .filter-dropdown__button {
+  border-color: #1e8883;
+  box-shadow: 0 0 0 1px #1e8883;
+}
+.filter-dropdown__chevron {
+  width: 8px;
+  height: 8px;
+  margin-left: 14px;
+  border-right: 2px solid #16827d;
+  border-bottom: 2px solid #16827d;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.16s ease;
+}
+.filter-dropdown.open .filter-dropdown__chevron {
+  transform: translateY(2px) rotate(225deg);
+}
+.filter-dropdown__menu {
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid #d8e2e1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(20 55 56 / 16%);
+}
+.filter-dropdown__option {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 12px 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.filter-dropdown__option:hover,
+.filter-dropdown__option[aria-selected='true'] {
+  background: #e8f1f0;
+}
+.filter-dropdown__check {
+  color: #16827d;
+  font-weight: 700;
+}
+.filter-dropdown.disabled {
+  opacity: 0.55;
+}
+.filter-dropdown__button:disabled {
+  cursor: not-allowed;
+}
 </style>

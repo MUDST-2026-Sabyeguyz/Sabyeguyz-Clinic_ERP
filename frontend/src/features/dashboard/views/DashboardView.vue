@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
-import { patientApi, reportApi } from '@/api/client'
+import { reportApi } from '@/api/client'
 import {
   clearSelectedManagerBranch,
   selectedManagerBranch,
@@ -12,21 +12,34 @@ import {
 
 const now = new Date()
 const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
-const to = ref(now.toISOString().slice(0, 10))
+const to = ref(
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+)
 const managerBranch = computed(() => selectedManagerBranch())
 const branchCode = computed(() => managerBranch.value?.code ?? '')
 const lastManagerBranch = ref(selectedManagerBranch())
-const selectedPeriod = ref('june-2569')
+const selectedPeriod = ref(from.value.slice(0, 7))
+const selectedDateRange = computed(() => {
+  const format = (date: string) =>
+    new Intl.DateTimeFormat('th-TH', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(`${date}T00:00:00`))
+  return `${format(from.value)} – ${format(to.value)}`
+})
 const customRangeOpen = ref(false)
 const customFrom = ref(from.value)
 const customTo = ref(to.value)
-const hasCustomRange = ref(false)
-const periodOptions = [
-  { value: 'june-2569', label: 'มิถุนายน 2569' },
-  { value: 'may-2569', label: 'พฤษภาคม 2569' },
-  { value: 'november-2569', label: 'พฤศจิกายน 2569' },
-]
+const periodOptions = Array.from({ length: 3 }, (_, index) => {
+  const date = new Date(now.getFullYear(), now.getMonth() - index, 1)
+  return {
+    value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+    label: new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(date),
+  }
+})
 const loading = ref(true)
+let dashboardRequest = 0
 const errorMessage = ref('')
 const patients = ref(0)
 const visits = ref(0)
@@ -34,8 +47,20 @@ const revenue = ref(0)
 const courses = ref(0)
 const genderBreakdown = ref<Array<{ gender: string; patients: number }>>([])
 const appointmentStatuses = ref<Array<{ status: string; appointments: number }>>([])
-const monthlyRevenue = ref<Array<{ label: string; course: number; singleVisit: number }>>([])
-const statusOrder = ['COMPLETED', 'IN_SERVICE', 'NO_SHOW', 'CANCELLED']
+const appointmentTotal = ref(0)
+const monthlyRevenue = ref<
+  Array<{ key: string; label: string; course: number; singleVisit: number }>
+>([])
+const statusOrder = [
+  'UNCONFIRMED',
+  'CONFIRMED',
+  'ARRIVED',
+  'IN_SERVICE',
+  'COMPLETED',
+  'CANCELLED',
+  'RESCHEDULED',
+]
+const normalizeStatus = (status: string) => status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
 
 const maxMonthlyRevenue = computed(() =>
   Math.max(...monthlyRevenue.value.flatMap((item) => [item.course, item.singleVisit]), 1),
@@ -43,7 +68,7 @@ const maxMonthlyRevenue = computed(() =>
 const chartMaximum = computed(() => {
   const rawMaximum = maxMonthlyRevenue.value
   const magnitude = 10 ** Math.max(String(Math.floor(rawMaximum)).length - 1, 0)
-  return Math.ceil(rawMaximum / magnitude) * magnitude
+  return Math.max(5, Math.ceil(rawMaximum / magnitude) * magnitude)
 })
 const chartTicks = computed(() =>
   Array.from({ length: 6 }, (_, index) => Math.round(chartMaximum.value * (1 - index / 5))),
@@ -55,23 +80,11 @@ const dashboardStatuses = computed(() => {
 const maxAppointments = computed(() =>
   Math.max(...dashboardStatuses.value.map((item) => item.appointments), 1),
 )
-const showNoResults = computed(
-  () =>
-    !loading.value &&
-    hasCustomRange.value &&
-    !errorMessage.value &&
-    patients.value === 0 &&
-    visits.value === 0 &&
-    revenue.value === 0 &&
-    courses.value === 0 &&
-    !monthlyRevenue.value.some((item) => item.course > 0 || item.singleVisit > 0) &&
-    !appointmentStatuses.value.some((item) => item.appointments > 0),
-)
 const branchName = computed(() => managerBranch.value?.name ?? 'ทุกสาขา')
 const dashboardSubtitle = computed(() =>
   managerBranch.value
-    ? `สรุปการดำเนินงาน · สาขา${managerBranch.value.name} · ข้อมูลตัวอย่าง`
-    : 'สรุปการดำเนินงาน · ทุกสาขา · ข้อมูลตัวอย่าง',
+    ? `สรุปการดำเนินงาน · สาขา${managerBranch.value.name}`
+    : 'สรุปการดำเนินงาน · ทุกสาขา',
 )
 const genderLabel = (gender: string) =>
   ({ MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่น ๆ', UNKNOWN: 'ไม่ระบุ' })[gender.toUpperCase()] ??
@@ -81,6 +94,7 @@ const money = (value: number) =>
 const statusLabel = (status: string) =>
   ({
     CONFIRMED: 'ยืนยันแล้ว',
+    UNCONFIRMED: 'ยังไม่ยืนยันนัด',
     ARRIVED: 'มาถึงแล้ว',
     IN_SERVICE: 'กำลังให้บริการ',
     COMPLETED: 'เสร็จสิ้น',
@@ -91,23 +105,25 @@ const statusLabel = (status: string) =>
 const statusClass = (status: string) => `status-${status.toLowerCase().replaceAll('_', '-')}`
 
 async function loadDashboard() {
+  const requestId = ++dashboardRequest
   loading.value = true
   errorMessage.value = ''
   try {
-    const [summary, appointments, balances, patientList, revenueReport] = await Promise.all([
+    const [summary, appointments, balances, revenueReport] = await Promise.all([
       reportApi.dashboard(from.value, to.value, branchCode.value || undefined),
       reportApi.appointments(from.value, to.value, branchCode.value || undefined),
       reportApi.balances(from.value, to.value, branchCode.value || undefined),
-      patientApi.searchAll('', branchCode.value),
       reportApi.revenue(from.value, to.value, branchCode.value || undefined),
     ])
-    patients.value = summary.uniquePatients || patientList.length
+    if (requestId !== dashboardRequest) return
+    patients.value = summary.uniquePatients
     visits.value = summary.visits
+    appointmentTotal.value = appointments.appointments
     revenue.value = Number(summary.totalRevenue)
     courses.value = balances.purchases
     genderBreakdown.value = summary.patientsByGender ?? []
     appointmentStatuses.value = appointments.byStatus.map((item) => ({
-      status: item.status,
+      status: normalizeStatus(item.status),
       appointments: item.appointments,
     }))
     const byMonth = new Map<string, { course: number; singleVisit: number }>()
@@ -115,31 +131,32 @@ async function loadDashboard() {
     dailyByCategory.forEach((item) => {
       const month = item.date.slice(0, 7)
       const row = byMonth.get(month) ?? { course: 0, singleVisit: 0 }
-      if (item.type === 'COURSE') row.course += Number(item.amount)
-      if (item.type === 'SINGLE_VISIT') row.singleVisit += Number(item.amount)
+      const type = normalizeStatus(item.type)
+      if (type === 'COURSE' || type === 'COURSE_PURCHASE') row.course += Number(item.amount)
+      if (type === 'SINGLE_VISIT') row.singleVisit += Number(item.amount)
       byMonth.set(month, row)
     })
-    monthlyRevenue.value = [...byMonth.entries()].map(([month, amounts]) => ({
-      label: new Intl.DateTimeFormat('th-TH', { month: 'short' })
-        .format(new Date(`${month}-01T00:00`))
-        .replace('.', ''),
-      ...amounts,
-    }))
-    if (!monthlyRevenue.value.length) {
-      monthlyRevenue.value = [
-        {
-          label: new Intl.DateTimeFormat('th-TH', { month: 'short' })
-            .format(new Date(`${from.value}T00:00:00`))
-            .replace('.', ''),
-          course: Number(summary.courseRevenue),
-          singleVisit: Number(summary.singleVisitRevenue),
-        },
-      ]
+    const firstMonth = from.value.slice(0, 7)
+    const lastMonth = to.value.slice(0, 7)
+    const showYear = firstMonth.slice(0, 4) !== lastMonth.slice(0, 4)
+    const currentMonth = new Date(`${firstMonth}-01T00:00:00`)
+    const months: typeof monthlyRevenue.value = []
+    while (true) {
+      const key = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`
+      if (key > lastMonth) break
+      const label = new Intl.DateTimeFormat('th-TH', {
+        month: 'short',
+        ...(showYear ? { year: 'numeric' as const } : {}),
+      }).format(currentMonth)
+      months.push({ key, label, ...(byMonth.get(key) ?? { course: 0, singleVisit: 0 }) })
+      currentMonth.setMonth(currentMonth.getMonth() + 1)
     }
+    monthlyRevenue.value = months
   } catch (error) {
+    if (requestId !== dashboardRequest) return
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลแดชบอร์ดไม่สำเร็จ'
   } finally {
-    loading.value = false
+    if (requestId === dashboardRequest) loading.value = false
   }
 }
 
@@ -160,8 +177,12 @@ watch([from, to, branchCode], loadDashboard)
 watch(managerBranch, (branch) => {
   if (branch) lastManagerBranch.value = branch
 })
-watch(selectedPeriod, () => {
-  hasCustomRange.value = false
+watch(selectedPeriod, (period) => {
+  const [year, month] = period.split('-').map(Number)
+  if (!year || !month) return
+  from.value = `${period}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  to.value = `${period}-${String(lastDay).padStart(2, '0')}`
 })
 function openCustomRange() {
   customFrom.value = from.value
@@ -174,11 +195,11 @@ function closeCustomRange() {
 }
 
 function applyCustomRange() {
-  if (!customFrom.value || !customTo.value || customFrom.value >= customTo.value) return
+  if (!customFrom.value || !customTo.value || customFrom.value > customTo.value) return
   const rangeUnchanged = from.value === customFrom.value && to.value === customTo.value
   loading.value = true
   errorMessage.value = ''
-  hasCustomRange.value = true
+  selectedPeriod.value = ''
   from.value = customFrom.value
   to.value = customTo.value
   customRangeOpen.value = false
@@ -256,16 +277,11 @@ function applyCustomRange() {
         </button>
       </header>
 
-      <p v-if="errorMessage && !showNoResults" class="dashboard-feedback error" role="alert">
+      <p v-if="errorMessage" class="dashboard-feedback error" role="alert">
         {{ errorMessage }}
       </p>
 
-      <section v-if="showNoResults" class="no-results" aria-label="ไม่พบข้อมูล">
-        <h2>กำลังโหลดข้อมูล</h2>
-        <p>กำลังดึงข้อมูลของสาขาและช่วงเวลาที่เลือก</p>
-      </section>
-
-      <template v-else>
+      <template v-if="!errorMessage">
         <section class="dashboard-section today-section" aria-label="ภาพรวมวันนี้">
           <h2>ภาพรวมวันนี้</h2>
           <p class="section-caption">
@@ -308,13 +324,14 @@ function applyCustomRange() {
             <div>
               <h2>สรุปตามช่วงเวลา</h2>
               <p class="section-caption">{{ branchName }}</p>
+              <p class="section-caption">{{ selectedDateRange }}</p>
             </div>
             <div class="period-actions">
               <div class="period-picker">
                 <FilterDropdown
                   v-model="selectedPeriod"
                   :options="periodOptions"
-                  default-label="เลือกช่วงเวลา"
+                  default-label="กำหนดช่วงวันที่เอง"
                   label="เลือกช่วงเวลา"
                   :clear-on-reselect="false"
                   hide-default-option
@@ -352,8 +369,8 @@ function applyCustomRange() {
         <section class="revenue-card">
           <header>
             <div>
-              <h2>แนวโน้มยอดขายแยกประเภท</h2>
-              <p>แยกยอดขายคอร์สและรายครั้ง (ไม่ใช่ยอดรับชำระ)</p>
+              <h2>แนวโน้มยอดรับชำระแยกประเภท</h2>
+              <p>แยกยอดรับชำระคอร์สและรายครั้ง</p>
             </div>
             <div class="chart-legend">
               <span class="course">รายได้คอร์ส (Course)</span
@@ -365,7 +382,7 @@ function applyCustomRange() {
               <span v-for="tick in chartTicks" :key="tick">{{ tick.toLocaleString() }}</span>
             </div>
             <div class="monthly-chart">
-              <div v-for="month in monthlyRevenue" :key="month.label" class="month-group">
+              <div v-for="month in monthlyRevenue" :key="month.key" class="month-group">
                 <div class="bar-area">
                   <i
                     class="course"
@@ -390,7 +407,7 @@ function applyCustomRange() {
             <header>
               <div>
                 <h2>สถานะการเข้ารับบริการ</h2>
-                <p>จากจำนวน {{ visits.toLocaleString() }} ครั้ง</p>
+                <p>จากนัดหมายทั้งหมด {{ appointmentTotal.toLocaleString() }} ครั้ง</p>
               </div>
             </header>
             <div v-for="item in dashboardStatuses" :key="item.status" class="status-row">
@@ -441,21 +458,22 @@ function applyCustomRange() {
             <ThaiDatePicker
               v-model="customTo"
               :min-date="customFrom"
+              inclusive-min
               show-calendar-icon
               numeric-month
               hide-caret
             />
           </label>
         </div>
-        <p v-if="customFrom && customTo && customFrom >= customTo" class="range-error">
-          วันสิ้นสุดต้องหลังวันเริ่มต้นอย่างน้อย 1 วัน
+        <p v-if="customFrom && customTo && customFrom > customTo" class="range-error">
+          วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น
         </p>
         <footer>
           <button class="dialog-cancel" type="button" @click="closeCustomRange">ยกเลิก</button>
           <button
             class="dialog-submit"
             type="button"
-            :disabled="!customFrom || !customTo || customFrom >= customTo"
+            :disabled="!customFrom || !customTo || customFrom > customTo"
             @click="applyCustomRange"
           >
             แสดงผล
@@ -1103,7 +1121,6 @@ function applyCustomRange() {
 .bar-area i {
   display: block;
   width: 22px;
-  min-height: 3px;
   border-radius: 5px 5px 0 0;
   transition: height 0.2s ease;
 }
@@ -1138,25 +1155,37 @@ function applyCustomRange() {
   height: 13px;
   overflow: hidden;
   border-radius: 999px;
-  background: #c8e6c0;
+  background: #edf2ef;
 }
 .status-track i {
   display: block;
   height: 100%;
-  min-width: 4px;
   border-radius: inherit;
-}
-.status-track .status-completed {
-  background: #1e807c;
-}
-.status-track .status-in-service {
   background: #8faeae;
 }
+.status-track .status-completed {
+  background: #39a96b;
+}
+.status-track .status-unconfirmed {
+  background: #e8b93f;
+}
+.status-track .status-confirmed {
+  background: #5599d0;
+}
+.status-track .status-arrived {
+  background: #66b59f;
+}
+.status-track .status-in-service {
+  background: #8a9fcd;
+}
 .status-track .status-no-show {
-  background: #e6d479;
+  background: #d49c55;
 }
 .status-track .status-cancelled {
-  background: #e07d96;
+  background: #df6671;
+}
+.status-track .status-rescheduled {
+  background: #a68abd;
 }
 .empty-state {
   color: #56665d;

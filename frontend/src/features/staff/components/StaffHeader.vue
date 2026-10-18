@@ -44,7 +44,6 @@ const navItems = computed(() =>
         { to: '/staff/transactions', label: 'รายการธุรกรรม' },
         { to: '/staff/commission', label: 'คอมมิชชั่น' },
         { to: '/staff/reports', label: 'รายงาน' },
-        { to: '/staff/calendar', label: 'ปฏิทิน Google' },
         { to: '/staff/settings', label: 'การตั้งค่า' },
       ]
     : [
@@ -157,7 +156,10 @@ function branchLabel(name: string) {
 <template>
   <header
     class="staff-header"
-    :class="{ 'manager-header': isManager, 'formula-route': route.path === '/staff/commission/formula' }"
+    :class="{
+      'manager-header': isManager,
+      'formula-route': route.path === '/staff/commission/formula',
+    }"
   >
     <RouterLink class="brand" :to="homePath"><img :src="logo" alt="SaByeGuyz" /></RouterLink>
     <button
@@ -218,6 +220,15 @@ function branchLabel(name: string) {
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
           ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : profileBranchLabel }}</span>
         </div>
+        <RouterLink v-if="isManager" to="/staff/calendar" @click="profileOpen = false"
+          >ตั้งค่า Google Calendar</RouterLink
+        >
+        <RouterLink
+          v-else
+          :to="{ path: '/staff/appointments/calendar', query: { googleCalendar: 'status' } }"
+          @click="profileOpen = false"
+          >สถานะ Google Calendar</RouterLink
+        >
         <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>
     </div>

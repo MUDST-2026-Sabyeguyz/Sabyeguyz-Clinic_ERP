@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import { loadAppointmentTherapists } from '../therapists'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import CalendarSyncIndicator from '../components/CalendarSyncIndicator.vue'
 import {
   appointmentApi,
   branchApi,
-  catalogApi,
   type Appointment,
   type Branch,
   type Therapist,
@@ -28,9 +29,6 @@ const therapists = ref<Therapist[]>([])
 const branches = ref<Branch[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
-function openGoogleCalendarSettings() {
-  void router.push({ name: 'staff-calendar' })
-}
 
 const branchOptions = computed(() => branches.value.filter((branch) => branch.active))
 const visibleTherapists = computed(() =>
@@ -52,7 +50,7 @@ const weekDays = computed(() => {
   const offset = selected.getDay() === 0 ? -6 : 1 - selected.getDay()
   const monday = new Date(selected)
   monday.setDate(selected.getDate() + offset)
-  return Array.from({ length: 5 }, (_, index) => {
+  return Array.from({ length: 6 }, (_, index) => {
     const date = new Date(monday)
     date.setDate(monday.getDate() + index)
     return toDateValue(date)
@@ -84,13 +82,15 @@ function therapistsForSlot(columnTherapist?: Therapist) {
   return mode.value === 'week' ? visibleTherapists.value : columnTherapist ? [columnTherapist] : []
 }
 function therapistForSlot(date: string, time: string, columnTherapist?: Therapist) {
-  return therapistsForSlot(columnTherapist).find(
-    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
-  ) ?? columnTherapist
+  return (
+    therapistsForSlot(columnTherapist).find((therapist) =>
+      availability.value[`${date}:${therapist.id}`]?.includes(time),
+    ) ?? columnTherapist
+  )
 }
 function slotInBranchWindow(date: string, time: string, columnTherapist?: Therapist) {
-  return therapistsForSlot(columnTherapist).some(
-    (therapist) => availability.value[`${date}:${therapist.id}`]?.includes(time),
+  return therapistsForSlot(columnTherapist).some((therapist) =>
+    availability.value[`${date}:${therapist.id}`]?.includes(time),
   )
 }
 const timeOptions = computed(() => {
@@ -123,7 +123,10 @@ function formatTime(value: string) {
 
 function dateInBangkok(value: string) {
   return new Intl.DateTimeFormat('sv-SE', {
-    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Bangkok',
   }).format(new Date(value))
 }
 
@@ -145,7 +148,7 @@ const dateLabel = computed(() => {
     }).format(new Date(`${anchorDate.value}T00:00:00`))
   }
   const start = new Date(`${weekDays.value[0]}T00:00:00`)
-  const end = new Date(`${weekDays.value[4]}T00:00:00`)
+  const end = new Date(`${weekDays.value[5]}T00:00:00`)
   return `${start.getDate()}–${end.getDate()} ${new Intl.DateTimeFormat('th-TH', {
     month: 'long',
     year: 'numeric',
@@ -155,6 +158,7 @@ const dateLabel = computed(() => {
 function appointmentFor(date: string, time: string, therapist?: Therapist) {
   return appointments.value.find(
     (item) =>
+      item.status !== 'CANCELLED' &&
       dateInBangkok(item.startAt) === date &&
       formatTime(item.startAt) === time &&
       (mode.value === 'week'
@@ -206,7 +210,7 @@ async function load() {
     const [appointmentPage, branchList, therapistList] = await Promise.all([
       appointmentApi.search({ page: 0, size: 100 }),
       branchApi.list(),
-      catalogApi.therapists(),
+      loadAppointmentTherapists(),
     ])
     appointments.value = appointmentPage.items
     branches.value = branchList
@@ -226,11 +230,17 @@ async function loadAvailability() {
     const requests = columns.value.flatMap((column) => {
       const dayTherapists = mode.value === 'week' ? visibleTherapists.value : [column.therapist]
       return dayTherapists.flatMap((therapist) => {
-        const branchCode = therapist?.branchCode ?? (selectedBranch.value !== 'ทั้งหมด' ? selectedBranch.value : '')
+        const branchCode =
+          therapist?.branchCode ?? (selectedBranch.value !== 'ทั้งหมด' ? selectedBranch.value : '')
         if (!therapist || !branchCode) return []
         const key = `${column.date}:${therapist.id}`
-        return [appointmentApi.availability({ branchCode, therapistId: therapist.id, date: column.date })
-          .then((result) => { next[key] = result.slots.map((slot) => slot.time) })]
+        return [
+          appointmentApi
+            .availability({ branchCode, therapistId: therapist.id, date: column.date })
+            .then((result) => {
+              next[key] = result.slots.map((slot) => slot.time)
+            }),
+        ]
       })
     })
     await Promise.all(requests)
@@ -299,10 +309,9 @@ onMounted(() => void load())
             รายสัปดาห์
           </button>
         </div>
-        <button class="calendar-google" type="button" @click="openGoogleCalendarSettings">
-          ตั้งค่า Google Calendar
-        </button>
       </section>
+
+      <CalendarSyncIndicator :branch-code="selectedBranch" />
 
       <div class="calendar-legend">
         <span data-status="empty">ว่าง</span>
@@ -317,11 +326,17 @@ onMounted(() => void load())
       </p>
       <div v-else-if="loading" class="calendar-loading">กำลังโหลดปฏิทิน...</div>
       <div v-else class="calendar-grid-scroll">
-        <div class="schedule-grid" :style="{ '--column-count': Math.max(columns.length, 1), '--time-count': Math.max(timeOptions.length, 1) }">
+        <div
+          class="schedule-grid"
+          :style="{
+            '--column-count': Math.max(columns.length, 1),
+            '--time-count': Math.max(timeOptions.length, 1),
+          }"
+        >
           <div class="time-column">
             <b>เวลา</b>
-          <span v-for="time in timeOptions" :key="time">{{ time }}</span>
-          <span v-if="availabilityLoading" class="calendar-time-loading">…</span>
+            <span v-for="time in timeOptions" :key="time">{{ time }}</span>
+            <span v-if="availabilityLoading" class="calendar-time-loading">…</span>
           </div>
           <div v-for="column in columns" :key="column.key" class="schedule-column">
             <header>
@@ -334,13 +349,22 @@ onMounted(() => void load())
               type="button"
               class="schedule-slot"
               :data-state="slotState(appointmentFor(column.date, time, column.therapist))"
-              :disabled="!appointmentFor(column.date, time, column.therapist) && !slotInBranchWindow(column.date, time, column.therapist)"
-              @click="openSlot(column.date, time, therapistForSlot(column.date, time, column.therapist))"
+              :disabled="
+                !appointmentFor(column.date, time, column.therapist) &&
+                !slotInBranchWindow(column.date, time, column.therapist)
+              "
+              @click="
+                openSlot(column.date, time, therapistForSlot(column.date, time, column.therapist))
+              "
             >
               <template v-if="appointmentFor(column.date, time, column.therapist)">
                 <strong>
                   {{ time }}
-                  {{ appointmentFor(column.date, time, column.therapist)?.patient?.fullName || appointmentFor(column.date, time, column.therapist)?.contactName || 'ผู้ป่วยไม่ประจำ' }}
+                  {{
+                    appointmentFor(column.date, time, column.therapist)?.patient?.fullName ||
+                    appointmentFor(column.date, time, column.therapist)?.contactName ||
+                    'ผู้ป่วยไม่ประจำ'
+                  }}
                 </strong>
                 <small
                   >นก.
@@ -362,7 +386,6 @@ onMounted(() => void load())
         </div>
       </div>
     </main>
-
   </div>
 </template>
 
