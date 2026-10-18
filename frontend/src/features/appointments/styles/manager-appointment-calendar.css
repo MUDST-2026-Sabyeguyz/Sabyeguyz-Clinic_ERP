@@ -5,7 +5,7 @@
 }
 
 .calendar-main {
-  width: min(1284px, calc(100% - 48px));
+  width: min(1600px, calc(100% - 48px));
   margin: 0 auto;
   padding: 46px 0 72px;
 }
@@ -152,17 +152,15 @@
 }
 
 .calendar-grid-scroll {
-  overflow-x: auto;
   padding-bottom: 10px;
-  scrollbar-color: #218b85 #dcecea;
-  scrollbar-width: thin;
 }
 
 .schedule-grid {
   --column-count: 5;
   display: grid;
-  grid-template-columns: 94px repeat(var(--column-count), minmax(204px, 1fr));
-  min-width: calc(94px + var(--column-count) * 204px);
+  grid-template-columns: 94px repeat(var(--column-count), minmax(0, 1fr));
+  box-sizing: border-box;
+  width: 100%;
   padding: 0 18px 28px;
   overflow: hidden;
   border: 1px solid #cbd7d3;
@@ -173,7 +171,8 @@
 .time-column,
 .schedule-column {
   display: grid;
-  grid-template-rows: 80px repeat(5, 112px);
+  min-width: 0;
+  grid-template-rows: 80px repeat(var(--time-count, 5), 112px);
 }
 
 .time-column > b,
@@ -208,6 +207,7 @@
 
 .schedule-slot {
   align-self: center;
+  box-sizing: border-box;
   width: calc(100% - 20px);
   height: 84px;
   margin-inline: 10px;
@@ -217,6 +217,7 @@
   color: #243832;
   background: #f7faf7;
   text-align: left;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
@@ -318,7 +319,7 @@
 
 @media (max-width: 720px) {
   .calendar-main {
-    width: min(100% - 28px, 1284px);
+    width: calc(100% - 28px);
     padding-top: 28px;
   }
   .calendar-title h1 {
@@ -340,15 +341,22 @@
     gap: 10px 16px;
   }
   .schedule-grid {
-    grid-template-columns: 76px repeat(var(--column-count), 236px);
-    min-width: calc(76px + var(--column-count) * 236px);
+    grid-template-columns: 52px repeat(var(--column-count), minmax(0, 1fr));
     padding-inline: 10px;
+  }
+  .schedule-column > header {
+    padding-inline: 4px;
+    overflow-wrap: anywhere;
   }
   .time-column,
   .schedule-column {
-    grid-template-rows: 66px repeat(5, 102px);
+    grid-template-rows: 66px repeat(var(--time-count, 5), 102px);
   }
   .schedule-slot {
+    width: calc(100% - 4px);
     height: 78px;
+    margin-inline: 2px;
+    padding: 6px 4px;
+    overflow: hidden;
   }
 }

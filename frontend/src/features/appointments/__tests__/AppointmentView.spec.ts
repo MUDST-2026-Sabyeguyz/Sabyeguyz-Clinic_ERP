@@ -45,7 +45,7 @@ describe('AppointmentView', () => {
     expect(source).toContain('ผู้จอง NEW ยังไม่มี HN')
   })
 
-  it('places service type on the row below patient type for current and new patients', () => {
+  it('places service type beside patient type for current and new patients', () => {
     const styles = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/styles/appointments.css'),
       'utf8',
@@ -57,7 +57,8 @@ describe('AppointmentView', () => {
       /\.appointment-create-card \.appointment-create-grid\.is-new-patient \{([\s\S]*?)\n\}/,
     )
 
-    expect(createGrid?.[1]).toContain("'patient-type summary'")
+    expect(createGrid?.[1]).toContain("'patient-type service-mode'")
+    expect(createGrid?.[1]).toContain("'patient selection'")
     expect(newPatientGrid?.[1]).toContain("'patient-type service-mode'")
     expect(newPatientGrid?.[1]).toContain("'new-patient selection'")
   })

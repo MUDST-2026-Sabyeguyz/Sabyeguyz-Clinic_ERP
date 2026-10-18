@@ -2,6 +2,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
+import TimeFilterPicker from '@/features/staff/components/TimeFilterPicker.vue'
 import {
   type TreatmentFeeRule,
   branchApi,
@@ -18,7 +20,8 @@ import { clinicToday } from '@/utils/clinicDate'
 import { isBranchPhoneValid, isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 import { baht2, recordedAt, versionCycles, versionStatus } from '../commissionVersion'
 
-type SectionKey = 'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'tiers' | 'master'
+type SectionKey =
+  'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'tiers' | 'master'
 // Rows are edited generically from form fields of different shapes, so their values stay loosely typed.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
@@ -62,10 +65,14 @@ const data = reactive<Record<Exclude<SectionKey, 'payments'>, Row[]>>({
 const paymentMethods = reactive<Array<{ id: number; name: string; note: string; active: boolean }>>(
   [],
 )
-const paymentStatuses = reactive<Array<{ code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID'; label: string; enabled: boolean }>>([])
+const paymentStatuses = reactive<
+  Array<{ code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID'; label: string; enabled: boolean }>
+>([])
 // a closed branch (ปิดใช้งาน) is not offered anywhere: not for a user, a room or a resource
 const openBranches = computed(() => data.branches.filter((branch) => branch.status === 'ใช้งาน'))
-const branchOptions = computed(() => openBranches.value.map((branch) => option(String(branch.name))))
+const branchOptions = computed(() =>
+  openBranches.value.map((branch) => option(String(branch.name))),
+)
 const resourceStatuses: Record<string, string> = {
   ACTIVE: 'ใช้งาน',
   INACTIVE: 'ปิดใช้งาน',
@@ -119,10 +126,15 @@ const resourceRow = (item: Awaited<ReturnType<typeof resourceApi.create>>) => ({
 })
 const masterRow = (item: Awaited<ReturnType<typeof masterDataApi.create>>) => ({
   ...item,
-  count: 1,
   examples: item.name,
   status: status(item.active),
 })
+const masterCategoryLabel = (value: string) =>
+  ({
+    'Customer Group': 'กลุ่มผู้ป่วย',
+    'Referral Channel': 'ช่องทางที่รู้จักคลินิก',
+    'Insurance Company': 'บริษัทประกัน',
+  })[value] ?? value
 const bahtText = (value: number) =>
   Number(value).toLocaleString('th-TH', { maximumFractionDigits: 2 })
 const feeCalculation = (rule: { feeType: string; feeValue: number }) =>
@@ -146,7 +158,12 @@ const feeRow = (rule: TreatmentFeeRule) => ({
 })
 // The "กฎค่ามือ" page lists the treatment fee rules, which the Manager sets here; the "กฎค่าคอมมิชชัน" page shows the Scheme
 // Version in force today with its tiers (a version still waiting to start is on the history page).
-type LatestVersion = { id: number; version: number; effectiveFrom: string; effectiveTo: string | null }
+type LatestVersion = {
+  id: number
+  version: number
+  effectiveFrom: string
+  effectiveTo: string | null
+}
 type LatestTier = { order: number; minimum: number; maximum: number | null; rate: number }
 const latestVersion = ref<LatestVersion | null>(null)
 const latestTiers = ref<LatestTier[]>([])
@@ -182,14 +199,23 @@ const feeVersions = computed(() =>
     .slice()
     .sort((a, b) => String(a.effectiveFrom).localeCompare(String(b.effectiveFrom)))
     .map((row, index) => {
-      const range = { effectiveFrom: String(row.effectiveFrom), effectiveTo: row.effectiveTo ? String(row.effectiveTo) : null }
+      const range = {
+        effectiveFrom: String(row.effectiveFrom),
+        effectiveTo: row.effectiveTo ? String(row.effectiveTo) : null,
+      }
       return { number: index + 1, row, range, status: versionStatus(range) }
     }),
 )
-const feeInForce = computed(() => feeVersions.value.find((item) => item.status.tone === 'current') ?? null)
-const feePending = computed(() => feeVersions.value.find((item) => item.status.tone === 'pending') ?? null)
+const feeInForce = computed(
+  () => feeVersions.value.find((item) => item.status.tone === 'current') ?? null,
+)
+const feePending = computed(
+  () => feeVersions.value.find((item) => item.status.tone === 'pending') ?? null,
+)
 const shownFeeVersions = computed(() =>
-  [feeInForce.value, feePending.value].filter((item): item is NonNullable<typeof item> => item !== null),
+  [feeInForce.value, feePending.value].filter(
+    (item): item is NonNullable<typeof item> => item !== null,
+  ),
 )
 /** The month the next version of a rule can start: the one after the current month ("YYYY-MM"). */
 function nextCycleMonth() {
@@ -209,7 +235,16 @@ async function loadBackendSettings() {
       masterDataApi.list(),
     ])
   const failures: string[] = []
-  const results = [branches, users, services, courses, payments, paymentStatusOptions, resources, master]
+  const results = [
+    branches,
+    users,
+    services,
+    courses,
+    payments,
+    paymentStatusOptions,
+    resources,
+    master,
+  ]
   const names = [
     'สาขา',
     'ผู้ใช้งาน',
@@ -271,7 +306,10 @@ const copy = computed(
       services: ['บริการและคอร์ส', 'จัดการรายการบริการและคอร์สทั้งหมดในระบบ'],
       payments: ['การชำระเงิน', 'เลือกช่องทางและสถานะการชำระเงินที่เปิดให้บริการในระบบ'],
       rooms: ['Room / Resource', 'จัดการห้องและทรัพยากรที่ใช้ในการให้บริการ'],
-      commission: ['กฎค่ามือ', 'ค่ามือของผู้รักษาแทนและการรักษารายครั้ง ใช้กฎกลางเดียวกับนักกายภาพทุกคน'],
+      commission: [
+        'กฎค่ามือ',
+        'ค่ามือของผู้รักษาแทนและการรักษารายครั้ง ใช้กฎกลางเดียวกับนักกายภาพทุกคน',
+      ],
       tiers: ['กฎค่าคอมมิชชัน', 'อัตราค่าคอมมิชชันตามยอดขายคอร์สรายเดือนของพนักงาน'],
       master: ['Master Data', 'จัดการข้อมูลหลักที่ใช้อ้างอิงทั่วทั้งระบบ'],
     })[section.value],
@@ -296,9 +334,16 @@ const headers = computed(() => {
     services: ['รายการ', 'ประเภท', 'ราคา', 'จำนวน/ครั้ง', 'สถานะ'],
     payments: [],
     rooms: ['ห้อง/ทรัพยากร', 'สาขา', 'ประเภท', 'สถานะ'],
-    commission: ['ชื่อกฎ', 'ผู้ได้รับค่ามือ', 'วิธีคำนวณ', 'สถานะ', 'ผู้บันทึกล่าสุด', 'แก้ไขล่าสุด'],
+    commission: [
+      'ชื่อกฎ',
+      'ผู้ได้รับค่ามือ',
+      'วิธีคำนวณ',
+      'สถานะ',
+      'ผู้บันทึกล่าสุด',
+      'แก้ไขล่าสุด',
+    ],
     tiers: ['ชื่อกฎ', 'ผู้ได้รับค่าคอมมิชชัน', 'วิธีคำนวณ'],
-    master: ['ประเภทข้อมูล', 'จำนวนรายการ', 'ตัวอย่างรายการ', 'สถานะ'],
+    master: ['ประเภทข้อมูล', 'ชื่อรายการ', 'สถานะ'],
   }
   return values[section.value]
 })
@@ -311,7 +356,7 @@ const keys = computed(() => {
     rooms: ['name', 'branch', 'type', 'status'],
     commission: ['name', 'recipient', 'calculation', 'status', 'lastEditedBy', 'lastEditedAt'],
     tiers: ['name', 'recipient', 'calculation'],
-    master: ['category', 'count', 'examples', 'status'],
+    master: ['category', 'examples', 'status'],
   }
   return values[section.value]
 })
@@ -388,7 +433,8 @@ function openDrawer(index: number | null) {
   if (section.value === 'branches') form.contact = limitPhoneDigits(String(form.contact ?? ''))
   if (section.value === 'users') form.phone = limitPhoneDigits(String(form.phone ?? ''))
   // a rule starts on the 1st of a month: the form takes the month only
-  if (section.value === 'commission') form.effectiveFrom = String(form.effectiveFrom ?? '').slice(0, 7)
+  if (section.value === 'commission')
+    form.effectiveFrom = String(form.effectiveFrom ?? '').slice(0, 7)
   drawerOpen.value = true
 }
 /**
@@ -403,7 +449,12 @@ function openFeeEditor() {
   }
   openDrawer(null)
   const current = feeInForce.value?.row
-  if (current) Object.assign(form, { name: current.name, feeType: current.feeType, feeValue: current.feeValue })
+  if (current)
+    Object.assign(form, {
+      name: current.name,
+      feeType: current.feeType,
+      feeValue: current.feeValue,
+    })
 }
 const textOrUndefined = (value: unknown) => String(value ?? '').trim() || undefined
 const numberOrUndefined = (value: unknown) => {
@@ -453,7 +504,9 @@ async function save() {
   }
   if (section.value === 'services') {
     fieldErrors.price =
-      String(form.price ?? '').trim() === '' || !Number.isFinite(Number(form.price)) || Number(form.price) < 0
+      String(form.price ?? '').trim() === '' ||
+      !Number.isFinite(Number(form.price)) ||
+      Number(form.price) < 0
     fieldErrors.duration = invalidMinutes(form.duration)
     if (form.type === 'Course') {
       fieldErrors.sessions = !Number.isInteger(Number(form.sessions)) || Number(form.sessions) < 1
@@ -471,23 +524,24 @@ async function save() {
     fieldErrors.effectiveFrom = !/^[0-9]{4}-[0-9]{2}$/.test(String(form.effectiveFrom ?? ''))
   }
   if (Object.values(fieldErrors).some(Boolean)) {
-    validationMessage.value = section.value === 'commission'
-      ? fieldErrors.feeValue
-        ? form.feeType === 'Percentage'
-          ? 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
-          : 'จำนวนเงินต้องเป็นตัวเลขไม่ติดลบ'
-        : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
-      : fieldErrors.contact
-      ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
-      : fieldErrors.phone
-        ? 'เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก'
-      : fieldErrors.openTime
-        ? 'ช่วงเปิดรับนัดต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด'
-        : fieldErrors.email
-          ? 'รูปแบบอีเมลสาขาไม่ถูกต้อง'
-          : fieldErrors.appointmentMinutes || fieldErrors.duration
-            ? 'ระยะเวลานัดต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (เว้นว่างได้)'
-            : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
+    validationMessage.value =
+      section.value === 'commission'
+        ? fieldErrors.feeValue
+          ? form.feeType === 'Percentage'
+            ? 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
+            : 'จำนวนเงินต้องเป็นตัวเลขไม่ติดลบ'
+          : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
+        : fieldErrors.contact
+          ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
+          : fieldErrors.phone
+            ? 'เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก'
+            : fieldErrors.openTime
+              ? 'ช่วงเปิดรับนัดต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด'
+              : fieldErrors.email
+                ? 'รูปแบบอีเมลสาขาไม่ถูกต้อง'
+                : fieldErrors.appointmentMinutes || fieldErrors.duration
+                  ? 'ระยะเวลานัดต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (เว้นว่างได้)'
+                  : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }
   if (
@@ -551,7 +605,10 @@ async function save() {
       const code = existing?.code || form.code || `SV-${Date.now()}`
       // the type chosen in the form is applied first (the server refuses it once the item has been used)
       if (existing?.id && existing.type && form.type !== existing.type) {
-        await serviceManagementApi.changeType(existing.id, form.type === 'Course' ? 'Course' : 'SingleVisit')
+        await serviceManagementApi.changeType(
+          existing.id,
+          form.type === 'Course' ? 'Course' : 'SingleVisit',
+        )
       }
       if (form.type === 'Course') {
         const body = {
@@ -624,7 +681,8 @@ async function save() {
         // a rule begins on the 1st of the month picked; its end is set by the system (the day before the next rule)
         // keeping the month of a version that waits to start keeps its start date as it is
         effectiveFrom:
-          existing?.effectiveFrom && String(existing.effectiveFrom).slice(0, 7) === String(form.effectiveFrom).slice(0, 7)
+          existing?.effectiveFrom &&
+          String(existing.effectiveFrom).slice(0, 7) === String(form.effectiveFrom).slice(0, 7)
             ? String(existing.effectiveFrom)
             : `${String(form.effectiveFrom).slice(0, 7)}-01`,
       }
@@ -711,7 +769,9 @@ const drawerTitle = computed(() => {
     master: 'Master Data',
   }
   if (section.value === 'commission')
-    return editingIndex.value === null ? 'แก้กฎค่ามือ (บันทึกเป็นเวอร์ชันใหม่)' : 'แก้ไขเวอร์ชันที่รอเริ่มใช้'
+    return editingIndex.value === null
+      ? 'แก้กฎค่ามือ (บันทึกเป็นเวอร์ชันใหม่)'
+      : 'แก้ไขเวอร์ชันที่รอเริ่มใช้'
   return `${editingIndex.value === null ? 'เพิ่ม' : 'แก้ไข'} ${labels[section.value]}`
 })
 </script>
@@ -735,7 +795,9 @@ const drawerTitle = computed(() => {
           >
             {{ item.label }}
           </button>
-          <RouterLink class="settings-nav-link" to="/staff/settings/audit-log">ประวัติการแก้ไขระบบ</RouterLink>
+          <RouterLink class="settings-nav-link" to="/staff/settings/audit-log"
+            >ประวัติการแก้ไขระบบ</RouterLink
+          >
         </aside>
         <section class="settings-panel">
           <header class="settings-panel-head">
@@ -747,13 +809,16 @@ const drawerTitle = computed(() => {
               {{ actionLabel }}
             </button>
             <div v-else-if="section === 'commission'" class="settings-actions">
-              <RouterLink class="settings-secondary" to="/staff/settings/fee-history">ประวัติเวอร์ชัน</RouterLink
+              <RouterLink class="settings-secondary" to="/staff/settings/fee-history"
+                >ประวัติเวอร์ชัน</RouterLink
               ><button class="settings-add" @click="openFeeEditor">แก้กฎค่ามือ</button>
             </div>
             <div v-else-if="section === 'tiers'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/commission-history"
                 >ประวัติเวอร์ชัน</RouterLink
-              ><RouterLink class="settings-add" to="/staff/commission/tiers">ตั้งค่า Tier</RouterLink>
+              ><RouterLink class="settings-add" to="/staff/commission/tiers"
+                >ตั้งค่า Tier</RouterLink
+              >
             </div>
             <p v-else-if="section === 'payments'" class="auto-save-note">
               {{ savedMessage || 'การเปลี่ยนแปลงจะบันทึกอัตโนมัติ' }}
@@ -768,9 +833,16 @@ const drawerTitle = computed(() => {
             >
               <span
                 ><b>{{ paymentLabel(method.name) }}</b
-                ><small>{{ paymentNote(method.name) }} · {{ method.active ? 'เปิดใช้งานอยู่' : 'ปิดอยู่' }}</small></span
+                ><small
+                  >{{ paymentNote(method.name) }} ·
+                  {{ method.active ? 'เปิดใช้งานอยู่' : 'ปิดอยู่' }}</small
+                ></span
               >
-              <span class="payment-status" role="group" :aria-label="`สถานะ ${paymentLabel(method.name)}`">
+              <span
+                class="payment-status"
+                role="group"
+                :aria-label="`สถานะ ${paymentLabel(method.name)}`"
+              >
                 <button
                   type="button"
                   class="enable"
@@ -794,16 +866,43 @@ const drawerTitle = computed(() => {
           </div>
           <section v-if="section === 'payments'" class="payment-list payment-status-settings">
             <h3>สถานะการชำระเงิน</h3>
-            <div v-for="(option, index) in paymentStatuses" :key="option.code" class="payment-option">
-              <span><b>{{ option.label }}</b><small>{{ option.enabled ? 'แสดงในหน้าบริการ' : 'ซ่อนจากหน้าบริการ' }}</small></span>
+            <div
+              v-for="(option, index) in paymentStatuses"
+              :key="option.code"
+              class="payment-option"
+            >
+              <span
+                ><b>{{ option.label }}</b
+                ><small>{{
+                  option.enabled ? 'แสดงในหน้าบริการ' : 'ซ่อนจากหน้าบริการ'
+                }}</small></span
+              >
               <span class="payment-status" role="group" :aria-label="`สถานะ ${option.label}`">
-                <button type="button" class="enable" :class="{ on: option.enabled }" :aria-pressed="option.enabled" @click="setPaymentStatusEnabled(index, true)">Enable</button>
-                <button type="button" class="disable" :class="{ on: !option.enabled }" :aria-pressed="!option.enabled" @click="setPaymentStatusEnabled(index, false)">Disable</button>
+                <button
+                  type="button"
+                  class="enable"
+                  :class="{ on: option.enabled }"
+                  :aria-pressed="option.enabled"
+                  @click="setPaymentStatusEnabled(index, true)"
+                >
+                  Enable
+                </button>
+                <button
+                  type="button"
+                  class="disable"
+                  :class="{ on: !option.enabled }"
+                  :aria-pressed="!option.enabled"
+                  @click="setPaymentStatusEnabled(index, false)"
+                >
+                  Disable
+                </button>
               </span>
             </div>
           </section>
           <section v-else-if="section === 'tiers'" class="latest-version">
-            <p v-if="!latestVersion" class="empty">ยังไม่มีเวอร์ชันของกฎค่าคอมมิชชันที่ใช้อยู่ในตอนนี้</p>
+            <p v-if="!latestVersion" class="empty">
+              ยังไม่มีเวอร์ชันของกฎค่าคอมมิชชันที่ใช้อยู่ในตอนนี้
+            </p>
             <template v-else>
               <header>
                 <h3>รายละเอียดเวอร์ชัน V{{ latestVersion.version }}</h3>
@@ -835,11 +934,16 @@ const drawerTitle = computed(() => {
             </template>
           </section>
           <section v-else-if="section === 'commission'" class="latest-version fee-versions">
-            <p v-if="!feeInForce" class="empty">ยังไม่มีกฎค่ามือที่ใช้อยู่ในตอนนี้ การรักษาแทนจะบันทึกไม่ได้จนกว่ากฎจะเริ่มมีผล</p>
+            <p v-if="!feeInForce" class="empty">
+              ยังไม่มีกฎค่ามือที่ใช้อยู่ในตอนนี้ การรักษาแทนจะบันทึกไม่ได้จนกว่ากฎจะเริ่มมีผล
+            </p>
             <article v-for="item in shownFeeVersions" :key="item.row.id" class="fee-version">
               <header>
                 <h3>
-                  {{ item.status.tone === 'pending' ? 'เวอร์ชันที่รอเริ่มใช้' : 'รายละเอียดเวอร์ชัน' }} V{{ item.number }}
+                  {{
+                    item.status.tone === 'pending' ? 'เวอร์ชันที่รอเริ่มใช้' : 'รายละเอียดเวอร์ชัน'
+                  }}
+                  V{{ item.number }}
                 </h3>
                 <span class="version-badge" :class="item.status.tone">{{ item.status.label }}</span>
               </header>
@@ -887,10 +991,15 @@ const drawerTitle = computed(() => {
                       class="settings-status"
                       :class="{
                         'status-off':
-                          String(row[key]).startsWith('ปิด') || String(row[key]).startsWith('ไม่พร้อม'),
+                          String(row[key]).startsWith('ปิด') ||
+                          String(row[key]).startsWith('ไม่พร้อม'),
                       }"
                       >{{ row[key] }}</span
-                    ><template v-else>{{ row[key] }}</template>
+                    ><template v-else>{{
+                      section === 'master' && key === 'category'
+                        ? masterCategoryLabel(row[key])
+                        : row[key]
+                    }}</template>
                   </td>
                   <td>
                     <button class="edit" @click="openDrawer(index)">แก้ไข</button>
@@ -912,7 +1021,7 @@ const drawerTitle = computed(() => {
           ต้องการ{{ paymentChange.enable ? 'เปิดใช้งาน (Enable)' : 'ปิดใช้งาน (Disable)' }}
           <b>{{ paymentLabel(paymentMethods[paymentChange.index]!.name) }}</b> หรือไม่?
         </p>
-                <div class="confirm-actions">
+        <div class="confirm-actions">
           <button type="button" class="confirm-cancel" @click="paymentChange = null">ยกเลิก</button>
           <button type="button" class="confirm-ok" @click="confirmPaymentStatus">ยืนยัน</button>
         </div>
@@ -962,16 +1071,19 @@ const drawerTitle = computed(() => {
               :class="{ invalid: fieldErrors.email }"
               placeholder="ไม่บังคับ" /></label
           ><label
-            >เลขใบอนุญาต<input v-model="form.licenseNo" maxlength="50" placeholder="ไม่บังคับ" /></label
+            >เลขใบอนุญาต<input
+              v-model="form.licenseNo"
+              maxlength="50"
+              placeholder="ไม่บังคับ" /></label
           ><label
-            >เปิดรับนัดตั้งแต่<input
+            >เปิดรับนัดตั้งแต่<TimeFilterPicker
               v-model="form.openTime"
-              type="time"
+              label="เปิดรับนัดตั้งแต่"
               :class="{ invalid: fieldErrors.openTime }" /></label
           ><label
-            >ถึงเวลา<input
+            >ถึงเวลา<TimeFilterPicker
               v-model="form.closeTime"
-              type="time"
+              label="ถึงเวลา"
               :class="{ invalid: fieldErrors.closeTime }" /></label
           ><label
             >ระยะเวลานัดเริ่มต้น (นาที)<input
@@ -1011,7 +1123,14 @@ const drawerTitle = computed(() => {
               placeholder="เว้นว่างได้เมื่อแก้ไข" /></label
           ><label
             >รหัสพนักงาน<input v-model="form.code" :class="{ invalid: fieldErrors.code }" /></label
-          ><label>โทรศัพท์<input v-model="form.phone" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="10" @input="form.phone = limitPhoneDigits(form.phone)" /></label
+          ><label
+            >โทรศัพท์<input
+              v-model="form.phone"
+              type="tel"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="10"
+              @input="form.phone = limitPhoneDigits(form.phone)" /></label
           ><label :class="{ 'invalid-field': fieldErrors.role }"
             >Role<FilterDropdown
               v-model="form.role"
@@ -1093,8 +1212,9 @@ const drawerTitle = computed(() => {
                 <option value="Year">ปี</option>
               </select></label
             ></template
-          ><p v-else class="hint">Single Visit คือ 1 ครั้งต่อรายการ และไม่มีวันหมดอายุ</p
-          ><label
+          >
+          <p v-else class="hint">Single Visit คือ 1 ครั้งต่อรายการ และไม่มีวันหมดอายุ</p>
+          <label
             >ระยะเวลานัดเริ่มต้น (นาที)<input
               v-model="form.duration"
               inputmode="numeric"
@@ -1146,14 +1266,22 @@ const drawerTitle = computed(() => {
               :class="{ invalid: fieldErrors.name }"
               placeholder="ระบุชื่อเกณฑ์" /></label
           ><label
-            >ผู้ได้รับค่ามือ<input class="locked-field" value="นักกายภาพทั้งหมด" disabled readonly aria-label="ผู้ได้รับค่ามือ" /></label
-          ><fieldset class="fee-type" :disabled="form.used">
+            >ผู้ได้รับค่ามือ<input
+              class="locked-field"
+              value="นักกายภาพทั้งหมด"
+              disabled
+              readonly
+              aria-label="ผู้ได้รับค่ามือ"
+          /></label>
+          <fieldset class="fee-type" :disabled="form.used">
             <legend>วิธีคำนวณ</legend>
             <label class="check"
-              ><input v-model="form.feeType" type="radio" value="Fixed" />จำนวนเงิน (บาท / ครั้ง)</label
+              ><input v-model="form.feeType" type="radio" value="Fixed" />จำนวนเงิน (บาท /
+              ครั้ง)</label
             >
             <label class="check"
-              ><input v-model="form.feeType" type="radio" value="Percentage" />เปอร์เซ็นต์ (%)</label
+              ><input v-model="form.feeType" type="radio" value="Percentage" />เปอร์เซ็นต์
+              (%)</label
             >
           </fieldset>
           <label
@@ -1169,14 +1297,15 @@ const drawerTitle = computed(() => {
                 form.feeType === 'Percentage' ? 'เช่น 10' : 'จำนวนเงินต่อครั้ง เช่น 300 บาท / ครั้ง'
               " /></label
           ><label
-            >เดือนที่เริ่มมีผล (เริ่มวันที่ 1 · วันสิ้นสุดระบบกำหนดให้)<input
+            >เดือนที่เริ่มมีผล (เริ่มวันที่ 1 · วันสิ้นสุดระบบกำหนดให้)<MonthFilterPicker
               v-model="form.effectiveFrom"
-              type="month"
               :min="editingIndex === null ? nextCycleMonth() : undefined"
               :disabled="form.used"
-              :class="{ invalid: fieldErrors.effectiveFrom }" /></label
-          ><p v-if="form.used" class="hint">
-            กฎนี้ถูกใช้คำนวณแล้ว แก้ได้เฉพาะชื่อ ถ้าต้องการเปลี่ยนอัตราให้แก้กฎค่ามือเพื่อสร้างเวอร์ชันใหม่
+              :class="{ invalid: fieldErrors.effectiveFrom }"
+          /></label>
+          <p v-if="form.used" class="hint">
+            กฎนี้ถูกใช้คำนวณแล้ว แก้ได้เฉพาะชื่อ
+            ถ้าต้องการเปลี่ยนอัตราให้แก้กฎค่ามือเพื่อสร้างเวอร์ชันใหม่
           </p></template
         >
         <template v-else-if="section === 'master'"
@@ -1184,9 +1313,9 @@ const drawerTitle = computed(() => {
             >ประเภทข้อมูล<FilterDropdown
               v-model="form.category"
               :options="[
-                option('Customer Group'),
-                option('Referral Channel'),
-                option('Insurance Company'),
+                { value: 'Customer Group', label: 'กลุ่มผู้ป่วย' },
+                { value: 'Referral Channel', label: 'ช่องทางที่รู้จักคลินิก' },
+                { value: 'Insurance Company', label: 'บริษัทประกัน' },
               ]"
               default-value="Customer Group"
               default-label="Customer Group"
@@ -1194,7 +1323,7 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false" /></label
           ><label
-            >ตัวอย่างรายการ<input
+            >ชื่อรายการ<input
               v-model="form.examples"
               :class="{ invalid: fieldErrors.examples }"
               placeholder="ระบุชื่อรายการ" /></label
