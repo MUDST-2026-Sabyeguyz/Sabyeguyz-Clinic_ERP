@@ -294,15 +294,12 @@ onMounted(load)
                   <dd>{{ branch.waiting }}</dd>
                 </div>
                 <div>
-                  <dt>ล้มเหลว · สาขานี้</dt>
+                  <dt>ล้มเหลว</dt>
                   <dd :class="{ 'calendar-failed': branch.failed > 0 }">{{ branch.failed }}</dd>
                 </div>
               </dl>
               <p class="calendar-hint">
-                ซิงก์ล่าสุด (รอบรวมทุกสาขา): {{ formatTime(status.lastRunAt) }}
-              </p>
-              <p v-if="!status.enabled" class="calendar-hint">
-                ปุ่ม sync จะใช้งานได้เมื่อระบบเปิดใช้งานการ sync
+                ซิงก์ล่าสุด: {{ formatTime(status.lastRunAt) }}
               </p>
               <button
                 type="button"
