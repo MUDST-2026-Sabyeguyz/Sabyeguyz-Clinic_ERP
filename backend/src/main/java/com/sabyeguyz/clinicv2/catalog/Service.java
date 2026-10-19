@@ -62,7 +62,14 @@ public class Service {
     @Column(name = "unit_name", nullable = false, length = 30)
     private String unitName = "ครั้ง";
 
+    /** Length of an appointment for this service; null = use the branch default. */
+    @Column(name = "default_duration_minutes")
+    private Integer defaultAppointmentMinutes;
+
     public Service() {}
+
+    public Integer getDefaultAppointmentMinutes() { return defaultAppointmentMinutes; }
+    public void setDefaultAppointmentMinutes(Integer minutes) { this.defaultAppointmentMinutes = minutes; }
 
     public Long getId() { return id; }
     public ServiceType getServiceType() { return serviceType; }

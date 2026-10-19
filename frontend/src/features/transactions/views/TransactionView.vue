@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { salesApi, courseApi } from '@/api/client'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 
 type Tab = 'sales' | 'usage' | 'history'
@@ -31,128 +31,68 @@ interface TransactionRepository {
   void(command: VoidTransactionCommand): Promise<Transaction>
 }
 
-const seedTransactions: Transaction[] = [
-  {
-    key: 'sale-84',
-    kind: 'sale',
-    id: 84,
-    number: 'SL-2569-0084',
-    date: '2026-09-10T10:15:00+07:00',
-    patient: 'นายสมชาย ใจดี',
-    hn: '2601080022',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '฿10,000',
-    status: 'ปกติ',
-    performedBy: 'กัญญา ใจดี',
-    paymentMethod: 'โอนเงิน',
-  },
-  {
-    key: 'sale-81',
-    kind: 'sale',
-    id: 81,
-    number: 'SL-2569-0081',
-    date: '2026-09-08T14:30:00+07:00',
-    patient: 'นางวรรณา มั่นคง',
-    hn: '2601080023',
-    item: 'Exercise Therapy',
-    branchCode: 'BR09',
-    quantity: '฿1,500',
-    status: 'ปกติ',
-    performedBy: 'พิมพ์ชนก',
-    paymentMethod: 'โอนเงิน',
-  },
-  {
-    key: 'usage-31',
-    kind: 'usage',
-    id: 31,
-    number: 'USE-2569-0031',
-    date: '2026-09-17T09:00:00+07:00',
-    patient: 'สมชาย ใจดี',
-    hn: '2601080022',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '1 ครั้ง',
-    status: 'ปกติ',
-    performedBy: 'กภ. ศิริพร',
-    paymentMethod: 'ใช้สิทธิ์คอร์ส',
-  },
-  {
-    key: 'usage-42',
-    kind: 'usage',
-    id: 42,
-    number: 'USE-2569-0042',
-    date: '2026-09-10T09:00:00+07:00',
-    patient: 'นายสมชาย ใจดี',
-    hn: '2601080022',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '1 ครั้ง',
-    status: 'ปกติ',
-    performedBy: 'กภ. ศิริพร',
-    paymentMethod: 'ใช้สิทธิ์คอร์ส',
-  },
-  {
-    key: 'sale-76',
-    kind: 'sale',
-    id: 76,
-    number: 'SL-2569-0076',
-    date: '2026-09-05T11:20:00+07:00',
-    patient: 'นายกิตติ วัฒนา',
-    hn: '2601080018',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '฿2,000',
-    status: 'ยกเลิก (Void)',
-    performedBy: 'พิมพ์ชนก',
-    paymentMethod: 'QR PromptPay',
-    voidedAt: '2026-09-12T11:42:00+07:00',
-    voidReason: 'ลงรายการผิด',
-    voidNumber: 'VOID-2569-0014',
-  },
-  {
-    key: 'usage-32',
-    kind: 'usage',
-    id: 32,
-    number: 'USE-2569-0032',
-    date: '2026-09-05T11:20:00+07:00',
-    patient: 'นายกิตติ วัฒนา',
-    hn: '2601080018',
-    item: 'Manual Therapy',
-    branchCode: 'BR01',
-    quantity: '1 ครั้ง',
-    status: 'ยกเลิก (Void)',
-    performedBy: 'กภ. ศิริพร',
-    paymentMethod: 'ใช้สิทธิ์คอร์ส',
-    voidedAt: '2026-09-05T11:40:00+07:00',
-    voidReason: 'ผู้ป่วยไม่ได้รับบริการ',
-    voidNumber: 'VOID-2569-0012',
-  },
-]
-
-/** Backend seam: replace only this adapter with an API implementation later. */
 const transactionRepository: TransactionRepository = {
   async list() {
-    return structuredClone(seedTransactions.filter((row) => row.status === 'ปกติ'))
+    const first = await salesApi.list({ page: 0, size: 100 })
+    const sales = [...first.items]
+    for (let page = 1; page < first.totalPages; page++)
+      sales.push(...(await salesApi.list({ page, size: 100 })).items)
+    const usages = await courseApi.usageTransactions()
+    return [
+      ...sales.map((row): Transaction => ({
+        key: `sale-${row.id}`,
+        kind: 'sale',
+        id: row.id,
+        number: row.receiptNo,
+        date: row.soldAt,
+        patient: row.patient.fullName,
+        hn: row.patient.hn,
+        item: row.itemDescription || '—',
+        branchCode: row.branchCode,
+        quantity: `฿${Number(row.total).toLocaleString('th-TH')}`,
+        status: row.status === 'VOIDED' ? 'ยกเลิก (Void)' : 'ปกติ',
+        performedBy: row.salesperson?.fullName || '—',
+        paymentMethod: '—',
+        voidedAt: row.voidedAt,
+        voidReason: row.voidReason,
+      })),
+      ...usages.map((row): Transaction => ({
+        key: `usage-${row.id}`,
+        kind: 'usage',
+        id: row.id,
+        number: String(row.id),
+        date: row.usedAt,
+        patient: row.patientName,
+        hn: row.patientHn,
+        item: row.courseName,
+        branchCode: row.branchCode,
+        quantity: '1 ครั้ง',
+        status: row.voidedAt ? 'ยกเลิก (Void)' : 'ปกติ',
+        performedBy: '—',
+        paymentMethod: '—',
+        voidedAt: row.voidedAt || undefined,
+        voidReason: row.voidReason || undefined,
+      })),
+    ]
   },
   async void(command) {
     const row = rows.value.find((item) => item.key === command.key)
     if (!row) throw new Error('ไม่พบรายการที่ต้องการยกเลิก')
-    row.status = 'ยกเลิก (Void)'
-    row.voidReason = command.reason
-    row.voidedAt = new Date().toISOString()
-    row.voidNumber = `VOID-${new Date().getFullYear() + 543}-${String(row.id).padStart(4, '0')}`
-    return { ...row }
+    if (row.kind === 'usage') throw new Error('ยังไม่รองรับการยกเลิกใช้สิทธิ์จากหน้านี้')
+    const saved = await salesApi.reverse(row.id, command.reason)
+    return {
+      ...row,
+      status: 'ยกเลิก (Void)',
+      voidedAt: saved.voidedAt,
+      voidReason: saved.voidReason,
+    } as Transaction
   },
 }
-
 const tab = ref<Tab>('sales')
 const step = ref<Step>('list')
 const rows = ref<Transaction[]>([])
 const selected = ref<Transaction | null>(null)
 const search = ref('')
-const branchFilter = ref('')
-const statusFilter = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const page = ref(1)
@@ -169,10 +109,6 @@ const lastCancelledKey = ref('')
 const showPostCancellationNotice = ref(false)
 let postCancellationNoticeTimer: ReturnType<typeof setTimeout> | undefined
 const branchNames = ref<Record<string, string>>({ BR01: 'แบริ่ง', BR09: 'พระราม 9' })
-const branchOptions = ref<Array<{ code: string; name: string }>>([
-  { code: 'BR01', name: 'แบริ่ง' },
-  { code: 'BR09', name: 'พระราม 9' },
-])
 const cancellationActor = ref('')
 const pageSize = computed(() => (tab.value === 'history' ? 5 : 10))
 
@@ -251,14 +187,8 @@ const visibleRows = computed(() => {
         !term ||
         `${row.number} ${row.patient} ${row.hn} ${row.item}`.toLocaleLowerCase().includes(term),
     )
-    .filter((row) => !branchFilter.value || row.branchCode === branchFilter.value)
     .filter((row) => !startDate.value || new Date(row.date) >= new Date(startDate.value))
     .filter((row) => !endDate.value || new Date(row.date) <= new Date(`${endDate.value}T23:59:59`))
-    .filter(
-      (row) =>
-        !statusFilter.value ||
-        (statusFilter.value === 'void' ? row.status !== 'ปกติ' : row.status === 'ปกติ'),
-    )
     .sort((left, right) => Date.parse(right.date) - Date.parse(left.date))
 })
 const hasCancellationHistory = computed(() =>
@@ -274,7 +204,7 @@ const reason = computed(() =>
 const canReview = computed(() =>
   reasonType.value === 'อื่น ๆ' ? otherReason.value.trim().length >= 10 : Boolean(reasonType.value),
 )
-watch([tab, search, branchFilter, statusFilter, startDate, endDate], () => {
+watch([tab, search, startDate, endDate], () => {
   page.value = 1
 })
 watch(totalPages, (count) => {
@@ -287,9 +217,7 @@ function changeTab(next: Tab) {
   tab.value = next
   step.value = 'list'
   selected.value = null
-  statusFilter.value = ''
   search.value = ''
-  branchFilter.value = ''
   startDate.value = ''
   endDate.value = ''
   expandedOriginal.value = []
@@ -447,36 +375,6 @@ function toggleOriginal(key: string) {
                 placeholder="เลขรายการ / ชื่อผู้ป่วย / HN"
               />
             </label>
-            <div class="transaction-control transaction-select">
-              <span>สาขา</span>
-              <FilterDropdown
-                v-model="branchFilter"
-                label="สาขา"
-                default-label="ทุกสาขา"
-                :options="
-                  branchOptions.map((branch) => ({ value: branch.code, label: branch.name }))
-                "
-              />
-            </div>
-            <div class="transaction-control transaction-select">
-              <span>สถานะ</span>
-              <FilterDropdown
-                v-model="statusFilter"
-                label="สถานะ"
-                default-label="ทุกสถานะ"
-                :options="
-                  tab === 'history'
-                    ? [{ value: 'void', label: 'ยกเลิกแล้ว' }]
-                    : [
-                        {
-                          value: 'normal',
-                          label: tab === 'sales' ? 'ชำระแล้ว' : 'ใช้บริการแล้ว',
-                        },
-                        { value: 'void', label: 'ยกเลิกแล้ว' },
-                      ]
-                "
-              />
-            </div>
             <label class="transaction-control transaction-date">
               <span>วันที่เริ่มต้น</span>
               <ThaiDatePicker v-model="startDate" show-calendar-icon numeric-month hide-caret />
@@ -627,7 +525,7 @@ function toggleOriginal(key: string) {
                         tab === 'history'
                           ? 'ดูรายละเอียด'
                           : row.status === 'ปกติ'
-                            ? 'ตรวจสอบ'
+                            ? 'ยกเลิก'
                             : 'ยกเลิกแล้ว'
                       }}
                     </button>

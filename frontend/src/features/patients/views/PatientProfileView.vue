@@ -3,8 +3,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
+import { masterDataApi, patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 
 const route = useRoute()
 type UiPatientProfile = PatientProfile & {
@@ -17,6 +18,73 @@ type UiPatientProfile = PatientProfile & {
   insuranceCompany: string
 }
 const patient = ref<UiPatientProfile | null>(null)
+const profileName = computed(() => splitFullName(patient.value?.fullName ?? ''))
+const profileInitials = computed(
+  () =>
+    patient.value?.fullName
+      .trim()
+      .split(/\s+/)
+      .map((part) => part.slice(0, 1))
+      .slice(0, 2)
+      .join('') ?? '',
+)
+const profileBranch = computed(
+  () => patient.value?.branch?.name || patient.value?.branchName || '-',
+)
+const editStatus = computed(() => (patient.value?.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'))
+const profileBirthDate = computed(() => {
+  const raw = patient.value?.birthDate ?? ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || '-'
+  const date = new Date(`${raw}T12:00:00`)
+  return Number.isNaN(date.getTime())
+    ? raw
+    : new Intl.DateTimeFormat('th-TH', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }).format(date)
+})
+const profileSections = computed(() => {
+  const p = patient.value
+  if (!p) return []
+  const passport = ['PASSPORT', 'หนังสือเดินทาง'].includes(p.identityDocumentType)
+  return [
+    {
+      title: 'ข้อมูลยืนยันตัวตน',
+      columns: 'identity-grid',
+      fields: [
+        { label: 'คำนำหน้า', value: p.title },
+        { label: 'ชื่อ', value: profileName.value.firstName },
+        { label: 'นามสกุล', value: profileName.value.lastName },
+        { label: 'ชื่อเล่น', value: p.nickname },
+        { label: 'เพศ', value: p.gender },
+        { label: 'วันเกิด', value: profileBirthDate.value },
+        { label: 'กรุ๊ปเลือด', value: p.bloodGroup },
+        { label: 'สัญชาติ', value: p.nationality },
+        { label: passport ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน', value: p.identityNumber },
+      ],
+    },
+    {
+      title: 'ข้อมูลติดต่อ',
+      columns: 'contact-grid',
+      fields: [
+        { label: 'เบอร์โทรศัพท์', value: p.phone },
+        { label: 'อีเมล', value: p.email },
+        { label: 'ที่อยู่', value: p.address, wide: true },
+      ],
+    },
+    {
+      title: 'ข้อมูลคลินิก',
+      columns: 'contact-grid',
+      fields: [
+        { label: 'สาขาที่ลงทะเบียน', value: profileBranch.value },
+        { label: 'กลุ่มลูกค้า', value: p.customerType },
+        { label: 'ช่องทางแนะนำ', value: p.customerSource },
+        { label: 'บริษัทประกัน', value: p.insuranceCompany },
+      ],
+    },
+  ]
+})
 const loading = ref(true)
 const errorMessage = ref('')
 const editing = ref(false)
@@ -25,15 +93,19 @@ const confirmationOpen = ref(false)
 const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
 const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
-const nationalityOptions = ['ไทย', 'ต่างชาติ'].map((value) => ({ value, label: value }))
-const customerSourceOptions = ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'].map((value) => ({
-  value,
-  label: value,
-}))
-const insuranceOptions = [{ value: 'AIA', label: 'AIA' }]
+const customerSourceOptions = ref<Array<{ value: string; label: string }>>([])
+const insuranceOptions = ref<Array<{ value: string; label: string }>>([])
 function splitFullName(fullName: string) {
   const [firstName = '', ...lastName] = fullName.trim().split(/\s+/)
   return { firstName, lastName: lastName.join(' ') }
+}
+function splitEditFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  return {
+    firstName: parts[0] ?? '',
+    middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
+    lastName: parts.length > 1 ? (parts.at(-1) ?? '') : '',
+  }
 }
 function toDateInput(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
@@ -81,26 +153,24 @@ const draft = reactive({
   customerSource: 'หน้าสาขา',
   insuranceCompany: '',
   firstName: '',
+  middleName: '',
   lastName: '',
   birthDateInput: '',
 })
 const isForeignNationalityValue = (value: string) =>
   ['ต่างชาติ', 'FOREIGN', 'FOREIGNER', 'NON_THAI'].includes(value.trim().toUpperCase())
 const isForeignNationality = computed(() => isForeignNationalityValue(draft.nationality))
-const isPassportDocument = computed(() => draft.identityDocumentType === 'หนังสือเดินทาง')
-const identityDocumentOptions = computed(() =>
-  (isForeignNationality.value ? ['หนังสือเดินทาง'] : ['บัตรประจำตัวประชาชน', 'หนังสือเดินทาง']).map(
-    (value) => ({ value, label: value }),
-  ),
-)
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
+const phoneIsValid = computed(() =>
+  isForeignNationality.value ? isOptionalPhoneValid(draft.phone) : /^[0-9]{10}$/.test(draft.phone),
+)
 watch(
   () => draft.nationality,
   (nationality) => {
-    if (isForeignNationalityValue(nationality) && draft.identityDocumentType !== 'หนังสือเดินทาง') {
-      draft.identityDocumentType = 'หนังสือเดินทาง'
-      draft.identityNumber = ''
-    }
+    draft.identityDocumentType = isForeignNationalityValue(nationality)
+      ? 'หนังสือเดินทาง'
+      : 'บัตรประจำตัวประชาชน'
+    draft.identityNumber = ''
   },
 )
 watch(
@@ -131,7 +201,7 @@ function normalizeProfile(profile: PatientProfile): UiPatientProfile {
 }
 function assignDraft(profile: UiPatientProfile) {
   const foreignPatient = isForeignNationalityValue(profile.nationality)
-  Object.assign(draft, profile, splitFullName(profile.fullName), {
+  Object.assign(draft, profile, splitEditFullName(profile.fullName), {
     nationality: foreignPatient ? 'ต่างชาติ' : profile.nationality,
     identityDocumentType:
       foreignPatient || profile.identityDocumentType === 'PASSPORT'
@@ -152,14 +222,22 @@ function cancelEdit() {
 async function saveEdit() {
   if (!patient.value) return
   errorMessage.value = ''
+  if (!phoneIsValid.value) {
+    errorMessage.value = isForeignNationality.value
+      ? 'เบอร์โทรต้องไม่เกิน 10 หลัก'
+      : 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก'
+    return
+  }
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
-      fullName: `${draft.firstName} ${draft.lastName}`.trim(),
+      fullName: `${draft.firstName} ${draft.middleName} ${draft.lastName}`
+        .replace(/\s+/g, ' ')
+        .trim(),
       birthDate: draft.birthDateInput,
       gender: draft.gender,
       phone: draft.phone,
-      identityDocumentType: isPassportDocument.value ? 'PASSPORT' : 'NATIONAL_ID',
+      identityDocumentType: isForeignNationality.value ? 'PASSPORT' : 'NATIONAL_ID',
       identityNumber: draft.identityNumber,
       address: draft.address,
       drugAllergy: draft.drugAllergy,
@@ -198,7 +276,20 @@ onMounted(async () => {
     return
   }
   try {
-    patient.value = normalizeProfile(await patientApi.get(id))
+    const [profile, masterData] = await Promise.all([
+      patientApi.get(id),
+      masterDataApi.list().catch(() => []),
+    ])
+    patient.value = normalizeProfile(profile)
+    const optionsFor = (category: string, currentValue: string) => {
+      const values = masterData
+        .filter((item) => item.active && item.category === category)
+        .map((item) => item.name)
+      if (currentValue && !values.includes(currentValue)) values.unshift(currentValue)
+      return values.map((value) => ({ value, label: value }))
+    }
+    customerSourceOptions.value = optionsFor('Referral Channel', patient.value.customerSource)
+    insuranceOptions.value = optionsFor('Insurance Company', patient.value.insuranceCompany)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ'
   } finally {
@@ -208,7 +299,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="patient-workspace patient-profile-page">
+  <div class="patient-workspace patient-profile-page" :class="{ 'is-editing': editing }">
     <StaffHeader />
     <main>
       <button v-if="editing" type="button" class="back-link back-link-button" @click="cancelEdit">
@@ -217,211 +308,210 @@ onMounted(async () => {
       <RouterLink v-else class="back-link" to="/staff/patients">← กลับไปค้นหาผู้ป่วย</RouterLink>
       <p v-if="loading" class="status-feedback">กำลังโหลดข้อมูลผู้ป่วย...</p>
       <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-      <section v-if="patient && !editing" class="profile-heading">
-        <div class="avatar">{{ patient.fullName.slice(0, 1) }}</div>
-        <div>
-          <small>PATIENT PROFILE</small>
-          <h1>{{ patient.title }}{{ patient.fullName }}</h1>
-          <p>HN {{ patient.hn }}</p>
+      <template v-if="patient && !editing">
+        <div class="patient-profile-title">
+          <h1>ข้อมูลผู้ป่วย</h1>
+          <button class="patient-profile-edit" type="button" @click="openEdit">แก้ไขข้อมูล</button>
         </div>
-        <div class="profile-actions">
-          <RouterLink class="history-button" :to="`/staff/patients/${patient.id}/history`"
-            >ประวัติการรักษา</RouterLink
+        <section class="patient-profile-summary" aria-label="สรุปข้อมูลผู้ป่วย">
+          <div class="patient-profile-avatar" aria-hidden="true">{{ profileInitials }}</div>
+          <div class="patient-profile-info">
+            <h2>{{ patient.title }}{{ patient.fullName }}</h2>
+            <p>
+              <span>HN {{ patient.hn }}</span
+              ><span>{{ patient.phone || '-' }}</span>
+            </p>
+          </div>
+          <span class="patient-profile-branch">{{ profileBranch }}</span>
+        </section>
+        <nav class="patient-profile-tabs" aria-label="ข้อมูลผู้ป่วย">
+          <RouterLink :to="`/staff/patients/${patient.id}`" aria-current="page" class="active"
+            >ข้อมูลส่วนตัว</RouterLink
           >
-          <button class="primary" @click="openEdit">แก้ไขข้อมูล</button>
-        </div>
-      </section>
+          <RouterLink :to="`/staff/patients/${patient.id}/history`">ประวัติการรักษา</RouterLink>
+          <RouterLink :to="{ path: '/staff/services', query: { patientId: patient.id } }"
+            >คอร์ส</RouterLink
+          >
+        </nav>
+      </template>
 
-      <h1 v-if="patient && editing" class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
-      <form
-        v-if="patient && editing"
-        class="patient-edit"
-        @submit.prevent="confirmationOpen = true"
-      >
-        <div class="edit-fields">
-          <h3>ข้อมูลส่วนตัว</h3>
-          <label
-            >คำนำหน้า
-            <FilterDropdown
-              v-model="draft.title"
-              :options="titleOptions"
-              default-label="เลือกคำนำหน้า"
-              label="คำนำหน้า"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label>อีเมล <input v-model="draft.email" type="text" inputmode="email" /></label>
-          <label>ชื่อ <em>*</em><input v-model="draft.firstName" required /></label>
-          <label>นามสกุล <em>*</em><input v-model="draft.lastName" required /></label>
-          <label>ชื่อเล่น <input v-model="draft.nickname" /></label>
-          <label
-            >เพศ
-            <FilterDropdown
-              v-model="draft.gender"
-              :options="genderOptions"
-              default-label="เลือกเพศ"
-              label="เพศ"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >วันเกิด <em>*</em
-            ><ThaiDatePicker v-model="draft.birthDateInput" show-calendar-icon hide-caret
-          /></label>
-          <label>เบอร์โทรศัพท์ <em>*</em><input v-model="draft.phone" type="tel" required /></label>
-          <label
-            >กรุ๊ปเลือด
-            <FilterDropdown
-              v-model="draft.bloodGroup"
-              :options="bloodGroupOptions"
-              default-label="เลือกกรุ๊ปเลือด"
-              label="กรุ๊ปเลือด"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >สัญชาติ
-            <FilterDropdown
-              v-model="draft.nationality"
-              :options="nationalityOptions"
-              default-label="เลือกสัญชาติ"
-              label="สัญชาติ"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >ประเภทเอกสารยืนยันตัวตน <em>*</em>
-            <FilterDropdown
-              v-model="draft.identityDocumentType"
-              :options="identityDocumentOptions"
-              default-label="เลือกประเภทเอกสาร"
-              label="ประเภทเอกสารยืนยันตัวตน"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >{{ isPassportDocument ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน' }} <em>*</em
-            ><input
-              v-model.trim="draft.identityNumber"
-              inputmode="numeric"
-              :maxlength="isPassportDocument ? 20 : 13"
-              :placeholder="
-                isPassportDocument
-                  ? 'กรอกเลขหนังสือเดินทางเป็นตัวเลข'
-                  : 'กรอกเลขบัตรประชาชน 13 หลัก'
-              "
-              required
-              @input="draft.identityNumber = digitsOnly(draft.identityNumber)"
-          /></label>
-          <label
-            >กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true"
-          /></label>
-          <label
-            >ช่องทางแนะนำ
-            <FilterDropdown
-              v-model="draft.customerSource"
-              :options="customerSourceOptions"
-              default-label="เลือกช่องทางแนะนำ"
-              label="ช่องทางแนะนำ"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label
-            >บริษัทประกัน
-            <FilterDropdown
-              v-model="draft.insuranceCompany"
-              :options="insuranceOptions"
-              default-label="ไม่มีประกัน"
-              label="บริษัทประกัน"
-              :clear-on-reselect="false"
-              hide-default-option
-            />
-          </label>
-          <label class="wide"
-            >ที่อยู่ <em>*</em><textarea v-model="draft.address" rows="3" required></textarea>
-          </label>
-        </div>
-        <footer>
-          <button type="button" class="outline" @click="cancelEdit">ยกเลิก</button
-          ><button class="primary">บันทึกข้อมูล</button>
-        </footer>
-      </form>
-      <section v-else-if="patient" class="profile-sheet">
-        <div class="section-title">
+      <template v-if="patient && editing">
+        <h1 class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
+        <section class="patient-edit-summary" aria-label="สรุปผู้ป่วยที่กำลังแก้ไข">
+          <div class="patient-edit-avatar" aria-hidden="true">{{ profileInitials }}</div>
           <div>
+            <h2>{{ patient.title }}{{ patient.fullName }}</h2>
+            <p>
+              HN {{ patient.hn }} <span>{{ patient.phone || '-' }}</span>
+            </p>
+          </div>
+          <span class="patient-edit-status">{{ editStatus }}</span>
+        </section>
+        <form class="patient-edit" @submit.prevent="confirmationOpen = true">
+          <section class="patient-edit-section">
             <h2>ข้อมูลส่วนตัว</h2>
-          </div>
-        </div>
-        <dl class="details four-columns">
-          <div>
-            <dt>ชื่อ–นามสกุล</dt>
-            <dd>{{ patient.title }}{{ patient.fullName }}</dd>
-          </div>
-          <div>
-            <dt>ชื่อเล่น</dt>
-            <dd>{{ patient.nickname || '-' }}</dd>
-          </div>
-          <div>
-            <dt>อีเมล</dt>
-            <dd>{{ patient.email || '-' }}</dd>
-          </div>
-          <div>
-            <dt>เพศ</dt>
-            <dd>{{ patient.gender }}</dd>
-          </div>
-          <div>
-            <dt>เบอร์โทรศัพท์</dt>
-            <dd>{{ patient.phone }}</dd>
-          </div>
-          <div>
-            <dt>วันเกิด</dt>
-            <dd>{{ patient.birthDate }}</dd>
-          </div>
-          <div>
-            <dt>กรุ๊ปเลือด</dt>
-            <dd>{{ patient.bloodGroup }}</dd>
-          </div>
-          <div>
-            <dt>ประเภทเอกสารยืนยันตัวตน</dt>
-            <dd>{{ patient.identityDocumentType }}</dd>
-          </div>
-          <div>
-            <dt>
-              {{
-                patient.identityDocumentType === 'หนังสือเดินทาง'
-                  ? 'เลขหนังสือเดินทาง'
-                  : 'เลขบัตรประชาชน'
-              }}
-            </dt>
-            <dd>{{ patient.identityNumber }}</dd>
-          </div>
-          <div>
-            <dt>สัญชาติ</dt>
-            <dd>{{ patient.nationality }}</dd>
-          </div>
-          <div>
-            <dt>กลุ่มลูกค้า</dt>
-            <dd>{{ patient.customerType }}</dd>
-          </div>
-          <div>
-            <dt>ช่องทางแนะนำ</dt>
-            <dd>{{ patient.customerSource }}</dd>
-          </div>
-          <div>
-            <dt>บริษัทประกัน</dt>
-            <dd>{{ patient.insuranceCompany || 'ไม่มีประกัน' }}</dd>
-          </div>
-          <div class="span-all">
-            <dt>ที่อยู่</dt>
-            <dd>{{ patient.address }}</dd>
-          </div>
-        </dl>
+            <fieldset class="edit-nationality">
+              <legend>สัญชาติ <em>*</em></legend>
+              <label :class="{ selected: draft.nationality === 'ไทย' }">
+                <input v-model="draft.nationality" type="radio" value="ไทย" />ไทย
+              </label>
+              <label :class="{ selected: draft.nationality === 'ต่างชาติ' }">
+                <input v-model="draft.nationality" type="radio" value="ต่างชาติ" />ต่างชาติ
+              </label>
+            </fieldset>
+            <div class="patient-edit-two-column-grid">
+              <label>
+                คำนำหน้า
+                <FilterDropdown
+                  v-model="draft.title"
+                  :options="titleOptions"
+                  default-label="เลือกคำนำหน้า"
+                  label="คำนำหน้า"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+              <label>
+                เพศ <em>*</em>
+                <FilterDropdown
+                  v-model="draft.gender"
+                  :options="genderOptions"
+                  default-label="เลือกเพศ"
+                  label="เพศ"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+            </div>
+            <div class="patient-edit-name-grid">
+              <label>ชื่อ <em>*</em><input v-model.trim="draft.firstName" required /></label>
+              <label
+                >ชื่อกลาง<input v-model.trim="draft.middleName" placeholder="ระบุชื่อกลาง (ถ้ามี)"
+              /></label>
+              <label>นามสกุล <em>*</em><input v-model.trim="draft.lastName" required /></label>
+            </div>
+            <div class="patient-edit-two-column-grid">
+              <label>ชื่อเล่น<input v-model.trim="draft.nickname" /></label>
+              <label>
+                วันเกิด <em v-if="!isForeignNationality">*</em>
+                <ThaiDatePicker v-model="draft.birthDateInput" show-calendar-icon hide-caret />
+              </label>
+            </div>
+            <div class="patient-edit-two-column-grid">
+              <label>
+                กรุ๊ปเลือด
+                <FilterDropdown
+                  v-model="draft.bloodGroup"
+                  :options="bloodGroupOptions"
+                  default-label="เลือกกรุ๊ปเลือด"
+                  label="กรุ๊ปเลือด"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+              <label>
+                {{ isForeignNationality ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }}
+                <em v-if="!isForeignNationality">*</em>
+                <input
+                  v-model.trim="draft.identityNumber"
+                  :inputmode="isForeignNationality ? 'text' : 'numeric'"
+                  :maxlength="isForeignNationality ? 20 : 13"
+                  :placeholder="isForeignNationality ? 'กรอกเลขพาสปอร์ต' : 'x-xxxx-xxxxx-xx-x'"
+                  :required="!isForeignNationality"
+                  autocomplete="tel"
+                  @input="
+                    draft.identityNumber = isForeignNationality
+                      ? draft.identityNumber.replace(/[^A-Za-z0-9]/g, '')
+                      : digitsOnly(draft.identityNumber)
+                  "
+                />
+              </label>
+            </div>
+          </section>
+          <section class="patient-edit-section">
+            <h2>ข้อมูลติดต่อ</h2>
+            <div class="patient-edit-two-column-grid">
+              <label>
+                เบอร์โทร <em v-if="!isForeignNationality">*</em>
+                <input
+                  v-model.trim="draft.phone"
+                  type="tel"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  maxlength="10"
+                  :required="!isForeignNationality"
+                  @input="draft.phone = limitPhoneDigits(draft.phone)"
+                />
+              </label>
+              <small v-if="draft.phone && !phoneIsValid" class="required-error">
+                {{ isForeignNationality ? 'เบอร์โทรต้องไม่เกิน 10 หลัก' : 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก' }}
+              </small>
+              <label>อีเมล<input v-model.trim="draft.email" type="text" inputmode="email" /></label>
+              <label class="wide"
+                >ที่อยู่<textarea v-model.trim="draft.address" rows="4" required />
+              </label>
+            </div>
+          </section>
+          <section class="patient-edit-section">
+            <h2>ข้อมูลเพิ่มเติม (ไม่บังคับ)</h2>
+            <div class="patient-edit-two-column-grid">
+              <label
+                >สาขาที่ลงทะเบียน<input :value="profileBranch" readonly aria-readonly="true"
+              /></label>
+              <label
+                >กลุ่มลูกค้า<input :value="draft.customerType" readonly aria-readonly="true"
+              /></label>
+              <label>
+                ช่องทางแนะนำ
+                <FilterDropdown
+                  v-model="draft.customerSource"
+                  :options="customerSourceOptions"
+                  default-label="เลือกช่องทางแนะนำ"
+                  label="ช่องทางแนะนำ"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                />
+              </label>
+              <label>
+                บริษัทประกัน
+                <FilterDropdown
+                  v-model="draft.insuranceCompany"
+                  :options="insuranceOptions"
+                  default-label="ไม่มีประกัน"
+                  label="บริษัทประกัน"
+                  :clear-on-reselect="false"
+                />
+              </label>
+            </div>
+          </section>
+          <footer>
+            <button type="button" class="outline" @click="cancelEdit">ยกเลิก</button>
+            <button class="primary">บันทึก</button>
+          </footer>
+        </form>
+      </template>
+      <section
+        v-else-if="patient"
+        class="patient-profile-details"
+        aria-label="ข้อมูลส่วนตัวผู้ป่วย"
+      >
+        <section
+          v-for="section in profileSections"
+          :key="section.title"
+          class="patient-profile-section"
+        >
+          <h2>{{ section.title }}</h2>
+          <dl :class="['patient-profile-grid', section.columns]">
+            <div
+              v-for="field in section.fields"
+              :key="field.label"
+              :class="{ 'span-all': 'wide' in field && field.wide }"
+            >
+              <dt>{{ field.label }}</dt>
+              <dd>{{ field.value || '-' }}</dd>
+            </div>
+          </dl>
+        </section>
       </section>
       <Teleport to="body">
         <Transition name="save-success">
@@ -449,3 +539,4 @@ onMounted(async () => {
 
 <style scoped src="../styles/patients.css"></style>
 <style src="../styles/therapist.css"></style>
+<style scoped src="../styles/patient-profile.css"></style>

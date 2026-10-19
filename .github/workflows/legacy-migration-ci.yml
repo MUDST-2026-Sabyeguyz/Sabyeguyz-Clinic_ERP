@@ -1,0 +1,172 @@
+name: Legacy data migration
+
+# Builds the OLD schema from its Flyway SQL files on PostgreSQL 16 with its demo data plus extra fixture rows,
+# moves everything into the new (v2) schema with backend/scripts/legacy-migration/migrate-legacy-to-v2.sql,
+# then boots the v2 app on the migrated database and checks the data through the HTTP API.
+
+on:
+  push:
+    branches: [develop, dev-backed, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
+    paths:
+      - 'backend/scripts/legacy-migration/**'
+      - 'backend/src/main/resources/db/**'
+      - 'backend/src/main/java/com/sabyeguyz/clinicv2/**'
+      - '.github/workflows/legacy-migration-ci.yml'
+  pull_request:
+    branches: [develop, dev-backed]
+    paths:
+      - 'backend/scripts/legacy-migration/**'
+      - 'backend/src/main/resources/db/**'
+      - '.github/workflows/legacy-migration-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic
+          POSTGRES_DB: clinic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clinic -d clinic"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      PGHOST: localhost
+      PGUSER: clinic
+      PGPASSWORD: clinic
+      PGDATABASE: clinic
+      DATABASE_URL: jdbc:postgresql://localhost:5432/clinic
+      DATABASE_USERNAME: clinic
+      DATABASE_PASSWORD: clinic
+      JWT_SECRET: ci-only-secret-ci-only-secret-0123456789
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Setup Node for the migration rehearsal
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check migration ordering and comparison guards
+        run: node --test scripts/legacy-migration/ci/rehearse.test.cjs
+
+      - name: Rehearse twice from the same disposable snapshot
+        run: node scripts/legacy-migration/ci/rehearse.cjs
+
+      - name: Save reconciliation and repeatability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-rehearsal
+          path: backend/target/migration-rehearsal/*.json
+          if-no-files-found: warn
+
+      - name: Create the old schema (all old Flyway migrations, in order)
+        run: |
+          python3 - <<'PY'
+          import glob, re, subprocess
+          def key(path):
+              m = re.search(r'V(\d+)(?:_(\d+))?__', path)
+              return (int(m.group(1)), int(m.group(2) or 0))
+          for path in sorted(glob.glob('src/main/resources/db/migration_old/V*__*.sql'), key=key):
+              print('applying', path, flush=True)
+              subprocess.run(['psql', '-v', 'ON_ERROR_STOP=1', '-q', '-f', path], check=True)
+          PY
+
+      - name: Add extra rows to the old schema
+        run: psql -v ON_ERROR_STOP=1 -q -f scripts/legacy-migration/ci/legacy-fixture.sql
+
+      - name: Remember what the old data looks like
+        run: |
+          {
+            echo "EXPECTED_PATIENTS=$(psql -Atc 'SELECT count(*) FROM patients')"
+            echo "EXPECTED_APPOINTMENTS=$(psql -Atc 'SELECT count(*) FROM appointments')"
+            echo "COURSE1_ID=$(psql -Atc "SELECT min(id) FROM course_purchases WHERE course_code = 'CRS10'")"
+            echo "COURSE1_REMAINING=$(psql -Atc "SELECT sum(quantity) FROM course_movements WHERE course_purchase_id = (SELECT min(id) FROM course_purchases WHERE course_code = 'CRS10')")"
+            echo "FX_PATIENT_ID=$(psql -Atc "SELECT id FROM patients WHERE username = 'fx-thai'")"
+          } >> "$GITHUB_ENV"
+
+      - name: Move the old schema aside and create the new one
+        run: |
+          psql -v ON_ERROR_STOP=1 -q -c 'ALTER SCHEMA public RENAME TO legacy' -c 'CREATE SCHEMA public'
+          node - <<'JS'
+          const fs = require('node:fs')
+          const { execFileSync } = require('node:child_process')
+          const { migrationFiles } = require('./scripts/legacy-migration/ci/rehearse.cjs')
+          const folder = 'src/main/resources/db/migration'
+          const files = migrationFiles(fs.readdirSync(folder))
+          for (const name of files) {
+            console.log('applying', name)
+            execFileSync('psql', ['-v', 'ON_ERROR_STOP=1', '-q', '-f', `${folder}/${name}`], { stdio: 'inherit' })
+          }
+          const version = /^V(.+)__/.exec(files.at(-1))[1].replaceAll('_', '.')
+          fs.appendFileSync(process.env.GITHUB_ENV, `MIGRATED_SCHEMA_VERSION=${version}\n`)
+          JS
+
+      - name: Run the data migration
+        run: psql -v ON_ERROR_STOP=1 -f scripts/legacy-migration/migrate-legacy-to-v2.sql
+
+      - name: Reconcile before the API checks create new records
+        run: psql -X -v ON_ERROR_STOP=1 -f scripts/legacy-migration/ci/reconcile.sql
+
+      - name: Remember the next imported receipt number
+        run: |
+          echo "NEXT_RECEIPT_NO=$(psql -Atc "SELECT 'RE' || to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok','YYMM') || lpad((coalesce((SELECT last_running_no FROM receipt_sequence WHERE branch_id=(SELECT branch_id FROM branch WHERE branch_code='01') AND year_month=to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok','YYMM')),0)+1)::text,4,'0')")" >> "$GITHUB_ENV"
+          echo "ASSESSMENT_RECEIPT_NO=$(psql -Atc "SELECT new_receipt_no FROM legacy.map_receipt WHERE old_receipt_no='RC2601010003'")" >> "$GITHUB_ENV"
+      - name: Rows that needed a decision
+        run: psql -c 'SELECT area, old_ref, issue, action FROM legacy.migration_issue ORDER BY id'
+
+      - name: Package the backend
+        run: mvn --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Start the v2 app on the migrated database
+        env:
+          SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+          SPRING_FLYWAY_BASELINE_VERSION: ${{ env.MIGRATED_SCHEMA_VERSION }}
+        run: |
+          nohup java -Dloader.main=com.sabyeguyz.clinicv2.ClinicV2Application -cp target/clinic-erp-backend-0.0.1-SNAPSHOT.jar org.springframework.boot.loader.launch.PropertiesLauncher > app.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fs http://localhost:8080/actuator/health > /dev/null; then echo "application is up"; exit 0; fi
+            sleep 2
+          done
+          echo "the application did not start"
+          tail -n 150 app.log
+          exit 1
+
+      - name: Check the migrated data through the API
+        run: bash scripts/legacy-migration/ci/verify-migrated-app.sh
+
+      - name: Application log
+        if: always()
+        run: tail -n 200 app.log

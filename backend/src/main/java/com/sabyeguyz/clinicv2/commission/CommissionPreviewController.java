@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.catalog.Service;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
  * shown commission (admin-permissioned in the feedback PDF) is not part of
  * this endpoint.
  */
-@org.springframework.transaction.annotation.Transactional
+@Transactional
 @RestController
 @RequestMapping("/api/commission/preview")
 public class CommissionPreviewController {
