@@ -15,6 +15,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 /**
  * A booked slot. A NEW patient is not registered yet, so patient and service
@@ -61,6 +62,9 @@ public class Appointment {
     @Column(name = "appointment_time", nullable = false)
     private LocalTime appointmentTime;
 
+    @Column(name = "appointment_end_at")
+    private LocalDateTime appointmentEndAt;
+
     @Column(name = "appointment_create_at", nullable = false, updatable = false)
     private Instant appointmentCreateAt;
 
@@ -85,14 +89,25 @@ public class Appointment {
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
 
+    @Column(name = "notes", columnDefinition = "text")
+    private String notes;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "requested_service_type", columnDefinition = "requested_service_type_enum")
     private RequestedServiceType requestedServiceType;
 
-    /** Calendar integration scope is still pending; nothing writes these two yet. */
+    /** Google Calendar link, written by {@code CalendarSyncService} (see app.calendar.* settings). */
     @Column(name = "external_calendar_event_id", length = 255)
     private String externalCalendarEventId;
+
+    /** When this appointment was last in step with its calendar event; older than the update time means "dirty". */
+    @Column(name = "calendar_last_synced_at")
+    private Instant calendarLastSyncedAt;
+
+    /** Etag Google returned for the event we last wrote or accepted; an event with this etag has no new change. */
+    @Column(name = "calendar_event_etag", length = 255)
+    private String calendarEventEtag;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -118,6 +133,8 @@ public class Appointment {
     public void setAppointmentDate(LocalDate appointmentDate) { this.appointmentDate = appointmentDate; }
     public LocalTime getAppointmentTime() { return appointmentTime; }
     public void setAppointmentTime(LocalTime appointmentTime) { this.appointmentTime = appointmentTime; }
+    public LocalDateTime getAppointmentEndAt() { return appointmentEndAt; }
+    public void setAppointmentEndAt(LocalDateTime appointmentEndAt) { this.appointmentEndAt = appointmentEndAt; }
     public Instant getAppointmentCreateAt() { return appointmentCreateAt; }
     public void setAppointmentCreateAt(Instant appointmentCreateAt) { this.appointmentCreateAt = appointmentCreateAt; }
     public Long getAppointmentCreateBy() { return appointmentCreateBy; }
@@ -132,10 +149,16 @@ public class Appointment {
     public void setContactName(String contactName) { this.contactName = contactName; }
     public String getContactPhone() { return contactPhone; }
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
     public RequestedServiceType getRequestedServiceType() { return requestedServiceType; }
     public void setRequestedServiceType(RequestedServiceType requestedServiceType) { this.requestedServiceType = requestedServiceType; }
     public String getExternalCalendarEventId() { return externalCalendarEventId; }
     public void setExternalCalendarEventId(String externalCalendarEventId) { this.externalCalendarEventId = externalCalendarEventId; }
     public CalendarSyncStatus getCalendarSyncStatus() { return calendarSyncStatus; }
     public void setCalendarSyncStatus(CalendarSyncStatus calendarSyncStatus) { this.calendarSyncStatus = calendarSyncStatus; }
+    public Instant getCalendarLastSyncedAt() { return calendarLastSyncedAt; }
+    public void setCalendarLastSyncedAt(Instant calendarLastSyncedAt) { this.calendarLastSyncedAt = calendarLastSyncedAt; }
+    public String getCalendarEventEtag() { return calendarEventEtag; }
+    public void setCalendarEventEtag(String calendarEventEtag) { this.calendarEventEtag = calendarEventEtag; }
 }

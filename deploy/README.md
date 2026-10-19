@@ -2,6 +2,8 @@
 
 Run from the repository root with Docker Desktop (Linux containers) running:
 
+For an existing Windows installation, pull `main`, then run `powershell -ExecutionPolicy Bypass -File scripts/update-local.ps1` from the repository root. The updater reuses the running application's Compose project and database, rebuilds both application images, replaces their containers, and waits for health checks.
+
 Copy `.env.example` to `.env`, then set unique `POSTGRES_PASSWORD` and `JWT_SECRET` values.
 
 ```bash
@@ -59,3 +61,7 @@ Remove these process-level overrides before returning to the default ports:
 ```powershell
 Remove-Item Env:FRONTEND_PORT, Env:BACKEND_PORT, Env:POSTGRES_PORT -ErrorAction SilentlyContinue
 ```
+
+## Google Calendar sync (optional)
+
+To turn on the two-way Google Calendar sync, add `compose.calendar.yaml` and a `CALENDAR_KEY_FILE` entry to `.env`; see `docs/deploy-calendar-sync.md`.
