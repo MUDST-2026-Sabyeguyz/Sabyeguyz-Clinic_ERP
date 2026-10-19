@@ -3,8 +3,8 @@ defineProps<{ active: 'overview' | 'closing' | 'tiers' | 'compensation' | 'adjus
 const tabs = [
   { key: 'overview', label: 'ภาพรวม', to: '/staff/commission' },
   { key: 'closing', label: 'ปิดรอบรายเดือน', to: '/staff/commission/closing' },
-  { key: 'tiers', label: 'ตั้งค่ากฎค่าตอบแทน ↗', to: '/staff/settings?section=commission' },
   { key: 'adjustments', label: 'รายการปรับปรุงค่าตอบแทน', to: '/staff/commission/adjustments' },
+  { key: 'tiers', label: 'ตั้งค่ากฎค่าตอบแทน ↗', to: '/staff/settings?section=commission' },
 ] as const
 </script>
 <template>
