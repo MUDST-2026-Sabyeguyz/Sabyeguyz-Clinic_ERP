@@ -55,6 +55,10 @@ public class CourseTransferService {
             throw new IllegalArgumentException("จำนวนครั้งคงเหลือของผู้โอนไม่พอ (คงเหลือ " + fromBalance + " ครั้ง)");
         }
 
+        // the entitlement row references the member row, and the transfer/ledger rows reference the entitlement
+        ensureSharedMember(course, toPatient);
+        ensureEntitlement(course, toPatient);
+
         CourseTransfer record = new CourseTransfer();
         record.setBranch(course.getBranch());
         record.setCourse(course);
@@ -71,7 +75,6 @@ public class CourseTransferService {
         writeLedgerEntry(course, fromPatient, -qty, saved, actorId, CourseLedgerEntryType.TransferOut);
         writeLedgerEntry(course, toPatient, qty, saved, actorId, CourseLedgerEntryType.TransferIn);
 
-        ensureSharedMember(course, toPatient);
         moveEntitlement(course, fromPatient, -qty, fromBalance);
         moveEntitlement(course, toPatient, qty, 0);
 
@@ -123,6 +126,14 @@ public class CourseTransferService {
         entry.setLedgerCreateBy(actorId);
         entry.setEventAt(Instant.now());
         ledger.save(entry);
+    }
+
+    /** The patient's entitlement row (0 visits when new); the transfer and ledger rows reference it. */
+    private void ensureEntitlement(Course course, Patient patient) {
+        CourseEntitlementId id = new CourseEntitlementId(course.getId(), patient.getId());
+        if (entitlements.findById(id).isEmpty()) {
+            entitlements.save(new CourseEntitlement(course, patient, 0));
+        }
     }
 
     /** A transfer implicitly makes the receiving patient a Shared Member if they were not already on the Course. */

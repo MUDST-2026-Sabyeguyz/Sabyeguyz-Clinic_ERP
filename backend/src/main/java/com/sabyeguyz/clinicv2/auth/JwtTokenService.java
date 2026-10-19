@@ -24,13 +24,16 @@ public class JwtTokenService {
 
     public String issue(AppUser user, List<String> roleNames) {
         Instant now = Instant.now();
-        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),
-                JwtClaimsSet.builder()
-                        .subject(String.valueOf(user.getId()))
-                        .claim("username", user.getUsername())
-                        .claim("role", roleNames.isEmpty() ? null : roleNames.get(0))
-                        .claim("roles", roleNames)
-                        .issuedAt(now).expiresAt(now.plusSeconds(3600)).build()))
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
+                .subject(String.valueOf(user.getId()))
+                .claim("username", user.getUsername())
+                .claim("roles", roleNames)
+                .issuedAt(now).expiresAt(now.plusSeconds(3600));
+        // A freshly registered account has no role yet; a null claim value is rejected by the encoder.
+        if (!roleNames.isEmpty()) {
+            claims.claim("role", roleNames.get(0));
+        }
+        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build()))
                 .getTokenValue();
     }
 }

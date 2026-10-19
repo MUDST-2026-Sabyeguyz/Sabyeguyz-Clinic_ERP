@@ -1,12 +1,7 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.catalog.Service;
-import com.sabyeguyz.clinicv2.catalog.ServiceGroup;
-import com.sabyeguyz.clinicv2.enums.CalculationBase;
 import com.sabyeguyz.clinicv2.enums.FeeType;
 import com.sabyeguyz.clinicv2.role.Permission;
-import com.sabyeguyz.clinicv2.staff.Staff;
-import com.sabyeguyz.clinicv2.staff.StaffGroup;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -27,35 +22,18 @@ public class TreatmentFeeRule {
     @JoinColumn(name = "permission_id")
     private Permission permission;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "staff_id")
-    private Staff staff;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "staff_group_id")
-    private StaffGroup staffGroup;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id")
-    private Service service;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_group_id")
-    private ServiceGroup serviceGroup;
-
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "fee_type", nullable = false, columnDefinition = "fee_type_enum")
     private FeeType feeType;
 
     /** THB amount, or percentage depending on feeType. */
+    /** The name the Manager gave the rule on the settings page (optional). */
+    @Column(name = "rule_name", length = 100)
+    private String ruleName;
+
     @Column(name = "fee_value", precision = 12, scale = 4, nullable = false)
     private BigDecimal feeValue;
-
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "percentage_base", columnDefinition = "percentage_base_enum")
-    private CalculationBase percentageBase;
 
     @Column(name = "effective_from", nullable = false)
     private LocalDate effectiveFrom;
@@ -83,20 +61,12 @@ public class TreatmentFeeRule {
     public Long getId() { return id; }
     public Permission getPermission() { return permission; }
     public void setPermission(Permission permission) { this.permission = permission; }
-    public Staff getStaff() { return staff; }
-    public void setStaff(Staff staff) { this.staff = staff; }
-    public StaffGroup getStaffGroup() { return staffGroup; }
-    public void setStaffGroup(StaffGroup staffGroup) { this.staffGroup = staffGroup; }
-    public Service getService() { return service; }
-    public void setService(Service service) { this.service = service; }
-    public ServiceGroup getServiceGroup() { return serviceGroup; }
-    public void setServiceGroup(ServiceGroup serviceGroup) { this.serviceGroup = serviceGroup; }
     public FeeType getFeeType() { return feeType; }
     public void setFeeType(FeeType feeType) { this.feeType = feeType; }
+    public String getRuleName() { return ruleName; }
+    public void setRuleName(String ruleName) { this.ruleName = ruleName; }
     public BigDecimal getFeeValue() { return feeValue; }
     public void setFeeValue(BigDecimal feeValue) { this.feeValue = feeValue; }
-    public CalculationBase getPercentageBase() { return percentageBase; }
-    public void setPercentageBase(CalculationBase percentageBase) { this.percentageBase = percentageBase; }
     public LocalDate getEffectiveFrom() { return effectiveFrom; }
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
     public LocalDate getEffectiveTo() { return effectiveTo; }

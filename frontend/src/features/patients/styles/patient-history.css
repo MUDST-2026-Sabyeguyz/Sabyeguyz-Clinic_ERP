@@ -4,7 +4,7 @@
   color: #25372e;
 }
 .patient-history-page main {
-  width: min(1080px, calc(100% - 48px));
+  width: min(1200px, calc(100% - 48px));
   margin: auto;
   padding: 28px 0 72px;
 }
@@ -20,7 +20,7 @@
 }
 .history-tabs {
   display: flex;
-  width: min(600px, 100%);
+  width: min(680px, 100%);
   gap: 0;
   margin: 0 0 16px;
   overflow: hidden;
@@ -49,9 +49,11 @@
 }
 .history-filters {
   display: grid;
-  grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(130px, 1fr));
-  gap: 10px;
-  padding: 12px 14px;
+  grid-template-columns: minmax(280px, 360px) 190px 220px;
+  gap: 12px;
+  min-height: 76px;
+  box-sizing: border-box;
+  padding: 16px 18px;
   border-radius: 12px;
   background: #f0f6f4;
 }
@@ -137,9 +139,6 @@
   width: 105px;
 }
 .history-table-wrap th:nth-child(7) {
-  width: 110px;
-}
-.history-table-wrap th:nth-child(8) {
   width: 235px;
 }
 .history-status {
@@ -234,10 +233,7 @@
     width: 10%;
   }
   .history-table-wrap th:nth-child(7) {
-    width: 11.5%;
-  }
-  .history-table-wrap th:nth-child(8) {
-    width: 17%;
+    width: 28.5%;
   }
 
   .history-table-wrap .course-history-table th,
@@ -281,8 +277,6 @@
 
   .history-table-wrap table:not(.course-history-table) th:nth-child(7),
   .history-table-wrap table:not(.course-history-table) td:nth-child(7),
-  .history-table-wrap table:not(.course-history-table) th:nth-child(8),
-  .history-table-wrap table:not(.course-history-table) td:nth-child(8),
   .history-table-wrap .course-history-table th:nth-child(8),
   .history-table-wrap .course-history-table td:nth-child(8),
   .history-table-wrap .course-history-table th:nth-child(9),

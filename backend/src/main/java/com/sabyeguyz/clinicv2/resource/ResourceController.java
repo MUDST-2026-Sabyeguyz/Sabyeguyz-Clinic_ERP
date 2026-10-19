@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.resource;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
  * Room has no "code" column (just room_name/room_type) - code is always
  * null here, a real gap vs. the old ClinicResource type.
  */
-@org.springframework.transaction.annotation.Transactional
+@Transactional
 @RestController
 @RequestMapping("/api/resources")
 public class ResourceController {
@@ -40,6 +41,7 @@ public class ResourceController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@RequestBody Request request) {
         Branch branch = resolveBranch(request.branchCode());
         Room room = new Room();
@@ -53,6 +55,7 @@ public class ResourceController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @RequestBody Request request) {
         Room room = find(id);
         room.setRoomName(request.name());
@@ -64,6 +67,7 @@ public class ResourceController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
         Room room = find(id);
         room.setRoomStatus(false);
@@ -71,6 +75,7 @@ public class ResourceController {
     }
 
     @PatchMapping("/{id}/activate")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
         Room room = find(id);
         room.setRoomStatus(true);

@@ -11,12 +11,21 @@ import org.springframework.data.repository.query.Param;
 public interface SalesTransactionRepository extends JpaRepository<SalesTransaction, Long> {
     long countByReceiptId(Long receiptId);
 
+    List<SalesTransaction> findByVisitId(Long visitId);
+
     List<SalesTransaction> findByReceiptId(Long receiptId);
 
     @Query("select t from SalesTransaction t where "
             + "(:patientId is null or t.patient.id = :patientId) "
             + "and (:branchId is null or t.branch.id = :branchId)")
     Page<SalesTransaction> search(@Param("patientId") Long patientId, @Param("branchId") Long branchId, Pageable pageable);
+
+    /** Select one legacy line ID per receipt before applying pagination. */
+    @Query("select t from SalesTransaction t where "
+            + "(:patientId is null or t.patient.id = :patientId) "
+            + "and (:branchId is null or t.branch.id = :branchId) "
+            + "and t.id = (select min(line.id) from SalesTransaction line where line.receipt.id = t.receipt.id)")
+    Page<SalesTransaction> searchReceipts(@Param("patientId") Long patientId, @Param("branchId") Long branchId, Pageable pageable);
 
     @Query("select t from SalesTransaction t where t.transactionDate between :from and :to "
             + "and (:branchId is null or t.branch.id = :branchId)")

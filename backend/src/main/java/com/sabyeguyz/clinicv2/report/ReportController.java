@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.report;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.appointment.Appointment;
 import com.sabyeguyz.clinicv2.appointment.AppointmentRepository;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
@@ -34,12 +36,10 @@ import org.springframework.web.bind.annotation.*;
  * data volumes are small - revisit with real SQL aggregation before this
  * runs against production-scale data.
  *
- * <p>receiptsVoided is approximated from Sales_transaction.transaction_status
- * (per-transaction, not per-Receipt) since Sales_transaction has no
- * receipt_id to group by - see SaleController's Javadoc for the same
- * underlying schema gap.</p>
+ * <p>Dashboard net sales follow non-voided receipts and sale dates. Cash follows successful payments
+ * and payment dates, before refunds; customer activity uses the approved registration-based rules.</p>
  */
-@org.springframework.transaction.annotation.Transactional
+@Transactional
 @RestController
 public class ReportController {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
@@ -51,11 +51,13 @@ public class ReportController {
     private final AppointmentRepository appointments;
     private final CourseRepository courses;
     private final BranchRepository branches;
+    private final DashboardMetricsService dashboardMetrics;
 
     public ReportController(PatientVisitRepository visits, PaymentTransactionRepository payments,
                              com.sabyeguyz.clinicv2.sale.ReceiptRepository receipts,
                              SalesTransactionRepository transactions, AppointmentRepository appointments,
-                             CourseRepository courses, BranchRepository branches) {
+                             CourseRepository courses, BranchRepository branches,
+                             DashboardMetricsService dashboardMetrics) {
         this.visits = visits;
         this.payments = payments;
         this.receipts = receipts;
@@ -63,12 +65,17 @@ public class ReportController {
         this.appointments = appointments;
         this.courses = courses;
         this.branches = branches;
+        this.dashboardMetrics = dashboardMetrics;
     }
 
     public record GenderCount(String gender, long patients) {}
     public record DashboardResponse(long uniquePatients, List<GenderCount> patientsByGender, long visits,
                                      BigDecimal totalRevenue, BigDecimal courseRevenue, BigDecimal singleVisitRevenue,
-                                     BigDecimal assessmentRevenue, long receiptsIssued, long receiptsVoided) {}
+                                     BigDecimal assessmentRevenue, long receiptsIssued, long receiptsVoided,
+                                     long newCustomers, long returningCustomers, long courseRenewals, long packageUpdates,
+                                     String packageUpdatesScope, BigDecimal salesTotal, BigDecimal cashReceived,
+                                     List<DailySales> dailySales) {}
+    public record DailySales(LocalDate date, BigDecimal amount) {}
 
     public record StatusCount(String status, long appointments) {}
     public record AppointmentReport(List<StatusCount> byStatus, long appointments, long visits, BigDecimal noShowRate) {}
@@ -87,11 +94,13 @@ public class ReportController {
     @GetMapping("/api/dashboard/summary")
     public DashboardResponse dashboard(@RequestParam LocalDate from, @RequestParam LocalDate to,
                                         @RequestParam(required = false) String branchCode) {
+        if (to.isBefore(from)) throw new IllegalArgumentException("วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น");
         Long branchId = resolveBranchId(branchCode);
         Instant fromInstant = from.atStartOfDay(CLINIC_ZONE).toInstant();
         Instant toInstant = to.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
 
         List<PatientVisit> attendedVisits = visits.findByVisitDateBetween(fromInstant, toInstant, branchId).stream()
+                .filter(v -> v.getVisitDate().isBefore(toInstant))
                 .filter(v -> v.getVisitStatus() == VisitStatus.Arrived || v.getVisitStatus() == VisitStatus.InService
                         || v.getVisitStatus() == VisitStatus.Completed)
                 .toList();
@@ -104,7 +113,8 @@ public class ReportController {
             genderCounts.merge(gender, 1L, Long::sum);
         });
 
-        List<PaymentTransaction> paid = payments.findByPaymentDateBetween(fromInstant, toInstant, branchId);
+        List<PaymentTransaction> paid = payments.findByPaymentDateBetween(fromInstant, toInstant, branchId).stream()
+                .filter(p -> p.getPaymentDate().isBefore(toInstant)).toList();
         BigDecimal totalRevenue = sum(paid, PaymentTransaction::getAmount);
         Map<TransactionType, BigDecimal> revenueByType = new EnumMap<>(TransactionType.class);
         for (PaymentTransaction p : paid) {
@@ -119,10 +129,20 @@ public class ReportController {
         long receiptsVoided = receiptsInRange.stream()
                 .filter(r -> r.getReceiptStatus() == ReceiptStatus.Voided).count();
 
+        List<Receipt> activeSales = receiptsInRange.stream()
+                .filter(r -> r.getReceiptStatus() != ReceiptStatus.Voided).toList();
+        BigDecimal salesTotal = sum(activeSales, Receipt::getNetAmount);
+        Map<LocalDate, BigDecimal> salesByDay = new LinkedHashMap<>();
+        activeSales.forEach(r -> salesByDay.merge(r.getSaleDate().toLocalDate(), r.getNetAmount(), BigDecimal::add));
+        List<DailySales> dailySales = from.datesUntil(to.plusDays(1))
+                .map(date -> new DailySales(date, salesByDay.getOrDefault(date, BigDecimal.ZERO))).toList();
+        DashboardMetricsService.Activity activity = dashboardMetrics.activity(fromInstant, toInstant, branchId, attendedVisits);
+
         return new DashboardResponse(uniquePatients,
                 genderCounts.entrySet().stream().map(e -> new GenderCount(e.getKey(), e.getValue())).toList(),
                 attendedVisits.size(), totalRevenue, courseRevenue, singleVisitRevenue, assessmentRevenue,
-                receiptsIssued, receiptsVoided);
+                receiptsIssued, receiptsVoided, activity.newCustomers(), activity.returningCustomers(),
+                activity.courseRenewals(), activity.packageUpdates(), "CLINIC", salesTotal, totalRevenue, dailySales);
     }
 
     private Map<TransactionType, BigDecimal> revenueSplit(PaymentTransaction payment) {
@@ -191,7 +211,7 @@ public class ReportController {
                     c.getReceipt().getBranch().getBranchCode(), c.getCourseName(), purchased, c.getVisitsUsed(),
                     c.getRemainingVisits(), c.getCourseCreateAt(),
                     c.getExpiryDate().atStartOfDay(CLINIC_ZONE).toInstant(),
-                    c.getExpiryDate().isBefore(LocalDate.now()));
+                    c.getExpiryDate().isBefore(ClinicTime.today()));
         }).toList();
         return new CourseBalanceReport(balanceRows.size(), balanceRows);
     }
@@ -205,18 +225,31 @@ public class ReportController {
         List<SalesTransaction> rows = transactions.findByTransactionDateBetween(fromInstant, toInstant, branchId).stream()
                 .filter(SalesTransaction::isTransactionStatus).toList();
 
-        Map<Long, List<SalesTransaction>> bySeller = new LinkedHashMap<>();
+        // Sales are credited to staff: a course sale goes to its seller (the Owner PT), every other line to its
+        // salesperson, in full.
+        Map<Long, String> names = new LinkedHashMap<>();
+        Map<Long, Long> counts = new LinkedHashMap<>();
+        Map<Long, BigDecimal> amounts = new LinkedHashMap<>();
         List<SalesTransaction> unassigned = new ArrayList<>();
         for (SalesTransaction t : rows) {
-            if (t.getSalespersonStaff() == null) unassigned.add(t);
-            else bySeller.computeIfAbsent(t.getSalespersonStaff().getId(), k -> new ArrayList<>()).add(t);
+            if (t.getSalespersonStaff() == null) {
+                unassigned.add(t);
+            } else {
+                credit(names, counts, amounts, t.getSalespersonStaff(), t.getAmount());
+            }
         }
-        List<StaffSaleRow> staffRows = bySeller.values().stream().map(group -> new StaffSaleRow(
-                group.get(0).getSalespersonStaff().getStaffFname() + " " + group.get(0).getSalespersonStaff().getStaffLname(),
-                group.size(), sum(group, SalesTransaction::getAmount))).toList();
+        List<StaffSaleRow> staffRows = names.keySet().stream()
+                .map(id -> new StaffSaleRow(names.get(id), counts.get(id), amounts.get(id))).toList();
         StaffSaleRow unassignedRow = unassigned.isEmpty() ? null
                 : new StaffSaleRow(null, unassigned.size(), sum(unassigned, SalesTransaction::getAmount));
         return new StaffSalesReport(staffRows, unassignedRow);
+    }
+
+    private static void credit(Map<Long, String> names, Map<Long, Long> counts, Map<Long, BigDecimal> amounts,
+                               com.sabyeguyz.clinicv2.staff.Staff staff, BigDecimal amount) {
+        names.putIfAbsent(staff.getId(), staff.getStaffFname() + " " + staff.getStaffLname());
+        counts.merge(staff.getId(), 1L, Long::sum);
+        amounts.merge(staff.getId(), amount, BigDecimal::add);
     }
 
     private Long resolveBranchId(String branchCode) {
