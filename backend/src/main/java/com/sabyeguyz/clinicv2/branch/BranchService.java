@@ -58,6 +58,58 @@ public class BranchService {
         return repository.save(branch);
     }
 
+    /** The optional branch settings. Times are "HH:mm"; the booking window needs both ends. */
+    public record Settings(String email, String licenseNo, String bookingOpenTime, String bookingCloseTime,
+                           Integer defaultAppointmentMinutes) {}
+
+    @Transactional
+    public Branch applySettings(Long id, Settings settings, Long actorId) {
+        Branch branch = find(id);
+        String email = blankToNull(settings.email());
+        if (email != null && (email.length() > 254
+                || !email.matches("^[^@.\\s]+(\\.[^@.\\s]+)*@[^@.\\s]+(\\.[^@.\\s]+)+$"))) {
+            throw new IllegalArgumentException("รูปแบบอีเมลสาขาไม่ถูกต้อง");
+        }
+        java.time.LocalTime open = parseTime(settings.bookingOpenTime(), "เวลาเริ่มรับนัด");
+        java.time.LocalTime close = parseTime(settings.bookingCloseTime(), "เวลาสิ้นสุดรับนัด");
+        if ((open == null) != (close == null)) {
+            throw new IllegalArgumentException("ต้องระบุช่วงเปิดรับนัดทั้งเวลาเริ่มและเวลาสิ้นสุด");
+        }
+        if (open != null && !open.isBefore(close)) {
+            throw new IllegalArgumentException("เวลาเริ่มรับนัดต้องอยู่ก่อนเวลาสิ้นสุด");
+        }
+        Integer minutes = settings.defaultAppointmentMinutes();
+        if (minutes != null && (minutes < 5 || minutes > 480)) {
+            throw new IllegalArgumentException("ระยะเวลานัดเริ่มต้นต้องอยู่ระหว่าง 5 ถึง 480 นาที");
+        }
+        String license = blankToNull(settings.licenseNo());
+        if (license != null && license.length() > 50) {
+            throw new IllegalArgumentException("เลขใบอนุญาตยาวเกิน 50 ตัวอักษร");
+        }
+        branch.setBranchEmail(email);
+        branch.setLicenseNo(license);
+        branch.setBookingOpenTime(open);
+        branch.setBookingCloseTime(close);
+        branch.setDefaultAppointmentMinutes(minutes);
+        branch.setBranchUpdateAt(Instant.now());
+        branch.setBranchUpdateBy(actorId);
+        return repository.save(branch);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static java.time.LocalTime parseTime(String value, String field) {
+        String text = blankToNull(value);
+        if (text == null) return null;
+        try {
+            return java.time.LocalTime.parse(text);
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw new IllegalArgumentException(field + " ต้องอยู่ในรูปแบบ HH:mm");
+        }
+    }
+
     @Transactional
     public Branch deactivate(Long id, Long actorId) {
         Branch branch = find(id);

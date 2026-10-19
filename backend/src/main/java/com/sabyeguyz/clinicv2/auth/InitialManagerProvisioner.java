@@ -33,14 +33,16 @@ public class InitialManagerProvisioner implements ApplicationRunner {
         if (username.isBlank() && password.isBlank()) return;
         // Serialize first-install provisioning if two instances start together.
         jdbc.execute("select pg_advisory_xact_lock(20261013)");
-        if (users.count() != 0) return;
+        if (jdbc.queryForObject("select count(*) from app_user where username <> 'system'", Long.class) != 0) return;
         if (username.isBlank() || username.length() > 50 || password.length() < 12)
             throw new IllegalArgumentException("Initial manager needs a username (1-50 characters) and a password of at least 12 characters");
         AppUser manager = service.register(username, password, null, null);
-        Role role = new Role();
-        role.setRoleName("Manager"); role.setRoleCreateAt(java.time.Instant.now());
-        role.setRoleCreateBy(manager.getId());
-        role = roles.saveAndFlush(role);
+        Role role = roles.findByRoleName("Manager").orElseGet(() -> {
+            Role created = new Role();
+            created.setRoleName("Manager"); created.setRoleCreateAt(java.time.Instant.now());
+            created.setRoleCreateBy(manager.getId());
+            return roles.saveAndFlush(created);
+        });
         service.assignRole(manager.getId(), role.getId());
     }
 }

@@ -35,9 +35,6 @@ public class CommissionTier {
     @Column(name = "commission_rate", precision = 5, scale = 4, nullable = false)
     private BigDecimal commissionRate;
 
-    @Column(name = "tier_status", nullable = false)
-    private boolean tierStatus = true;
-
     @Column(name = "effective_from", nullable = false)
     private LocalDate effectiveFrom;
 
@@ -71,8 +68,6 @@ public class CommissionTier {
     public void setMaximumMonthlySales(BigDecimal maximumMonthlySales) { this.maximumMonthlySales = maximumMonthlySales; }
     public BigDecimal getCommissionRate() { return commissionRate; }
     public void setCommissionRate(BigDecimal commissionRate) { this.commissionRate = commissionRate; }
-    public boolean isTierStatus() { return tierStatus; }
-    public void setTierStatus(boolean tierStatus) { this.tierStatus = tierStatus; }
     public LocalDate getEffectiveFrom() { return effectiveFrom; }
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
     public LocalDate getEffectiveTo() { return effectiveTo; }

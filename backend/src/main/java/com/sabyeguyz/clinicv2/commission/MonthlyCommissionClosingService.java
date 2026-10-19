@@ -1,8 +1,11 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.enums.ClosingStatus;
 import com.sabyeguyz.clinicv2.enums.CommissionStatus;
+import com.sabyeguyz.clinicv2.enums.PaymentStatus;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import java.math.BigDecimal;
@@ -17,13 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
  * every Course they sold that month — the "Course must remember its own
  * Tier forever" rule (§4).
  *
- * <p>Known gap, flagged for the team: if any Course from this month already
- * had visits used before closing ("Buy &amp; Use Same Day"), those
- * {@code Course_visit_usage}/{@code Commission_allocation_ledger} rows were
- * computed from the provisional per-visit amount, which can differ from the
- * now-locked one. This method does not retroactively adjust those rows —
- * the requirement doc does not specify how that reconciliation should
- * work.</p>
+ * <p>Sessions used before the close ("Buy &amp; Use Same Day") kept a NULL Owner commission, because the
+ * rate was not known; closing the month settles them ({@link CourseCommissionService#settle}).</p>
  */
 @org.springframework.stereotype.Service
 public class MonthlyCommissionClosingService {
@@ -31,9 +29,17 @@ public class MonthlyCommissionClosingService {
     private final CourseRepository courses;
     private final CommissionSchemeResolver schemeResolver;
     private final CommissionTierResolver tierResolver;
+    private final MonthlyTierSalesService tierSales;
+    private final CourseCommissionService courseCommission;
+    private final CommissionAllocationLedgerRepository allocations;
 
     public MonthlyCommissionClosingService(MonthlyCommissionClosingRepository closings, CourseRepository courses,
-                                            CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver) {
+                                            CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
+                                            MonthlyTierSalesService tierSales, CourseCommissionService courseCommission,
+                                            CommissionAllocationLedgerRepository allocations) {
+        this.allocations = allocations;
+        this.courseCommission = courseCommission;
+        this.tierSales = tierSales;
         this.closings = closings;
         this.courses = courses;
         this.schemeResolver = schemeResolver;
@@ -45,16 +51,18 @@ public class MonthlyCommissionClosingService {
         require(saleMonth != null && saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])"), "closingMonth ต้องเป็นรูปแบบ yyyy-mm");
         require(staff != null, "ต้องระบุพนักงาน");
         if (closings.findByClosingMonthAndStaffId(saleMonth, staff.getId())
-                .filter(MonthlyCommissionClosing::isClosingStatus).isPresent()) {
+                .filter(MonthlyCommissionClosing::isClosed).isPresent()) {
             throw new IllegalStateException("ปิดยอดเดือนนี้ของพนักงานคนนี้ไปแล้ว");
         }
 
         LocalDate effectiveDate = LocalDate.parse(saleMonth + "-01");
-        BigDecimal monthlySales = courses.sumCreditedSalesByStaffAndSaleMonth(staff.getId(), saleMonth);
+        BigDecimal monthlySales = tierSales.netSales(staff.getId(), saleMonth);
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveDate);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySales);
 
-        MonthlyCommissionClosing closing = new MonthlyCommissionClosing();
+        // a month that was reopened is closed again on the same row (one closing per staff and month)
+        MonthlyCommissionClosing closing = closings.findByClosingMonthAndStaffId(saleMonth, staff.getId())
+                .orElseGet(MonthlyCommissionClosing::new);
         closing.setClosingMonth(saleMonth);
         closing.setPermission(permission);
         closing.setStaff(staff);
@@ -63,21 +71,76 @@ public class MonthlyCommissionClosingService {
         closing.setCommissionSchemeVersion(scheme.getSchemeVersion());
         closing.setCalculatedCommissionRate(tier.getCommissionRate());
         closing.setLockedCommissionRate(tier.getCommissionRate());
-        closing.setClosingStatus(true);
+        closing.setClosingStatus(ClosingStatus.Closed);
         closing.setClosedAt(Instant.now());
         closing.setClosedBy(actorId);
         MonthlyCommissionClosing saved = closings.save(closing);
 
-        for (Course course : courses.findBySellerStaffIdAndSaleMonth(staff.getId(), saleMonth)) {
-            lockCourse(course, scheme, tier);
+        // each course is locked (row lock) like a usage does, so a session being recorded now is either settled here or
+        // sees the locked rate itself
+        for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonth(staff.getId(), saleMonth)) {
+            Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
+            lockCourse(course, scheme, tier, actorId);
         }
 
         return saved;
     }
 
-    private void lockCourse(Course course, CommissionScheme scheme, CommissionTier tier) {
+    /**
+     * Reopens a Closed month before it is paid (Manager): the rate of every course the seller sold that month is
+     * unlocked and the Owner commission allocated at that rate is reversed; closing the month again works the tier out
+     * again from the sales at that time and allocates a new version. Refused once the month is Finalized or any of its
+     * Owner commission is in a Paid payment (a later correction is a pay adjustment).
+     */
+    @Transactional
+    public MonthlyCommissionClosing reopen(Long closingId, String reason, Long actorId) {
+        require(reason != null && !reason.isBlank(), "ต้องระบุเหตุผลที่ Reopen");
+        MonthlyCommissionClosing closing = closings.findById(closingId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการปิดยอด"));
+        if (closing.getClosingStatus() == ClosingStatus.Finalized) {
+            throw new IllegalStateException("เดือนนี้ Finalize แล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+        }
+        if (closing.getClosingStatus() == ClosingStatus.Open) {
+            throw new IllegalStateException("เดือนนี้ยังไม่ได้ปิดยอด");
+        }
+        Long staffId = closing.getStaff().getId();
+        if (allocations.ownerCommissionOfSaleMonthIn(staffId, closing.getClosingMonth(), java.util.List.of(PaymentStatus.Paid))) {
+            throw new IllegalStateException("ค่าคอมมิชชันของเดือนนี้ถูกจ่ายแล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+        }
+        for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonth(staffId, closing.getClosingMonth())) {
+            Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
+            courseCommission.unlock(course, "Reopen การปิดยอด " + closing.getClosingMonth() + ": " + reason.trim(), actorId);
+        }
+        String trimmed = reason.trim();
+        if (trimmed.length() > 255) throw new IllegalArgumentException("เหตุผลที่ Reopen ยาวเกิน 255 ตัวอักษร");
+        closing.setClosingStatus(ClosingStatus.Open);
+        closing.setClosedAt(null);
+        closing.setClosedBy(null);
+        closing.setLockedCommissionRate(null);
+        closing.setReopenReason(trimmed);
+        closing.setReopenedBy(actorId);
+        closing.setReopenedAt(Instant.now());
+        return closings.save(closing);
+    }
+
+    /** Closed -> Finalized, together with the payment of the money that depends on its rate. */
+    @Transactional
+    public MonthlyCommissionClosing finalizeClosing(MonthlyCommissionClosing closing, Long actorId) {
+        if (closing.getClosingStatus() == ClosingStatus.Finalized) {
+            return closing;
+        }
+        if (closing.getClosingStatus() != ClosingStatus.Closed) {
+            throw new IllegalStateException("เดือนขาย " + closing.getClosingMonth() + " ยังไม่ได้ปิดยอด จึง Finalize ไม่ได้");
+        }
+        closing.setClosingStatus(ClosingStatus.Finalized);
+        closing.setFinalizedAt(Instant.now());
+        closing.setFinalizedBy(actorId);
+        return closings.save(closing);
+    }
+
+    private void lockCourse(Course course, CommissionScheme scheme, CommissionTier tier, Long actorId) {
         BigDecimal pool = course.getCoursePrice().multiply(tier.getCommissionRate()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal perVisit = pool.divide(BigDecimal.valueOf(course.getTotalVisits()), 2, RoundingMode.HALF_UP);
+        BigDecimal perVisit = CommissionAllocationCalculator.nominal(pool, course.getTotalVisits());
 
         course.setCommissionStatus(CommissionStatus.Locked);
         course.setCommissionScheme(scheme);
@@ -85,9 +148,10 @@ public class MonthlyCommissionClosingService {
         course.setLockedCommissionRate(tier.getCommissionRate());
         course.setTotalCourseCommissionPool(pool);
         course.setCommissionAllocationPerVisit(perVisit);
-        course.setCommissionGeneratedDate(LocalDate.now());
-        course.setCommissionOutstanding(pool.subtract(course.getGrossCommissionAllocatedTotal()));
+        course.setCommissionGeneratedDate(ClinicTime.today());
         courses.save(course);
+        // sessions used before the rate was known get their rate, Owner commission and allocation now
+        courseCommission.settle(course, actorId);
     }
 
     private static void require(boolean condition, String message) {

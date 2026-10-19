@@ -30,7 +30,7 @@ public class Patient {
     private CustomerType customerType;
 
     /**
-     * ด.ช., ด.ญ., นาย, นาง, นางสาว — a String since the values are not valid Java identifiers;
+     * นาย, นางสาว, นาง, เด็กชาย, เด็กหญิง — a String since the values are not valid Java identifiers;
      * the column is a PostgreSQL enum, so writes cast the parameter to it.
      */
     @ColumnTransformer(write = "cast(? as title_enum)")
@@ -43,6 +43,9 @@ public class Patient {
     @Column(name = "patient_lname", length = 100, nullable = false)
     private String patientLname;
 
+    @Column(name = "patient_middle_name", length = 100)
+    private String patientMiddleName;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, columnDefinition = "gender_enum")
@@ -50,6 +53,9 @@ public class Patient {
 
     @Column(length = 20, nullable = false)
     private String phone;
+
+    @Column(name = "email", length = 254)
+    private String email;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "branch_id")
@@ -112,6 +118,8 @@ public class Patient {
     public Patient() {}
 
     public Long getId() { return id; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
     public String getPatientHn() { return patientHn; }
     public void setPatientHn(String patientHn) { this.patientHn = patientHn; }
     public CustomerType getCustomerType() { return customerType; }
@@ -122,6 +130,8 @@ public class Patient {
     public void setPatientFname(String patientFname) { this.patientFname = patientFname; }
     public String getPatientLname() { return patientLname; }
     public void setPatientLname(String patientLname) { this.patientLname = patientLname; }
+    public String getPatientMiddleName() { return patientMiddleName; }
+    public void setPatientMiddleName(String patientMiddleName) { this.patientMiddleName = patientMiddleName; }
     public Gender getGender() { return gender; }
     public void setGender(Gender gender) { this.gender = gender; }
     public String getPhone() { return phone; }
