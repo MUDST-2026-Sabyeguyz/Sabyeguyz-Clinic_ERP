@@ -322,6 +322,12 @@ const router = createRouter({
     {
       path: '/staff/calendar',
       name: 'staff-calendar',
+      redirect: '/staff/settings/calendar',
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/settings/calendar',
+      name: 'staff-calendar-settings',
       component: () => import('@/features/settings/views/CalendarSettingsView.vue'),
       meta: { roles: ['manager'] },
     },
