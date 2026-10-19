@@ -42,7 +42,8 @@ describe('calendar settings', () => {
     expect(view.get('a[data-cy="calendar-open"]').attributes('href')).toContain(
       encodeURIComponent('rama@example.com'),
     )
-    expect(view.text()).toContain('รอบรวมทุกสาขา')
+    expect(view.text()).toContain('ซิงก์ล่าสุด:')
+    expect(view.text()).not.toContain('รอบรวมทุกสาขา')
     expect(view.get('[data-cy="calendar-sync"]').text()).toBe('sync ↻')
     view.unmount()
   })
