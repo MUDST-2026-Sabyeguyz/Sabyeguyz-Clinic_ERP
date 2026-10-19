@@ -801,9 +801,8 @@ const drawerTitle = computed(() => {
           >
             {{ item.label }}
           </button>
-          <RouterLink class="settings-nav-link" to="/staff/settings/audit-log"
-            >ประวัติการแก้ไขระบบ</RouterLink
-          >
+          <RouterLink class="settings-nav-item" to="/staff/settings/calendar">Google Calendar</RouterLink>
+          <RouterLink class="settings-nav-link" to="/staff/settings/audit-log">ประวัติการแก้ไขระบบ</RouterLink>
         </aside>
         <section class="settings-panel">
           <header class="settings-panel-head">
