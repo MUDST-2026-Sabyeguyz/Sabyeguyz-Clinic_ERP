@@ -204,6 +204,8 @@ function normalizeBranch(branch: BackendBranch): Branch {
 }
 export type Staff = {
   id: number
+  branchCode?: string
+  branchName?: string
   position?: string
   userId: number
   username: string
@@ -933,6 +935,8 @@ export type TreatmentFeeInput = {
 }
 
 export const commissionApi = {
+  payments: (month: string) =>
+    api.get<StaffPayment[]>(`/api/commission/payments?${new URLSearchParams({ month })}`),
   schemes: () => api.get('/api/commission/schemes'),
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
   createScheme: (body: unknown) => api.post('/api/commission/schemes', body),
