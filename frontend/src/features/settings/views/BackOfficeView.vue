@@ -4,6 +4,7 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import TimeFilterPicker from '@/features/staff/components/TimeFilterPicker.vue'
+import MasterDataGroups from '../components/MasterDataGroups.vue'
 import {
   type TreatmentFeeRule,
   branchApi,
@@ -129,12 +130,6 @@ const masterRow = (item: Awaited<ReturnType<typeof masterDataApi.create>>) => ({
   examples: item.name,
   status: status(item.active),
 })
-const masterCategoryLabel = (value: string) =>
-  ({
-    'Customer Group': 'กลุ่มผู้ป่วย',
-    'Referral Channel': 'ช่องทางที่รู้จักคลินิก',
-    'Insurance Company': 'บริษัทประกัน',
-  })[value] ?? value
 const bahtText = (value: number) =>
   Number(value).toLocaleString('th-TH', { maximumFractionDigits: 2 })
 const feeCalculation = (rule: { feeType: string; feeValue: number }) =>
@@ -311,7 +306,7 @@ const copy = computed(
         'ค่ามือของผู้รักษาแทนและการรักษารายครั้ง ใช้กฎกลางเดียวกับนักกายภาพทุกคน',
       ],
       tiers: ['กฎค่าคอมมิชชัน', 'อัตราค่าคอมมิชชันตามยอดขายคอร์สรายเดือนของพนักงาน'],
-      master: ['Master Data', 'จัดการข้อมูลหลักที่ใช้อ้างอิงทั่วทั้งระบบ'],
+      master: ['Master Data', 'จัดการข้อมูลลูกค้า'],
     })[section.value],
 )
 const actionLabel = computed(() => {
@@ -361,6 +356,17 @@ const keys = computed(() => {
   return values[section.value]
 })
 const form = reactive<Row>({})
+const masterItems = computed(() => data.master.map((row) => ({
+  id: Number(row.id), category: String(row.category), name: String(row.examples), status: String(row.status),
+})))
+function addMasterItem(category: string) {
+  openDrawer(null)
+  form.category = category
+}
+function editMasterItem(id: number) {
+  const index = data.master.findIndex((row) => Number(row.id) === id)
+  if (index >= 0) openDrawer(index)
+}
 const rolePermissions = computed(() =>
   form.role === 'Manager' ? permissions : ['Patient', 'Visit', 'Treatment'],
 )
@@ -805,7 +811,7 @@ const drawerTitle = computed(() => {
               <h2>{{ copy[0] }}</h2>
               <p>{{ copy[1] }}</p>
             </div>
-            <button v-if="actionLabel" class="settings-add" @click="openDrawer(null)">
+            <button v-if="actionLabel && section !== 'master'" class="settings-add" @click="openDrawer(null)">
               {{ actionLabel }}
             </button>
             <div v-else-if="section === 'commission'" class="settings-actions">
@@ -972,6 +978,7 @@ const drawerTitle = computed(() => {
               </div>
             </article>
           </section>
+          <MasterDataGroups v-else-if="section === 'master'" :items="masterItems" @add="addMasterItem" @edit="editMasterItem" />
           <div v-else class="table-wrap">
             <table>
               <thead>
@@ -995,11 +1002,7 @@ const drawerTitle = computed(() => {
                           String(row[key]).startsWith('ไม่พร้อม'),
                       }"
                       >{{ row[key] }}</span
-                    ><template v-else>{{
-                      section === 'master' && key === 'category'
-                        ? masterCategoryLabel(row[key])
-                        : row[key]
-                    }}</template>
+                    ><template v-else>{{ row[key] }}</template>
                   </td>
                   <td>
                     <button class="edit" @click="openDrawer(index)">แก้ไข</button>
@@ -1313,12 +1316,12 @@ const drawerTitle = computed(() => {
             >ประเภทข้อมูล<FilterDropdown
               v-model="form.category"
               :options="[
-                { value: 'Customer Group', label: 'กลุ่มผู้ป่วย' },
-                { value: 'Referral Channel', label: 'ช่องทางที่รู้จักคลินิก' },
-                { value: 'Insurance Company', label: 'บริษัทประกัน' },
+                { value: 'Customer Group', label: 'กลุ่มลูกค้า' },
+                { value: 'Referral Channel', label: 'ช่องทางแนะนำ' },
+                { value: 'Insurance Type', label: 'บริษัทประกัน' },
               ]"
               default-value="Customer Group"
-              default-label="Customer Group"
+              default-label="กลุ่มลูกค้า"
               label="ประเภทข้อมูล"
               hide-default-option
               :clear-on-reselect="false" /></label
