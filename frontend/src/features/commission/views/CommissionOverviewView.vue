@@ -5,7 +5,8 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
-import { commissionApi } from '@/api/client'
+import { commissionApi, staffApi } from '@/api/client'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 
 type PersonRow = {
   id: string
@@ -13,7 +14,8 @@ type PersonRow = {
   tier: string
   base: number
   commission: number
-  treatment: number
+  treatment: number | null
+  pendingPayment: number | null
   branch: string
   status: 'pending' | 'approved'
 }
@@ -37,6 +39,7 @@ const monthFilter = computed({
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
+      row.branch === selectedManagerBranch()?.code &&
       (!search.value ||
         row.name.includes(search.value) ||
         row.id.toLowerCase().includes(search.value.toLowerCase())) &&
@@ -45,32 +48,64 @@ const visible = computed(() =>
 )
 const sales = computed(() => visible.value.reduce((s, r) => s + r.base, 0))
 const pool = computed(() => visible.value.reduce((s, r) => s + r.commission, 0))
-const treatment = computed(() => visible.value.reduce((s, r) => s + r.treatment, 0))
-const money = (value: number) => `฿${value.toLocaleString('th-TH')}`
+const treatment = computed(() =>
+  visible.value.some((row) => row.treatment === null)
+    ? null
+    : visible.value.reduce((sum, row) => sum + (row.treatment ?? 0), 0),
+)
+const pendingPayment = computed(() =>
+  visible.value.some((row) => row.pendingPayment === null)
+    ? null
+    : visible.value.reduce((sum, row) => sum + (row.pendingPayment ?? 0), 0),
+)
+const money = (value: number | null) => (value === null ? '—' : `฿${value.toLocaleString('th-TH')}`)
+let requestVersion = 0
 async function loadOverview() {
+  const version = ++requestVersion
+  errorMessage.value = ''
+  rows.value = []
   try {
     const period = date.value.slice(0, 7)
     const [year, month] = period.split('-').map(Number)
     const lastDay = String(new Date(year!, month!, 0).getDate()).padStart(2, '0')
-    const [data, closings] = await Promise.all([
+    const [data, closings, payments, staff] = await Promise.all([
       commissionApi.report(`${period}-01`, `${period}-${lastDay}`),
       commissionApi.closings(period),
+      commissionApi.payments(period),
+      staffApi.list(),
     ])
+    if (version !== requestVersion) return
     const closingStatus = new Map(closings.map((item) => [item.employeeId, item.status]))
-    const realRows: PersonRow[] = data
-      .filter((r) => r.staffId !== null)
-      .map((r) => ({
-        id: String(r.staffId),
-        name: r.staffName,
-        tier: `อัตรา ${Math.round(r.rate * 100)}%`,
-        base: Number(r.base),
-        commission: Number(r.commission),
-        treatment: 0,
-        branch: r.branchCode,
-        status: closingStatus.get(r.staffId!) === 'CLOSED' ? 'approved' : 'pending',
-      }))
+    const people = new Map(staff.map((person) => [person.id, person]))
+    const payroll = new Map(payments.map((payment) => [payment.staffId, payment]))
+    const salesByStaff = new Map(
+      data.filter((row) => row.staffId !== null).map((row) => [row.staffId!, row]),
+    )
+    const ids = new Set([...salesByStaff.keys(), ...payroll.keys()])
+    const realRows: PersonRow[] = [...ids].map((id) => {
+      const sale = salesByStaff.get(id)
+      const payment = payroll.get(id)
+      const person = people.get(id)
+      return {
+        id: String(id),
+        name: person?.fullName ?? sale?.staffName ?? payment!.staffName,
+        tier: sale ? `อัตรา ${Math.round(sale.rate * 100)}%` : '—',
+        base: Number(sale?.base ?? 0),
+        commission: Number(sale?.commission ?? 0),
+        treatment:
+          payment?.singleVisitFee != null && payment.substituteFee != null
+            ? Number(payment.singleVisitFee) + Number(payment.substituteFee)
+            : null,
+        pendingPayment: payment?.status === 'PAID' ? 0 : (payment?.net ?? null),
+        branch: person?.branchCode ?? sale?.branchCode ?? '',
+        status: ['CLOSED', 'FINALIZED'].includes(closingStatus.get(id) ?? '')
+          ? 'approved'
+          : 'pending',
+      }
+    })
     rows.value = realRows
   } catch (error) {
+    if (version !== requestVersion) return
     rows.value = []
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลคอมมิชชันไม่สำเร็จ'
   }
@@ -99,10 +134,12 @@ watch(date, loadOverview)
         </article>
         <article>
           <span>ค่ามือ</span><b>{{ money(treatment) }}</b
-          ><small>— รายการ</small>
+          ><small>{{
+            treatment === null ? 'ยังไม่มีข้อมูลสรุปค่ามือ' : 'รายครั้งและรักษาแทน · ตามสาขาประจำ'
+          }}</small>
         </article>
         <article class="warning">
-          <span>ยอดรอจ่าย</span><b>{{ money(pool + treatment) }}</b
+          <span>ยอดรอจ่าย</span><b>{{ money(pendingPayment) }}</b
           ><small>รอตรวจสอบ {{ visible.length }} คน</small>
         </article>
       </section>
