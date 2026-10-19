@@ -78,6 +78,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: SPRING_PROFILES_ACTIVE, value: 'docker,v2'}
+            - {name: SERVER_FORWARD_HEADERS_STRATEGY, value: framework}
             - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/clinic_demo'}
             - {name: SPRING_DATASOURCE_USERNAME, value: clinic}
             - {name: APP_V2_FLYWAY_EXTRA_LOCATIONS, value: ',classpath:db/seed_v2'}
