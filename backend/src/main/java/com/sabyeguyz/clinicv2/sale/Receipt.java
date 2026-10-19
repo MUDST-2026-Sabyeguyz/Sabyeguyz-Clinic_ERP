@@ -38,6 +38,9 @@ public class Receipt {
     @Column(name = "sale_date", nullable = false)
     private LocalDateTime saleDate;
 
+    @Column(name = "note", columnDefinition = "text")
+    private String note;
+
     @Column(name = "receipt_create_at", nullable = false, updatable = false)
     private Instant receiptCreateAt;
 
@@ -64,7 +67,7 @@ public class Receipt {
     @Column(name = "bill_discount_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal billDiscountAmount = BigDecimal.ZERO;
 
-    /** Tax policy is still to be confirmed with the business; no tax is charged yet. */
+    /** R32 confirms zero tax: taxable amount is the net after bill discount, with tax amount zero. */
     @Column(name = "taxable_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal taxableAmount = BigDecimal.ZERO;
 
@@ -88,6 +91,9 @@ public class Receipt {
     public void setPaymentLabel(com.sabyeguyz.clinicv2.enums.PaymentLabel value) { paymentLabel = value; }
 
     public Receipt() {}
+
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
 
     public Long getId() { return id; }
     public String getReceiptNo() { return receiptNo; }

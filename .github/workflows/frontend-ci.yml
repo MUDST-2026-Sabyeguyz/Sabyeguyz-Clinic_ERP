@@ -2,10 +2,17 @@ name: Frontend CI
 
 on:
   push:
-    branches: [develop, 'feat/**', 'feature/**']
+    branches: [develop, 'feat/**', 'feature/**', 'codex/**', 'codex/**']
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
   pull_request:
     branches: [develop]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

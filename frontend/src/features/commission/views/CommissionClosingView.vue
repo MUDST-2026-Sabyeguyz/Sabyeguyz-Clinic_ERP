@@ -25,6 +25,31 @@ const isConfirming = ref(false)
 const isSaving = ref(false)
 const closedSuccessfully = ref(false)
 const validationLoading = ref(false)
+const draftMessage = ref('')
+const reportRows = ref<Awaited<ReturnType<typeof commissionApi.report>>>([])
+const schemeLabel = ref('ยังไม่มีข้อมูล Scheme')
+const schemePeriodLabel = ref('ยังไม่มีข้อมูลช่วงวันที่')
+const shortDate = (value: string) =>
+  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+    new Date(`${value}T12:00:00`),
+  )
+const totalBase = computed(() => reportRows.value.reduce((sum, r) => sum + Number(r.base), 0))
+const commissionPool = computed(() =>
+  reportRows.value.reduce((sum, r) => sum + Number(r.commission), 0),
+)
+const reportCount = computed(() => reportRows.value.reduce((sum, r) => sum + r.saleCount, 0))
+const proposedRate = computed(() => {
+  const rates = [...new Set(reportRows.value.map((r) => Number(r.rate) * 100))]
+  return rates.length === 1 ? `${rates[0]}%` : rates.length ? 'ตาม Tier รายบุคคล' : '—'
+})
+function saveDraft() {
+  try {
+    localStorage.setItem('commission-closing-draft-month', selectedMonth.value)
+    draftMessage.value = 'บันทึกฉบับร่างแล้ว'
+  } catch {
+    draftMessage.value = 'บันทึกฉบับร่างในเครื่องไม่สำเร็จ'
+  }
+}
 const validationResults = ref({
   tiers: null as boolean | null,
   sales: null as boolean | null,
@@ -34,6 +59,10 @@ const validationResults = ref({
 
 async function validatePeriod() {
   validationLoading.value = true
+  reportRows.value = []
+  schemeLabel.value = 'ยังไม่มีข้อมูล Scheme'
+  schemePeriodLabel.value = 'ยังไม่มีข้อมูลช่วงวันที่'
+  validationResults.value = { tiers: null, sales: null, courses: null, treatment: null }
   const [year, number] = month.value.split('-').map(Number)
   const from = `${month.value}-01`
   const to = `${month.value}-${String(new Date(year!, number!, 0).getDate()).padStart(2, '0')}`
@@ -44,6 +73,7 @@ async function validatePeriod() {
     commissionApi.treatmentReport(from, to),
   ])
 
+  if (salesResult.status === 'fulfilled') reportRows.value = salesResult.value
   validationResults.value.sales =
     salesResult.status === 'fulfilled'
       ? salesResult.value.length > 0 &&
@@ -63,8 +93,24 @@ async function validatePeriod() {
   }
 
   if (schemesResult.status === 'fulfilled' && Array.isArray(schemesResult.value)) {
-    const scheme = (schemesResult.value as Array<{ id: number }>)[0]
+    const scheme = (
+      schemesResult.value as Array<{
+        id: number
+        name: string
+        active: boolean
+        effectiveFrom: string
+        effectiveTo: string | null
+      }>
+    ).find((s) => s.active && s.effectiveFrom <= to && (!s.effectiveTo || s.effectiveTo > to))
     if (scheme) {
+      schemeLabel.value = scheme.name
+      if (scheme.effectiveTo) {
+        const lastDay = new Date(`${scheme.effectiveTo}T12:00:00`)
+        lastDay.setDate(lastDay.getDate() - 1)
+        const inclusiveEnd = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
+        schemePeriodLabel.value = `${shortDate(scheme.effectiveFrom)}–${shortDate(inclusiveEnd)}`
+      } else schemePeriodLabel.value = `${shortDate(scheme.effectiveFrom)} เป็นต้นไป`
+
       try {
         const tierData = (await commissionApi.tiers(scheme.id)) as Array<{
           minimum: number
@@ -77,7 +123,8 @@ async function validatePeriod() {
             if (index === 0) return Number(tier.minimum) === 0
             const previous = tiers[index - 1]!
             return (
-              previous.maximum !== null && Number(tier.minimum) === Number(previous.maximum) + 1
+              previous.maximum !== null &&
+              Math.abs(Number(tier.minimum) - Number(previous.maximum) - 0.01) < 0.001
             )
           })
       } catch {
@@ -89,6 +136,8 @@ async function validatePeriod() {
 }
 
 async function load() {
+  closedSuccessfully.value = false
+  draftMessage.value = ''
   void validatePeriod()
   try {
     const data = await commissionApi.closings(month.value)
@@ -114,7 +163,7 @@ async function confirmClosing() {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'ปิดรอบไม่สำเร็จ'
     isConfirming.value = false
-    closedSuccessfully.value = true
+    closedSuccessfully.value = false
   } finally {
     isSaving.value = false
   }
@@ -149,7 +198,8 @@ const periodLabel = computed(() => {
   return `1–${new Date(year, number, 0).getDate()} ${fullMonthLabel.value}`
 })
 const monthOptions = Array.from({ length: 12 }, (_, index) => {
-  const date = new Date(2026, 9 - index, 1)
+  const now = new Date()
+  const date = new Date(now.getFullYear(), now.getMonth() - index, 1)
   return {
     value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`,
     label: new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(date),
@@ -167,7 +217,8 @@ const closeChecks = computed(() =>
     result: validationResults.value[item.key as keyof typeof validationResults.value],
   })),
 )
-const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result === false))
+const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result !== true))
+const passedChecks = computed(() => closeChecks.value.filter((item) => item.result === true).length)
 
 function selectView(event: Event) {
   const value = (event.target as HTMLSelectElement).value
@@ -190,19 +241,31 @@ function selectView(event: Event) {
           }}
         </p>
       </header>
+      <div v-if="!closedSuccessfully" class="closing-month-selector">
+        <FilterDropdown
+          v-model="selectedMonth"
+          :options="monthOptions"
+          :default-value="selectedMonth"
+          :default-label="periodLabel"
+          label="เลือกรอบคำนวณ"
+          hide-default-option
+          :clear-on-reselect="false"
+        />
+      </div>
       <CommissionTabs active="closing" />
+      <p v-if="errorMessage" class="state-card error" role="alert">{{ errorMessage }}</p>
       <section v-if="closedSuccessfully" class="closed-success commission-card">
         <i>✓</i>
         <h2>ปิดรอบ{{ fullMonthLabel }} เรียบร้อย</h2>
-        <p>Commission Scheme V1 · อัตราตาม Tier ถูกล็อกกับ 32 Course ID</p>
+        <p>{{ schemeLabel }} · บันทึกรอบและล็อกอัตราสำเร็จ</p>
         <dl>
           <div>
             <dt>ยอดฐานที่ล็อก</dt>
-            <dd>฿410,000</dd>
+            <dd>{{ currency(totalBase) }}</dd>
           </div>
           <div>
             <dt>Commission Pool</dt>
-            <dd>฿32,800</dd>
+            <dd>{{ currency(commissionPool) }}</dd>
           </div>
           <div>
             <dt>ผู้ดำเนินการ</dt>
@@ -216,43 +279,63 @@ function selectView(event: Event) {
       <template v-else>
         <section class="closing-summary" aria-label="สรุปรอบรายเดือน">
           <article>
-            <span>รอบคำนวณ</span><b>{{ monthLabel }}</b>
+            <span>ยอดขายคอร์ส</span><b>{{ currency(totalBase) }}</b
+            ><small>ฐานสุทธิจากรายงาน · {{ reportCount }} รายการขาย</small>
           </article>
           <article>
-            <span>ยอดขายรวม</span><b>{{ currency(totalSales) }}</b>
+            <span>อัตราที่เสนอ</span><b>{{ proposedRate }}</b>
           </article>
           <article>
-            <span>รอปิดรอบ</span><b>{{ openCount }}</b>
+            <span>คอร์สรอล็อก</span><b>—</b><small>ระบบยังไม่ส่งจำนวนคอร์สรอล็อก</small>
           </article>
           <article>
-            <span>สถานะเดือน</span><b>{{ openCount ? 'รอปิดรอบ' : 'ปิดรอบแล้ว' }}</b>
+            <span>สถานะรอบ</span><b>{{ rows.length && !openCount ? 'ปิดรอบแล้ว' : 'เปิดอยู่' }}</b
+            ><small>{{ fullMonthLabel }}</small>
           </article>
         </section>
         <section class="closing-workspace">
           <article class="commission-card calculation">
             <h2>รายละเอียดรอบคำนวณ</h2>
-            <div class="calculation-period">
-              <span>รอบคำนวณ</span>
-              <div class="calculation-period-control">
-                <FilterDropdown
-                  v-model="selectedMonth"
-                  :options="monthOptions"
-                  :default-value="selectedMonth"
-                  :default-label="fullMonthLabel"
-                  label="เลือกรอบคำนวณ"
-                  hide-default-option
-                  :clear-on-reselect="false"
-                /><small>ช่วงวันที่ {{ periodLabel }}</small>
+            <p class="calculation-caption">สรุปฐานที่ใช้คำนวณค่าคอมมิชชันก่อนปิดรอบ</p>
+            <div class="period-cards">
+              <div class="period-card">
+                <span>รอบคำนวณ</span><b>{{ periodLabel }}</b>
+              </div>
+              <div class="period-card scheme-card">
+                <span>Commission Scheme</span><b>{{ schemePeriodLabel }}</b>
               </div>
             </div>
-            <div><span>ยอดขายคอร์สรวม</span><b>฿428,500.00</b></div>
-            <div><span>ส่วนลดรายการ</span><b>− ฿18,500.00</b></div>
-            <div><span>ฐานคำนวณ Tier</span><b>฿410,000.00</b></div>
-            <div class="pool"><span>Commission Pool ที่จะสร้าง</span><b>฿32,800.00</b></div>
-            <aside>เมื่อปิดรอบ อัตราที่คำนวณแล้วจะถูกล็อกตาม Course ID และแก้ไขไม่ได้โดยตรง</aside>
+            <div class="calculation-breakdown">
+              <div><span>ยอดขายคอร์สรวมก่อนส่วนลด</span><b>—</b></div>
+              <div><span>ส่วนลดรายรายการ</span><b>—</b></div>
+              <div class="base-total">
+                <span>ฐานคำนวณ Tier</span><b>{{ currency(totalBase) }}</b>
+              </div>
+            </div>
+            <p class="calculation-caption">ระบบยังไม่ส่งยอดก่อนส่วนลดและส่วนลดแยกในรายงานรอบนี้</p>
+            <div class="pool">
+              <span>Commission Pool ที่จะสร้าง<small>คำนวณตาม Tier ของแต่ละบุคคล</small></span
+              ><b>{{ currency(commissionPool) }}</b>
+            </div>
+            <aside>
+              <strong>เมื่อปิดรอบ อัตราค่าคอมมิชชันจะถูกล็อกตาม Course ID</strong
+              ><br />การแก้ย้อนหลังต้องใช้ Admin Override พร้อมระบุเหตุผลและเก็บ Audit Log
+            </aside>
           </article>
           <article class="commission-card checklist">
             <h2>ตรวจสอบก่อนปิดรอบ</h2>
+            <p :class="{ warn: hasBlockingIssues }">
+              <strong>{{
+                validationLoading
+                  ? 'กำลังตรวจสอบ'
+                  : hasBlockingIssues
+                    ? 'ต้องตรวจสอบเพิ่มเติม'
+                    : 'พร้อมปิดรอบ'
+              }}</strong
+              ><small
+                >ผ่าน {{ passedChecks }} รายการ · ต้องตรวจ {{ 4 - passedChecks }} รายการ</small
+              >
+            </p>
             <p v-if="validationLoading" class="checking">… กำลังตรวจสอบข้อมูลรอบนี้</p>
             <template v-else>
               <p
@@ -270,8 +353,11 @@ function selectView(event: Event) {
               :disabled="validationLoading || hasBlockingIssues"
               @click="isConfirming = true"
             >
-              ยืนยันปิดรอบ
+              ปิดรอบ
             </button>
+            <button class="commission-secondary" @click="saveDraft">บันทึกฉบับร่าง</button>
+            <small v-if="draftMessage" role="status">{{ draftMessage }}</small>
+            <small>เมื่อยืนยันแล้ว การแก้ไขต้องผ่าน Admin Override</small>
           </article>
         </section>
       </template>
@@ -307,6 +393,55 @@ function selectView(event: Event) {
   width: min(1540px, calc(100% - 10vw));
   margin: 0 auto;
   padding: 54px 0 64px;
+}
+.closing-month-selector {
+  display: flex;
+  justify-content: flex-end;
+  margin: -60px 0 24px;
+}
+.closing-month-selector :deep(.filter-dropdown) {
+  width: 280px;
+}
+.calculation .period-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  padding: 16px 0;
+}
+.period-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #dce5e1;
+  border-radius: 9px;
+  min-width: 0;
+}
+.period-card span {
+  color: #6d7d78;
+  font-size: 13px;
+}
+.period-card b {
+  font-size: 16px;
+  font-weight: 400;
+}
+.scheme-card {
+  background: #e3f4ed;
+  border-color: #e3f4ed;
+}
+@media (max-width: 900px) {
+  .closing-month-selector {
+    margin: 16px 0 20px;
+  }
+}
+@media (max-width: 620px) {
+  .calculation .period-cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .closing-month-selector :deep(.filter-dropdown) {
+    width: 100%;
+  }
 }
 .closing-period-picker {
   display: flex;
@@ -360,13 +495,12 @@ function selectView(event: Event) {
   border-radius: 999px;
 }
 .closing-summary {
+  gap: 20px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   margin-bottom: 42px;
   overflow: hidden;
-  border-radius: 22px;
-  background: #fffafa;
-  box-shadow: 0 4px 18px #00000014;
+  background: transparent;
 }
 .closing-workspace {
   display: grid;
@@ -394,6 +528,41 @@ function selectView(event: Event) {
   padding: 18px;
   border-radius: 9px;
   background: #fff1c7;
+}
+.calculation-caption {
+  color: #6d7d78;
+  font-size: 14px;
+}
+.calculation .calculation-breakdown {
+  display: block;
+  padding: 12px 18px;
+  border: 1px solid #dce5e1;
+  border-radius: 10px;
+  background: #fbfcfb;
+}
+.calculation-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+}
+.calculation-breakdown .base-total {
+  border-top: 1px solid #dce5e1;
+}
+.calculation .pool {
+  padding: 18px;
+  border-radius: 10px;
+  background: #d5efe4;
+}
+.pool small {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.closing-summary small {
+  color: #6d7d78;
+  font-size: 13px;
 }
 .checklist {
   display: flex;
@@ -474,7 +643,9 @@ function selectView(event: Event) {
   display: grid;
   gap: 5px;
   padding: 25px 34px;
-  border-right: 1px solid #dde6df;
+  border: 1px solid #dce5e1;
+  border-radius: 12px;
+  background: #fff;
 }
 .closing-summary article:last-child {
   border-right: 0;

@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.treatment;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitRepository;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
@@ -25,7 +26,7 @@ import org.springframework.web.bind.annotation.*;
  * prior check-in isn't supported, since PatientVisit.branch has no source
  * to come from at this endpoint).
  */
-@org.springframework.transaction.annotation.Transactional
+@Transactional
 @RestController
 @RequestMapping("/api/treatments")
 public class TreatmentController {

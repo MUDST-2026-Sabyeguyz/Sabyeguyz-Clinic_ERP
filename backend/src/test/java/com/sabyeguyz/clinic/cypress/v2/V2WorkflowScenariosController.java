@@ -65,6 +65,7 @@ public class V2WorkflowScenariosController {
             existing.setPatient(new Patient());
         }
         appointments.on("findById", args -> Optional.of(existing));
+        appointments.on("findByIdForUpdate", args -> Optional.of(existing));
         appointments.on("existsByStaffIdAndAppointmentDateAndAppointmentTimeAndAppointmentStatusNotIn",
                 args -> scenario.equals("conflict"));
         return V2RepositoryStub.outcome(() -> {
@@ -126,6 +127,7 @@ public class V2WorkflowScenariosController {
             }
         };
         PatientVisit existing = new PatientVisit();
+        existing.setAssignedStaff(new Staff()); // a started visit needs the PT who treats it
         existing.setAppointment(appointment);
         existing.setVisitStatus(scenario.equals("cancelled") ? VisitStatus.Cancelled : VisitStatus.InService);
         visits.on("findById", args -> Optional.of(existing));
@@ -166,7 +168,7 @@ public class V2WorkflowScenariosController {
         var members = new V2RepositoryStub<>(CourseSharedMemberRepository.class);
         var entitlements = new V2RepositoryStub<>(CourseEntitlementRepository.class);
         var cancellationRepo = new V2RepositoryStub<>(TransactionCancellationRepository.class);
-        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null);
+        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null, null, null, null);
         Course course = new Course(); setId(course, 1L);
         Patient from = new Patient(); setId(from, 10L);
         Patient to = new Patient(); setId(to, 20L);
@@ -191,8 +193,9 @@ public class V2WorkflowScenariosController {
             resultMap.put("ledgerTypes", entries.stream().map(e -> e.getEntryType().name()).toList());
             resultMap.put("ledgerLinked", entries.stream().allMatch(e -> e.getTransfer() == result));
             resultMap.put("entitlementSaves", saved.size());
-            resultMap.put("fromAllocated", saved.get(0).getAllocatedVisits());
-            resultMap.put("toAllocated", saved.get(1).getAllocatedVisits());
+            // the receiver's row is created first (the transfer references it), then both rows are adjusted
+            resultMap.put("fromAllocated", saved.stream().filter(e -> e.getPatient() == from).reduce((a, b) -> b).get().getAllocatedVisits());
+            resultMap.put("toAllocated", saved.stream().filter(e -> e.getPatient() == to).reduce((a, b) -> b).get().getAllocatedVisits());
             return resultMap;
         });
     }
@@ -241,34 +244,42 @@ public class V2WorkflowScenariosController {
         var courses = new V2RepositoryStub<>(CourseRepository.class);
         var allocations = new V2RepositoryStub<>(CommissionAllocationLedgerRepository.class);
         var rules = new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
+        usages.on("findByCourseIdOrderByIdDesc", args -> {
+            var saved = new java.util.ArrayList<>(new java.util.LinkedHashSet<>(usages.arguments("save").stream().map(a -> (CourseVisitUsage) a[0]).toList()));
+            java.util.Collections.reverse(saved);
+            return saved;
+        });
         var entitlements = new V2RepositoryStub<>(CourseEntitlementRepository.class);
         var cancellationRepo = new V2RepositoryStub<>(TransactionCancellationRepository.class);
-        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null);
+        var cancellations = new TransactionCancellationService(cancellationRepo.proxy(), null, null, null, null, null, null, null, null);
         Course course = lockedCourse();
         Staff owner = new Staff(); setId(owner, 10L);
         Staff substitute = new Staff(); setId(substitute, 11L);
         Patient patient = new Patient(); setId(patient, 100L);
-        course.setCaseOwnerStaff(owner);
+        course.setSellerStaff(owner); // the seller is the Owner PT
         ledger.on("sumQtyChangeByCourseAndPatient", args -> scenario.equals("no-balance") ? 0L : 10L);
         TreatmentFeeRule rule = new TreatmentFeeRule();
         rule.setFeeType(scenario.equals("percentage") ? FeeType.Percentage : FeeType.Fixed);
-        rule.setFeeValue(new BigDecimal(scenario.equals("percentage") ? "0.03" : scenario.equals("capped") ? "60" : "45"));
-        rule.setPercentageBase(CalculationBase.CourseValuePerVisit);
+        rule.setFeeValue(new BigDecimal(scenario.equals("percentage") ? "3" : scenario.equals("capped") ? "60" : "45"));
         rules.on("findActiveOn", args -> List.of(rule));
         if (scenario.equals("capped")) course.setCommissionAllocationPerVisit(new BigDecimal("40.00"));
         if (scenario.equals("expired")) course.setExpiryDate(LocalDate.of(2020, 1, 1));
         if (scenario.equals("exhausted")) course.setRemainingVisits(0);
         ledger.on("findByVisitUsageId", args -> ledger.arguments("save").stream().map(a -> (CourseLedger) a[0])
                 .filter(l -> l.getVisitUsage() != null).toList());
-        allocations.on("findByVisitUsageIdAndEntryType",
-                args -> Optional.of((CommissionAllocationLedger) allocations.arguments("save").get(0)[0]));
+        allocations.on("findByVisitUsageIdOrderByIdAsc",
+                args -> allocations.arguments("save").stream().map(a -> (CommissionAllocationLedger) a[0]).toList());
         entitlements.on("findById", args -> entitlements.arguments("save").isEmpty() ? Optional.empty()
                 : Optional.of((CourseEntitlement) entitlements.arguments("save").get(entitlements.arguments("save").size() - 1)[0]));
         boolean ownerTreats = scenario.equals("owner") || scenario.equals("reverse") || scenario.equals("reverse-twice")
                 || scenario.equals("reverse-no-reason");
         return V2RepositoryStub.outcome(() -> {
             var service = new CourseVisitUsageService(usages.proxy(), ledger.proxy(), courses.proxy(),
-                    allocations.proxy(), new TreatmentFeeRuleResolver(rules.proxy()), entitlements.proxy(), cancellations);
+                    allocations.proxy(), new TreatmentFeeRuleResolver(rules.proxy()), entitlements.proxy(), cancellations,
+                    new com.sabyeguyz.clinicv2.commission.CourseCommissionService(usages.proxy(), allocations.proxy(),
+                            courses.proxy(), new TreatmentFeeRuleResolver(rules.proxy())),
+                    new CourseUsagePrintService(new V2RepositoryStub<>(CourseUsagePrintRepository.class).proxy(),
+                            new V2RepositoryStub<>(CourseUsagePrintEventRepository.class).proxy(), usages.proxy()));
             var result = service.use(course, new PatientVisit(), patient, ownerTreats ? owner : substitute,
                     LocalDate.of(2026, 9, 1), 1L);
             Map<String, Object> resultMap = new LinkedHashMap<>();
@@ -276,13 +287,12 @@ public class V2WorkflowScenariosController {
                 var firstEntry = (CourseLedger) ledger.arguments("save").get(0)[0];
                 var firstAllocation = (CommissionAllocationLedger) allocations.arguments("save").get(0)[0];
                 var firstEntitlement = (CourseEntitlement) entitlements.arguments("save").get(0)[0];
-                resultMap.put("gross", result.getGrossCommissionAllocation());
+                resultMap.put("gross", result.getOwnerNetCommission().add(result.getSubstituteTreatmentFeeAmount()));
                 resultMap.put("fee", result.getSubstituteTreatmentFeeAmount());
                 resultMap.put("ownerNet", result.getOwnerNetCommission());
                 resultMap.put("remainingVisits", course.getRemainingVisits());
                 resultMap.put("visitsUsed", course.getVisitsUsed());
                 resultMap.put("usageStatus", result.getUsageStatus());
-                resultMap.put("printRequired", result.isPrintRequired());
                 resultMap.put("allocationType", firstAllocation.getEntryType());
                 resultMap.put("ledgerLinkedToUsage", firstEntry.getVisitUsage() == result);
                 resultMap.put("entitlementUsed", firstEntitlement.getUsedVisits());
@@ -298,16 +308,15 @@ public class V2WorkflowScenariosController {
             var cancellation = (TransactionCancellation) cancellationRepo.arguments("save").get(0)[0];
             resultMap.put("usageStatus", reversed.getUsageStatus());
             resultMap.put("allocationTypes", allocs.stream().map(a -> a.getEntryType().name()).toList());
-            resultMap.put("reversalGross", allocs.get(1).getGrossCommissionAllocation());
+            resultMap.put("reversalGross", allocs.get(1).getOwnerNetCommission().add(allocs.get(1).getTreatmentFeeAmount()));
             resultMap.put("reversalFee", allocs.get(1).getTreatmentFeeAmount());
             resultMap.put("reversalOwnerNet", allocs.get(1).getOwnerNetCommission());
-            resultMap.put("reversalLinked", allocs.get(1).getAdjustmentReference() == allocs.get(0));
+            resultMap.put("reversalLinked", allocs.get(1).getReversesAllocation() == allocs.get(0));
             resultMap.put("ledgerTypes", entries.stream().map(e -> e.getEntryType().name()).toList());
             resultMap.put("ledgerReversalLinked", entries.get(1).getReversesLedger() == entries.get(0));
             resultMap.put("reversalQty", entries.get(1).getQtyChange());
             resultMap.put("visitsUsed", course.getVisitsUsed());
             resultMap.put("remainingVisits", course.getRemainingVisits());
-            resultMap.put("grossAllocatedTotal", course.getGrossCommissionAllocatedTotal());
             resultMap.put("ownerNetTotal", course.getOwnerNetCommissionReleasedTotal());
             resultMap.put("feeTotal", course.getSubstituteTreatmentFeeTotal());
             resultMap.put("outstanding", course.getCommissionOutstanding());
@@ -321,7 +330,8 @@ public class V2WorkflowScenariosController {
     public Map<String, Object> print(@PathVariable String scenario) {
         var prints = new V2RepositoryStub<>(CourseUsagePrintRepository.class);
         var events = new V2RepositoryStub<>(CourseUsagePrintEventRepository.class);
-        var service = new CourseUsagePrintService(prints.proxy(), events.proxy());
+        var service = new CourseUsagePrintService(prints.proxy(), events.proxy(),
+                new V2RepositoryStub<>(CourseVisitUsageRepository.class).proxy());
         Course course = lockedCourse(); course.setCourseNo("RE00000010"); course.setCourseName("คอร์สทดสอบ");
         var usage = new CourseVisitUsage();
         usage.setCourse(course); usage.setVisitDate(LocalDate.of(2026, 9, 1).atStartOfDay());
@@ -347,10 +357,11 @@ public class V2WorkflowScenariosController {
         Course course = new Course(); setId(course, 1L);
         course.setCoursePrice(new BigDecimal("10000.00"));
         course.setTotalVisits(10); course.setRemainingVisits(10); course.setVisitsUsed(0);
-        course.setExpiryDate(LocalDate.of(2026, 12, 31)); course.setCourseStatus(CourseStatus.Active);
+        course.setExpiryDate(LocalDate.of(2099, 12, 31)); course.setCourseStatus(CourseStatus.Active);
+        course.setCommissionStatus(com.sabyeguyz.clinicv2.enums.CommissionStatus.Locked);
         course.setCommissionAllocationPerVisit(new BigDecimal("70.00"));
         course.setTotalCourseCommissionPool(new BigDecimal("700.00"));
-        course.setGrossCommissionAllocatedTotal(BigDecimal.ZERO);
+        course.setTreatmentFeeBaseAmount(new BigDecimal("10000.00"));
         course.setOwnerNetCommissionReleasedTotal(BigDecimal.ZERO);
         course.setSubstituteTreatmentFeeTotal(BigDecimal.ZERO);
         course.setCommissionOutstanding(new BigDecimal("700.00"));

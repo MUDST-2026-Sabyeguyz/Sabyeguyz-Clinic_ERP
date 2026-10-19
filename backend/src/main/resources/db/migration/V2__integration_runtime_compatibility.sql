@@ -24,3 +24,9 @@ RETURNS INTEGER LANGUAGE SQL AS $$
             last_running_at = CURRENT_TIMESTAMP
     RETURNING last_running_no;
 $$;
+
+-- Preserve the confirmed cash workflow alongside the latest named payment methods.
+ALTER TYPE method_name_enum ADD VALUE IF NOT EXISTS 'Cash';
+
+-- A receipt can be settled by multiple completed tenders (split payment).
+DROP INDEX uq_payment_transaction_completed_receipt;
