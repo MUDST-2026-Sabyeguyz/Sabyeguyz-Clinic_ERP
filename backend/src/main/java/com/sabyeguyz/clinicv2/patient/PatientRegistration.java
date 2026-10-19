@@ -15,7 +15,7 @@ import java.time.LocalDate;
 public record PatientRegistration(
         Branch branch,
         CustomerType customerType,
-        /** e.g. ด.ช., ด.ญ., นาย, นาง, นางสาว. */
+        /** Canonical นาย, นางสาว, นาง, เด็กชาย, เด็กหญิง; the HTTP contract also accepts English aliases. */
         String title,
         String patientFname,
         String patientLname,
@@ -32,6 +32,7 @@ public record PatientRegistration(
         MasterDataValue customerGroup,
         MasterDataValue referralChannel,
         MasterDataValue insuranceType,
-        MasterDataValue insuranceCompany
+        MasterDataValue insuranceCompany,
+        String middleName
 ) {
 }

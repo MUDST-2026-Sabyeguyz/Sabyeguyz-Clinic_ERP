@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinicv2.patient;
 
 import java.util.Optional;
+import java.time.Instant;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,6 +10,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface PatientRepository extends JpaRepository<Patient, Long> {
     Optional<Patient> findByPatientHn(String patientHn);
+    Optional<Patient> findByNationalId(String nationalId);
+
+    @Query("select count(p) from Patient p where p.registeredAt >= :from and p.registeredAt < :to "
+            + "and (:branchId is null or p.branch.id = :branchId)")
+    long countRegistrations(@Param("from") Instant from, @Param("to") Instant to, @Param("branchId") Long branchId);
 
     @Query("select p from Patient p where "
             + "(:query is null or :query = '' "

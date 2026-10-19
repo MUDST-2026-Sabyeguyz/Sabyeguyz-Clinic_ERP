@@ -67,6 +67,59 @@ public class ServiceCatalogService {
         return repository.save(service);
     }
 
+    @Transactional
+    public com.sabyeguyz.clinicv2.catalog.Service activate(Long id, Long actorId) {
+        com.sabyeguyz.clinicv2.catalog.Service service = find(id);
+        service.setServiceStatus(true);
+        service.setServiceUpdateAt(Instant.now());
+        service.setServiceUpdateBy(actorId);
+        return repository.save(service);
+    }
+
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
+
+    /**
+     * Turns a Single Visit into a Course or back. Only an item nothing refers to yet can change type: once it has been
+     * sold, booked or used, its type is part of that history.
+     */
+    @Transactional
+    public com.sabyeguyz.clinicv2.catalog.Service changeType(Long id, ServiceType type, Long actorId) {
+        com.sabyeguyz.clinicv2.catalog.Service service = find(id);
+        if (type != ServiceType.SingleVisit && type != ServiceType.Course) {
+            throw new IllegalArgumentException("ประเภทต้องเป็น Single Visit หรือ Course");
+        }
+        if (service.getServiceType() == type) return service;
+        @SuppressWarnings("unchecked")
+        List<Object[]> references = entityManager.createNativeQuery(
+                "SELECT kcu.table_name, kcu.column_name FROM information_schema.table_constraints tc "
+                        + "JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name "
+                        + "AND tc.table_schema = kcu.table_schema "
+                        + "JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name "
+                        + "AND ccu.table_schema = tc.table_schema "
+                        + "WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'service' "
+                        + "AND ccu.column_name = 'service_id' AND kcu.table_name <> 'service_group_member'")
+                .getResultList();
+        for (Object[] reference : references) {
+            Object used = entityManager.createNativeQuery("SELECT EXISTS (SELECT 1 FROM " + reference[0]
+                    + " WHERE " + reference[1] + " = :id)").setParameter("id", id).getSingleResult();
+            if (Boolean.TRUE.equals(used)) {
+                throw new IllegalStateException("รายการนี้ถูกใช้งานแล้ว (ขาย นัดหมาย หรือใช้สิทธิ์) จึงเปลี่ยนประเภทไม่ได้ ให้สร้างรายการใหม่");
+            }
+        }
+        service.setServiceType(type);
+        if (type == ServiceType.SingleVisit) {
+            service.setDefaultTotalVisits(null);
+            service.setDefaultBonusVisits(0);
+            service.setDefaultValidityDays(null);
+            service.setDefaultValidityValue(null);
+            service.setDefaultValidityUnit(null);
+        }
+        service.setServiceUpdateAt(Instant.now());
+        service.setServiceUpdateBy(actorId);
+        return repository.save(service);
+    }
+
     private com.sabyeguyz.clinicv2.catalog.Service find(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));

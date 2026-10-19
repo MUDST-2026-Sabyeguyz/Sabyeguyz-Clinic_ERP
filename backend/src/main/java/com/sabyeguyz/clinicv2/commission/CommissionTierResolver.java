@@ -1,12 +1,14 @@
 package com.sabyeguyz.clinicv2.commission;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Picks the Commission Tier whose [minimum, maximum] monthly-sales range
- * covers a given amount (Commission_System_Requirement_Dev §2).
+ * Picks the one enabled Commission Tier whose inclusive [minimum, maximum] range covers the monthly sales, compared
+ * at 2 decimals (50,000.00 is in one tier, 50,000.01 and 50,000.50 in the next).
  */
 @Service
 public class CommissionTierResolver {
@@ -18,11 +20,18 @@ public class CommissionTierResolver {
 
     @Transactional(readOnly = true)
     public CommissionTier resolve(CommissionScheme scheme, BigDecimal monthlySales) {
-        return tiers.findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder(scheme.getId()).stream()
-                .filter(tier -> monthlySales.compareTo(tier.getMinimumMonthlySales()) >= 0
+        BigDecimal sales = monthlySales.setScale(2, RoundingMode.HALF_UP);
+        List<CommissionTier> covering = tiers.findByCommissionSchemeIdOrderByTierOrder(scheme.getId()).stream()
+                .filter(tier -> sales.compareTo(tier.getMinimumMonthlySales()) >= 0
                         && (tier.getMaximumMonthlySales() == null
-                            || monthlySales.compareTo(tier.getMaximumMonthlySales()) <= 0))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("ไม่พบ Commission Tier ที่ครอบคลุมยอดขาย " + monthlySales));
+                            || sales.compareTo(tier.getMaximumMonthlySales()) <= 0))
+                .toList();
+        if (covering.isEmpty()) {
+            throw new IllegalStateException("ไม่พบ Commission Tier ที่ครอบคลุมยอดขาย " + sales);
+        }
+        if (covering.size() > 1) {
+            throw new IllegalStateException("พบ Commission Tier ที่ครอบคลุมยอดขาย " + sales + " มากกว่าหนึ่งรายการ");
+        }
+        return covering.get(0);
     }
 }

@@ -1,6 +1,9 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
-export type ApiErrorBody = { message?: string; fields?: Record<string, string> }
+export type ApiErrorBody = {
+  message?: string
+  fields?: Record<string, string>
+}
 
 export class ApiError extends Error {
   constructor(
@@ -141,14 +144,63 @@ export type Page<T> = {
 }
 export type Branch = {
   id: number
+  code: string
+  numericCode: string
   branchCode: string
   name: string
   address?: string
   phone?: string
   email?: string
   licenseNumber?: string
+  licenseNo?: string | null
   taxId?: string
+  bookingOpenTime?: string | null
+  bookingCloseTime?: string | null
+  defaultAppointmentMinutes?: number | null
   active: boolean
+}
+export type BranchRequest = {
+  branchCode: string
+  name: string
+  address?: string
+  phone?: string
+  email?: string
+  licenseNo?: string | null
+  bookingOpenTime?: string | null
+  bookingCloseTime?: string | null
+  defaultAppointmentMinutes?: number | null
+}
+type BackendBranch = {
+  id: number
+  branchCode: string
+  name: string
+  address?: string
+  phone?: string
+  email?: string | null
+  licenseNo?: string | null
+  bookingOpenTime?: string | null
+  bookingCloseTime?: string | null
+  defaultAppointmentMinutes?: number | null
+  active: boolean
+}
+
+function normalizeBranch(branch: BackendBranch): Branch {
+  return {
+    id: branch.id,
+    code: branch.branchCode,
+    numericCode: branch.branchCode,
+    branchCode: branch.branchCode,
+    name: branch.name,
+    address: branch.address,
+    phone: branch.phone,
+    email: branch.email ?? undefined,
+    licenseNumber: branch.licenseNo ?? undefined,
+    licenseNo: branch.licenseNo,
+    bookingOpenTime: branch.bookingOpenTime,
+    bookingCloseTime: branch.bookingCloseTime,
+    defaultAppointmentMinutes: branch.defaultAppointmentMinutes,
+    active: branch.active,
+  }
 }
 export type Staff = {
   id: number
@@ -175,28 +227,60 @@ export type Course = {
   sessions: number
   bonusSessions: number
   validityDays: number
+  validityValue?: number
+  validityUnit?: 'Day' | 'Month' | 'Year'
+  defaultDurationMinutes?: number | null
   active: boolean
 }
-export type Therapist = { id: number; code: string; fullName: string; branchCode: string }
-export type PaymentMethod = { id: number; code: string; name: string; active: boolean }
+export type Therapist = {
+  id: number
+  code: string
+  fullName: string
+  branchCode: string
+}
+export type PaymentMethod = {
+  id: number
+  code: string
+  name: string
+  active: boolean
+}
+export type PaymentStatusOption = {
+  code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID'
+  label: string
+  enabled: boolean
+}
 export type AppointmentStatus =
-  'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
+  'UNCONFIRMED' | 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
 export type Appointment = {
   id: number
   branchCode: string
-  patient: { id: number; hn: string; fullName: string }
+  patient: { id: number | null; hn: string | null; fullName: string | null } | null
   therapist: { id: number; fullName: string }
-  service: { id: number; name: string; durationMinutes: number }
+  service: { id: number | null; name: string | null; durationMinutes: number }
   startAt: string
   endAt: string
   status: AppointmentStatus
   note?: string
   cancelReason?: string
+  patientType?: 'CURRENT' | 'NEW'
+  contactName?: string | null
+  contactPhone?: string | null
 }
 export type AppointmentPage = Page<Appointment>
+export type AppointmentAvailability = {
+  date: string
+  openTime: string
+  closeTime: string
+  windowConfigured: boolean
+  durationMinutes: number | null
+  stepMinutes: number
+  slots: Array<{ time: string; available: boolean; reason: string | null }>
+  googleCalendar: 'NOT_CONNECTED' | 'CHECKED' | 'UNAVAILABLE'
+}
 export type CoursePurchase = {
   id: number
   patient: Patient
+  purchaser?: { id: number; hn: string; fullName: string }
   branchCode: string
   course: { id: number; code: string; name: string }
   price: number
@@ -234,7 +318,12 @@ export type SaleDetail = SaleReceipt & {
     quantity: number
     lineTotal: number
   }>
-  payments: Array<{ id: number; type: string; paymentMethodCode: string; amount: number }>
+  payments: Array<{
+    id: number
+    type: string
+    paymentMethodCode: string
+    amount: number
+  }>
 }
 export type CourseUsageTransaction = {
   id: number
@@ -309,21 +398,37 @@ export type TransferRecord = {
 
 export const authApi = {
   login: (identifier: string, password: string) =>
-    api.post<AuthResponse>('/api/auth/login', { username: identifier, password }),
+    api.post<AuthResponse>('/api/auth/login', {
+      username: identifier,
+      password,
+    }),
   register: (username: string, password: string, role: 'MANAGER' | 'THERAPIST', email?: string) =>
-    api.post<AuthResponse>('/api/auth/register', { username, email, password, role }),
+    api.post<AuthResponse>('/api/auth/register', {
+      username,
+      email,
+      password,
+      role,
+    }),
 }
 
 export const patientApi = {
   search: (query = '', page = 0, size = 20, branchCode = '', sort = 'nameAsc') =>
-    api.get<Page<Patient>>(
-      `/api/patients?${new URLSearchParams({ query, page: String(page), size: String(size), sort, ...(branchCode ? { branchCode } : {}) })}`,
-    ),
-  searchAll: async (query = '') => {
-    const first = await patientApi.search(query, 0, 100)
+    api.get<Page<Patient>>(`/api/patients?${new URLSearchParams({
+      query: /^hn[\s:#-]*/i.test(query.trim())
+        ? query.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '')
+        : /^\d[\d\s-]*$/.test(query.trim())
+          ? query.trim().replace(/\D/g, '')
+          : query,
+      page: String(page),
+      size: String(size),
+      sort,
+      ...(branchCode ? { branchCode } : {}),
+    })}`),
+  searchAll: async (query = '', branchCode = '') => {
+    const first = await patientApi.search(query, 0, 100, branchCode)
     const rest = await Promise.all(
       Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
-        patientApi.search(query, index + 1, 100),
+        patientApi.search(query, index + 1, 100, branchCode),
       ),
     )
     return [first, ...rest].flatMap((page) => page.items)
@@ -335,14 +440,26 @@ export const patientApi = {
 }
 
 export const branchApi = {
-  list: () => api.get<Branch[]>('/api/branches'),
-  get: (id: number) => api.get<Branch>(`/api/branches/${id}`),
-  create: (body: { branchCode: string; name: string; address: string; phone: string }) =>
-    api.post<Branch>('/api/branches', body),
-  update: (
-    id: number,
-    body: { branchCode: string; name: string; address: string; phone: string },
-  ) => api.put<Branch>(`/api/branches/${id}`, body),
+  list: () => api.get<BackendBranch[]>('/api/branches').then((items) => items.map(normalizeBranch)),
+  listActive: async () => (await branchApi.list()).filter((branch) => branch.active !== false),
+  get: (id: number) => api.get<BackendBranch>(`/api/branches/${id}`).then(normalizeBranch),
+  create: (body: BranchRequest | { code: string; numericCode: string; name: string }) =>
+    api
+      .post<BackendBranch>('/api/branches', {
+        ...body,
+        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
+        name: body.name,
+      })
+      .then(normalizeBranch),
+  update: (id: number, body: BranchRequest | { code: string; numericCode: string; name: string }) =>
+    api
+      .put<BackendBranch>(`/api/branches/${id}`, {
+        ...body,
+        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
+        name: body.name,
+      })
+      .then(normalizeBranch),
+  activate: (id: number) => api.patch<BackendBranch>(`/api/branches/${id}/activate`, {}),
   deactivate: (id: number) => api.delete(`/api/branches/${id}`),
 }
 
@@ -362,7 +479,13 @@ export const catalogApi = {
     >('/api/lookups/services'),
   lookupTherapists: (branchCode?: string) =>
     api.get<
-      Array<{ id: number; code: string; fullName: string; branchCode: string; active: boolean }>
+      Array<{
+        id: number
+        code: string
+        fullName: string
+        branchCode: string
+        active: boolean
+      }>
     >(
       `/api/lookups/therapists${branchCode ? `?branchCode=${encodeURIComponent(branchCode)}` : ''}`,
     ),
@@ -376,26 +499,33 @@ export type ManagedService = {
   price: number
   active: boolean
 }
+export type ManagedServiceRequest = Omit<ManagedService, 'id' | 'active' | 'defaultDurationMinutes'> & {
+  defaultDurationMinutes?: number | null
+}
 export const serviceManagementApi = {
   list: () => api.get<ManagedService[]>('/api/services'),
-  create: (body: Omit<ManagedService, 'id' | 'active'>) =>
+  create: (body: ManagedServiceRequest) =>
     api.post<ManagedService>('/api/services', body),
-  update: (id: number, body: Omit<ManagedService, 'id' | 'active'>) =>
+  update: (id: number, body: ManagedServiceRequest) =>
     api.put<ManagedService>(`/api/services/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
+  activate: (id: number) => api.patch<ManagedService>(`/api/services/${id}/activate`, {}),
+  changeType: (id: number, type: 'SingleVisit' | 'Course') =>
+    api.post<ManagedService>(`/api/services/${id}/type`, { type }),
 }
 
 export const appointmentApi = {
-  search: (
-    params: {
+  search: (params: {
       branchCode?: string
       date?: string
+      startDate?: string
+      endDate?: string
       therapistId?: number
       status?: AppointmentStatus
+      sortOrder?: 'newest' | 'oldest'
       page?: number
       size?: number
-    } = {},
-  ) => {
+  } = {}) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
       if (value !== undefined && value !== '') query.set(key, String(value))
@@ -403,21 +533,51 @@ export const appointmentApi = {
     return api.get<AppointmentPage>(`/api/appointments?${query}`)
   },
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
+  availability: (params: {
+    branchCode: string
+    therapistId: number
+    date: string
+    serviceId?: number
+    excludeAppointmentId?: number
+  }) => {
+    const query = new URLSearchParams({
+      branchCode: params.branchCode,
+      therapistId: String(params.therapistId),
+      date: params.date,
+      ...(params.serviceId ? { serviceId: String(params.serviceId) } : {}),
+      ...(params.excludeAppointmentId ? { excludeAppointmentId: String(params.excludeAppointmentId) } : {}),
+    })
+    return api.get<AppointmentAvailability>(`/api/appointments/availability?${query}`)
+  },
   create: (body: {
     branchCode: string
-    patientId: number
+    patientId?: number
     therapistId: number
-    serviceId: number
+    serviceId?: number
     startAt: string
     note?: string
+    patientType?: 'CURRENT' | 'NEW'
+    contactName?: string
+    contactPhone?: string
+    requestedServiceType?: 'SingleVisit' | 'Course'
   }) => api.post<Appointment>('/api/appointments', body),
+  confirm: (id: number) => api.post<Appointment>(`/api/appointments/${id}/confirm`, {}),
   checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}),
   startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}),
   noShow: (id: number) => api.post<Appointment>(`/api/appointments/${id}/no-show`, {}),
   complete: (id: number) => api.post<Appointment>(`/api/appointments/${id}/complete`, {}),
   cancel: (id: number, reason: string) =>
     api.post<Appointment>(`/api/appointments/${id}/cancel`, { reason }),
-  reschedule: (id: number, body: { startAt: string; therapistId?: number }) =>
+  reschedule: (
+    id: number,
+    body: {
+      startAt: string
+      therapistId?: number
+      serviceId?: number
+      branchCode?: string
+      note?: string | null
+    },
+  ) =>
     api.patch<Appointment>(`/api/appointments/${id}`, body),
 }
 
@@ -454,12 +614,19 @@ export const courseApi = {
         commissionAllocationPerVisit?: number
       }
       movements: unknown[]
-      allocations: Array<{ visitDate: string; gross: number; fee: number; ownerNet: number }>
+      allocations: Array<{
+        visitDate: string
+        gross: number
+        fee: number
+        ownerNet: number
+      }>
     }>(`/api/course-purchases/${id}`),
   use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) =>
     api.post<CoursePurchase>('/api/course-usages', body),
   reverse: (movementId: number, reason: string) =>
-    api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, { reason }),
+    api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, {
+      reason,
+    }),
   cancel: (id: number, reason: string) =>
     api.post<CoursePurchase>(`/api/course-purchases/${id}/cancel`, { reason }),
   transfer: (body: {
@@ -474,7 +641,12 @@ export const courseApi = {
 
 export const salesApi = {
   list: (
-    params: { patientId?: number; branchCode?: string; page?: number; size?: number } = {},
+    params: {
+      patientId?: number
+      branchCode?: string
+      page?: number
+      size?: number
+    } = {},
   ) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
@@ -498,6 +670,12 @@ export const paymentMethodApi = {
   activate: (id: number) => api.patch<PaymentMethod>(`/api/payment-methods/${id}/activate`, {}),
 }
 
+export const paymentStatusApi = {
+  list: () => api.get<PaymentStatusOption[]>('/api/payment-statuses'),
+  setEnabled: (code: PaymentStatusOption['code'], enabled: boolean) =>
+    api.patch<PaymentStatusOption>(`/api/payment-statuses/${code}`, { enabled }),
+}
+
 export const staffApi = {
   list: () => api.get<Staff[]>('/api/staff'),
   get: (id: number) => api.get<Staff>(`/api/staff/${id}`),
@@ -505,7 +683,12 @@ export const staffApi = {
     api.post<Staff>('/api/staff', body),
   update: (
     id: number,
-    body: { userId: number; employeeCode: string; fullName: string; phone?: string },
+    body: {
+      userId: number
+      employeeCode: string
+      fullName: string
+      phone?: string
+    },
   ) => api.put<Staff>(`/api/staff/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/staff/${id}`),
 }
@@ -574,6 +757,163 @@ export const reportApi = {
     ),
 }
 
+export type CommissionFormula = {
+  asOf: string
+  scheme: {
+    id: number
+    name: string
+    version: number
+    effectiveFrom: string
+    effectiveTo: string | null
+  } | null
+  tiers: Array<{
+    id: number
+    order: number
+    minimum: number
+    maximum: number | null
+    rate: number
+    active: boolean
+  }>
+  treatmentFee: {
+    id: number
+    feeType: 'Fixed' | 'Percentage'
+    feeValue: number
+    effectiveFrom: string
+    effectiveTo: string | null
+    enabled: boolean
+    used: boolean
+  } | null
+}
+export type TherapistLine = {
+  kind: 'COMMISSION' | 'FEE'
+  id: number
+  date: string
+  patientName: string
+  patientHn: string | null
+  item: string
+  role: string
+  amount: number | null
+  reversal: boolean
+  pending: boolean
+  paymentStatus: 'OPEN' | 'CLOSED' | 'PAID' | null
+  courseNo: string | null
+  totalVisits: number | null
+  grossAmount: number | null
+  lineDiscount: number | null
+  base: number | null
+  rate: number | null
+  tier: string | null
+  pool: number | null
+  saleNo: string | null
+  saleDate: string | null
+  saleType: string | null
+  feeType: 'Fixed' | 'Percentage' | null
+  feeValue: number | null
+  feeBase: number | null
+  ownerName: string | null
+  treatingName: string | null
+  visitNo: string | null
+  singleVisit: boolean
+}
+export type TherapistLines = {
+  month: string
+  courseCommission: number | null
+  singleVisitFee: number
+  substituteFee: number
+  pendingSessions: number
+  lines: TherapistLine[]
+}
+export type TherapistAdjustment = {
+  id: number
+  originalMonth: string
+  appliedMonth: string
+  amount: number
+  reason: string
+  status: string
+  processed: number
+  remaining: number
+  reference: string | null
+  approvedBy: string | null
+  applications: Array<{
+    id: number
+    month: string | null
+    amount: number
+    status: string
+    approvedBy: string | null
+    approvalReference: string | null
+  }>
+}
+export type ManagerAdjustment = {
+  id: number
+  staffId: number
+  staffName: string
+  originalMonth: string
+  appliedMonth: string
+  amount: number
+  reason: string
+  status: string
+  processed: number
+  remaining: number
+  allocationId: number | null
+  singleVisitFeeId: number | null
+  courseId: number | null
+  visitId: number | null
+  saleTransactionId: number | null
+  applications: Array<{
+    id: number
+    adjustmentId: number
+    amount: number
+    status: string
+    approved: boolean
+    approvalReference: string | null
+  }>
+}
+export type StaffPayment = {
+  id: number
+  staffId: number
+  staffName: string
+  month: string
+  status: 'OPEN' | 'CLOSED' | 'PAID'
+  courseCommission: number | null
+  singleVisitFee: number | null
+  substituteFee: number | null
+  adjustment: number | null
+  net: number | null
+  paidAt: string | null
+  paidDate?: string | null
+  paymentReference?: string | null
+  closingId: number | null
+  pendingSessions: number
+  applications: Array<{
+    id: number
+    adjustmentId: number
+    amount: number
+    status: string
+    approved: boolean
+    approvalReference: string | null
+  }>
+}
+
+export type TreatmentFeeRule = {
+  id: number
+  name?: string | null
+  feeType: 'Fixed' | 'Percentage'
+  feeValue: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  enabled: boolean
+  used: boolean
+  lastEditedBy?: string | null
+  lastEditedAt?: string | null
+}
+export type TreatmentFeeInput = {
+  name?: string
+  feeType: 'Fixed' | 'Percentage'
+  feeValue: number
+  effectiveFrom: string
+  effectiveTo?: string | null
+}
+
 export const commissionApi = {
   schemes: () => api.get('/api/commission/schemes'),
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
@@ -581,6 +921,7 @@ export const commissionApi = {
   updateScheme: (id: number, body: unknown) => api.put(`/api/commission/schemes/${id}`, body),
   activateScheme: (id: number) => api.patch(`/api/commission/schemes/${id}/activate`, {}),
   deactivateScheme: (id: number) => api.delete(`/api/commission/schemes/${id}`),
+  formula: () => api.get<CommissionFormula>('/api/commission/formula'),
   report: (from: string, to: string) =>
     api.get<
       Array<{
@@ -631,6 +972,35 @@ export const commissionApi = {
   closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
   closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
+  createTreatmentFee: (body: TreatmentFeeInput) =>
+    api.post<TreatmentFeeRule>('/api/commission/treatment-fees', body),
+  updateTreatmentFee: (id: number, body: Partial<TreatmentFeeInput>) =>
+    api.put<TreatmentFeeRule>(`/api/commission/treatment-fees/${id}`, body),
+  setTreatmentFeeEnabled: (id: number, enabled: boolean) =>
+    api.patch<TreatmentFeeRule>(`/api/commission/treatment-fees/${id}/${enabled ? 'enable' : 'disable'}`, {}),
+  backfillSingleVisitFees: (from: string, to: string) =>
+    api.post<{ recorded: number }>(
+      `/api/commission/single-visit-fees/backfill?${new URLSearchParams({ from, to })}`,
+      {},
+    ),
+  myPayments: () => api.get<StaffPayment[]>('/api/commission/my-payments'),
+  myLines: (month: string) =>
+    api.get<TherapistLines>(`/api/commission/my-lines?month=${encodeURIComponent(month)}`),
+  myAdjustments: () => api.get<TherapistAdjustment[]>('/api/commission/my-adjustments'),
+  adjustments: () => api.get<ManagerAdjustment[]>('/api/commission/adjustments'),
+  adjustment: (id: number) => api.get<ManagerAdjustment>(`/api/commission/adjustments/${id}`),
+  createAdjustment: (body: {
+    staffId: number
+    originalMonth: string
+    appliedMonth: string
+    amount: number
+    reason: string
+    allocationId?: number
+    singleVisitFeeId?: number
+    courseId?: number
+    visitId?: number
+    saleTransactionId?: number
+  }) => api.post<ManagerAdjustment>('/api/commission/adjustments', body),
 }
 
 export type ClinicResource = {
@@ -665,6 +1035,70 @@ export const masterDataApi = {
   activate: (id: number) => api.patch<MasterData>(`/api/master-data/${id}/activate`, {}),
 }
 
+export type AuditEntry = {
+  id: number
+  tableName: string
+  recordId: string
+  action: 'INSERT' | 'UPDATE' | 'DELETE'
+  oldValue: string | null
+  newValue: string | null
+  changedBy: number | null
+  changedAt: string
+  changedByName: string | null
+}
+export type AuditPage = {
+  items: AuditEntry[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+export type AuditFilter = {
+  tableName?: string
+  recordId?: string
+  action?: string
+  changedBy?: number
+  from?: string
+  to?: string
+}
 export const auditApi = {
-  list: (page = 0, size = 50) => api.get(`/api/audit-logs?page=${page}&size=${size}`),
+  list: (page = 0, size = 50, filter: AuditFilter = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) })
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return api.get<AuditPage>(`/api/audit-logs?${params}`)
+  },
+  tables: () => api.get<string[]>('/api/audit-logs/tables'),
+}
+
+export type CalendarBranchStatus = {
+  branchCode: string
+  branchName: string
+  googleCalendarId: string | null
+  waiting: number
+  failed: number
+}
+export type CalendarSyncResult = {
+  pushed: number
+  removed: number
+  failed: number
+  movedFromGoogle: number
+  cancelledFromGoogle: number
+  revertedInGoogle: number
+}
+export type CalendarStatus = {
+  enabled: boolean
+  defaultDurationMinutes: number
+  lastRunAt: string | null
+  lastResult: CalendarSyncResult | null
+  branches: CalendarBranchStatus[]
+}
+export const calendarApi = {
+  status: () => api.get<CalendarStatus>('/api/calendar/status'),
+  setBranchCalendar: (branchCode: string, googleCalendarId: string) =>
+    api.put<CalendarBranchStatus>(`/api/calendar/branches/${encodeURIComponent(branchCode)}`, {
+      googleCalendarId,
+    }),
+  syncNow: () => api.post<CalendarSyncResult>('/api/calendar/sync', {}),
 }

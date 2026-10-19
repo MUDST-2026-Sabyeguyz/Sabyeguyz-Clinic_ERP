@@ -21,4 +21,8 @@ public interface CourseLedgerRepository extends JpaRepository<CourseLedger, Long
     List<CourseLedger> findByVisitUsageId(Long visitUsageId);
 
     List<CourseLedger> findByTransferId(Long transferId);
+
+    boolean existsByCourseRefundItemId(Long courseRefundItemId);
+
+    boolean existsByCancellationIdAndCourseId(Long cancellationId, Long courseId);
 }

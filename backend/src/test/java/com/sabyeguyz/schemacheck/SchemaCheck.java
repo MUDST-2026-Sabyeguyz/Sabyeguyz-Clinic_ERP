@@ -43,7 +43,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * Checks the clinicv2 entities against a database built from db/migration V1 and V2 via the production Flyway runtime.
+ * Checks the clinicv2 entities against a database built from production Flyway migrations.
  *
  * <p>Step 1 lists every column whose database type Hibernate would reject (so one run shows all
  * problems, not just the first). Step 2 boots the whole clinicv2 bean graph over that database with
@@ -162,9 +162,22 @@ public class SchemaCheck {
 
     @Configuration
     @EnableJpaRepositories(basePackages = ENTITY_PACKAGE)
-    @ComponentScan(ENTITY_PACKAGE)
+    @ComponentScan(basePackages = ENTITY_PACKAGE, excludeFilters = {
+            @ComponentScan.Filter(type = org.springframework.context.annotation.FilterType.ANNOTATION, classes = Configuration.class),
+            @ComponentScan.Filter(type = org.springframework.context.annotation.FilterType.REGEX, pattern = "com\\.sabyeguyz\\.clinicv2\\.cypress\\..*")
+    })
     static class WiringConfig {
         private static final byte[] SECRET = "schema-check-secret-schema-check-secret".getBytes(StandardCharsets.UTF_8);
+
+        @Bean
+        com.fasterxml.jackson.databind.ObjectMapper objectMapper() {
+            return new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        }
+
+        @Bean
+        com.sabyeguyz.clinicv2.calendar.CalendarProperties calendarProperties() {
+            return new com.sabyeguyz.clinicv2.calendar.CalendarProperties();
+        }
 
         @Bean
         DataSource dataSource() {

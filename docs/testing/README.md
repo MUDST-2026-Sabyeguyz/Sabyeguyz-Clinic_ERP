@@ -89,3 +89,7 @@ E2E ต้องตรวจอย่างน้อย Success Case, Validation
 - เมื่อมี API Contract ที่ BA/Backend ยืนยันแล้ว ให้เพิ่ม Contract Test ก่อนเชื่อม Frontend กับ Backend
 
 รายละเอียดการรัน การแยกฐานข้อมูล และตารางเทสต์ที่ย้าย: [Backend Cypress API tests](../../backend/cypress/README.md)
+
+## Latest integration trial
+
+หลักฐาน merge dev-backed ล่าสุดก่อน feat/database และการตรวจ v2 runtime/legacy import ดู [Latest Integration Trial Merge](2026-10-13-Latest-Integration-Trial-Merge.md)

@@ -1,0 +1,13 @@
+{
+  "status": "MIGRATED_API_SMOKE_OK",
+  "preSmokePatientCount": 164,
+  "sourcePatients": 163,
+  "oldAppointments": 60,
+  "oldCourseRemaining": 7,
+  "historicalAssessmentReadable": true,
+  "patientCreatedThisRun": false,
+  "newPatientId": 164,
+  "newHn": "2601100161",
+  "receiptNo": "RE26100016",
+  "courseAndPaymentSameReceipt": true
+}
