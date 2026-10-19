@@ -87,7 +87,7 @@ try {
     Run-Kube rollout status statefulset/postgres --timeout=180s
     Run-Kube rollout status deployment/backend --timeout=360s
     Run-Kube rollout status deployment/frontend --timeout=180s
-    Run-Kube get pods,services,pvc -o wide
+    Run-Kube get 'pods,services,pvc' -o wide
     Write-Host "DEPLOYED image tag: $ImageTag"
     Write-Host "Open the demo: kubectl --context docker-desktop -n $Namespace port-forward service/frontend 38001:80"
 } catch {
