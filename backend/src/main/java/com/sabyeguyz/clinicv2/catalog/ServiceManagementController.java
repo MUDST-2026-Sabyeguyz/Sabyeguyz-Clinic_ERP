@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.catalog;
 
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.enums.ServiceType;
 import jakarta.validation.Valid;
@@ -16,7 +18,8 @@ import org.springframework.web.bind.annotation.*;
  * templates go through {@link CourseTemplateController} (/api/courses)
  * even though both are the same v2 Service entity underneath.
  */
-@org.springframework.transaction.annotation.Transactional
+@Transactional
+@PreAuthorize("hasRole('MANAGER')")
 @RestController
 @RequestMapping("/api/services")
 public class ServiceManagementController {
@@ -30,7 +33,8 @@ public class ServiceManagementController {
         this.actor = actor;
     }
 
-    public record Request(@NotBlank String code, @NotBlank String name, int defaultDurationMinutes,
+    /** defaultDurationMinutes is optional (5-480); empty = the appointment uses the branch default. */
+    public record Request(@NotBlank String code, @NotBlank String name, Integer defaultDurationMinutes,
                            @NotNull BigDecimal price) {}
 
     public record Response(Long id, String code, String name, int defaultDurationMinutes, BigDecimal price,
@@ -44,31 +48,55 @@ public class ServiceManagementController {
     }
 
     @PostMapping
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
     public Response create(@Valid @RequestBody Request request) {
         Service created = service.create(request.code(), request.name(), ServiceType.SingleVisit, request.price(),
                 null, null, null, actor.currentId());
-        return toResponse(created);
+        created.setDefaultAppointmentMinutes(validMinutes(request.defaultDurationMinutes()));
+        return toResponse(repository.save(created));
     }
 
     @PutMapping("/{id}")
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Service existing = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         existing.setServiceName(request.name());
         existing.setServicePrice(request.price());
+        existing.setDefaultAppointmentMinutes(validMinutes(request.defaultDurationMinutes()));
         return toResponse(repository.save(existing));
     }
 
     @DeleteMapping("/{id}")
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deactivate(@PathVariable Long id) {
         service.deactivate(id, actor.currentId());
     }
 
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/activate")
+    public Response activate(@PathVariable Long id) {
+        return toResponse(service.activate(id, actor.currentId()));
+    }
+
+    public record TypeRequest(@NotBlank String type) {}
+
+    /** Changes the item between Single Visit and Course; refused once it has been used. */
+    @org.springframework.web.bind.annotation.PostMapping("/{id}/type")
+    public Response changeType(@PathVariable Long id, @Valid @RequestBody TypeRequest request) {
+        ServiceType type = "Course".equalsIgnoreCase(request.type()) ? ServiceType.Course
+                : "SingleVisit".equalsIgnoreCase(request.type().replace(" ", "")) ? ServiceType.SingleVisit : null;
+        return toResponse(service.changeType(id, type, actor.currentId()));
+    }
+
+    private static Integer validMinutes(Integer minutes) {
+        if (minutes == null || minutes == 0) return null; // 0 = none, as a response shows it
+        if (minutes < 5 || minutes > 480) {
+            throw new IllegalArgumentException("ระยะเวลานัดต้องอยู่ระหว่าง 5 ถึง 480 นาที");
+        }
+        return minutes;
+    }
+
     private static Response toResponse(Service s) {
-        return new Response(s.getId(), s.getServiceCode(), s.getServiceName(), 0, s.getServicePrice(), s.isServiceStatus());
+        return new Response(s.getId(), s.getServiceCode(), s.getServiceName(),
+                s.getDefaultAppointmentMinutes() == null ? 0 : s.getDefaultAppointmentMinutes(), s.getServicePrice(),
+                s.isServiceStatus());
     }
 }

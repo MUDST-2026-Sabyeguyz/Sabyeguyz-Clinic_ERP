@@ -1,7 +1,6 @@
 package com.sabyeguyz.clinicv2.staff;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.enums.CommissionAfterTerminationPolicy;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -11,9 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Staff/Physiotherapist management (Clinic ERP Workflow Brief §2).
- * Termination policy follows Commission_System_Requirement_Dev §21: staff
- * keep releasing outstanding commission from courses sold before they left
- * unless the branch's policy is FORFEIT.
+ * Termination (Data Dictionary, Staff.termination_date): after the termination date the staff member no longer earns
+ * Owner commission and substitutes get the treatment fee; there is no per-person policy any more.
  */
 @Service
 public class StaffService {
@@ -72,29 +70,28 @@ public class StaffService {
         return repository.save(staff);
     }
 
-    /**
-     * Marks the staff as terminated. commissionAfterTerminationPolicy decides whether
-     * their outstanding commission pool keeps releasing (CONTINUE_UNTIL_COMPLETE) or is
-     * cut off (FORFEIT) — see Commission_System_Requirement_Dev §21.
-     */
+    /** Switches a staff member off without a termination record (no commission policy involved). */
     @Transactional
-    public Staff terminate(Long id, LocalDate terminationDate, CommissionAfterTerminationPolicy policy, Long actorId) {
+    public Staff deactivate(Long id, Long actorId) {
+        Staff staff = find(id);
+        staff.setStaffStatus(false);
+        staff.setStaffUpdateAt(Instant.now());
+        staff.setStaffUpdateBy(actorId);
+        return repository.save(staff);
+    }
+
+    /** Marks the staff as terminated on the given date (Inactive from then on). */
+    @Transactional
+    public Staff terminate(Long id, LocalDate terminationDate, Long actorId) {
         Staff staff = find(id);
         if (terminationDate == null) {
             throw new IllegalArgumentException("ต้องระบุวันที่ลาออก");
         }
-        if (policy == null) {
-            throw new IllegalArgumentException("ต้องระบุ commissionAfterTerminationPolicy");
-        }
-        if (staff.getTerminationPolicyLockedAt() != null && staff.getCommissionAfterTerminationPolicy() != policy) {
-            throw new IllegalArgumentException("นโยบายคอมมิชชันหลังออกจากงานถูกล็อกแล้ว ไม่สามารถเปลี่ยนได้");
+        if (staff.getHireDate() != null && terminationDate.isBefore(staff.getHireDate())) {
+            throw new IllegalArgumentException("วันที่ลาออกต้องไม่ก่อนวันที่เริ่มงาน");
         }
         staff.setStaffStatus(false);
         staff.setTerminationDate(terminationDate);
-        staff.setCommissionAfterTerminationPolicy(policy);
-        if (staff.getTerminationPolicyLockedAt() == null) {
-            staff.setTerminationPolicyLockedAt(Instant.now());
-        }
         staff.setStaffUpdateAt(Instant.now());
         staff.setStaffUpdateBy(actorId);
         return repository.save(staff);

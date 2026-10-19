@@ -6,6 +6,17 @@ import java.time.Instant;
 @Entity
 @Table(name = "payment_method")
 public class PaymentMethod {
+    public static String canonicalName(String value) {
+        if (value == null) throw new IllegalArgumentException("ต้องระบุช่องทางชำระเงิน");
+        return switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "cash" -> "Cash";
+            case "creditcard", "credit card" -> "CreditCard";
+            case "promptpay", "qr" -> "PromptPay";
+            case "banktransfer", "transfer" -> "BankTransfer";
+            default -> throw new IllegalArgumentException("ช่องทางชำระเงินต้องเป็น Cash, CreditCard, PromptPay หรือ BankTransfer");
+        };
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "payment_method_id")

@@ -1,21 +1,25 @@
 package com.sabyeguyz.clinicv2.catalog;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.enums.ServiceType;
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.web.bind.annotation.*;
 
 /** Matches frontend/src/api/client.ts's catalogApi + lookups (read-only). */
-@org.springframework.transaction.annotation.Transactional
+@Transactional
 @RestController
 public class CatalogController {
     private final ServiceRepository services;
     private final StaffRepository staff;
+    private final AppUserRepository users;
 
-    public CatalogController(ServiceRepository services, StaffRepository staff) {
+    public CatalogController(ServiceRepository services, StaffRepository staff, AppUserRepository users) {
         this.services = services;
         this.staff = staff;
+        this.users = users;
     }
 
     public record CourseOption(Long id, String code, String name, BigDecimal price, int sessions,
@@ -45,8 +49,12 @@ public class CatalogController {
 
     @GetMapping("/api/catalog/therapists")
     public List<TherapistOption> therapists() {
+        java.util.Set<Long> closed = users.closedStaffIds();
         return staff.findAll().stream()
+                .filter(s -> !closed.contains(s.getId()))
                 .filter(s -> s.isStaffStatus())
+                // the staff of a closed branch are not offered either
+                .filter(s -> s.getBranch() == null || s.getBranch().isBranchStatus())
                 .map(s -> new TherapistOption(s.getId(), s.getStaffCode(), s.getStaffFname() + " " + s.getStaffLname(),
                         s.getBranch() == null ? null : s.getBranch().getBranchCode()))
                 .toList();
@@ -62,11 +70,14 @@ public class CatalogController {
 
     @GetMapping("/api/lookups/therapists")
     public List<LookupTherapist> lookupTherapists(@RequestParam(required = false) String branchCode) {
+        java.util.Set<Long> closed = users.closedStaffIds();
         return staff.findAll().stream()
                 .filter(s -> branchCode == null || branchCode.isBlank()
                         || (s.getBranch() != null && branchCode.equalsIgnoreCase(s.getBranch().getBranchCode())))
                 .map(s -> new LookupTherapist(s.getId(), s.getStaffCode(), s.getStaffFname() + " " + s.getStaffLname(),
-                        s.getBranch() == null ? null : s.getBranch().getBranchCode(), s.isStaffStatus()))
+                        s.getBranch() == null ? null : s.getBranch().getBranchCode(),
+                        s.isStaffStatus() && !closed.contains(s.getId())
+                                && (s.getBranch() == null || s.getBranch().isBranchStatus())))
                 .toList();
     }
 }

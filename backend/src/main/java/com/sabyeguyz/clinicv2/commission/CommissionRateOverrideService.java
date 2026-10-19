@@ -17,10 +17,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class CommissionRateOverrideService {
     private final CommissionRateOverrideAuditRepository audits;
     private final CourseRepository courses;
+    private final MonthlyCommissionClosingRepository closings;
+    private final CourseCommissionService courseCommission;
 
-    public CommissionRateOverrideService(CommissionRateOverrideAuditRepository audits, CourseRepository courses) {
+    public CommissionRateOverrideService(CommissionRateOverrideAuditRepository audits, CourseRepository courses,
+                                          MonthlyCommissionClosingRepository closings,
+                                          CourseCommissionService courseCommission) {
         this.audits = audits;
         this.courses = courses;
+        this.closings = closings;
+        this.courseCommission = courseCommission;
     }
 
     @Transactional
@@ -31,6 +37,11 @@ public class CommissionRateOverrideService {
                 "อัตราค่าคอมมิชชั่นต้องอยู่ระหว่าง 0 ถึง 1");
         require(reason != null && !reason.isBlank(), "ต้องระบุเหตุผลของการแก้ไข");
         require(course.getLockedCommissionRate() != null, "คอร์สนี้ยังไม่ถูก Lock จึงไม่ต้อง Override");
+        boolean finalized = closings.findByClosingMonthAndStaffId(course.getSaleMonth(), course.getSellerStaff().getId())
+                .map(closing -> closing.getClosingStatus() == com.sabyeguyz.clinicv2.enums.ClosingStatus.Finalized).orElse(false);
+        if (finalized) {
+            throw new IllegalStateException("เดือนขายของคอร์สนี้ Finalize แล้ว ห้ามเปลี่ยนอัตรา ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+        }
 
         BigDecimal oldRate = course.getLockedCommissionRate();
 
@@ -45,11 +56,13 @@ public class CommissionRateOverrideService {
         CommissionRateOverrideAudit saved = audits.save(audit);
 
         course.setLockedCommissionRate(newRate);
-        BigDecimal pool = course.getCoursePrice().multiply(newRate);
+        BigDecimal pool = course.getCoursePrice().multiply(newRate).setScale(2, java.math.RoundingMode.HALF_UP);
         course.setTotalCourseCommissionPool(pool);
-        course.setCommissionAllocationPerVisit(
-                pool.divide(BigDecimal.valueOf(course.getTotalVisits()), 2, java.math.RoundingMode.HALF_UP));
-        course.setCommissionOutstanding(pool.subtract(course.getGrossCommissionAllocatedTotal()));
+        course.setCommissionAllocationPerVisit(CommissionAllocationCalculator.nominal(pool, course.getTotalVisits()));
+        courses.save(course);
+        // sessions already allocated at the old rate are reversed and allocated again at the new one (before payment)
+        courseCommission.recalculate(course, "แก้อัตราคอมมิชชั่นของคอร์ส: " + reason.trim(), actorId);
+        courseCommission.refreshTotals(course);
         courses.save(course);
 
         return saved;

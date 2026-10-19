@@ -1,6 +1,9 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import java.math.BigDecimal;
@@ -17,8 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Receipt numbers use REYYMMNNNN, allocated atomically per branch/month from receipt_sequence.</p>
  *
- * <p>Tax policy is still to be confirmed with the business, so no tax is
- * charged: taxable_amount is the amount after the bill discount, tax_amount is
+ * <p>R32 confirms zero tax: taxable_amount is the amount after the bill discount, tax_amount is
  * zero and net_amount equals taxable_amount.</p>
  */
 @Service
@@ -27,8 +29,11 @@ public class ReceiptService {
 
     private final ReceiptRepository repository;
 
-    public ReceiptService(ReceiptRepository repository) {
+    private final CourseRepository courses;
+
+    public ReceiptService(ReceiptRepository repository, CourseRepository courses) {
         this.repository = repository;
+        this.courses = courses;
     }
 
     @Transactional(readOnly = true)
@@ -63,7 +68,7 @@ public class ReceiptService {
         receipt.setReceiptNo(no);
         receipt.setPatient(patient);
         receipt.setBranch(branch);
-        receipt.setSaleDate(saleDate == null ? LocalDateTime.now() : saleDate.atStartOfDay());
+        receipt.setSaleDate(saleDate == null ? ClinicTime.now() : saleDate.atStartOfDay());
         receipt.setReceiptCreateAt(Instant.now());
         receipt.setReceiptCreateBy(actorId);
         return repository.save(receipt);
@@ -88,6 +93,10 @@ public class ReceiptService {
         BigDecimal subtotal = lines.stream().map(SalesTransaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
         BigDecimal billAmount = bill.amountOff(subtotal);
+        if (billAmount.signum() > 0 && lines.stream().anyMatch(line ->
+                line.getLineDiscountAmount() != null && line.getLineDiscountAmount().signum() > 0)) {
+            throw new IllegalArgumentException("ไม่สามารถใช้ส่วนลดรายการร่วมกับส่วนลดทั้งบิลได้");
+        }
 
         BigDecimal remaining = billAmount;
         for (int i = 0; i < lines.size(); i++) {
@@ -97,6 +106,13 @@ public class ReceiptService {
                     : billAmount.multiply(line.getAmount()).divide(subtotal, 2, RoundingMode.HALF_UP);
             line.setAllocatedBillDiscountAmount(share);
             remaining = remaining.subtract(share);
+            if (line.getTransactionType() == TransactionType.CoursePurchase && line.getId() != null) {
+                // The substitute-fee base of a course is the net amount paid: the line amount after the bill discount.
+                courses.findBySaleTransactionId(line.getId()).ifPresent(course -> {
+                    course.setTreatmentFeeBaseAmount(line.getAmount().subtract(share));
+                    courses.save(course);
+                });
+            }
         }
 
         BigDecimal taxable = subtotal.subtract(billAmount);
