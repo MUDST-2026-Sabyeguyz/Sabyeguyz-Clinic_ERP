@@ -44,11 +44,13 @@ public class TreatmentFeeRuleService {
     @Transactional
     public TreatmentFeeRule create(FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
                                     Permission permission, Long actorId) {
+        rules.lockVersionAllocation();
         validate(feeType, feeValue, effectiveFrom, effectiveTo);
         requireNoOtherPending(effectiveFrom);
         retireOverlapping(null, effectiveFrom, effectiveTo, actorId);
 
         TreatmentFeeRule rule = new TreatmentFeeRule();
+        rule.setRuleVersion(Math.addExact(rules.findMaxRuleVersion(), 1));
         rule.setPermission(permission);
         rule.setFeeType(feeType);
         rule.setFeeValue(feeValue);
