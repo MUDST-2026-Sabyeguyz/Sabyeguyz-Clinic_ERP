@@ -276,6 +276,21 @@ export type Appointment = {
   contactName?: string | null
   contactPhone?: string | null
 }
+export type AppointmentProgress = {
+  appointmentId: number
+  registered: boolean
+  patientId: number | null
+  paymentStatus: 'REVIEW_REQUIRED' | 'NOT_STARTED' | 'UNPAID' | 'PARTIAL' | 'PAID' | 'REVERSED'
+  saleId: number | null
+  receiptNo: string | null
+  paid: number
+  outstanding: number
+  courseStatus: 'NOT_STARTED' | 'USED' | 'REVERSED'
+  courseId: number | null
+  includesCourse: boolean
+  canManage: boolean
+  canReview: boolean
+}
 export type AppointmentPage = Page<Appointment>
 export type AppointmentAvailability = {
   date: string
@@ -356,6 +371,9 @@ export type DashboardResponse = {
   assessmentRevenue: number
   receiptsIssued: number
   receiptsVoided: number
+  salesTotal: number
+  cashReceived: number
+  courseRenewals: number
 }
 export type AppointmentReport = {
   byStatus: Array<{ status: string; appointments: number }>
@@ -532,6 +550,11 @@ export const serviceManagementApi = {
 }
 
 export const appointmentApi = {
+  documentCandidates: (id: number) => api.get<{ receipts: Array<{id:number;label:string}>; usages: Array<{id:number;label:string}> }>(`/api/appointments/${id}/document-candidates`),
+  linkDocuments: (id: number, receiptId: number | null, usageId: number | null, reason: string) => api.post<AppointmentProgress>(`/api/appointments/${id}/link-documents`, { receiptId, usageId, reason }),
+  verifyNoDocuments: (id: number, reason: string) => api.post<AppointmentProgress>(`/api/appointments/${id}/verify-no-documents`, { reason }),
+  progress: (id: number) => api.get<AppointmentProgress>(`/api/appointments/${id}/progress`),
+  settle: (id: number, amount: number, paymentMethodCode: string) => api.post<AppointmentProgress>(`/api/appointments/${id}/settle`, { amount, paymentMethodCode }),
   search: (
     params: {
       branchCode?: string
@@ -552,6 +575,8 @@ export const appointmentApi = {
     return api.get<AppointmentPage>(`/api/appointments?${query}`)
   },
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
+  linkPatient: (id: number, patientId: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/link-patient`, { patientId }),
   availability: (params: {
     branchCode: string
     therapistId: number
