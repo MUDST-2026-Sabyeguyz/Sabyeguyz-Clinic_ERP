@@ -56,9 +56,10 @@ public class TreatmentFeeRuleService {
         rule.setFeeValue(feeValue);
         rule.setEffectiveFrom(effectiveFrom);
         rule.setEffectiveTo(effectiveTo);
-        rule.setTreatmentFeeRuleStatus(true);
         rule.setTreatmentFeeRuleCreateAt(Instant.now());
         rule.setTreatmentFeeRuleCreateBy(actorId);
+        requireContinuousTimeline(rule);
+
         return rules.save(rule);
     }
 
@@ -109,9 +110,7 @@ public class TreatmentFeeRuleService {
                 }
             }
         }
-        if (rule.isTreatmentFeeRuleStatus()) {
-            requireNoOverlap(id, predecessor == null ? null : predecessor.getId(), newFrom, newTo);
-        }
+        requireNoOverlap(id, predecessor == null ? null : predecessor.getId(), newFrom, newTo);
         if (predecessor != null) {
             LocalDate previousEnd = predecessor.getEffectiveTo();
             predecessor.setEffectiveTo(newFrom.minusDays(1));
@@ -131,6 +130,8 @@ public class TreatmentFeeRuleService {
         rule.setEffectiveTo(newTo);
         rule.setTreatmentFeeRuleUpdateAt(Instant.now());
         rule.setTreatmentFeeRuleUpdateBy(actorId);
+        requireContinuousTimeline(rule);
+
         return rules.save(rule);
     }
 
@@ -148,24 +149,18 @@ public class TreatmentFeeRuleService {
         return rules.save(rule);
     }
 
+    /** Rejects manual toggles because fee rules are selected by effective dates. */
     @Transactional
     public TreatmentFeeRule setEnabled(Long id, boolean enabled, Long actorId) {
-        TreatmentFeeRule rule = find(id);
-        if (rule.isTreatmentFeeRuleStatus() == enabled) {
-            return rule;
-        }
-        if (enabled) {
-            requireNoOverlap(id, null, rule.getEffectiveFrom(), rule.getEffectiveTo());
-        }
-        rule.setTreatmentFeeRuleStatus(enabled);
-        rule.setTreatmentFeeRuleUpdateAt(Instant.now());
-        rule.setTreatmentFeeRuleUpdateBy(actorId);
-        return rules.save(rule);
+        find(id);
+
+        throw new IllegalArgumentException(
+                "ไม่รองรับการเปิด–ปิดกฎค่ามือ ระบบเลือกกฎตามช่วงวันที่มีผล");
     }
 
-    /** An enabled open-ended rule is ended the day before a newer open-ended one starts; other overlaps are rejected. */
+    /** Ends the previous open-ended rule before its successor starts; rejects other overlaps. */
     private void retireOverlapping(Long selfId, LocalDate from, LocalDate to, Long actorId) {
-        for (TreatmentFeeRule other : rules.findByTreatmentFeeRuleStatusTrue()) {
+        for (TreatmentFeeRule other : rules.findAllByOrderByEffectiveFromDesc()) {
             if (!overlaps(other.getEffectiveFrom(), other.getEffectiveTo(), from, to)) {
                 continue;
             }
@@ -214,7 +209,7 @@ public class TreatmentFeeRuleService {
     }
 
     private void requireNoOverlap(Long selfId, Long alsoIgnoreId, LocalDate from, LocalDate to) {
-        for (TreatmentFeeRule other : rules.findByTreatmentFeeRuleStatusTrue()) {
+        for (TreatmentFeeRule other : rules.findAllByOrderByEffectiveFromDesc()) {
             if (other.getId().equals(alsoIgnoreId)) continue;
             if (!other.getId().equals(selfId) && overlaps(other.getEffectiveFrom(), other.getEffectiveTo(), from, to)) {
                 throw new IllegalArgumentException("ช่วงวันที่ซ้อนกับกฎค่ามือที่ใช้งานอยู่ (เริ่ม " + other.getEffectiveFrom() + ")");
@@ -224,6 +219,37 @@ public class TreatmentFeeRuleService {
 
     private static boolean overlaps(LocalDate aFrom, LocalDate aTo, LocalDate bFrom, LocalDate bTo) {
         return (bTo == null || !aFrom.isAfter(bTo)) && (aTo == null || !bFrom.isAfter(aTo));
+    }
+
+    /** Requires consecutive date ranges and an open-ended latest version. */
+    private void requireContinuousTimeline(TreatmentFeeRule candidate) {
+        List<TreatmentFeeRule> timeline = new java.util.ArrayList<>(
+                rules.findAllByOrderByEffectiveFromDesc().stream()
+                        .filter(rule -> !java.util.Objects.equals(
+                                rule.getId(), candidate.getId()))
+                        .toList());
+
+        timeline.add(candidate);
+        timeline.sort(java.util.Comparator.comparing(
+                TreatmentFeeRule::getEffectiveFrom));
+
+        for (int i = 1; i < timeline.size(); i++) {
+            TreatmentFeeRule previous = timeline.get(i - 1);
+            TreatmentFeeRule next = timeline.get(i);
+
+            LocalDate expectedEnd = next.getEffectiveFrom().minusDays(1);
+
+            if (!expectedEnd.equals(previous.getEffectiveTo())) {
+                throw new IllegalArgumentException(
+                        "ช่วงวันที่ของกฎค่ามือต้องต่อเนื่องกัน ห้ามซ้อนหรือขาดช่วง");
+            }
+        }
+
+        TreatmentFeeRule latest = timeline.get(timeline.size() - 1);
+        if (latest.getEffectiveTo() != null) {
+            throw new IllegalArgumentException(
+                    "กฎค่ามือเวอร์ชันล่าสุดต้องไม่มีวันที่สิ้นสุด");
+        }
     }
 
     private TreatmentFeeRule find(Long id) {
