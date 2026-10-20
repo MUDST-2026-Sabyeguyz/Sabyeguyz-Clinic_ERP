@@ -101,7 +101,7 @@ public class SaleController {
     /** treatingStaffId (optional) is the PT who treated the single-visit lines; default: the salesperson, else the signed-in staff. */
     public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note,
                                  List<ItemRequest> items, List<PaymentRequest> payments, String billDiscountType,
-                                 BigDecimal billDiscountValue, Long treatingStaffId) {}
+                                 BigDecimal billDiscountValue, Long treatingStaffId, String paymentLabelCode) {}
     public record ReverseRequest(String reason) {}
 
     private Staff singleVisitTreatingStaff(CreateRequest request, Staff salesperson) {
@@ -179,6 +179,8 @@ public class SaleController {
 
         String receiptNo = receiptService.nextReceiptNo(branch, ClinicTime.today());
         Receipt receipt = receiptService.create(receiptNo, patient, branch, ClinicTime.today(), actor.currentId());
+
+        receiptService.assignPaymentLabel(receipt, request.paymentLabelCode());
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
         for (ItemRequest item : request.items()) {

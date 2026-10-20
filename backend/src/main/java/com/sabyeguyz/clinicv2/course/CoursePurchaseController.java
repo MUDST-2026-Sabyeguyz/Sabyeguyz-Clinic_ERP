@@ -135,7 +135,7 @@ public class CoursePurchaseController {
      * (optional) names the PT who owns the course's commission, the seller by default.
      */
     public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
-                                   BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares) {}
+                                   BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares, String paymentLabelCode) {}
     /** treatingStaffId (optional): the PT who treats the session, the Owner PT by default; patientId (optional): who uses the entitlement. */
     public record UseRequest(Long coursePurchaseId, Long appointmentId, String note, Long treatingStaffId, Long patientId,
                               Long treatmentId) {}
@@ -178,6 +178,7 @@ public class CoursePurchaseController {
 
         Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, ClinicTime.today()), patient, branch, ClinicTime.today(),
                 actor.currentId());
+        receiptService.assignPaymentLabel(receipt, request.paymentLabelCode());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
                 seller, null, null, null, Discount.of(request.discountType(), request.discountValue()),
                 ClinicTime.today(), actor.currentId());
