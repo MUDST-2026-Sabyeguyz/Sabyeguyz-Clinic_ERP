@@ -307,11 +307,22 @@ public class CommissionController {
         } catch (RuntimeException noScheme) {
             // nothing in force: the page says so
         }
-        TreatmentFeeResponse fee = treatmentFeeService.list().stream()
-                .filter(rule -> rule.isTreatmentFeeRuleStatus() && !rule.getEffectiveFrom().isAfter(today)
-                        && (rule.getEffectiveTo() == null || !rule.getEffectiveTo().isBefore(today)))
-                .max(java.util.Comparator.comparing(TreatmentFeeRule::getEffectiveFrom))
-                .map(this::toTreatmentFeeResponse).orElse(null);
+        List<TreatmentFeeRule> effectiveRules = treatmentFeeService.list().stream()
+                .filter(rule -> !rule.getEffectiveFrom().isAfter(today)
+                        && (rule.getEffectiveTo() == null
+                        || !rule.getEffectiveTo().isBefore(today)))
+                .toList();
+
+        if (effectiveRules.size() > 1) {
+            throw new IllegalStateException(
+                    "พบกฎค่ามือที่มีผลในวันที่ " + today + " มากกว่าหนึ่งรายการ");
+        }
+
+        TreatmentFeeResponse fee = effectiveRules.stream()
+                .findFirst()
+                .map(this::toTreatmentFeeResponse)
+                .orElse(null);
+
         return new Formula(today, scheme, tierRows, fee);
     }
 
@@ -397,7 +408,7 @@ public class CommissionController {
     private java.util.Map<String, Object> feeSnapshot(TreatmentFeeRule rule) {
         return com.sabyeguyz.clinicv2.audit.AuditLogService.fields("rule_name", rule.getRuleName(),
                 "fee_type", rule.getFeeType(), "fee_value", rule.getFeeValue(), "effective_from", rule.getEffectiveFrom(),
-                "effective_to", rule.getEffectiveTo(), "enabled", rule.isTreatmentFeeRuleStatus());
+                "effective_to", rule.getEffectiveTo());
     }
 
     private static com.sabyeguyz.clinicv2.enums.FeeType parseFeeType(String value) {
@@ -411,7 +422,7 @@ public class CommissionController {
     private TreatmentFeeResponse toTreatmentFeeResponse(TreatmentFeeRule rule) {
         // staffId / percentageBase stay in the response for the screens but are always null: one clinic-wide rule
         return new TreatmentFeeResponse(rule.getId(), null, rule.getFeeType().name(), rule.getFeeValue(), null,
-                rule.getEffectiveFrom(), rule.getEffectiveTo(), rule.isTreatmentFeeRuleStatus(),
+                rule.getEffectiveFrom(), rule.getEffectiveTo(), true,
                 treatmentFeeService.isUsed(rule.getId()), rule.getRuleName(),
                 recorderName(rule.getTreatmentFeeRuleUpdateBy() != null ? rule.getTreatmentFeeRuleUpdateBy()
                         : rule.getTreatmentFeeRuleCreateBy()),

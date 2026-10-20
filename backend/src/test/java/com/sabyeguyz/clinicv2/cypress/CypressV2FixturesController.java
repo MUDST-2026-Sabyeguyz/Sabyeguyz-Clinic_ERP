@@ -95,8 +95,8 @@ public class CypressV2FixturesController {
                 + "(1, 0.00, 59999.99, 0.05), (2, 60000.00, 69999.99, 0.06), (3, 70000.00, 79999.99, 0.07), "
                 + "(4, 80000.00, 89999.99, 0.08), (5, 90000.00, NULL::numeric, 0.10)) AS t(tier_order, lo, hi, rate)");
         jdbc.update("DELETE FROM treatment_fee_rule WHERE treatment_fee_rule_id <> (SELECT MIN(treatment_fee_rule_id) FROM treatment_fee_rule)");
-        jdbc.update("UPDATE treatment_fee_rule SET fee_type = 'Fixed'::fee_type_enum, fee_value = 45, effective_to = NULL, "
-                + "treatment_fee_rule_status = TRUE");
+        jdbc.update("UPDATE treatment_fee_rule SET fee_type = 'Fixed'::fee_type_enum, "
+                + "fee_value = 45, effective_to = NULL");
         jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL");
         jdbc.update("UPDATE app_user SET user_status = TRUE WHERE username <> 'system'");
         jdbc.update("UPDATE branch SET branch_status = TRUE");
