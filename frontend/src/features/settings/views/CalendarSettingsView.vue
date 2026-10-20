@@ -97,7 +97,7 @@ async function syncNow() {
   try {
     const result = await calendarApi.syncNow()
     message.value =
-      `ซิงก์แล้ว ส่งไปยัง Google ${result.pushed}, ลบ ${result.removed}, ` +
+      `sync แล้ว ส่งไปยัง Google ${result.pushed}, ลบ ${result.removed}, ` +
       `เลื่อนจาก Google ${result.movedFromGoogle}, ยกเลิกจาก Google ${result.cancelledFromGoogle}, ล้มเหลว ${result.failed}`
     await load()
   } catch (caught) {
@@ -140,7 +140,7 @@ function formatTime(value: string | null) {
         timeStyle: 'short',
         timeZone: 'Asia/Bangkok',
       })
-    : 'ยังไม่มีประวัติการซิงก์'
+    : 'ยังไม่มีประวัติการ sync'
 }
 
 onMounted(load)
@@ -299,7 +299,9 @@ onMounted(load)
                 </div>
               </dl>
               <p class="calendar-hint">
-                ซิงก์ล่าสุด: {{ formatTime(status.lastRunAt) }}
+                sync ล่าสุด : {{ formatTime(status.lastRunAt) }}
+              </p>
+              <p v-if="!status.enabled" class="calendar-hint">
               </p>
               <button
                 type="button"
@@ -328,7 +330,7 @@ onMounted(load)
           >
             <h3 id="disconnect-title">ยกเลิกการเชื่อมต่อ{{ branch?.branchName }}?</h3>
             <p>
-              ระบบจะหยุดซิงก์ปฏิทินของสาขานี้ โดยไม่ลบนัดหมายในคลินิกหรือกิจกรรมเดิมใน Google
+              ระบบจะหยุด sync ปฏิทินของสาขานี้ โดยไม่ลบนัดหมายในคลินิกหรือกิจกรรมเดิมใน Google
               Calendar
             </p>
             <p v-if="error" class="calendar-error" role="alert">{{ error }}</p>
