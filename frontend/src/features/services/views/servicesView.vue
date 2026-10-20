@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
+import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -28,6 +30,7 @@ import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data
 type Mode = 'assessment' | 'single' | 'course'
 const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const route = useRoute()
+const { appointmentId, appointmentProgress, processLoading, processError, refreshAppointmentProcess, hasAppointmentDocument } = useAppointmentProcess()
 const router = useRouter()
 const query = ref(''),
   patient = ref<Patient | null>(null),
@@ -139,6 +142,7 @@ async function loadSelectedPatient() {
 onMounted(async () => {
   await Promise.all([
     loadSelectedPatient(),
+    refreshAppointmentProcess(),
     loadMaster().catch(() => {
       masterLoadError.value = 'โหลดข้อมูลบริการบางส่วนไม่สำเร็จ กรุณาลองใหม่ก่อนทำรายการ'
     }),
@@ -382,6 +386,11 @@ async function submit() {
   errorMessage.value = ''
   confirmed.value = false
   try {
+    if (appointmentId.value) {
+      await refreshAppointmentProcess()
+      if (processError.value || !appointmentProgress.value?.canManage) throw new Error(processError.value || 'จัดการได้เฉพาะนัดหมายของตัวเอง')
+      if (hasAppointmentDocument.value) return
+    }
     if (
       !enabledPaymentStatuses.value.some(
         (status) => status.code === paymentStatus.value && status.enabled,
@@ -420,6 +429,7 @@ async function submit() {
     )
       throw new Error('ยอดผ่อนชำระต้องมากกว่า 0 และน้อยกว่ายอดสุทธิ')
     const sale = await salesApi.create({
+      appointmentId: appointmentId.value ?? undefined,
       patientId: patient.value.id,
       branchCode:
         managerBranchCode.value || patient.value.branchCode || branches.value[0]?.code || '',
@@ -440,6 +450,7 @@ async function submit() {
               },
             ],
     })
+    if (appointmentId.value) await refreshAppointmentProcess()
     receiptNo.value = sale.receiptNo
     confirmed.value = true
     reviewing.value = false
@@ -455,7 +466,10 @@ async function submit() {
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <p v-if="patientLoading" role="status">กำลังโหลดข้อมูลผู้ป่วย...</p>
+      <p v-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
+      <div v-else-if="processError" role="alert"><p>{{ processError }}</p><button type="button" @click="refreshAppointmentProcess">ลองใหม่</button><button type="button" @click="router.push({ name: 'staff-appointments' })">กลับหน้านัดหมาย</button></div>
+      <AppointmentProcessPanel v-else-if="appointmentProgress && (hasAppointmentDocument || !appointmentProgress.canManage || !appointmentProgress.registered)" :progress="appointmentProgress" @refresh="refreshAppointmentProcess" />
+      <p v-else-if="patientLoading" role="status">กำลังโหลดข้อมูลผู้ป่วย...</p>
       <div v-else-if="patientLoadError" role="alert">
         <p class="error">{{ patientLoadError }}</p>
         <button type="button" @click="router.push({ name: 'staff-appointments' })">
