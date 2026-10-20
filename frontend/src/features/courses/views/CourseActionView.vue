@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
+import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -17,6 +19,12 @@ import {
 
 type CourseAction = 'manage' | 'transfer' | 'history' | 'use'
 const route = useRoute()
+const { appointmentId, appointmentProgress, processLoading, processError, refreshAppointmentProcess } = useAppointmentProcess()
+const usageSubmitting = ref(false)
+const appointmentNeedsReview = computed(() => Boolean(appointmentProgress.value && action.value !== 'history' && (
+  appointmentProgress.value.courseStatus !== 'NOT_STARTED' || !appointmentProgress.value.canManage ||
+  (appointmentProgress.value.paymentStatus !== 'NOT_STARTED' && !(appointmentProgress.value.paymentStatus === 'PAID' && appointmentProgress.value.includesCourse))
+)))
 const router = useRouter()
 const action = ref<CourseAction>('manage')
 const recipientSearch = ref('')
@@ -233,6 +241,7 @@ async function loadCourses(patientId: number) {
   } else action.value = 'manage'
 }
 onMounted(async () => {
+  await refreshAppointmentProcess()
   try {
     await loadOwner()
   } catch (error) {
@@ -388,18 +397,30 @@ function returnToCourseManager() {
     })
   }
 }
+watch(() => [route.query.action, route.query.courseId], async () => {
+  if (route.query.action !== 'history') return
+  const course = patientCourses.value.find(item => item.id === Number(route.query.courseId))
+  if (course) await start('history', course)
+})
 async function confirm() {
-  if (!owner.value || !selectedCourse.value.id) return
+  if (!owner.value || !selectedCourse.value.id || usageSubmitting.value) return
+  usageSubmitting.value = true
   try {
     const isCourseUsage = action.value === 'use'
     const usedCourseId = selectedCourse.value.id
     const balanceBeforeUse = selectedCourse.value.balance
     if (isCourseUsage) {
+      if (appointmentId.value) {
+        await refreshAppointmentProcess()
+        if (processError.value || !appointmentProgress.value?.canManage || appointmentProgress.value.courseStatus !== 'NOT_STARTED' || (appointmentProgress.value.paymentStatus !== 'NOT_STARTED' && !(appointmentProgress.value.paymentStatus === 'PAID' && appointmentProgress.value.includesCourse))) throw new Error(processError.value || 'นัดหมายนี้มีรายการแล้ว กรุณาตรวจสอบรายการเดิม')
+      }
       usageConfirmDialog.value = false
       await courseApi.use({
+        appointmentId: appointmentId.value ?? undefined,
         coursePurchaseId: selectedCourse.value.id,
         note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
       })
+      if (appointmentId.value) await refreshAppointmentProcess()
     } else {
       if (!selectedRecipient.value) return
       const transfer = await courseApi.transfer({
@@ -414,7 +435,7 @@ async function confirm() {
     if (isCourseUsage) {
       selectedCourse.value =
         patientCourses.value.find((course) => course.id === usedCourseId) ?? selectedCourse.value
-      const newBalance = Math.max(0, balanceBeforeUse - 1)
+      const newBalance = appointmentId.value ? selectedCourse.value.balance : Math.max(0, balanceBeforeUse - 1)
       selectedCourse.value = { ...selectedCourse.value, balance: newBalance, remaining: newBalance }
       patientCourses.value = patientCourses.value.map((course) =>
         course.id === usedCourseId ? selectedCourse.value : course,
@@ -441,8 +462,8 @@ async function confirm() {
       transferStep.value = 'success'
     }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'แชร์คอร์สไม่สำเร็จ'
-  }
+    errorMessage.value = error instanceof Error ? error.message : action.value === 'use' ? 'ใช้สิทธิ์คอร์สไม่สำเร็จ' : 'แชร์คอร์สไม่สำเร็จ'
+  } finally { usageSubmitting.value = false }
 }
 function selectRecipient(patient: Patient) {
   selectedRecipient.value = patient
@@ -531,6 +552,10 @@ function closePrintSuccess() {
 <template>
   <div class="staff-page course-page">
     <StaffHeader />
+    <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
+    <div v-else-if="processError" role="alert"><p>{{ processError }}</p><button type="button" @click="refreshAppointmentProcess">ลองใหม่</button></div>
+    <AppointmentProcessPanel v-else-if="appointmentProgress && appointmentNeedsReview" :progress="appointmentProgress" @refresh="refreshAppointmentProcess" />
+    <template v-else>
     <main
       v-if="action === 'use'"
       class="course-use-main"
@@ -1408,6 +1433,7 @@ function closePrintSuccess() {
         </section></template
       >
     </main>
+    </template>
   </div>
 </template>
 
