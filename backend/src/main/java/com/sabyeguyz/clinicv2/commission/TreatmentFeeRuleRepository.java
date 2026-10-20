@@ -36,4 +36,14 @@ public interface TreatmentFeeRuleRepository extends JpaRepository<TreatmentFeeRu
     default boolean isUsedAfter(Long id, LocalDate date) {
         return countAllocationUsesAfter(id, date) + countSingleVisitUsesAfter(id, date) > 0;
     }
+
+    // Serialize fee-rule creation, including when no rules exist yet.
+    // PostgreSQL releases this lock when the transaction ends.
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(1010, 1)",
+            nativeQuery = true)
+    Integer lockVersionAllocation();
+
+    // Return 0 when no rules exist.
+    @Query("select coalesce(max(r.ruleVersion), 0) from TreatmentFeeRule r")
+    Integer findMaxRuleVersion();
 }
