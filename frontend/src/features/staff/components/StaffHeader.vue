@@ -12,6 +12,18 @@ import {
   setSelectedManagerBranch,
 } from '@/features/staff/data/managerBranch'
 const profileOpen = ref(false)
+const profileRef = ref<HTMLElement | null>(null)
+const profileTrigger = ref<HTMLButtonElement | null>(null)
+function closeProfileOutside(event: Event) {
+  if (event.target instanceof Node && !profileRef.value?.contains(event.target))
+    profileOpen.value = false
+}
+function closeProfileOnEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape' && profileOpen.value) {
+    profileOpen.value = false
+    profileTrigger.value?.focus()
+  }
+}
 const menuOpen = ref(false)
 const route = useRoute()
 const navRef = ref<HTMLElement | null>(null)
@@ -38,8 +50,8 @@ const navItems = computed(() =>
   isManager.value
     ? [
         { to: '/staff/dashboard', label: 'แดชบอร์ด' },
-        { to: '/staff/patients', label: 'ผู้ป่วย' },
         { to: '/staff/appointments', label: 'นัดหมาย' },
+        { to: '/staff/patients', label: 'ผู้ป่วย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'รายการธุรกรรม' },
         { to: '/staff/commission', label: 'คอมมิชชั่น' },
@@ -47,8 +59,8 @@ const navItems = computed(() =>
         { to: '/staff/settings', label: 'การตั้งค่า' },
       ]
     : [
-        { to: '/staff/patients', label: 'ผู้ป่วย' },
         { to: '/staff/appointments', label: 'นัดหมาย' },
+        { to: '/staff/patients', label: 'ผู้ป่วย' },
         { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
         { to: '/staff/compensation', label: 'คอมมิชชัน' },
@@ -98,6 +110,9 @@ function positionPillWithoutAnimation() {
   })
 }
 onMounted(() => {
+  document.addEventListener('pointerdown', closeProfileOutside)
+  document.addEventListener('focusin', closeProfileOutside)
+  document.addEventListener('keydown', closeProfileOnEscape)
   positionPillWithoutAnimation()
   requestAnimationFrame(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
@@ -107,6 +122,9 @@ onMounted(() => {
   if (isManager.value) void loadManagerBranches()
 })
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeProfileOutside)
+  document.removeEventListener('focusin', closeProfileOutside)
+  document.removeEventListener('keydown', closeProfileOnEscape)
   window.removeEventListener('resize', positionPillWithoutAnimation)
   if (readyFrame) cancelAnimationFrame(readyFrame)
   if (routeFrame) cancelAnimationFrame(routeFrame)
@@ -116,6 +134,7 @@ watch(
   () => route.fullPath,
   () => {
     menuOpen.value = false
+    profileOpen.value = false
     nextTick(() => {
       if (routeFrame) cancelAnimationFrame(routeFrame)
       routeFrame = requestAnimationFrame(movePillToActive)
@@ -203,8 +222,10 @@ function branchLabel(name: string) {
         @update:model-value="switchManagerBranch"
       />
     </div>
-    <div class="profile-wrap">
+    <div ref="profileRef" class="profile-wrap">
       <button
+        ref="profileTrigger"
+        type="button"
         class="profile-trigger"
         aria-label="เปิดเมนูโปรไฟล์"
         :aria-expanded="profileOpen"
@@ -220,11 +241,8 @@ function branchLabel(name: string) {
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
           ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : profileBranchLabel }}</span>
         </div>
-        <RouterLink v-if="isManager" to="/staff/calendar" @click="profileOpen = false"
-          >ตั้งค่า Google Calendar</RouterLink
-        >
         <RouterLink
-          v-else
+          v-if="!isManager"
           :to="{ path: '/staff/appointments/calendar', query: { googleCalendar: 'status' } }"
           @click="profileOpen = false"
           >สถานะ Google Calendar</RouterLink
