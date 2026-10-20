@@ -44,9 +44,6 @@ public class TreatmentFeeRule {
     @Column(name = "effective_to")
     private LocalDate effectiveTo;
 
-    @Column(name = "treatment_fee_rule_status", nullable = false)
-    private boolean treatmentFeeRuleStatus = true;
-
     @Column(name = "treatment_fee_rule_create_at", nullable = false, updatable = false)
     private Instant treatmentFeeRuleCreateAt;
 
@@ -78,8 +75,6 @@ public class TreatmentFeeRule {
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
     public LocalDate getEffectiveTo() { return effectiveTo; }
     public void setEffectiveTo(LocalDate effectiveTo) { this.effectiveTo = effectiveTo; }
-    public boolean isTreatmentFeeRuleStatus() { return treatmentFeeRuleStatus; }
-    public void setTreatmentFeeRuleStatus(boolean treatmentFeeRuleStatus) { this.treatmentFeeRuleStatus = treatmentFeeRuleStatus; }
     public Instant getTreatmentFeeRuleCreateAt() { return treatmentFeeRuleCreateAt; }
     public void setTreatmentFeeRuleCreateAt(Instant treatmentFeeRuleCreateAt) { this.treatmentFeeRuleCreateAt = treatmentFeeRuleCreateAt; }
     public Long getTreatmentFeeRuleCreateBy() { return treatmentFeeRuleCreateBy; }
