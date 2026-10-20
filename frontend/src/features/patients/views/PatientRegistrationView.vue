@@ -5,16 +5,43 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { registerPatient } from '@/api/patients'
-import { branchApi, masterDataApi, patientApi, type PatientProfile } from '@/api/client'
+import {
+  appointmentApi,
+  branchApi,
+  masterDataApi,
+  patientApi,
+  type PatientProfile,
+} from '@/api/client'
 import { type PatientRegistrationForm } from '../data/patientRegistration'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
 import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
+import { clinicToday } from '@/utils/clinicDate'
+import {
+  patientTitleOptions,
+  titleForNationality,
+  titleForGender,
+  genderForTitle,
+} from '../data/patientTitles'
 
-const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null')
+const isManager = authUser?.role === 'MANAGER'
 
 const submitting = ref(false)
 const route = useRoute()
 const router = useRouter()
+const registrationBackTarget = computed(() =>
+  route.query.appointmentId
+    ? {
+        name: 'staff-appointments',
+        query: {
+          startDate:
+            typeof route.query.returnStartDate === 'string' ? route.query.returnStartDate : '',
+          endDate: typeof route.query.returnEndDate === 'string' ? route.query.returnEndDate : '',
+          type: typeof route.query.returnType === 'string' ? route.query.returnType : 'all',
+        },
+      }
+    : { name: 'patient-search' },
+)
 const submitted = ref(false)
 const emailFocused = ref(false)
 const identityFocused = ref(false)
@@ -37,11 +64,8 @@ const customerGroups = ref<string[]>([])
 const referralChannels = ref<string[]>([])
 const insuranceCompanies = ref<string[]>([])
 const branches = ref<Array<{ code: string; name: string }>>([])
-const titleOptions = ['นาย', 'นางสาว', 'นาง', 'เด็กชาย', 'เด็กหญิง'].map((value) => ({
-  value,
-  label: value,
-}))
-const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
+const titleOptions = computed(() => patientTitleOptions(form.nationality === 'ต่างชาติ'))
+const genderOptions = ['ชาย', 'หญิง', 'ไม่ระบุ'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const branchOptions = computed(() =>
   branches.value.map((branch) => ({ value: branch.code, label: branch.name })),
@@ -114,7 +138,10 @@ const phoneIsValid = computed(() =>
 const birthDateIsValid = computed(() =>
   isForeign.value && !form.birthDate
     ? true
-    : Boolean(form.birthDate && form.birthDate < new Date().toISOString().slice(0, 10)),
+    : Boolean(form.birthDate && form.birthDate < clinicToday()),
+)
+const birthDateErrorVisible = computed(
+  () => (Boolean(form.birthDate) || submitted.value) && !birthDateIsValid.value,
 )
 const canSubmit = computed(() =>
   Boolean(
@@ -132,17 +159,15 @@ const canSubmit = computed(() =>
 watch(
   () => form.title,
   (title) => {
-    if (title === 'นาย' || title === 'เด็กชาย') form.gender = 'ชาย'
-    else if (title === 'นาง' || title === 'นางสาว' || title === 'เด็กหญิง') form.gender = 'หญิง'
+    const gender = genderForTitle(title)
+    if (gender && form.gender !== 'ไม่ระบุ') form.gender = gender
   },
 )
 watch(
   () => form.gender,
   (gender) => {
-    const maleTitles = ['นาย', 'เด็กชาย']
-    const femaleTitles = ['นางสาว', 'นาง', 'เด็กหญิง']
-    if (gender === 'ชาย' && !maleTitles.includes(form.title)) form.title = 'นาย'
-    else if (gender === 'หญิง' && !femaleTitles.includes(form.title)) form.title = 'นางสาว'
+    if (gender === 'ชาย' || gender === 'หญิง')
+      form.title = titleForGender(form.title, gender, form.nationality === 'ต่างชาติ')
   },
 )
 watch(
@@ -154,6 +179,7 @@ watch(
 watch(
   () => form.nationality,
   (nationality) => {
+    form.title = titleForNationality(form.title, nationality === 'ต่างชาติ')
     form.identityDocumentType = nationality === 'ต่างชาติ' ? 'PASSPORT' : 'NATIONAL_ID'
   },
 )
@@ -166,9 +192,14 @@ onMounted(async () => {
     if (isManager) {
       setManagerBranches(branches.value)
       applyManagerBranch()
+      if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode))
+        form.branchCode = branches.value[0]!.code
+    } else {
+      form.branchCode =
+        branches.value.find((item) => item.code === authUser?.branchCode)?.code ?? ''
+      if (!form.branchCode)
+        errorMessage.value = 'ไม่พบสาขาที่เปิดใช้งานของบัญชีนี้ กรุณาตรวจสอบข้อมูลบัญชี'
     }
-    if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode))
-      form.branchCode = branches.value[0]!.code
     const active = items.filter((item) => item.active)
     const valuesFor = (category: string) =>
       active.filter((item) => item.category === category).map((item) => item.name)
@@ -176,7 +207,6 @@ onMounted(async () => {
     referralChannels.value = valuesFor('Referral Channel')
     insuranceCompanies.value = valuesFor('Insurance Company')
     if (!form.customerType) form.customerType = customerGroups.value[0]!
-    if (!form.customerSource) form.customerSource = referralChannels.value[0]!
   } catch {
     errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
   }
@@ -221,6 +251,7 @@ function applyManagerBranch() {
 onMounted(() => window.addEventListener('manager-branch-changed', applyManagerBranch))
 onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
 async function requestSubmit() {
+  if (submitting.value || confirmationOpen.value) return
   submitted.value = true
   if (!canSubmit.value) {
     errorMessage.value = ''
@@ -237,13 +268,49 @@ async function requestSubmit() {
   }
   confirmationOpen.value = true
 }
-function openExistingPatient() {
-  if (!duplicatePatient.value) return
+async function openExistingPatient() {
+  if (!duplicatePatient.value || continuingAppointment.value) return
+  if (route.query.appointmentId) {
+    if (await continueToServices(duplicatePatient.value.id)) duplicateOpen.value = false
+    return
+  }
   duplicateOpen.value = false
   void router.push(`/staff/patients/${duplicatePatient.value.id}`)
 }
-function openRegisteredPatient() {
-  if (!registeredPatientId.value) return
+const continuingAppointment = ref(false)
+async function continueToServices(patientId: number) {
+  if (continuingAppointment.value) return false
+  const appointmentId = Number(route.query.appointmentId)
+  if (!Number.isSafeInteger(appointmentId) || appointmentId <= 0) {
+    errorMessage.value = 'ไม่พบนัดหมายต้นทาง กรุณากลับไปหน้านัดหมาย'
+    return false
+  }
+  continuingAppointment.value = true
+  errorMessage.value = ''
+  try {
+    const appointment = await appointmentApi.get(appointmentId)
+    if (appointment.patient?.id && appointment.patient.id !== patientId)
+      throw new Error('นัดหมายนี้เชื่อมกับผู้ป่วยรายอื่นแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
+    if (!appointment.patient?.id) await appointmentApi.linkPatient(appointmentId, patientId)
+    await router.push({
+      name: 'staff-services',
+      query: { patientId: String(patientId), appointmentId: String(appointmentId) },
+    })
+    return true
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : 'เชื่อมนัดหมายไม่สำเร็จ กรุณาลองใหม่'
+    return false
+  } finally {
+    continuingAppointment.value = false
+  }
+}
+async function openRegisteredPatient() {
+  if (!registeredPatientId.value || continuingAppointment.value) return
+  if (route.query.appointmentId) {
+    if (await continueToServices(registeredPatientId.value)) successOpen.value = false
+    return
+  }
   successOpen.value = false
   void router.push(`/staff/patients/${registeredPatientId.value}`)
 }
@@ -260,6 +327,7 @@ async function findDuplicatePatient() {
   )
 }
 async function submit() {
+  if (submitting.value || !canSubmit.value) return
   confirmationOpen.value = false
   form.privacyConsent = true
   submitting.value = true
@@ -299,6 +367,7 @@ async function submit() {
     registeredPatientId.value = result.id
     localStorage.setItem('patientCreationHn', result.hn)
     successOpen.value = true
+    if (route.query.appointmentId) await openRegisteredPatient()
   } catch (error) {
     try {
       duplicatePatient.value = await findDuplicatePatient()
@@ -318,7 +387,9 @@ async function submit() {
     <StaffHeader />
     <main class="registration-content">
       <div class="back-row">
-        <RouterLink to="/staff/patients" class="back-link">← กลับไปค้นหาผู้ป่วย</RouterLink>
+        <RouterLink :to="registrationBackTarget" class="back-link">{{
+          route.query.appointmentId ? '← กลับไปหน้านัดหมาย' : '← กลับไปค้นหาผู้ป่วย'
+        }}</RouterLink>
       </div>
       <section v-if="!registeredHn" class="registration-shell">
         <div class="intro">
@@ -369,11 +440,14 @@ async function submit() {
                   placeholder="ชื่อ"
                   @input="form.firstName = allowedName(form.firstName)"
                 />
-                <small v-if="submitted && !form.firstName" class="required-error">กรุณากรอกข้อมูล</small>
+                <small v-if="submitted && !form.firstName" class="required-error"
+                  >กรุณากรอกข้อมูล</small
+                >
                 <small
                   v-else-if="submitted && !personNameIsValid(form.firstName)"
                   class="required-error"
-                >รูปแบบชื่อไม่ถูกต้อง</small>
+                  >รูปแบบชื่อไม่ถูกต้อง</small
+                >
               </label>
               <label>
                 ชื่อกลาง
@@ -390,11 +464,14 @@ async function submit() {
                   placeholder="นามสกุล"
                   @input="form.lastName = allowedName(form.lastName)"
                 />
-                <small v-if="submitted && !form.lastName" class="required-error">กรุณากรอกข้อมูล</small>
+                <small v-if="submitted && !form.lastName" class="required-error"
+                  >กรุณากรอกข้อมูล</small
+                >
                 <small
                   v-else-if="submitted && !personNameIsValid(form.lastName)"
                   class="required-error"
-                >รูปแบบนามสกุลไม่ถูกต้อง</small>
+                  >รูปแบบนามสกุลไม่ถูกต้อง</small
+                >
               </label>
             </div>
             <div class="personal-details-grid">
@@ -412,19 +489,24 @@ async function submit() {
                 <small
                   v-if="submitted && form.nickname && !personNameIsValid(form.nickname)"
                   class="required-error"
-                >รูปแบบชื่อเล่นไม่ถูกต้อง</small>
+                  >รูปแบบชื่อเล่นไม่ถูกต้อง</small
+                >
               </label>
-              <label :class="{ 'invalid-field': submitted && !birthDateIsValid }">
+              <label :class="{ 'invalid-field': birthDateErrorVisible }">
                 วันเกิด <em v-if="!isForeign">*</em>
                 <ThaiDatePicker
                   v-model="form.birthDate"
-                  :invalid="submitted && !birthDateIsValid"
+                  :invalid="birthDateErrorVisible"
                   show-calendar-icon
                   numeric-month
                   hide-caret
                 />
-                <small v-if="submitted && !isForeign && !form.birthDate" class="required-error">กรุณากรอกข้อมูล</small>
-                <small v-else-if="submitted && !birthDateIsValid" class="required-error">วันเกิดต้องเป็นวันในอดีต</small>
+                <small v-if="submitted && !isForeign && !form.birthDate" class="required-error"
+                  >กรุณากรอกข้อมูล</small
+                >
+                <small v-else-if="birthDateErrorVisible" class="required-error" role="alert"
+                  >วันเกิดต้องเป็นวันในอดีต</small
+                >
               </label>
             </div>
             <div class="personal-details-grid">
@@ -504,7 +586,8 @@ async function submit() {
                   :options="branchOptions"
                   default-label="เลือกสาขา"
                   label="สาขาที่ลงทะเบียน"
-                  :disabled="!branches.length"
+                  hide-chevron
+                  disabled
                   :clear-on-reselect="false"
                   hide-default-option
               /></label>
@@ -521,10 +604,9 @@ async function submit() {
                 >ช่องทางแนะนำ<FilterDropdown
                   v-model="form.customerSource"
                   :options="referralChannelOptions"
-                  default-label="เลือกช่องทางแนะนำ"
+                  default-label="ไม่ระบุ"
                   label="ช่องทางแนะนำ"
                   :clear-on-reselect="false"
-                  hide-default-option
               /></label>
               <label
                 >บริษัทประกัน<FilterDropdown
@@ -550,7 +632,9 @@ async function submit() {
         <p>เลขประจำตัวผู้ป่วย (HN)</p>
         <strong>{{ registeredHn }}</strong>
         <div class="success-actions">
-          <RouterLink class="secondary" to="/staff/patients">กลับไปรายชื่อผู้ป่วย</RouterLink
+          <RouterLink class="secondary" :to="registrationBackTarget">{{
+            route.query.appointmentId ? 'กลับไปหน้านัดหมาย' : 'กลับไปรายชื่อผู้ป่วย'
+          }}</RouterLink
           ><RouterLink
             v-if="registeredPatientId"
             class="primary"
@@ -574,6 +658,7 @@ async function submit() {
         >
           <h2 id="registration-confirmation-title">ต้องการลงทะเบียนหรือไม่?</h2>
           <div class="confirmation-modal-spacer" aria-hidden="true"></div>
+          <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
           <div class="registration-modal-actions">
             <button type="button" class="secondary" @click="confirmationOpen = false">ไม่ใช่</button
             ><button type="button" class="primary" :disabled="submitting" @click="submit">
@@ -602,8 +687,19 @@ async function submit() {
             <button type="button" class="secondary" @click="duplicateOpen = false">
               กลับไปตรวจสอบข้อมูล
             </button>
-            <button type="button" class="primary" @click="openExistingPatient">
-              เปิดข้อมูลผู้ป่วยเดิม
+            <button
+              type="button"
+              class="primary"
+              :disabled="continuingAppointment"
+              @click="openExistingPatient"
+            >
+              {{
+                continuingAppointment
+                  ? 'กำลังเชื่อมนัดหมาย…'
+                  : route.query.appointmentId
+                    ? 'ใช้ผู้ป่วยนี้และไปชำระเงิน'
+                    : 'เปิดข้อมูลผู้ป่วยเดิม'
+              }}
             </button>
           </div>
         </section>
@@ -627,8 +723,20 @@ async function submit() {
               {{ registeredIdentityNumber }}
             </span>
           </div>
-          <button type="button" class="primary" @click="openRegisteredPatient">
-            เปิดข้อมูลผู้ป่วย
+          <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
+          <button
+            type="button"
+            class="primary"
+            :disabled="continuingAppointment"
+            @click="openRegisteredPatient"
+          >
+            {{
+              continuingAppointment
+                ? 'กำลังเชื่อมนัดหมาย…'
+                : route.query.appointmentId
+                  ? 'บริการและชำระเงิน'
+                  : 'เปิดข้อมูลผู้ป่วย'
+            }}
           </button>
         </section>
       </div>
