@@ -425,6 +425,7 @@ async function submit() {
         managerBranchCode.value || patient.value.branchCode || branches.value[0]?.code || '',
       salespersonStaffId: selectedStaffId.value,
       note: note.value,
+      paymentLabelCode: paymentStatus.value,
       items: [{ type, referenceId, quantity: 1 }],
       payments:
         paymentStatus.value === 'DEPOSIT'
