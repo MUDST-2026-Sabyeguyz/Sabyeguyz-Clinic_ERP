@@ -12,6 +12,7 @@ const props = withDefaults(
     disabled?: boolean
     clearOnReselect?: boolean
     hideDefaultOption?: boolean
+    hideChevron?: boolean
   }>(),
   { defaultValue: '', disabled: false, clearOnReselect: true, hideDefaultOption: false },
 )
@@ -97,9 +98,9 @@ onBeforeUnmount(() => {
       @click="toggle"
     >
       <span>{{ selectedLabel }}</span
-      ><span class="filter-dropdown__chevron" aria-hidden="true"></span>
+      ><span v-if="!hideChevron" class="filter-dropdown__chevron" aria-hidden="true"></span>
     </button>
-    <Teleport to="body">
+    <Teleport :to="root?.closest('[role=dialog]') || 'body'">
       <div
         v-if="open"
         ref="menu"

@@ -157,7 +157,7 @@ function isSelected(day: number) {
     <button
       type="button"
       class="date-trigger"
-      :class="{ invalid }"
+      :class="{ invalid, placeholder: !modelValue }"
       :disabled="disabled"
       @click="toggleOpen"
     >
