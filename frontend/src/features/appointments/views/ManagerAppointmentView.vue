@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { clinicToday } from '@/utils/clinicDate'
+import { readAppointmentRange } from '../appointmentList'
+import { vModalFocus } from '../modalFocus'
+import AppointmentProcessActions from '../components/AppointmentProcessActions.vue'
 import { loadAppointmentTherapists } from '../therapists'
 import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -13,6 +17,7 @@ import {
   catalogApi,
   courseApi,
   patientApi,
+  staffApi,
   type Appointment,
   type AppointmentAvailability,
   type AppointmentStatus,
@@ -26,10 +31,35 @@ import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data
 import { isContactPhoneValid, limitPhoneDigits } from '@/utils/phone'
 
 const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+  id?: number
   role?: string
   branchCode?: string
 } | null
 const isManager = authUser?.role === 'MANAGER'
+
+const ownStaffId = ref<number | null>(null)
+let identityPromise: Promise<void> | null = null
+function loadStaffIdentity() {
+  if (isManager || identityPromise) return identityPromise ?? Promise.resolve()
+  identityPromise = staffApi
+    .list()
+    .then((items) => {
+      ownStaffId.value = items.find((item) => item.userId === authUser?.id)?.id ?? null
+    })
+    .catch(() => {
+      ownStaffId.value = null
+      identityPromise = null
+    })
+  return identityPromise
+}
+function canManageOwnAppointment(item: Appointment) {
+  return (
+    isManager ||
+    (authUser?.role === 'THERAPIST' &&
+      ownStaffId.value === item.therapist.id &&
+      authUser.branchCode === item.branchCode)
+  )
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -46,20 +76,20 @@ const availabilityLoading = ref(false)
 const availabilityError = ref('')
 let availabilityRequest = 0
 const scheduleView = ref<'list' | 'day' | 'week'>('list')
-const listServiceMode = ref<'single' | 'course'>('single')
+const listServiceMode = ref<'all' | 'single' | 'course'>(
+  route.query.type === 'single' || route.query.type === 'course' ? route.query.type : 'all',
+)
 const calendarSyncOpen = ref(false)
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
-const startDate = ref('')
-const endDate = ref('')
+const startDate = ref(typeof route.query.startDate === 'string' ? route.query.startDate : '')
+const endDate = ref(typeof route.query.endDate === 'string' ? route.query.endDate : '')
 const selectedMonth = ref('')
 const yesterday = new Date()
 yesterday.setDate(yesterday.getDate() - 1)
 const minimumAppointmentDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
 watch(selectedMonth, (month) => {
   if (!month) {
-    startDate.value = ''
-    endDate.value = ''
     return
   }
   const [year, number] = month.split('-').map(Number)
@@ -69,11 +99,67 @@ watch(selectedMonth, (month) => {
 })
 type AppointmentUiStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
 const selectedTherapistId = ref('ทั้งหมด')
-const sortOrder = ref<'newest' | 'oldest'>('newest')
+const sortOrder = ref<'newest' | 'oldest'>('oldest')
 const appointments = ref<Appointment[]>([])
+const formDataLoading = ref(false)
+const formDataError = ref('')
+let formDataScope: string | undefined
+let formDataPromise: Promise<void> | null = null
+async function ensureFormData() {
+  const scope = managerBranchCode.value
+  if (formDataPromise && formDataScope === scope) return formDataPromise
+  formDataScope = scope
+  patients.value = []
+  services.value = []
+  therapists.value = []
+  formDataLoading.value = true
+  formDataError.value = ''
+  const pending = (async () => {
+    try {
+      const [branchList, patientList, serviceList, therapistList] = await Promise.all([
+        branchApi.list(),
+        patientApi.searchAll('', scope),
+        catalogApi.services(),
+        loadAppointmentTherapists(),
+        loadStaffIdentity(),
+      ])
+      if (scope !== managerBranchCode.value) return
+      branches.value = branchList
+      patients.value = patientList
+      services.value = serviceList
+      therapists.value = therapistList.filter(
+        (item) =>
+          (!scope || item.branchCode === scope) && (isManager || item.id === ownStaffId.value),
+      )
+      if (!form.value.branchCode)
+        form.value.branchCode = scope || branchOptions.value[0]?.code || ''
+      if (!form.value.therapistId) form.value.therapistId = therapists.value[0]?.id ?? 0
+      if (!form.value.serviceId) form.value.serviceId = services.value[0]?.id ?? 0
+    } catch {
+      if (scope !== managerBranchCode.value) return
+      formDataError.value = 'โหลดข้อมูลสำหรับนัดหมายไม่สำเร็จ'
+      formDataPromise = null
+    } finally {
+      if (scope === managerBranchCode.value) formDataLoading.value = false
+    }
+  })()
+  formDataPromise = pending
+  return pending
+}
 let appointmentLoadRequest = 0
 const page = ref(0)
-const totalPages = ref(0)
+const totalPages = computed(() => Math.ceil(filteredAppointments.value.length / 20))
+const visiblePageNumbers = computed(() => {
+  const last = totalPages.value - 1
+  const pages = new Set([0, last])
+  for (let index = Math.max(0, page.value - 1); index <= Math.min(last, page.value + 1); index++)
+    pages.add(index)
+  if (page.value < 2) for (let index = 0; index <= Math.min(last, 3); index++) pages.add(index)
+  if (page.value > last - 2)
+    for (let index = Math.max(0, last - 3); index <= last; index++) pages.add(index)
+  return [...pages].filter((index) => index >= 0).sort((a, b) => a - b)
+})
+const listLoading = ref(false)
 const branches = ref<Branch[]>([])
 const patients = ref<Patient[]>([])
 const services = ref<ServiceOption[]>([])
@@ -196,8 +282,12 @@ const afternoonTimeOptions = computed(() =>
 const filteredAppointments = computed(() => {
   const direction = sortOrder.value === 'newest' ? -1 : 1
   return appointments.value
-    .filter((item) =>
-      listServiceMode.value === 'course' ? isCourseAppointment(item) : !isCourseAppointment(item),
+    .filter(
+      (item) =>
+        listServiceMode.value === 'all' ||
+        (listServiceMode.value === 'course'
+          ? isCourseAppointment(item)
+          : !isCourseAppointment(item)),
     )
     .sort(
       (left, right) =>
@@ -206,6 +296,30 @@ const filteredAppointments = computed(() => {
           left.id - right.id),
     )
 })
+const pagedAppointments = computed(() =>
+  filteredAppointments.value.slice(page.value * 20, (page.value + 1) * 20),
+)
+const listDateCaption = computed(() => {
+  if (!startDate.value && !endDate.value) return 'นัดหมายทั้งหมด'
+  const format = (value: string) =>
+    value
+      ? new Intl.DateTimeFormat('th-TH', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }).format(new Date(value + 'T12:00:00'))
+      : 'ไม่จำกัดวันที่'
+  return startDate.value === endDate.value
+    ? format(startDate.value)
+    : format(startDate.value) + ' – ' + format(endDate.value)
+})
+function showToday() {
+  const alreadyToday = startDate.value === clinicToday() && endDate.value === clinicToday()
+  selectedMonth.value = ''
+  startDate.value = clinicToday()
+  endDate.value = clinicToday()
+  if (alreadyToday) void load()
+}
 const isCourseAppointment = (item: Appointment) => {
   const courseAppointment = item as Appointment & {
     courseId?: number | null
@@ -219,6 +333,9 @@ const isCourseAppointment = (item: Appointment) => {
     /คอร์ส|course/i.test(item.service.name ?? ''),
   )
 }
+watch(totalPages, (count) => {
+  page.value = Math.min(page.value, Math.max(0, count - 1))
+})
 const patientPhone = (item: Appointment) =>
   patients.value.find((patient) => patient.id === item.patient?.id)?.phone ||
   item.contactPhone ||
@@ -349,45 +466,44 @@ function moveCalendarDate(days: number) {
 const toStartAt = () => `${form.value.date}T${form.value.time}:00+07:00`
 async function load() {
   const requestId = ++appointmentLoadRequest
+  if (startDate.value && endDate.value && startDate.value > endDate.value) {
+    listLoading.value = false
+    errorMessage.value = 'วันเริ่มต้นต้องไม่อยู่หลังวันสิ้นสุด'
+    return
+  }
+  listLoading.value = true
+  errorMessage.value = ''
   try {
-    const [a, b, p, s, t] = await Promise.all([
-      appointmentApi.search({
-        page: page.value,
-        size: 20,
+    const initialBranches = isManager && !managerBranchCode.value ? await branchApi.list() : null
+    if (requestId !== appointmentLoadRequest) return
+    if (initialBranches) {
+      setManagerBranches(initialBranches.filter((branch) => branch.active))
+      if (!managerBranchCode.value) throw new Error('ไม่พบสาขาที่เปิดใช้งาน')
+    }
+    void loadStaffIdentity()
+    const result = await readAppointmentRange(
+      {
         branchCode: managerBranchCode.value,
         startDate: startDate.value || undefined,
         endDate: endDate.value || undefined,
         sortOrder: sortOrder.value,
-      }),
-      branchApi.list(),
-      patientApi.searchAll('', managerBranchCode.value),
-      catalogApi.services(),
-      loadAppointmentTherapists(),
-    ])
+      },
+      () => requestId === appointmentLoadRequest,
+    )
     if (requestId !== appointmentLoadRequest) return
-    appointments.value = a.items
-    totalPages.value = a.totalPages
-    branches.value = b
-    if (isManager) setManagerBranches(b.filter((branch) => branch.active))
-    patients.value = p
-    services.value = s
-    therapists.value = managerBranchCode.value
-      ? t.filter((therapist) => therapist.branchCode === managerBranchCode.value)
-      : t
-    if (branches.value[0] && !form.value.branchCode) form.value.branchCode = branches.value[0].code
-  } catch (error) {
+    appointments.value = result ?? []
+    if (initialBranches) branches.value = initialBranches
+  } catch {
     if (requestId !== appointmentLoadRequest) return
     appointments.value = []
-    totalPages.value = 0
-    branches.value = []
-    patients.value = []
-    services.value = []
-    therapists.value = []
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลนัดหมายไม่สำเร็จ'
+    errorMessage.value = 'โหลดนัดหมายไม่สำเร็จ กรุณาลองใหม่'
+  } finally {
+    if (requestId === appointmentLoadRequest) listLoading.value = false
   }
 }
 onMounted(async () => {
   await load()
+  await loadStaffIdentity()
   window.addEventListener('manager-branch-changed', applyManagerBranch)
   const editId = Number(route.params.id || route.query.edit)
   if (editId) {
@@ -411,9 +527,21 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
-watch([startDate, endDate, listServiceMode], () => {
+watch([startDate, endDate], () => {
+  if (selectedMonth.value) {
+    const [year, month] = selectedMonth.value.split('-').map(Number)
+    const last = new Date(year!, month!, 0).getDate()
+    if (
+      startDate.value !== selectedMonth.value + '-01' ||
+      endDate.value !== selectedMonth.value + '-' + String(last).padStart(2, '0')
+    )
+      selectedMonth.value = ''
+  }
   page.value = 0
   void load()
+})
+watch(listServiceMode, () => {
+  page.value = 0
 })
 function applyManagerBranch() {
   if (!isManager) return
@@ -424,10 +552,10 @@ function applyManagerBranch() {
 async function changePage(nextPage: number) {
   if (nextPage >= 0 && nextPage < totalPages.value) {
     page.value = nextPage
-    await load()
   }
 }
 function openCreate(source: 'standard' | 'calendar' = 'standard') {
+  void ensureFormData()
   editingId.value = null
   originalEditingAppointment.value = null
   createSource.value = source
@@ -483,6 +611,11 @@ async function loadPatientCourses(patientId: number) {
   }
 }
 function openEdit(item: Appointment) {
+  if (!canManageOwnAppointment(item)) {
+    errorMessage.value = 'จัดการได้เฉพาะนัดหมายของตัวเอง'
+    return
+  }
+  void ensureFormData()
   editingId.value = item.id
   originalEditingAppointment.value = item
   createSource.value = 'standard'
@@ -609,6 +742,7 @@ watch(
   },
 )
 async function requestSaveConfirmation() {
+  if (formDataLoading.value || formDataError.value) return
   showRequiredValidation.value = true
   const newPatientName =
     [newPatientForm.value.firstName, newPatientForm.value.lastName]
@@ -754,14 +888,14 @@ async function save() {
     selectedMonth.value = ''
     startDate.value = ''
     endDate.value = ''
-    sortOrder.value = 'newest'
+    sortOrder.value = 'oldest'
     page.value = 0
     viewMode.value = 'list'
     await load()
     appointments.value = [
       savedAppointment,
       ...appointments.value.filter((item) => item.id !== savedAppointment.id),
-    ].slice(0, 20)
+    ]
     if (wasEditing) {
       appointmentSuccessMessage.value = 'เลื่อนนัดหมายสำเร็จ'
     } else {
@@ -804,14 +938,18 @@ async function saveStatus(item: Appointment, status: AppointmentStatus, reason =
     return false
   } finally {
     savingStatusId.value = null
-    window.setTimeout(() => (statusNotice.value = ''), 2200)
+    if (statusNotice.value === 'บันทึกแล้ว')
+      window.setTimeout(() => {
+        if (statusNotice.value === 'บันทึกแล้ว') statusNotice.value = ''
+      }, 2200)
   }
 }
-function confirmCancellation() {
+async function confirmCancellation() {
   if (!pendingCancellation.value || !cancellationReason.value.trim()) return
   const { item } = pendingCancellation.value
-  pendingCancellation.value = null
-  void saveStatus(item, 'CANCELLED', cancellationReason.value.trim())
+  if (savingStatusId.value) return
+  if (await saveStatus(item, 'CANCELLED', cancellationReason.value.trim()))
+    pendingCancellation.value = null
 }
 
 async function requestStatusChange(item: Appointment, nextStatus: string) {
@@ -819,8 +957,8 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
   if (nextStatus === 'CONFIRMED') {
     if (!(await saveStatus(item, 'CONFIRMED'))) return
     const patientId = item.patient?.id
-    if (!patientId) {
-      statusNotice.value = 'นัดหมายนี้ยังไม่มีข้อมูลผู้ป่วยที่ลงทะเบียน'
+    if (!patientId || !item.patient?.hn) {
+      statusNotice.value = 'กรุณาลงทะเบียนผู้ป่วยก่อนใช้บริการ'
       window.setTimeout(() => (statusNotice.value = ''), 2200)
       return
     }
@@ -846,7 +984,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
     <main class="staff-main">
       <section v-if="viewMode === 'list'" class="staff-hero">
         <h1>นัดหมาย</h1>
-        <p>ตรวจสอบตารางนัด สร้าง แก้ไข และอัปเดตสถานะการเข้ารับบริการ</p>
+        <p>ตรวจตารางและจัดการนัดหมาย</p>
         <div class="appointment-hero-actions">
           <button class="primary hero-action" @click="goToCreate">+ สร้างนัดหมาย</button>
           <button
@@ -854,11 +992,32 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             type="button"
             @click="router.push({ name: 'staff-appointment-calendar' })"
           >
-            <img src="/calendar-appointment.svg" alt="" /> ดูปฏิทินนัดหมาย
+            <svg
+              class="appointment-calendar-icon"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              aria-hidden="true"
+            >
+              <rect x="3" y="5" width="18" height="16" rx="3" />
+              <path d="M7 3v4m10-4v4M3 11h18" />
+            </svg>
+            ดูปฏิทินนัดหมาย
           </button>
         </div>
       </section>
-      <div v-if="viewMode !== 'list'" class="appointment-form-page">
+      <div
+        v-if="viewMode !== 'list'"
+        class="appointment-form-page"
+        :class="{ 'appointment-reschedule-modal': isEditing }"
+        :role="isEditing ? 'dialog' : undefined"
+        :aria-modal="isEditing ? true : undefined"
+        :aria-label="isEditing ? 'เลื่อนนัดหมาย' : undefined"
+        v-modal-focus="isEditing ? { close: goToAppointmentList, busy: savingAppointment } : null"
+      >
         <div class="appointment-back-row">
           <button class="appointment-back" type="button" @click="goToAppointmentList">
             {{ isCalendarCreate ? '← กลับไปหน้าปฏิทิน' : '← กลับไปหน้านัดหมาย' }}
@@ -868,6 +1027,10 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           class="staff-panel create-card appointment-create-card"
           :class="{ 'is-editing': isEditing }"
         >
+          <p v-if="formDataLoading" role="status">กำลังโหลดข้อมูลนัดหมาย…</p>
+          <p v-if="formDataError" role="alert">
+            {{ formDataError }} <button type="button" @click="ensureFormData">ลองใหม่</button>
+          </p>
           <h1>
             {{
               isEditing
@@ -1277,6 +1440,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="time-drawer-title"
+          v-modal-focus="{
+            close: () => {
+              timeDrawerOpen = false
+            },
+          }"
         >
           <div class="appointment-time-drawer-content">
             <h2 id="time-drawer-title">เลือกเวลาว่าง</h2>
@@ -1352,12 +1520,26 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
         </aside>
       </div>
       <section v-if="viewMode === 'list'" class="staff-panel appointment-panel">
-        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="error" role="alert">
+          {{ errorMessage }}
+          <button class="appointment-retry" type="button" @click="load" :disabled="listLoading">
+            ลองใหม่
+          </button>
+        </p>
         <div v-show="scheduleView === 'list'" class="appointment-list-controls">
-          <div class="appointment-list-mode-toggle" aria-label="เลือกรูปแบบรายการ">
+          <div class="appointment-list-mode-toggle" role="group" aria-label="เลือกรูปแบบรายการ">
+            <button
+              type="button"
+              :class="{ active: listServiceMode === 'all' }"
+              :aria-pressed="listServiceMode === 'all'"
+              @click="listServiceMode = 'all'"
+            >
+              ทั้งหมด
+            </button>
             <button
               type="button"
               :class="{ active: listServiceMode === 'single' }"
+              :aria-pressed="listServiceMode === 'single'"
               @click="listServiceMode = 'single'"
             >
               รายครั้ง
@@ -1365,12 +1547,21 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             <button
               type="button"
               :class="{ active: listServiceMode === 'course' }"
+              :aria-pressed="listServiceMode === 'course'"
               @click="listServiceMode = 'course'"
             >
               รายคอร์ส
             </button>
           </div>
           <header class="panel-head appointment-list-filters">
+            <button
+              class="appointment-today"
+              type="button"
+              @click="showToday"
+              :aria-pressed="startDate === clinicToday() && endDate === clinicToday()"
+            >
+              วันนี้
+            </button>
             <div class="appointment-date-range appointment-month-filter">
               <span>เดือน</span>
               <MonthFilterPicker
@@ -1401,6 +1592,13 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               />
             </label>
           </header>
+        </div>
+        <div v-if="scheduleView === 'list'" class="appointment-list-summary">
+          <p class="appointment-summary-date">{{ listDateCaption }}</p>
+          <span v-if="!listLoading && !errorMessage" class="appointment-summary-count">
+            {{ filteredAppointments.length.toLocaleString('th-TH') }} นัดหมาย
+          </span>
+          <span v-if="listLoading" role="status">กำลังโหลดนัดหมาย…</span>
         </div>
         <section v-if="scheduleView !== 'list'" class="appointment-calendar">
           <header class="calendar-heading">
@@ -1505,8 +1703,27 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             </div>
           </div>
         </section>
-        <div v-else class="appointment-table-scroll">
-          <table class="staff-table">
+        <div v-else class="appointment-table-scroll" :aria-busy="listLoading">
+          <p v-if="listLoading" class="appointment-list-feedback" aria-hidden="true">
+            กำลังโหลดนัดหมาย…
+          </p>
+          <p
+            v-else-if="!errorMessage && filteredAppointments.length === 0"
+            class="appointment-list-feedback"
+            role="status"
+          >
+            {{
+              startDate === clinicToday() && endDate === clinicToday()
+                ? 'วันนี้ไม่มีนัดหมาย'
+                : !startDate && !endDate
+                  ? 'ยังไม่มีนัดหมาย'
+                  : 'ไม่พบนัดหมายในช่วงวันที่เลือก'
+            }}
+          </p>
+          <table
+            v-if="!listLoading && !errorMessage && filteredAppointments.length > 0"
+            class="staff-table"
+          >
             <thead>
               <tr>
                 <th>วันที่</th>
@@ -1524,13 +1741,19 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in filteredAppointments" :key="item.id">
+              <tr
+                v-for="item in listLoading || errorMessage ? [] : pagedAppointments"
+                :key="item.id"
+              >
                 <td>{{ formatThaiDate(item.startAt) }}</td>
                 <td>
                   <b>{{ formatTime(item.startAt) }}</b>
                 </td>
-                <td>
+                <td class="appointment-patient-cell">
                   <b>{{ item.patient?.fullName || item.contactName || 'ผู้ป่วยไม่ประจำ' }}</b>
+                  <span v-if="item.patient?.hn" class="appointment-patient-hn"
+                    >HN {{ item.patient.hn }}</span
+                  >
                 </td>
                 <td>{{ patientPhone(item) }}</td>
                 <td>{{ item.service.name || 'ยังไม่ระบุบริการ' }}</td>
@@ -1559,24 +1782,82 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   </div>
                 </td>
                 <td>
-                  <button class="appointment-edit" @click="goToEdit(item)">แก้ไข</button>
+                  <span
+                    v-if="item.status === 'CANCELLED' && item.cancelReason"
+                    class="appointment-cancel-reason"
+                    >เหตุผล: {{ item.cancelReason }}</span
+                  >
+                  <RouterLink
+                    v-if="
+                      item.status === 'CONFIRMED' &&
+                      !item.patient?.hn &&
+                      canManageOwnAppointment(item)
+                    "
+                    class="appointment-register"
+                    :to="{
+                      name: 'patient-registration',
+                      query: {
+                        appointmentId: String(item.id),
+                        returnStartDate: startDate,
+                        returnEndDate: endDate,
+                        returnType: listServiceMode,
+                      },
+                    }"
+                    >ลงทะเบียนผู้ป่วย</RouterLink
+                  >
+                  <AppointmentProcessActions v-if="uiStatusFor(item.status) === 'CONFIRMED' && item.patient?.hn" :appointment="item" :can-manage="canManageOwnAppointment(item)" />
+                  <span
+                    v-if="
+                      !canManageOwnAppointment(item) &&
+                      item.status === 'CONFIRMED' &&
+                      !item.patient?.hn
+                    "
+                    class="appointment-cancel-reason"
+                    >ให้ผู้จัดการหรือเจ้าของนัดลงทะเบียน</span
+                  >
+
+                  <button
+                    v-if="canManageOwnAppointment(item) && uiStatusFor(item.status) === 'PENDING'"
+                    class="appointment-edit"
+                    @click="goToEdit(item)"
+                  >
+                    แก้ไข
+                  </button>
                 </td>
-              </tr>
-              <tr v-if="filteredAppointments.length === 0">
-                <td class="appointment-empty" colspan="8">ไม่พบข้อมูลนัดหมาย</td>
               </tr>
             </tbody>
           </table>
         </div>
         <nav
-          v-if="scheduleView === 'list'"
+          v-if="scheduleView === 'list' && !listLoading && !errorMessage && filteredAppointments.length > 0"
           class="appointment-pagination"
           aria-label="เปลี่ยนหน้ารายการนัดหมาย"
         >
           <button type="button" :disabled="page === 0" @click="changePage(page - 1)">
             ← ก่อนหน้า
           </button>
-          <span>หน้า {{ page + 1 }} จาก {{ Math.max(totalPages, 1) }}</span>
+          <div class="appointment-page-choices">
+            <span class="appointment-page-caption" aria-live="polite"
+              >หน้า {{ page + 1 }} จาก {{ Math.max(totalPages, 1) }}</span
+            >
+            <div class="appointment-page-numbers" role="group" aria-label="เลือกหน้า">
+              <template v-for="(number, index) in visiblePageNumbers" :key="number">
+                <span
+                  v-if="index > 0 && number - visiblePageNumbers[index - 1]! > 1"
+                  aria-hidden="true"
+                  >…</span
+                >
+                <button
+                  type="button"
+                  :aria-label="`หน้า ${number + 1}`"
+                  :aria-current="page === number ? 'page' : undefined"
+                  @click="changePage(number)"
+                >
+                  {{ number + 1 }}
+                </button>
+              </template>
+            </div>
+          </div>
           <button type="button" :disabled="page + 1 >= totalPages" @click="changePage(page + 1)">
             ถัดไป →
           </button>
@@ -1586,9 +1867,22 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
     <div
       v-if="pendingCancellation"
       class="status-modal-backdrop"
-      @click.self="pendingCancellation = null"
+      @click.self="savingStatusId === null && (pendingCancellation = null)"
     >
-      <form class="status-modal" @submit.prevent="confirmCancellation">
+      <form
+        class="status-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="ยืนยันการยกเลิกนัดหมาย"
+        v-modal-focus="{
+          close: () => {
+            pendingCancellation = null
+          },
+          busy: savingStatusId !== null,
+        }"
+        @submit.prevent="confirmCancellation"
+      >
+        <p v-if="statusNotice" role="status">{{ statusNotice }}</p>
         <h2>ยืนยันการยกเลิกนัดหมาย</h2>
         <p>
           {{
@@ -1604,30 +1898,56 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           <textarea v-model.trim="cancellationReason" rows="3" required></textarea>
         </label>
         <div>
-          <button type="button" class="secondary" @click="pendingCancellation = null">กลับ</button>
-          <button type="submit" class="danger">ยืนยันการยกเลิก</button>
+          <button
+            type="button"
+            class="secondary"
+            :disabled="savingStatusId !== null"
+            @click="pendingCancellation = null"
+          >
+            กลับ
+          </button>
+          <button
+            type="submit"
+            class="danger"
+            :disabled="!cancellationReason.trim() || savingStatusId !== null"
+          >
+            ยืนยันการยกเลิก
+          </button>
         </div>
       </form>
     </div>
     <div
       v-if="pendingSaveConfirmation"
       class="status-modal-backdrop"
-      @click.self="pendingSaveConfirmation = false"
+      @click.self="!savingAppointment && (pendingSaveConfirmation = false)"
     >
       <section
         class="status-modal appointment-confirm-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="appointment-confirmation-title"
+        v-modal-focus="{
+          close: () => {
+            pendingSaveConfirmation = false
+          },
+          busy: savingAppointment,
+        }"
       >
         <h2 id="appointment-confirmation-title">
           {{ isEditing ? 'ยืนยันการเลื่อนนัดหมายหรือไม่?' : 'ยืนยันการสร้างนัดหมายหรือไม่?' }}
         </h2>
         <div>
-          <button type="button" class="secondary" @click="pendingSaveConfirmation = false">
-            ไม่ใช่
+          <button
+            type="button"
+            class="secondary"
+            :disabled="savingAppointment"
+            @click="pendingSaveConfirmation = false"
+          >
+            กลับไปแก้ไข
           </button>
-          <button type="button" class="primary" @click="confirmSave">ใช่</button>
+          <button type="button" class="primary" :disabled="savingAppointment" @click="confirmSave">
+            {{ savingAppointment ? 'กำลังบันทึก…' : 'ยืนยันนัดหมาย' }}
+          </button>
         </div>
       </section>
     </div>
@@ -1658,3 +1978,5 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
 </template>
 <style scoped src="../styles/manager-appointments.css"></style>
 <style src="../styles/therapist.css"></style>
+
+<style src="../styles/appointment-list.css"></style>
