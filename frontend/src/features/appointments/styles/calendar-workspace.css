@@ -265,8 +265,13 @@ input:focus-visible,
   z-index: 5;
 }
 .appointment-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   box-sizing: border-box;
   width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   border: 1px solid #bdcec6;
   border-radius: 14px;
   padding: 24px;
