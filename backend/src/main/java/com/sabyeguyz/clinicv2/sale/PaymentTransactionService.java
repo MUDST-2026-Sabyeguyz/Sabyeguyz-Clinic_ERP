@@ -49,7 +49,6 @@ public class PaymentTransactionService {
         payment.setPaymentCreateAt(Instant.now());
         payment.setPaymentCreateBy(actorId);
         PaymentTransaction saved = payments.saveAndFlush(payment);
-        refreshPaymentLabel(receipt);
         return saved;
     }
 
@@ -67,16 +66,7 @@ public class PaymentTransactionService {
         payment.setPaymentUpdateAt(Instant.now());
         payment.setPaymentUpdateBy(actorId);
         PaymentTransaction saved = payments.saveAndFlush(payment);
-        refreshPaymentLabel(payment.getReceipt());
         return saved;
-    }
-
-    private void refreshPaymentLabel(Receipt receipt) {
-        BigDecimal paid = payments.paidAmountOf(receipt.getId());
-        receipt.setPaymentLabel(paid.compareTo(receipt.getNetAmount()) >= 0
-                ? com.sabyeguyz.clinicv2.enums.PaymentLabel.FullyPaid
-                : paid.signum() > 0 ? com.sabyeguyz.clinicv2.enums.PaymentLabel.Installment
-                : com.sabyeguyz.clinicv2.enums.PaymentLabel.Deposit);
     }
 
     private static void require(boolean condition, String message) {

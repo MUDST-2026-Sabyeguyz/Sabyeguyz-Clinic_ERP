@@ -406,7 +406,8 @@ public class V2FinanceScenarios {
     private Object receipt(String scenario) {
         var repository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByReceiptNoAndBranchId",
                 a -> scenario.equals("receipt-duplicate") ? Optional.of(new Receipt()) : Optional.empty());
-        var service = new ReceiptService(repository.proxy(), new V2RepositoryStub<>(CourseRepository.class).proxy());
+        var service = new ReceiptService(repository.proxy(), new V2RepositoryStub<>(CourseRepository.class).proxy(),
+                new V2RepositoryStub<>(PaymentLabelOptionRepository.class).proxy());
         if (scenario.equals("receipt-next-no")) {
             repository.on("findMaxReceiptSequence", a -> 41);
             return service.nextReceiptNo();
@@ -536,7 +537,10 @@ public class V2FinanceScenarios {
         var service = new TransactionCancellationService(cancellations.proxy(), salesRepo.proxy(),
                 new SalesTransactionService(salesRepo.proxy(), null), paymentRepo.proxy(),
                 new PaymentTransactionService(paymentRepo.proxy(), receiptRepo.proxy()),
-                new ReceiptService(receiptRepo.proxy(), new V2RepositoryStub<>(CourseRepository.class).proxy()),
+                new ReceiptService(
+                        receiptRepo.proxy(),
+                        new V2RepositoryStub<>(CourseRepository.class).proxy(),
+                        new V2RepositoryStub<>(PaymentLabelOptionRepository.class).proxy()),
                 new V2RepositoryStub<>(CourseRepository.class).proxy(), null, null);
         var receipt = new Receipt(); receipt.setReceiptStatus(ReceiptStatus.Issued);
         var sale = line(TransactionType.CoursePurchase, "1500.00", "0.00"); sale.setReceipt(receipt);

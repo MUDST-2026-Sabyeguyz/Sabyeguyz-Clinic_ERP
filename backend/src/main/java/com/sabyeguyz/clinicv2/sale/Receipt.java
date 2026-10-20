@@ -87,8 +87,19 @@ public class Receipt {
     @Column(name = "payment_label", nullable = false, columnDefinition = "payment_label_enum")
     private com.sabyeguyz.clinicv2.enums.PaymentLabel paymentLabel = com.sabyeguyz.clinicv2.enums.PaymentLabel.Deposit;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_label_id")
+    private PaymentLabelOption paymentLabelOption;
+
     public com.sabyeguyz.clinicv2.enums.PaymentLabel getPaymentLabel() { return paymentLabel; }
     public void setPaymentLabel(com.sabyeguyz.clinicv2.enums.PaymentLabel value) { paymentLabel = value; }
+
+    public PaymentLabelOption getPaymentLabelOption() {
+        return paymentLabelOption;
+    }
+    public void setPaymentLabelOption(PaymentLabelOption paymentLabelOption) {
+        this.paymentLabelOption = paymentLabelOption;
+    }
 
     public Receipt() {}
 
