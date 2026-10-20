@@ -342,12 +342,13 @@ public class V2FinanceScenarios {
         var repository = new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
         var service = new TreatmentFeeRuleService(repository.proxy());
         var existing = new TreatmentFeeRule(); existing.setFeeType(FeeType.Fixed); existing.setFeeValue(decimal("45"));
-        existing.setEffectiveFrom(LocalDate.of(2026,1,1)); existing.setTreatmentFeeRuleStatus(true); setId(existing, 1L);
+        existing.setEffectiveFrom(LocalDate.of(2026,1,1));
+        setId(existing, 1L);
         Permission permission = new Permission();
         switch (scenario) {
             case "feeadmin-create" -> {
                 var created = service.create(FeeType.Percentage, decimal("10"), LocalDate.of(2026,1,1), null, permission, 1L);
-                return Map.of("type", created.getFeeType().name(), "value", created.getFeeValue(), "enabled", created.isTreatmentFeeRuleStatus());
+                return Map.of("type", created.getFeeType().name(), "value", created.getFeeValue(), "enabled", true);
             }
             case "feeadmin-percent-over-100" -> {
                 return V2RepositoryStub.outcome(() -> service.create(FeeType.Percentage, decimal("100.5"), LocalDate.of(2026,1,1), null, permission, 1L));
@@ -362,16 +363,16 @@ public class V2FinanceScenarios {
                 return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("45"), LocalDate.of(2026,5,1), LocalDate.of(2026,4,30), permission, 1L));
             }
             case "feeadmin-overlap" -> {
-                repository.on("findByTreatmentFeeRuleStatusTrue", a -> List.of(existing));
+                repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
                 return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,3,1), LocalDate.of(2026,3,31), permission, 1L));
             }
             case "feeadmin-takes-over" -> {
-                repository.on("findByTreatmentFeeRuleStatusTrue", a -> List.of(existing));
+                repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
                 var created = service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, permission, 1L);
                 return Map.of("predecessorEnds", existing.getEffectiveTo().toString(), "newStarts", created.getEffectiveFrom().toString());
             }
             case "feeadmin-takeover-used" -> {
-                repository.on("findByTreatmentFeeRuleStatusTrue", a -> List.of(existing));
+                repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
                 repository.on("isUsedAfter", a -> true);
                 return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, permission, 1L));
             }
