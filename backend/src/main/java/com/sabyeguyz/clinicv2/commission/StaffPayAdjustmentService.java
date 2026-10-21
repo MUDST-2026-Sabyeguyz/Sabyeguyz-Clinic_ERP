@@ -11,6 +11,7 @@ import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.sale.SalesTransactionRepository;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
+import com.sabyeguyz.clinicv2.branch.Branch;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -222,7 +223,9 @@ public class StaffPayAdjustmentService {
      * after the other Draft applications). The payment must be Open and the month not before the first intended month.
      */
     @Transactional
-    public AdjustmentApplication createApplication(Long adjustmentId, String month, BigDecimal amountAbs, Long actorId) {
+    public AdjustmentApplication createApplication(Long adjustmentId, String month, BigDecimal amountAbs, Branch branch, Long actorId) {
+        require(branch != null && branch.getId() != null,
+                "ต้องระบุสาขาของงวดจ่ายที่จะนำ Adjustment ไปใช้");
         StaffPayAdjustment adjustment = find(adjustmentId);
         require(adjustment.getAdjustmentStatus() == AdjustmentStatus.Approved
                 || adjustment.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied, "นำไปใช้ได้เฉพาะใบปรับยอดที่อนุมัติแล้วและยังไม่ครบ");
@@ -236,7 +239,7 @@ public class StaffPayAdjustmentService {
         BigDecimal wanted = amountAbs == null ? available : amountAbs;
         require(wanted.signum() > 0 && wanted.stripTrailingZeros().scale() <= 2, "ยอดที่นำไปใช้ต้องมากกว่า 0 และมีทศนิยมไม่เกิน 2 ตำแหน่ง");
         require(wanted.compareTo(available) <= 0, "ยอดที่นำไปใช้รวมกันต้องไม่เกินยอดคงเหลือของใบปรับยอด (" + available + ")");
-        StaffMonthlyPayment payment = paymentService.openFor(adjustment.getStaff(), month, actorId);
+        StaffMonthlyPayment payment = paymentService.openFor(adjustment.getStaff(), month, branch, actorId);
         require(payment.getPaymentStatus() == PaymentStatus.Open, "เพิ่มได้เฉพาะงวดที่ยังเป็น Open (งวด Paid แล้วห้ามเพิ่ม)");
 
         AdjustmentApplication application = new AdjustmentApplication();
