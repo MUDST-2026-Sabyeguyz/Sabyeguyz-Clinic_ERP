@@ -106,7 +106,12 @@ public class CourseService {
                 : "%s-%02d".formatted(receipt.getReceiptNo(), courseSequence);
 
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveSaleDate);
-        BigDecimal monthlySalesToDate = tierSales.netSales(sellerStaff.getId(), saleMonth)
+        require(transaction.getBranch() != null, "ต้องระบุสาขาของรายการขาย");
+
+        BigDecimal monthlySalesToDate = tierSales.netSales(
+                        sellerStaff.getId(),
+                        saleMonth,
+                        transaction.getBranch().getId())
                 .add(price);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySalesToDate);
 

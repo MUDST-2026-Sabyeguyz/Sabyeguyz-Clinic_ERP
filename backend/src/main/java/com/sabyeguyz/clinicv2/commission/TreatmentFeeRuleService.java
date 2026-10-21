@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.commission;
 
 import com.sabyeguyz.clinicv2.enums.FeeType;
 import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.branch.Branch;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -19,11 +20,15 @@ public class TreatmentFeeRuleService {
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final TreatmentFeeRuleRepository rules;
+    private final BranchClosingGuard branchClosingGuard;
 
     private com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
-    public TreatmentFeeRuleService(TreatmentFeeRuleRepository rules) {
+    public TreatmentFeeRuleService(
+            TreatmentFeeRuleRepository rules,
+            BranchClosingGuard branchClosingGuard) {
         this.rules = rules;
+        this.branchClosingGuard = branchClosingGuard;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -42,8 +47,9 @@ public class TreatmentFeeRuleService {
     }
 
     @Transactional
-    public TreatmentFeeRule create(FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                    Permission permission, Long actorId) {
+    public TreatmentFeeRule create( FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
+                                    Branch branch, Permission permission, Long actorId) {
+        branchClosingGuard.requireCurrentMonthClosed(branch);
         rules.lockVersionAllocation();
         validate(feeType, feeValue, effectiveFrom, effectiveTo);
         requireNoOtherPending(effectiveFrom);
@@ -69,7 +75,9 @@ public class TreatmentFeeRuleService {
      */
     @Transactional
     public TreatmentFeeRule update(Long id, FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom,
-                                    LocalDate effectiveTo, Long actorId) {
+                                    LocalDate effectiveTo, Branch branch, Long actorId) {
+        branchClosingGuard.requireCurrentMonthClosed(branch);
+        rules.lockVersionAllocation();
         TreatmentFeeRule rule = find(id);
         FeeType newType = feeType != null ? feeType : rule.getFeeType();
         BigDecimal newValue = feeValue != null ? feeValue : rule.getFeeValue();
