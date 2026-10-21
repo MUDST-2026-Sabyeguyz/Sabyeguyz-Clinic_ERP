@@ -37,7 +37,10 @@ public class CommissionRateOverrideService {
                 "อัตราค่าคอมมิชชั่นต้องอยู่ระหว่าง 0 ถึง 1");
         require(reason != null && !reason.isBlank(), "ต้องระบุเหตุผลของการแก้ไข");
         require(course.getLockedCommissionRate() != null, "คอร์สนี้ยังไม่ถูก Lock จึงไม่ต้อง Override");
-        boolean finalized = closings.findByClosingMonthAndStaffId(course.getSaleMonth(), course.getSellerStaff().getId())
+        boolean finalized = closings.findByClosingMonthAndStaffIdAndBranchId(
+                        course.getSaleMonth(),
+                        course.getSellerStaff().getId(),
+                        course.getBranch().getId())
                 .map(closing -> closing.getClosingStatus() == com.sabyeguyz.clinicv2.enums.ClosingStatus.Finalized).orElse(false);
         if (finalized) {
             throw new IllegalStateException("เดือนขายของคอร์สนี้ Finalize แล้ว ห้ามเปลี่ยนอัตรา ให้บันทึกเป็น Adjustment ในงวดถัดไป");

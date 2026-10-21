@@ -60,6 +60,15 @@ public class ApiExceptionHandler {
                 .body(new ApiErrorResponse("ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นไปแล้ว กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง"));
     }
 
+    /** 409: Reports database lock conflicts without exposing internal errors. */
+    @ExceptionHandler(org.springframework.dao.PessimisticLockingFailureException.class)
+    ResponseEntity<ApiErrorResponse> lockConflict(
+            org.springframework.dao.PessimisticLockingFailureException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "มีรายการอื่นกำลังประมวลผลอยู่ กรุณาลองใหม่อีกครั้ง"));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<ApiErrorResponse> unreadable(HttpMessageNotReadableException exception) {
         return ResponseEntity.badRequest().body(new ApiErrorResponse(
