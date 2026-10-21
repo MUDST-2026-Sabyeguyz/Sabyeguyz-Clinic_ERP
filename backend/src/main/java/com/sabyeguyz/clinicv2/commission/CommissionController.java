@@ -3,6 +3,7 @@ package com.sabyeguyz.clinicv2.commission;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
+import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.role.Permission;
@@ -50,23 +51,26 @@ public class CommissionController {
     private final StaffRepository staff;
     private final PermissionRepository permissions;
     private final CurrentActor actor;
+    private final BranchAccessPolicy branchAccess;
     private final CommissionRateOverrideService overrideService;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CommissionController(CommissionSchemeService schemeService, CommissionTierResolver tierResolver,
-                                 CommissionSchemeRepository schemes, MonthlyCommissionClosingService closingService,
-                                 CommissionSchemeResolver schemeResolver,
-                                 MonthlyCommissionClosingRepository closings,
-                                 CommissionAllocationLedgerRepository allocationLedger,
-                                 TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
-                                 StaffRepository staff, PermissionRepository permissions, CurrentActor actor,
-                                 CommissionRateOverrideService overrideService,
-                                 com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                 TreatmentFeeRuleService treatmentFeeService, MonthlyTierSalesService tierSales,
-                                 com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
-                                 com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
-                                 com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems,
-                                 com.sabyeguyz.clinicv2.auth.AppUserRepository users) {
+                                CommissionSchemeRepository schemes, MonthlyCommissionClosingService closingService,
+                                CommissionSchemeResolver schemeResolver,
+                                MonthlyCommissionClosingRepository closings,
+                                CommissionAllocationLedgerRepository allocationLedger,
+                                TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
+                                StaffRepository staff, PermissionRepository permissions, CurrentActor actor,
+                                CommissionRateOverrideService overrideService,
+                                com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                                TreatmentFeeRuleService treatmentFeeService, MonthlyTierSalesService tierSales,
+                                com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
+                                com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
+                                com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems,
+                                com.sabyeguyz.clinicv2.auth.AppUserRepository users,
+                                BranchAccessPolicy branchAccess) {
+        this.branchAccess = branchAccess;
         this.users = users;
         this.refundItems = refundItems;
         this.singleVisitFeeAccrual = singleVisitFeeAccrual;
@@ -113,7 +117,7 @@ public class CommissionController {
                                         LocalDate effectiveFrom, LocalDate effectiveTo, boolean enabled, boolean used,
                                         String name, String lastEditedBy, java.time.Instant lastEditedAt) {}
     public record TreatmentFeeRequest(String feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                       String name) {}
+                                      String name, String branchCode) {}
 
     @GetMapping("/schemes")
     public List<SchemeResponse> schemes() {
@@ -221,9 +225,16 @@ public class CommissionController {
      * offer "close the month".
      */
     @GetMapping("/closings")
-    public List<ClosingResponse> closings(@RequestParam String month) {
+    public List<ClosingResponse> closings(@RequestParam String month, @RequestParam String branchCode) {
         String saleMonth = month.length() >= 7 ? month.substring(0, 7) : month;
-        List<ClosingResponse> rows = new ArrayList<>(closings.findByClosingMonth(saleMonth).stream().map(c -> new ClosingResponse(c.getId(),
+        StaffMonthlyPaymentService.requireMonth(saleMonth);
+
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขาที่ต้องการดูยอด");
+        }
+
+        List<ClosingResponse> rows = new ArrayList<>(closings.findByClosingMonthAndBranchId(saleMonth, branch.getId()).stream().map(c -> new ClosingResponse(c.getId(),
                 c.getClosingMonth(), c.getStaff().getId(), c.getStaff().getStaffFname() + " " + c.getStaff().getStaffLname(),
                 c.getMonthlyCourseSales(), String.valueOf(c.getCommissionSchemeVersion()),
                 c.getLockedCommissionRate() != null ? c.getLockedCommissionRate() : c.getCalculatedCommissionRate(),
@@ -231,11 +242,11 @@ public class CommissionController {
         if (saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])")) {
             java.util.Set<Long> listed = new java.util.HashSet<>();
             rows.forEach(r -> listed.add(r.employeeId()));
-            for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonth(saleMonth)) {
+            for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonthAndBranchId(saleMonth, branch.getId())) {
                 if (listed.contains(sellerId)) continue;
                 Staff seller = staff.findById(sellerId).orElse(null);
                 if (seller == null) continue;
-                BigDecimal sales = tierSales.netSales(sellerId, saleMonth);
+                BigDecimal sales = tierSales.netSales(sellerId, saleMonth, branch.getId());
                 BigDecimal rate;
                 try {
                     rate = tierResolver.resolve(schemeResolver.resolveEffective(LocalDate.parse(saleMonth + "-01")), sales)
@@ -251,25 +262,74 @@ public class CommissionController {
     }
 
     @PostMapping("/closings/{month}")
-    public List<ClosingResponse> closeMonth(@PathVariable String month) {
-        String saleMonth = month.length() >= 7 ? month.substring(0, 7) : month;
-        Permission permission = resolveOrCreatePermission("COMMISSION_CLOSING_MANAGE");
-        for (Long sellerId : courses.findDistinctCreditedStaffIdsBySaleMonth(saleMonth)) {
+    public List<ClosingResponse> closeMonth(
+            @PathVariable String month,
+            @RequestParam String branchCode) {
+
+        String saleMonth = month.length() >= 7
+                ? month.substring(0, 7) : month;
+        StaffMonthlyPaymentService.requireMonth(saleMonth);
+
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขาที่ต้องการปิดยอด");
+        }
+
+        closings.lockBranchMonth(branch.getId(), saleMonth);
+
+        Permission permission =
+                resolveOrCreatePermission("COMMISSION_CLOSING_MANAGE");
+
+        for (Long sellerId :
+                courses.findDistinctCreditedStaffIdsBySaleMonthAndBranchId(
+                        saleMonth, branch.getId())) {
+
             Staff seller = staff.findById(sellerId).orElseThrow();
-            boolean alreadyClosed = closings.findByClosingMonthAndStaffId(saleMonth, sellerId)
-                    .map(MonthlyCommissionClosing::isClosed).orElse(false);
+
+            boolean alreadyClosed =
+                    closings.findByClosingMonthAndStaffIdAndBranchId(
+                                    saleMonth, sellerId, branch.getId())
+                            .map(MonthlyCommissionClosing::isClosed)
+                            .orElse(false);
+
             if (!alreadyClosed) {
-                MonthlyCommissionClosing closed = closingService.closeMonth(saleMonth, seller, permission, actor.currentId());
-                audit.recordChange("monthly_commission_closing", String.valueOf(closed.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
-                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Open"),
-                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields("closing_status", "Closed",
-                                "closing_month", saleMonth, "staff_id", sellerId,
+                MonthlyCommissionClosing closed = closingService.closeMonth(
+                        saleMonth, seller, branch, permission, actor.currentId());
+
+                audit.recordChange(
+                        "monthly_commission_closing",
+                        String.valueOf(closed.getId()),
+                        com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields(
+                                "closing_status", "Open"),
+                        com.sabyeguyz.clinicv2.audit.AuditLogService.fields(
+                                "closing_status", "Closed",
+                                "closing_month", saleMonth,
+                                "branch_id", branch.getId(),
+                                "staff_id", sellerId,
                                 "monthly_course_sales", closed.getMonthlyCourseSales(),
                                 "calculated_commission_rate", closed.getCalculatedCommissionRate(),
-                                "locked_commission_rate", closed.getLockedCommissionRate()), actor.currentId());
+                                "locked_commission_rate", closed.getLockedCommissionRate()),
+                        actor.currentId());
             }
         }
-        return closings(month);
+
+        return closings.findByClosingMonthAndBranchId(
+                        saleMonth, branch.getId()).stream()
+                .map(c -> new ClosingResponse(
+                        c.getId(), c.getClosingMonth(),
+                        c.getStaff().getId(),
+                        c.getStaff().getStaffFname() + " "
+                                + c.getStaff().getStaffLname(),
+                        c.getMonthlyCourseSales(),
+                        String.valueOf(c.getCommissionSchemeVersion()),
+                        c.getLockedCommissionRate() != null
+                                ? c.getLockedCommissionRate()
+                                : c.getCalculatedCommissionRate(),
+                        c.getClosingStatus().name()
+                                .toUpperCase(java.util.Locale.ROOT),
+                        c.getReopenReason(), c.getReopenedAt()))
+                .toList();
     }
 
     public record OverrideRequest(BigDecimal rate, String reason) {}
@@ -334,9 +394,16 @@ public class CommissionController {
     @PostMapping("/treatment-fees")
     @ResponseStatus(HttpStatus.CREATED)
     public TreatmentFeeResponse createTreatmentFee(@RequestBody TreatmentFeeRequest request) {
+        var branch = branchAccess.scope(request.branchCode());
+        if (branch == null) {
+            throw new IllegalArgumentException(
+                    "ต้องเลือกสาขาสำหรับตรวจการปิดยอด");
+        }
         // the end of a rule is set by the system (the day before the next rule starts), never by the request
-        TreatmentFeeRule rule = treatmentFeeService.create(parseFeeType(request.feeType()), request.feeValue(),
-                request.effectiveFrom(), null, resolveOrCreatePermission("COMMISSION_SCHEME_MANAGE"),
+        TreatmentFeeRule rule = treatmentFeeService.create(
+                parseFeeType(request.feeType()), request.feeValue(), request.effectiveFrom(),
+                null, branch,
+                resolveOrCreatePermission("COMMISSION_SCHEME_MANAGE"),
                 actor.currentId());
         if (request.name() != null) {
             rule = treatmentFeeService.rename(rule.getId(), request.name(), actor.currentId());
@@ -348,10 +415,18 @@ public class CommissionController {
 
     @PutMapping("/treatment-fees/{id}")
     public TreatmentFeeResponse updateTreatmentFee(@PathVariable Long id, @RequestBody TreatmentFeeRequest request) {
+        var branch = branchAccess.scope(request.branchCode());
+        if (branch == null) {
+            throw new IllegalArgumentException(
+                    "ต้องเลือกสาขาสำหรับตรวจการปิดยอด");
+        }
         java.util.Map<String, Object> before = treatmentFeeRules.findById(id).map(this::feeSnapshot).orElse(null);
-        TreatmentFeeRule rule = treatmentFeeService.update(id,
-                request.feeType() == null ? null : parseFeeType(request.feeType()), request.feeValue(),
-                request.effectiveFrom(), null, actor.currentId());
+        TreatmentFeeRule rule = treatmentFeeService.update(
+                id,
+                request.feeType() == null ? null : parseFeeType(request.feeType()),
+                request.feeValue(), request.effectiveFrom(),
+                null, branch,
+                actor.currentId());
         if (request.name() != null) {
             rule = treatmentFeeService.rename(id, request.name(), actor.currentId());
         }
