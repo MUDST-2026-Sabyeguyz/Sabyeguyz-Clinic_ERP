@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import TimeFilterPicker from '@/features/staff/components/TimeFilterPicker.vue'
 import MasterDataGroups from '../components/MasterDataGroups.vue'
+import SettingsNavIcon from '../components/SettingsNavIcon.vue'
 import {
   type TreatmentFeeRule,
   branchApi,
@@ -20,22 +21,28 @@ import {
 import { clinicToday } from '@/utils/clinicDate'
 import { isBranchPhoneValid, isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 import { baht2, recordedAt, versionCycles, versionStatus } from '../commissionVersion'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 
 type SectionKey =
   'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'tiers' | 'master'
+type SettingsNavIconName = Exclude<
+  InstanceType<typeof SettingsNavIcon>['$props']['name'],
+  'calendar' | 'settings'
+>
 // Rows are edited generically from form fields of different shapes, so their values stay loosely typed.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
-const sections: Array<{ key: SectionKey; label: string }> = [
-  { key: 'branches', label: 'สาขา' },
-  { key: 'users', label: 'ผู้ใช้และสิทธิ์' },
-  { key: 'services', label: 'บริการและคอร์ส' },
-  { key: 'payments', label: 'การชำระเงิน' },
-  { key: 'rooms', label: 'Room / Resource' },
-  { key: 'commission', label: 'กฎค่ามือ' },
-  { key: 'tiers', label: 'กฎค่าคอมมิชชัน' },
-  { key: 'master', label: 'Master Data' },
-]
+const sections: Array<{ key: SectionKey; label: string; hint: string; icon: SettingsNavIconName }> =
+  [
+    { key: 'branches', label: 'สาขา', hint: 'ข้อมูลและเวลาทำการ', icon: 'branch' },
+    { key: 'users', label: 'ผู้ใช้และสิทธิ์', hint: 'บัญชีและการเข้าถึง', icon: 'users' },
+    { key: 'services', label: 'บริการและคอร์ส', hint: 'รายการและราคา', icon: 'services' },
+    { key: 'payments', label: 'การชำระเงิน', hint: 'ช่องทางและสถานะ', icon: 'payments' },
+    { key: 'rooms', label: 'Room / Resource', hint: 'ห้องและทรัพยากร', icon: 'rooms' },
+    { key: 'commission', label: 'กฎค่ามือ', hint: 'ค่ามือการรักษา', icon: 'commission' },
+    { key: 'tiers', label: 'กฎค่าคอมมิชชัน', hint: 'อัตราตามยอดขาย', icon: 'tiers' },
+    { key: 'master', label: 'Master Data', hint: 'ข้อมูลพื้นฐานระบบ', icon: 'master' },
+  ]
 // ?section=tiers opens that category (the history page links back to it)
 function initialSection(): SectionKey {
   const wanted = new URLSearchParams(window.location.search).get('section')
@@ -51,6 +58,37 @@ const fieldErrors = reactive<Record<string, boolean>>({})
 const validationMessage = ref('')
 const loadError = ref('')
 const option = (value: string) => ({ value, label: value })
+const serviceTypeOptions = [
+  { value: 'Single Visit', label: 'บริการรายครั้ง' },
+  { value: 'Course', label: 'คอร์ส' },
+]
+const userRoleOptions = [
+  { value: 'Therapist', label: 'นักกายภาพ' },
+  { value: 'Manager', label: 'ผู้จัดการ' },
+]
+const serviceTypeLabel = (value: unknown) =>
+  value === 'Single Visit'
+    ? 'บริการรายครั้ง'
+    : value === 'Course'
+      ? 'คอร์ส'
+      : value === 'Treatment Room'
+        ? 'ห้องรักษา'
+        : String(value ?? '-')
+const permissionLabels: Record<string, string> = {
+  Patient: 'ผู้ป่วย',
+  Visit: 'นัดหมาย',
+  Treatment: 'บริการ',
+  Course: 'คอร์ส',
+  Transaction: 'รายการขาย',
+  Commission: 'คอมมิชชัน',
+}
+const roleLabel = (value: unknown) =>
+  value === 'Therapist' ? 'นักกายภาพ' : value === 'Manager' ? 'ผู้จัดการ' : String(value ?? '-')
+const permissionList = (value: unknown) =>
+  String(value ?? '')
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map((permission) => ({ key: permission, label: permissionLabels[permission] ?? permission }))
 const statusOptions = computed(() => {
   return [option('ใช้งาน'), option('ปิดใช้งาน')]
 })
@@ -63,6 +101,12 @@ const data = reactive<Record<Exclude<SectionKey, 'payments'>, Row[]>>({
   tiers: [],
   master: [],
 })
+const rowsPerPage = 10
+const currentPage = ref(1)
+const userRoleFilter = ref('ทั้งหมด')
+const userStatusFilter = ref('ทั้งหมด')
+const serviceSearch = ref('')
+const serviceTypeFilter = ref('ทั้งหมด')
 const paymentMethods = reactive<Array<{ id: number; name: string; note: string; active: boolean }>>(
   [],
 )
@@ -74,6 +118,7 @@ const openBranches = computed(() => data.branches.filter((branch) => branch.stat
 const branchOptions = computed(() =>
   openBranches.value.map((branch) => option(String(branch.name))),
 )
+const selectedBranchName = computed(() => selectedManagerBranch()?.name ?? '')
 const resourceStatuses: Record<string, string> = {
   ACTIVE: 'ใช้งาน',
   INACTIVE: 'ปิดใช้งาน',
@@ -97,7 +142,7 @@ const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => 
   code: item.employeeCode,
   name: item.fullName,
   role: item.role === 'MANAGER' ? 'Manager' : 'Therapist',
-  branch: item.branchName ?? 'ทุกสาขา',
+  branch: item.branchName ?? 'ยังไม่กำหนดสาขา',
   permission: item.role === 'MANAGER' ? permissions.join(' ') : 'Patient Visit Treatment',
   status: status(item.active),
 })
@@ -122,7 +167,7 @@ const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
 const resourceRow = (item: Awaited<ReturnType<typeof resourceApi.create>>) => ({
   ...item,
   branch: item.branchName,
-  type: item.type === 'ROOM' ? 'Treatment Room' : 'Resource',
+  type: 'Treatment Room',
   status: resourceStatuses[item.status] ?? item.status,
 })
 const masterRow = (item: Awaited<ReturnType<typeof masterDataApi.create>>) => ({
@@ -290,7 +335,7 @@ function fillDefaultBranch() {
     (section.value === 'users' || section.value === 'rooms') &&
     !String(form.branch ?? '').trim()
   )
-    form.branch = openBranches.value[0]?.name ?? ''
+    form.branch = selectedBranchName.value || openBranches.value[0]?.name || ''
 }
 onMounted(loadBackendSettings)
 const copy = computed(
@@ -328,7 +373,7 @@ const headers = computed(() => {
     users: ['ผู้ใช้งาน', 'บทบาท', 'สาขา', 'สิทธิ์', 'สถานะ'],
     services: ['รายการ', 'ประเภท', 'ราคา', 'จำนวน/ครั้ง', 'สถานะ'],
     payments: [],
-    rooms: ['ห้อง/ทรัพยากร', 'สาขา', 'ประเภท', 'สถานะ'],
+    rooms: ['ห้องรักษา', 'สาขา', 'สถานะ'],
     commission: [
       'ชื่อกฎ',
       'ผู้ได้รับค่ามือ',
@@ -348,21 +393,87 @@ const keys = computed(() => {
     users: ['name', 'role', 'branch', 'permission', 'status'],
     services: ['name', 'type', 'price', 'sessions', 'status'],
     payments: [],
-    rooms: ['name', 'branch', 'type', 'status'],
+    rooms: ['name', 'branch', 'status'],
     commission: ['name', 'recipient', 'calculation', 'status', 'lastEditedBy', 'lastEditedAt'],
     tiers: ['name', 'recipient', 'calculation'],
     master: ['category', 'examples', 'status'],
   }
   return values[section.value]
 })
+const filteredTableRows = computed(() => {
+  if (section.value === 'payments' || section.value === 'commission' || section.value === 'tiers')
+    return [] as Array<{ row: Row; index: number }>
+
+  let rows = data[section.value].map((row, index) => ({ row, index }))
+  if (section.value === 'rooms') {
+    const branchName = selectedBranchName.value
+    if (!branchName) return []
+    rows = rows.filter(({ row }) => String(row.branch) === branchName)
+  }
+
+  if (section.value === 'users') {
+    const branchName = selectedBranchName.value
+    if (!branchName) return []
+    rows = rows.filter(({ row }) => String(row.branch) === branchName)
+    if (userRoleFilter.value !== 'ทั้งหมด')
+      rows = rows.filter(({ row }) => String(row.role) === userRoleFilter.value)
+    if (userStatusFilter.value !== 'ทั้งหมด')
+      rows = rows.filter(({ row }) => String(row.status) === userStatusFilter.value)
+  }
+
+  if (section.value === 'services') {
+    const query = serviceSearch.value.trim().toLocaleLowerCase('th-TH')
+    if (query)
+      rows = rows.filter(({ row }) =>
+        [row.name, serviceTypeLabel(row.type)].some((value) =>
+          String(value ?? '')
+            .toLocaleLowerCase('th-TH')
+            .includes(query),
+        ),
+      )
+    if (serviceTypeFilter.value !== 'ทั้งหมด')
+      rows = rows.filter(({ row }) => String(row.type) === serviceTypeFilter.value)
+  }
+  return rows
+})
+const pageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredTableRows.value.length / rowsPerPage)),
+)
+const pagedTableRows = computed(() => {
+  const start = (currentPage.value - 1) * rowsPerPage
+  return filteredTableRows.value.slice(start, start + rowsPerPage)
+})
+const tableRange = computed(() => {
+  const total = filteredTableRows.value.length
+  if (!total) return 'ไม่พบรายการ'
+  const start = (currentPage.value - 1) * rowsPerPage + 1
+  return `แสดง ${start}-${Math.min(start + rowsPerPage - 1, total)} จาก ${total} รายการ`
+})
+watch(
+  [
+    section,
+    () => selectedManagerBranch()?.code ?? '',
+    userRoleFilter,
+    userStatusFilter,
+    serviceSearch,
+    serviceTypeFilter,
+  ],
+  () => {
+    currentPage.value = 1
+  },
+)
+watch(pageCount, (count) => {
+  if (currentPage.value > count) currentPage.value = count
+})
 const form = reactive<Row>({})
-const masterItems = computed(() => data.master.map((row) => ({
-  id: Number(row.id), category: String(row.category), name: String(row.examples), status: String(row.status),
-})))
-function addMasterItem(category: string) {
-  openDrawer(null)
-  form.category = category
-}
+const masterItems = computed(() =>
+  data.master.map((row) => ({
+    id: Number(row.id),
+    category: String(row.category),
+    name: String(row.examples),
+    status: String(row.status),
+  })),
+)
 function editMasterItem(id: number) {
   const index = data.master.findIndex((row) => Number(row.id) === id)
   if (index >= 0) openDrawer(index)
@@ -393,7 +504,7 @@ function defaults() {
       password: '',
       code: '',
       phone: '',
-      branch: openBranches.value[0]?.name ?? '',
+      branch: selectedBranchName.value || openBranches.value[0]?.name || '',
       permission: '',
       status: 'ใช้งาน',
     })
@@ -411,7 +522,7 @@ function defaults() {
   if (section.value === 'rooms')
     Object.assign(form, {
       name: '',
-      branch: openBranches.value[0]?.name ?? '',
+      branch: selectedBranchName.value || openBranches.value[0]?.name || '',
       type: 'Treatment Room',
       capacity: 1,
       status: 'ใช้งาน',
@@ -787,30 +898,59 @@ const drawerTitle = computed(() => {
     <StaffHeader />
     <main class="settings-main">
       <header class="settings-title">
-        <h1>การตั้งค่า</h1>
-        <p>จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ</p>
+        <div>
+          <span class="settings-eyebrow">ศูนย์ควบคุมระบบ</span>
+          <h1>การตั้งค่า</h1>
+          <p>จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ</p>
+        </div>
       </header>
       <div class="settings-layout">
         <aside class="settings-nav">
-          <h2>หมวดการตั้งค่า</h2>
-          <button
-            v-for="item in sections"
-            :key="item.key"
-            :class="{ active: section === item.key }"
-            @click="section = item.key"
-          >
-            {{ item.label }}
-          </button>
-          <RouterLink class="settings-nav-item" to="/staff/settings/calendar">Google Calendar</RouterLink>
-          <RouterLink class="settings-nav-link" to="/staff/settings/audit-log">ประวัติการแก้ไขระบบ</RouterLink>
+          <div class="settings-nav-head">
+            <div>
+              <h2>หมวดการตั้งค่า</h2>
+              <p>เลือกหัวข้อเพื่อจัดการ</p>
+            </div>
+          </div>
+          <nav class="settings-nav-list" aria-label="หมวดการตั้งค่า">
+            <button
+              v-for="item in sections"
+              :key="item.key"
+              :class="{ active: section === item.key }"
+              @click="section = item.key"
+            >
+              <span class="settings-nav-icon" aria-hidden="true"
+                ><SettingsNavIcon :name="item.icon"
+              /></span>
+              <span
+                ><b>{{ item.label }}</b
+                ><small>{{ item.hint }}</small></span
+              >
+              <span class="settings-nav-arrow" aria-hidden="true">›</span>
+            </button>
+          </nav>
+          <div class="settings-nav-footer">
+            <RouterLink class="settings-nav-item" to="/staff/settings/calendar">
+              <span class="settings-nav-icon" aria-hidden="true"
+                ><SettingsNavIcon name="calendar" /></span
+              ><span><b>Google Calendar</b><small>ปฏิทินและการซิงก์</small></span
+              ><span class="settings-nav-arrow" aria-hidden="true">›</span>
+            </RouterLink>
+            <RouterLink class="settings-nav-link" to="/staff/settings/audit-log"
+              >ดูประวัติการแก้ไขระบบ <span>→</span></RouterLink
+            >
+          </div>
         </aside>
         <section class="settings-panel">
           <header class="settings-panel-head">
             <div>
               <h2>{{ copy[0] }}</h2>
               <p>{{ copy[1] }}</p>
+              <p v-if="section === 'users'" class="settings-branch-context">
+                สาขา: {{ selectedBranchName || 'ยังไม่ได้เลือกสาขา' }}
+              </p>
             </div>
-            <button v-if="actionLabel && section !== 'master'" class="settings-add" @click="openDrawer(null)">
+            <button v-if="actionLabel" class="settings-add" @click="openDrawer(null)">
               {{ actionLabel }}
             </button>
             <div v-else-if="section === 'commission'" class="settings-actions">
@@ -829,6 +969,49 @@ const drawerTitle = computed(() => {
               {{ savedMessage || 'การเปลี่ยนแปลงจะบันทึกอัตโนมัติ' }}
             </p>
           </header>
+          <div
+            v-if="section === 'services' || section === 'users' || section === 'rooms'"
+            class="settings-toolbar"
+          >
+            <label v-if="section === 'services'" class="settings-search">
+              <span>ค้นหารายการ</span>
+              <input
+                v-model="serviceSearch"
+                type="search"
+                placeholder="ค้นหาชื่อรายการหรือประเภท"
+              />
+            </label>
+            <label v-if="section === 'users'">
+              <span>บทบาท</span>
+              <FilterDropdown
+                v-model="userRoleFilter"
+                :options="userRoleOptions"
+                default-value="ทั้งหมด"
+                default-label="ทั้งหมด"
+                label="บทบาท"
+                :clear-on-reselect="false" />
+            </label>
+            <label v-if="section === 'users'">
+              <span>สถานะ</span>
+              <FilterDropdown
+                v-model="userStatusFilter"
+                :options="statusOptions"
+                default-value="ทั้งหมด"
+                default-label="ทั้งหมด"
+                label="สถานะ"
+                :clear-on-reselect="false" />
+            </label>
+            <label v-if="section === 'services'">
+              <span>ประเภท</span>
+              <FilterDropdown
+                v-model="serviceTypeFilter"
+                :options="serviceTypeOptions"
+                default-value="ทั้งหมด"
+                default-label="ทั้งหมด"
+                label="ประเภท"
+                :clear-on-reselect="false" />
+            </label>
+          </div>
           <p v-if="loadError" class="validation-message" role="alert">{{ loadError }}</p>
           <div v-if="section === 'payments'" class="payment-list">
             <div
@@ -977,7 +1160,11 @@ const drawerTitle = computed(() => {
               </div>
             </article>
           </section>
-          <MasterDataGroups v-else-if="section === 'master'" :items="masterItems" @add="addMasterItem" @edit="editMasterItem" />
+          <MasterDataGroups
+            v-else-if="section === 'master'"
+            :items="masterItems"
+            @edit="editMasterItem"
+          />
           <div v-else class="table-wrap">
             <table>
               <thead>
@@ -987,28 +1174,60 @@ const drawerTitle = computed(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="(row, index) in data[section as Exclude<SectionKey, 'payments'>]"
-                  :key="index"
-                >
+                <tr v-for="item in pagedTableRows" :key="item.index">
                   <td v-for="key in keys" :key="key">
                     <span
                       v-if="key === 'status'"
                       class="settings-status"
                       :class="{
                         'status-off':
-                          String(row[key]).startsWith('ปิด') ||
-                          String(row[key]).startsWith('ไม่พร้อม'),
+                          String(item.row[key]).startsWith('ปิด') ||
+                          String(item.row[key]).startsWith('ไม่พร้อม'),
                       }"
-                      >{{ row[key] }}</span
-                    ><template v-else>{{ row[key] }}</template>
+                      >{{ item.row[key] }}</span
+                    >
+                    <template v-else-if="key === 'type'">
+                      {{ serviceTypeLabel(item.row[key]) }}
+                    </template>
+                    <template v-else-if="key === 'role'">
+                      {{ roleLabel(item.row[key]) }}
+                    </template>
+                    <span v-else-if="key === 'permission'" class="settings-permissions">
+                      <span
+                        v-for="permission in permissionList(item.row[key])"
+                        :key="permission.key"
+                        class="settings-permission-chip"
+                        >{{ permission.label }}</span
+                      >
+                    </span>
+                    <template v-else>{{ item.row[key] }}</template>
                   </td>
                   <td>
-                    <button class="edit" @click="openDrawer(index)">แก้ไข</button>
+                    <button class="edit" @click="openDrawer(item.index)">แก้ไข</button>
                   </td>
                 </tr>
               </tbody>
             </table>
+            <div
+              v-if="filteredTableRows.length"
+              class="table-pagination"
+              aria-label="เปลี่ยนหน้ารายการ"
+            >
+              <p>{{ tableRange }}</p>
+              <div>
+                <button type="button" :disabled="currentPage === 1" @click="currentPage -= 1">
+                  ก่อนหน้า
+                </button>
+                <span>หน้า {{ currentPage }} / {{ pageCount }}</span>
+                <button
+                  type="button"
+                  :disabled="currentPage === pageCount"
+                  @click="currentPage += 1"
+                >
+                  ถัดไป
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -1145,7 +1364,7 @@ const drawerTitle = computed(() => {
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
             >สาขาที่เข้า<FilterDropdown
               v-model="form.branch"
-              :options="[option('ทุกสาขา'), ...branchOptions]"
+              :options="branchOptions"
               :default-value="openBranches[0]?.name ?? ''"
               :default-label="openBranches[0]?.name ?? 'เลือกสาขา'"
               label="สาขาที่เข้า"
@@ -1177,16 +1396,16 @@ const drawerTitle = computed(() => {
         ></template>
         <template v-else-if="section === 'services'"
           ><label
-            >ชื่อคอร์ส<input
+            >ชื่อบริการ/คอร์ส<input
               v-model="form.name"
               :class="{ invalid: fieldErrors.name }"
               placeholder="ระบุชื่อคอร์สหรือบริการ" /></label
           ><label :class="{ 'invalid-field': fieldErrors.type }"
             >ประเภท<FilterDropdown
               v-model="form.type"
-              :options="[option('Single Visit'), option('Course')]"
+              :options="serviceTypeOptions"
               default-value="Single Visit"
-              default-label="Single Visit"
+              default-label="บริการรายครั้ง"
               label="ประเภท"
               hide-default-option
               :clear-on-reselect="false" /></label
@@ -1215,7 +1434,7 @@ const drawerTitle = computed(() => {
               </select></label
             ></template
           >
-          <p v-else class="hint">Single Visit คือ 1 ครั้งต่อรายการ และไม่มีวันหมดอายุ</p>
+          <p v-else class="hint">บริการรายครั้งคือ 1 ครั้งต่อรายการ และไม่มีวันหมดอายุ</p>
           <label
             >ระยะเวลานัดเริ่มต้น (นาที)<input
               v-model="form.duration"
@@ -1248,15 +1467,6 @@ const drawerTitle = computed(() => {
               :default-value="openBranches[0]?.name ?? ''"
               :default-label="openBranches[0]?.name ?? 'เลือกสาขา'"
               label="สาขา"
-              hide-default-option
-              :clear-on-reselect="false" /></label
-          ><label :class="{ 'invalid-field': fieldErrors.type }"
-            >ประเภท<FilterDropdown
-              v-model="form.type"
-              :options="[option('Treatment Room'), option('Resource')]"
-              default-value="Treatment Room"
-              default-label="Treatment Room"
-              label="ประเภท"
               hide-default-option
               :clear-on-reselect="false" /></label
         ></template>
