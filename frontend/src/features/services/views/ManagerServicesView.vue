@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
+import { useCourseCommissionPreview } from '@/features/commission/useCourseCommissionPreview'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -30,7 +31,14 @@ import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data
 type Mode = 'assessment' | 'single' | 'course'
 const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const route = useRoute()
-const { appointmentId, appointmentProgress, processLoading, processError, refreshAppointmentProcess, hasAppointmentDocument } = useAppointmentProcess()
+const {
+  appointmentId,
+  appointmentProgress,
+  processLoading,
+  processError,
+  refreshAppointmentProcess,
+  hasAppointmentDocument,
+} = useAppointmentProcess()
 const router = useRouter()
 const query = ref(''),
   patient = ref<Patient | null>(null),
@@ -91,6 +99,9 @@ const receiptBranchLabel = computed(() => {
   return name ? (name.startsWith('สาขา') ? name : `สาขา ${name}`) : 'ไม่ระบุสาขา'
 })
 const managerBranchCode = computed(() => (isManager ? (selectedManagerBranch()?.code ?? '') : ''))
+const saleBranchCode = computed(
+  () => managerBranchCode.value || patient.value?.branchCode || branches.value[0]?.code || '',
+)
 async function loadMaster() {
   const [s, c, p, methods, statuses, staffList] = await Promise.all([
     catalogApi.services(),
@@ -218,6 +229,20 @@ const rawPrice = computed(() =>
       ? (assessmentService.value?.price ?? 0)
       : (services.value.find((service) => service.id === selectedServiceId.value)?.price ?? 0),
 )
+const {
+  preview: courseCommissionPreview,
+  loading: commissionPreviewLoading,
+  error: commissionPreviewError,
+} = useCourseCommissionPreview(() => {
+  if (mode.value !== 'course' || !selectedCourseId.value || !saleBranchCode.value) return null
+
+  return {
+    courseId: selectedCourseId.value,
+    branchCode: saleBranchCode.value,
+    sellerStaffId: selectedStaffId.value,
+    price: rawPrice.value,
+  }
+})
 const itemDiscount = computed(() => 0)
 const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
 const billDiscount = computed(() => 0)
@@ -234,6 +259,8 @@ const commissionAmount = computed(() => afterItemDiscount.value * 0.1)
 const receiptPayable = computed(() => netAmount.value)
 const money = (value: number) =>
   new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(value)
+const percentage = (rate: number) =>
+  new Intl.NumberFormat('th-TH', { style: 'percent', maximumFractionDigits: 2 }).format(rate)
 const printReceipt = () => {
   receiptPrintModal.value = 'confirm'
 }
@@ -400,7 +427,8 @@ async function submit() {
   try {
     if (appointmentId.value) {
       await refreshAppointmentProcess()
-      if (processError.value || !appointmentProgress.value?.canManage) throw new Error(processError.value || 'จัดการได้เฉพาะนัดหมายของตัวเอง')
+      if (processError.value || !appointmentProgress.value?.canManage)
+        throw new Error(processError.value || 'จัดการได้เฉพาะนัดหมายของตัวเอง')
       if (hasAppointmentDocument.value) return
     }
     if (
@@ -443,8 +471,7 @@ async function submit() {
     const sale = await salesApi.create({
       appointmentId: appointmentId.value ?? undefined,
       patientId: patient.value.id,
-      branchCode:
-        managerBranchCode.value || patient.value.branchCode || branches.value[0]?.code || '',
+      branchCode: saleBranchCode.value,
       salespersonStaffId: selectedStaffId.value,
       note: note.value,
       items: [{ type, referenceId, quantity: 1 }],
@@ -478,8 +505,21 @@ async function submit() {
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
       <p v-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
-      <div v-else-if="processError" role="alert"><p>{{ processError }}</p><button type="button" @click="refreshAppointmentProcess">ลองใหม่</button><button type="button" @click="returnToAppointments">กลับหน้านัดหมาย</button></div>
-      <AppointmentProcessPanel v-else-if="appointmentProgress && (hasAppointmentDocument || !appointmentProgress.canManage || !appointmentProgress.registered)" :progress="appointmentProgress" @refresh="refreshAppointmentProcess" />
+      <div v-else-if="processError" role="alert">
+        <p>{{ processError }}</p>
+        <button type="button" @click="refreshAppointmentProcess">ลองใหม่</button
+        ><button type="button" @click="returnToAppointments">กลับหน้านัดหมาย</button>
+      </div>
+      <AppointmentProcessPanel
+        v-else-if="
+          appointmentProgress &&
+          (hasAppointmentDocument ||
+            !appointmentProgress.canManage ||
+            !appointmentProgress.registered)
+        "
+        :progress="appointmentProgress"
+        @refresh="refreshAppointmentProcess"
+      />
       <p v-else-if="patientLoading" role="status">กำลังโหลดข้อมูลผู้ป่วย...</p>
       <div v-else-if="patientLoadError" role="alert">
         <p class="error">{{ patientLoadError }}</p>
@@ -852,7 +892,29 @@ async function submit() {
               <p class="net-total">
                 <strong>ยอดสุทธิที่ลูกค้าชำระ</strong><strong>{{ money(netAmount) }}</strong>
               </p>
-              <div class="commission">
+              <div v-if="mode === 'course'" class="commission">
+                <template v-if="commissionPreviewLoading">
+                  <p><span>ค่าคอมมิชชันโดยประมาณ</span><b>กำลังคำนวณ…</b></p>
+                </template>
+                <template v-else-if="commissionPreviewError">
+                  <p><span>ค่าคอมมิชชันโดยประมาณ</span><b>ยังคำนวณไม่ได้</b></p>
+                  <small class="service-error">{{ commissionPreviewError }}</small>
+                </template>
+                <template v-else-if="courseCommissionPreview">
+                  <p>
+                    <span>ฐานค่าคอมมิชชัน</span><b>{{ money(courseCommissionPreview.netPrice) }}</b>
+                  </p>
+                  <p>
+                    <span>{{ percentage(courseCommissionPreview.commissionRate) }}</span>
+                    <b>{{ money(courseCommissionPreview.commissionPool) }}</b>
+                  </p>
+                  <p>
+                    <span>ประมาณการต่อครั้ง</span>
+                    <b>{{ money(courseCommissionPreview.commissionPerVisit) }}</b>
+                  </p>
+                </template>
+              </div>
+              <div v-else class="commission">
                 <p>
                   <span>ค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
                 </p>
@@ -918,7 +980,29 @@ async function submit() {
                   }}</small
                 >
               </section>
-              <section>
+              <section v-if="mode === 'course'">
+                <template v-if="commissionPreviewLoading">
+                  <span>ฐานค่าคอมมิชชัน</span><b>กำลังคำนวณ…</b>
+                </template>
+                <template v-else-if="commissionPreviewError">
+                  <span>ค่าคอมมิชชันโดยประมาณ</span><b>ยังคำนวณไม่ได้</b>
+                  <small class="service-error">{{ commissionPreviewError }}</small>
+                </template>
+                <template v-else-if="courseCommissionPreview">
+                  <span>ฐานค่าคอมมิชชัน</span><b>{{ money(courseCommissionPreview.netPrice) }}</b>
+                  <small>
+                    ค่าคอมมิชชัน {{ percentage(courseCommissionPreview.commissionRate) }}
+                    {{ money(courseCommissionPreview.commissionPool) }}
+                  </small>
+                  <small>
+                    ประมาณการ {{ money(courseCommissionPreview.commissionPerVisit) }} ต่อครั้ง ({{
+                      courseCommissionPreview.totalVisits
+                    }}
+                    ครั้ง)
+                  </small>
+                </template>
+              </section>
+              <section v-else>
                 <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b
                 ><small>ค่าคอมมิชชัน 10%　{{ money(commissionAmount) }}</small>
               </section>
