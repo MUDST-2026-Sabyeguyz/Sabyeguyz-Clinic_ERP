@@ -24,7 +24,6 @@ describe('Clinic v2 commission and sale services', () => {
     'schemecrud-referenced-rename': 'aSchemeInUseMayStillBeRenamed',
     'feeadmin-create': 'createsTheClinicWideTreatmentFeeRule',
     'feeadmin-takes-over': 'aNewOpenEndedRuleEndsTheOldOneTheDayBefore',
-    'feeadmin-used-can-end': 'aRuleInUseKeepsItsValueAndMayEnd',
     'feeadmin-unused-editable': 'anUnusedRuleCanBeEdited',
     'scheme-missing': 'throwsWhenNoSchemeCoversTheDate',
     'tier-example': 'resolvesTheSeventyPercentTierFromTheRequirementDocExample',
@@ -106,7 +105,6 @@ describe('Clinic v2 commission and sale services', () => {
     ['schemecrud-referenced-rename', { name: 'Renamed', tiersDeleted: 0 }],
     ['feeadmin-create', { type: 'Percentage', value: 10, enabled: true }],
     ['feeadmin-takes-over', { predecessorEnds: '2026-06-30', newStarts: '2026-07-01' }],
-    ['feeadmin-used-can-end', { value: 45, ends: '2026-12-31' }],
     ['feeadmin-unused-editable', { type: 'Percentage', value: 12.5 }],
     ['tier-example', 0.07],
     ['tier-top', 0.10],
@@ -216,6 +214,9 @@ describe('Clinic v2 commission and sale services', () => {
     ['feeadmin-overlap', 'rejectsOverlappingEnabledRules', 'IllegalArgumentException'],
     ['feeadmin-takeover-used', 'rejectsEndingARuleBeforeTreatmentsItAlreadyPaid', 'IllegalStateException'],
     ['feeadmin-used-immutable', 'rejectsChangingTheValueOfARuleInUse', 'IllegalStateException'],
+    ['feeadmin-started-unused-immutable', 'rejectsChangingAnEffectiveRuleEvenWhenUnused', 'IllegalStateException'],
+    ['feeadmin-used-cannot-end', 'rejectsManuallyEndingARuleAlreadyUsed', 'IllegalStateException'],
+    ['feeadmin-future-used-immutable', 'rejectsChangingAFutureRuleAlreadyUsed', 'IllegalStateException'],
   ]
   nestedFailures.forEach(([scenario, name, error]) => {
     it(name, () => {
