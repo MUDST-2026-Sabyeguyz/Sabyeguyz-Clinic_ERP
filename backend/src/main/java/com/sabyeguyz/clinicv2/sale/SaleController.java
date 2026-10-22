@@ -167,9 +167,18 @@ public class SaleController {
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("ต้องมีรายการขายอย่างน้อย 1 รายการ");
         }
-        if (request.payments() != null && request.payments().stream()
-                .map(payment -> PaymentMethod.canonicalName(payment.paymentMethodCode())).distinct().count() > 1) {
-            throw new IllegalArgumentException("หนึ่งใบเสร็จรับชำระได้เพียงช่องทางเดียว");
+        if (request.payments() != null && request.payments().size() > 1) {
+            throw new IllegalArgumentException(
+                    "หนึ่งใบเสร็จมีรายการชำระเงินได้ไม่เกินหนึ่งรายการ");
+        }
+
+        PaymentRequest paymentRequest = null;
+        if (request.payments() != null && !request.payments().isEmpty()) {
+            paymentRequest = request.payments().get(0);
+            if (paymentRequest == null) {
+                throw new IllegalArgumentException("ต้องระบุข้อมูลการชำระเงิน");
+            }
+            PaymentMethod.canonicalName(paymentRequest.paymentMethodCode());
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
@@ -204,12 +213,18 @@ public class SaleController {
         receiptService.finalizeTotals(receipt, lines,
                 Discount.of(request.billDiscountType(), request.billDiscountValue()), actor.currentId());
 
-        if (request.payments() != null) {
-            for (PaymentRequest paymentRequest : request.payments()) {
-                PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(PaymentMethod.canonicalName(paymentRequest.paymentMethodCode()))
-                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode()));
-                paymentTransactionService.record(patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
-            }
+        if (paymentRequest != null) {
+            String methodName =
+                    PaymentMethod.canonicalName(paymentRequest.paymentMethodCode());
+
+            PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(methodName)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "ไม่พบช่องทางชำระเงิน " + methodName));
+
+            paymentTransactionService.record(
+                    patient, branch, receipt,
+                    paymentRequest.amount(), method, actor.currentId());
+
             singleVisitFees.accrue(receipt, lines, actor.currentId());
         }
 

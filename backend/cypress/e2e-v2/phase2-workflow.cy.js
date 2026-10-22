@@ -23,9 +23,11 @@ describe('phase 2 v2 PostgreSQL acceptance', () => {
         expect(appointment.status).to.equal('CONFIRMED')
 
         cy.api('POST', '/api/payments', {
-          patientId: patient.id, branchCode: '01',
+          patientId: patient.id,
+          branchCode: '01',
+          paymentLabelCode: 'FULL',
           items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
-          payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
         }).then(({ status: saleStatus, body: sale }) => {
           expect(saleStatus).to.equal(201)
           expect(sale.receiptNo).to.match(/^RE\d{8}$/)
@@ -41,8 +43,11 @@ describe('phase 2 v2 PostgreSQL acceptance', () => {
         })
 
         cy.api('POST', '/api/course-purchases', {
-          patientId: patient.id, courseId: fx.courseId, branchCode: '01',
+          patientId: patient.id,
+          courseId: fx.courseId,
+          branchCode: '01',
           caseOwnerStaffId: fx.therapistId,
+          paymentLabelCode: 'FULL',
         }).then(({ status: purchaseStatus, body: purchase }) => {
           expect(purchaseStatus).to.equal(201)
           expect(purchase.remaining).to.equal(6)

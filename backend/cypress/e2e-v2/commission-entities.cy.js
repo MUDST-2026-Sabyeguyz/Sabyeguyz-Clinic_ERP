@@ -10,14 +10,15 @@ describe('v2 commission tables (entities and database rules)', () => {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/payments', {
         patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
+        paymentLabelCode: 'FULL',
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
       }).then(({ body: sale }) => {
         cy.api('GET', `/api/receipts/${sale.id}`).then(({ body: receipt }) => {
           cy.api('POST', `/api/payments/${receipt.payments[0].id}/refunds`, {
-            amount: 300, paymentMethodCode: 'Cash', reason: 'ลูกค้าไม่พอใจ',
+            amount: 300, paymentMethodCode: 'BankTransfer', reason: 'ลูกค้าไม่พอใจ',
           }).then(({ body: refund }) => {
-            cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01' })
+            cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',})
               .then(({ body: course }) => {
                 cy.api('GET', '/__cypress/commission-entities/latest').then(({ body: latest }) => {
                   cy.login('manager', 'manager123').then(({ body: auth }) => {
