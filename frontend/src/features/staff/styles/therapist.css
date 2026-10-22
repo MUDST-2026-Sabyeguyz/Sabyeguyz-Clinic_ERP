@@ -358,6 +358,38 @@ body.therapist-ui .profile-copy {
   }
 }
 
+/* Keep the shared drawer readable on narrow Manager and therapist screens. */
+@media (max-width: 900px) {
+  body.therapist-ui .staff-header nav .nav-pill,
+  body.therapist-ui .staff-header.manager-header nav .nav-pill {
+    display: none !important;
+  }
+
+  body.therapist-ui .staff-header nav a,
+  body.therapist-ui .staff-header.manager-header nav a {
+    color: #173f44;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  body.therapist-ui .staff-header nav a.router-link-active,
+  body.therapist-ui .staff-header.manager-header nav a.router-link-active {
+    background: #e8f5f1;
+  }
+
+  body.therapist-ui .staff-header .mobile-menu-head img,
+  body.therapist-ui .staff-header.manager-header .mobile-menu-head img {
+    width: 158px;
+    height: 76px;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1400px) {
+  body.therapist-ui .staff-header.manager-header nav .nav-pill {
+    display: none !important;
+  }
+}
+
 /* Keep the regular logo and tab scale on shared Manager screens. The tab strip
    scrolls horizontally if the complete Manager menu cannot fit. */
 @media (min-width: 821px) {

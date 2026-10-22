@@ -1,19 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import SettingsNavIcon from '../components/SettingsNavIcon.vue'
 import { ApiError, calendarApi, type CalendarStatus } from '@/api/client'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 
 const menus = [
-  ['branches', 'สาขา'],
-  ['users', 'ผู้ใช้และสิทธิ์'],
-  ['services', 'บริการและคอร์ส'],
-  ['payments', 'การชำระเงิน'],
-  ['rooms', 'Room / Resource'],
-  ['commission', 'กฎค่ามือ'],
-  ['tiers', 'กฎค่าคอมมิชชัน'],
-  ['master', 'Master Data'],
-]
+  { key: 'branches', label: 'สาขา', hint: 'ข้อมูลและเวลาทำการ', icon: 'branch' },
+  { key: 'users', label: 'ผู้ใช้และสิทธิ์', hint: 'บัญชีและการเข้าถึง', icon: 'users' },
+  { key: 'services', label: 'บริการและคอร์ส', hint: 'รายการและราคา', icon: 'services' },
+  { key: 'payments', label: 'การชำระเงิน', hint: 'ช่องทางและสถานะ', icon: 'payments' },
+  { key: 'rooms', label: 'Room / Resource', hint: 'ห้องและทรัพยากร', icon: 'rooms' },
+  { key: 'commission', label: 'กฎค่ามือ', hint: 'ค่ามือการรักษา', icon: 'commission' },
+  { key: 'tiers', label: 'กฎค่าคอมมิชชัน', hint: 'อัตราตามยอดขาย', icon: 'tiers' },
+  { key: 'master', label: 'Master Data', hint: 'ข้อมูลพื้นฐานระบบ', icon: 'master' },
+] as const
 const selectedCode = computed(() => selectedManagerBranch()?.code ?? '')
 const visibleBranches = computed(
   () => status.value?.branches.filter((branch) => branch.branchCode === selectedCode.value) ?? [],
@@ -23,6 +24,14 @@ const changed = computed(
   () =>
     !!branch.value &&
     (calendarIds[selectedCode.value] ?? '').trim() !== (branch.value.googleCalendarId ?? ''),
+)
+const calendarIdValue = computed(() => (calendarIds[selectedCode.value] ?? '').trim())
+const isCalendarIdValid = computed(() =>
+  /^[^\s@]+@(gmail\.com|group\.calendar\.google\.com)$/i.test(calendarIdValue.value),
+)
+const calendarIdTouched = ref(false)
+const calendarIdFormatInvalid = computed(
+  () => calendarIdTouched.value && calendarIdValue.value.length > 0 && !isCalendarIdValid.value,
 )
 const openUrl = computed(() =>
   branch.value?.googleCalendarId
@@ -41,6 +50,7 @@ const message = ref('')
 watch(selectedCode, () => {
   error.value = ''
   message.value = ''
+  calendarIdTouched.value = false
   disconnectDialog.value?.close()
   disconnectCode.value = ''
 })
@@ -71,6 +81,7 @@ async function save(branchCode: string) {
     error.value = 'กรุณากรอก Calendar ID หากต้องการยกเลิกกรุณากดปุ่มยกเลิกการเชื่อมต่อ'
     return
   }
+  if (!isCalendarIdValid.value) return
   busy.value = branchCode
   error.value = ''
   message.value = ''
@@ -124,7 +135,6 @@ async function disconnect() {
     const current = status.value?.branches.find((item) => item.branchCode === code)
     if (current) current.googleCalendarId = null
     disconnectDialog.value?.close()
-    if (selectedCode.value === code) message.value = 'ยกเลิกการเชื่อมต่อแล้ว'
     await load()
   } catch (caught) {
     error.value = messageOf(caught)
@@ -150,33 +160,53 @@ onMounted(load)
   <div class="settings-page">
     <StaffHeader />
     <main class="settings-main">
-      <div class="settings-title">
-        <h1>การตั้งค่า</h1>
-        <p>จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ</p>
-      </div>
+      <header class="settings-title">
+        <div>
+          <span class="settings-eyebrow">ศูนย์ควบคุมระบบ</span>
+          <h1>การตั้งค่า</h1>
+          <p>จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ</p>
+        </div>
+      </header>
 
       <div class="settings-layout">
         <aside class="settings-nav">
-          <h2>หมวดการตั้งค่า</h2>
-          <RouterLink
-            v-for="menu in menus"
-            :key="menu[0]"
-            class="settings-nav-item"
-            :to="`/staff/settings?section=${menu[0]}`"
-            >{{ menu[1] }}</RouterLink
-          >
-          <RouterLink
-            class="settings-nav-item active"
-            to="/staff/settings/calendar"
-            aria-current="page"
-            >Google Calendar</RouterLink
-          >
-          <RouterLink class="settings-nav-link" to="/staff/settings/audit-log"
-            >ประวัติการแก้ไขระบบ</RouterLink
-          >
+          <div class="settings-nav-head">
+            <div>
+              <h2>หมวดการตั้งค่า</h2>
+              <p>เลือกหัวข้อเพื่อจัดการ</p>
+            </div>
+          </div>
+          <nav class="settings-nav-list" aria-label="หมวดการตั้งค่า">
+            <RouterLink
+              v-for="menu in menus"
+              :key="menu.key"
+              class="settings-nav-item"
+              :to="`/staff/settings?section=${menu.key}`"
+              ><span class="settings-nav-icon" aria-hidden="true"
+                ><SettingsNavIcon :name="menu.icon" /></span
+              ><span
+                ><b>{{ menu.label }}</b
+                ><small>{{ menu.hint }}</small></span
+              ><span class="settings-nav-arrow" aria-hidden="true">›</span></RouterLink
+            >
+          </nav>
+          <div class="settings-nav-footer">
+            <RouterLink
+              class="settings-nav-item active"
+              to="/staff/settings/calendar"
+              aria-current="page"
+              ><span class="settings-nav-icon" aria-hidden="true"
+                ><SettingsNavIcon name="calendar" /></span
+              ><span><b>Google Calendar</b><small>ปฏิทินและการซิงก์</small></span
+              ><span class="settings-nav-arrow" aria-hidden="true">›</span></RouterLink
+            >
+            <RouterLink class="settings-nav-link" to="/staff/settings/audit-log"
+              >ดูประวัติการแก้ไขระบบ <span>→</span></RouterLink
+            >
+          </div>
         </aside>
         <section class="settings-panel calendar-panel" :aria-busy="loading || !!busy">
-          <header class="calendar-heading">
+          <header class="settings-panel-head calendar-heading">
             <div>
               <h2>Google Calendar</h2>
               <p>เชื่อมปฏิทินนัดหมายแต่ละสาขา</p>
@@ -185,176 +215,189 @@ onMounted(load)
               selectedManagerBranch()?.name || 'ยังไม่ได้เลือกสาขา'
             }}</span>
           </header>
-          <p v-if="loading" data-cy="calendar-loading" role="status">กำลังโหลดการตั้งค่า…</p>
-          <template v-else-if="status">
-            <div
-              class="calendar-state"
-              :class="{ 'is-enabled': status.enabled }"
-              data-cy="calendar-state"
-            >
-              <strong>{{
-                status.enabled ? 'ระบบ sync เปิดใช้งาน' : 'ระบบ sync ยังไม่พร้อมใช้งาน'
-              }}</strong>
-              <p v-if="!status.enabled">
-                กรุณาลองใหม่
-              </p>
-              <p v-else>บันทึกปฏิทินของสาขา แล้วใช้ปุ่ม sync เพื่ออัปเดตนัดหมาย</p>
-            </div>
-            <form
-              v-if="branch"
-              class="calendar-form"
-              :data-cy="`calendar-row-${branch.branchCode}`"
-              novalidate
-              @submit.prevent="save(branch.branchCode)"
-            >
-              <div class="form-title">
-                <h3>ปฏิทินของ{{ branch.branchName }}</h3>
-                <span class="connection-status">{{
-                  branch.googleCalendarId
-                    ? 'มี Calendar ID ที่บันทึกแล้ว'
-                    : 'ยังไม่ได้ตั้งค่าปฏิทิน'
-                }}</span>
+          <div class="calendar-body">
+            <p v-if="loading" data-cy="calendar-loading" role="status">กำลังโหลดการตั้งค่า…</p>
+            <template v-else-if="status">
+              <div
+                class="calendar-state"
+                :class="{ 'is-enabled': status.enabled }"
+                data-cy="calendar-state"
+              >
+                <strong>{{
+                  status.enabled ? 'ระบบ sync เปิดใช้งาน' : 'ระบบ sync ยังไม่พร้อมใช้งาน'
+                }}</strong>
+                <p v-if="!status.enabled">กรุณาลองใหม่</p>
+                <p v-else>บันทึกปฏิทินของสาขา แล้วใช้ปุ่ม sync เพื่ออัปเดตนัดหมาย</p>
               </div>
-              <label :for="`calendar-id-${branch.branchCode}`">Calendar ID</label>
-              <input
-                :id="`calendar-id-${branch.branchCode}`"
-                v-model="calendarIds[branch.branchCode]"
-                :data-cy="`calendar-id-${branch.branchCode}`"
-                :disabled="!!busy"
-                placeholder="เช่น xxxx@group.calendar.google.com"
-                aria-describedby="calendar-id-help"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <p id="calendar-id-help" class="calendar-hint">
-                กรอก Calendar ID ที่ต้องการเชื่อมต่อ
+              <div class="calendar-workspace">
+                <div class="calendar-connection">
+                  <form
+                    v-if="branch"
+                    class="calendar-form"
+                    :data-cy="`calendar-row-${branch.branchCode}`"
+                    novalidate
+                    @submit.prevent="save(branch.branchCode)"
+                  >
+                <div class="form-title">
+                  <h3>ปฏิทินของ{{ branch.branchName }}</h3>
+                  <span class="connection-status">{{
+                    branch.googleCalendarId
+                      ? 'มี Calendar ID ที่บันทึกแล้ว'
+                      : 'ยังไม่ได้ตั้งค่าปฏิทิน'
+                  }}</span>
+                  <span v-if="changed" class="draft-status">ยังไม่บันทึก</span>
+                </div>
+                <label :for="`calendar-id-${branch.branchCode}`">Calendar ID</label>
+                <input
+                  :id="`calendar-id-${branch.branchCode}`"
+                  v-model="calendarIds[branch.branchCode]"
+                  :data-cy="`calendar-id-${branch.branchCode}`"
+                  :disabled="!!busy"
+                  :class="{ 'calendar-id-invalid': calendarIdFormatInvalid }"
+                  placeholder="เช่น xxxx@group.calendar.google.com"
+                  :aria-describedby="
+                    calendarIdFormatInvalid ? 'calendar-id-help calendar-id-error' : 'calendar-id-help'
+                  "
+                  :aria-invalid="calendarIdFormatInvalid"
+                  autocomplete="off"
+                  spellcheck="false"
+                  @blur="calendarIdTouched = true"
+                />
+                <p id="calendar-id-help" class="calendar-hint">
+                  กรอก Calendar ID ที่ต้องการเชื่อมต่อ
+                </p>
+                <p
+                  v-if="calendarIdFormatInvalid"
+                  id="calendar-id-error"
+                  class="calendar-field-error"
+                  role="alert"
+                >
+                  รูปแบบ Calendar ID ไม่ถูกต้อง
+                </p>
+                <div class="connection-actions">
+                  <button
+                    type="submit"
+                    class="calendar-save"
+                    :data-cy="`calendar-save-${branch.branchCode}`"
+                    :disabled="!!busy || !changed || !isCalendarIdValid"
+                  >
+                    {{ busy === branch.branchCode ? 'กำลังบันทึก…' : 'บันทึก' }}
+                  </button>
+                  <a
+                    v-if="openUrl"
+                    :href="openUrl"
+                    class="calendar-secondary"
+                    data-cy="calendar-open"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >เปิด Google Calendar ↗</a
+                  >
+                </div>
+                <button
+                  v-if="branch.googleCalendarId"
+                  type="button"
+                  class="disconnect-link"
+                  data-cy="calendar-disconnect"
+                  :disabled="!!busy"
+                  @click="askDisconnect"
+                >
+                  ยกเลิกการเชื่อมต่อ
+                </button>
+                  </form>
+                  <p v-else class="calendar-hint">เลือกสาขาจาก Header เพื่อเริ่มตั้งค่า</p>
+                  <details class="calendar-help">
+                    <summary>วิธีตั้งค่าและเชิญนักกายภาพ</summary>
+                    <ol>
+                      <li>เปิด Google Calendar สร้างหรือเลือกปฏิทินของสาขาที่ต้องการ</li>
+                      <li>ในหน้าตั้งค่าปฏิทิน คัดลอก Calendar ID แล้ววางในช่องด้านบน</li>
+                      <li>
+                        ให้สิทธิ์บัญชี service account ที่ทีม backend ตั้งไว้ในการจัดการกิจกรรม
+                        ไม่ต้องนำไฟล์คีย์หรือรหัสลับมากรอก
+                      </li>
+                      <li>
+                        หากต้องการเชิญนักกายภาพรายนัด ให้เปิดกิจกรรมนั้นใน Google Calendar เพิ่ม Gmail
+                        ในผู้เข้าร่วม และตรวจสิทธิ์ก่อนส่งคำเชิญ
+                      </li>
+                    </ol>
+                    <p>
+                      การเชิญเข้ากิจกรรมต่างจากการแชร์ปฏิทินทั้งสาขา หน้านี้ไม่ได้จัดการสิทธิ์ Google
+                      รายบุคคล
+                    </p>
+                  </details>
+                </div>
+                <section class="sync-section" aria-label="สถานะการ sync">
+                <h3>สถานะการ sync</h3>
+                <dl v-if="branch" class="sync-stats">
+                  <div>
+                    <dt>รอ sync</dt>
+                    <dd>{{ branch.waiting }}</dd>
+                  </div>
+                  <div>
+                    <dt>ล้มเหลว</dt>
+                    <dd :class="{ 'calendar-failed': branch.failed > 0 }">{{ branch.failed }}</dd>
+                  </div>
+                </dl>
+                <p class="calendar-hint">sync ล่าสุด : {{ formatTime(status.lastRunAt) }}</p>
+                <p v-if="!status.enabled" class="calendar-hint"></p>
+                <button
+                  type="button"
+                  class="calendar-sync"
+                  data-cy="calendar-sync"
+                  :disabled="!!busy || !status.enabled"
+                  @click="syncNow"
+                >
+                  {{ busy === 'sync' ? 'กำลัง sync …' : 'sync ↻' }}
+                </button>
+                </section>
+              </div>
+            </template>
+            <p v-if="message" class="calendar-message" role="status" data-cy="calendar-message">
+              {{ message }}
+            </p>
+            <p v-if="error" class="calendar-error" role="alert" data-cy="calendar-error">
+              {{ error }}
+            </p>
+            <button
+              v-if="!status && !loading"
+              type="button"
+              class="calendar-secondary"
+              @click="load"
+            >
+              ลองโหลดอีกครั้ง
+            </button>
+            <dialog
+              ref="disconnectDialog"
+              class="disconnect-dialog"
+              aria-labelledby="disconnect-title"
+            >
+              <h3 id="disconnect-title">ยกเลิกการเชื่อมต่อ{{ branch?.branchName }}?</h3>
+              <p>
+                ระบบจะหยุด sync ปฏิทินของสาขานี้ โดยไม่ลบนัดหมายในคลินิกหรือกิจกรรมเดิมใน Google
+                Calendar
               </p>
-              <p v-if="changed" class="draft-note">
-                มีการแก้ไขที่ยังไม่บันทึก กรุณาสลับสาขาแล้วข้อมูลที่กรอกยังอยู่จนกว่าจะออกจากหน้านี้
-              </p>
+              <p v-if="error" class="calendar-error" role="alert">{{ error }}</p>
               <div class="connection-actions">
                 <button
-                  type="submit"
-                  class="calendar-save"
-                  :data-cy="`calendar-save-${branch.branchCode}`"
-                  :disabled="!!busy || !changed"
-                >
-                  {{ busy === branch.branchCode ? 'กำลังบันทึก…' : 'บันทึกการเชื่อมต่อ' }}
-                </button>
-                <a
-                  v-if="openUrl"
-                  :href="openUrl"
+                  type="button"
                   class="calendar-secondary"
-                  data-cy="calendar-open"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >เปิด Google Calendar ↗</a
+                  :disabled="!!busy"
+                  autofocus
+                  @click="disconnectDialog?.close()"
                 >
+                  กลับ
+                </button>
+                <button
+                  type="button"
+                  class="calendar-danger"
+                  :disabled="!!busy"
+                  data-cy="calendar-confirm-disconnect"
+                  @click="disconnect"
+                >
+                  ยืนยัน
+                </button>
               </div>
-              <button
-                v-if="branch.googleCalendarId"
-                type="button"
-                class="disconnect-link"
-                data-cy="calendar-disconnect"
-                :disabled="!!busy"
-                @click="askDisconnect"
-              >
-                ยกเลิกการเชื่อมต่อ
-              </button>
-            </form>
-            <p v-else class="calendar-hint">เลือกสาขาจาก Header เพื่อเริ่มตั้งค่า</p>
-            <details class="calendar-help">
-              <summary>วิธีตั้งค่าและเชิญนักกายภาพ</summary>
-              <ol>
-                <li>
-                  เปิด Google Calendar สร้างหรือเลือกปฏิทินของสาขาที่ต้องการ
-                </li>
-                <li>
-                  ในหน้าตั้งค่าปฏิทิน คัดลอก Calendar ID แล้ววางในช่องด้านบน
-                </li>
-                <li>
-                  ให้สิทธิ์บัญชี service account ที่ทีม backend ตั้งไว้ในการจัดการกิจกรรม
-                  ไม่ต้องนำไฟล์คีย์หรือรหัสลับมากรอก
-                </li>
-                <li>
-                  หากต้องการเชิญนักกายภาพรายนัด ให้เปิดกิจกรรมนั้นใน Google Calendar เพิ่ม Gmail
-                  ในผู้เข้าร่วม และตรวจสิทธิ์ก่อนส่งคำเชิญ
-                </li>
-              </ol>
-              <p>
-                การเชิญเข้ากิจกรรมต่างจากการแชร์ปฏิทินทั้งสาขา หน้านี้ไม่ได้จัดการสิทธิ์ Google
-                รายบุคคล
-              </p>
-            </details>
-            <section class="sync-section" aria-label="สถานะการ sync">
-              <h3>สถานะการ sync</h3>
-              <dl v-if="branch" class="sync-stats">
-                <div>
-                  <dt>รอ sync</dt>
-                  <dd>{{ branch.waiting }}</dd>
-                </div>
-                <div>
-                  <dt>ล้มเหลว</dt>
-                  <dd :class="{ 'calendar-failed': branch.failed > 0 }">{{ branch.failed }}</dd>
-                </div>
-              </dl>
-              <p class="calendar-hint">
-                sync ล่าสุด : {{ formatTime(status.lastRunAt) }}
-              </p>
-              <p v-if="!status.enabled" class="calendar-hint">
-              </p>
-              <button
-                type="button"
-                class="calendar-sync"
-                data-cy="calendar-sync"
-                :disabled="!!busy || !status.enabled"
-                @click="syncNow"
-              >
-                {{ busy === 'sync' ? 'กำลัง sync …' : 'sync ↻' }}
-              </button>
-            </section>
-          </template>
-          <p v-if="message" class="calendar-message" role="status" data-cy="calendar-message">
-            {{ message }}
-          </p>
-          <p v-if="error" class="calendar-error" role="alert" data-cy="calendar-error">
-            {{ error }}
-          </p>
-          <button v-if="!status && !loading" type="button" class="calendar-secondary" @click="load">
-            ลองโหลดอีกครั้ง
-          </button>
-          <dialog
-            ref="disconnectDialog"
-            class="disconnect-dialog"
-            aria-labelledby="disconnect-title"
-          >
-            <h3 id="disconnect-title">ยกเลิกการเชื่อมต่อ{{ branch?.branchName }}?</h3>
-            <p>
-              ระบบจะหยุด sync ปฏิทินของสาขานี้ โดยไม่ลบนัดหมายในคลินิกหรือกิจกรรมเดิมใน Google
-              Calendar
-            </p>
-            <p v-if="error" class="calendar-error" role="alert">{{ error }}</p>
-            <div class="connection-actions">
-              <button
-                type="button"
-                class="calendar-secondary"
-                :disabled="!!busy"
-                autofocus
-                @click="disconnectDialog?.close()"
-              >
-                กลับ
-              </button>
-              <button
-                type="button"
-                class="calendar-danger"
-                :disabled="!!busy"
-                data-cy="calendar-confirm-disconnect"
-                @click="disconnect"
-              >
-                ยืนยันยกเลิกการเชื่อมต่อ
-              </button>
-            </div>
-          </dialog>
+            </dialog>
+          </div>
         </section>
       </div>
     </main>
@@ -365,7 +408,23 @@ onMounted(load)
 <style scoped>
 .calendar-panel {
   margin-top: 0;
-  padding: 28px 32px;
+  padding: 0;
+}
+.calendar-body {
+  padding: 26px 32px 32px;
+}
+.calendar-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(230px, 0.55fr);
+  gap: 20px;
+  align-items: stretch;
+}
+.calendar-connection {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #e1ebe7;
+  border-radius: 14px;
+  background: #fff;
 }
 .calendar-heading,
 .form-title,
@@ -377,7 +436,7 @@ onMounted(load)
 }
 .calendar-heading {
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 .calendar-heading h2,
 .calendar-form h3,
@@ -397,7 +456,7 @@ onMounted(load)
 .calendar-form label {
   display: block;
   font-weight: 600;
-  margin: 20px 0 8px;
+  margin: 18px 0 8px;
 }
 .calendar-form input {
   box-sizing: border-box;
@@ -408,14 +467,31 @@ onMounted(load)
   border-radius: 8px;
   font: inherit;
 }
+.calendar-form input.calendar-id-invalid {
+  border-color: #d34d47;
+  box-shadow: 0 0 0 3px #d34d471c;
+}
+.calendar-field-error {
+  margin: -10px 0 0;
+  color: #bd3e39;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
 .connection-status,
 .calendar-help {
   color: #68776f;
   font-size: 14px;
 }
-.draft-note {
-  color: #71571e;
-  font-size: 14px;
+.draft-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #fff4d8;
+  color: #86611f;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 .connection-actions .calendar-save {
   margin-left: 0;
@@ -457,10 +533,9 @@ onMounted(load)
   cursor: pointer;
 }
 .calendar-help {
-  margin-top: 28px;
-  padding: 18px 0;
+  margin-top: 22px;
+  padding: 16px 0 0;
   border-top: 1px solid #e3ebe7;
-  border-bottom: 1px solid #e3ebe7;
   line-height: 1.7;
 }
 .calendar-help summary {
@@ -472,11 +547,18 @@ onMounted(load)
   margin-top: 8px;
 }
 .sync-section {
-  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+  padding: 20px;
+  border: 1px solid #e1ebe7;
+  border-radius: 14px;
+  background: #f9fcfa;
 }
 .sync-stats {
-  display: flex;
-  gap: 40px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   margin: 18px 0;
   flex-wrap: wrap;
 }
@@ -489,19 +571,44 @@ onMounted(load)
   font-size: 24px;
   font-weight: 600;
 }
+.sync-section .calendar-hint {
+  margin-bottom: 16px;
+}
+.sync-section .calendar-sync {
+  margin-top: auto;
+}
 .disconnect-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
   box-sizing: border-box;
   width: min(500px, calc(100% - 32px));
+  margin: 0;
   border: 1px solid #cbdcd7;
   border-radius: 16px;
-  padding: 24px;
+  padding: 30px 32px;
   color: #25372e;
+  transform: translate(-50%, -50%);
 }
 .disconnect-dialog::backdrop {
   background: rgb(0 0 0 / 40%);
 }
 .disconnect-dialog p {
+  margin: 10px 0 0;
   line-height: 1.7;
+}
+.disconnect-dialog .connection-actions {
+  margin-top: 24px;
+  gap: 12px;
+}
+.disconnect-dialog .calendar-danger {
+  border-color: #c74742;
+  background: #c74742;
+  color: #fff;
+}
+.disconnect-dialog .calendar-danger:hover:not(:disabled) {
+  border-color: #ab3632;
+  background: #ab3632;
 }
 button:focus-visible,
 a:focus-visible,
@@ -575,13 +682,14 @@ button:disabled {
   border-collapse: collapse;
   margin: 0;
 }
-.settings-nav .settings-nav-link {
-  display: block;
+.settings-nav .settings-nav-item.active {
+  background: linear-gradient(135deg, #1c8d82, #16756e);
+  box-shadow: 0 7px 14px #16756e33;
 }
-.settings-nav .active {
-  background: #1e807c;
-  color: white;
-  border-radius: 10px;
+.settings-nav .settings-nav-item.active b,
+.settings-nav .settings-nav-item.active small,
+.settings-nav .settings-nav-item.active .settings-nav-arrow {
+  color: #fff;
 }
 .calendar-table th,
 .calendar-table td {
@@ -656,11 +764,27 @@ button:disabled {
   color: #b3261e;
 }
 .calendar-message {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #edf8f2;
   color: #1e807c;
+}
+.calendar-error {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff1ef;
 }
 @media (max-width: 720px) {
   .calendar-panel {
-    padding: 24px 18px;
+    padding: 0;
+  }
+  .calendar-body {
+    padding: 22px 18px 24px;
+  }
+  .calendar-workspace {
+    grid-template-columns: 1fr;
   }
   .connection-actions {
     align-items: stretch;
