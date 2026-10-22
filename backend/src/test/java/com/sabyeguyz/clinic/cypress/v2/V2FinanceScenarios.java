@@ -35,6 +35,7 @@ public class V2FinanceScenarios {
             if (scenario.startsWith("scheme-")) return scheme(scenario);
             if (scenario.startsWith("schemecrud-")) return schemeCrud(scenario);
             if (scenario.startsWith("tier-")) return tier(scenario);
+            if (scenario.startsWith("closing-reclose-")) {return reclosePreservesScheme(scenario);}
             if (scenario.startsWith("closing-")) return closing(scenario);
             if (scenario.startsWith("alloc-")) return allocationRates(scenario);
             if (scenario.startsWith("fee-")) return fee(scenario);
@@ -85,7 +86,7 @@ public class V2FinanceScenarios {
     }
     private static CommissionTierResolver tierResolver() {
         return new CommissionTierResolver(new V2RepositoryStub<>(CommissionTierRepository.class)
-                .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder", a -> tiers()).proxy());
+                .on("findByCommissionSchemeIdOrderByTierOrder", a -> tiers()).proxy());
     }
     private Object override(String scenario) {
         var audits = new V2RepositoryStub<>(CommissionRateOverrideAuditRepository.class);
@@ -259,6 +260,61 @@ public class V2FinanceScenarios {
                 .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder", a -> scenario.equals("tier-missing") ? List.of() : tiers());
         return new CommissionTierResolver(repository.proxy()).resolve(new CommissionScheme(),
                 decimal(scenario.equals("tier-top") ? "500000" : scenario.equals("tier-missing") ? "1000" : "75000")).getCommissionRate();
+    }
+    private Object reclosePreservesScheme(String scenario) {
+        Branch branch = new Branch();
+        setId(branch, 1L);
+
+        // The original closing used scheme 7.
+        CommissionScheme originalScheme =
+                schemeVersion(7, "2026-01-01", null);
+
+        MonthlyCommissionClosing existing =
+                new MonthlyCommissionClosing();
+        setId(existing, 10L);
+        existing.setClosingMonth("2026-08");
+        existing.setStaff(staff());
+        existing.setBranch(branch);
+        existing.setClosingStatus(ClosingStatus.Open);
+        existing.setCommissionScheme(originalScheme);
+        existing.setCommissionSchemeVersion(7);
+
+        if (scenario.equals("closing-reclose-missing-scheme")) {
+            existing.setCommissionScheme(null);
+        }
+
+        if (scenario.equals("closing-reclose-version-mismatch")) {
+            existing.setCommissionSchemeVersion(6);
+        }
+
+        var closings =
+                new V2RepositoryStub<>(MonthlyCommissionClosingRepository.class)
+                        .on("findByClosingMonthAndStaffIdAndBranchId",
+                                a -> Optional.of(existing));
+
+        var courses = new V2RepositoryStub<>(CourseRepository.class)
+                .on("sumCreditedSalesByStaffAndSaleMonthAndBranchId",
+                        a -> decimal("75000"));
+
+        var service = new MonthlyCommissionClosingService(
+                closings.proxy(),
+                courses.proxy(),
+                schemeResolver(),
+                tierResolver(),
+                new MonthlyTierSalesService(courses.proxy()),
+                settlement(courses),
+                new V2RepositoryStub<>(
+                        CommissionAllocationLedgerRepository.class).proxy());
+
+        var result = service.closeMonth(
+                "2026-08", staff(), branch, null, 9L);
+
+        return Map.of(
+                "closingId", result.getId(),
+                "schemeId", result.getCommissionScheme().getId(),
+                "schemeVersion", result.getCommissionSchemeVersion(),
+                "rate", result.getLockedCommissionRate(),
+                "status", result.getClosingStatus().name());
     }
     private Object closing(String scenario) {
         Branch branch = new Branch();
