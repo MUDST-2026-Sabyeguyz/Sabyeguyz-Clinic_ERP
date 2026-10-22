@@ -21,7 +21,7 @@ const template = (code, price, sessions, bonus = 0) => cy.api('POST', '/api/cour
   return body.id
 })
 const buy = (fx, patient, courseId, ownerId) => cy.api('POST', '/api/course-purchases', {
-  patientId: patient.id, courseId, branchCode: '01', caseOwnerStaffId: ownerId,
+  patientId: patient.id, courseId, branchCode: '01', caseOwnerStaffId: ownerId, paymentLabelCode: 'FULL',
 }).then(({ status, body }) => {
   expect(status, JSON.stringify(body)).to.equal(201)
   return body
@@ -340,7 +340,7 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
 
 describe('v2 commission: single-visit treatment fee', () => {
   const sale = (fx, patient, items, extra = {}) => cy.api('POST', '/api/payments', {
-    patientId: patient.id, branchCode: '01', salespersonStaffId: fx.therapistId, treatingStaffId: fx.therapistId, items, ...extra,
+    patientId: patient.id, branchCode: '01', salespersonStaffId: fx.therapistId, treatingStaffId: fx.therapistId, paymentLabelCode: 'FULL', items, ...extra,
   })
   const fees = () => cy.api('GET', '/__cypress/commission/single-visit-fees').its('body')
 
@@ -350,7 +350,7 @@ describe('v2 commission: single-visit treatment fee', () => {
         .its('status').should('equal', 201) // not paid: no fee
       fees().should('have.length', 0)
       sale(this.fixtures, patient, [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 2 }],
-        { payments: [{ paymentMethodCode: 'Cash', amount: 1600 }] }).its('status').should('equal', 201)
+        { payments: [{ paymentMethodCode: 'BankTransfer', amount: 1600 }] }).its('status').should('equal', 201)
       fees().then((rows) => {
         expect(rows).to.have.length(1)
         expect(rows[0].fee_type).to.equal('Fixed')
@@ -369,7 +369,7 @@ describe('v2 commission: single-visit treatment fee', () => {
       sale(this.fixtures, patient, [
         { type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 },
         { type: 'COURSE', referenceId: this.fixtures.courseId, quantity: 1 },
-      ], { billDiscountType: 'BAHT', billDiscountValue: 98, payments: [{ paymentMethodCode: 'Cash', amount: 9702 }] })
+      ], { billDiscountType: 'BAHT', billDiscountValue: 98, payments: [{ paymentMethodCode: 'BankTransfer', amount: 9702 }] })
         .its('status').should('equal', 201)
       fees().then((rows) => {
         expect(rows).to.have.length(1)
@@ -384,7 +384,7 @@ describe('v2 commission: single-visit treatment fee', () => {
     setFee('Percentage', 10)
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        { payments: [{ paymentMethodCode: 'Cash', amount: 800 }] }).then(({ body }) => {
+        { payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }] }).then(({ body }) => {
         cy.api('POST', `/api/payments/${body.id}/reverse`, { reason: 'ลูกค้ายกเลิก' }).its('status').should('equal', 200)
         cy.api('POST', `/api/payments/${body.id}/reverse`, { reason: 'ซ้ำ' }).its('status').should('be.within', 400, 409)
       })
@@ -401,7 +401,7 @@ describe('v2 commission: single-visit treatment fee', () => {
     feeRule().then((rule) => cy.api('PATCH', `/api/commission/treatment-fees/${rule.id}/disable`).its('status').should('equal', 200))
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        { payments: [{ paymentMethodCode: 'Cash', amount: 800 }] }).its('status').should('equal', 201)
+        { payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }] }).its('status').should('equal', 201)
       fees().should('have.length', 0)
       feeRule().then((rule) => cy.api('PATCH', `/api/commission/treatment-fees/${rule.id}/enable`).its('status').should('equal', 200))
       cy.api('POST', '/api/commission/single-visit-fees/backfill?from=2020-01-01&to=2099-12-31').its('body.recorded').should('equal', 1)
@@ -456,8 +456,9 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/payments', {
         patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
+        paymentLabelCode: 'FULL',
         items: [{ type: 'COURSE', referenceId: this.fixtures.courseId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 9000 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 9000 }],
       }).then(({ body: sale }) => {
         cy.api('GET', `/api/patients/${patient.id}/courses`).then(({ body: courses }) => {
           const courseId = courses[0].id
@@ -483,8 +484,9 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
       cy.registerPatient().then((patient) => {
         cy.api('POST', '/api/payments', {
           patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
+          paymentLabelCode: 'FULL',
           items: [{ type: 'COURSE', referenceId: courseId, quantity: 1 }],
-          payments: [{ paymentMethodCode: 'Cash', amount: 10000 }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: 10000 }],
         }).then(({ body: sale }) => cy.api('GET', `/api/receipts/${sale.id}`).then(({ body: detail }) => {
           cy.api('GET', `/api/patients/${patient.id}/courses`).then(({ body: courses }) => {
             const course = courses[0]
@@ -492,7 +494,7 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
             closeMonth()
             allocations(course.id).should('have.length', 1)
             cy.api('POST', `/api/payments/${detail.payments[0].id}/refunds`, {
-              amount: 4000, paymentMethodCode: 'Cash', reason: 'คืนสิทธิ์ที่เหลือบางส่วน',
+              amount: 4000, paymentMethodCode: 'BankTransfer', reason: 'คืนสิทธิ์ที่เหลือบางส่วน',
               items: [{ courseId: course.id, refundAmount: 4000, cancelledVisits: 6 }],
             }).then(({ body: refund }) => {
               // a Pending refund changes nothing

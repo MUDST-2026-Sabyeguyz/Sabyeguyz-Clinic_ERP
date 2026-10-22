@@ -4,8 +4,9 @@ const summary = (from = day, to = from, branch = '') =>
 const dates = (patientId, values) => cy.api('POST', '/__cypress/dashboard/dates', { patientId, ...values }).its('status').should('equal', 200)
 const sale = (fx, patient) => cy.api('POST', '/api/payments', {
   patientId: patient.id, branchCode: '01',
+  paymentLabelCode: 'FULL',
   items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
-  payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+  payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
 }).then(({ status, body }) => { expect(status).to.equal(201); return body })
 
 describe('dashboard registration-based customers and recorded activity', () => {
@@ -96,7 +97,7 @@ describe('dashboard registration-based customers and recorded activity', () => {
 
   it('counts recorded course extensions by event date and course branch', function () {
     cy.registerPatient().then(patient => {
-      cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01' })
+      cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',})
         .then(({ status, body }) => {
           expect(status).to.equal(201)
           cy.api('POST', '/__cypress/dashboard/extension', { courseId: body.id, extendedAt: `${day}T03:00:00Z` })

@@ -510,12 +510,46 @@ public class V2FinanceScenarios {
     }
     private Object payment(String scenario) {
         var repository = new V2RepositoryStub<>(PaymentTransactionRepository.class);
-        var receipt = new Receipt(); receipt.setReceiptStatus(scenario.equals("payment-void") ? ReceiptStatus.Voided : ReceiptStatus.Issued);
-        var receiptRepository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByIdForUpdate", a -> Optional.of(receipt));
-        var method = new PaymentMethod(); method.setMethodName("Cash");
-        var result = new PaymentTransactionService(repository.proxy(), receiptRepository.proxy()).record(new Patient(),new Branch(),receipt,
-                scenario.equals("payment-zero") ? BigDecimal.ZERO : decimal("1200.00"),method,1L);
-        return Map.of("amount",result.getAmount(),"status",result.isPaymentStatus());
+
+        var patient = new Patient();
+        setId(patient, 1L);
+
+        var branch = new Branch();
+        setId(branch, 1L);
+
+        var receipt = new Receipt();
+        setId(receipt, 1L);
+        receipt.setPatient(patient);
+        receipt.setBranch(branch);
+        receipt.setNetAmount(decimal("1200.00"));
+        receipt.setReceiptStatus(
+                scenario.equals("payment-void")
+                        ? ReceiptStatus.Voided
+                        : ReceiptStatus.Issued);
+
+        var receiptRepository = new V2RepositoryStub<>(ReceiptRepository.class)
+                .on("findByIdForUpdate", a -> Optional.of(receipt));
+
+        repository.on("existsByReceiptIdAndPaymentStatusTrue",
+                a -> scenario.equals("payment-duplicate"));
+
+        var method = new PaymentMethod();
+        method.setMethodName("PromptPay");
+
+        BigDecimal amount = switch (scenario) {
+            case "payment-zero" -> BigDecimal.ZERO;
+            case "payment-underpaid" -> decimal("1199.00");
+            case "payment-overpaid" -> decimal("1201.00");
+            default -> decimal("1200.00");
+        };
+
+        var result = new PaymentTransactionService(
+                repository.proxy(), receiptRepository.proxy())
+                .record(patient, branch, receipt, amount, method, 1L);
+
+        return Map.of(
+                "amount", result.getAmount(),
+                "status", result.isPaymentStatus());
     }
     private Object receipt(String scenario) {
         var repository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByReceiptNoAndBranchId",

@@ -8,8 +8,9 @@ describe('v2 audit log', () => {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/payments', {
         patientId: patient.id, branchCode: '01',
+        paymentLabelCode: 'FULL',
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
       }).then(({ body: sale }) => {
         entries().then((items) => {
           const created = items.find((entry) => entry.tableName === 'receipt' && entry.action === 'INSERT')
@@ -31,6 +32,7 @@ describe('v2 audit log', () => {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
       entries().then((items) => {
         expect(items.some((entry) => entry.tableName === 'course' && entry.action === 'INSERT')).to.equal(true)
