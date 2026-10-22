@@ -10,6 +10,9 @@ import org.springframework.data.repository.query.Param;
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
     List<PaymentTransaction> findByReceiptIdOrderByIdAsc(Long receiptId);
 
+    /** Checks whether the receipt already has a completed payment. */
+    boolean existsByReceiptIdAndPaymentStatusTrue(Long receiptId);
+
     @Query("select coalesce(sum(p.amount), 0) from PaymentTransaction p "
             + "where p.receipt.id = :receiptId and p.paymentStatus = true")
     BigDecimal paidAmountOf(@Param("receiptId") Long receiptId);

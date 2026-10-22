@@ -100,7 +100,7 @@ public class CypressV2FixturesController {
         jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL");
         jdbc.update("UPDATE app_user SET user_status = TRUE WHERE username <> 'system'");
         jdbc.update("UPDATE branch SET branch_status = TRUE");
-        jdbc.update("UPDATE payment_method SET payment_method_status = TRUE");
+        jdbc.update("UPDATE payment_method SET payment_method_status = " + "(method_name::text IN ('CreditCard', 'PromptPay', 'BankTransfer'))");
         jdbc.update("UPDATE master_data_value SET value_status = TRUE");
         jdbc.update("UPDATE room SET room_status = TRUE");
         jdbc.update("UPDATE service SET service_status = TRUE");

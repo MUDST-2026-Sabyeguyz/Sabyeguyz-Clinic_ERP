@@ -16,7 +16,7 @@ const template = (code, price, sessions) => cy.api('POST', '/api/courses',
   return body.id
 })
 const buy = (patient, courseId, ownerId) => cy.api('POST', '/api/course-purchases', {
-  patientId: patient.id, courseId, branchCode: '01', caseOwnerStaffId: ownerId,
+  patientId: patient.id, courseId, branchCode: '01', caseOwnerStaffId: ownerId, paymentLabelCode: 'FULL',
 }).then(({ status, body }) => {
   expect(status, JSON.stringify(body)).to.equal(201)
   return body
@@ -127,9 +127,12 @@ describe('v2 commission: the monthly payment of a staff member', () => {
         { feeType: 'Fixed', feeValue: 45 }).its('status').should('equal', 200))
       use(course.id, { treatingStaffId: this.fixtures.managerStaffId }).its('status').should('equal', 200)
       cy.api('POST', '/api/payments', {
-        patientId: course.patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId, treatingStaffId: this.fixtures.therapistId,
+        patientId: course.patient.id, branchCode: '01',
+        salespersonStaffId: this.fixtures.therapistId,
+        treatingStaffId: this.fixtures.therapistId,
+        paymentLabelCode: 'FULL',
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
       }).its('status').should('equal', 201)
       closeMonth()
       paymentOf(this.fixtures.therapistId).then((payment) => {
