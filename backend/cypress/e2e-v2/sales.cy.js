@@ -1,14 +1,15 @@
 function sale(fx, patient, overrides = {}) {
   return cy.api('POST', '/api/payments', {
     patientId: patient.id, branchCode: '01',
+    paymentLabelCode: 'FULL',
     items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
-    payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+    payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
     ...overrides,
   })
 }
 
 describe('v2 sales and payments', () => {
-  it('sells a single visit paid in cash and returns an REYYMMNNNN receipt number', function () {
+  it('sells a single visit paid by bank transfer and returns an REYYMMNNNN receipt number', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient).then(({ status, body }) => {
         expect(status).to.equal(201)
@@ -38,8 +39,9 @@ describe('v2 sales and payments', () => {
         method: 'POST', url: '/api/payments',
         body: {
           patientId: patient.id, branchCode: '01',
+          paymentLabelCode: 'FULL',
           items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-          payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
         },
       }
       cy.parallelApi([request, request]).then((responses) => {
@@ -55,7 +57,7 @@ describe('v2 sales and payments', () => {
       sale(this.fixtures, patient, {
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,
                   discountType: 'PERCENT', discountValue: 10 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 720 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 720 }],
       }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.total)).to.equal(720)
@@ -96,7 +98,7 @@ describe('v2 sales and payments', () => {
           { type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 },
           { type: 'SERVICE', referenceId: this.fixtures.serviceId, quantity: 1 },
         ],
-        payments: [{ paymentMethodCode: 'Cash', amount: 2000 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 2000 }],
       }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.total)).to.equal(2000)
@@ -117,7 +119,7 @@ describe('v2 sales and payments', () => {
           { type: 'SERVICE', referenceId: this.fixtures.serviceId, quantity: 1 },
         ],
         billDiscountType: 'BAHT', billDiscountValue: 100,
-        payments: [{ paymentMethodCode: 'Cash', amount: 1900 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 1900 }],
       }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.total)).to.equal(1900)
@@ -125,18 +127,18 @@ describe('v2 sales and payments', () => {
     })
   })
 
-  it('preserves multiple payment records with the same method on one receipt', function () {
-    cy.registerPatient().then((patient) => {
-      sale(this.fixtures, patient, {
-        payments: [{ paymentMethodCode: 'Cash', amount: 300 }, { paymentMethodCode: 'Cash', amount: 500 }],
-      }).then(({ status, body }) => {
-        expect(status).to.equal(201)
-        expect(Number(body.paid)).to.equal(800)
-        cy.api('GET', `/api/receipts/${body.id}`).then((detail) => {
-          expect(detail.status).to.equal(200)
-          expect(detail.body.payments).to.have.length(2)
-          expect(detail.body.items).to.have.length(1)
-        })
+  it('rejects multiple payment records on one receipt', function () {
+    cy.registerPatient().then(patient => {
+      cy.api('GET', '/__cypress/payment-policy/counts').then(({ body: before }) => {
+        sale(this.fixtures, patient, {
+          paymentLabelCode: 'FULL',
+          payments: [
+            { paymentMethodCode: 'PromptPay', amount: 300 },
+            { paymentMethodCode: 'PromptPay', amount: 500 },
+          ],
+        }).its('status').should('equal', 400)
+
+        cy.api('GET', '/__cypress/payment-policy/counts').its('body').should('deep.equal', before)
       })
     })
   })

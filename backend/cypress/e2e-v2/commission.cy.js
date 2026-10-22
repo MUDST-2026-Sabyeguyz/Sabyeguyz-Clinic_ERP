@@ -34,7 +34,7 @@ describe('v2 commission', () => {
   it('counts sales already made this month towards the tier', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
         discountType: 'BAHT', discountValue: 0,
       }).its('status').should('equal', 201)
       cy.api('GET', `/api/commission/preview?courseId=${this.fixtures.courseId}&sellerStaffId=${this.fixtures.managerStaffId}`)
@@ -47,7 +47,7 @@ describe('v2 commission', () => {
   it('closes the month: locks the rate and the commission pool of each course', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).then(({ body: purchase }) => {
         expect(purchase.commissionStatus).to.equal('PROVISIONAL')
         cy.api('POST', `/api/commission/closings/${month}-01`).then(({ status, body }) => {
@@ -71,7 +71,7 @@ describe('v2 commission', () => {
   it('closing a month twice does not close it again', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
       cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
       cy.api('POST', `/api/commission/closings/${month}-01`).then(({ status, body }) => {
@@ -84,7 +84,7 @@ describe('v2 commission', () => {
   it('lists a visit in the treatment report; the Owner commission is unknown (null) until the month is closed', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).then(({ body: purchase }) => {
         cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('equal', 200)
         cy.api('GET', `/api/commission/treatment-report${range}`).then(({ status, body }) => {
@@ -223,7 +223,7 @@ describe('v2 commission', () => {
   it('refuses to change the tiers or disable a scheme a course already uses, but allows a rename', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
       defaultScheme().then((scheme) => {
         expect(scheme.locked).to.equal(true)
@@ -241,10 +241,10 @@ describe('v2 commission', () => {
   it('counts only valid course sales towards the monthly tier sales (a voided sale is left out)', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId,
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId, paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId,
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId, paymentLabelCode: 'FULL',
       }).then(({ body: second }) => {
         cy.api('POST', `/api/payments/${second.id}/reverse`, { reason: 'ยกเลิกการขาย' }).its('status').should('equal', 200)
       })
@@ -258,16 +258,18 @@ describe('v2 commission', () => {
   it('the sales report leaves out voided sales and takes off Completed refunds, like the monthly tier', function () {
     cy.registerPatient().then((patient) => {
       const sell = () => cy.api('POST', '/api/payments', {
-        patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
+        patientId: patient.id, branchCode: '01',
+        salespersonStaffId: this.fixtures.therapistId,
+        paymentLabelCode: 'FULL',
         items: [{ type: 'COURSE', referenceId: this.fixtures.courseId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 9000 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 9000 }],
       }).then(({ body }) => body)
       sell().then((first) => sell().then((second) => sell().then((third) => {
         cy.api('POST', `/api/payments/${second.id}/reverse`, { reason: 'ยกเลิกการขาย' }).its('status').should('equal', 200)
         cy.api('GET', `/api/receipts/${third.id}`).then(({ body: detail }) => cy.api('GET', `/api/patients/${patient.id}/courses`).then(({ body: courses }) => {
           const course = courses.find((row) => row.receiptId === detail.receiptId)
           cy.api('POST', `/api/payments/${detail.payments[0].id}/refunds`, {
-            amount: 2000, paymentMethodCode: 'Cash', reason: 'คืนบางส่วน',
+            amount: 2000, paymentMethodCode: 'BankTransfer', reason: 'คืนบางส่วน',
             items: [{ courseId: course.id, refundAmount: 2000, cancelledVisits: 3 }],
           }).then(({ body: refund }) => cy.api('POST', `/api/refunds/${refund.id}/complete`).its('status').should('equal', 200))
         }))
@@ -304,7 +306,7 @@ describe('v2 commission', () => {
   it('lists a seller with course sales as OPEN before the month is closed, then as CLOSED', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
     })
     cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
