@@ -550,11 +550,22 @@ export const serviceManagementApi = {
 }
 
 export const appointmentApi = {
-  documentCandidates: (id: number) => api.get<{ receipts: Array<{id:number;label:string}>; usages: Array<{id:number;label:string}> }>(`/api/appointments/${id}/document-candidates`),
-  linkDocuments: (id: number, receiptId: number | null, usageId: number | null, reason: string) => api.post<AppointmentProgress>(`/api/appointments/${id}/link-documents`, { receiptId, usageId, reason }),
-  verifyNoDocuments: (id: number, reason: string) => api.post<AppointmentProgress>(`/api/appointments/${id}/verify-no-documents`, { reason }),
+  documentCandidates: (id: number) =>
+    api.get<{
+      receipts: Array<{ id: number; label: string }>
+      usages: Array<{ id: number; label: string }>
+    }>(`/api/appointments/${id}/document-candidates`),
+  linkDocuments: (id: number, receiptId: number | null, usageId: number | null, reason: string) =>
+    api.post<AppointmentProgress>(`/api/appointments/${id}/link-documents`, {
+      receiptId,
+      usageId,
+      reason,
+    }),
+  verifyNoDocuments: (id: number, reason: string) =>
+    api.post<AppointmentProgress>(`/api/appointments/${id}/verify-no-documents`, { reason }),
   progress: (id: number) => api.get<AppointmentProgress>(`/api/appointments/${id}/progress`),
-  settle: (id: number, amount: number, paymentMethodCode: string) => api.post<AppointmentProgress>(`/api/appointments/${id}/settle`, { amount, paymentMethodCode }),
+  settle: (id: number, amount: number, paymentMethodCode: string) =>
+    api.post<AppointmentProgress>(`/api/appointments/${id}/settle`, { amount, paymentMethodCode }),
   search: (
     params: {
       branchCode?: string
@@ -959,7 +970,37 @@ export type TreatmentFeeInput = {
   effectiveTo?: string | null
 }
 
+export type CommissionPreviewParams = {
+  courseId: number
+  branchCode: string
+  sellerStaffId?: number
+  price?: number
+  discountType?: string
+  discountValue?: number
+}
+
+export type CommissionPreview = {
+  netPrice: number
+  commissionRate: number
+  commissionPool: number
+  commissionPerVisit: number
+  totalVisits: number
+  schemeVersion: number
+  monthlySalesToDate: number
+}
+
 export const commissionApi = {
+  preview: (params: CommissionPreviewParams) => {
+    const query = new URLSearchParams({
+      courseId: String(params.courseId),
+      branchCode: params.branchCode,
+    })
+    if (params.sellerStaffId != null) query.set('sellerStaffId', String(params.sellerStaffId))
+    if (params.price != null) query.set('price', String(params.price))
+    if (params.discountType) query.set('discountType', params.discountType)
+    if (params.discountValue != null) query.set('discountValue', String(params.discountValue))
+    return api.get<CommissionPreview>(`/api/commission/preview?${query.toString()}`)
+  },
   payments: (month: string) =>
     api.get<StaffPayment[]>(`/api/commission/payments?${new URLSearchParams({ month })}`),
   schemes: () => api.get('/api/commission/schemes'),
