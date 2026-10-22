@@ -1,13 +1,14 @@
 function paidSale(fx, patient) {
   return cy.api('POST', '/api/payments', {
     patientId: patient.id, branchCode: '01',
+    paymentLabelCode: 'FULL',
     items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
-    payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+    payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
   }).then(({ body: sale }) => cy.api('GET', `/api/receipts/${sale.id}`).then(({ body }) => body.payments[0]))
 }
 
 const refund = (payment, amount) => cy.api('POST', `/api/payments/${payment.id}/refunds`, {
-  amount, paymentMethodCode: 'Cash', reason: 'ลูกค้าไม่พอใจ',
+  amount, paymentMethodCode: 'BankTransfer', reason: 'ลูกค้าไม่พอใจ',
 })
 
 describe('v2 refunds', () => {
@@ -75,7 +76,7 @@ describe('v2 refunds', () => {
       paidSale(this.fixtures, patient).then((payment) => {
         cy.login('therapist', 'therapist123').then(({ body: auth }) => {
           cy.apiAs(auth.token, 'POST', `/api/payments/${payment.id}/refunds`,
-            { amount: 100, paymentMethodCode: 'Cash', reason: 'x' }).its('status').should('equal', 403)
+            { amount: 100, paymentMethodCode: 'BankTransfer', reason: 'x' }).its('status').should('equal', 403)
         })
       })
     })

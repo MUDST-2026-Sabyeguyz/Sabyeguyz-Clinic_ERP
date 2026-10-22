@@ -1,18 +1,55 @@
 const sale = (fx, patient, payments, course = false) => cy.api('POST', '/api/payments', {
   patientId: patient.id, branchCode: '01', salespersonStaffId: fx.managerStaffId,
+  paymentLabelCode: 'FULL',
   items: [{ type: course ? 'COURSE' : 'SERVICE', referenceId: course ? fx.courseId : fx.singleVisitServiceId, quantity: 1 }], payments,
 })
 const counts = () => cy.api('GET', '/__cypress/payment-policy/counts').its('body')
-const refund = (id) => cy.api('POST', `/api/payments/${id}/refunds`, { amount: 100, paymentMethodCode: 'Cash', reason: 'test' })
+const refund = (id) => cy.api('POST', `/api/payments/${id}/refunds`, { amount: 100, paymentMethodCode: 'BankTransfer', reason: 'test' })
 
 describe('v2 payment policy', () => {
-  it('rejects mixed methods before leaving any sale records', function () {
+  it('rejects Cash without creating sale records', function () {
     cy.registerPatient().then(patient => counts().then(before => {
-      sale(this.fixtures, patient, [{ paymentMethodCode: 'Cash', amount: 400 }, { paymentMethodCode: 'QR', amount: 400 }]).its('status').should('equal', 400)
+      sale(this.fixtures, patient, [
+        { paymentMethodCode: 'Cash', amount: 800 },
+      ]).then(({ status }) => {
+        expect(status).to.equal(400)
+      })
+
       counts().should('deep.equal', before)
     }))
   })
-  for (const method of ['Cash', 'CreditCard', 'PromptPay', 'BankTransfer', 'QR']) {
+  for (const amount of [799, 801]) {
+    it(`rejects amount ${amount} when receipt net is 800`, function () {
+      cy.registerPatient().then(patient => counts().then(before => {
+        sale(this.fixtures, patient, [
+          { paymentMethodCode: 'PromptPay', amount },
+        ]).then(({ status }) => {
+          expect(status).to.equal(400)
+        })
+
+        counts().should('deep.equal', before)
+      }))
+    })
+  }
+  it('rejects mixed methods before leaving any sale records', function () {
+    cy.registerPatient().then(patient => counts().then(before => {
+      sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 400 }, { paymentMethodCode: 'QR', amount: 400 }]).its('status').should('equal', 400)
+      counts().should('deep.equal', before)
+    }))
+  })
+  it('rejects multiple payments using the same method', function () {
+    cy.registerPatient().then(patient => counts().then(before => {
+      sale(this.fixtures, patient, [
+        { paymentMethodCode: 'PromptPay', amount: 400 },
+        { paymentMethodCode: 'PromptPay', amount: 400 },
+      ]).then(({ status }) => {
+        expect(status).to.equal(400)
+      })
+
+      counts().should('deep.equal', before)
+    }))
+  })
+  for (const method of ['CreditCard', 'PromptPay', 'BankTransfer', 'QR']) {
     it(`accepts ${method} and returns canonical method and persisted label`, function () {
       cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: method, amount: 800 }]).then(({ status, body }) => {
         expect(status).to.equal(201)
@@ -25,32 +62,58 @@ describe('v2 payment policy', () => {
       }))
     })
   }
-  it('allows repeated canonical records but rejects a different later method', function () {
-    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'QR', amount: 100 }]).then(({ body }) => {
-      cy.api('POST', `/__cypress/payment-policy/${body.id}/record`, { method: 'PromptPay', amount: 100 }).its('status').should('equal', 200)
-      counts().then(before => {
-        cy.api('POST', `/__cypress/payment-policy/${body.id}/record`, { method: 'Cash', amount: 100 }).its('status').should('equal', 400)
-        counts().should('deep.equal', before)
-      })
-    }))
+  it('rejects a second completed payment for either method', function () {
+    cy.registerPatient().then(patient =>
+        sale(this.fixtures, patient, [
+          { paymentMethodCode: 'PromptPay', amount: 800 },
+        ]).then(({ status, body }) => {
+          expect(status).to.equal(201)
+
+          counts().then(before => {
+            for (const method of ['PromptPay', 'BankTransfer']) {
+              cy.api('POST', `/__cypress/payment-policy/${body.id}/record`, {
+                method, amount: 800,
+              }).its('status').should('equal', 400)
+            }
+
+            counts().should('deep.equal', before)
+
+            cy.api('GET', `/api/receipts/${body.id}`).its('body.payments').should('have.length', 1)
+          })
+        })
+    )
   })
-  it('serializes concurrent different methods on an unpaid receipt', function () {
-    cy.registerPatient().then(patient => sale(this.fixtures, patient, []).then(({ body }) => {
-      cy.parallelApi(['Cash', 'PromptPay'].map(method => ({ method: 'POST', url: `/__cypress/payment-policy/${body.id}/record`, body: { method, amount: 100 } }))).then(responses => {
-        expect(responses.map(r => r.status).sort()).to.deep.equal([200, 400])
-        cy.api('GET', `/api/receipts/${body.id}`).its('body.payments').should('have.length', 1)
-      })
-    }))
+  it('allows only one concurrent completed payment', function () {
+    cy.registerPatient().then(patient =>
+        sale(this.fixtures, patient, []).then(({ status, body }) => {
+          expect(status).to.equal(201)
+
+          cy.api('GET', `/api/receipts/${body.id}`).then(({ body: detail }) => {
+            expect(detail.payments).to.have.length(0)
+
+            cy.parallelApi(
+                ['BankTransfer', 'PromptPay'].map(method => ({
+                  method: 'POST',
+                  url: `/__cypress/payment-policy/${body.id}/record`,
+                  body: { method, amount: detail.netAmount },
+                }))
+            ).then(responses => {
+              expect(responses.map(r => r.status).sort()).to.deep.equal([200, 400])
+              cy.api('GET', `/api/receipts/${body.id}`).its('body.payments').should('have.length', 1)
+            })
+          })
+        })
+    )
   })
   const courseRefund = (paymentId, courseId, amount, visits, extra = {}) => cy.api('POST', `/api/payments/${paymentId}/refunds`, {
-    amount, paymentMethodCode: 'Cash', reason: 'ลูกค้าขอคืนสิทธิ์ที่ไม่ได้ใช้',
+    amount, paymentMethodCode: 'BankTransfer', reason: 'ลูกค้าขอคืนสิทธิ์ที่ไม่ได้ใช้',
     items: [{ courseId, refundAmount: amount, cancelledVisits: visits }], ...extra,
   })
   const usedCourse = (fx, patient, body) => cy.api('GET', `/api/receipts/${body.id}`).then(({ body: detail }) =>
     cy.api('GET', `/api/patients/${patient.id}/courses`).then(({ body: courses }) => ({ paymentId: detail.payments[0].id, courseId: courses[0].id })))
 
   it('refunds only the unused rights of a used course and keeps what was already earned', function () {
-    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'Cash', amount: 9000 }], true).then(({ body }) => {
+    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 9000 }], true).then(({ body }) => {
       usedCourse(this.fixtures, patient, body).then(({ paymentId, courseId }) => {
         cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId }).its('status').should('equal', 200)
         counts().then(before => {
@@ -58,7 +121,7 @@ describe('v2 payment policy', () => {
           refund(paymentId).its('status').should('equal', 400)
           courseRefund(paymentId, courseId, 1500, 6).its('status').should('equal', 400)
           cy.api('POST', `/api/payments/${paymentId}/refunds`, {
-            amount: 1500, paymentMethodCode: 'Cash', reason: 'x', items: [{ courseId, refundAmount: 1000, cancelledVisits: 5 }],
+            amount: 1500, paymentMethodCode: 'BankTransfer', reason: 'x', items: [{ courseId, refundAmount: 1000, cancelledVisits: 5 }],
           }).its('status').should('equal', 400)
           counts().should('deep.equal', before)
           courseRefund(paymentId, courseId, 1500, 5).then(({ status, body: pending }) => {
@@ -83,7 +146,7 @@ describe('v2 payment policy', () => {
     }))
   })
   it('keeps the course usable when only some rights are refunded', function () {
-    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'Cash', amount: 9000 }], true).then(({ body }) => {
+    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 9000 }], true).then(({ body }) => {
       usedCourse(this.fixtures, patient, body).then(({ paymentId, courseId }) => {
         courseRefund(paymentId, courseId, 3000, 2).then(({ body: pending }) => {
           cy.api('POST', `/api/refunds/${pending.id}/complete`).its('status').should('equal', 200)
@@ -97,7 +160,7 @@ describe('v2 payment policy', () => {
     }))
   })
   it('does not cut rights for a failed or voided refund request', function () {
-    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'Cash', amount: 9000 }], true).then(({ body }) => {
+    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 9000 }], true).then(({ body }) => {
       usedCourse(this.fixtures, patient, body).then(({ paymentId, courseId }) => {
         courseRefund(paymentId, courseId, 1000, 2).then(({ body: first }) => {
           cy.api('POST', `/api/refunds/${first.id}/fail`).its('body.status').should('equal', 'Failed')
@@ -111,7 +174,7 @@ describe('v2 payment policy', () => {
     }))
   })
   it('rejects completion when usage left too few rights after the refund request', function () {
-    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'Cash', amount: 9000 }], true).then(({ body }) => {
+    cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 9000 }], true).then(({ body }) => {
       usedCourse(this.fixtures, patient, body).then(({ paymentId, courseId }) => courseRefund(paymentId, courseId, 9000, 6).then(({ body: pending, status }) => {
         expect(status).to.equal(201)
         cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId }).its('status').should('equal', 200)
@@ -126,7 +189,7 @@ describe('v2 payment policy', () => {
   })
   for (const complete of [false, true]) {
     it(`waits for an in-flight usage before ${complete ? 'completing' : 'requesting'} a refund`, function () {
-      cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'Cash', amount: 9000 }], true).then(({ body }) => {
+      cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 9000 }], true).then(({ body }) => {
         cy.api('GET', `/api/receipts/${body.id}`).then(({ body: detail }) => {
           const paymentId = detail.payments[0].id
           const prepare = complete ? null : cy.wrap(null)
@@ -137,7 +200,7 @@ describe('v2 payment policy', () => {
                 token, courseId: courses[0].id,
                 refundUrl: complete ? `/api/refunds/${refundId}/complete` : `/api/payments/${paymentId}/refunds`,
                 refundBody: complete ? undefined : {
-                  amount: 9000, paymentMethodCode: 'Cash', reason: 'race test',
+                  amount: 9000, paymentMethodCode: 'BankTransfer', reason: 'race test',
                   items: [{ courseId: courses[0].id, refundAmount: 9000, cancelledVisits: 6 }],
                 },
               }, { log: false }).then(result => {
