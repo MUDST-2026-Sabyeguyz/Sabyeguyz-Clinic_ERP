@@ -278,6 +278,23 @@ public class V2FinanceScenarios {
         existing.setClosingStatus(ClosingStatus.Open);
         existing.setCommissionScheme(originalScheme);
         existing.setCommissionSchemeVersion(7);
+        existing.setCalculatedCommissionRate(
+                scenario.equals("closing-reclose-same-rate")
+                        ? decimal("0.07")
+                        : decimal("0.05"));
+        existing.setReopenReason("แก้ไขข้อมูลยอดขายต้นทาง");
+
+        if (scenario.equals("closing-reclose-missing-old-rate")) {
+            existing.setCalculatedCommissionRate(null);
+        }
+
+        if (scenario.equals("closing-reclose-missing-reason")) {
+            existing.setReopenReason(null);
+        }
+
+        if (scenario.equals("closing-reclose-finalized")) {
+            existing.setClosingStatus(ClosingStatus.Finalized);
+        }
 
         if (scenario.equals("closing-reclose-missing-scheme")) {
             existing.setCommissionScheme(null);
@@ -296,6 +313,9 @@ public class V2FinanceScenarios {
                 .on("sumCreditedSalesByStaffAndSaleMonthAndBranchId",
                         a -> decimal("75000"));
 
+        var rateAudits =
+                new V2RepositoryStub<>(CommissionRateOverrideAuditRepository.class);
+
         var service = new MonthlyCommissionClosingService(
                 closings.proxy(),
                 courses.proxy(),
@@ -304,10 +324,36 @@ public class V2FinanceScenarios {
                 new MonthlyTierSalesService(courses.proxy()),
                 settlement(courses),
                 new V2RepositoryStub<>(
-                        CommissionAllocationLedgerRepository.class).proxy());
+                        CommissionAllocationLedgerRepository.class).proxy(),
+                rateAudits.proxy());
+
+        Permission permission = new Permission();
+        setId(permission, 1L);
 
         var result = service.closeMonth(
-                "2026-08", staff(), branch, null, 9L);
+                "2026-08", staff(), branch, permission, 9L);
+
+        if (scenario.equals("closing-reclose-same-rate")) {
+            return Map.of(
+                    "auditCount", rateAudits.calls("save"),
+                    "rate", result.getCalculatedCommissionRate());
+        }
+
+        if (scenario.equals("closing-reclose-audit")) {
+            CommissionRateOverrideAudit savedAudit =
+                    (CommissionRateOverrideAudit)
+                            rateAudits.arguments("save").get(0)[0];
+
+            return Map.of(
+                    "auditCount", rateAudits.calls("save"),
+                    "closingId", savedAudit.getClosing().getId(),
+                    "permissionId", savedAudit.getPermission().getId(),
+                    "oldRate", savedAudit.getOldRate(),
+                    "newRate", savedAudit.getNewRate(),
+                    "changedBy", savedAudit.getChangedBy(),
+                    "hasChangedAt", savedAudit.getChangedAt() != null,
+                    "reason", savedAudit.getReason());
+        }
 
         return Map.of(
                 "closingId", result.getId(),
@@ -328,8 +374,9 @@ public class V2FinanceScenarios {
                 .on("findIdsBySellerStaffIdAndSaleMonthAndBranchId", a -> List.of(1L))
                 .on("findByIdForUpdate", a -> Optional.of(c));
         var result = new MonthlyCommissionClosingService(closings.proxy(),courses.proxy(),schemeResolver(),tierResolver(),
-                        new MonthlyTierSalesService(courses.proxy()), settlement(courses),
-                        new V2RepositoryStub<>(CommissionAllocationLedgerRepository.class).proxy())
+                new MonthlyTierSalesService(courses.proxy()), settlement(courses),
+                new V2RepositoryStub<>(CommissionAllocationLedgerRepository.class).proxy(),
+                new V2RepositoryStub<>(CommissionRateOverrideAuditRepository.class).proxy())
                 .closeMonth(
                         scenario.equals("closing-malformed") ? "August-2026" : "2026-08",
                         staff(), branch, null, 9L);

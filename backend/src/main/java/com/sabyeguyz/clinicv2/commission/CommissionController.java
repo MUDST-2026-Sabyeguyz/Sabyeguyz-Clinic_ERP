@@ -360,18 +360,14 @@ public class CommissionController {
     public record OverrideResponse(Long courseId, BigDecimal oldRate, BigDecimal newRate, String reason,
                                     BigDecimal commissionPool) {}
 
-    /** Manually corrects the locked commission rate of one course (needs a reason; audited). */
+    /** Rejects direct manual commission rate overrides. */
     @PostMapping("/courses/{courseId}/override-rate")
-    public OverrideResponse overrideRate(@PathVariable Long courseId, @RequestBody OverrideRequest request) {
-        Course course = courses.findById(courseId).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Permission permission = resolveOrCreatePermission("COMMISSION_RATE_OVERRIDE");
-        var saved = overrideService.override(course, request.rate(), permission, request.reason(), actor.currentId());
-        audit.recordChange("course", String.valueOf(courseId), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
-                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("locked_commission_rate", saved.getOldRate()),
-                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("locked_commission_rate", saved.getNewRate(),
-                        "reason", request.reason()), actor.currentId());
-        return new OverrideResponse(courseId, saved.getOldRate(), saved.getNewRate(), saved.getReason(),
-                courses.findById(courseId).orElseThrow().getTotalCourseCommissionPool());
+    public OverrideResponse overrideRate(
+            @PathVariable Long courseId,
+            @RequestBody OverrideRequest request) {
+        throw new IllegalArgumentException(
+                "ไม่อนุญาตให้กำหนดอัตราคอมมิชชันโดยตรง "
+                        + "ให้แก้ข้อมูลต้นทางและคำนวณใหม่ก่อน Finalize");
     }
 
     /** How the pay is worked out: the tiers and the treatment fee in force today, read only, for anyone signed in. */

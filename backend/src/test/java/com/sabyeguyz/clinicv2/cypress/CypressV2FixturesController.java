@@ -28,7 +28,8 @@ public class CypressV2FixturesController {
             "course_refund_item", "refund_transaction", "transaction_cancellation", "payment_transaction", "course_usage_print_event",
             "course_usage_print", "commission_allocation_ledger", "course_ledger", "course_visit_usage",
             "course_transfer", "course_entitlement", "course_sale_staff_share", "course_shared_member",
-            "commission_rate_override_audit", "monthly_commission_closing", "treatment", "sales_transaction",
+            "commission_rate_override_audit", "monthly_commission_closing",
+            "branch_monthly_closing", "treatment", "sales_transaction",
             "course", "receipt", "receipt_sequence", "appointment_status_history", "appointment", "patient_visit", "hn_sequence",
             "patient", "audit_log");
 
