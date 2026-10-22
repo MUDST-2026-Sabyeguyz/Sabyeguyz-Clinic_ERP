@@ -70,8 +70,9 @@ public class TreatmentFeeRuleService {
     }
 
     /**
-     * Edits a rule. A rule in use may only end earlier (or later), never change what it pays. When a rule that has not
-     * started moves to another month, the rule before it follows (it ends the day before the new start).
+     * Changes calculation fields only for future rules that have never been used.
+     * Moving a pending rule also adjusts its predecessor's end date.
+     * Display-name changes are handled separately by rename().
      */
     @Transactional
     public TreatmentFeeRule update(Long id, FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom,
@@ -91,14 +92,25 @@ public class TreatmentFeeRuleService {
         LocalDate newTo = effectiveTo != null ? effectiveTo : rule.getEffectiveTo();
         validate(newType, newValue, newFrom, newTo);
 
-        if (isUsed(id)) {
-            boolean changesPayment = newType != rule.getFeeType() || newValue.compareTo(rule.getFeeValue()) != 0
-                    || !newFrom.equals(rule.getEffectiveFrom());
-            if (changesPayment) {
-                throw new IllegalStateException("กฎค่ามือนี้ถูกใช้คำนวณไปแล้ว ห้ามแก้ประเภท อัตรา หรือวันที่เริ่ม ให้สร้างกฎใหม่ตามวันที่มีผล");
+        boolean changesRule =
+                newType != rule.getFeeType()
+                        || newValue.compareTo(rule.getFeeValue()) != 0
+                        || !newFrom.equals(rule.getEffectiveFrom())
+                        || !java.util.Objects.equals(
+                        newTo, rule.getEffectiveTo());
+
+        if (changesRule) {
+            LocalDate today =
+                    com.sabyeguyz.clinicv2.config.ClinicTime.today();
+
+            if (!rule.getEffectiveFrom().isAfter(today)) {
+                throw new IllegalStateException(
+                        "กฎค่ามือนี้เริ่มมีผลแล้ว ห้ามแก้ประเภท อัตรา หรือช่วงวันที่ ให้สร้างเวอร์ชันใหม่");
             }
-            if (newTo != null && rules.isUsedAfter(id, newTo)) {
-                throw new IllegalStateException("มีรายการรักษาที่ใช้กฎนี้หลังวันที่สิ้นสุดที่ระบุ");
+
+            if (isUsed(id)) {
+                throw new IllegalStateException(
+                        "กฎค่ามือนี้ถูกใช้คำนวณแล้ว ห้ามแก้ข้อมูลคำนวณ ให้สร้างเวอร์ชันใหม่");
             }
         }
         TreatmentFeeRule predecessor = null;
