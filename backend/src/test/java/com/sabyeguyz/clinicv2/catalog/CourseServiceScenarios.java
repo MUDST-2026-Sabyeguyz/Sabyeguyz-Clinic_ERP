@@ -9,6 +9,9 @@ import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
 import com.sabyeguyz.clinicv2.commission.CommissionTier;
 import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
 import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
+import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingService;
+import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingRepository;
+import com.sabyeguyz.clinicv2.commission.MonthlyCommissionClosingRepository;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedger;
@@ -23,6 +26,7 @@ import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.sale.Receipt;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
+import com.sabyeguyz.clinicv2.branch.Branch;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -49,8 +53,31 @@ public class CourseServiceScenarios {
     };
 
     private CourseService service() {
-        return new CourseService(courses, ledger, sharedMembersStub.proxy(),
-                entitlementsStub.proxy(), schemeResolver, tierResolver, new MonthlyTierSalesService(courses));
+        var branchClosingService = new BranchMonthlyClosingService(
+                new V2RepositoryStub<>(BranchMonthlyClosingRepository.class).proxy(),
+                new V2RepositoryStub<>(MonthlyCommissionClosingRepository.class).proxy(),
+                courses);
+
+        return new CourseService(
+                courses, ledger, sharedMembersStub.proxy(), entitlementsStub.proxy(), schemeResolver, tierResolver,
+                new MonthlyTierSalesService(courses),
+                branchClosingService);
+    }
+
+    private static void setId(Object entity, Long id) {
+        try {
+            var field = entity.getClass().getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(entity, id);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Staff staffFixture() {
+        Staff person = new Staff();
+        setId(person, 1L);
+        return person;
     }
 
     /** A CoursePurchase sale line for the receipt's patient, as SalesTransactionService records it before selling the Course. */
@@ -58,6 +85,9 @@ public class CourseServiceScenarios {
         Patient patient = new Patient();
         receipt.setPatient(patient);
         SalesTransaction transaction = new SalesTransaction();
+        Branch branch = new Branch();
+        setId(branch, 1L);
+        transaction.setBranch(branch);
         transaction.setPatient(patient);
         transaction.setReceipt(receipt);
         transaction.setTransactionType(TransactionType.CoursePurchase);
@@ -87,11 +117,11 @@ public class CourseServiceScenarios {
         tier.setCommissionRate(new BigDecimal("0.07"));
 
         coursesStub.on("countByReceiptId", args -> 0L);
-        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonthAndBranchId", args -> BigDecimal.ZERO);
         schemeResult = scheme;
         tierResult = tier;
 
-        Course course = service().sell(receipt, purchaseLine(receipt), courseTemplate(), new Staff(), null, null,
+        Course course = service().sell(receipt, purchaseLine(receipt), courseTemplate(), staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L);
 
         out.put("courseNo", course.getCourseNo());
@@ -111,11 +141,11 @@ public class CourseServiceScenarios {
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE22063150");
         coursesStub.on("countByReceiptId", args -> 1L);
-        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonthAndBranchId", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
         tierResult = new CommissionTier();
 
-        Course course = service().sell(receipt, purchaseLine(receipt), courseTemplate(), new Staff(), null, null,
+        Course course = service().sell(receipt, purchaseLine(receipt), courseTemplate(), staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L);
 
         out.put("courseNo", course.getCourseNo());
@@ -132,11 +162,11 @@ public class CourseServiceScenarios {
         CommissionTier tier = new CommissionTier();
         tier.setCommissionRate(new BigDecimal("0.07"));
         coursesStub.on("countByReceiptId", args -> 0L);
-        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonthAndBranchId", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
         tierResult = tier;
 
-        Course course = service().sell(receipt, purchaseLine(receipt), template, new Staff(), null, null,
+        Course course = service().sell(receipt, purchaseLine(receipt), template, staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L);
 
         out.put("totalVisits", course.getTotalVisits());
@@ -151,7 +181,7 @@ public class CourseServiceScenarios {
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE40000010");
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, purchaseLine(receipt), template, new Staff(), null, null,
+        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, purchaseLine(receipt), template, staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L); return null; }));
         return out;
     }
@@ -163,11 +193,11 @@ public class CourseServiceScenarios {
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE50000010");
         SalesTransaction line = purchaseLine(receipt);
-        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonthAndBranchId", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
         tierResult = new CommissionTier();
 
-        Course course = service().sell(receipt, line, template, new Staff(), null, null,
+        Course course = service().sell(receipt, line, template, staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L);
 
         out.put("samePurchaser", course.getPurchaserPatient() == line.getPatient());
@@ -183,7 +213,7 @@ public class CourseServiceScenarios {
         SalesTransaction line = purchaseLine(receipt);
         line.setTransactionType(TransactionType.SingleVisit);
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), new Staff(), null, null,
+        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L); return null; }));
         return out;
     }
@@ -195,7 +225,7 @@ public class CourseServiceScenarios {
         SalesTransaction line = purchaseLine(receipt);
         coursesStub.on("existsBySaleTransactionId", args -> true);
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), new Staff(), null, null,
+        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L); return null; }));
         return out;
     }
@@ -207,7 +237,7 @@ public class CourseServiceScenarios {
         SalesTransaction line = purchaseLine(receipt);
         receipt.setPatient(new Patient());
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), new Staff(), null, null,
+        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), staffFixture(), null, null,
                 LocalDate.of(2026, 8, 18), 1L); return null; }));
         return out;
     }
@@ -217,10 +247,10 @@ public class CourseServiceScenarios {
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE60000010");
         SalesTransaction line = purchaseLine(receipt);
-        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonthAndBranchId", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
         tierResult = new CommissionTier();
-        Staff seller = new Staff();
+        Staff seller = staffFixture();
         Course course = service().sell(receipt, line, courseTemplate(), seller, null, null, LocalDate.of(2026, 8, 18), 1L);
         out.put("ownerIsSeller", course.getOwnerStaff() == seller && course.getSellerStaff() == seller);
         out.put("salesSeenByTier", salesSeenByTier);
@@ -234,11 +264,11 @@ public class CourseServiceScenarios {
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE60000050");
         SalesTransaction line = purchaseLine(receipt);
-        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonthAndBranchId", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
         tierResult = new CommissionTier();
 
-        service().sell(receipt, line, template, new Staff(), null, null, LocalDate.of(2026, 8, 18), 1L);
+        service().sell(receipt, line, template, staffFixture(), null, null, LocalDate.of(2026, 8, 18), 1L);
 
         CourseSharedMember member = (CourseSharedMember) sharedMembersStub.arguments("save").get(0)[0];
         CourseEntitlement entitlement = (CourseEntitlement) entitlementsStub.arguments("save").get(0)[0];
@@ -257,11 +287,11 @@ public class CourseServiceScenarios {
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE60000060");
         SalesTransaction line = purchaseLine(receipt);
-        coursesStub.on("sumCreditedSalesByStaffAndSaleMonth", args -> BigDecimal.ZERO);
+        coursesStub.on("sumCreditedSalesByStaffAndSaleMonthAndBranchId", args -> BigDecimal.ZERO);
         schemeResult = new CommissionScheme();
         tierResult = new CommissionTier();
 
-        service().sell(receipt, line, template, new Staff(), null, null, LocalDate.of(2026, 8, 18), 1L);
+        service().sell(receipt, line, template, staffFixture(), null, null, LocalDate.of(2026, 8, 18), 1L);
 
         CourseLedger entry = (CourseLedger) ledgerStub.arguments("save").get(0)[0];
         out.put("entryType", entry.getEntryType());
