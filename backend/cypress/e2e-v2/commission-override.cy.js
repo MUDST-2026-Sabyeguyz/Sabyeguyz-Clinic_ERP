@@ -5,24 +5,37 @@ function buyAndClose(fx, patient) {
   return cy.api('POST', '/api/course-purchases', {
     patientId: patient.id, courseId: fx.courseId, branchCode: '01', paymentLabelCode: 'FULL',
   }).then(({ body: purchase }) => {
-    cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`).its('status').should('equal', 200)
     return cy.wrap(purchase)
   })
 }
 
 describe('v2 commission rate override and credited staff sales', () => {
-  it('overrides the locked rate of a closed course and recalculates the pool', function () {
-    cy.registerPatient().then((patient) => {
-      buyAndClose(this.fixtures, patient).then((purchase) => {
-        cy.api('POST', `/api/commission/courses/${purchase.id}/override-rate`,
-          { rate: 0.08, reason: 'ข้อตกลงพิเศษ' }).then(({ status, body }) => {
-          expect(status, JSON.stringify(body)).to.equal(200)
-          expect(Number(body.oldRate)).to.equal(0.05)
-          expect(Number(body.newRate)).to.equal(0.08)
-          expect(Number(body.commissionPool)).to.equal(720)
-        })
-        cy.api('GET', `/api/patients/${patient.id}/courses`).its('body.0.lockedCommissionRate')
-          .should('satisfy', (rate) => Number(rate) === 0.08)
+  it('rejects a manual override and preserves the locked rate', function () {
+    cy.registerPatient().then(patient => {
+      buyAndClose(this.fixtures, patient).then(purchase => {
+        cy.api('GET', `/api/patients/${patient.id}/courses`)
+            .then(({ body: beforeRows }) => {
+              const before = beforeRows.find(row => row.id === purchase.id)
+              expect(before).to.exist
+
+              cy.api('POST',
+                  `/api/commission/courses/${purchase.id}/override-rate`,
+                  { rate: 0.08, reason: 'ข้อตกลงพิเศษ' }
+              ).then(({ status, body }) => {
+                expect(status).to.equal(400)
+                expect(body.message)
+                    .to.contain('ไม่อนุญาตให้กำหนดอัตราคอมมิชชันโดยตรง')
+              })
+
+              cy.api('GET', `/api/patients/${patient.id}/courses`)
+                  .then(({ body: afterRows }) => {
+                    const after = afterRows.find(row => row.id === purchase.id)
+                    expect(after).to.exist
+                    expect(after.lockedCommissionRate)
+                        .to.equal(before.lockedCommissionRate)
+                  })
+            })
       })
     })
   })
@@ -46,19 +59,32 @@ describe('v2 commission rate override and credited staff sales', () => {
     })
   })
 
-  it('is manager-only and leaves an audit entry', function () {
-    cy.registerPatient().then((patient) => {
-      buyAndClose(this.fixtures, patient).then((purchase) => {
+  it('denies therapist access and rejects a manager manual override', function () {
+    cy.registerPatient().then(patient => {
+      buyAndClose(this.fixtures, patient).then(purchase => {
         cy.login('therapist', 'therapist123').then(({ body: auth }) => {
-          cy.apiAs(auth.token, 'POST', `/api/commission/courses/${purchase.id}/override-rate`,
-            { rate: 0.08, reason: 'x' }).its('status').should('equal', 403)
+          cy.apiAs(auth.token, 'POST',
+              `/api/commission/courses/${purchase.id}/override-rate`,
+              { rate: 0.08, reason: 'ทดสอบสิทธิ์' }
+          ).its('status').should('equal', 403)
         })
-        cy.api('POST', `/api/commission/courses/${purchase.id}/override-rate`, { rate: 0.07, reason: 'ปรับตามตกลง' })
-          .its('status').should('equal', 200)
-        cy.api('GET', '/api/audit-logs?size=100').its('body.items').then((items) => {
-          const entry = items.find((item) => item.tableName === 'course' && item.recordId === String(purchase.id)
-            && JSON.parse(item.newValue || '{}').reason === 'ปรับตามตกลง')
-          expect(entry, 'override audit entry').to.exist
+
+        const reason = 'ทดสอบคำขอแก้อัตราที่ไม่อนุญาต'
+
+        cy.api('POST',
+            `/api/commission/courses/${purchase.id}/override-rate`,
+            { rate: 0.07, reason }
+        ).its('status').should('equal', 400)
+
+        cy.api('GET', '/api/audit-logs?size=100')
+            .its('body.items').then(items => {
+          const entry = items.find(item =>
+              item.tableName === 'course'
+              && item.recordId === String(purchase.id)
+              && String(item.newValue || '').includes(reason)
+          )
+          expect(entry, 'no course change from rejected override')
+              .not.to.exist
         })
       })
     })
