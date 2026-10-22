@@ -4,6 +4,10 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CourseVisitUsageRepository extends JpaRepository<CourseVisitUsage, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select u from CourseVisitUsage u where u.id = :id")
+    java.util.Optional<CourseVisitUsage> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") Long id);
+    List<CourseVisitUsage> findByPatientIdAndVisitBranchIdOrderByIdDesc(Long patientId, Long branchId);
     boolean existsByCourseId(Long courseId);
 
     List<CourseVisitUsage> findByCourseIdOrderByIdDesc(Long courseId);

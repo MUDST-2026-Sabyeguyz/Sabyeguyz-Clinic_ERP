@@ -37,6 +37,10 @@ public class PatientVisitService {
     /** Checks in a patient against an existing, booked Appointment. */
     @Transactional
     public PatientVisit checkInFromAppointment(Long appointmentId, Long actorId) {
+        // Serialize check-in with appointment financial actions; a retry reuses attendance.
+        appointmentService.getForUpdate(appointmentId);
+        var existing = visits.findFirstByAppointmentIdOrderByIdDesc(appointmentId);
+        if (existing.isPresent()) return existing.get();
         Appointment appointment = appointmentService.markArrived(appointmentId, actorId);
         PatientVisit visit = new PatientVisit();
         visit.setAppointment(appointment);

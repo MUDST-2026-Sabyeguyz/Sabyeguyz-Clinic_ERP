@@ -57,45 +57,146 @@ body .appointment-page .appointment-list-feedback {
 body .appointment-page .appointment-table-scroll:not(:has(table)) {
   min-height: 0;
 }
-body .appointment-page .appointment-reschedule-modal {
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-reschedule-modal {
   position: fixed;
   inset: 0;
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  margin: 0;
   z-index: 90;
   overflow-y: auto;
-  padding: 32px max(20px, calc((100vw - 960px) / 2));
+  padding: 32px 24px;
+  overscroll-behavior: contain;
   background: #173f4452;
   box-sizing: border-box;
 }
-body .appointment-page .appointment-reschedule-modal .appointment-back-row {
-  margin: 0;
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-back-row {
+  width: min(860px, 100%);
+  margin: 0 auto;
+  box-sizing: border-box;
   padding: 16px 24px 0;
   background: #fff;
   border-radius: 12px 12px 0 0;
 }
-body .appointment-page .appointment-reschedule-modal .appointment-create-card {
-  width: 100%;
-  margin: 0;
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-create-card {
+  width: min(860px, 100%);
+  max-width: none;
+  margin: 0 auto;
   box-sizing: border-box;
   border-radius: 0 0 12px 12px;
 }
-body .appointment-page .appointment-reschedule-modal .appointment-create-card.is-editing {
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-create-card.is-editing {
   min-height: 0;
   padding: 24px 32px 32px;
   box-shadow: none;
 }
-body .appointment-page .appointment-reschedule-modal .appointment-create-card.is-editing > h1 {
-  font-size: 28px;
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-create-card.is-editing
+  > h1 {
+  font-size: 32px;
+  font-weight: 800;
+  color: #145c59;
   line-height: 1.4;
   letter-spacing: normal;
 }
-body .appointment-page .appointment-reschedule-modal .appointment-reschedule-grid {
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-original-summary {
+  margin: 16px 0 24px;
+  padding: 16px;
+  background: #edf5f1;
+  color: #34594f;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: normal;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  :is(.reschedule-date-field, .reschedule-time-field) {
+  color: #145c59;
+  font-weight: 700;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .reschedule-date-field
+  .date-trigger {
+  border-color: #145c59;
+  color: #145c59;
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-save {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e6e1dc;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-save
+  .primary {
+  min-width: 220px;
+  min-height: 48px;
+  font-size: 16px;
+  font-weight: 700;
+  background: #145c59;
+  color: #fff;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-reschedule-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px 24px;
 }
-body .appointment-page .appointment-reschedule-modal .appointment-reschedule-grid > label {
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .appointment-reschedule-grid
+  > label {
   min-width: 0;
   font-size: 15px;
   line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .reschedule-time-trigger {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-reschedule-modal
+  .reschedule-time-trigger
+  strong {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 body
   .appointment-page
@@ -576,14 +677,20 @@ body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page button:disabled {
   }
 }
 @media (max-width: 700px) {
-  body .appointment-page .appointment-reschedule-modal {
+  body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-reschedule-modal {
     padding: 16px;
     overscroll-behavior: contain;
   }
-  body .appointment-page .appointment-reschedule-modal .appointment-create-card.is-editing {
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .appointment-page
+    .appointment-reschedule-modal
+    .appointment-create-card.is-editing {
     padding: 20px;
   }
-  body .appointment-page .appointment-reschedule-modal .appointment-reschedule-grid {
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .appointment-page
+    .appointment-reschedule-modal
+    .appointment-reschedule-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: 'patient' 'service' 'therapist' 'date' 'time' 'branch' 'note';
     gap: 16px;
@@ -650,5 +757,182 @@ body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page button:disabled {
     scroll-behavior: auto;
     transition: none;
     animation: none;
+  }
+}
+
+/* Set size on cells, not only the table: the shared theme sizes td directly. */
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page:not(.appointment-form-open)
+  .appointment-panel
+  .staff-table
+  tbody
+  td {
+  font-size: 16px;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-patient-hn,
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-cancel-reason {
+  font-size: 14px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-status-filter,
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-status-filter
+  .filter-dropdown__button {
+  font-size: 14px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-sort {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid #8fb5ae;
+  border-radius: 8px;
+  background: #fff;
+  color: #145c59;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-sort:hover {
+  background: #edf5f1;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-summary-date {
+  margin-right: auto;
+}
+
+/* Polish: consistent labels and targets across the list toolbar and row actions. */
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-list-mode-toggle button,
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-today {
+  min-height: 44px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-sort {
+  white-space: nowrap;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-summary-count {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-list-filters
+  :is(.date-trigger, .filter-dropdown__button) {
+  min-height: 44px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+/* Layout: filter controls above, result context left, ordering and count together right. */
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-list-summary {
+  gap: 12px 24px;
+  min-height: 72px;
+  box-sizing: border-box;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page:not(.appointment-form-open)
+  .appointment-panel
+  .staff-table
+  :is(th, td):is(:nth-child(3), :nth-child(5), :nth-child(6)) {
+  text-align: left;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page:not(.appointment-form-open)
+  .appointment-panel
+  .staff-table
+  :is(th, td):is(:nth-child(1), :nth-child(2), :nth-child(4), :nth-child(7)) {
+  text-align: center;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page:not(.appointment-form-open)
+  .appointment-panel
+  .staff-table
+  tbody
+  td:first-child {
+  white-space: nowrap;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-patient-cell b {
+  font-size: 16px;
+  font-weight: 700;
+}
+@media (max-width: 1100px) {
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .appointment-page
+    .appointment-panel
+    .appointment-list-filters {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 700px) {
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .appointment-page
+    .appointment-panel
+    .appointment-list-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .appointment-page
+    .appointment-list-filters
+    .appointment-today {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-summary-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* Keep result actions together and recover space from the patient column. */
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-list-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-summary-actions {
+  width: auto;
+  justify-self: end;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 16px;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page:not(.appointment-form-open)
+  .appointment-panel
+  .staff-table
+  :is(th, td):nth-child(3) {
+  width: 13%;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page:not(.appointment-form-open)
+  .appointment-panel
+  .staff-table
+  :is(th, td):nth-child(5) {
+  width: 17%;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page:not(.appointment-form-open)
+  .appointment-panel
+  .staff-table
+  :is(th, td):nth-child(6) {
+  width: 15%;
+}
+@media (max-width: 700px) {
+  body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-list-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-summary-actions {
+    justify-self: end;
   }
 }
