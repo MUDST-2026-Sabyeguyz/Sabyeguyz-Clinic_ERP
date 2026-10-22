@@ -47,13 +47,15 @@ public class AppointmentController {
     private final BranchAccessPolicy branchAccess;
     private final AppointmentStatusHistoryRepository history;
     private final AppointmentAvailabilityService availability;
+    private final AppointmentProcessService processes;
 
     public AppointmentController(AppointmentService service, AppointmentRepository repository,
                                   PatientVisitService visitService, PatientVisitRepository visits,
                                   PatientRepository patients, StaffRepository staff,
                                   ServiceRepository services, CurrentActor actor, BranchAccessPolicy branchAccess,
                                   AppointmentStatusHistoryRepository history,
-                                  AppointmentAvailabilityService availability) {
+                                  AppointmentAvailabilityService availability, AppointmentProcessService processes) {
+        this.processes = processes;
         this.service = service;
         this.repository = repository;
         this.visitService = visitService;
@@ -187,16 +189,16 @@ public class AppointmentController {
 
     @PostMapping("/{id}/confirm")
     public Response confirm(@PathVariable Long id) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         requireAppointmentAccess(id);
         return toResponse(service.confirm(id, actor.currentId()));
     }
 
     @PostMapping("/{id}/link-patient")
     public Response linkPatient(@PathVariable Long id, @RequestBody LinkPatientRequest request) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         // Lock before the first entity load: otherwise a waiting transaction could keep a stale NEW snapshot.
-        branchAccess.requireAccess(service.getForUpdate(id).getBranch());
+        requireOwnedAppointmentAccess(service.getForUpdate(id));
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         return toResponse(service.linkRegisteredPatient(id, patient, actor.currentId()));
@@ -204,15 +206,16 @@ public class AppointmentController {
 
     @PostMapping("/{id}/check-in")
     public Response checkIn(@PathVariable Long id) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         requireAppointmentAccess(id);
         visitService.checkInFromAppointment(id, actor.currentId());
+        processes.attachExistingVisit(id);
         return toResponse(service.get(id));
     }
 
     @PostMapping("/{id}/start-service")
     public Response startService(@PathVariable Long id) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         requireAppointmentAccess(id);
         PatientVisit visit = requireVisit(id);
         visitService.startService(visit.getId(), actor.currentId());
@@ -221,39 +224,43 @@ public class AppointmentController {
 
     @PostMapping("/{id}/complete")
     public Response complete(@PathVariable Long id) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         requireAppointmentAccess(id);
         PatientVisit visit = requireVisit(id);
         visitService.complete(visit.getId(), actor.currentId());
+        processes.attachExistingVisit(id);
         return toResponse(service.get(id));
     }
 
     @PostMapping("/{id}/no-show")
     public Response noShow(@PathVariable Long id) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         requireAppointmentAccess(id);
         return toResponse(service.markNoShow(id, actor.currentId()));
     }
 
     @PostMapping("/{id}/cancel")
     public Response cancel(@PathVariable Long id, @RequestBody CancelRequest request) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         requireAppointmentAccess(id);
         return toResponse(service.cancel(id, request.reason(), actor.currentId()));
     }
 
     @PatchMapping("/{id}")
     public Response reschedule(@PathVariable Long id, @RequestBody RescheduleRequest request) {
-        branchAccess.requireManager();
+        branchAccess.requireAppointmentStatusEditor();
         requireAppointmentAccess(id);
         if (request.startAt() == null) throw new IllegalArgumentException("ต้องระบุเวลานัดใหม่");
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
         Appointment current = service.getForUpdate(id);
-        branchAccess.requireAccess(current.getBranch());
+        requireOwnedAppointmentAccess(current);
         Branch branch = request.branchCode() == null || request.branchCode().isBlank()
                 ? current.getBranch() : branchAccess.scope(request.branchCode());
         Staff therapist = request.therapistId() == null ? current.getStaff()
                 : staff.findById(request.therapistId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ให้บริการ"));
+        if (!branchAccess.isManager() && !therapist.getId().equals(branchAccess.currentStaffId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "เลื่อนนัดได้เฉพาะตารางของตัวเอง");
+        }
         Service chosen = request.serviceId() == null ? current.getService()
                 : services.findById(request.serviceId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         if (!branch.getId().equals(therapist.getBranch().getId())) {
@@ -295,6 +302,13 @@ public class AppointmentController {
     private PatientVisit requireVisit(Long appointmentId) {
         return visits.findFirstByAppointmentIdOrderByIdDesc(appointmentId)
                 .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
+    }
+
+    private void requireOwnedAppointmentAccess(Appointment appointment) {
+        branchAccess.requireAccess(appointment.getBranch());
+        if (!branchAccess.isManager() && !appointment.getStaff().getId().equals(branchAccess.currentStaffId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "จัดการได้เฉพาะนัดหมายของตัวเองในสาขาตนเอง");
+        }
     }
 
     private Appointment requireAppointmentAccess(Long id) {

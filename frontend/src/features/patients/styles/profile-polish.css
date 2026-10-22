@@ -1,0 +1,461 @@
+/* Shared patient profile polish; edit and detail data flow are preserved. */
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main {
+  width: min(1160px, calc(100% - 48px));
+  padding-top: 28px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > .back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+  border: 1px solid #b7cecc;
+  border-radius: 8px;
+  background: #fff;
+  color: #145c59;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > .back-link:hover {
+  background: #edf5f1;
+  border-color: #145c59;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-title h1 {
+  font-size: 32px;
+  line-height: 1.4;
+  color: #145c59;
+  font-weight: 800;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-edit {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #145c59;
+  background: #fff;
+  border-color: #b7cecc;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-edit:hover {
+  background: #edf5f1;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-summary {
+  padding: 20px 24px;
+  gap: 16px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-info h2 {
+  font-size: 22px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-info p {
+  font-size: 16px;
+  line-height: 1.5;
+  gap: 8px 24px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-branch {
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 8px 16px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs {
+  gap: 8px;
+  margin: 16px 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a {
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 16px;
+  line-height: 1.5;
+  box-sizing: border-box;
+  color: #52665e;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a.active {
+  color: #145c59;
+  background: #edf5f1;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a:hover {
+  background: #edf5f1;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-details {
+  padding: 28px 32px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-section h2 {
+  margin-bottom: 20px;
+  font-size: 20px;
+  line-height: 1.5;
+  color: #25372e;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid {
+  gap: 20px 24px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid > div {
+  min-width: 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid dt {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #56665d;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid dd {
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #25372e;
+  overflow-wrap: anywhere;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page :is(button, a):focus-visible {
+  outline: 3px solid #145c59;
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main {
+    width: calc(100% - 32px);
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-title {
+    flex-wrap: wrap;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-title h1 {
+    font-size: 28px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-summary {
+    flex-wrap: wrap;
+    padding: 20px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-info {
+    flex: 1 1 180px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-info h2 {
+    font-size: 20px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs {
+    overflow-x: auto;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a {
+    flex: 1 0 auto;
+    width: auto;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-details {
+    padding: 24px 20px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Profile layout: stable identity alignment and balanced use of the available width. */
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page:not(.is-editing)
+  .patient-profile-summary {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 20px;
+  row-gap: 12px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-branch {
+  max-width: 240px;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a {
+  width: auto;
+  text-align: center;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .identity-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .contact-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid dd {
+  margin-left: 0;
+  margin-bottom: 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-profile-section
+  + .patient-profile-section {
+  margin-top: 28px;
+  padding-top: 28px;
+}
+@media (max-width: 1000px) {
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .identity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .patient-profile-page:not(.is-editing)
+    .patient-profile-summary {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px 16px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-avatar {
+    width: 48px;
+    height: 48px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-branch {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100%;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a {
+    padding: 8px;
+    white-space: normal;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .patient-profile-page
+    :is(.identity-grid, .contact-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Lightweight back navigation with press feedback; reduced motion keeps it still. */
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > a.back-link {
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #145c59;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    transform 160ms ease-out,
+    color 160ms ease-out;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > a.back-link:hover {
+  background: transparent;
+  color: #176c68;
+  transform: translateX(-3px);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > a.back-link:active {
+  transform: translateX(-6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > a.back-link {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* History shares the profile frame instead of introducing a second page shell. */
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-history-embedded {
+  min-height: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded::before {
+  content: none;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  > .history-page-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 24px;
+  box-sizing: border-box;
+  border: 1px solid #dbe3df;
+  border-radius: 12px;
+  background: #fff;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  .history-tabs {
+  margin-top: 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  .history-tabs
+  button {
+  min-height: 44px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  .history-filters {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  .history-table-wrap {
+  overflow-x: auto;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  .history-table-wrap
+  th {
+  font-size: 14px;
+  color: #34594f;
+  background: #f2f7f4;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  .history-table-wrap
+  td {
+  font-size: 16px;
+  line-height: 1.5;
+}
+@media (max-width: 700px) {
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .patient-profile-page
+    .patient-history-embedded
+    > .history-page-content {
+    padding: 16px;
+  }
+}
+@media print {
+  .patient-profile-history > .staff-header,
+  .patient-profile-history > main > :not(.patient-history-embedded) {
+    display: none !important;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-history > main {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+/* Patient service workspace: one navigation level, course overview and contextual actions. */
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .profile-service-action {
+  text-decoration: none;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #dbe3df;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview > div {
+  min-width: 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview span {
+  display: block;
+  color: #56665d;
+  font-size: 14px;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview strong {
+  display: block;
+  margin-top: 6px;
+  color: #145c59;
+  font-size: 22px;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .patient-history-embedded
+  .history-filters {
+  display: flex;
+  align-items: end;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  :is(.history-search-field, .history-date-field) {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  color: #56665d;
+  font-size: 14px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-search-field {
+  flex: 1 1 280px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-date-field {
+  flex: 0 1 200px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-search-field input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-size: 16px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-clear-filters {
+  min-height: 44px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #b7cecc;
+  border-radius: 8px;
+  color: #145c59;
+  font-size: 14px;
+  cursor: pointer;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-history-table {
+  min-width: 800px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-purchase-date {
+  display: block;
+  margin-top: 4px;
+  color: #56665d;
+  font-size: 14px;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-more-actions {
+  display: inline-grid;
+  min-width: 140px;
+  gap: 4px;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-more-actions summary {
+  min-height: 44px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+  border: 1px solid #b7cecc;
+  border-radius: 8px;
+  color: #145c59;
+  font-size: 14px;
+  background: #fff;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-more-actions
+  .history-row-action {
+  display: flex;
+  margin-top: 8px;
+  min-height: 44px;
+  align-items: center;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page summary:focus-visible {
+  outline: 3px solid #145c59;
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-date-field {
+    flex-grow: 1;
+  }
+}
