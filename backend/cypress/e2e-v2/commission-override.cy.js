@@ -3,7 +3,7 @@ const range = '?from=2020-01-01&to=2099-12-31'
 
 function buyAndClose(fx, patient) {
   return cy.api('POST', '/api/course-purchases', {
-    patientId: patient.id, courseId: fx.courseId, branchCode: '01',
+    patientId: patient.id, courseId: fx.courseId, branchCode: '01', paymentLabelCode: 'FULL',
   }).then(({ body: purchase }) => {
     cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
     return cy.wrap(purchase)
@@ -30,7 +30,7 @@ describe('v2 commission rate override and credited staff sales', () => {
   it('refuses an override before the course is locked, without a reason, or with a rate over 100%', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).then(({ body: purchase }) => {
         cy.api('POST', `/api/commission/courses/${purchase.id}/override-rate`, { rate: 0.08, reason: 'x' })
           .its('status').should('equal', 400)
@@ -67,7 +67,7 @@ describe('v2 commission rate override and credited staff sales', () => {
   it('credits a course sale to its seller (the Owner PT) in full in the staff sales report', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
         caseOwnerStaffId: this.fixtures.therapistId,
       }).its('status').should('equal', 201)
       cy.api('GET', `/api/reports/staff-sales${range}`).then(({ status, body }) => {
@@ -81,9 +81,11 @@ describe('v2 commission rate override and credited staff sales', () => {
   it('credits a single-visit sale to its salesperson in full', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/payments', {
-        patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
+        patientId: patient.id, branchCode: '01',
+        salespersonStaffId: this.fixtures.therapistId,
+        paymentLabelCode: 'FULL',
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
       }).its('status').should('equal', 201)
       cy.api('GET', `/api/reports/staff-sales${range}`).then(({ body }) => {
         expect(body.rows).to.have.length(1)
