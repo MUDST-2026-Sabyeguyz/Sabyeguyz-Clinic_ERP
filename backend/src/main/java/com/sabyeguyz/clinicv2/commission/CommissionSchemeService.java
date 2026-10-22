@@ -73,12 +73,12 @@ public class CommissionSchemeService {
                                     Permission permission, List<TierInput> tierInputs, Long actorId) {
         validate(schemeName, effectiveFrom, effectiveTo, tierInputs);
         validateTiers(tierInputs);
+        schemes.lockVersionAllocation();
         requireNoOtherPending(null, effectiveFrom);
         retireOverlapping(effectiveFrom, effectiveTo, actorId);
 
         String name = schemeName.trim();
         int nextVersion = schemes.findByOrderByEffectiveFromDesc().stream()
-                .filter(s -> s.getSchemeName().equalsIgnoreCase(name))
                 .mapToInt(CommissionScheme::getSchemeVersion).max().orElse(0) + 1;
 
         CommissionScheme scheme = new CommissionScheme();
