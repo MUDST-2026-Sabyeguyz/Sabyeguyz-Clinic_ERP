@@ -56,19 +56,37 @@ public class MonthlyCommissionClosingService {
         require(saleMonth != null && saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])"), "closingMonth ต้องเป็นรูปแบบ yyyy-mm");
         require(staff != null, "ต้องระบุพนักงาน");
         require(branch != null, "ต้องระบุสาขา");
-        if (closings.findByClosingMonthAndStaffIdAndBranchId(saleMonth, staff.getId(), branch.getId())
-                .filter(MonthlyCommissionClosing::isClosed).isPresent()) {
-            throw new IllegalStateException("ปิดยอดเดือนนี้ของพนักงานคนนี้ไปแล้ว");
+        MonthlyCommissionClosing closing =
+                closings.findByClosingMonthAndStaffIdAndBranchId(
+                                saleMonth, staff.getId(), branch.getId())
+                        .orElseGet(MonthlyCommissionClosing::new);
+
+        if (closing.isClosed()) {
+            throw new IllegalStateException(
+                    "ปิดยอดเดือนนี้ของพนักงานคนนี้ไปแล้ว");
         }
 
-        LocalDate effectiveDate = LocalDate.parse(saleMonth + "-01");
-        BigDecimal monthlySales = tierSales.netSales(staff.getId(), saleMonth, branch.getId());
-        CommissionScheme scheme = schemeResolver.resolveEffective(effectiveDate);
-        CommissionTier tier = tierResolver.resolve(scheme, monthlySales);
+        BigDecimal monthlySales = tierSales.netSales(
+                staff.getId(), saleMonth, branch.getId());
 
-        // a month that was reopened is closed again on the same row (one closing per staff and month)
-        MonthlyCommissionClosing closing = closings.findByClosingMonthAndStaffIdAndBranchId(saleMonth, staff.getId(), branch.getId())
-                .orElseGet(MonthlyCommissionClosing::new);
+        CommissionScheme scheme;
+        if (closing.getId() == null) {
+            // First close: select the scheme effective in the sale month.
+            LocalDate effectiveDate = LocalDate.parse(saleMonth + "-01");
+            scheme = schemeResolver.resolveEffective(effectiveDate);
+        } else {
+            // Reclose: preserve the original scheme and version.
+            scheme = closing.getCommissionScheme();
+
+            if (scheme == null
+                    || closing.getCommissionSchemeVersion()
+                    != scheme.getSchemeVersion()) {
+                throw new IllegalStateException(
+                        "ข้อมูล scheme ของงวดเดิมไม่ครบหรือเวอร์ชันไม่ตรง ต้องตรวจสอบก่อนปิดยอด");
+            }
+        }
+
+        CommissionTier tier = tierResolver.resolve(scheme, monthlySales);
         closing.setClosingMonth(saleMonth);
         closing.setPermission(permission);
         closing.setStaff(staff);
