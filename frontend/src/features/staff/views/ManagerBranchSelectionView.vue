@@ -232,8 +232,8 @@ onMounted(loadBranches)
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 76px;
-  padding: 14px 16px;
+  min-height: 96px;
+  padding: 18px 20px;
   border: 1px solid #d9e1dc;
   border-radius: 10px;
   color: #25372e;
@@ -275,17 +275,17 @@ onMounted(loadBranches)
 }
 .branch-option-copy {
   display: grid;
-  gap: 3px;
+  gap: 6px;
   min-width: 0;
 }
 .branch-option-copy b {
   overflow-wrap: anywhere;
-  font-size: 20px;
+  font-size: 26px;
   line-height: 1.4;
 }
 .branch-option strong {
   color: #1e807c;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
 }
 .branch-option strong span {
@@ -325,18 +325,18 @@ onMounted(loadBranches)
   .branch-option {
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 12px;
-    min-height: 68px;
-    padding: 12px;
+    min-height: 88px;
+    padding: 16px;
   }
   .branch-icon {
     width: 40px;
     height: 40px;
   }
   .branch-option strong {
-    font-size: 14px;
+    font-size: 16px;
   }
   .branch-option-copy b {
-    font-size: 19px;
+    font-size: 23px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

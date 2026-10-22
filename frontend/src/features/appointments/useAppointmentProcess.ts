@@ -15,7 +15,10 @@ export function useAppointmentProcess() {
   let request = 0
   async function refreshAppointmentProcess() {
     const current = ++request
-    if (!route.query.appointmentId) { processLoading.value = false; return }
+    if (!route.query.appointmentId) {
+      processLoading.value = false
+      return
+    }
     processLoading.value = true
     processError.value = ''
     try {
@@ -23,11 +26,25 @@ export function useAppointmentProcess() {
       const result = await appointmentApi.progress(appointmentId.value)
       if (current === request) appointmentProgress.value = result
     } catch (error) {
-      if (current === request) processError.value = error instanceof Error ? error.message : 'ตรวจสอบนัดหมายไม่สำเร็จ'
-    } finally { if (current === request) processLoading.value = false }
+      if (current === request)
+        processError.value = error instanceof Error ? error.message : 'ตรวจสอบนัดหมายไม่สำเร็จ'
+    } finally {
+      if (current === request) processLoading.value = false
+    }
   }
-  const hasAppointmentDocument = computed(() => Boolean(appointmentProgress.value && (
-    appointmentProgress.value.paymentStatus !== 'NOT_STARTED' || appointmentProgress.value.courseStatus !== 'NOT_STARTED'
-  )))
-  return { appointmentId, appointmentProgress, processLoading, processError, refreshAppointmentProcess, hasAppointmentDocument }
+  const hasAppointmentDocument = computed(() =>
+    Boolean(
+      appointmentProgress.value &&
+      (appointmentProgress.value.paymentStatus !== 'NOT_STARTED' ||
+        appointmentProgress.value.courseStatus !== 'NOT_STARTED'),
+    ),
+  )
+  return {
+    appointmentId,
+    appointmentProgress,
+    processLoading,
+    processError,
+    refreshAppointmentProcess,
+    hasAppointmentDocument,
+  }
 }

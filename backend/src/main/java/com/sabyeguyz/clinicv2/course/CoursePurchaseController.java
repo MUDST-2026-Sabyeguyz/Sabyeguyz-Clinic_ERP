@@ -90,6 +90,8 @@ public class CoursePurchaseController {
 
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
+    private final com.sabyeguyz.clinicv2.appointment.AppointmentProcessService appointmentProcesses;
+
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
                                      CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
                                      CourseTransferService transferService, PermissionService permissions,
@@ -102,7 +104,9 @@ public class CoursePurchaseController {
                                      com.sabyeguyz.clinicv2.audit.AuditLogService audit,
                                      com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
                                      com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments,
-                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess,
+                                     com.sabyeguyz.clinicv2.appointment.AppointmentProcessService appointmentProcesses) {
+        this.appointmentProcesses = appointmentProcesses;
         this.branchAccess = branchAccess;
         this.treatments = treatments;
         this.cancellations = cancellations;
@@ -232,13 +236,33 @@ public class CoursePurchaseController {
     @PostMapping("/api/course-usages")
     @Transactional
     public Response use(@RequestBody UseRequest request) {
-        // Row-lock first: two parallel usages must not both see the last remaining visit.
+        // Appointment -> course is the shared lock order. Back/retry must not consume a second session.
+        var appointment = request.appointmentId() == null ? null
+                : appointmentProcesses.lock(request.appointmentId(), request.patientId(), null);
+        var process = appointment == null ? null : appointmentProcesses.links(appointment.getId());
+        if (process != null && process.getUsageId() != null) {
+            var previous = usages.findById(process.getUsageId()).orElseThrow();
+            if (!previous.getCourse().getId().equals(request.coursePurchaseId())
+                    || previous.getUsageStatus() != com.sabyeguyz.clinicv2.enums.UsageStatus.Completed)
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                        "นัดหมายนี้มีประวัติใช้สิทธิ์แล้ว กรุณาตรวจสอบรายการเดิม");
+            return toResponse(previous.getCourse(), appointment.getPatient().getId());
+        }
+        if (appointment != null) {
+            appointmentProcesses.requireOpen(appointment);
+            appointmentProcesses.requireVerified(process);
+            var progress = appointmentProcesses.progress(appointment.getId());
+            if (process.getReceiptId() != null && (!progress.includesCourse() || !"PAID".equals(progress.paymentStatus())))
+                throw new IllegalArgumentException("นัดหมายนี้มีใบรายการบริการแล้ว หรือคอร์สยังชำระไม่ครบ กรุณาตรวจสอบใบรายการเดิม");
+        }
+        // Course lock still protects its remaining balance across different appointments.
         Course course = courses.findByIdForUpdate(request.coursePurchaseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Staff treating = request.treatingStaffId() == null ? course.getOwnerStaff() : staffById(request.treatingStaffId());
+        Staff treating = request.treatingStaffId() == null
+                ? (appointment == null ? course.getOwnerStaff() : appointment.getStaff()) : staffById(request.treatingStaffId());
         PatientVisit appointmentVisit = request.appointmentId() == null ? null
                 : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
-                        .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
+                        .orElseGet(() -> visitService.checkInFromAppointment(request.appointmentId(), actor.currentId()));
         Patient usingPatient = request.patientId() != null
                 ? patients.findById(request.patientId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
                 : appointmentVisit != null ? appointmentVisit.getPatient() : course.getPurchaserPatient();
@@ -248,7 +272,8 @@ public class CoursePurchaseController {
         PatientVisit visit = appointmentVisit != null ? appointmentVisit : walkInVisit(course, usingPatient, treating);
         var treatment = request.treatmentId() == null ? null : treatments.findById(request.treatmentId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
-        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
+        var usage = usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
+        if (process != null) { process.setUsageId(usage.getId()); appointmentProcesses.save(process); }
         return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
