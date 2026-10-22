@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import logo from '@/assets/sabyeguyz-logo.png'
 import drawerLogo from '@/assets/sabyeguyz-logo2.png'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { branchApi } from '@/api/client'
+import { branchApi, clearSession } from '@/api/client'
 import {
   managerBranches,
   selectedManagerBranch,
@@ -152,11 +152,13 @@ watch(
   },
 )
 function signOut() {
-  localStorage.removeItem('authToken')
+  clearSession()
   localStorage.removeItem('staffRole')
   localStorage.removeItem('staffUsername')
   localStorage.removeItem('mockStaffRole')
   localStorage.removeItem('mockStaffEmail')
+  localStorage.removeItem('managerSelectedBranch')
+  document.body.classList.remove('therapist-ui')
 }
 async function loadManagerBranches() {
   try {
