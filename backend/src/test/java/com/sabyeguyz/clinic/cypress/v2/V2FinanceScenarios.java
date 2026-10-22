@@ -150,6 +150,27 @@ public class V2FinanceScenarios {
             var created = service.create("Default", LocalDate.parse("2027-01-01"), null, new Permission(), validTiers, 1L);
             return Map.of("version", created.getSchemeVersion(), "predecessorEnds", existing.getEffectiveTo().toString());
         }
+        if (scenario.equals("schemecrud-different-name-version")) {
+            var existing = schemeVersion(7, "2026-01-01", null);
+            existing.setSchemeName("Original Scheme");
+
+            schemesStub.on("findByOrderByEffectiveFromDesc",
+                    a -> List.of(existing));
+
+            LocalDate nextStart =
+                    com.sabyeguyz.clinicv2.config.ClinicTime.today()
+                            .withDayOfMonth(1)
+                            .plusMonths(1);
+
+            var created = service.create(
+                    "Different Scheme", nextStart, null,
+                    new Permission(), validTiers, 1L);
+
+            return Map.of(
+                    "version", created.getSchemeVersion(),
+                    "originalVersion", existing.getSchemeVersion(),
+                    "lockCalls", schemesStub.calls("lockVersionAllocation"));
+        }
         if (scenario.equals("schemecrud-date-overlap")) {
             // a bounded scheme inside the range of the open-ended one is not a take-over: refused
             var existing = schemeVersion(1, "2026-01-01", null);

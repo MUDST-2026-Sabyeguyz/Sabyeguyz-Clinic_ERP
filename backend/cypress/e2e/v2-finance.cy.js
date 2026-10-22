@@ -92,6 +92,7 @@ describe('Clinic v2 commission and sale services', () => {
     'sale-void': 'voidRejectsAnAlreadyVoidedTransaction',
     'schemecrud-create': 'createsASchemeWithItsTiers',
     'schemecrud-next-version': 'nextVersionIncrementsFromTheLatestExistingScheme',
+    'schemecrud-different-name-version': 'incrementsVersionAcrossDifferentSchemeNames',
     'schemecrud-update-keeps-tiers': 'updateOnlyTouchesNameAndDatesNeverTiers',
   }
   const cases = [
@@ -149,6 +150,7 @@ describe('Clinic v2 commission and sale services', () => {
     ['sale-course', { sameCourse: true, sameLine: true, amount: 10000, type: 'CoursePurchase', saveOrder: ['transaction', 'course'] }],
     ['schemecrud-create', { version: 1, tiersSaved: 2, firstRate: 0.05 }],
     ['schemecrud-next-version', { version: 2, predecessorEnds: '2026-12-31' }],
+    ['schemecrud-different-name-version', {version: 8, originalVersion: 7, lockCalls: 1,}],
     ['schemecrud-update-keeps-tiers', { name: 'Renamed', tiersSaveCallsDuringUpdate: 0 }],
   ]
   cases.forEach(([scenario, expected]) => {
