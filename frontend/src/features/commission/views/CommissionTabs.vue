@@ -21,12 +21,13 @@ const tabs = [
 <style scoped>
 .commission-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 12px;
   margin: 20px 0 28px;
   overflow: hidden;
 }
 .commission-tabs a {
+  min-width: 0;
   min-height: 48px;
   padding: 0 18px;
   display: flex;
@@ -38,6 +39,8 @@ const tabs = [
   font-size: 1rem;
   font-weight: 700;
   text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .commission-tabs a.active {
@@ -47,7 +50,8 @@ const tabs = [
 }
 @media (max-width: 720px) {
   .commission-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+    gap: 8px;
     margin-bottom: 20px;
   }
   .commission-tabs a {
