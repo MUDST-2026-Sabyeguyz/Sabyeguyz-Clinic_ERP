@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { vModalFocus } from '@/features/appointments/modalFocus'
+import { vRegistrationErrors } from '../registrationErrors'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -11,6 +13,7 @@ import {
   masterDataApi,
   patientApi,
   type PatientProfile,
+  type Appointment,
 } from '@/api/client'
 import { type PatientRegistrationForm } from '../data/patientRegistration'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
@@ -28,6 +31,11 @@ const isManager = authUser?.role === 'MANAGER'
 
 const submitting = ref(false)
 const route = useRoute()
+// A completed request may outlive this screen. Do not redirect the user after they have gone back.
+const registrationActive = ref(true)
+onBeforeUnmount(() => {
+  registrationActive.value = false
+})
 const router = useRouter()
 const registrationBackTarget = computed(() =>
   route.query.appointmentId
@@ -42,6 +50,56 @@ const registrationBackTarget = computed(() =>
       }
     : { name: 'patient-search' },
 )
+const registrationForm = ref<HTMLFormElement | null>(null)
+const sourceAppointment = ref<Appointment | null>(null)
+const sourceLoading = ref(Boolean(route.query.appointmentId))
+const sourceError = ref('')
+const initialForm = ref('')
+const appointmentSummary = computed(() => {
+  const item = sourceAppointment.value
+  if (!item) return ''
+  const date = new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Bangkok',
+  }).format(new Date(item.startAt))
+  return [
+    item.contactName || item.patient?.fullName,
+    item.contactPhone ? `โทร ${item.contactPhone}` : null,
+    `วันที่ ${date} น.`,
+  ]
+    .filter(Boolean)
+    .join(' ')
+})
+async function loadSourceAppointment() {
+  sourceLoading.value = true
+  sourceError.value = ''
+  try {
+    const id = Number(route.query.appointmentId)
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('ไม่พบนัดหมายต้นทาง')
+    const item = await appointmentApi.get(id)
+    if (!registrationActive.value) return
+    if (item.patient?.id)
+      throw new Error('นัดหมายนี้มีผู้ป่วยที่ลงทะเบียนแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
+    if (item.status !== 'CONFIRMED')
+      throw new Error('นัดหมายนี้ยังไม่พร้อมลงทะเบียน กรุณากลับไปตรวจสอบสถานะ')
+    sourceAppointment.value = item
+    form.branchCode = item.branchCode
+    // A booking contact may be a nickname; never guess legal first and last names.
+    if (!form.nickname) form.nickname = item.contactName || ''
+    if (!form.phone) form.phone = limitPhoneDigits(item.contactPhone || '')
+  } catch (error) {
+    sourceError.value = error instanceof Error ? error.message : 'โหลดนัดหมายไม่สำเร็จ'
+  } finally {
+    sourceLoading.value = false
+  }
+}
+onBeforeRouteLeave(() => {
+  if (submitting.value || continuingAppointment.value) return false
+  if (!registeredPatientId.value && initialForm.value && JSON.stringify(form) !== initialForm.value)
+    return window.confirm('ข้อมูลที่กรอกยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?')
+  return true
+})
 const submitted = ref(false)
 const emailFocused = ref(false)
 const identityFocused = ref(false)
@@ -117,7 +175,8 @@ const isForeign = computed(() => form.nationality === 'ต่างชาติ'
 const emailIsValid = computed(() =>
   !form.email.trim()
     ? true
-    : /^[a-z0-9](?:[a-z0-9._%+-]*[a-z0-9])?@gmail\.com$/i.test(form.email.trim()),
+    : form.email.trim().length <= 254 &&
+      /^[^@.\s]+(\.[^@.\s]+)*@[^@.\s]+(\.[^@.\s]+)+$/.test(form.email.trim()),
 )
 const emailErrorVisible = computed(
   () => submitted.value && !emailFocused.value && !emailIsValid.value,
@@ -145,6 +204,8 @@ const birthDateErrorVisible = computed(
 )
 const canSubmit = computed(() =>
   Boolean(
+    !sourceLoading.value &&
+    !sourceError.value &&
     form.branchCode &&
     branches.value.length &&
     personNameIsValid(form.firstName) &&
@@ -210,6 +271,8 @@ onMounted(async () => {
   } catch {
     errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
   }
+  if (route.query.appointmentId) await loadSourceAppointment()
+  initialForm.value = JSON.stringify(form)
   if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
     duplicatePatient.value = {
       id: 10,
@@ -246,6 +309,7 @@ onMounted(async () => {
   }
 })
 function applyManagerBranch() {
+  if (sourceAppointment.value) return
   if (isManager) form.branchCode = selectedManagerBranch()?.code ?? form.branchCode
 }
 onMounted(() => window.addEventListener('manager-branch-changed', applyManagerBranch))
@@ -254,7 +318,13 @@ async function requestSubmit() {
   if (submitting.value || confirmationOpen.value) return
   submitted.value = true
   if (!canSubmit.value) {
-    errorMessage.value = ''
+    errorMessage.value = 'กรุณาตรวจสอบช่องที่ระบุข้อผิดพลาด'
+    await nextTick()
+    const first = registrationForm.value?.querySelector<HTMLElement>(
+      '.invalid-field input, .invalid-field select, .invalid-field textarea, .invalid-field button',
+    )
+    first?.focus()
+    first?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     return
   }
   try {
@@ -279,7 +349,7 @@ async function openExistingPatient() {
 }
 const continuingAppointment = ref(false)
 async function continueToServices(patientId: number) {
-  if (continuingAppointment.value) return false
+  if (continuingAppointment.value || !registrationActive.value) return false
   const appointmentId = Number(route.query.appointmentId)
   if (!Number.isSafeInteger(appointmentId) || appointmentId <= 0) {
     errorMessage.value = 'ไม่พบนัดหมายต้นทาง กรุณากลับไปหน้านัดหมาย'
@@ -292,6 +362,7 @@ async function continueToServices(patientId: number) {
     if (appointment.patient?.id && appointment.patient.id !== patientId)
       throw new Error('นัดหมายนี้เชื่อมกับผู้ป่วยรายอื่นแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
     if (!appointment.patient?.id) await appointmentApi.linkPatient(appointmentId, patientId)
+    if (!registrationActive.value) return true
     await router.push({
       name: 'staff-services',
       query: { patientId: String(patientId), appointmentId: String(appointmentId) },
@@ -306,7 +377,7 @@ async function continueToServices(patientId: number) {
   }
 }
 async function openRegisteredPatient() {
-  if (!registeredPatientId.value || continuingAppointment.value) return
+  if (!registeredPatientId.value || continuingAppointment.value || !registrationActive.value) return
   if (route.query.appointmentId) {
     if (await continueToServices(registeredPatientId.value)) successOpen.value = false
     return
@@ -329,7 +400,6 @@ async function findDuplicatePatient() {
 async function submit() {
   if (submitting.value || !canSubmit.value) return
   confirmationOpen.value = false
-  form.privacyConsent = true
   submitting.value = true
   errorMessage.value = ''
   try {
@@ -355,7 +425,7 @@ async function submit() {
       emergencyContactName: fullName,
       emergencyContactRelationship: 'ญาติ',
       emergencyContactPhone: form.phone,
-      privacyConsent: true,
+      privacyConsent: form.privacyConsent,
       nickname: form.nickname,
       bloodGroup: form.bloodGroup,
       nationality: form.nationality,
@@ -396,7 +466,28 @@ async function submit() {
           <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
           <p>กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p>
         </div>
-        <form class="form-card" novalidate @submit.prevent="requestSubmit">
+        <aside
+          v-if="route.query.appointmentId"
+          class="registration-source"
+          aria-label="นัดหมายต้นทาง"
+        >
+          <p v-if="sourceLoading" role="status">กำลังโหลดข้อมูลนัดหมาย…</p>
+          <template v-else-if="sourceError">
+            <p role="alert">{{ sourceError }}</p>
+            <button type="button" class="secondary" @click="loadSourceAppointment">ลองใหม่</button>
+          </template>
+          <template v-else
+            ><strong>ลงทะเบียนจากนัดหมาย</strong>
+            <p>{{ appointmentSummary }}</p></template
+          >
+        </aside>
+        <form
+          ref="registrationForm"
+          v-registration-errors
+          class="form-card"
+          novalidate
+          @submit.prevent="requestSubmit"
+        >
           <section class="registration-section">
             <h2>ข้อมูลส่วนตัว</h2>
             <fieldset class="patient-type">
@@ -619,8 +710,26 @@ async function submit() {
             </div>
           </section>
           <div class="actions end">
-            <button type="submit" class="primary" :disabled="submitting">
-              {{ submitting ? 'กำลังบันทึก...' : 'บันทึก' }}
+            <button
+              type="button"
+              class="secondary registration-cancel"
+              :disabled="submitting || continuingAppointment"
+              @click="router.push(registrationBackTarget)"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              class="primary"
+              :disabled="submitting || sourceLoading || Boolean(sourceError)"
+            >
+              {{
+                submitting
+                  ? 'กำลังบันทึก...'
+                  : route.query.appointmentId
+                    ? 'บันทึก'
+                    : 'บันทึก'
+              }}
             </button>
           </div>
           <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
@@ -652,6 +761,7 @@ async function submit() {
       >
         <section
           class="registration-modal confirmation-modal"
+          v-modal-focus="{ close: () => (confirmationOpen = false), busy: submitting }"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="registration-confirmation-title"
@@ -670,9 +780,15 @@ async function submit() {
     >
     <Teleport to="body">
       <div v-if="duplicateOpen" class="registration-modal-backdrop">
-        <section class="registration-modal duplicate-modal" role="alertdialog" aria-modal="true">
+        <section
+          class="registration-modal duplicate-modal"
+          v-modal-focus="{ close: () => (duplicateOpen = false), busy: continuingAppointment }"
+          aria-labelledby="registration-duplicate-title"
+          role="alertdialog"
+          aria-modal="true"
+        >
           <span class="duplicate-warning-icon" aria-hidden="true">!</span>
-          <h2>พบเลขบัตรประชาชน หรือ HN ซ้ำ</h2>
+          <h2 id="registration-duplicate-title">พบเลขบัตรประชาชน หรือ HN ซ้ำ</h2>
           <p>ระบบตรวจพบข้อมูลที่ตรงกับผู้ป่วยเดิม จึงไม่สามารถสร้างรายการใหม่ได้</p>
           <strong>ไม่สามารถบันทึกเป็นผู้ป่วยใหม่ได้</strong>
           <div v-if="duplicatePatient" class="duplicate-patient">
@@ -709,6 +825,7 @@ async function submit() {
       <div v-if="successOpen" class="registration-modal-backdrop">
         <section
           class="registration-modal registration-success-modal"
+          v-modal-focus="{ close: () => {}, busy: continuingAppointment }"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="registration-success-title"
@@ -745,3 +862,5 @@ async function submit() {
 </template>
 <style scoped src="../styles/patient-registration.css"></style>
 <style src="../styles/therapist.css"></style>
+
+<style scoped src="../styles/registration-polish.css"></style>

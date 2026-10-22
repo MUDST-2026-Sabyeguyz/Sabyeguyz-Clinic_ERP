@@ -102,6 +102,11 @@ watch(selectedMonth, (month) => {
 type AppointmentUiStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
 const selectedTherapistId = ref('ทั้งหมด')
 const sortOrder = ref<'newest' | 'oldest'>('oldest')
+function toggleSortOrder() {
+  sortOrder.value = sortOrder.value === 'oldest' ? 'newest' : 'oldest'
+  page.value = 0
+}
+
 const appointments = ref<Appointment[]>([])
 const formDataLoading = ref(false)
 const formDataError = ref('')
@@ -135,8 +140,8 @@ async function ensureFormData() {
       )
       if (!form.value.branchCode)
         form.value.branchCode = scope || branchOptions.value[0]?.code || ''
-      if (!form.value.therapistId) form.value.therapistId = therapists.value[0]?.id ?? 0
-      if (!form.value.serviceId) form.value.serviceId = services.value[0]?.id ?? 0
+      // Leave the therapist unselected until explicitly chosen.
+      // Loading options must preserve an empty selection until the user chooses a program.
     } catch {
       if (scope !== managerBranchCode.value) return
       formDataError.value = 'โหลดข้อมูลสำหรับนัดหมายไม่สำเร็จ'
@@ -218,7 +223,9 @@ const originalAppointmentSummary = computed(() => {
   const appointment = editingAppointment.value
   if (!appointment) return ''
   const time = formatTime(appointment.startAt).replace(/^0/, '')
-  return `นัดเดิม: ${formatThaiDate(appointment.startAt)} · ${time} น. · สาขา${branchName(appointment.branchCode)} · ${appointmentRoom(appointment)}`
+  const name = branchName(appointment.branchCode).trim()
+  const branch = name.startsWith('สาขา') ? name : `${name}`
+  return `นัดเดิม ${formatThaiDate(appointment.startAt)} เวลา ${time} น. ${branch}`
 })
 const patientError = computed(
   () =>
@@ -302,7 +309,11 @@ const pagedAppointments = computed(() =>
   filteredAppointments.value.slice(page.value * 20, (page.value + 1) * 20),
 )
 const listDateCaption = computed(() => {
-  if (!startDate.value && !endDate.value) return 'นัดหมายทั้งหมด'
+  if (!startDate.value && !endDate.value) {
+    if (listServiceMode.value === 'single') return 'นัดหมายรายครั้งทั้งหมด'
+    if (listServiceMode.value === 'course') return 'นัดหมายรายคอร์สทั้งหมด'
+    return 'นัดหมายทั้งหมด'
+  }
   const format = (value: string) =>
     value
       ? new Intl.DateTimeFormat('th-TH', {
@@ -578,8 +589,8 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   const branchCode = branch?.code ?? ''
   form.value = {
     patientId: 0,
-    therapistId: therapists.value[0]?.id ?? 0,
-    serviceId: services.value[0]?.id ?? 0,
+    therapistId: 0,
+    serviceId: 0,
     branchCode,
     date: new Date().toISOString().slice(0, 10),
     time: '',
@@ -1084,6 +1095,8 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               ประเภทบริการ
               <FilterDropdown
                 v-model="formServiceModel"
+                searchable
+                empty-search-label="ไม่พบโปรแกรมที่ค้นหา"
                 class="appointment-form-filter"
                 label="เลือกประเภทบริการ"
                 default-label="เลือกประเภทบริการ"
@@ -1100,6 +1113,8 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               นักกายภาพ
               <FilterDropdown
                 v-model="formTherapistModel"
+                searchable
+                empty-search-label="ไม่พบนักกายภาพที่ค้นหา"
                 class="appointment-form-filter"
                 :class="{ 'is-invalid': missingCurrentTherapist }"
                 label="เลือกนักกายภาพ"
@@ -1295,9 +1310,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               }}
               <FilterDropdown
                 v-model="formServiceModel"
+                searchable
+                empty-search-label="ไม่พบโปรแกรมที่ค้นหา"
                 class="appointment-form-filter"
                 label="เลือกบริการ"
-                default-label="เลือกบริการ"
+                default-label="เลือกโปรแกรม"
                 :clear-on-reselect="false"
                 :options="
                   services.map((service) => ({
@@ -1311,6 +1328,8 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               {{ appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อคอร์ส' }}
               <FilterDropdown
                 v-model="selectedCourseModel"
+                searchable
+                empty-search-label="ไม่พบโปรแกรมที่ค้นหา"
                 class="appointment-form-filter"
                 label="เลือกคอร์ส"
                 default-label="เลือกคอร์ส"
@@ -1330,9 +1349,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               </span>
             </label>
             <label class="appointment-therapist-field">
-              นักกายภาพ <em>*</em>
+              <span class="appointment-field-label">นักกายภาพ <em>*</em></span>
               <FilterDropdown
                 v-model="formTherapistModel"
+                searchable
+                empty-search-label="ไม่พบนักกายภาพที่ค้นหา"
                 class="appointment-form-filter"
                 :class="{ 'is-invalid': missingCurrentTherapist }"
                 label="เลือกนักกายภาพ"
@@ -1347,7 +1368,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               />
             </label>
             <label class="appointment-date-field">
-              วันที่ <em>*</em>
+              <span class="appointment-field-label">วันที่ <em>*</em></span>
               <ThaiDatePicker
                 :model-value="form.date"
                 :min-date="minimumAppointmentDate"
@@ -1363,7 +1384,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               </p>
             </label>
             <label class="appointment-time-field">
-              เวลา <em>*</em>
+              <span class="appointment-field-label">เวลา <em>*</em></span>
               <span class="appointment-time-picker" :class="{ 'is-invalid': missingCurrentTime }">
                 <span>{{ formatTimeRange(form.time) }}</span>
                 <button type="button" @click="openTimeDrawer">ดูตารางเวลาว่าง</button>
@@ -1597,10 +1618,29 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
         </div>
         <div v-if="scheduleView === 'list'" class="appointment-list-summary">
           <p class="appointment-summary-date">{{ listDateCaption }}</p>
-          <span v-if="!listLoading && !errorMessage" class="appointment-summary-count">
-            {{ filteredAppointments.length.toLocaleString('th-TH') }} นัดหมาย
-          </span>
-          <span v-if="listLoading" role="status">กำลังโหลดนัดหมาย…</span>
+          <div class="appointment-summary-actions">
+            <button
+              class="appointment-sort"
+              type="button"
+              :title="
+                sortOrder === 'oldest'
+                  ? 'เก่าไปใหม่ — กดเพื่อเรียงใหม่ไปเก่า'
+                  : 'ใหม่ไปเก่า — กดเพื่อเรียงเก่าไปใหม่'
+              "
+              :aria-label="
+                sortOrder === 'oldest'
+                  ? 'เรียงเก่าไปใหม่ กดเพื่อสลับเป็นใหม่ไปเก่า'
+                  : 'เรียงใหม่ไปเก่า กดเพื่อสลับเป็นเก่าไปใหม่'
+              "
+              @click="toggleSortOrder"
+            >
+              {{ sortOrder === 'oldest' ? 'ล่าสุด ↓' : 'ล่าสุด ↑' }}
+            </button>
+            <span v-if="!listLoading && !errorMessage" class="appointment-summary-count">
+              {{ filteredAppointments.length.toLocaleString('th-TH') }} นัดหมาย
+            </span>
+            <span v-if="listLoading" role="status">กำลังโหลดนัดหมาย…</span>
+          </div>
         </div>
         <section v-if="scheduleView !== 'list'" class="appointment-calendar">
           <header class="calendar-heading">
@@ -1728,7 +1768,9 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           >
             <thead>
               <tr>
-                <th>วันที่</th>
+                <th scope="col" :aria-sort="sortOrder === 'oldest' ? 'ascending' : 'descending'">
+                  วันที่
+                </th>
                 <th>เวลา</th>
                 <th>ผู้ป่วย</th>
                 <th>เบอร์โทรศัพท์</th>
@@ -1822,7 +1864,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                     }"
                     >ลงทะเบียนผู้ป่วย</RouterLink
                   >
-                  <AppointmentProcessActions v-if="uiStatusFor(item.status) === 'CONFIRMED' && item.patient?.hn" :appointment="item" :can-manage="canManageOwnAppointment(item)" />
+                  <AppointmentProcessActions
+                    v-if="uiStatusFor(item.status) === 'CONFIRMED' && item.patient?.hn"
+                    :appointment="item"
+                    :can-manage="canManageOwnAppointment(item)"
+                  />
                   <span
                     v-if="
                       !canManageOwnAppointment(item) &&
@@ -1846,7 +1892,12 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           </table>
         </div>
         <nav
-          v-if="scheduleView === 'list' && !listLoading && !errorMessage && filteredAppointments.length > 0"
+          v-if="
+            scheduleView === 'list' &&
+            !listLoading &&
+            !errorMessage &&
+            filteredAppointments.length > 0
+          "
           class="appointment-pagination"
           aria-label="เปลี่ยนหน้ารายการนัดหมาย"
         >
@@ -1997,3 +2048,4 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
 <style src="../styles/therapist.css"></style>
 
 <style src="../styles/appointment-list.css"></style>
+<style src="../styles/appointment-create-layout.css"></style>

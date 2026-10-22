@@ -62,6 +62,8 @@ public class SaleController {
 
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
+    private final com.sabyeguyz.clinicv2.appointment.AppointmentProcessService appointmentProcesses;
+
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
                            PaymentTransactionService paymentTransactionService,
                            TransactionCancellationService cancellations, TransactionCancellationRepository cancellationRecords, PermissionService permissions,
@@ -73,7 +75,9 @@ public class SaleController {
                                      com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
                                      com.sabyeguyz.clinicv2.auth.AppUserRepository users,
                                      SingleVisitFeeAccrual singleVisitFees,
-                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess,
+                                     com.sabyeguyz.clinicv2.appointment.AppointmentProcessService appointmentProcesses) {
+        this.appointmentProcesses = appointmentProcesses;
         this.branchAccess = branchAccess;
         this.singleVisitFees = singleVisitFees;
         this.visitService = visitService;
@@ -101,7 +105,7 @@ public class SaleController {
     /** treatingStaffId (optional) is the PT who treated the single-visit lines; default: the salesperson, else the signed-in staff. */
     public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note,
                                  List<ItemRequest> items, List<PaymentRequest> payments, String billDiscountType,
-                                 BigDecimal billDiscountValue, Long treatingStaffId) {}
+                                 BigDecimal billDiscountValue, Long treatingStaffId, Long appointmentId) {}
     public record ReverseRequest(String reason) {}
 
     private Staff singleVisitTreatingStaff(CreateRequest request, Staff salesperson) {
@@ -177,6 +181,27 @@ public class SaleController {
         Staff salesperson = request.salespersonStaffId() == null ? null
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
 
+        // The appointment lock spans document creation and linking in this transaction.
+        // A retried submit returns the committed bill; a changed request must be reviewed instead.
+        com.sabyeguyz.clinicv2.appointment.AppointmentProcess process = null;
+        String fingerprint = null;
+        com.sabyeguyz.clinicv2.appointment.Appointment appointmentContext = null;
+        if (request.appointmentId() != null) {
+            var appointment = appointmentProcesses.lock(request.appointmentId(), patient.getId(), branch.getBranchCode());
+            appointmentContext = appointment;
+            process = appointmentProcesses.links(appointment.getId());
+            fingerprint = com.sabyeguyz.clinicv2.appointment.AppointmentProcessService.fingerprint(request);
+            if (process.getReceiptId() != null) {
+                if (!fingerprint.equals(process.getPaymentFingerprint()))
+                    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                            "นัดหมายนี้มีใบรายการแล้ว กรุณาเปิดรายการเดิมแทนการสร้างซ้ำ");
+                var previous = transactions.findByReceiptId(process.getReceiptId());
+                return toSummary(previous.get(0), previous);
+            }
+            appointmentProcesses.requireOpen(appointment);
+            appointmentProcesses.requireVerified(process);
+            if (process.getUsageId() != null) throw new IllegalArgumentException("นัดหมายนี้ใช้สิทธิ์คอร์สแล้ว ไม่ต้องสร้างใบรายการบริการซ้ำ");
+        }
         String receiptNo = receiptService.nextReceiptNo(branch, ClinicTime.today());
         Receipt receipt = receiptService.create(receiptNo, patient, branch, ClinicTime.today(), actor.currentId());
 
@@ -213,6 +238,12 @@ public class SaleController {
 
         audit.record("receipt", String.valueOf(receipt.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
                 receiptNo + " (" + lines.size() + " รายการ)", actor.currentId());
+        if (process != null) {
+            process.setReceiptId(receipt.getId());
+            process.setPaymentFingerprint(fingerprint);
+            appointmentProcesses.save(process);
+            appointmentProcesses.attachExistingVisit(process.getAppointmentId());
+        }
         return toSummary(lines.get(0), lines);
     }
 
