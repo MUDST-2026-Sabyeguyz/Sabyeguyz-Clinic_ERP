@@ -61,6 +61,11 @@ nav {
 }
 nav a {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  text-align: center;
   z-index: 1;
   padding: 12px 10px;
   border-radius: 10px;
@@ -275,6 +280,18 @@ nav a.router-link-active:after {
 .staff-header.manager-header nav a {
   padding-inline: 8px;
   font-size: 17px;
+}
+@media (min-width: 1401px) {
+  .staff-header.manager-header nav > a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: 48px;
+    padding-inline: 20px;
+    line-height: 1.4;
+    text-align: center;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .nav-pill,
