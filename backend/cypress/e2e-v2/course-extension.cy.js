@@ -1,6 +1,10 @@
 /* oxlint-disable vitest/valid-expect -- Cypress assertions use Chai, not Vitest. */
 const buy = (fx, patient) => cy.api('POST', '/api/course-purchases', {
-  patientId: patient.id, courseId: fx.courseId, branchCode: '01', caseOwnerStaffId: fx.therapistId,
+  patientId: patient.id,
+  courseId: fx.courseId,
+  branchCode: '01',
+  caseOwnerStaffId: fx.therapistId,
+  paymentLabelCode: 'FULL',
 }).then(({ status, body }) => {
   expect(status).to.be.oneOf([200, 201])
   return body
@@ -131,9 +135,12 @@ describe('v2 the sale list says what each line sold', () => {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient)
       cy.api('POST', '/api/payments', {
-        patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.managerStaffId,
+        patientId: patient.id,
+        branchCode: '01',
+        salespersonStaffId: this.fixtures.managerStaffId,
+        paymentLabelCode: 'FULL',
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
       }).its('status').should('equal', 201)
     })
     cy.api('GET', '/api/payments').its('body.items').should((items) => {
@@ -149,10 +156,12 @@ describe('v2 transactions of another branch are read-only for a therapist', () =
     cy.login('therapist', 'therapist123').its('body.token').then((therapist01) => {
       cy.registerPatient({ branchCode: '02' }).then((patient) => {
         const sellAt02 = () => cy.api('POST', '/api/payments', {
-          patientId: patient.id, branchCode: '02', salespersonStaffId: this.fixtures.therapist2Id,
+          patientId: patient.id, branchCode: '02',
+          salespersonStaffId: this.fixtures.therapist2Id,
+          paymentLabelCode: 'FULL',
           treatingStaffId: this.fixtures.therapist2Id,
           items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-          payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
         })
         sellAt02().then(({ status, body: sale }) => {
           expect(status).to.equal(201)
