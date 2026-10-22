@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class CommissionPayrollController {
     private final MonthlyCommissionClosingService closingService;
     private final MonthlyCommissionClosingRepository closings;
+    private final BranchMonthlyClosingService branchClosingService;
     private final StaffMonthlyPaymentService paymentService;
     private final StaffPayAdjustmentService adjustmentService;
     private final CurrentActor actor;
@@ -37,10 +38,11 @@ public class CommissionPayrollController {
     public CommissionPayrollController(MonthlyCommissionClosingService closingService, StaffMonthlyPaymentService paymentService,
                                        StaffPayAdjustmentService adjustmentService, CurrentActor actor, AppUserRepository users,
                                        AuditLogService audit, BranchAccessPolicy branchAccess,
-                                       MonthlyCommissionClosingRepository closings) {
+                                       MonthlyCommissionClosingRepository closings, BranchMonthlyClosingService branchClosingService) {
         this.closings = closings;
         this.branchAccess = branchAccess;
         this.closingService = closingService;
+        this.branchClosingService = branchClosingService;
         this.paymentService = paymentService;
         this.adjustmentService = adjustmentService;
         this.actor = actor;
@@ -66,8 +68,57 @@ public class CommissionPayrollController {
                                       Long allocationId, Long singleVisitFeeId, Long courseId, Long visitId, Long saleTransactionId,
                                       List<ApplicationResponse> applications) {}
     public record ClosingStateResponse(Long id, String month, Long staffId, String status) {}
+    public record BranchClosingResponse(Long id, String branchCode, String month, String status, Instant closedAt, Long closedBy) {}
+
+    // GET /api/commission/branch-closings?month=2026-10&branchCode=99
+    @GetMapping("/branch-closings")
+    @Transactional(readOnly = true)
+    public BranchClosingResponse branchClosing(
+            @RequestParam String month,
+            @RequestParam String branchCode) {
+        StaffMonthlyPaymentService.requireMonth(month);
+
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขา");
+        }
+
+        return branchClosingService.find(branch, month)
+                .map(closing -> new BranchClosingResponse(
+                        closing.getId(), branch.getBranchCode(), month,
+                        closing.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT),
+                        closing.getClosedAt(), closing.getClosedBy()))
+                .orElseGet(() -> new BranchClosingResponse(
+                        null, branch.getBranchCode(), month, "OPEN", null, null));
+    }
 
     // ---------- reopening a closed month ----------
+    // POST /api/commission/branch-closings/2026-10/reopen?branchCode=99
+    @PostMapping("/branch-closings/{month}/reopen")
+    public BranchClosingResponse reopenEmptyBranch(
+            @PathVariable String month,
+            @RequestParam String branchCode,
+            @RequestBody ReasonRequest request) {
+        StaffMonthlyPaymentService.requireMonth(month);
+
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขา");
+        }
+
+        BranchMonthlyClosing closing = branchClosingService.reopenEmpty(branch, month, request.reason());
+
+        audit.recordChange(
+                "branch_monthly_closing", String.valueOf(closing.getId()), AuditAction.UPDATE,
+                AuditLogService.fields("closing_status", "Closed"),
+                AuditLogService.fields("closing_status", "Open", "branch_id", branch.getId(), "closing_month", month, "reason", request.reason().trim()),
+                actor.currentId());
+
+        return new BranchClosingResponse(
+                closing.getId(), branch.getBranchCode(), month,
+                closing.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT),
+                closing.getClosedAt(), closing.getClosedBy());
+    }
 
     @PostMapping("/closings/{closingId}/reopen")
     public ClosingStateResponse reopenClosing(@PathVariable Long closingId, @RequestBody ReasonRequest request) {
@@ -91,6 +142,29 @@ public class CommissionPayrollController {
                         "commission_scheme_version", closing.getCommissionSchemeVersion(),
                         "calculated_commission_rate", closing.getCalculatedCommissionRate(),
                         "locked_commission_rate", closing.getLockedCommissionRate()), actor.currentId());
+
+        boolean branchChanged = branchClosingService.markOpenAfterIndividualReopen(closing.getBranch(), closing.getClosingMonth());
+        if (branchChanged) {
+            BranchMonthlyClosing branchClosing =
+                    branchClosingService.find(
+                            closing.getBranch(),
+                            closing.getClosingMonth()).orElseThrow();
+
+            audit.recordChange(
+                    "branch_monthly_closing",
+                    String.valueOf(branchClosing.getId()),
+                    AuditAction.UPDATE,
+                    AuditLogService.fields(
+                            "closing_status", "Closed"),
+                    AuditLogService.fields(
+                            "closing_status", "Open",
+                            "branch_id", closing.getBranch().getId(),
+                            "closing_month", closing.getClosingMonth(),
+                            "reason", request.reason().trim(),
+                            "individual_closing_id", closingId),
+                    actor.currentId());
+        }
+
         return new ClosingStateResponse(closing.getId(), closing.getClosingMonth(), closing.getStaff().getId(),
                 closing.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT));
     }

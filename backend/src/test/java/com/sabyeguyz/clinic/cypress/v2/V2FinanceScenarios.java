@@ -420,8 +420,17 @@ public class V2FinanceScenarios {
                         .on("findDistinctCreditedStaffIdsBySaleMonthAndBranchId",
                                 args -> List.of(1L));
 
-        var guard = new BranchClosingGuard(
-                closingRepository.proxy(), courseRepository.proxy());
+        var branchClosing = new BranchMonthlyClosing();
+        branchClosing.setBranch(branch);
+        branchClosing.setClosingMonth(closed.getClosingMonth());
+        branchClosing.setClosingStatus(BranchClosingStatus.Closed);
+        branchClosing.setClosedAt(java.time.Instant.now());
+        branchClosing.setClosedBy(1L);
+
+        var branchClosingRepository = new V2RepositoryStub<>(BranchMonthlyClosingRepository.class)
+                        .on("findByBranchIdAndClosingMonth", args -> Optional.of(branchClosing));
+
+        var guard = new BranchClosingGuard(closingRepository.proxy(), courseRepository.proxy(), branchClosingRepository.proxy());
 
         var repository =
                 new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
@@ -551,10 +560,20 @@ public class V2FinanceScenarios {
         List<String> saveOrder = new ArrayList<>();
         courses.on("save", a -> { saveOrder.add("course"); return a[0]; });
         transactions.on("save", a -> { saveOrder.add("transaction"); return a[0]; });
-        var service = new SalesTransactionService(transactions.proxy(),new CourseService(courses.proxy(),ledger.proxy(),
-                new V2RepositoryStub<>(CourseSharedMemberRepository.class).proxy(),
-                new V2RepositoryStub<>(CourseEntitlementRepository.class).proxy(),schemeResolver(),tierResolver(),
-                new MonthlyTierSalesService(courses.proxy())));
+        var branchClosingService = new BranchMonthlyClosingService(
+                new V2RepositoryStub<>(BranchMonthlyClosingRepository.class).proxy(),
+                new V2RepositoryStub<>(MonthlyCommissionClosingRepository.class).proxy(),
+                courses.proxy());
+
+        var service = new SalesTransactionService(
+                transactions.proxy(),
+                new CourseService(courses.proxy(),
+                        ledger.proxy(),
+                        new V2RepositoryStub<>(CourseSharedMemberRepository.class).proxy(),
+                        new V2RepositoryStub<>(CourseEntitlementRepository.class).proxy(),
+                        schemeResolver(), tierResolver(),
+                        new MonthlyTierSalesService(courses.proxy()),
+                        branchClosingService));
         Service template = new Service(); template.setServiceType(ServiceType.SingleVisit); template.setServicePrice(decimal("1200.00"));
         if (scenario.equals("sale-void")) {
             var transaction = new SalesTransaction(); transaction.setTransactionStatus(false);
