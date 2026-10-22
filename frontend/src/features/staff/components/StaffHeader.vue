@@ -71,17 +71,19 @@ const hasMatchingNavItem = computed(() =>
 )
 function movePill(target: HTMLElement | null) {
   if (!target || !navRef.value) return
-  const targetBox = target.getBoundingClientRect()
   navRef.value.querySelectorAll<HTMLElement>('a').forEach((link) => {
     link.classList.remove('pill-target')
   })
   target.classList.add('pill-target')
+  const targetBox = target.getBoundingClientRect()
+  const navBox = navRef.value.getBoundingClientRect()
   pillStyle.value = {
     width: `${targetBox.width}px`,
-    transform: `translateX(${target.offsetLeft}px)`,
+    transform: `translateX(${targetBox.left - navBox.left + navRef.value.scrollLeft - navRef.value.clientLeft}px)`,
     opacity: '1',
   }
 }
+let navResizeObserver: ResizeObserver | null = null
 function movePillToActive() {
   if (!navRef.value) return
   if (!hasMatchingNavItem.value) {
@@ -118,10 +120,18 @@ onMounted(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
   })
   document.fonts?.ready.then(positionPillWithoutAnimation)
+  // Role styles and fonts can resize tabs after mount. Keep the highlight tied
+  // to the final link box instead of retaining an earlier, wider measurement.
+  if (typeof ResizeObserver !== 'undefined' && navRef.value) {
+    navResizeObserver = new ResizeObserver(positionPillWithoutAnimation)
+    navResizeObserver.observe(navRef.value)
+    navRef.value.querySelectorAll('a').forEach((link) => navResizeObserver?.observe(link))
+  }
   window.addEventListener('resize', positionPillWithoutAnimation)
   if (isManager.value) void loadManagerBranches()
 })
 onBeforeUnmount(() => {
+  navResizeObserver?.disconnect()
   document.removeEventListener('pointerdown', closeProfileOutside)
   document.removeEventListener('focusin', closeProfileOutside)
   document.removeEventListener('keydown', closeProfileOnEscape)

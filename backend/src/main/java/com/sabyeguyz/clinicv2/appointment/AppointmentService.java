@@ -147,6 +147,10 @@ public class AppointmentService {
     @Transactional
     public Appointment linkRegisteredPatient(Long id, Patient patient, Long actorId) {
         Appointment appointment = getForUpdate(id);
+        // Registration may finish in two tabs or retry after a lost response.
+        // The same link is already complete; a different patient still fails below.
+        if (patient != null && appointment.getPatient() != null
+                && patient.getId().equals(appointment.getPatient().getId())) return appointment;
         requireNotTerminal(appointment);
         require(patient != null, "ต้องระบุผู้ป่วย");
         require(appointment.getAppointmentPatientType() == AppointmentPatientType.NEW && appointment.getPatient() == null,

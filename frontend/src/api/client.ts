@@ -302,6 +302,14 @@ export type AppointmentAvailability = {
   slots: Array<{ time: string; available: boolean; reason: string | null }>
   googleCalendar: 'NOT_CONNECTED' | 'CHECKED' | 'UNAVAILABLE'
 }
+export type CourseRenewalHistory = {
+  id: number
+  oldExpiryDate: string
+  newExpiryDate: string
+  reason: string
+  changedBy: number
+  changedAt: string
+}
 export type CoursePurchase = {
   id: number
   patient: Patient
@@ -650,6 +658,16 @@ export const treatmentApi = {
 }
 
 export const courseApi = {
+  renew: (
+    id: number,
+    body: { patientId: number; expectedExpiryDate: string; newExpiryDate: string; reason: string },
+  ) =>
+    api.post<{ coursePurchaseId: number; expiryDate: string }>(
+      '/api/course-purchases/' + id + '/renewals',
+      body,
+    ),
+  renewals: (id: number) =>
+    api.get<CourseRenewalHistory[]>('/api/course-purchases/' + id + '/renewals'),
   usageTransactions: () => api.get<CourseUsageTransaction[]>('/api/course-usages'),
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
   get: (id: number) => api.get<Course>(`/api/courses/${id}`),

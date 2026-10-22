@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import CourseRenewalDialog from '../components/CourseRenewalDialog.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import {
@@ -16,9 +17,22 @@ import {
   type SaleSummary,
 } from '@/api/client'
 
+defineProps<{ embedded?: boolean }>()
 const route = useRoute()
+const canRenewCourses = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+const renewingCourse = ref<CoursePurchase | null>(null)
+const renewalRefreshError = ref('')
+async function refreshCoursesAfterRenewal() {
+  if (!patient.value) return
+  renewalRefreshError.value = ''
+  try {
+    courses.value = await courseApi.patientCourses(patient.value.id)
+  } catch {
+    renewalRefreshError.value = 'ต่ออายุสำเร็จ แต่โหลดรายการคอร์สใหม่ไม่สำเร็จ กรุณาลองใหม่'
+  }
+}
 const activeTab = ref<'payments' | 'courses'>(
-  route.query.tab === 'courses' ? 'courses' : 'payments',
+  route.query.tab === 'payments' ? 'payments' : 'courses',
 )
 const patient = ref<PatientProfile | null>(null)
 const receiptBranch = ref<Branch | null>(null)
@@ -65,6 +79,34 @@ const filteredCourses = computed(() => {
       (!dateFilter.value || item.purchasedAt.slice(0, 10) === dateFilter.value),
   )
 })
+const courseOverview = computed(() => ({
+  total: courses.value.length,
+  active: courses.value.filter((item) => item.usable).length,
+  remaining: courses.value
+    .filter((item) => item.usable)
+    .reduce((sum, item) => sum + item.remaining, 0),
+  expired: courses.value.filter((item) => item.expired && item.status !== 'CANCELLED').length,
+}))
+function clearHistoryFilters() {
+  query.value = ''
+  dateFilter.value = ''
+  typeFilter.value = ''
+}
+function courseActionLink(
+  item: CoursePurchase,
+  action: 'use' | 'history' | 'transfer',
+  print = false,
+) {
+  return {
+    path: '/staff/patients/' + patient.value?.id + '/courses/' + item.id,
+    query: {
+      patientId: String(patient.value?.id),
+      courseId: String(item.id),
+      action,
+      ...(print ? { print: '1' } : {}),
+    },
+  }
+}
 const paymentDescription = (item: SaleSummary) =>
   item.itemDescription ||
   paymentDetails.value[item.id]?.items.map((entry) => entry.description).join(', ') ||
@@ -150,6 +192,8 @@ const receiptDate = (value: string) =>
   }).format(new Date(value))
 
 watch(activeTab, () => {
+  query.value = ''
+  dateFilter.value = ''
   typeFilter.value = ''
 })
 
@@ -189,9 +233,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="patient-workspace patient-history-page">
-    <StaffHeader />
-    <main
+  <div
+    class="patient-workspace patient-history-page"
+    :class="{ 'patient-history-embedded': embedded }"
+  >
+    <StaffHeader v-if="!embedded" />
+    <component
+      :is="embedded ? 'section' : 'main'"
       v-if="selectedReceipt"
       v-show="receiptView"
       class="receipt-page-main printable-receipt-screen"
@@ -321,36 +369,106 @@ onMounted(async () => {
           ><button type="button" @click="openReceiptPrint">พิมพ์เอกสาร</button>
         </div>
       </section>
-    </main>
-    <main v-show="!receiptView" class="history-page-content">
-      <RouterLink class="back-link" :to="`/staff/patients/${route.params.id}`"
+    </component>
+    <component
+      :is="embedded ? 'section' : 'main'"
+      v-show="!receiptView"
+      class="history-page-content"
+    >
+      <RouterLink v-if="!embedded" class="back-link" :to="`/staff/patients/${route.params.id}`"
         >← กลับข้อมูลผู้ป่วย</RouterLink
       >
-      <h1>ประวัติการรักษา</h1>
-      <p class="history-subtitle">ตรวจสอบใบเสร็จ การชำระเงิน และสิทธิ์คอร์สรักษาของผู้ป่วย</p>
-      <nav class="history-tabs">
-        <button :class="{ active: activeTab === 'payments' }" @click="activeTab = 'payments'">
-          ใบเสร็จและการชำระเงิน</button
-        ><button :class="{ active: activeTab === 'courses' }" @click="activeTab = 'courses'">
-          คอร์สรักษา
+      <h1 v-if="!embedded">บริการและคอร์ส</h1>
+      <p v-if="!embedded" class="history-subtitle">
+        ตรวจสอบใบเสร็จ การชำระเงิน และสิทธิ์คอร์สรักษาของผู้ป่วย
+      </p>
+      <p v-if="renewalRefreshError" role="alert">
+        {{ renewalRefreshError }}
+        <button type="button" @click="refreshCoursesAfterRenewal">โหลดคอร์สใหม่</button>
+      </p>
+      <CourseRenewalDialog
+        v-if="renewingCourse && patient"
+        :key="renewingCourse.id"
+        :course="renewingCourse"
+        :patient-id="patient.id"
+        @close="renewingCourse = null"
+        @renewed="refreshCoursesAfterRenewal"
+      />
+      <section
+        v-if="!loading && !errorMessage"
+        class="course-overview"
+        aria-label="ภาพรวมคอร์สทั้งหมด"
+      >
+        <div>
+          <span>คอร์สทั้งหมด</span><strong>{{ courseOverview.total }} คอร์ส</strong>
+        </div>
+        <div>
+          <span>คอร์สที่ใช้ได้</span><strong>{{ courseOverview.active }} คอร์ส</strong>
+        </div>
+        <div>
+          <span>สิทธิ์ที่ใช้ได้คงเหลือ</span><strong>{{ courseOverview.remaining }} ครั้ง</strong>
+        </div>
+        <div>
+          <span>คอร์สหมดอายุ</span><strong>{{ courseOverview.expired }} คอร์ส</strong>
+        </div>
+      </section>
+      <nav class="history-tabs" aria-label="เลือกรายการบริการและคอร์ส">
+        <button
+          type="button"
+          :aria-pressed="activeTab === 'payments'"
+          :class="{ active: activeTab === 'payments' }"
+          @click="activeTab = 'payments'"
+        >
+          รายการชำระเงิน</button
+        ><button
+          type="button"
+          :aria-pressed="activeTab === 'courses'"
+          :class="{ active: activeTab === 'courses' }"
+          @click="activeTab = 'courses'"
+        >
+          คอร์สของผู้ป่วย
         </button>
       </nav>
       <section class="history-card">
         <div class="history-filters">
-          <input v-model="query" placeholder="ค้นหาเลขที่ใบเสร็จหรือชื่อคอร์ส" />
-          <ThaiDatePicker v-model="dateFilter" show-calendar-icon numeric-month hide-caret />
+          <label class="history-search-field"
+            ><span>ค้นหา</span
+            ><input
+              v-model="query"
+              type="search"
+              :placeholder="
+                activeTab === 'payments' ? 'เลขที่ใบเสร็จหรือชื่อบริการ' : 'ชื่อหรือรหัสคอร์ส'
+              "
+          /></label>
+          <label class="history-date-field"
+            ><span>{{ activeTab === 'payments' ? 'วันที่ชำระเงิน' : 'วันที่ซื้อคอร์ส' }}</span
+            ><ThaiDatePicker
+              v-model="dateFilter"
+              clearable
+              show-calendar-icon
+              numeric-month
+              hide-caret
+          /></label>
           <FilterDropdown
             v-if="activeTab === 'payments'"
             v-model="typeFilter"
             label="กรองตามประเภทรายการ"
-            default-label="ประเภทรายการ"
+            default-label="รายครั้งและรายคอร์ส"
             :options="[
               { value: 'SINGLE', label: 'รายครั้ง' },
               { value: 'COURSE', label: 'รายคอร์ส' },
             ]"
           />
+          <button
+            v-if="query || dateFilter || typeFilter"
+            type="button"
+            class="history-clear-filters"
+            @click="clearHistoryFilters"
+          >
+            ล้างตัวกรอง
+          </button>
         </div>
-        <p v-if="loading">กำลังโหลดข้อมูล...</p>
+        <p v-if="loading" role="status">กำลังโหลดข้อมูล...</p>
         <p v-else-if="errorMessage" class="error">{{ errorMessage }}</p>
         <div v-else class="history-table-wrap">
           <table v-if="activeTab === 'payments'">
@@ -360,7 +478,7 @@ onMounted(async () => {
                 <th>เลขที่ใบเสร็จ</th>
                 <th>บริการ / คอร์ส</th>
                 <th>สาขา</th>
-                <th>ยอดสุทธิ</th>
+                <th>ยอดชำระ</th>
                 <th>การชำระ</th>
                 <th></th>
               </tr>
@@ -392,28 +510,24 @@ onMounted(async () => {
           <table v-else class="course-history-table">
             <thead>
               <tr>
-                <th>ชื่อคอร์ส</th>
-                <th>วันที่ซื้อ</th>
-                <th>ผู้ขาย / นักกายภาพ</th>
-                <th>สิทธิ์รวม</th>
-                <th>ใช้แล้ว</th>
-                <th>คงเหลือ</th>
-                <th>หมดอายุ</th>
+                <th>คอร์ส / วันที่ซื้อ</th>
+                <th>สิทธิ์คอร์ส</th>
+                <th>วันหมดอายุ</th>
                 <th>สถานะ</th>
-                <th>จัดการ</th>
+                <th>ดำเนินการ</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in filteredCourses" :key="item.id">
                 <td>
-                  <b>{{ item.course.name }}</b>
+                  <b>{{ item.course.name }}</b
+                  ><small class="course-purchase-date">ซื้อ {{ thaiDate(item.purchasedAt) }}</small>
                 </td>
-                <td>{{ thaiDate(item.purchasedAt) }}</td>
-                <td>-</td>
-                <td>{{ item.purchased }} ครั้ง</td>
-                <td>ใช้ {{ item.used }}</td>
                 <td>
-                  <b>เหลือ {{ item.remaining }}</b>
+                  <strong>เหลือ {{ item.remaining }} ครั้ง</strong
+                  ><small class="course-purchase-date"
+                    >ใช้แล้ว {{ item.used }} / ทั้งหมด {{ item.purchased }} ครั้ง</small
+                  >
                 </td>
                 <td>{{ thaiDate(item.expiresAt) }}</td>
                 <td>
@@ -423,34 +537,48 @@ onMounted(async () => {
                 </td>
                 <td class="history-actions course-actions">
                   <RouterLink
+                    v-if="item.usable"
                     class="history-row-action"
-                    :to="{
-                      path: `/staff/patients/${patient?.id}/courses/${item.id}`,
-                      query: {
-                        patientId: patient?.id,
-                        courseId: item.id,
-                        action: 'history',
-                        print: '1',
-                      },
-                    }"
-                    >รายละเอียด</RouterLink
+                    :to="courseActionLink(item, 'use')"
+                    >ใช้สิทธิ์</RouterLink
                   >
-                  <RouterLink
-                    class="history-row-action outline"
-                    :to="{
-                      path: `/staff/patients/${patient?.id}/courses/${item.id}`,
-                      query: {
-                        patientId: patient?.id,
-                        courseId: item.id,
-                        action: 'history',
-                      },
-                    }"
-                    >ประวัติใช้สิทธิ์</RouterLink
-                  >
+                  <details class="course-more-actions">
+                    <summary>รายละเอียดคอร์ส</summary>
+                    <RouterLink
+                      class="history-row-action outline"
+                      :to="courseActionLink(item, 'history')"
+                      >ประวัติใช้สิทธิ์</RouterLink
+                    >
+                    <RouterLink
+                      class="history-row-action outline"
+                      :to="courseActionLink(item, 'history', true)"
+                      >ดูใบตัดคอร์ส</RouterLink
+                    >
+                    <RouterLink
+                      v-if="item.usable && (item.purchaser?.id ?? item.patient.id) === patient?.id"
+                      class="history-row-action outline"
+                      :to="courseActionLink(item, 'transfer')"
+                      >แชร์คอร์ส</RouterLink
+                    >
+                    <button
+                      v-if="
+                        canRenewCourses && (item.purchaser?.id ?? item.patient.id) === patient?.id
+                      "
+                      type="button"
+                      class="history-row-action outline"
+                      @click="renewingCourse = item"
+                    >
+                      ต่ออายุ / ประวัติ
+                    </button>
+                  </details>
                 </td>
               </tr>
               <tr v-if="!filteredCourses.length">
-                <td colspan="9">ไม่พบประวัติคอร์ส</td>
+                <td colspan="5">
+                  {{
+                    query || dateFilter ? 'ไม่พบคอร์สตามตัวกรองที่เลือก' : 'ผู้ป่วยยังไม่มีคอร์ส'
+                  }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -459,11 +587,11 @@ onMounted(async () => {
           {{
             activeTab === 'payments'
               ? `แสดง ${filteredPayments.length} รายการล่าสุด`
-              : 'สิทธิ์คงเหลือเป็นข้อมูลล่าสุดหลังการใช้บริการและการแชร์คอร์ส'
+              : 'สิทธิ์คงเหลือล่าสุดหลังการใช้บริการและการแชร์คอร์ส'
           }}
         </p>
       </section>
-    </main>
+    </component>
     <Teleport to="body">
       <div
         v-if="printConfirm"

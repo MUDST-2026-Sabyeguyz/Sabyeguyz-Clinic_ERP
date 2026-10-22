@@ -58,8 +58,8 @@ const router = createRouter({
       path: '/staff/patients/:id/history',
       name: 'patient-history',
       component: roleView(
-        () => import('@/features/patients/views/ManagerPatientHistoryView.vue'),
-        () => import('@/features/patients/views/PatientHistoryView.vue'),
+        () => import('@/features/patients/views/ManagerPatientProfileView.vue'),
+        () => import('@/features/patients/views/PatientProfileView.vue'),
       ),
       meta: { permission: 'Patient' },
     },
@@ -232,7 +232,8 @@ const router = createRouter({
     {
       path: '/staff/commission/adjustments/:id/select-schedule',
       name: 'commission-adjustment-select-schedule',
-      component: () => import('@/features/commission/views/CommissionAdjustmentSelectScheduleView.vue'),
+      component: () =>
+        import('@/features/commission/views/CommissionAdjustmentSelectScheduleView.vue'),
       meta: { roles: ['manager'] },
     },
     {
@@ -256,13 +257,15 @@ const router = createRouter({
     {
       path: '/staff/commission/adjustments/:id/reopen-success',
       name: 'commission-adjustment-reopen-success',
-      component: () => import('@/features/commission/views/CommissionAdjustmentReopenSuccessView.vue'),
+      component: () =>
+        import('@/features/commission/views/CommissionAdjustmentReopenSuccessView.vue'),
       meta: { roles: ['manager'] },
     },
     {
       path: '/staff/commission/adjustments/:id/reopen-history',
       name: 'commission-adjustment-reopen-history',
-      component: () => import('@/features/commission/views/CommissionAdjustmentReopenHistoryView.vue'),
+      component: () =>
+        import('@/features/commission/views/CommissionAdjustmentReopenHistoryView.vue'),
       meta: { roles: ['manager'] },
     },
     {
@@ -274,7 +277,8 @@ const router = createRouter({
     {
       path: '/staff/commission/adjustments/:id/payment-success',
       name: 'commission-adjustment-payment-success',
-      component: () => import('@/features/commission/views/CommissionAdjustmentPaymentSuccessView.vue'),
+      component: () =>
+        import('@/features/commission/views/CommissionAdjustmentPaymentSuccessView.vue'),
       meta: { roles: ['manager'] },
     },
     {
