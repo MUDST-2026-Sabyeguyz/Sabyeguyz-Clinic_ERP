@@ -14,12 +14,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class BranchClosingGuard {
     private final MonthlyCommissionClosingRepository closings;
     private final CourseRepository courses;
+    private final BranchMonthlyClosingRepository branchClosings;
 
     public BranchClosingGuard(
-            MonthlyCommissionClosingRepository closings,
-            CourseRepository courses) {
+            MonthlyCommissionClosingRepository closings, CourseRepository courses, BranchMonthlyClosingRepository branchClosings) {
         this.closings = closings;
         this.courses = courses;
+        this.branchClosings = branchClosings;
+
     }
 
     /** Requires the selected branch's current commission month to be closed. */
@@ -33,12 +35,19 @@ public class BranchClosingGuard {
 
         closings.lockBranchMonth(branch.getId(), month);
 
+        BranchMonthlyClosing branchClosing = branchClosings.findByBranchIdAndClosingMonth(branch.getId(), month)
+                        .orElseThrow(() -> new IllegalStateException("ยังไม่ได้ยืนยันปิดรอบสาขาเดือน " + month));
+
+        if (!branchClosing.isClosed()) {
+            throw new IllegalStateException(
+                    "รอบสาขาเดือน " + month + " ยังเปิดอยู่");
+        }
+
         List<MonthlyCommissionClosing> rows =
                 closings.findByClosingMonthAndBranchId(
                         month, branch.getId());
 
-        if (rows.isEmpty()
-                || rows.stream().anyMatch(row -> !row.isClosed())) {
+        if (rows.stream().anyMatch(row -> !row.isClosed())) {
             throw new IllegalStateException(
                     "สาขานี้ยังปิดยอดเดือน " + month + " ไม่ครบ");
         }

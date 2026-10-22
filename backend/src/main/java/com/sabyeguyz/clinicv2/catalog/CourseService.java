@@ -6,6 +6,7 @@ import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
 import com.sabyeguyz.clinicv2.commission.CommissionTier;
 import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
 import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
+import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingService;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedger;
@@ -56,11 +57,12 @@ public class CourseService {
     private final CommissionSchemeResolver schemeResolver;
     private final CommissionTierResolver tierResolver;
     private final MonthlyTierSalesService tierSales;
+    private final BranchMonthlyClosingService branchClosingService;
 
     public CourseService(CourseRepository courses, CourseLedgerRepository ledger,
-                          CourseSharedMemberRepository sharedMembers,
-                          CourseEntitlementRepository entitlements, CommissionSchemeResolver schemeResolver,
-                          CommissionTierResolver tierResolver, MonthlyTierSalesService tierSales) {
+                         CourseSharedMemberRepository sharedMembers, CourseEntitlementRepository entitlements,
+                         CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
+                         MonthlyTierSalesService tierSales, BranchMonthlyClosingService branchClosingService) {
         this.courses = courses;
         this.ledger = ledger;
         this.sharedMembers = sharedMembers;
@@ -68,6 +70,7 @@ public class CourseService {
         this.schemeResolver = schemeResolver;
         this.tierResolver = tierResolver;
         this.tierSales = tierSales;
+        this.branchClosingService = branchClosingService;
     }
 
     /**
@@ -99,6 +102,12 @@ public class CourseService {
         require(price != null && price.signum() >= 0, "ราคาคอร์สต้องไม่ติดลบ");
 
         String saleMonth = effectiveSaleDate.format(SALE_MONTH);
+        require(transaction.getBranch() != null, "ต้องระบุสาขาของรายการขาย");
+
+        branchClosingService.requireCourseSaleOpen(
+                transaction.getBranch(),
+                saleMonth,
+                sellerStaff.getId());
 
         long existingOnReceipt = courses.countByReceiptId(receipt.getId());
         int courseSequence = (int) existingOnReceipt + 1;
@@ -106,7 +115,6 @@ public class CourseService {
                 : "%s-%02d".formatted(receipt.getReceiptNo(), courseSequence);
 
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveSaleDate);
-        require(transaction.getBranch() != null, "ต้องระบุสาขาของรายการขาย");
 
         BigDecimal monthlySalesToDate = tierSales.netSales(
                         sellerStaff.getId(),

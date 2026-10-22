@@ -43,6 +43,7 @@ public class CommissionController {
     private final CommissionSchemeRepository schemes;
     private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
     private final MonthlyCommissionClosingService closingService;
+    private final BranchMonthlyClosingService branchClosingService;
     private final CommissionSchemeResolver schemeResolver;
     private final MonthlyCommissionClosingRepository closings;
     private final CommissionAllocationLedgerRepository allocationLedger;
@@ -57,14 +58,12 @@ public class CommissionController {
 
     public CommissionController(CommissionSchemeService schemeService, CommissionTierResolver tierResolver,
                                 CommissionSchemeRepository schemes, MonthlyCommissionClosingService closingService,
-                                CommissionSchemeResolver schemeResolver,
-                                MonthlyCommissionClosingRepository closings,
-                                CommissionAllocationLedgerRepository allocationLedger,
-                                TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses,
-                                StaffRepository staff, PermissionRepository permissions, CurrentActor actor,
-                                CommissionRateOverrideService overrideService,
-                                com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                TreatmentFeeRuleService treatmentFeeService, MonthlyTierSalesService tierSales,
+                                BranchMonthlyClosingService branchClosingService, CommissionSchemeResolver schemeResolver,
+                                MonthlyCommissionClosingRepository closings, CommissionAllocationLedgerRepository allocationLedger,
+                                TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses, StaffRepository staff,
+                                PermissionRepository permissions, CurrentActor actor, CommissionRateOverrideService overrideService,
+                                com.sabyeguyz.clinicv2.audit.AuditLogService audit, TreatmentFeeRuleService treatmentFeeService,
+                                MonthlyTierSalesService tierSales,
                                 com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
                                 com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
                                 com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems,
@@ -81,6 +80,7 @@ public class CommissionController {
         this.tierResolver = tierResolver;
         this.schemes = schemes;
         this.closingService = closingService;
+        this.branchClosingService = branchClosingService;
         this.schemeResolver = schemeResolver;
         this.closings = closings;
         this.allocationLedger = allocationLedger;
@@ -276,14 +276,15 @@ public class CommissionController {
         }
 
         closings.lockBranchMonth(branch.getId(), saleMonth);
+        Permission permission = resolveOrCreatePermission("COMMISSION_CLOSING_MANAGE");
 
-        Permission permission =
-                resolveOrCreatePermission("COMMISSION_CLOSING_MANAGE");
+        java.util.Set<Long> sellerIds = new java.util.LinkedHashSet<>(
+                courses.findDistinctCreditedStaffIdsBySaleMonthAndBranchId(saleMonth, branch.getId()));
 
-        for (Long sellerId :
-                courses.findDistinctCreditedStaffIdsBySaleMonthAndBranchId(
-                        saleMonth, branch.getId())) {
+        closings.findByClosingMonthAndBranchId(saleMonth, branch.getId())
+                .forEach(closing -> sellerIds.add(closing.getStaff().getId()));
 
+        for (Long sellerId : sellerIds) {
             Staff seller = staff.findById(sellerId).orElseThrow();
 
             boolean alreadyClosed =
@@ -312,6 +313,29 @@ public class CommissionController {
                                 "locked_commission_rate", closed.getLockedCommissionRate()),
                         actor.currentId());
             }
+        }
+
+        var previousBranchClosing = branchClosingService.find(branch, saleMonth);
+        boolean wasClosed = previousBranchClosing.map(BranchMonthlyClosing::isClosed).orElse(false);
+        BranchMonthlyClosing branchClosing = branchClosingService.confirmClosed(branch, saleMonth, actor.currentId());
+        if (!wasClosed) {
+            audit.recordChange(
+                    "branch_monthly_closing",
+                    String.valueOf(branchClosing.getId()),
+                    previousBranchClosing.isPresent()
+                            ? com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE
+                            : com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
+                    previousBranchClosing.isPresent()
+                            ? com.sabyeguyz.clinicv2.audit.AuditLogService.fields(
+                            "closing_status", "Open")
+                            : null,
+                    com.sabyeguyz.clinicv2.audit.AuditLogService.fields(
+                            "branch_id", branch.getId(),
+                            "closing_month", saleMonth,
+                            "closing_status", "Closed",
+                            "closed_at", branchClosing.getClosedAt(),
+                            "closed_by", branchClosing.getClosedBy()),
+                    actor.currentId());
         }
 
         return closings.findByClosingMonthAndBranchId(
