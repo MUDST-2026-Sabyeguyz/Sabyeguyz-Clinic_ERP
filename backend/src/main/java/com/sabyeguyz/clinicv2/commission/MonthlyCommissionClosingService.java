@@ -37,11 +37,12 @@ public class MonthlyCommissionClosingService {
     private final MonthlyTierSalesService tierSales;
     private final CourseCommissionService courseCommission;
     private final CommissionAllocationLedgerRepository allocations;
+    private final CommissionRateOverrideAuditRepository rateAudits;
 
     public MonthlyCommissionClosingService(MonthlyCommissionClosingRepository closings, CourseRepository courses,
                                             CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
                                             MonthlyTierSalesService tierSales, CourseCommissionService courseCommission,
-                                            CommissionAllocationLedgerRepository allocations) {
+                                            CommissionAllocationLedgerRepository allocations, CommissionRateOverrideAuditRepository rateAudits) {
         this.allocations = allocations;
         this.courseCommission = courseCommission;
         this.tierSales = tierSales;
@@ -49,6 +50,7 @@ public class MonthlyCommissionClosingService {
         this.courses = courses;
         this.schemeResolver = schemeResolver;
         this.tierResolver = tierResolver;
+        this.rateAudits = rateAudits;
     }
 
     @Transactional
@@ -65,6 +67,11 @@ public class MonthlyCommissionClosingService {
             throw new IllegalStateException(
                     "ปิดยอดเดือนนี้ของพนักงานคนนี้ไปแล้ว");
         }
+
+        boolean recalculating = closing.getId() != null;
+        BigDecimal previousRate = recalculating
+                ? closing.getCalculatedCommissionRate()
+                : null;
 
         BigDecimal monthlySales = tierSales.netSales(
                 staff.getId(), saleMonth, branch.getId());
@@ -106,6 +113,39 @@ public class MonthlyCommissionClosingService {
         for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonthAndBranchId(staff.getId(), saleMonth, branch.getId())) {
             Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
             lockCourse(course, scheme, tier, actorId);
+        }
+
+        if (recalculating) {
+            if (previousRate == null) {
+                throw new IllegalStateException(
+                        "ไม่พบอัตราคำนวณเดิมของงวด ต้องตรวจข้อมูลก่อนคำนวณใหม่");
+            }
+
+            BigDecimal newRate = saved.getCalculatedCommissionRate();
+
+            if (previousRate.compareTo(newRate) != 0) {
+                String reason = saved.getReopenReason();
+
+                require(permission != null, "ต้องระบุสิทธิ์สำหรับบันทึก audit");
+                require(actorId != null, "ต้องระบุผู้ดำเนินการ");
+                require(reason != null && !reason.isBlank(),
+                        "ต้องมีเหตุผลการ Reopen สำหรับบันทึก audit");
+
+                reason = reason.trim();
+                require(reason.length() <= 255,
+                        "เหตุผลการคำนวณใหม่ยาวเกิน 255 ตัวอักษร");
+
+                CommissionRateOverrideAudit rateAudit =
+                        new CommissionRateOverrideAudit();
+                rateAudit.setPermission(permission);
+                rateAudit.setClosing(saved);
+                rateAudit.setOldRate(previousRate);
+                rateAudit.setNewRate(newRate);
+                rateAudit.setChangedBy(actorId);
+                rateAudit.setChangedAt(Instant.now());
+                rateAudit.setReason(reason);
+                rateAudits.save(rateAudit);
+            }
         }
 
         return saved;
