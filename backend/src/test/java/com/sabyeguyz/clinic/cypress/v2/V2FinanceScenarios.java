@@ -467,16 +467,34 @@ public class V2FinanceScenarios {
                 repository.on("isUsedByLedger", a -> true);
                 return V2RepositoryStub.outcome(() -> service.update(1L, null, decimal("60"), null, null, branch, 9L));
             }
-            case "feeadmin-used-can-end" -> {
+            case "feeadmin-used-cannot-end" -> {
                 repository.on("findById", a -> Optional.of(existing));
                 repository.on("isUsedByLedger", a -> true);
-                var updated = service.update(1L, null, null, null, LocalDate.of(2026,12,31), branch, 9L);
-                return Map.of("value", updated.getFeeValue(), "ends", updated.getEffectiveTo().toString());
+
+                return V2RepositoryStub.outcome(() ->
+                        service.update(1L, null, null, null,
+                                com.sabyeguyz.clinicv2.config.ClinicTime.today().plusMonths(2),
+                                branch, 9L));
             }
             case "feeadmin-unused-editable" -> {
+                existing.setEffectiveFrom(com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1));
                 repository.on("findById", a -> Optional.of(existing));
                 var updated = service.update(1L, FeeType.Percentage, decimal("12.5"), null, null, branch, 9L);
                 return Map.of("type", updated.getFeeType().name(), "value", updated.getFeeValue());
+            }
+            case "feeadmin-started-unused-immutable" -> {
+                existing.setEffectiveFrom(com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1));
+                repository.on("findById", a -> Optional.of(existing));
+                repository.on("isUsedByLedger", a -> false);
+                return V2RepositoryStub.outcome(() ->
+                        service.update(1L, null, decimal("60"), null, null, branch, 9L));
+            }
+            case "feeadmin-future-used-immutable" -> {
+                existing.setEffectiveFrom(com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1));
+                repository.on("findById", a -> Optional.of(existing));
+                repository.on("isUsedByLedger", a -> true);
+                return V2RepositoryStub.outcome(() ->
+                        service.update(1L, null, decimal("60"), null, null, branch, 9L));
             }
             default -> throw new IllegalArgumentException("Unknown feeadmin scenario: " + scenario);
         }
