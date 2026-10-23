@@ -215,4 +215,11 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             + "and c.receipt.receiptStatus <> :voided and c.courseStatus <> :cancelled")
     List<Long> findDistinctCreditedStaffIds(@Param("saleMonth") String saleMonth,
                                             @Param("voided") ReceiptStatus voided, @Param("cancelled") CourseStatus cancelled);
+
+    @Query("select count(u) > 0 from CourseVisitUsage u "
+            + "where u.course.id = :courseId "
+            + "and u.visit.id = :visitId")
+    boolean existsUsageForCourseAndVisit(
+            @Param("courseId") Long courseId,
+            @Param("visitId") Long visitId);
 }
