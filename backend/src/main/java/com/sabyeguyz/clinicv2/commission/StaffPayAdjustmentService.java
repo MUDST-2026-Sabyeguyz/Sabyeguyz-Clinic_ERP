@@ -147,7 +147,7 @@ public class StaffPayAdjustmentService {
         return YearMonth.parse(latest).plusMonths(1).toString();
     }
 
-    private static void checkSources(Staff person, CommissionAllocationLedger allocation, SingleVisitFeeLedger fee, Course course,
+    private void checkSources(Staff person, CommissionAllocationLedger allocation, SingleVisitFeeLedger fee, Course course,
                                       PatientVisit visit, SalesTransaction sale) {
         Long id = person.getId();
         if (allocation != null) {
@@ -155,6 +155,11 @@ public class StaffPayAdjustmentService {
                     "allocation ที่อ้างไม่ใช่ของพนักงานคนนี้");
         }
         if (fee != null) require(fee.getStaff().getId().equals(id), "ค่ามือรายครั้งที่อ้างไม่ใช่ของพนักงานคนนี้");
+        if (allocation != null && fee != null) {
+            require(allocation.getVisitUsage().getVisit().getId()
+                            .equals(fee.getVisit().getId()),
+                    "allocation และค่ามือรายครั้งต้องอ้าง Visit เดียวกัน");
+        }
         if (course != null) {
             require(course.getSellerStaff().getId().equals(id) || allocation != null || visit != null,
                     "คอร์สที่อ้างไม่ใช่ของพนักงานคนนี้");
@@ -165,6 +170,70 @@ public class StaffPayAdjustmentService {
         }
         if (allocation != null && visit != null) {
             require(allocation.getVisitUsage().getVisit().getId().equals(visit.getId()), "Visit ไม่ตรงกับ allocation ที่อ้าง");
+        }
+        if (course != null && visit != null) {
+            require(courses.existsUsageForCourseAndVisit(
+                            course.getId(), visit.getId()),
+                    "Visit ที่อ้างไม่มีประวัติใช้คอร์สต้นทางนี้");
+        }
+        if (course != null && fee != null) {
+            require(
+                    courses.existsUsageForCourseAndVisit(
+                            course.getId(),
+                            fee.getVisit().getId()),
+                    "Visit ของค่ามือรายครั้งไม่มีประวัติใช้คอร์สที่อ้าง");
+        }
+        if (sale != null
+                && sale.getTransactionType()
+                == com.sabyeguyz.clinicv2.enums.TransactionType.SingleVisit) {
+            require(sale.getVisit() != null,
+                    "รายการขายรายครั้งต้องมี Visit ต้นทาง");
+            Long saleVisitId = sale.getVisit().getId();
+
+            if (visit != null) {
+                require(saleVisitId.equals(visit.getId()),
+                        "รายการขายไม่ตรงกับ Visit ที่อ้าง");
+            }
+            if (fee != null) {
+                require(saleVisitId.equals(fee.getVisit().getId()),
+                        "รายการขายไม่ตรงกับ Visit ของค่ามือรายครั้ง");
+            }
+            if (allocation != null) {
+                require(saleVisitId.equals(
+                                allocation.getVisitUsage().getVisit().getId()),
+                        "รายการขายไม่ตรงกับ Visit ของ allocation");
+            }
+        }
+        if (sale != null
+                && allocation != null
+                && sale.getTransactionType()
+                == com.sabyeguyz.clinicv2.enums.TransactionType.CoursePurchase) {
+            SalesTransaction courseSale =
+                    allocation.getCourse().getSaleTransaction();
+            require(
+                    courseSale != null
+                            && sale.getId().equals(courseSale.getId()),
+                    "รายการขายไม่ตรงกับคอร์สของ allocation ที่อ้าง");
+        }
+        if (sale != null
+                && sale.getTransactionType()
+                == com.sabyeguyz.clinicv2.enums.TransactionType.CoursePurchase
+                && (visit != null || fee != null)) {
+            Course soldCourse = courses.findBySaleTransactionId(sale.getId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "ไม่พบคอร์สต้นทางของรายการขาย"));
+            if (visit != null) {
+                require(
+                        courses.existsUsageForCourseAndVisit(
+                                soldCourse.getId(), visit.getId()),
+                        "Visit ไม่ได้ใช้คอร์สจากรายการขายที่อ้าง");
+            }
+            if (fee != null) {
+                require(
+                        courses.existsUsageForCourseAndVisit(
+                                soldCourse.getId(), fee.getVisit().getId()),
+                        "Visit ของค่ามือไม่ได้ใช้คอร์สจากรายการขายที่อ้าง");
+            }
         }
         if (sale != null && course != null && course.getSaleTransaction() != null) {
             require(course.getSaleTransaction().getId().equals(sale.getId()), "รายการขายไม่ตรงกับคอร์สที่อ้าง");
@@ -227,6 +296,119 @@ public class StaffPayAdjustmentService {
         require(branch != null && branch.getId() != null,
                 "ต้องระบุสาขาของงวดจ่ายที่จะนำ Adjustment ไปใช้");
         StaffPayAdjustment adjustment = find(adjustmentId);
+        checkSources(
+                adjustment.getStaff(),
+                adjustment.getAllocation(),
+                adjustment.getSingleVisitFee(),
+                adjustment.getCourse(),
+                adjustment.getVisit(),
+                adjustment.getSaleTransaction());
+        Course payoutCourse = adjustment.getCourse();
+
+        if (payoutCourse == null
+                && adjustment.getSaleTransaction() != null
+                && adjustment.getSaleTransaction().getTransactionType()
+                == com.sabyeguyz.clinicv2.enums.TransactionType.CoursePurchase) {
+            payoutCourse = courses.findBySaleTransactionId(
+                            adjustment.getSaleTransaction().getId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "ไม่พบคอร์สต้นทางของรายการขาย"));
+        }
+        if (adjustment.getSingleVisitFee() != null) {
+            Branch sourceBranch = adjustment.getSingleVisitFee().getVisit().getBranch();
+            require(
+                    sourceBranch != null
+                            && branch.getId().equals(sourceBranch.getId()),
+                    "สาขางวดจ่ายต้องตรงกับสาขาที่ให้บริการของค่ามือต้นทาง");
+        }
+        if (adjustment.getAllocation() != null) {
+            CommissionAllocationLedger allocation = adjustment.getAllocation();
+            Long staffId = adjustment.getStaff().getId();
+
+            boolean owner = staffId.equals(allocation.getOwnerStaff().getId());
+            boolean treating = staffId.equals(allocation.getTreatingStaff().getId());
+
+            require(owner || treating,
+                    "พนักงานของ Adjustment ไม่ตรงกับ allocation ต้นทาง");
+            Branch sourceBranch = owner
+                    ? allocation.getCourse().getBranch()
+                    : allocation.getVisitUsage().getVisit().getBranch();
+            require(
+                    sourceBranch != null
+                            && branch.getId().equals(sourceBranch.getId()),
+                    "สาขางวดจ่ายต้องตรงกับสาขาของค่าตอบแทน allocation ต้นทาง");
+        }
+        if (adjustment.getAllocation() == null
+                && payoutCourse != null
+                && adjustment.getStaff().getId().equals(
+                payoutCourse.getSellerStaff().getId())) {
+            Branch sourceBranch = payoutCourse.getBranch();
+            require(
+                    sourceBranch != null
+                            && branch.getId().equals(sourceBranch.getId()),
+                    "สาขางวดจ่ายต้องตรงกับสาขาขายคอร์สของ Owner");
+        }
+        if (adjustment.getAllocation() == null
+                && adjustment.getSingleVisitFee() == null
+                && adjustment.getVisit() != null
+                && (payoutCourse == null
+                || !adjustment.getStaff().getId().equals(
+                payoutCourse.getSellerStaff().getId()))) {
+            PatientVisit sourceVisit = adjustment.getVisit();
+            require(
+                    sourceVisit.getTreatingStaff() != null
+                            && adjustment.getStaff().getId().equals(
+                            sourceVisit.getTreatingStaff().getId()),
+                    "พนักงานของ Adjustment ต้องตรงกับผู้รักษาใน Visit ต้นทาง");
+            Branch sourceBranch = sourceVisit.getBranch();
+            require(
+                    sourceBranch != null
+                            && branch.getId().equals(sourceBranch.getId()),
+                    "สาขางวดจ่ายต้องตรงกับสาขาที่รักษาของ Visit ต้นทาง");
+        }
+        if (adjustment.getAllocation() == null
+                && adjustment.getSingleVisitFee() == null
+                && adjustment.getVisit() == null
+                && payoutCourse != null) {
+
+            require(
+                    adjustment.getStaff().getId().equals(
+                            payoutCourse.getSellerStaff().getId()),
+                    "พนักงานของ Adjustment ต้องตรงกับ Owner ของคอร์สต้นทาง");
+        }
+        if (adjustment.getAllocation() == null
+                && adjustment.getSingleVisitFee() == null
+                && adjustment.getCourse() == null
+                && adjustment.getVisit() == null
+                && adjustment.getSaleTransaction() != null
+                && adjustment.getSaleTransaction().getTransactionType()
+                != com.sabyeguyz.clinicv2.enums.TransactionType.CoursePurchase) {
+
+            SalesTransaction sourceSale = adjustment.getSaleTransaction();
+
+            require(
+                    sourceSale.getTransactionType()
+                            == com.sabyeguyz.clinicv2.enums.TransactionType.SingleVisit,
+                    "ประเภทรายการขายไม่มีต้นทางค่าตอบแทนที่รองรับ");
+
+            PatientVisit sourceVisit = sourceSale.getVisit();
+
+            require(sourceVisit != null,
+                    "รายการขายรายครั้งต้องมี Visit ต้นทาง");
+
+            require(
+                    sourceVisit.getTreatingStaff() != null
+                            && adjustment.getStaff().getId().equals(
+                            sourceVisit.getTreatingStaff().getId()),
+                    "พนักงานของ Adjustment ต้องตรงกับผู้รักษาใน Visit ต้นทาง");
+
+            Branch sourceBranch = sourceVisit.getBranch();
+
+            require(
+                    sourceBranch != null
+                            && branch.getId().equals(sourceBranch.getId()),
+                    "สาขางวดจ่ายต้องตรงกับสาขาที่รักษาของรายการขายต้นทาง");
+        }
         require(adjustment.getAdjustmentStatus() == AdjustmentStatus.Approved
                 || adjustment.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied, "นำไปใช้ได้เฉพาะใบปรับยอดที่อนุมัติแล้วและยังไม่ครบ");
         StaffMonthlyPaymentService.requireMonth(month);
