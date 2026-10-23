@@ -22,6 +22,14 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import com.sabyeguyz.clinicv2.auth.AppUser;
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 
 /**
  * Security of the v2 application: stateless JWT (HS256, the same app.jwt.secret as the
@@ -48,8 +56,36 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(signingKey).macAlgorithm(MacAlgorithm.HS256).build();
+    JwtDecoder jwtDecoder(AppUserRepository users) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
+                .withSecretKey(signingKey)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
+        OAuth2TokenValidator<Jwt> activeUserValidator = jwt -> {
+            Long userId;
+            try {
+                userId = Long.valueOf(jwt.getSubject());
+            } catch (NumberFormatException ex) {
+                return OAuth2TokenValidatorResult.failure(
+                        new OAuth2Error("invalid_token",
+                                "Invalid token subject", null));
+            }
+            boolean active = users.findById(userId)
+                    .map(AppUser::isUserStatus)
+                    .orElse(false);
+
+            return active
+                    ? OAuth2TokenValidatorResult.success()
+                    : OAuth2TokenValidatorResult.failure(
+                    new OAuth2Error("invalid_token",
+                            "User account is inactive", null));
+        };
+
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(),
+                activeUserValidator));
+
+        return decoder;
     }
 
     @Bean
