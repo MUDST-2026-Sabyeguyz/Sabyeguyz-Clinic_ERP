@@ -40,3 +40,21 @@ Cypress.Commands.add('registerPatient', (overrides = {}) => {
     return body
   })
 })
+
+Cypress.Commands.add('configureBookingWindows', () => {
+  return cy.api('GET', '/api/branches').then(({ body }) => {
+    return cy.wrap(
+        body.filter((branch) => ['01', '02'].includes(branch.branchCode))
+    ).each((branch) => {
+      return cy.api('PUT', `/api/branches/${branch.id}`, {
+        branchCode: branch.branchCode,
+        name: branch.name,
+        address: branch.address,
+        phone: branch.phone,
+        bookingOpenTime: '09:00',
+        bookingCloseTime: '18:00',
+        defaultAppointmentMinutes: 60,
+      }).its('status').should('equal', 200)
+    })
+  })
+})

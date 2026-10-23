@@ -3,7 +3,7 @@ const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year:
 describe('v2 users, commission schemes, course templates, treatments and lookups', () => {
   describe('users', () => {
     const user = {
-      username: 'editme01', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-810',
+      username: 'editme01', email: 'editme01@example.com', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-810',
       fullName: 'ผู้ใช้ แก้ไขได้', branchCode: '01',
     }
 
@@ -134,13 +134,26 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
   })
 
   describe('treatments', () => {
+    beforeEach(() => {
+      cy.configureBookingWindows()
+    })
     function checkedInVisit(fx, patient) {
       return cy.api('POST', '/api/appointments', {
-        branchCode: '01', patientId: patient.id, therapistId: fx.therapistId, serviceId: fx.serviceId,
+        branchCode: '01',
+        patientId: patient.id,
+        therapistId: fx.therapistId,
+        serviceId: fx.serviceId,
         startAt: `${fx.tomorrow}T09:00:00+07:00`,
-      }).then(({ body }) => {
-        cy.api('POST', `/api/appointments/${body.id}/check-in`).its('status').should('equal', 200)
-        return cy.wrap(body)
+        endAt: `${fx.tomorrow}T10:00:00+07:00`,
+      }).then(({ status, body }) => {
+        expect(status, JSON.stringify(body)).to.equal(201)
+
+        return cy.api(
+            'POST', `/api/appointments/${body.id}/check-in`
+        ).then((checkedIn) => {
+          expect(checkedIn.status).to.equal(200)
+          return body
+        })
       })
     }
 
@@ -166,9 +179,14 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
       cy.registerPatient().then((patient) => {
         cy.registerPatient({ firstName: 'คนอื่น', phone: '0822222222', identityNumber: '1100000000102' }).then((other) => {
           cy.api('POST', '/api/appointments', {
-            branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId,
-            serviceId: this.fixtures.serviceId, startAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
-          }).then(({ body: appointment }) => {
+            branchCode: '01',
+            patientId: patient.id,
+            therapistId: this.fixtures.therapistId,
+            serviceId: this.fixtures.serviceId,
+            startAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
+            endAt: `${this.fixtures.tomorrow}T11:00:00+07:00`,
+          }).then(({ status, body: appointment }) => {
+            expect(status, JSON.stringify(appointment)).to.equal(201)
             const treatment = (overrides) => cy.api('POST', '/api/treatments', {
               patientId: patient.id, appointmentId: appointment.id, staffId: this.fixtures.therapistId,
               serviceId: this.fixtures.serviceId, note: 'x', ...overrides,
