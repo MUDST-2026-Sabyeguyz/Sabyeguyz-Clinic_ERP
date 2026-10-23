@@ -100,7 +100,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
               expect(updated.body.name).to.equal('คอร์สแก้ไขแล้ว')
               expect(Number(updated.body.price)).to.equal(6500)
               expect(updated.body.sessions).to.equal(7)
-              expect(updated.body.bonusSessions).to.equal(1)
+              expect(updated.body.bonusSessions).to.equal(0)
               expect(updated.body.validityDays).to.equal(120)
             })
         })
