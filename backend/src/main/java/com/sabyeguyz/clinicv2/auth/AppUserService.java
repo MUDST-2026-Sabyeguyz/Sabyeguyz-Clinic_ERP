@@ -33,6 +33,9 @@ public class AppUserService {
 
     @Transactional
     public AppUser register(String username, String email, String rawPassword, Staff staff, Long actorId) {
+        if (staff != null && staff.getTerminationDate() != null) {
+            throw new IllegalArgumentException("ไม่สามารถสร้างบัญชีให้พนักงานที่มีวันลาออกแล้ว");
+        }
         String normalized = requireText(username, "username");
         if (normalized.contains("@")) throw new IllegalArgumentException("ชื่อผู้ใช้ห้ามมี @");
         if (users.findByUsername(normalized).isPresent()) {
@@ -128,7 +131,13 @@ public class AppUserService {
 
     @Transactional
     public AppUser activate(Long userId) {
-        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        AppUser user = users.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        Staff staff = user.getStaff();
+        if (staff != null && staff.getTerminationDate() != null) {
+            throw new IllegalArgumentException(
+                    "ไม่สามารถเปิดบัญชีของพนักงานที่มีวันลาออกแล้ว");
+        }
         user.setUserStatus(true);
         return users.save(user);
     }
