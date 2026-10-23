@@ -1,8 +1,40 @@
 const at = (fx, time = '09:00') => `${fx.tomorrow}T${time}:00+07:00`
-const newBooking = (fx, overrides = {}) => ({ branchCode: '01', therapistId: fx.therapistId,
-  startAt: at(fx), patientType: 'NEW', contactName: 'ผู้ป่วย ใหม่', contactPhone: '0891234567', ...overrides })
+function newBooking(fx, overrides = {}) {
+  const startAt = overrides.startAt ?? at(fx)
+  const endAt = new Date(
+      new Date(startAt).getTime() + 60 * 60 * 1000
+  ).toISOString()
+
+  return {
+    branchCode: '01',
+    therapistId: fx.therapistId,
+    startAt, endAt,
+    patientType: 'NEW',
+    contactName: 'ผู้ป่วย ใหม่',
+    contactPhone: '0891234567',
+    ...overrides,
+  }
+}
 
 describe('P3 non-commission appointment workflow', () => {
+  beforeEach(() => {
+    cy.api('GET', '/api/branches').then(({ body }) => {
+      body
+          .filter((branch) => ['01', '02'].includes(branch.branchCode))
+          .forEach((branch) => {
+            cy.api('PUT', `/api/branches/${branch.id}`, {
+              branchCode: branch.branchCode,
+              name: branch.name,
+              address: branch.address,
+              phone: branch.phone,
+              bookingOpenTime: '09:00',
+              bookingCloseTime: '18:00',
+              defaultAppointmentMinutes: 60,
+            }).its('status').should('equal', 200)
+          })
+    })
+  })
+
   it('requires NEW contact name and phone, therapist and time, but no room', function () {
     for (const overrides of [{ contactName: '' }, { contactPhone: '' }, { therapistId: null }, { startAt: null }]) {
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, overrides)).its('status').should('equal', 400)
@@ -27,22 +59,43 @@ describe('P3 non-commission appointment workflow', () => {
   })
 
   it('preserves omitted notes and supports editing/clearing notes without a false conflict with its own slot', function () {
-    cy.api('POST', '/api/appointments', newBooking(this.fixtures, { note: 'Original' })).then(({ body }) => {
-      cy.api('PATCH', `/api/appointments/${body.id}`, { startAt: at(this.fixtures, '10:00') })
-        .its('body.note').should('equal', 'Original')
-      cy.api('PATCH', `/api/appointments/${body.id}`, { startAt: at(this.fixtures, '10:00'), note: 'Edited' })
-        .its('status').should('equal', 200)
-      cy.api('GET', `/api/appointments/${body.id}`).its('body.note').should('equal', 'Edited')
-      cy.api('PATCH', `/api/appointments/${body.id}`, { startAt: at(this.fixtures, '10:00'), note: null })
-        .its('status').should('equal', 200)
-      cy.api('GET', `/api/appointments/${body.id}`).its('body.note').should('be.null')
+    cy.api('POST', '/api/appointments',
+        newBooking(this.fixtures, { note: 'Original' })
+    ).then(({ body }) => {
+      const times = {
+        startAt: at(this.fixtures, '10:00'),
+        endAt: at(this.fixtures, '11:00'),
+      }
+
+      cy.api('PATCH', `/api/appointments/${body.id}`, times)
+          .its('body.note').should('equal', 'Original')
+
+      cy.api('PATCH', `/api/appointments/${body.id}`, {
+        ...times, note: 'Edited',
+      }).its('status').should('equal', 200)
+
+      cy.api('GET', `/api/appointments/${body.id}`)
+          .its('body.note').should('equal', 'Edited')
+
+      cy.api('PATCH', `/api/appointments/${body.id}`, {
+        ...times, note: null,
+      }).its('status').should('equal', 200)
+
+      cy.api('GET', `/api/appointments/${body.id}`)
+          .its('body.note').should('be.null')
     })
   })
 
   it('searches CURRENT full name/middle/nickname/phone and NEW name/phone within the authorized branch', function () {
     cy.registerPatient({ firstName: 'สมชาย', middleName: 'กลาง', lastName: 'ใจดี', nickname: 'ชายน้อย' }).then((patient) => {
-      cy.api('POST', '/api/appointments', { branchCode: '01', therapistId: this.fixtures.therapistId,
-        patientId: patient.id, serviceId: this.fixtures.serviceId, startAt: at(this.fixtures) }).its('status').should('equal', 201)
+      cy.api('POST', '/api/appointments', {
+        branchCode: '01',
+        therapistId: this.fixtures.therapistId,
+        patientId: patient.id,
+        serviceId: this.fixtures.serviceId,
+        startAt: at(this.fixtures),
+        endAt: at(this.fixtures, '10:00'),
+      }).its('status').should('equal', 201)
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, { startAt: at(this.fixtures, '10:00') }))
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, {
         branchCode: '02', therapistId: this.fixtures.therapist2Id, contactName: 'สาขาสอง เท่านั้น', contactPhone: '0822222222',
@@ -62,8 +115,11 @@ describe('P3 non-commission appointment workflow', () => {
 
   it('applies the query before pagination, including records beyond the first page', function () {
     for (let index = 0; index < 21; index++) {
+      const start = Date.parse(at(this.fixtures)) + index * 15 * 60 * 1000
+
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, {
-        startAt: `${this.fixtures.tomorrow}T09:${String(index).padStart(2, '0')}:00+07:00`,
+        startAt: new Date(start).toISOString(),
+        endAt: new Date(start + 15 * 60 * 1000).toISOString(),
         contactName: index === 20 ? 'เป้าหมาย หน้าสอง' : `รายการ ${index}`,
       })).its('status').should('equal', 201)
     }

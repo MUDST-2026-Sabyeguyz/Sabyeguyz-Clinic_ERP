@@ -1,9 +1,18 @@
 const at = (fx, time) => `${fx.tomorrow}T${time}:00+07:00`
 
 function book(fx, patient, overrides = {}) {
+  const startAt = overrides.startAt ?? at(fx, '09:00')
+  const endAt = new Date(
+      new Date(startAt).getTime() + 60 * 60 * 1000
+  ).toISOString()
+
   return cy.api('POST', '/api/appointments', {
-    branchCode: '01', patientId: patient.id, therapistId: fx.therapistId, serviceId: fx.serviceId,
-    startAt: at(fx, '09:00'), ...overrides,
+    branchCode: '01',
+    patientId: patient.id,
+    therapistId: fx.therapistId,
+    serviceId: fx.serviceId,
+    startAt, endAt,
+    ...overrides,
   })
 }
 
@@ -19,6 +28,24 @@ describe('v2 appointments', () => {
         expect(body.therapist.id).to.equal(this.fixtures.therapistId)
         expect(body.service.id).to.equal(this.fixtures.serviceId)
       })
+    })
+  })
+
+  beforeEach(() => {
+    cy.api('GET', '/api/branches').then(({ body }) => {
+      body
+          .filter((branch) => ['01', '02'].includes(branch.branchCode))
+          .forEach((branch) => {
+            cy.api('PUT', `/api/branches/${branch.id}`, {
+              branchCode: branch.branchCode,
+              name: branch.name,
+              address: branch.address,
+              phone: branch.phone,
+              bookingOpenTime: '09:00',
+              bookingCloseTime: '18:00',
+              defaultAppointmentMinutes: 60,
+            }).its('status').should('equal', 200)
+          })
     })
   })
 
@@ -50,9 +77,15 @@ describe('v2 appointments', () => {
 
   it('books an unregistered NEW patient as Unconfirmed, then confirms it', function () {
     cy.api('POST', '/api/appointments', {
-      branchCode: '01', therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '10:00'),
-      status: 'Unconfirmed', patientType: 'NEW', contactName: 'สมศรี ใจงาม', contactPhone: '0899999999',
-    }).then(({ status, body }) => {
+      branchCode: '01',
+      therapistId: this.fixtures.therapistId,
+      startAt: at(this.fixtures, '10:00'),
+      endAt: at(this.fixtures, '11:00'),
+      status: 'Unconfirmed',
+      patientType: 'NEW',
+      contactName: 'สมศรี ใจงาม',
+      contactPhone: '0899999999',
+    }).then(({status, body}) => {
       expect(status).to.equal(201)
       expect(body.status).to.equal('UNCONFIRMED')
       expect(body.patientType).to.equal('NEW')
@@ -66,8 +99,13 @@ describe('v2 appointments', () => {
 
   it('links a NEW appointment to a patient registered afterwards', function () {
     cy.api('POST', '/api/appointments', {
-      branchCode: '01', therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '10:30'),
-      patientType: 'NEW', contactName: 'สมศรี ใจงาม', contactPhone: '0899999999',
+      branchCode: '01',
+      therapistId: this.fixtures.therapistId,
+      startAt: at(this.fixtures, '10:30'),
+      endAt: at(this.fixtures, '11:30'),
+      patientType: 'NEW',
+      contactName: 'สมศรี ใจงาม',
+      contactPhone: '0899999999',
     }).then(({ body }) => {
       cy.registerPatient({ firstName: 'สมศรี', lastName: 'ใจงาม', phone: '0899999999' }).then((patient) => {
         cy.api('POST', `/api/appointments/${body.id}/link-patient`, { patientId: patient.id }).then((linked) => {
@@ -113,9 +151,15 @@ describe('v2 appointments', () => {
   it('reschedules to a new time', function () {
     cy.registerPatient().then((patient) => {
       book(this.fixtures, patient).then(({ body }) => {
-        cy.api('PATCH', `/api/appointments/${body.id}`, { startAt: at(this.fixtures, '14:00') }).then((r) => {
+        cy.api('PATCH', `/api/appointments/${body.id}`, {
+          startAt: at(this.fixtures, '14:00'),
+          endAt: at(this.fixtures, '15:00'),
+        }).then((r) => {
           expect(r.status).to.equal(200)
-          expect(new Date(r.body.startAt).toISOString()).to.equal(new Date(at(this.fixtures, '14:00')).toISOString())
+          expect(new Date(r.body.startAt).toISOString())
+              .to.equal(new Date(at(this.fixtures, '14:00')).toISOString())
+          expect(new Date(r.body.endAt).toISOString())
+              .to.equal(new Date(at(this.fixtures, '15:00')).toISOString())
         })
       })
     })
@@ -136,8 +180,12 @@ describe('v2 appointments', () => {
   it('answers 404 for an unknown appointment and 400 for an unknown patient', function () {
     cy.api('GET', '/api/appointments/999999').its('status').should('equal', 404)
     cy.api('POST', '/api/appointments', {
-      branchCode: '01', patientId: 999999, therapistId: this.fixtures.therapistId,
-      serviceId: this.fixtures.serviceId, startAt: at(this.fixtures, '09:00'),
+      branchCode: '01',
+      patientId: 999999,
+      therapistId: this.fixtures.therapistId,
+      serviceId: this.fixtures.serviceId,
+      startAt: at(this.fixtures, '09:00'),
+      endAt: at(this.fixtures, '10:00'),
     }).its('status').should('equal', 400)
   })
 })

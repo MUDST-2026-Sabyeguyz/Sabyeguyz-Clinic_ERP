@@ -62,7 +62,7 @@ public class Appointment {
     @Column(name = "appointment_time", nullable = false)
     private LocalTime appointmentTime;
 
-    @Column(name = "appointment_end_at")
+    @Column(name = "appointment_end_at", nullable = false)
     private LocalDateTime appointmentEndAt;
 
     @Column(name = "appointment_create_at", nullable = false, updatable = false)
