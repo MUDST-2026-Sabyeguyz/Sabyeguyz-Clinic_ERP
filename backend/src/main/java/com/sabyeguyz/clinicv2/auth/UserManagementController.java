@@ -71,7 +71,7 @@ public class UserManagementController {
 
     public record Request(
             @NotBlank @Size(max = 50) String username,
-            String email,
+            @NotBlank @Size(max = 254) String email,
             @Size(min = 8, max = 100) String password,
             @NotNull String role,
             @NotBlank @Size(max = 20) String employeeCode,
