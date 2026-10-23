@@ -479,18 +479,36 @@ public class StaffMonthlyPaymentService {
 
     private void link(StaffMonthlyPayment payment, Totals totals) {
         for (CommissionAllocationLedger row : totals.ownerRows()) {
+            if (row.getOwnerMonthlyPayment() != null
+                    && !payment.getId().equals(
+                    row.getOwnerMonthlyPayment().getId())) {
+                throw new IllegalStateException(
+                        "คอม Owner ต้นทางผูกกับงวดจ่ายอื่นแล้ว ต้องตรวจข้อมูลก่อนจ่าย");
+            }
             if (row.getOwnerMonthlyPayment() == null) {
                 row.setOwnerMonthlyPayment(payment);
                 allocations.save(row);
             }
         }
         for (CommissionAllocationLedger row : totals.feeRows()) {
+            if (row.getTreatingMonthlyPayment() != null
+                    && !payment.getId().equals(
+                    row.getTreatingMonthlyPayment().getId())) {
+                throw new IllegalStateException(
+                        "ค่ามือรักษาแทนต้นทางผูกกับงวดจ่ายอื่นแล้ว ต้องตรวจข้อมูลก่อนจ่าย");
+            }
             if (row.getTreatingMonthlyPayment() == null) {
                 row.setTreatingMonthlyPayment(payment);
                 allocations.save(row);
             }
         }
         for (SingleVisitFeeLedger row : totals.singleRows()) {
+            if (row.getMonthlyPayment() != null
+                    && !payment.getId().equals(
+                    row.getMonthlyPayment().getId())) {
+                throw new IllegalStateException(
+                        "ค่ามือรายครั้งต้นทางผูกกับงวดจ่ายอื่นแล้ว ต้องตรวจข้อมูลก่อนจ่าย");
+            }
             if (row.getMonthlyPayment() == null) {
                 row.setMonthlyPayment(payment);
                 singleVisitFees.save(row);
