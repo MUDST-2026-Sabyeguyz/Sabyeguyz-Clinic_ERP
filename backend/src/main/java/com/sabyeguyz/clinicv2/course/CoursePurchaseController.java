@@ -259,7 +259,7 @@ public class CoursePurchaseController {
         CourseLedger original = ledger.findById(movementId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการ"));
         branchAccess.requireAccess(original.getCourse().getBranch(), "ยกเลิกได้เฉพาะรายการของสาขาตัวเอง รายการต่างสาขาดูรายละเอียดได้อย่างเดียว");
-        Permission permission = permissions.getOrCreate("COURSE_REVERSE", "Course", actor.currentId());
+        Permission permission = permissions.requireAllowed("COURSE_REVERSE", actor.currentId());
         switch (original.getEntryType()) {
             case Treatment -> usageService.reverse(original.getVisitUsage(), permission, request.reason(), actor.currentId());
             case TransferOut, TransferIn ->
@@ -280,7 +280,7 @@ public class CoursePurchaseController {
         if (request.reason() == null || request.reason().isBlank()) {
             throw new IllegalArgumentException("ต้องระบุเหตุผลที่ยกเลิก");
         }
-        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        Permission permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         // voids the sale line, cuts the unused rights and marks the course Cancelled
         cancellations.voidSale(course.getSaleTransaction(), permission, request.reason(), actor.currentId());
         Course saved = findCourse(id);
