@@ -12,14 +12,40 @@ const events = () => cy.api('GET', `/__cypress/calendar/events?calendarId=${enco
 const edit = (body) => cy.api('POST', '/__cypress/calendar/edit', { calendarId: CAL, ...body }).its('status').should('equal', 200)
 
 function book(fx, patient, overrides = {}) {
+  const startAt = overrides.startAt ?? at(fx, '09:00')
+  const endAt = new Date(
+      new Date(startAt).getTime() + 60 * 60 * 1000
+  ).toISOString()
+
   return cy.api('POST', '/api/appointments', {
-    branchCode: '01', patientId: patient.id, therapistId: fx.therapistId, serviceId: fx.serviceId,
-    startAt: at(fx, '09:00'), ...overrides,
+    branchCode: '01',
+    patientId: patient.id,
+    therapistId: fx.therapistId,
+    serviceId: fx.serviceId,
+    startAt,
+    endAt,
+    ...overrides,
   }).then(({ status, body }) => {
     expect(status, JSON.stringify(body)).to.equal(201)
     return body
   })
 }
+
+beforeEach(() => {
+  cy.api('GET', '/api/branches').then(({ body }) => {
+    const branch = body.find((row) => row.branchCode === '01')
+
+    cy.api('PUT', `/api/branches/${branch.id}`, {
+      branchCode: branch.branchCode,
+      name: branch.name,
+      address: branch.address,
+      phone: branch.phone,
+      bookingOpenTime: '09:00',
+      bookingCloseTime: '18:00',
+      defaultAppointmentMinutes: 60,
+    }).its('status').should('equal', 200)
+  })
+})
 
 const appointment = (id) => cy.api('GET', `/api/appointments/${id}`).its('body')
 
@@ -49,9 +75,13 @@ describe('v2 Google Calendar sync - system to Google', () => {
     cy.registerPatient().then((patient) => {
       book(this.fixtures, patient).then((appointmentBody) => {
         sync()
-        cy.api('PATCH', `/api/appointments/${appointmentBody.id}`, { startAt: at(this.fixtures, '14:00') }).its('status').should('equal', 200)
+        cy.api('PATCH', `/api/appointments/${appointmentBody.id}`, {
+          startAt: at(this.fixtures, '14:00'),
+          endAt: at(this.fixtures, '15:00'),
+        }).its('status').should('equal', 200)
         sync().then((result) => expect(result.pushed).to.equal(1))
         events().its('0.start').should('equal', local(this.fixtures, '14:00'))
+        events().its('0.end').should('equal', local(this.fixtures, '15:00'))
         cy.api('POST', `/api/appointments/${appointmentBody.id}/cancel`, { reason: 'ทดสอบ' }).its('status').should('equal', 200)
         sync().then((result) => expect(result.removed).to.equal(1))
         events().its('0.cancelled').should('equal', true)
@@ -98,9 +128,15 @@ describe('v2 Google Calendar sync - Google to system', () => {
   it('syncs a NEW contact without creating a patient and preserves its note and cancellation history', function () {
     connect()
     cy.api('POST', '/api/appointments', {
-      branchCode: '01', therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '09:00'),
-      patientType: 'NEW', contactName: 'NewContact PrivateSurname', contactPhone: '0891234567',
-      requestedServiceType: 'SingleVisit', note: 'Keep clinic note',
+      branchCode: '01',
+      therapistId: this.fixtures.therapistId,
+      startAt: at(this.fixtures, '09:00'),
+      endAt: at(this.fixtures, '10:00'),
+      patientType: 'NEW',
+      contactName: 'NewContact PrivateSurname',
+      contactPhone: '0891234567',
+      requestedServiceType: 'SingleVisit',
+      note: 'Keep clinic note',
     }).then(({ status, body }) => {
       expect(status).to.equal(201)
       sync().then(result => expect(result.pushed).to.equal(1))
@@ -181,6 +217,7 @@ describe('v2 Google Calendar sync - Google to system', () => {
         sync().then((result) => expect(result.revertedInGoogle).to.equal(1))
         appointment(appointmentBody.id).its('status').should('equal', 'ARRIVED')
         events().its('0.start').should('equal', local(this.fixtures, '09:00'))
+        events().its('0.end').should('equal', local(this.fixtures, '10:00'))
       })
     })
   })
