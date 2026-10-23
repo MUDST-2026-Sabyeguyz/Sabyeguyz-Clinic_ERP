@@ -3,7 +3,7 @@ const range = '?from=2020-01-01&to=2099-12-31'
 
 describe('v2 commission', () => {
   it('previews the pool of the 9,000 THB course at the first tier (5%)', function () {
-    cy.api('GET', `/api/commission/preview?courseId=${this.fixtures.courseId}&sellerStaffId=${this.fixtures.managerStaffId}`)
+    cy.api('GET', `/api/commission/preview?courseId=${this.fixtures.courseId}&sellerStaffId=${this.fixtures.managerStaffId}&branchCode=01`)
       .then(({ status, body }) => {
         expect(status).to.equal(200)
         expect(Number(body.netPrice)).to.equal(9000)
@@ -14,7 +14,7 @@ describe('v2 commission', () => {
   })
 
   it('bases the preview on the price after the line discount', function () {
-    cy.api('GET', `/api/commission/preview?courseId=${this.fixtures.courseId}&sellerStaffId=${this.fixtures.managerStaffId}`
+    cy.api('GET', `/api/commission/preview?courseId=${this.fixtures.courseId}&sellerStaffId=${this.fixtures.managerStaffId}&branchCode=01`
       + '&discountType=BAHT&discountValue=1000').then(({ body }) => {
       expect(Number(body.netPrice)).to.equal(8000)
       expect(Number(body.commissionPool)).to.equal(400)
@@ -22,9 +22,9 @@ describe('v2 commission', () => {
   })
 
   it('moves to the next tier as the monthly sales grow', function () {
-    const rateAt = (fx, price) => cy.api('GET',
-      `/api/commission/preview?courseId=${fx.courseId}&sellerStaffId=${fx.managerStaffId}&price=${price}`)
-      .then(({ body }) => Number(body.commissionRate))
+    const rateAt = (fx, price) => cy.api(
+        'GET', `/api/commission/preview?courseId=${fx.courseId}&sellerStaffId=${fx.managerStaffId}&price=${price}&branchCode=01`,
+        ).then(({ body }) => Number(body.commissionRate))
     rateAt(this.fixtures, 59999).should('equal', 0.05)
     rateAt(this.fixtures, 60000).should('equal', 0.06)
     rateAt(this.fixtures, 70000).should('equal', 0.07)
@@ -37,7 +37,7 @@ describe('v2 commission', () => {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
         discountType: 'BAHT', discountValue: 0,
       }).its('status').should('equal', 201)
-      cy.api('GET', `/api/commission/preview?courseId=${this.fixtures.courseId}&sellerStaffId=${this.fixtures.managerStaffId}`)
+      cy.api('GET', `/api/commission/preview?courseId=${this.fixtures.courseId}&sellerStaffId=${this.fixtures.managerStaffId}&branchCode=01`)
         .then(({ body }) => {
           expect(Number(body.monthlySalesToDate)).to.be.at.least(9000)
         })
@@ -50,7 +50,7 @@ describe('v2 commission', () => {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).then(({ body: purchase }) => {
         expect(purchase.commissionStatus).to.equal('PROVISIONAL')
-        cy.api('POST', `/api/commission/closings/${month}-01`).then(({ status, body }) => {
+        cy.api('POST', `/api/commission/closings/${month}?branchCode=01`).then(({ status, body }) => {
           expect(status).to.equal(200)
           expect(body).to.have.length(1)
           expect(body[0].status).to.equal('CLOSED')
@@ -63,7 +63,7 @@ describe('v2 commission', () => {
           expect(Number(body[0].totalCourseCommissionPool)).to.equal(450)
           expect(Number(body[0].commissionAllocationPerVisit)).to.be.greaterThan(0)
         })
-        cy.api('GET', `/api/commission/closings?month=${month}`).its('body').should('have.length', 1)
+        cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).its('body').should('have.length', 1)
       })
     })
   })
@@ -73,8 +73,8 @@ describe('v2 commission', () => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
-      cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
-      cy.api('POST', `/api/commission/closings/${month}-01`).then(({ status, body }) => {
+      cy.api('POST', `/api/commission/closings/${month}?branchCode=01`).its('status').should('equal', 200)
+      cy.api('POST', `/api/commission/closings/${month}?branchCode=01`).then(({ status, body }) => {
         expect(status).to.equal(200)
         expect(body).to.have.length(1)
       })
@@ -96,7 +96,7 @@ describe('v2 commission', () => {
           expect(body[0].ownerNetPending).to.equal(true)
           expect(Number(body[0].treatmentFee)).to.equal(0)
         })
-        cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
+        cy.api('POST', `/api/commission/closings/${month}?branchCode=01`).its('status').should('equal', 200)
         cy.api('GET', `/api/commission/treatment-report${range}`).then(({ body }) => {
           // 9,000 THB at 5% = 450 over 6 sessions: 75.00 for the first session
           expect(Number(body[0].ownerNet)).to.equal(75)
@@ -107,8 +107,11 @@ describe('v2 commission', () => {
     })
   })
 
-  it('manages the clinic-wide treatment fee rule: validation, no overlap, take-over, enable/disable', () => {
-    const rule = (body) => cy.api('POST', '/api/commission/treatment-fees', body)
+  it('manages date-based treatment fee rules and rejects manual enable/disable', () => {
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,)
+        .its('status').should('equal', 200)
+    const rule = (body) =>
+        cy.api('POST', '/api/commission/treatment-fees', {...body, branchCode: '01',})
     rule({ feeType: 'Percentage', feeValue: 101, effectiveFrom: '2026-01-01' }).its('status').should('equal', 400)
     rule({ feeType: 'Fixed', feeValue: -1, effectiveFrom: '2026-01-01' }).its('status').should('equal', 400)
     rule({ feeType: 'Bogus', feeValue: 5, effectiveFrom: '2026-01-01' }).its('status').should('equal', 400)
@@ -121,12 +124,12 @@ describe('v2 commission', () => {
         const seeded = rules.find((entry) => entry.feeType === 'Fixed')
         expect(seeded.effectiveTo).to.equal('2029-12-31')
       })
-      cy.api('PUT', `/api/commission/treatment-fees/${body.id}`, { feeValue: 12.5 }).then((updated) => {
+      cy.api('PUT', `/api/commission/treatment-fees/${body.id}`, { branchCode: '01', feeValue: 12.5 }).then((updated) => {
         expect(updated.status).to.equal(200)
         expect(Number(updated.body.feeValue)).to.equal(12.5)
       })
-      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/disable`).its('body.enabled').should('equal', false)
-      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/enable`).its('body.enabled').should('equal', true)
+      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/disable`,).its('status').should('equal', 400)
+      cy.api('PATCH', `/api/commission/treatment-fees/${body.id}/enable`,).its('status').should('equal', 400)
     })
   })
 
@@ -140,7 +143,16 @@ describe('v2 commission', () => {
   })
 
   it('creates a commission scheme with tiers and lists them', () => {
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date())
+
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,)
+        .its('status').should('equal', 200)
     cy.api('POST', '/api/commission/schemes', {
+      branchCode: '01',
       name: 'Scheme 2030', effectiveFrom: '2030-01-01',
       tiers: [
         { minimum: 0, maximum: 99999.99, rate: 0.04, order: 1 },
@@ -160,8 +172,16 @@ describe('v2 commission', () => {
     .then(({ body }) => body.find((scheme) => scheme.name === 'Default Tier Scheme'))
 
   it('keeps tier ranges contiguous at two decimals (50,000.00 then 50,000.01)', () => {
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date())
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,).its('status').should('equal', 200)
     cy.api('POST', '/api/commission/schemes', {
-      name: 'Satang scheme', effectiveFrom: '2032-01-01',
+      branchCode: '01',
+      name: 'Satang scheme',
+      effectiveFrom: '2032-01-01',
       tiers: [
         { minimum: 0, maximum: 50000, rate: 0.05, order: 1 },
         { minimum: 50000.01, maximum: null, rate: 0.06, order: 2 },
@@ -176,7 +196,18 @@ describe('v2 commission', () => {
   })
 
   it('rejects whole-baht tiers that leave satang in no tier, and other malformed tiers', () => {
-    const scheme = (tiers) => ({ name: 'Bad scheme', effectiveFrom: '2034-01-01', tiers })
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date())
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,).its('status').should('equal', 200)
+    const scheme = (tiers) => ({
+      branchCode: '01',
+      name: 'Bad scheme',
+      effectiveFrom: '2034-01-01',
+      tiers,
+    })
     const bad = [
       [{ minimum: 0, maximum: 59999, rate: 0.05, order: 1 }, { minimum: 60000, maximum: null, rate: 0.1, order: 2 }],
       [{ minimum: 0, maximum: 100.005, rate: 0.05, order: 1 }, { minimum: 100.01, maximum: null, rate: 0.1, order: 2 }],
@@ -189,26 +220,56 @@ describe('v2 commission', () => {
   })
 
   it('rejects a scheme whose dates overlap another scheme without taking over from it', () => {
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date())
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,).its('status').should('equal', 200)
     cy.api('POST', '/api/commission/schemes', {
-      name: 'Inside', effectiveFrom: '2026-06-01', effectiveTo: '2026-12-31',
-      tiers: [{ minimum: 0, maximum: null, rate: 0.05, order: 1 }],
+      branchCode: '01',
+      name: 'Inside',
+      effectiveFrom: '2026-06-01',
+      effectiveTo: '2026-12-31',
+      tiers: [
+        { minimum: 0, maximum: null, rate: 0.05, order: 1 },
+      ],
     }).its('status').should('equal', 400)
   })
 
   it('ends the open-ended scheme the day before a newer version starts', () => {
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date())
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,).its('status').should('equal', 200)
     cy.api('POST', '/api/commission/schemes', {
-      name: 'Takeover', effectiveFrom: '2035-01-01',
-      tiers: [{ minimum: 0, maximum: null, rate: 0.05, order: 1 }],
+      branchCode: '01',
+      name: 'Takeover',
+      effectiveFrom: '2035-01-01',
+      tiers: [{ minimum: 0, maximum: null, rate: 0.05, order: 1 },],
     }).its('status').should('equal', 201)
+
     cy.api('GET', '/api/commission/schemes').then(({ body }) => {
-      const previous = body.find((scheme) => scheme.name === 'Default Tier Scheme')
+      const previous = body.find(
+          (scheme) => scheme.name === 'Default Tier Scheme',
+      )
       expect(previous.effectiveTo).to.equal('2034-12-31')
     })
   })
 
   it('creates a new version of a scheme and keeps the old one untouched', () => {
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date())
+
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,).its('status').should('equal', 200)
     defaultScheme().then((scheme) => {
       cy.api('POST', `/api/commission/schemes/${scheme.id}/versions`, {
+        branchCode: '01',
         effectiveFrom: '2036-01-01',
         tiers: [{ minimum: 0, maximum: 70000, rate: 0.04, order: 1 }, { minimum: 70000.01, maximum: null, rate: 0.09, order: 2 }],
       }).then(({ status, body }) => {
@@ -225,14 +286,27 @@ describe('v2 commission', () => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
+      const month = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: '2-digit',
+      }).format(new Date())
+
+      cy.api(
+          'POST',
+          `/api/commission/closings/${month}?branchCode=01`,
+      ).its('status').should('equal', 200)
       defaultScheme().then((scheme) => {
         expect(scheme.locked).to.equal(true)
         cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
-          name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom, tiers: [{ minimum: 0, maximum: null, rate: 0.01, order: 1 }],
+          branchCode: '01', name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom, tiers: [{ minimum: 0, maximum: null, rate: 0.01, order: 1 }],
         }).its('status').should('equal', 409)
         cy.api('DELETE', `/api/commission/schemes/${scheme.id}`).its('status').should('equal', 405)
-        cy.api('PUT', `/api/commission/schemes/${scheme.id}`, { name: 'Default Tier Scheme', effectiveFrom: scheme.effectiveFrom })
-          .its('status').should('equal', 200)
+        cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
+          branchCode: '01',
+          name: 'Default Tier Scheme',
+          effectiveFrom: scheme.effectiveFrom,
+        }).its('status').should('equal', 200)
         cy.api('GET', `/api/commission/schemes/${scheme.id}/tiers`).its('body').should('have.length', 5)
       })
     })
@@ -248,7 +322,7 @@ describe('v2 commission', () => {
       }).then(({ body: second }) => {
         cy.api('POST', `/api/payments/${second.id}/reverse`, { reason: 'ยกเลิกการขาย' }).its('status').should('equal', 200)
       })
-      cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+      cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).then(({ body }) => {
         const row = body.find((entry) => entry.employeeId === this.fixtures.therapistId)
         expect(Number(row.sales)).to.equal(9000)
       })
@@ -285,7 +359,23 @@ describe('v2 commission', () => {
   })
 
   it('rejects a gap or overlap in the tiers', () => {
-    const scheme = (tiers) => ({ name: 'Bad scheme', effectiveFrom: '2031-01-01', tiers })
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+    }).format(new Date())
+
+    cy.api(
+        'POST',
+        `/api/commission/closings/${month}?branchCode=01`,
+    ).its('status').should('equal', 200)
+
+    const scheme = (tiers) => ({
+      branchCode: '01',
+      name: 'Bad scheme',
+      effectiveFrom: '2031-01-01',
+      tiers,
+    })
     cy.api('POST', '/api/commission/schemes', scheme([
       { minimum: 0, maximum: 50000, rate: 0.05, order: 1 },
       { minimum: 60000, maximum: null, rate: 0.1, order: 2 },
@@ -299,7 +389,7 @@ describe('v2 commission', () => {
   it('is manager-only', () => {
     cy.login('therapist', 'therapist123').then(({ body: auth }) => {
       cy.apiAs(auth.token, 'GET', '/api/commission/schemes').its('status').should('equal', 403)
-      cy.apiAs(auth.token, 'POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 403)
+      cy.apiAs(auth.token, 'POST', `/api/commission/closings/${month}?branchCode=01`).its('status').should('equal', 403)
     })
   })
 
@@ -309,13 +399,13 @@ describe('v2 commission', () => {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).its('status').should('equal', 201)
     })
-    cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+    cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).then(({ body }) => {
       expect(body).to.have.length(1)
       expect(body[0].status).to.equal('OPEN')
       expect(Number(body[0].sales)).to.equal(9000)
       expect(Number(body[0].rate)).to.equal(0.05)
     })
-    cy.api('POST', `/api/commission/closings/${month}-01`).its('body.0.status').should('equal', 'CLOSED')
-    cy.api('GET', `/api/commission/closings?month=${month}`).its('body').should('have.length', 1)
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`).its('body.0.status').should('equal', 'CLOSED')
+    cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).its('body').should('have.length', 1)
   })
 })
