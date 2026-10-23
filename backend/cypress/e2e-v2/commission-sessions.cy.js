@@ -6,15 +6,42 @@ const month = today.slice(0, 7)
 const money = (value) => Math.round(Number(value) * 100) / 100
 
 // one flat tier, so the documents' 7% examples can be reproduced exactly (the seed scheme is not in use yet)
-const flatRate = (rate) => cy.api('GET', '/api/commission/schemes').then(({ body }) => {
-  const scheme = body.find((entry) => entry.name === 'Default Tier Scheme')
-  return cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
-    name: scheme.name, effectiveFrom: scheme.effectiveFrom, tiers: [{ minimum: 0, maximum: null, rate, order: 1 }],
-  }).its('status').should('equal', 200)
-})
-const feeRule = () => cy.api('GET', '/api/commission/treatment-fees').then(({ body }) => body.find((rule) => rule.feeType === 'Fixed' || rule.feeType === 'Percentage'))
-const setFee = (feeType, feeValue) => feeRule().then((rule) => cy.api('PUT', `/api/commission/treatment-fees/${rule.id}`, { feeType, feeValue })
-  .its('status').should('equal', 200))
+const flatRate = (rate) =>
+    closeMonth()
+        .then(() => cy.api('GET', '/api/commission/schemes'))
+        .then(({ body }) => {
+          const scheme = body.find(
+              (entry) => entry.name === 'Default Tier Scheme',
+          )
+
+          return cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
+            branchCode: '01',
+            name: scheme.name,
+            effectiveFrom: scheme.effectiveFrom,
+            tiers: [
+              { minimum: 0, maximum: null, rate, order: 1 },
+            ],
+          }).its('status').should('equal', 200)
+        })
+        .then(() =>
+            cy.api(
+                'POST',
+                `/api/commission/branch-closings/${month}/reopen?branchCode=01`,
+                { reason: 'เตรียมอัตราสำหรับข้อมูลทดสอบก่อนขายคอร์ส' },
+            ).its('status').should('equal', 200),
+        )
+const setFeeAvailable = (available) =>
+    cy.api('POST', '/__cypress/treatment-fee-availability-fixture', {
+      available,
+    }).then(({ status, body }) => {
+      expect(status, JSON.stringify(body)).to.equal(200)
+      expect(body.updated).to.equal(1)
+    })
+const setFee = (feeType, feeValue) =>
+    cy.api('POST', '/__cypress/treatment-fee-fixture', {feeType, feeValue,}).then(({ status, body }) => {
+      expect(status, JSON.stringify(body)).to.equal(200)
+      expect(body.updated).to.equal(1)
+    })
 const template = (code, price, sessions, bonus = 0) => cy.api('POST', '/api/courses',
   { code, name: `คอร์ส ${code}`, price, sessions, bonusSessions: bonus, validityDays: 365 }).then(({ status, body }) => {
   expect(status, JSON.stringify(body)).to.equal(201)
@@ -27,7 +54,7 @@ const buy = (fx, patient, courseId, ownerId) => cy.api('POST', '/api/course-purc
   return body
 })
 const use = (courseId, extra = {}) => cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId, ...extra })
-const closeMonth = (m = month) => cy.api('POST', `/api/commission/closings/${m}-01`).its('status').should('equal', 200)
+const closeMonth = (m = month) => cy.api('POST', `/api/commission/closings/${m}?branchCode=01`,).its('status').should('equal', 200)
 const usages = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/usages`).its('body')
 const allocations = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/allocations`).its('body')
 const totals = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/totals`).its('body')
@@ -234,11 +261,12 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
         const previous = new Date(`${month}-01T00:00:00Z`)
         previous.setUTCMonth(previous.getUTCMonth() - 1)
         closeMonth(previous.toISOString().slice(0, 7))
+        closeMonth()
         // a newer version of the scheme (a higher rate) starting later does not touch a locked course
         cy.api('GET', '/api/commission/schemes').then(({ body }) => {
           const scheme = body.find((entry) => entry.name === 'Default Tier Scheme')
           cy.api('POST', `/api/commission/schemes/${scheme.id}/versions`, {
-            effectiveFrom: '2040-01-01', tiers: [{ minimum: 0, maximum: null, rate: 0.1, order: 1 }],
+            branchCode: '01', effectiveFrom: '2040-01-01', tiers: [{ minimum: 0, maximum: null, rate: 0.1, order: 1 }],
           }).its('status').should('equal', 201)
         })
         for (let i = 0; i < 3; i += 1) use(course.id).its('status').should('equal', 200)
@@ -269,7 +297,7 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
     flatRate(0.07)
     template('ACC13', 10000, 13).then((courseId) => {
       cy.registerPatient().then((patient) => buy(this.fixtures, patient, courseId, this.fixtures.therapistId).then((course) => {
-        feeRule().then((rule) => cy.api('PATCH', `/api/commission/treatment-fees/${rule.id}/disable`).its('status').should('equal', 200))
+        setFeeAvailable(false)
         use(course.id, { treatingStaffId: this.fixtures.managerStaffId }).its('status').should('equal', 409)
         use(course.id, { treatingStaffId: 99999999 }).its('status').should('equal', 400)
         // a PT of another branch cannot treat a session given at this branch
@@ -398,12 +426,12 @@ describe('v2 commission: single-visit treatment fee', () => {
   })
 
   it('sells without a fee when no Treatment Fee Rule applies (never 0) and records it once a rule exists', function () {
-    feeRule().then((rule) => cy.api('PATCH', `/api/commission/treatment-fees/${rule.id}/disable`).its('status').should('equal', 200))
+    setFeeAvailable(false)
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
         { payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }] }).its('status').should('equal', 201)
       fees().should('have.length', 0)
-      feeRule().then((rule) => cy.api('PATCH', `/api/commission/treatment-fees/${rule.id}/enable`).its('status').should('equal', 200))
+      setFeeAvailable(true)
       cy.api('POST', '/api/commission/single-visit-fees/backfill?from=2020-01-01&to=2099-12-31').its('body.recorded').should('equal', 1)
       cy.api('POST', '/api/commission/single-visit-fees/backfill?from=2020-01-01&to=2099-12-31').its('body.recorded').should('equal', 0)
       fees().then((rows) => {
@@ -437,7 +465,7 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
         })
         use(course.id).its('status').should('equal', 400) // nothing left to use
         // the sale is void: it no longer counts towards the tier, so the month has nothing to close for the seller
-        cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+        cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).then(({ body }) => {
           expect(body.find((row) => row.employeeId === this.fixtures.therapistId)).to.equal(undefined)
         })
         totals(course.id).then((row) => {
@@ -498,7 +526,7 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
               items: [{ courseId: course.id, refundAmount: 4000, cancelledVisits: 6 }],
             }).then(({ body: refund }) => {
               // a Pending refund changes nothing
-              cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+              cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).then(({ body }) => {
                 expect(Number(body.find((row) => row.employeeId === this.fixtures.therapistId).sales)).to.equal(10000)
               })
               cy.api('POST', `/api/refunds/${refund.id}/complete`).its('status').should('equal', 200)
@@ -518,7 +546,7 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
 
 describe('v2 commission: closing the month while sessions are being recorded', () => {
   const race = (a, b) => cy.parallelApi([a, b])
-  const closeRequest = { method: 'POST', url: `/api/commission/closings/${month}-01`, body: {} }
+  const closeRequest = {method: 'POST', url: `/api/commission/closings/${month}?branchCode=01`, body: {},}
 
   it('settles every session exactly once whatever the order of a close and the use that races it', function () {
     flatRate(0.07)
@@ -536,22 +564,35 @@ describe('v2 commission: closing the month while sessions are being recorded', (
         })
         // a close racing a use, again and again: the month is reopened before each round
         for (let round = 0; round < 5; round += 1) {
-          buy(this.fixtures, patient, courseId, this.fixtures.therapistId).then((course) => {
+          cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`,).then(({ status, body }) => {
+            expect(status).to.equal(200)
+
+            const closing = body.find(
+                (row) => row.employeeId === this.fixtures.therapistId,
+            )
+
+            if (closing && closing.status === 'CLOSED') {
+              return cy.api('POST', `/api/commission/closings/${closing.id}/reopen`, { reason: 'รอบทดสอบ' },
+              ).its('status').should('equal', 200)
+            }
+          }).then(() =>
+              buy(this.fixtures, patient, courseId, this.fixtures.therapistId),
+          ).then((course) => {
             courses.push(course)
-            cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
-              const closing = body.find((row) => row.employeeId === this.fixtures.therapistId)
-              if (closing && closing.status === 'CLOSED') {
-                cy.api('POST', `/api/commission/closings/${closing.id}/reopen`, { reason: 'รอบทดสอบ' }).its('status').should('equal', 200)
-              }
-            })
-            race(closeRequest, { method: 'POST', url: '/api/course-usages', body: { coursePurchaseId: course.id } }).then((responses) => {
-              responses.forEach((response) => expect(response.status, JSON.stringify(response.body)).to.equal(200))
+
+            return race(closeRequest, {
+              method: 'POST',
+              url: '/api/course-usages',
+              body: { coursePurchaseId: course.id },
+            }).then((responses) => {
+              responses.forEach((response) => expect(response.status, JSON.stringify(response.body)).to.equal(200),
+              )
             })
           })
         }
         cy.then(() => {
           // whatever order they ran in, one more close leaves nothing unsettled and nothing doubled
-          cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+          cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).then(({ body }) => {
             const closing = body.find((row) => row.employeeId === this.fixtures.therapistId)
             if (closing.status !== 'CLOSED') closeMonth()
           })
@@ -566,7 +607,7 @@ describe('v2 commission: closing the month while sessions are being recorded', (
             })
             totals(course.id).then((row) => expect(row.commission_status).to.equal('Locked'))
           })
-          cy.api('GET', `/api/commission/closings?month=${month}`).its('body').should('have.length', 1)
+          cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).its('body').should('have.length', 1)
         })
       })
     })

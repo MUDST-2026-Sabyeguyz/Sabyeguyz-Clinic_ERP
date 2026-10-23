@@ -131,15 +131,65 @@ public class V2FinanceScenarios {
         tiersStub.on("save", a -> { savedTiers.add((CommissionTier) a[0]); return a[0]; });
         var coursesStub = new V2RepositoryStub<>(CourseRepository.class);
         var closingsStub = new V2RepositoryStub<>(MonthlyCommissionClosingRepository.class);
-        var service = new CommissionSchemeService(schemesStub.proxy(), tiersStub.proxy(), coursesStub.proxy(), closingsStub.proxy());
+        Branch branch = new Branch();
+        setId(branch, 1L);
+
+        var branchClosing = new BranchMonthlyClosing();
+        branchClosing.setBranch(branch);
+        branchClosing.setClosingMonth(com.sabyeguyz.clinicv2.config.ClinicTime.today().toString().substring(0, 7));
+        branchClosing.setClosingStatus(BranchClosingStatus.Closed);
+        branchClosing.setClosedAt(java.time.Instant.now());
+        branchClosing.setClosedBy(1L);
+
+        var branchClosingsStub = new V2RepositoryStub<>(BranchMonthlyClosingRepository.class)
+                        .on("findByBranchIdAndClosingMonth",
+                                args -> Optional.of(branchClosing));
+
+        var guard = new BranchClosingGuard(closingsStub.proxy(), coursesStub.proxy(), branchClosingsStub.proxy());
+        var service = new CommissionSchemeService(schemesStub.proxy(), tiersStub.proxy(), coursesStub.proxy(), closingsStub.proxy(), guard);
 
         List<CommissionSchemeService.TierInput> validTiers = List.of(
                 new CommissionSchemeService.TierInput(decimal("0"), decimal("59999.99"), decimal("0.05"), 1),
                 new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
 
+        if (scenario.equals("schemecrud-branch-open")) {
+            branchClosing.setClosingStatus(BranchClosingStatus.Open);
+            branchClosing.setClosedAt(null);
+            branchClosing.setClosedBy(null);
+
+            LocalDate nextStart = com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1);
+
+            return V2RepositoryStub.outcome(() ->
+                    service.create("Default", nextStart, null, branch, new Permission(), validTiers, 1L));
+        }
+
+        if (scenario.equals("schemecrud-other-branch-open")) {
+            var existing = schemeVersion(1, "2026-01-01", null);
+            existing.setSchemeName("Default");
+
+            schemesStub.on(
+                    "findByOrderByEffectiveFromDesc",
+                    args -> List.of(existing));
+
+            // Simulates unclosed courses elsewhere.
+            coursesStub.on("countOpenCommissionUpToMonth", args -> 1L);
+            LocalDate nextStart = com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1);
+
+            var created = service.create(
+                    "Default", nextStart, null,
+                    branch, new Permission(), validTiers, 1L);
+
+            return Map.of(
+                    "version", created.getSchemeVersion(),
+                    "globalOpenChecks",
+                    coursesStub.calls("countOpenCommissionUpToMonth"));
+        }
+
         if (scenario.equals("schemecrud-create")) {
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of());
-            var created = service.create("Default", LocalDate.parse("2026-01-01"), null, new Permission(), validTiers, 1L);
+            var created = service.create(
+                    "Default", LocalDate.parse("2026-01-01"),
+                    null, branch, new Permission(), validTiers, 1L);
             return Map.of("version", created.getSchemeVersion(), "tiersSaved", savedTiers.size(),
                     "firstRate", savedTiers.get(0).getCommissionRate());
         }
@@ -147,7 +197,7 @@ public class V2FinanceScenarios {
             var existing = schemeVersion(1, "2026-01-01", null);
             existing.setSchemeName("Default");
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(existing));
-            var created = service.create("Default", LocalDate.parse("2027-01-01"), null, new Permission(), validTiers, 1L);
+            var created = service.create("Default", LocalDate.parse("2027-01-01"), null, branch, new Permission(), validTiers, 1L);
             return Map.of("version", created.getSchemeVersion(), "predecessorEnds", existing.getEffectiveTo().toString());
         }
         if (scenario.equals("schemecrud-different-name-version")) {
@@ -164,7 +214,7 @@ public class V2FinanceScenarios {
 
             var created = service.create(
                     "Different Scheme", nextStart, null,
-                    new Permission(), validTiers, 1L);
+                    branch, new Permission(), validTiers, 1L);
 
             return Map.of(
                     "version", created.getSchemeVersion(),
@@ -175,21 +225,26 @@ public class V2FinanceScenarios {
             // a bounded scheme inside the range of the open-ended one is not a take-over: refused
             var existing = schemeVersion(1, "2026-01-01", null);
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(existing));
-            return V2RepositoryStub.outcome(() -> service.create("Other", LocalDate.parse("2026-06-01"),
-                    LocalDate.parse("2026-12-31"), new Permission(), validTiers, 1L));
+            return V2RepositoryStub.outcome(() -> service.create(
+                    "Other",
+                    LocalDate.parse("2026-06-01"),
+                    LocalDate.parse("2026-12-31"),
+                    branch, new Permission(), validTiers, 1L));
         }
         if (scenario.equals("schemecrud-takeover-used")) {
             // the open-ended scheme already priced a course sold after the new start date: it cannot end before it
             var existing = schemeVersion(1, "2026-01-01", null);
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(existing));
             coursesStub.on("existsBySchemeUsedAfter", a -> true);
-            return V2RepositoryStub.outcome(() -> service.create("Default", LocalDate.parse("2027-01-01"), null,
-                    new Permission(), validTiers, 1L));
+            return V2RepositoryStub.outcome(() -> service.create(
+                    "Default",
+                    LocalDate.parse("2027-01-01"), null,
+                   branch, new Permission(), validTiers, 1L));
         }
         if (scenario.equals("schemecrud-satang-ok")) {
             // 50,000.00 then 50,000.01 is the contiguous form from the Data Dictionary
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of());
-            var created = service.create("Satang", LocalDate.parse("2026-01-01"), null, new Permission(), List.of(
+            var created = service.create("Satang", LocalDate.parse("2026-01-01"), null, branch, new Permission(), List.of(
                     new CommissionSchemeService.TierInput(decimal("0.00"), decimal("50000.00"), decimal("0.05"), 1),
                     new CommissionSchemeService.TierInput(decimal("50000.01"), null, decimal("0.06"), 2)), 1L);
             return Map.of("tiersSaved", savedTiers.size(), "secondMin", savedTiers.get(1).getMinimumMonthlySales().toPlainString());
@@ -217,7 +272,7 @@ public class V2FinanceScenarios {
                 default -> throw new IllegalArgumentException("Unknown schemecrud scenario: " + scenario);
             };
             return V2RepositoryStub.outcome(() -> service.create("Bad", LocalDate.parse("2026-01-01"), null,
-                    new Permission(), bad, 1L));
+                    branch, new Permission(), bad, 1L));
         }
         if (scenario.equals("schemecrud-referenced-tiers") || scenario.equals("schemecrud-referenced-rename")
                 || scenario.equals("schemecrud-referenced-deactivate")) {
@@ -228,12 +283,13 @@ public class V2FinanceScenarios {
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(used));
             coursesStub.on("existsByCommissionSchemeId", a -> true);
             if (scenario.equals("schemecrud-referenced-tiers")) {
-                return V2RepositoryStub.outcome(() -> service.update(1L, null, null, null, validTiers, 9L));
+                return V2RepositoryStub.outcome(() ->
+                        service.update(1L, null, null, null, branch, validTiers, 9L));
             }
             if (scenario.equals("schemecrud-referenced-deactivate")) {
                 return V2RepositoryStub.outcome(() -> { service.deactivate(1L); return "deactivated"; });
             }
-            service.update(1L, "Renamed", null, null, null, 9L);
+            service.update(1L, "Renamed", null, null, branch, null, 9L);
             return Map.of("name", used.getSchemeName(), "tiersDeleted", tiersStub.calls("deleteAll"));
         }
         if (scenario.equals("schemecrud-overlap")) {
@@ -242,19 +298,19 @@ public class V2FinanceScenarios {
                     new CommissionSchemeService.TierInput(decimal("0"), decimal("59999.99"), decimal("0.05"), 1),
                     new CommissionSchemeService.TierInput(decimal("50000"), null, decimal("0.07"), 2));
             return V2RepositoryStub.outcome(() ->
-                    service.create("Overlap", LocalDate.parse("2026-01-01"), null, new Permission(), overlapping, 1L));
+                    service.create("Overlap", LocalDate.parse("2026-01-01"), null, branch, new Permission(), overlapping, 1L));
         }
         if (scenario.equals("schemecrud-gap")) {
             List<CommissionSchemeService.TierInput> gapped = List.of(
                     new CommissionSchemeService.TierInput(decimal("0"), decimal("49999"), decimal("0.05"), 1),
                     new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
             return V2RepositoryStub.outcome(() ->
-                    service.create("Gap", LocalDate.parse("2026-01-01"), null, new Permission(), gapped, 1L));
+                    service.create("Gap", LocalDate.parse("2026-01-01"), null, branch, new Permission(), gapped, 1L));
         }
         if (scenario.equals("schemecrud-update-keeps-tiers")) {
             var existing = schemeVersion(1, "2026-01-01", null);
             schemesStub.on("findById", a -> Optional.of(existing));
-            service.update(existing.getId(), "Renamed", null, null, null, 9L);
+            service.update(existing.getId(), "Renamed", null, null, branch, null, 9L);
             return Map.of("name", existing.getSchemeName(), "tiersSaveCallsDuringUpdate", tiersStub.calls("save"));
         }
         throw new IllegalArgumentException("Unknown schemecrud scenario: " + scenario);
