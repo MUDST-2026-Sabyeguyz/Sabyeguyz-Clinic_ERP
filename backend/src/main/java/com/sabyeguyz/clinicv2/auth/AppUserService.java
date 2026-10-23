@@ -32,11 +32,6 @@ public class AppUserService {
     }
 
     @Transactional
-    public AppUser register(String username, String rawPassword, Staff staff, Long actorId) {
-        return register(username, null, rawPassword, staff, actorId);
-    }
-
-    @Transactional
     public AppUser register(String username, String email, String rawPassword, Staff staff, Long actorId) {
         String normalized = requireText(username, "username");
         if (normalized.contains("@")) throw new IllegalArgumentException("ชื่อผู้ใช้ห้ามมี @");
@@ -176,9 +171,9 @@ public class AppUserService {
     }
 
     private static String normalizeEmail(String email) {
-        if (email == null || email.isBlank()) return null;
-        String normalized = email.trim();
-        if (normalized.length() > 254 || !EMAIL_FORMAT.matcher(normalized).matches()) {
+        String normalized = requireText(email, "email");
+        if (normalized.length() > 254
+                || !EMAIL_FORMAT.matcher(normalized).matches()) {
             throw new IllegalArgumentException("รูปแบบอีเมลไม่ถูกต้อง");
         }
         return normalized;
