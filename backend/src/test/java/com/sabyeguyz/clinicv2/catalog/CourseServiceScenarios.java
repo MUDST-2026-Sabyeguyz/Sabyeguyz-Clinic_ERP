@@ -156,6 +156,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> remainingVisitsIncludesBonusButCommissionRateIgnoresIt() {
         Map<String, Object> out = new LinkedHashMap<>();
         Service template = courseTemplate();
+        template.setDefaultTotalVisits(13);
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE30000010");
@@ -171,6 +172,7 @@ public class CourseServiceScenarios {
 
         out.put("totalVisits", course.getTotalVisits());
         out.put("remainingVisits", course.getRemainingVisits());
+        out.put("bonusVisits", course.getBonusVisits());
         return out;
     }
 
@@ -189,6 +191,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> recordsThePurchaserTheSaleLineAndEntitledVisits() {
         Map<String, Object> out = new LinkedHashMap<>();
         Service template = courseTemplate();
+        template.setDefaultTotalVisits(13);
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE50000010");
@@ -260,6 +263,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> createsTheOwnerMemberAndEntitlementForThePurchaser() {
         Map<String, Object> out = new LinkedHashMap<>();
         Service template = courseTemplate();
+        template.setDefaultTotalVisits(13);
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE60000050");
@@ -283,6 +287,7 @@ public class CourseServiceScenarios {
     public Map<String, Object> recordsThePurchaseLedgerEntryAgainstTheSaleLine() {
         Map<String, Object> out = new LinkedHashMap<>();
         Service template = courseTemplate();
+        template.setDefaultTotalVisits(13);
         template.setDefaultBonusVisits(3);
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE60000060");

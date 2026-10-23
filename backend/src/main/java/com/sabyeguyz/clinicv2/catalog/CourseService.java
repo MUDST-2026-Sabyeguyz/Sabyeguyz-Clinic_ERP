@@ -96,7 +96,6 @@ public class CourseService {
 
         BigDecimal price = transaction.getCommissionableAmount();
         Integer totalVisits = totalVisitsOverride != null ? totalVisitsOverride : serviceTemplate.getDefaultTotalVisits();
-        Integer bonusVisits = bonusVisitsOverride != null ? bonusVisitsOverride : serviceTemplate.getDefaultBonusVisits();
         LocalDate expiryDate = serviceTemplate.expiryFrom(effectiveSaleDate);
         require(totalVisits != null && totalVisits >= 1, "ต้องระบุจำนวนครั้งของคอร์ส");
         require(price != null && price.signum() >= 0, "ราคาคอร์สต้องไม่ติดลบ");
@@ -123,7 +122,7 @@ public class CourseService {
                 .add(price);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySalesToDate);
 
-        int totalUsableVisits = totalVisits + (bonusVisits == null ? 0 : bonusVisits);
+        int totalUsableVisits = totalVisits;
 
         Course course = new Course();
         course.setBranch(transaction.getBranch());
@@ -134,7 +133,8 @@ public class CourseService {
         course.setCourseName(serviceTemplate.getServiceName());
         course.setCoursePrice(price);
         course.setTotalVisits(totalUsableVisits);
-        course.setBonusVisits(bonusVisits);
+        // Total visits already includes promotional sessions.
+        course.setBonusVisits(0);
         course.setExpiryDate(expiryDate);
         course.setCourseStatus(CourseStatus.Active);
         course.setService(serviceTemplate);
