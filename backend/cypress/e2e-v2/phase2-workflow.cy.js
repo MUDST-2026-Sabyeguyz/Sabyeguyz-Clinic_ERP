@@ -14,9 +14,14 @@ describe('phase 2 v2 PostgreSQL acceptance', () => {
     cy.registerPatient().then((patient) => {
       expect(patient.hn).to.match(/^\d{2}01\d{2}\d{4}$/)
       cy.api('GET', `/api/patients/${patient.id}`).its('body.hn').should('equal', patient.hn)
+      cy.configureBookingWindows()
       cy.api('POST', '/api/appointments', {
-        branchCode: '01', patientId: patient.id, therapistId: fx.therapistId,
-        serviceId: fx.serviceId, startAt: `${fx.tomorrow}T09:00:00+07:00`,
+        branchCode: '01',
+        patientId: patient.id,
+        therapistId: fx.therapistId,
+        serviceId: fx.serviceId,
+        startAt: `${fx.tomorrow}T09:00:00+07:00`,
+        endAt: `${fx.tomorrow}T10:00:00+07:00`,
       }).then(({ status, body: appointment }) => {
         expect(status).to.equal(201)
         expect(appointment.patient.id).to.equal(patient.id)
