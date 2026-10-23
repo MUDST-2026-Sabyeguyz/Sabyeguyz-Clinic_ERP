@@ -187,9 +187,9 @@ public class SaleController {
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
 
         String receiptNo = receiptService.nextReceiptNo(branch, ClinicTime.today());
-        Receipt receipt = receiptService.create(receiptNo, patient, branch, ClinicTime.today(), actor.currentId());
-
-        receiptService.assignPaymentLabel(receipt, request.paymentLabelCode());
+        Receipt receipt = receiptService.create(
+                receiptNo, patient, branch, ClinicTime.today(),
+                request.paymentLabelCode(), actor.currentId());
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
         for (ItemRequest item : request.items()) {
