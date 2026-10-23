@@ -110,7 +110,7 @@ describe('v2 course transfer lifecycle', () => {
               .its('status').should('equal', 200)
           })
           coursesOf(friend).its('0.remaining').should('equal', 1)
-          coursesOf(owner).its('0.remaining').should('equal', 4)
+          coursesOf(owner).its('0.remaining').should('equal', purchase.remaining - 2)
         })
       })
     })
