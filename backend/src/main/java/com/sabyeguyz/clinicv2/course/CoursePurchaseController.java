@@ -176,9 +176,10 @@ public class CoursePurchaseController {
         // user's own staff record is the default.
         Staff seller = request.caseOwnerStaffId() == null ? resolveActorStaff() : staffById(request.caseOwnerStaffId());
 
-        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, ClinicTime.today()), patient, branch, ClinicTime.today(),
-                actor.currentId());
-        receiptService.assignPaymentLabel(receipt, request.paymentLabelCode());
+        Receipt receipt = receiptService.create(
+                receiptService.nextReceiptNo(branch, ClinicTime.today()),
+                patient, branch, ClinicTime.today(),
+                request.paymentLabelCode(), actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
                 seller, null, null, null, Discount.of(request.discountType(), request.discountValue()),
                 ClinicTime.today(), actor.currentId());

@@ -94,7 +94,7 @@ public class ReceiptService {
     }
 
     @Transactional
-    public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, Long actorId) {
+    public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, String paymentLabelCode, Long actorId) {
         String no = requireText(receiptNo, "receiptNo");
         if (!no.matches(RECEIPT_NO_FORMAT)) {
             throw new IllegalArgumentException("เลขที่ใบเสร็จต้องอยู่ในรูปแบบ REYYMMNNNN");
@@ -115,6 +115,7 @@ public class ReceiptService {
         receipt.setSaleDate(saleDate == null ? ClinicTime.now() : saleDate.atStartOfDay());
         receipt.setReceiptCreateAt(Instant.now());
         receipt.setReceiptCreateBy(actorId);
+        assignPaymentLabel(receipt, paymentLabelCode);
         return repository.save(receipt);
     }
 
