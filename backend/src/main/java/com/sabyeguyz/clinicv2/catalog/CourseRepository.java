@@ -3,6 +3,7 @@ package com.sabyeguyz.clinicv2.catalog;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
 import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.enums.RefundStatus;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -100,6 +101,7 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             Long staffId, String saleMonth, Long branchId) {
         return sumCreditedSalesForBranch(
                 staffId, saleMonth, branchId,
+                TransactionType.CoursePurchase,
                 ReceiptStatus.Voided, CourseStatus.Cancelled);
     }
 
@@ -107,13 +109,17 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             + "where c.sellerStaff.id = :staffId "
             + "and c.saleMonth = :saleMonth "
             + "and c.branch.id = :branchId "
+            + "and c.saleTransaction.salespersonStaff.id = :staffId "
+            + "and c.saleTransaction.branch.id = :branchId "
             + "and c.saleTransaction.transactionStatus = true "
+            + "and c.saleTransaction.transactionType = :transactionType "
             + "and c.receipt.receiptStatus <> :voided "
             + "and c.courseStatus <> :cancelled")
     BigDecimal sumCreditedSalesForBranch(
             @Param("staffId") Long staffId,
             @Param("saleMonth") String saleMonth,
             @Param("branchId") Long branchId,
+            @Param("transactionType") TransactionType transactionType,
             @Param("voided") ReceiptStatus voided,
             @Param("cancelled") CourseStatus cancelled);
 
@@ -122,6 +128,7 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             Long staffId, String saleMonth, Long branchId) {
         return sumRefundsForBranch(
                 staffId, saleMonth, branchId,
+                TransactionType.CoursePurchase,
                 RefundStatus.Completed,
                 ReceiptStatus.Voided,
                 CourseStatus.Cancelled);
@@ -132,14 +139,18 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             + "where c.sellerStaff.id = :staffId "
             + "and c.saleMonth = :saleMonth "
             + "and c.branch.id = :branchId "
+            + "and c.saleTransaction.salespersonStaff.id = :staffId "
+            + "and c.saleTransaction.branch.id = :branchId "
             + "and i.refund.refundStatus = :refundStatus "
             + "and c.saleTransaction.transactionStatus = true "
+            + "and c.saleTransaction.transactionType = :transactionType "
             + "and c.receipt.receiptStatus <> :voided "
             + "and c.courseStatus <> :cancelled")
     BigDecimal sumRefundsForBranch(
             @Param("staffId") Long staffId,
             @Param("saleMonth") String saleMonth,
             @Param("branchId") Long branchId,
+            @Param("transactionType") TransactionType transactionType,
             @Param("refundStatus") RefundStatus refundStatus,
             @Param("voided") ReceiptStatus voided,
             @Param("cancelled") CourseStatus cancelled);
@@ -175,18 +186,23 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             String saleMonth, Long branchId) {
         return findDistinctCreditedStaffIdsForBranch(
                 saleMonth, branchId,
+                TransactionType.CoursePurchase,
                 ReceiptStatus.Voided, CourseStatus.Cancelled);
     }
 
     @Query("select distinct c.sellerStaff.id from Course c "
             + "where c.saleMonth = :saleMonth "
             + "and c.branch.id = :branchId "
+            + "and c.saleTransaction.salespersonStaff.id = c.sellerStaff.id "
+            + "and c.saleTransaction.branch.id = :branchId "
             + "and c.saleTransaction.transactionStatus = true "
+            + "and c.saleTransaction.transactionType = :transactionType "
             + "and c.receipt.receiptStatus <> :voided "
             + "and c.courseStatus <> :cancelled")
     List<Long> findDistinctCreditedStaffIdsForBranch(
             @Param("saleMonth") String saleMonth,
             @Param("branchId") Long branchId,
+            @Param("transactionType") TransactionType transactionType,
             @Param("voided") ReceiptStatus voided,
             @Param("cancelled") CourseStatus cancelled);
 
