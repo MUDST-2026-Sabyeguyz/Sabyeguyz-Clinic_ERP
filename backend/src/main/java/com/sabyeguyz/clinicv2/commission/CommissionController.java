@@ -95,7 +95,7 @@ public class CommissionController {
 
     public record TierInput(BigDecimal minimum, BigDecimal maximum, BigDecimal rate, int order) {}
     public record SchemeRequest(String name, String version, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                 List<TierInput> tiers) {}
+                                 List<TierInput> tiers, String branchCode) {}
 
     /** createdBy is the name of the user who recorded the version (history of the commission rules). */
     public record SchemeResponse(Long id, String name, int version, LocalDate effectiveFrom, LocalDate effectiveTo,
@@ -138,7 +138,7 @@ public class CommissionController {
                 .toList();
         // the end of a version is set by the system (the day before the next one starts), never by the request
         CommissionScheme scheme = schemeService.create(request.name(), request.effectiveFrom(), null,
-                permission, inputs, actor.currentId());
+                branchAccess.scope(request.branchCode()), permission, inputs, actor.currentId());
         audit.recordChange("commission_scheme", String.valueOf(scheme.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
                 null, schemeSnapshot(scheme), actor.currentId());
         return toSchemeResponse(scheme);
@@ -149,7 +149,7 @@ public class CommissionController {
     public SchemeResponse updateScheme(@PathVariable Long id, @RequestBody SchemeRequest request) {
         java.util.Map<String, Object> before = schemes.findById(id).map(this::schemeSnapshot).orElse(null);
         CommissionScheme scheme = schemeService.update(id, request.name(), request.effectiveFrom(),
-                null, toInputs(request.tiers()), actor.currentId());
+                null, branchAccess.scope(request.branchCode()), toInputs(request.tiers()), actor.currentId());
         audit.recordChange("commission_scheme", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
                 before, schemeSnapshot(scheme), actor.currentId());
         return toSchemeResponse(scheme);
@@ -160,7 +160,7 @@ public class CommissionController {
     @ResponseStatus(HttpStatus.CREATED)
     public SchemeResponse createSchemeVersion(@PathVariable Long id, @RequestBody SchemeRequest request) {
         CommissionScheme scheme = schemeService.createVersion(id, request.effectiveFrom(), null,
-                toInputs(request.tiers()), actor.currentId());
+                branchAccess.scope(request.branchCode()), toInputs(request.tiers()), actor.currentId());
         audit.recordChange("commission_scheme", String.valueOf(scheme.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
                 com.sabyeguyz.clinicv2.audit.AuditLogService.fields("from_scheme_id", id), schemeSnapshot(scheme), actor.currentId());
         return toSchemeResponse(scheme);

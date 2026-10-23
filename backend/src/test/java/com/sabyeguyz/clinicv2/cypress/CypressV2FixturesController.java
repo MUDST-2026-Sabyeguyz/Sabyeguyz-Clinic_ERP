@@ -97,7 +97,8 @@ public class CypressV2FixturesController {
                 + "(4, 80000.00, 89999.99, 0.08), (5, 90000.00, NULL::numeric, 0.10)) AS t(tier_order, lo, hi, rate)");
         jdbc.update("DELETE FROM treatment_fee_rule WHERE treatment_fee_rule_id <> (SELECT MIN(treatment_fee_rule_id) FROM treatment_fee_rule)");
         jdbc.update("UPDATE treatment_fee_rule SET fee_type = 'Fixed'::fee_type_enum, "
-                + "fee_value = 45, effective_to = NULL");
+                + "fee_value = 45, effective_from = DATE '2026-01-01', "
+                + "effective_to = NULL");
         jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL");
         jdbc.update("UPDATE app_user SET user_status = TRUE WHERE username <> 'system'");
         jdbc.update("UPDATE branch SET branch_status = TRUE");
@@ -105,6 +106,78 @@ public class CypressV2FixturesController {
         jdbc.update("UPDATE master_data_value SET value_status = TRUE");
         jdbc.update("UPDATE room SET room_status = TRUE");
         jdbc.update("UPDATE service SET service_status = TRUE");
+    }
+
+    public record FeeFixtureRequest(
+            String feeType,
+            java.math.BigDecimal feeValue) {}
+
+    @PostMapping("/treatment-fee-fixture")
+    public Map<String, Object> treatmentFeeFixture(
+            @org.springframework.web.bind.annotation.RequestBody
+            FeeFixtureRequest request) {
+
+        if ((! "Fixed".equals(request.feeType())
+                && ! "Percentage".equals(request.feeType()))
+                || request.feeValue() == null
+                || request.feeValue().signum() < 0
+                || request.feeValue().scale() > 2
+                || ("Percentage".equals(request.feeType())
+                && request.feeValue().compareTo(
+                new java.math.BigDecimal("100")) > 0)) {
+            throw new IllegalArgumentException("ข้อมูลค่ามือทดสอบไม่ถูกต้อง");
+        }
+
+        if (id("SELECT COUNT(*) FROM course_visit_usage") > 0
+                || id("SELECT COUNT(*) FROM single_visit_fee_ledger") > 0
+                || id("SELECT COUNT(*) FROM commission_allocation_ledger") > 0
+                || id("SELECT COUNT(*) FROM treatment_fee_rule") != 1) {
+            throw new IllegalStateException(
+                    "ต้องเตรียม fixture ก่อนใช้สิทธิ์หรือคำนวณค่ามือ");
+        }
+
+        int updated = jdbc.update(
+                "UPDATE treatment_fee_rule "
+                        + "SET fee_type = ?::fee_type_enum, fee_value = ?",
+                request.feeType(),
+                request.feeValue());
+
+        return Map.of("updated", updated);
+    }
+
+    public record FeeAvailabilityFixtureRequest(Boolean available) {}
+
+    @PostMapping("/treatment-fee-availability-fixture")
+    public Map<String, Object> treatmentFeeAvailabilityFixture(
+            @org.springframework.web.bind.annotation.RequestBody
+            FeeAvailabilityFixtureRequest request) {
+
+        if (request.available() == null) {
+            throw new IllegalArgumentException("ต้องระบุ available");
+        }
+
+        if (id("SELECT COUNT(*) FROM course_visit_usage") > 0
+                || id("SELECT COUNT(*) FROM single_visit_fee_ledger") > 0
+                || id("SELECT COUNT(*) FROM commission_allocation_ledger") > 0
+                || id("SELECT COUNT(*) FROM treatment_fee_rule") != 1) {
+            throw new IllegalStateException(
+                    "ต้องเตรียม fixture ก่อนใช้สิทธิ์หรือคำนวณค่ามือ");
+        }
+
+        LocalDate start =
+                com.sabyeguyz.clinicv2.config.ClinicTime.today()
+                        .withDayOfMonth(1);
+
+        if (!request.available()) {
+            start = start.plusMonths(1);
+        }
+
+        int updated = jdbc.update(
+                "UPDATE treatment_fee_rule "
+                        + "SET effective_from = ?, effective_to = NULL",
+                java.sql.Date.valueOf(start));
+
+        return Map.of("updated", updated);
     }
 
     private long id(String sql) {
