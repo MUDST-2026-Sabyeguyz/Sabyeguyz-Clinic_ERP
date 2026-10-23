@@ -149,9 +149,10 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
   it('links a session to a treatment of the same visit, PT and service, and refuses any other', function () {
     template('ACC13', 10000, 13).then((courseId) => {
       cy.registerPatient().then((patient) => buy(this.fixtures, patient, courseId, this.fixtures.managerStaffId).then((course) => {
+        cy.configureBookingWindows()
         cy.api('POST', '/api/appointments', {
           branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, serviceId: this.fixtures.serviceId,
-          startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`,
+          startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`, endAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
         }).then(({ body: appointment }) => {
           cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)
           const treatment = (extra) => cy.api('POST', '/api/treatments', {

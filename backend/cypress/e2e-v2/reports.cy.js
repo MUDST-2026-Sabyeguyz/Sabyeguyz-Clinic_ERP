@@ -40,9 +40,14 @@ describe('v2 reports', () => {
 
   it('counts appointments by status', function () {
     cy.registerPatient().then((patient) => {
+      cy.configureBookingWindows()
       cy.api('POST', '/api/appointments', {
-        branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId,
-        serviceId: this.fixtures.serviceId, startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`,
+        branchCode: '01',
+        patientId: patient.id,
+        therapistId: this.fixtures.therapistId,
+        serviceId: this.fixtures.serviceId,
+        startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`,
+        endAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
       }).its('status').should('equal', 201)
       cy.api('GET', `/api/reports/appointments${range}`).then(({ body }) => {
         expect(body.appointments).to.equal(1)

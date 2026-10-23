@@ -3,7 +3,12 @@
 const friendPayload = { firstName: 'ปลายทาง', phone: '0822222222', identityNumber: '1100000000102' }
 
 const buy = (fx, patient) =>
-  cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: fx.courseId, branchCode: '01' })
+    cy.api('POST', '/api/course-purchases', {
+      patientId: patient.id,
+      courseId: fx.courseId,
+      branchCode: '01',
+      paymentLabelCode: 'FULL',
+    })
 const coursesOf = (patient) => cy.api('GET', `/api/patients/${patient.id}/courses`).its('body')
 const transfer = (purchase, friend, quantity) =>
   cy.api('POST', '/api/course-transfers', {
@@ -90,9 +95,14 @@ describe('v2 course transfer lifecycle', () => {
       cy.registerPatient(friendPayload).then((friend) => {
         buy(this.fixtures, owner).then(({ body: purchase }) => {
           transfer(purchase, friend, 2).its('status').should('equal', 201)
+          cy.configureBookingWindows()
           cy.api('POST', '/api/appointments', {
-            branchCode: '01', patientId: friend.id, therapistId: this.fixtures.therapistId,
-            serviceId: this.fixtures.serviceId, startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`,
+            branchCode: '01',
+            patientId: friend.id,
+            therapistId: this.fixtures.therapistId,
+            serviceId: this.fixtures.serviceId,
+            startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`,
+            endAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
           }).then(({ status, body: appointment }) => {
             expect(status, JSON.stringify(appointment)).to.equal(201)
             cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)

@@ -157,10 +157,13 @@ public class CalendarSyncService {
                 + "ผู้ให้บริการ: " + appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname() + "\n"
                 + "สถานะ: " + appointment.getAppointmentStatus().name() + "\n"
                 + "(จัดการนัดหมายในระบบ Clinic ERP — การเลื่อนเวลาหรือยกเลิกใน Google จะสะท้อนกลับมาที่ระบบ)";
-        return new EventData(appointment.getId(), (prefix + who + " - " + service).trim(), description,
-                appointment.getBranch().getBranchName(), start,
-                appointment.getAppointmentEndAt() == null ? start.plusMinutes(properties.getDefaultDurationMinutes())
-                        : appointment.getAppointmentEndAt(),
+        return new EventData(
+                appointment.getId(),
+                (prefix + who + " - " + service).trim(),
+                description,
+                appointment.getBranch().getBranchName(),
+                start,
+                appointment.getAppointmentEndAt(),
                 properties.getTimeZone());
     }
 

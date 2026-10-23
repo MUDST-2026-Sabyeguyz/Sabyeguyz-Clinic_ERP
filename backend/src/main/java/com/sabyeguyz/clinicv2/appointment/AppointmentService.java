@@ -9,6 +9,7 @@ import com.sabyeguyz.clinicv2.enums.RequestedServiceType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.resource.Room;
 import com.sabyeguyz.clinicv2.staff.Staff;
+import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -20,10 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class AppointmentService {
     private final AppointmentRepository appointments;
     private final AppointmentStatusHistoryRepository history;
+    private final StaffRepository staffRepository;
 
-    public AppointmentService(AppointmentRepository appointments, AppointmentStatusHistoryRepository history) {
+    public AppointmentService(AppointmentRepository appointments, AppointmentStatusHistoryRepository history, StaffRepository staffRepository) {
         this.appointments = appointments;
         this.history = history;
+        this.staffRepository = staffRepository;
     }
 
     @Transactional(readOnly = true)
@@ -49,19 +52,33 @@ public class AppointmentService {
                 AppointmentStatus.Confirmed, actorId);
     }
 
+    @Transactional
+    public Appointment book(
+            Patient patient, Branch branch, Staff staff,
+            Service service, Room room,
+            LocalDate appointmentDate, LocalTime appointmentTime,
+            AppointmentStatus initialStatus, Long actorId) {
+        return book(
+                patient, branch, staff, service, room,
+                appointmentDate, appointmentTime,
+                endAt(appointmentDate, appointmentTime, service, branch),
+                initialStatus, actorId);
+    }
+
     /** Books a registered (CURRENT) patient; a new booking starts Unconfirmed or Confirmed. */
     @Transactional
     public Appointment book(Patient patient, Branch branch, Staff staff, Service service, Room room,
-                             LocalDate appointmentDate, LocalTime appointmentTime, AppointmentStatus initialStatus,
-                             Long actorId) {
+                            LocalDate appointmentDate, LocalTime appointmentTime, java.time.LocalDateTime appointmentEndAt,
+                            AppointmentStatus initialStatus, Long actorId) {
         require(patient != null, "ต้องระบุผู้ป่วย");
         require(branch != null, "ต้องระบุสาขา");
         require(staff != null, "ต้องระบุผู้ให้บริการ");
         require(appointmentDate != null, "ต้องระบุวันที่นัด");
         require(appointmentTime != null, "ต้องระบุเวลานัด");
+        java.time.LocalDateTime bookingEnd = requireEndAt(appointmentDate, appointmentTime, appointmentEndAt);
         requireFuture(appointmentDate, appointmentTime);
         requireNoConflict(staff.getId(), appointmentDate, appointmentTime, null);
-        requireSlotFits(branch, staff, service, appointmentDate, appointmentTime, null);
+        requireSlotFits(branch, staff, appointmentDate, appointmentTime, bookingEnd, null);
 
         Appointment appointment = new Appointment();
         appointment.setPatient(patient);
@@ -71,7 +88,7 @@ public class AppointmentService {
         appointment.setRoom(room);
         appointment.setAppointmentDate(appointmentDate);
         appointment.setAppointmentTime(appointmentTime);
-        appointment.setAppointmentEndAt(endAt(appointmentDate, appointmentTime, service, branch));
+        appointment.setAppointmentEndAt(bookingEnd);
         appointment.setAppointmentPatientType(AppointmentPatientType.CURRENT);
         appointment.setAppointmentStatus(requireInitialStatus(initialStatus));
         appointment.setAppointmentCreateAt(Instant.now());
@@ -94,10 +111,26 @@ public class AppointmentService {
     }
 
     @Transactional
+    public Appointment bookNewPatient(
+            String contactName, String contactPhone,
+            Branch branch, Staff staff,
+            RequestedServiceType requestedServiceType,
+            Service service, Room room,
+            LocalDate appointmentDate, LocalTime appointmentTime,
+            AppointmentStatus initialStatus, Long actorId) {
+        return bookNewPatient(
+                contactName, contactPhone, branch, staff,
+                requestedServiceType, service, room,
+                appointmentDate, appointmentTime,
+                endAt(appointmentDate, appointmentTime, service, branch),
+                initialStatus, actorId);
+    }
+
+    @Transactional
     public Appointment bookNewPatient(String contactName, String contactPhone, Branch branch, Staff staff,
-                                       RequestedServiceType requestedServiceType, Service service, Room room,
-                                       LocalDate appointmentDate, LocalTime appointmentTime,
-                                       AppointmentStatus initialStatus, Long actorId) {
+                                      RequestedServiceType requestedServiceType, Service service, Room room,
+                                      LocalDate appointmentDate, LocalTime appointmentTime, java.time.LocalDateTime appointmentEndAt,
+                                      AppointmentStatus initialStatus, Long actorId) {
         String name = contactName == null ? "" : contactName.trim();
         String phone = contactPhone == null || contactPhone.isBlank() ? null : contactPhone.trim();
         require(!name.isEmpty(), "ต้องระบุชื่อ-นามสกุล หรือชื่อเล่นของผู้ป่วยใหม่");
@@ -108,9 +141,10 @@ public class AppointmentService {
         require(staff != null, "ต้องระบุผู้ให้บริการ");
         require(appointmentDate != null, "ต้องระบุวันที่นัด");
         require(appointmentTime != null, "ต้องระบุเวลานัด");
+        java.time.LocalDateTime bookingEnd = requireEndAt(appointmentDate, appointmentTime, appointmentEndAt);
         requireFuture(appointmentDate, appointmentTime);
         requireNoConflict(staff.getId(), appointmentDate, appointmentTime, null);
-        requireSlotFits(branch, staff, service, appointmentDate, appointmentTime, null);
+        requireSlotFits(branch, staff, appointmentDate, appointmentTime, bookingEnd, null);
 
         Appointment appointment = new Appointment();
         appointment.setPatient(null);
@@ -124,7 +158,7 @@ public class AppointmentService {
         appointment.setRoom(room);
         appointment.setAppointmentDate(appointmentDate);
         appointment.setAppointmentTime(appointmentTime);
-        appointment.setAppointmentEndAt(endAt(appointmentDate, appointmentTime, service, branch));
+        appointment.setAppointmentEndAt(bookingEnd);
         appointment.setAppointmentStatus(requireInitialStatus(initialStatus));
         appointment.setAppointmentCreateAt(Instant.now());
         appointment.setAppointmentCreateBy(actorId);
@@ -173,26 +207,52 @@ public class AppointmentService {
         return reschedule(getForUpdate(id), branch, staff, service, newDate, newTime, reason, actorId);
     }
 
+    @Transactional
+    public Appointment reschedule(Long id, Branch branch, Staff staff, Service service, LocalDate newDate, LocalTime newTime,
+                                  java.time.LocalDateTime appointmentEndAt, String reason, Long actorId) {
+        return reschedule(
+                getForUpdate(id), branch, staff, service,
+                newDate, newTime, appointmentEndAt, reason, actorId);
+    }
+
     private Appointment reschedule(Appointment appointment, Branch branch, Staff staff, Service service,
                                    LocalDate newDate, LocalTime newTime, String reason, Long actorId) {
+        java.time.LocalDateTime originalStart =
+                appointment.getAppointmentDate()
+                        .atTime(appointment.getAppointmentTime());
+        java.time.LocalDateTime originalEnd = requireEndAt(
+                appointment.getAppointmentDate(),
+                appointment.getAppointmentTime(),
+                appointment.getAppointmentEndAt());
+        java.time.LocalDateTime movedEnd = newDate.atTime(newTime)
+                .plus(java.time.Duration.between(originalStart, originalEnd));
+        return reschedule(
+                appointment, branch, staff, service,
+                newDate, newTime, movedEnd, reason, actorId);
+    }
+
+    private Appointment reschedule(Appointment appointment, Branch branch, Staff staff, Service service,
+                                   LocalDate newDate, LocalTime newTime, java.time.LocalDateTime appointmentEndAt,
+                                   String reason, Long actorId) {
         requireNotTerminal(appointment);
         require(branch != null, "ต้องระบุสาขา");
         require(staff != null, "ต้องระบุนักกายภาพ");
         require(branch.getId().equals(staff.getBranch().getId()), "นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
         require(newDate != null, "ต้องระบุวันที่นัดใหม่");
         require(newTime != null, "ต้องระบุเวลานัดใหม่");
+        java.time.LocalDateTime bookingEnd = requireEndAt(newDate, newTime, appointmentEndAt);
         if (!newDate.equals(appointment.getAppointmentDate()) || !newTime.equals(appointment.getAppointmentTime())) {
             requireFuture(newDate, newTime);
         }
         requireNoConflict(staff.getId(), newDate, newTime, appointment.getId());
-        requireSlotFits(branch, staff, service, newDate, newTime, appointment.getId());
+        requireSlotFits(branch, staff, newDate, newTime, bookingEnd, appointment.getId());
 
         appointment.setBranch(branch);
         appointment.setStaff(staff);
         appointment.setService(service);
         appointment.setAppointmentDate(newDate);
         appointment.setAppointmentTime(newTime);
-        appointment.setAppointmentEndAt(endAt(newDate, newTime, service, branch));
+        appointment.setAppointmentEndAt(bookingEnd);
         changeStatus(appointment, AppointmentStatus.Confirmed, reason, actorId);
         appointment.setAppointmentUpdateAt(Instant.now());
         appointment.setAppointmentUpdateBy(actorId);
@@ -289,6 +349,15 @@ public class AppointmentService {
         return branch == null ? null : branch.getDefaultAppointmentMinutes();
     }
 
+    private static java.time.LocalDateTime requireEndAt(LocalDate date, LocalTime time, java.time.LocalDateTime appointmentEndAt) {
+        require(date != null, "ต้องระบุวันที่นัด");
+        require(time != null, "ต้องระบุเวลานัด");
+        require(appointmentEndAt != null, "ต้องระบุเวลาจบนัด");
+        require(appointmentEndAt.isAfter(date.atTime(time)),
+                "เวลาจบนัดต้องอยู่หลังเวลาเริ่มนัด");
+        return appointmentEndAt;
+    }
+
     private static java.time.LocalDateTime endAt(LocalDate date, LocalTime time, Service service, Branch branch) {
         Integer minutes = effectiveMinutes(service, branch);
         return minutes == null ? null : date.atTime(time).plusMinutes(minutes);
@@ -300,26 +369,41 @@ public class AppointmentService {
     }
 
     /** The slot must be inside the branch's booking window and must not overlap another appointment of the therapist. */
-    private void requireSlotFits(Branch branch, Staff staff, Service service, LocalDate date, LocalTime time,
-                                  Long excludingAppointmentId) {
-        Integer minutes = effectiveMinutes(service, branch);
-        LocalTime open = branch == null ? null : branch.getBookingOpenTime();
-        LocalTime close = branch == null ? null : branch.getBookingCloseTime();
-        int length = minutes == null ? 0 : minutes;
-        if (open != null && close != null) {
-            LocalTime end = time.plusMinutes(length);
-            if (time.isBefore(open) || end.isBefore(time) || end.isAfter(close)) {
-                throw new IllegalArgumentException("เวลานัดอยู่นอกช่วงเปิดรับนัดของสาขา (" + open + "-" + close + ")");
-            }
+    private void requireSlotFits(Branch branch, Staff staff, Service service, LocalDate date, LocalTime time, Long excludingAppointmentId) {
+        requireSlotFits(
+                branch, staff, date, time,
+                endAt(date, time, service, branch),
+                excludingAppointmentId);
+    }
+    private void requireSlotFits(Branch branch, Staff staff, LocalDate date, LocalTime time, java.time.LocalDateTime appointmentEndAt, Long excludingAppointmentId) {
+        java.time.LocalDateTime start = date.atTime(time);
+        java.time.LocalDateTime end = requireEndAt(date, time, appointmentEndAt);
+
+        require(branch != null, "ต้องระบุสาขา");
+        require(staff != null && staff.getId() != null, "ต้องระบุนักกายภาพ");
+
+        Staff lockedStaff = staffRepository.findByIdForUpdate(staff.getId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบนักกายภาพ"));
+
+        require(lockedStaff.getBranch() != null
+                        && branch.getId().equals(lockedStaff.getBranch().getId()),
+                "นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
+
+        LocalTime open = branch.getBookingOpenTime();
+        LocalTime close = branch.getBookingCloseTime();
+        require(open != null && close != null, "ต้องกำหนดช่วงเปิดรับนัดของสาขาก่อน");
+
+        if (start.isBefore(date.atTime(open)) || end.isAfter(date.atTime(close))) {
+            throw new IllegalArgumentException("เวลานัดอยู่นอกช่วงเปิดรับนัดของสาขา");
         }
-        if (minutes == null || staff == null || staff.getId() == null) return;
-        int start = time.getHour() * 60 + time.getMinute();
-        for (Appointment other : appointments.activeOfStaffOnDate(staff.getId(), date, AppointmentStatus.slotReleasing())) {
-            if (other.getId() != null && other.getId().equals(excludingAppointmentId)) continue;
-            Integer otherMinutes = effectiveMinutes(other.getService(), other.getBranch());
-            LocalTime otherTime = other.getAppointmentTime();
-            int otherStart = otherTime.getHour() * 60 + otherTime.getMinute();
-            if (overlaps(start, length, otherStart, otherMinutes == null ? 0 : otherMinutes)) {
+
+        for (Appointment other : appointments.activeOfStaffForInterval(staff.getId(), start, end.toLocalDate(), AppointmentStatus.slotReleasing())) {
+            if (other.getId() != null && other.getId().equals(excludingAppointmentId)) {
+                continue;
+            }
+            java.time.LocalDateTime otherStart = other.getAppointmentDate().atTime(other.getAppointmentTime());
+            java.time.LocalDateTime otherEnd = other.getAppointmentEndAt();
+            if (otherStart.isBefore(end) && start.isBefore(otherEnd)) {
                 throw new IllegalArgumentException("ผู้ให้บริการไม่ว่างในช่วงเวลาที่เลือก (ทับกับนัดอื่น)");
             }
         }
