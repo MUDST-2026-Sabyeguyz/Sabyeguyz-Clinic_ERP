@@ -237,7 +237,7 @@ public class SaleController {
     public Detail reverse(@PathVariable Long id, @RequestBody ReverseRequest request) {
         SalesTransaction transaction = findTransaction(id);
         branchAccess.requireAccess(transaction.getBranch(), "ยกเลิกได้เฉพาะรายการของสาขาตัวเอง รายการต่างสาขาดูรายละเอียดได้อย่างเดียว");
-        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        Permission permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         cancellations.voidSale(transaction, permission, request.reason(), actor.currentId());
         audit.record("sales_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "PAID", "VOIDED: " + request.reason(),
                 actor.currentId());
