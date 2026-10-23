@@ -343,7 +343,7 @@ public class CoursePurchaseController {
         return new Response(course.getId(), purchaser, purchaser,
                 course.getReceipt().getBranch().getBranchCode(),
                 new CourseSummary(course.getService().getId(), course.getCourseNo(), course.getCourseName()),
-                course.getCoursePrice(), course.getPaidVisits(), course.getBonusVisits() == null ? 0 : course.getBonusVisits(),
+                course.getCoursePrice(), course.getTotalVisits(), 0,
                 course.getTotalVisits(),
                 course.getVisitsUsed(), (int) remaining,
                 course.getCourseCreateAt(), course.getExpiryDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
