@@ -93,6 +93,7 @@ describe('Clinic v2 commission and sale services', () => {
     'schemecrud-create': 'createsASchemeWithItsTiers',
     'schemecrud-next-version': 'nextVersionIncrementsFromTheLatestExistingScheme',
     'schemecrud-different-name-version': 'incrementsVersionAcrossDifferentSchemeNames',
+    'schemecrud-other-branch-open': 'allowsNewSchemeWithoutWaitingForOtherBranches',
     'schemecrud-update-keeps-tiers': 'updateOnlyTouchesNameAndDatesNeverTiers',
   }
   const cases = [
@@ -151,6 +152,7 @@ describe('Clinic v2 commission and sale services', () => {
     ['schemecrud-create', { version: 1, tiersSaved: 2, firstRate: 0.05 }],
     ['schemecrud-next-version', { version: 2, predecessorEnds: '2026-12-31' }],
     ['schemecrud-different-name-version', {version: 8, originalVersion: 7, lockCalls: 1,}],
+    ['schemecrud-other-branch-open', { version: 2, globalOpenChecks: 0 }],
     ['schemecrud-update-keeps-tiers', { name: 'Renamed', tiersSaveCallsDuringUpdate: 0 }],
   ]
   cases.forEach(([scenario, expected]) => {
@@ -213,6 +215,7 @@ describe('Clinic v2 commission and sale services', () => {
   // schemeCrud(), so their IllegalArgumentException is caught one level down:
   // the outer run() wraps that already-caught result in its own {value: ...}.
   const nestedFailures = [
+    ['schemecrud-branch-open', 'rejectsCreatingASchemeWhileSelectedBranchIsOpen', 'IllegalStateException'],
     ['schemecrud-overlap', 'rejectsOverlappingTierRanges', 'IllegalArgumentException'],
     ['schemecrud-gap', 'rejectsAGapBetweenTierRanges', 'IllegalArgumentException'],
     ['schemecrud-bad-whole-baht', 'rejectsWholeBahtTiersThatLeaveSatangUncovered', 'IllegalArgumentException'],

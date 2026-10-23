@@ -34,6 +34,7 @@ public class CommissionSchemeService {
     private final CommissionTierRepository tiers;
     private final CourseRepository courses;
     private final MonthlyCommissionClosingRepository closings;
+    private final BranchClosingGuard branchClosingGuard;
 
     private com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
@@ -43,11 +44,12 @@ public class CommissionSchemeService {
     }
 
     public CommissionSchemeService(CommissionSchemeRepository schemes, CommissionTierRepository tiers,
-                                    CourseRepository courses, MonthlyCommissionClosingRepository closings) {
+                                    CourseRepository courses, MonthlyCommissionClosingRepository closings, BranchClosingGuard branchClosingGuard) {
         this.schemes = schemes;
         this.tiers = tiers;
         this.courses = courses;
         this.closings = closings;
+        this.branchClosingGuard = branchClosingGuard;
     }
 
     @Transactional(readOnly = true)
@@ -70,8 +72,10 @@ public class CommissionSchemeService {
 
     @Transactional
     public CommissionScheme create(String schemeName, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                    Permission permission, List<TierInput> tierInputs, Long actorId) {
+                                   com.sabyeguyz.clinicv2.branch.Branch branch, Permission permission,
+                                   List<TierInput> tierInputs, Long actorId) {
         validate(schemeName, effectiveFrom, effectiveTo, tierInputs);
+        branchClosingGuard.requireCurrentMonthClosed(branch);
         validateTiers(tierInputs);
         schemes.lockVersionAllocation();
         requireNoOtherPending(null, effectiveFrom);
@@ -100,7 +104,8 @@ public class CommissionSchemeService {
      */
     @Transactional
     public CommissionScheme update(Long id, String schemeName, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                    List<TierInput> tierInputs, Long actorId) {
+                                   com.sabyeguyz.clinicv2.branch.Branch branch, List<TierInput> tierInputs, Long actorId) {
+        branchClosingGuard.requireCurrentMonthClosed(branch);
         CommissionScheme scheme = find(id);
         if (tierInputs != null && tierInputs.isEmpty()) {
             tierInputs = null; // an empty list means "tiers unchanged"
@@ -176,9 +181,10 @@ public class CommissionSchemeService {
     /** A new version of an existing scheme with new tiers; it takes over from {@code effectiveFrom}. */
     @Transactional
     public CommissionScheme createVersion(Long id, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                           List<TierInput> tierInputs, Long actorId) {
+                                          com.sabyeguyz.clinicv2.branch.Branch branch,
+                                          List<TierInput> tierInputs, Long actorId) {
         CommissionScheme base = find(id);
-        return create(base.getSchemeName(), effectiveFrom, effectiveTo, base.getPermission(), tierInputs, actorId);
+        return create(base.getSchemeName(), effectiveFrom, effectiveTo, branch, base.getPermission(), tierInputs, actorId);
     }
 
     /** Removes an unused scheme; a scheme already referenced by a course or closing must remain immutable. */
@@ -193,17 +199,11 @@ public class CommissionSchemeService {
     }
 
     /**
-     * New tiers are a new cycle's rules: they start on the first day of a month after the current one, and only once the
-     * commission of the current cycle (and any earlier one) has been closed, so no course is priced under two rule sets.
+     * Validates the effective date.
+     * The selected branch closing is checked by create/update.
      */
     private void requireNextCycle(LocalDate effectiveFrom) {
         requireFutureCycleStart(effectiveFrom);
-        java.time.YearMonth current = java.time.YearMonth.from(com.sabyeguyz.clinicv2.config.ClinicTime.today());
-        long open = courses.countOpenCommissionUpToMonth(current.toString());
-        if (open > 0) {
-            throw new IllegalStateException("ต้องปิดยอดคอมมิชชันของรอบปัจจุบันก่อน (ยังมี " + open
-                    + " คอร์สที่ยังไม่ปิดยอดถึงเดือน " + current + ") จึงจะสร้างเวอร์ชันใหม่ได้");
-        }
     }
 
     private void saveTiers(CommissionScheme scheme, Permission permission, List<TierInput> inputs, Long actorId) {
