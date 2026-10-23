@@ -676,20 +676,47 @@ public class V2FinanceScenarios {
                 "status", result.isPaymentStatus());
     }
     private Object receipt(String scenario) {
-        var repository = new V2RepositoryStub<>(ReceiptRepository.class).on("findByReceiptNoAndBranchId",
-                a -> scenario.equals("receipt-duplicate") ? Optional.of(new Receipt()) : Optional.empty());
-        var service = new ReceiptService(repository.proxy(), new V2RepositoryStub<>(CourseRepository.class).proxy(),
-                new V2RepositoryStub<>(PaymentLabelOptionRepository.class).proxy());
+        var repository = new V2RepositoryStub<>(ReceiptRepository.class)
+                .on("findByReceiptNoAndBranchId",
+                        a -> scenario.equals("receipt-duplicate")
+                                ? Optional.of(new Receipt())
+                                : Optional.empty());
+
+        PaymentLabelOption label = new PaymentLabelOption() {
+            @Override
+            public String getCode() {
+                return "FULL";
+            }
+        };
+
+        var labels = new V2RepositoryStub<>(PaymentLabelOptionRepository.class)
+                .on("findByCode", a -> Optional.of(label));
+
+        var service = new ReceiptService(
+                repository.proxy(),
+                new V2RepositoryStub<>(CourseRepository.class).proxy(),
+                labels.proxy());
+
         if (scenario.equals("receipt-next-no")) {
             repository.on("findMaxReceiptSequence", a -> 41);
             return service.nextReceiptNo();
         }
         if (scenario.equals("receipt-bad-format")) {
-            return service.create("RE2600001",new Patient(),new Branch(),LocalDate.of(2026,8,18),1L);
+            return service.create(
+                    "RE2600001", new Patient(), new Branch(),
+                    LocalDate.of(2026, 8, 18), "FULL", 1L);
         }
-        if (scenario.startsWith("receipt-totals")) return receiptTotals(scenario, service);
-        var result = service.create("RE26000010",new Patient(),new Branch(),LocalDate.of(2026,8,18),1L);
-        return Map.of("number",result.getReceiptNo(),"date",result.getSaleDate());
+        if (scenario.startsWith("receipt-totals")) {
+            return receiptTotals(scenario, service);
+        }
+
+        var result = service.create(
+                "RE26000010", new Patient(), new Branch(),
+                LocalDate.of(2026, 8, 18), "FULL", 1L);
+
+        return Map.of(
+                "number", result.getReceiptNo(),
+                "date", result.getSaleDate());
     }
     private Object receiptTotals(String scenario, ReceiptService service) {
         boolean rounding = scenario.equals("receipt-totals-rounding");
