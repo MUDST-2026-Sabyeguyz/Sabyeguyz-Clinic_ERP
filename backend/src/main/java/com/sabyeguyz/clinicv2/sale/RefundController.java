@@ -62,7 +62,7 @@ public class RefundController {
         PaymentMethod method = request.paymentMethodCode() == null ? null
                 : paymentMethods.findByMethodNameIgnoreCase(request.paymentMethodCode())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
-        var permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        var permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         RefundTransaction refund = refundService.request(payment, request.amount(), method, permission,
                 request.reason(), actor.currentId(), request.items());
         audit.record("refund_transaction", String.valueOf(refund.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
@@ -77,6 +77,7 @@ public class RefundController {
 
     @PostMapping("/api/refunds/{id}/complete")
     public Response complete(@PathVariable Long id) {
+        permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         RefundTransaction refund = refundService.complete(id, actor.currentId());
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Completed", actor.currentId());
         return toResponse(refund);
@@ -84,6 +85,7 @@ public class RefundController {
 
     @PostMapping("/api/refunds/{id}/void")
     public Response voidRequest(@PathVariable Long id) {
+        permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         RefundTransaction refund = refundService.voidRequest(id);
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Voided", actor.currentId());
         return toResponse(refund);
@@ -91,6 +93,7 @@ public class RefundController {
 
     @PostMapping("/api/refunds/{id}/fail")
     public Response fail(@PathVariable Long id) {
+        permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         RefundTransaction refund = refundService.fail(id);
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Failed", actor.currentId());
         return toResponse(refund);
