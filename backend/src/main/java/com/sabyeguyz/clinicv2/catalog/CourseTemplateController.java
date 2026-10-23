@@ -109,13 +109,13 @@ public class CourseTemplateController {
         boolean changed = !Objects.equals(existing.getServiceName(), request.name())
                 || existing.getServicePrice().compareTo(request.price()) != 0
                 || !Objects.equals(existing.getDefaultTotalVisits(), request.sessions())
-                || !Objects.equals(existing.getDefaultBonusVisits(), request.bonusSessions() == null ? 0 : request.bonusSessions())
+                || !Objects.equals(existing.getDefaultBonusVisits(), 0)
                 || !Objects.equals(existing.getDefaultValidityValue(), request.validity())
                 || existing.getDefaultValidityUnit() != request.unit();
         existing.setServiceName(request.name());
         existing.setServicePrice(request.price());
         existing.setDefaultTotalVisits(request.sessions());
-        existing.setDefaultBonusVisits(request.bonusSessions() == null ? 0 : request.bonusSessions());
+        existing.setDefaultBonusVisits(0);
         existing.setDefaultValidityValue(request.validity());
         existing.setDefaultValidityUnit(request.unit());
         existing.setDefaultAppointmentMinutes(request.duration());
@@ -143,7 +143,7 @@ public class CourseTemplateController {
     private static Response toResponse(Service s) {
         return new Response(s.getId(), s.getServiceCode(), s.getServiceName(), s.getServicePrice(),
                 s.getDefaultTotalVisits() == null ? 0 : s.getDefaultTotalVisits(),
-                s.getDefaultBonusVisits() == null ? 0 : s.getDefaultBonusVisits(),
+                0, // Sessions already includes promotional sessions.
                 s.getDefaultValidityDays() == null ? 0 : s.getDefaultValidityDays(), s.isServiceStatus(),
                 s.getDefaultValidityValue() == null ? 0 : s.getDefaultValidityValue(),
                 s.getDefaultValidityUnit() == null ? "Day" : s.getDefaultValidityUnit().name(),
