@@ -34,6 +34,7 @@ describe('v2 multiple course usages in one Visit', () => {
         cy.registerPatient().then((patient) =>
             buy(fx, patient).then((course) =>
                 cy.createServiceAppointment(fx, patient.id).then((appointment) => {
+                    const beforeUsage = Date.now()
                     batch(fx, patient, course, appointment, 2)
                         .then(({ status, body }) => {
                             expect(status).to.equal(200)
@@ -46,8 +47,12 @@ describe('v2 multiple course usages in one Visit', () => {
                         expect(rows).to.have.length(2)
                         expect(rows[0].visit_id).to.be.a('number')
                         expect(rows[1].visit_id).to.equal(rows[0].visit_id)
-                        expect(rows.map((row) => row.usage_sequence))
-                            .to.deep.equal([1, 2])
+                        expect(rows.map((row) => row.usage_sequence)).to.deep.equal([1, 2])
+                        const usedAt = new Date(
+                            rows[0].visit_date.replace(' ', 'T') + '+07:00'
+                        ).getTime()
+                        expect(usedAt, 'actual usage time in Bangkok').to.be.within(beforeUsage - 1000, Date.now() + 1000)
+                        expect(rows[1].visit_date).to.equal(rows[0].visit_date)
                     })
 
                     cy.api('GET', `/api/appointments/${appointment.id}`)
@@ -95,7 +100,7 @@ describe('v2 multiple course usages in one Visit', () => {
             )
         )
     })
-    
+
     it('uses two courses in one Visit and rejects inconsistent patient details', function () {
         const fx = this.fixtures
 

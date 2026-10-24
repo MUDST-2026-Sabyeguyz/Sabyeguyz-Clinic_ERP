@@ -298,7 +298,7 @@ public class CoursePurchaseController {
                         new IllegalArgumentException("ไม่พบผู้ป่วย"));
 
         PatientVisit visit = visitService.createForService(first.appointmentId(), usingPatient, branch, treating, actor.currentId());
-        LocalDate serviceDate = ClinicTime.today();
+        java.time.LocalDateTime serviceDate = ClinicTime.now();
 
         for (UseRequest item : requests) {
             Course course = lockedCourses.get(item.coursePurchaseId());
