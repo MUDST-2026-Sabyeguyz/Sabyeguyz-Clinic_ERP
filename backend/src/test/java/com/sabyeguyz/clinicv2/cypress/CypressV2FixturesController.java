@@ -73,6 +73,7 @@ public class CypressV2FixturesController {
     private void resetReferenceData() {
         String seedUsers = "('system', 'manager', 'therapist', 'therapist2')";
         String seedBranches = "('01', '02')";
+        jdbc.update("DELETE FROM user_permission");
         jdbc.update("DELETE FROM user_role WHERE user_id IN (SELECT user_id FROM app_user WHERE username NOT IN " + seedUsers + ")");
         jdbc.update("DELETE FROM user_branch_access WHERE user_id IN (SELECT user_id FROM app_user WHERE username NOT IN " + seedUsers + ")");
         jdbc.update("DELETE FROM app_user WHERE username NOT IN " + seedUsers);
