@@ -14,6 +14,7 @@ import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.role.PermissionService;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
+import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -99,9 +100,9 @@ public class SaleController {
                                BigDecimal discountValue) {}
     public record PaymentRequest(String paymentMethodCode, BigDecimal amount) {}
     /** treatingStaffId (optional) is the PT who treated the single-visit lines; default: the salesperson, else the signed-in staff. */
-    public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note,
-                                 List<ItemRequest> items, List<PaymentRequest> payments, String billDiscountType,
-                                 BigDecimal billDiscountValue, Long treatingStaffId, String paymentLabelCode) {}
+    public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note, List<ItemRequest> items,
+                                List<PaymentRequest> payments, String billDiscountType, BigDecimal billDiscountValue,
+                                Long treatingStaffId, String paymentLabelCode, Long appointmentId) {}
     public record ReverseRequest(String reason) {}
 
     private Staff singleVisitTreatingStaff(CreateRequest request, Staff salesperson) {
@@ -192,6 +193,7 @@ public class SaleController {
                 request.paymentLabelCode(), actor.currentId());
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
+        PatientVisit appointmentVisit = null;
         for (ItemRequest item : request.items()) {
             Service svc = services.findById(item.referenceId())
                     .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส"));
@@ -204,8 +206,18 @@ public class SaleController {
                         ? TransactionType.Assessment : TransactionType.SingleVisit;
                 // A single visit is treated by one PT, and the sale is tied to that visit.
                 Staff treating = singleVisitTreatingStaff(request, salesperson);
-                var visit = visitService.checkInWalkIn(patient, branch, treating, actor.currentId());
-                visit = visitService.complete(visit.getId(), actor.currentId());
+                PatientVisit visit;
+                if (request.appointmentId() == null) {
+                    visit = visitService.checkInWalkIn(patient, branch, treating, actor.currentId());
+                    visit = visitService.complete(visit.getId(), actor.currentId());
+                } else {
+                    branchAccess.requireAccess(branch);
+                    if (appointmentVisit == null) {
+                        appointmentVisit = visitService.createForService(
+                                request.appointmentId(), patient, branch, treating, actor.currentId());
+                    }
+                    visit = appointmentVisit;
+                }
                 lines.add(salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, treating,
                         salesperson, Math.max(1, item.quantity()), null, visit, discount, actor.currentId()));
             }
@@ -214,18 +226,26 @@ public class SaleController {
                 Discount.of(request.billDiscountType(), request.billDiscountValue()), actor.currentId());
 
         if (paymentRequest != null) {
-            String methodName =
-                    PaymentMethod.canonicalName(paymentRequest.paymentMethodCode());
-
-            PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(methodName)
+            String methodName = PaymentMethod.canonicalName(paymentRequest.paymentMethodCode());
+            PaymentMethod method = paymentMethods
+                    .findByMethodNameIgnoreCase(methodName)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "ไม่พบช่องทางชำระเงิน " + methodName));
 
             paymentTransactionService.record(
-                    patient, branch, receipt,
-                    paymentRequest.amount(), method, actor.currentId());
+                    patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
+
+            if (appointmentVisit != null) {
+                appointmentVisit = visitService.completeForService(
+                        appointmentVisit.getId(),
+                        request.appointmentId(),
+                        actor.currentId());
+            }
 
             singleVisitFees.accrue(receipt, lines, actor.currentId());
+        } else if (appointmentVisit != null) {
+            throw new IllegalArgumentException(
+                    "ต้องรับชำระเงินสำเร็จก่อนยืนยันการรับบริการจากนัด");
         }
 
         audit.record("receipt", String.valueOf(receipt.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
