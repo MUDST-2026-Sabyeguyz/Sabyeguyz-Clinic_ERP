@@ -139,6 +139,7 @@ public class CoursePurchaseController {
     /** treatingStaffId (optional): the PT who treats the session, the Owner PT by default; patientId (optional): who uses the entitlement. */
     public record UseRequest(Long coursePurchaseId, Long appointmentId, String note, Long treatingStaffId, Long patientId,
                               Long treatmentId) {}
+    public record BatchUseRequest(List<UseRequest> usages) {}
     public record ReasonRequest(String reason) {}
 
     public record PatientSummary(Long id, String hn, String fullName) {}
@@ -234,55 +235,97 @@ public class CoursePurchaseController {
     @PostMapping("/api/course-usages")
     @Transactional
     public Response use(@RequestBody UseRequest request) {
-        // Lock the course before checking and deducting remaining rights.
-        Course course = courses.findByIdForUpdate(request.coursePurchaseId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        return useTogether(java.util.Collections.singletonList(request)).get(0);
+    }
 
-        branchAccess.requireAccess(
-                course.getBranch(), "ใช้สิทธิ์ได้เฉพาะรายการของสาขาตัวเอง");
+    @PostMapping("/api/course-usages/batch")
+    @Transactional
+    public List<Response> useBatch(@RequestBody BatchUseRequest request) {
+        return useTogether(request.usages());
+    }
 
-        Staff treating = request.treatingStaffId() == null
-                ? course.getOwnerStaff()
-                : staffById(request.treatingStaffId());
+    private List<Response> useTogether(List<UseRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException("ต้องระบุรายการใช้สิทธิ์คอร์ส");
+        }
 
-        Patient usingPatient = request.patientId() != null
-                ? patients.findById(request.patientId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
-                : course.getPurchaserPatient();
-
-        if (request.appointmentId() == null) {
+        UseRequest first = requests.get(0);
+        if (first == null || first.appointmentId() == null) {
             throw new IllegalArgumentException(
-                    "ต้องสร้างนัด NEW หรือ CURRENT ก่อนใช้สิทธิ์คอร์ส " + "และส่ง appointmentId มาด้วย");
+                    "ต้องสร้างนัด NEW หรือ CURRENT ก่อนใช้สิทธิ์คอร์ส และส่ง appointmentId มาด้วย");
         }
 
-        PatientVisit visit = visitService.createForService(
-                request.appointmentId(),
-                usingPatient,
-                course.getBranch(),
-                treating,
-                actor.currentId());
-
-        var treatment = request.treatmentId() == null
-                ? null
-                : treatments.findById(request.treatmentId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
-
-        if (treatment == null) {
-            treatment = new com.sabyeguyz.clinicv2.treatment.Treatment();
-            treatment.setVisit(visit);
-            treatment.setService(course.getService());
-            treatment.setTreatingStaff(treating);
-            treatment.setNotes(
-                    request.note() == null ? null : request.note().trim());
-            treatment.setTreatmentCreateAt(Instant.now());
-            treatment.setTreatmentCreateBy(actor.currentId());
-            treatment = treatments.save(treatment);
+        for (UseRequest item : requests) {
+            if (item == null || item.coursePurchaseId() == null) {
+                throw new IllegalArgumentException("ต้องระบุคอร์สทุกรายการ");
+            }
+            if (!java.util.Objects.equals(first.appointmentId(), item.appointmentId())
+                    || !java.util.Objects.equals(first.patientId(), item.patientId())
+                    || !java.util.Objects.equals(first.treatingStaffId(), item.treatingStaffId())) {
+                throw new IllegalArgumentException(
+                        "รายการใน Visit เดียวกันต้องระบุนัด ผู้ป่วย และผู้รักษาตรงกัน");
+            }
         }
 
-        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
-        visitService.completeForService(visit.getId(), request.appointmentId(), actor.currentId());
+        // Lock distinct courses in the same order for every batch.
+        var lockedCourses = new java.util.TreeMap<Long, Course>();
+        requests.stream()
+                .map(UseRequest::coursePurchaseId)
+                .distinct()
+                .sorted()
+                .forEach(id -> lockedCourses.put(id,
+                        courses.findByIdForUpdate(id)
+                                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"))));
 
-        return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
+        Course firstCourse = lockedCourses.get(first.coursePurchaseId());
+        Branch branch = firstCourse.getBranch();
+
+        for (Course course : lockedCourses.values()) {
+            branchAccess.requireAccess(course.getBranch(), "ใช้สิทธิ์ได้เฉพาะรายการของสาขาตัวเอง");
+            if (!branch.getId().equals(course.getBranch().getId())) {
+                throw new IllegalArgumentException("คอร์สใน Visit เดียวกันต้องอยู่สาขาเดียวกัน");
+            }
+        }
+
+        Staff treating = first.treatingStaffId() == null
+                ? firstCourse.getOwnerStaff()
+                : staffById(first.treatingStaffId());
+
+        Patient usingPatient = first.patientId() == null
+                ? firstCourse.getPurchaserPatient()
+                : patients.findById(first.patientId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException("ไม่พบผู้ป่วย"));
+
+        PatientVisit visit = visitService.createForService(first.appointmentId(), usingPatient, branch, treating, actor.currentId());
+        LocalDate serviceDate = ClinicTime.today();
+
+        for (UseRequest item : requests) {
+            Course course = lockedCourses.get(item.coursePurchaseId());
+
+            var treatment = item.treatmentId() == null
+                    ? null
+                    : treatments.findById(item.treatmentId())
+                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
+
+            if (treatment == null) {
+                treatment = new com.sabyeguyz.clinicv2.treatment.Treatment();
+                treatment.setVisit(visit);
+                treatment.setService(course.getService());
+                treatment.setTreatingStaff(treating);
+                treatment.setNotes(
+                        item.note() == null ? null : item.note().trim());
+                treatment.setTreatmentCreateAt(Instant.now());
+                treatment.setTreatmentCreateBy(actor.currentId());
+                treatment = treatments.save(treatment);
+            }
+            usageService.use(course, visit, usingPatient, treating, serviceDate, treatment, actor.currentId());
+        }
+        visitService.completeForService(visit.getId(), first.appointmentId(), actor.currentId());
+
+        return lockedCourses.values().stream()
+                .map(course -> toResponse(course, usingPatient.getId()))
+                .toList();
     }
 
     @PostMapping("/api/course-movements/{movementId}/reverse")
