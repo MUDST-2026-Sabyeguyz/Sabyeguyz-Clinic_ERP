@@ -49,6 +49,30 @@ beforeEach(() => {
 
 const appointment = (id) => cy.api('GET', `/api/appointments/${id}`).its('body')
 
+const paidService = (fx, patient, booked) =>
+    cy.api('POST', '/api/payments', {
+      patientId: patient.id,
+      branchCode: '01',
+      appointmentId: booked.id,
+      treatingStaffId: fx.therapistId,
+      paymentLabelCode: 'FULL',
+      items: [{type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1,}],
+      payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
+    }).then(({ status, body }) => {
+      expect(status).to.equal(201)
+      return body
+    })
+
+const activitySnapshot = () =>
+    cy.api('GET', '/__cypress/payment-policy/counts').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      return cy.api('GET', '/api/dashboard/summary?from=2020-01-01&to=2099-12-31')
+          .then(({ status, body: dashboard }) => {
+            expect(status).to.equal(200)
+            return { ...body, visits: dashboard.visits }
+          })
+    })
+
 describe('v2 Google Calendar sync - system to Google', () => {
   it('writes a booked appointment to the branch calendar with little personal data', function () {
     connect()
@@ -207,33 +231,51 @@ describe('v2 Google Calendar sync - Google to system', () => {
     })
   })
 
-  it('does not accept a change in Google once the patient has arrived', function () {
+  it('moves a confirmed appointment from Google without changing service or financial records', function () {
     connect()
-    cy.registerPatient().then((patient) => {
-      book(this.fixtures, patient).then((appointmentBody) => {
-        cy.api('POST', `/api/appointments/${appointmentBody.id}/check-in`).its('status').should('equal', 200)
-        sync()
-        edit({ appointmentId: appointmentBody.id, start: local(this.fixtures, '16:00') })
-        sync().then((result) => expect(result.revertedInGoogle).to.equal(1))
-        appointment(appointmentBody.id).its('status').should('equal', 'ARRIVED')
-        events().its('0.start').should('equal', local(this.fixtures, '09:00'))
-        events().its('0.end').should('equal', local(this.fixtures, '10:00'))
-      })
-    })
+    cy.registerPatient().then((patient) =>
+        book(this.fixtures, patient).then((booked) =>
+            paidService(this.fixtures, patient, booked).then((sale) => {
+              sync()
+              activitySnapshot().then((before) => {
+                expect(before.visits).to.equal(1)
+                edit({
+                  appointmentId: booked.id,
+                  start: local(this.fixtures, '16:00'),
+                })
+                sync().then((result) => expect(result.movedFromGoogle).to.equal(1))
+                appointment(booked.id).then((body) => {
+                  expect(body.status).to.equal('CONFIRMED')
+                  expect(new Date(body.startAt).toISOString()).to.equal(new Date(at(this.fixtures, '16:00')).toISOString())
+                })
+                activitySnapshot().should('deep.equal', before)
+                cy.api('GET', `/api/receipts/${sale.id}`).its('body.status').should('equal', 'PAID')
+              })
+            })
+        )
+    )
   })
 
-  it('brings the event back when it is deleted in Google after the visit has started', function () {
+  it('cancels a confirmed appointment from Google without reversing its paid service', function () {
     connect()
-    cy.registerPatient().then((patient) => {
-      book(this.fixtures, patient).then((appointmentBody) => {
-        cy.api('POST', `/api/appointments/${appointmentBody.id}/check-in`).its('status').should('equal', 200)
-        sync()
-        edit({ appointmentId: appointmentBody.id, cancel: true })
-        sync().then((result) => expect(result.revertedInGoogle).to.equal(1))
-        events().then((list) => expect(list.filter((item) => !item.cancelled)).to.have.length(1))
-        appointment(appointmentBody.id).its('status').should('equal', 'ARRIVED')
-      })
-    })
+    cy.registerPatient().then((patient) =>
+        book(this.fixtures, patient).then((booked) =>
+            paidService(this.fixtures, patient, booked).then((sale) => {
+              sync()
+              activitySnapshot().then((before) => {
+                expect(before.visits).to.equal(1)
+                edit({ appointmentId: booked.id, cancel: true })
+                sync().then((result) => expect(result.cancelledFromGoogle).to.equal(1))
+                appointment(booked.id).then((body) => {
+                  expect(body.status).to.equal('CANCELLED')
+                  expect(body.cancelReason).to.equal('ยกเลิกจาก Google Calendar')
+                })
+                activitySnapshot().should('deep.equal', before)
+                cy.api('GET', `/api/receipts/${sale.id}`).its('body.status').should('equal', 'PAID')
+              })
+            })
+        )
+    )
   })
 })
 
