@@ -71,6 +71,7 @@ public class CoursePurchaseController {
     private final CourseLedgerRepository ledger;
     private final CourseVisitUsageRepository usages;
     private final CourseVisitUsageService usageService;
+    private final CourseUsageBatchService usageBatchService;
     private final CourseTransferService transferService;
     private final PermissionService permissions;
     private final CommissionAllocationLedgerRepository allocationLedger;
@@ -86,25 +87,24 @@ public class CoursePurchaseController {
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
     private final com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations;
-    private final com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments;
 
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
-                                     CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
-                                     CourseTransferService transferService, PermissionService permissions,
-                                     CommissionAllocationLedgerRepository allocationLedger, ReceiptService receiptService,
-                                     SalesTransactionService salesTransactionService,
-                                     PatientRepository patients, BranchRepository branches, ServiceRepository services,
-                                     PatientVisitRepository visits, PatientVisitService visitService,
-                                     AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
-                                     CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                     com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
-                                     com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments,
-                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+                                    CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
+                                    CourseTransferService transferService, PermissionService permissions,
+                                    CommissionAllocationLedgerRepository allocationLedger, ReceiptService receiptService,
+                                    SalesTransactionService salesTransactionService,
+                                    PatientRepository patients, BranchRepository branches, ServiceRepository services,
+                                    PatientVisitRepository visits, PatientVisitService visitService,
+                                    AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
+                                    CurrentActor actor,
+                                    com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                                    com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
+                                    com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess,
+                                    CourseUsageBatchService usageBatchService) {
+        this.usageBatchService = usageBatchService;
         this.branchAccess = branchAccess;
-        this.treatments = treatments;
         this.cancellations = cancellations;
         this.courses = courses;
         this.ledger = ledger;
@@ -251,8 +251,7 @@ public class CoursePurchaseController {
 
         UseRequest first = requests.get(0);
         if (first == null || first.appointmentId() == null) {
-            throw new IllegalArgumentException(
-                    "ต้องสร้างนัด NEW หรือ CURRENT ก่อนใช้สิทธิ์คอร์ส และส่ง appointmentId มาด้วย");
+            throw new IllegalArgumentException("ต้องสร้างนัด NEW หรือ CURRENT ก่อนใช้สิทธิ์คอร์ส และส่ง appointmentId มาด้วย");
         }
 
         for (UseRequest item : requests) {
@@ -262,26 +261,22 @@ public class CoursePurchaseController {
             if (!java.util.Objects.equals(first.appointmentId(), item.appointmentId())
                     || !java.util.Objects.equals(first.patientId(), item.patientId())
                     || !java.util.Objects.equals(first.treatingStaffId(), item.treatingStaffId())) {
-                throw new IllegalArgumentException(
-                        "รายการใน Visit เดียวกันต้องระบุนัด ผู้ป่วย และผู้รักษาตรงกัน");
+                throw new IllegalArgumentException("รายการใน Visit เดียวกันต้องระบุนัด ผู้ป่วย และผู้รักษาตรงกัน");
             }
         }
 
-        // Lock distinct courses in the same order for every batch.
-        var lockedCourses = new java.util.TreeMap<Long, Course>();
-        requests.stream()
-                .map(UseRequest::coursePurchaseId)
-                .distinct()
-                .sorted()
-                .forEach(id -> lockedCourses.put(id,
-                        courses.findByIdForUpdate(id)
-                                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"))));
+        List<CourseUsageBatchService.Item> items = requests.stream()
+                .map(item -> new CourseUsageBatchService.Item(
+                        item.coursePurchaseId(),
+                        item.note(),
+                        item.treatmentId()))
+                .toList();
 
+        var lockedCourses = usageBatchService.lockCourses(items);
         Course firstCourse = lockedCourses.get(first.coursePurchaseId());
         Branch branch = firstCourse.getBranch();
 
         for (Course course : lockedCourses.values()) {
-            branchAccess.requireAccess(course.getBranch(), "ใช้สิทธิ์ได้เฉพาะรายการของสาขาตัวเอง");
             if (!branch.getId().equals(course.getBranch().getId())) {
                 throw new IllegalArgumentException("คอร์สใน Visit เดียวกันต้องอยู่สาขาเดียวกัน");
             }
@@ -297,30 +292,11 @@ public class CoursePurchaseController {
                 .orElseThrow(() ->
                         new IllegalArgumentException("ไม่พบผู้ป่วย"));
 
-        PatientVisit visit = visitService.createForService(first.appointmentId(), usingPatient, branch, treating, actor.currentId());
-        java.time.LocalDateTime serviceDate = ClinicTime.now();
+        PatientVisit visit = visitService.createForService(
+                first.appointmentId(), usingPatient, branch,
+                treating, actor.currentId());
 
-        for (UseRequest item : requests) {
-            Course course = lockedCourses.get(item.coursePurchaseId());
-
-            var treatment = item.treatmentId() == null
-                    ? null
-                    : treatments.findById(item.treatmentId())
-                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
-
-            if (treatment == null) {
-                treatment = new com.sabyeguyz.clinicv2.treatment.Treatment();
-                treatment.setVisit(visit);
-                treatment.setService(course.getService());
-                treatment.setTreatingStaff(treating);
-                treatment.setNotes(
-                        item.note() == null ? null : item.note().trim());
-                treatment.setTreatmentCreateAt(Instant.now());
-                treatment.setTreatmentCreateBy(actor.currentId());
-                treatment = treatments.save(treatment);
-            }
-            usageService.use(course, visit, usingPatient, treating, serviceDate, treatment, actor.currentId());
-        }
+        usageBatchService.recordForVisit(lockedCourses, items, visit, ClinicTime.now(), actor.currentId());
         visitService.completeForService(visit.getId(), first.appointmentId(), actor.currentId());
 
         return lockedCourses.values().stream()
