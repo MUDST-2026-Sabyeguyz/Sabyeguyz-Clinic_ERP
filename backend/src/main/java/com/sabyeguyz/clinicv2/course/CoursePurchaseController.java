@@ -234,23 +234,38 @@ public class CoursePurchaseController {
     @PostMapping("/api/course-usages")
     @Transactional
     public Response use(@RequestBody UseRequest request) {
-        // Row-lock first: two parallel usages must not both see the last remaining visit.
+        // Lock the course before checking and deducting remaining rights.
         Course course = courses.findByIdForUpdate(request.coursePurchaseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        Staff treating = request.treatingStaffId() == null ? course.getOwnerStaff() : staffById(request.treatingStaffId());
-        PatientVisit appointmentVisit = request.appointmentId() == null ? null
-                : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
-                        .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
+
+        branchAccess.requireAccess(
+                course.getBranch(), "ใช้สิทธิ์ได้เฉพาะรายการของสาขาตัวเอง");
+
+        Staff treating = request.treatingStaffId() == null
+                ? course.getOwnerStaff()
+                : staffById(request.treatingStaffId());
+
         Patient usingPatient = request.patientId() != null
-                ? patients.findById(request.patientId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
-                : appointmentVisit != null ? appointmentVisit.getPatient() : course.getPurchaserPatient();
-        if (appointmentVisit != null && !appointmentVisit.getPatient().getId().equals(usingPatient.getId())) {
-            throw new IllegalArgumentException("ผู้ใช้สิทธิ์ต้องเป็นผู้ป่วยคนเดียวกับของ Visit");
+                ? patients.findById(request.patientId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
+                : course.getPurchaserPatient();
+
+        PatientVisit visit;
+        if (request.appointmentId() == null) {
+            visit = walkInVisit(course, usingPatient, treating);
+        } else {
+            visit = visitService.createForService(request.appointmentId(), usingPatient, course.getBranch(), treating, actor.currentId());
         }
-        PatientVisit visit = appointmentVisit != null ? appointmentVisit : walkInVisit(course, usingPatient, treating);
-        var treatment = request.treatmentId() == null ? null : treatments.findById(request.treatmentId())
+
+        var treatment = request.treatmentId() == null
+                ? null
+                : treatments.findById(request.treatmentId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
         usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
+
+        if (request.appointmentId() != null) {
+            visitService.completeForService(visit.getId(), request.appointmentId(), actor.currentId());
+        }
         return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
