@@ -30,6 +30,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import com.sabyeguyz.clinicv2.auth.AppUser;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
+import com.sabyeguyz.clinicv2.auth.UserRoleRepository;
 
 /**
  * Security of the v2 application: stateless JWT (HS256, the same app.jwt.secret as the
@@ -89,28 +90,34 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtAuthenticationConverter jwtAuthenticationConverter() {
+    JwtAuthenticationConverter jwtAuthenticationConverter(
+            UserRoleRepository userRoles) {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            List<String> roles = jwt.getClaimAsStringList("roles");
-            if (roles == null) {
-                return List.<GrantedAuthority>of();
-            }
-            return roles.stream()
-                    .<GrantedAuthority>map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
-                    .toList();
-        });
+        converter.setJwtGrantedAuthoritiesConverter(jwt ->
+                userRoles.findRoleNamesByUserId(Long.valueOf(jwt.getSubject()))
+                        .stream()
+                        .<GrantedAuthority>map(role ->
+                                new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT)))
+                        .toList());
+
         return converter;
     }
 
     @Bean
-    SecurityFilterChain security(HttpSecurity http) throws Exception {
+    SecurityFilterChain security(HttpSecurity http, JwtAuthenticationConverter authenticationConverter)
+            throws Exception {
         return http.csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/actuator/health", "/error").permitAll()
+                        .requestMatchers(
+                                "/api/auth/login",
+                                "/actuator/health",
+                                "/error")
+                        .permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .oauth2ResourceServer(oauth -> oauth.jwt(jwt ->
+                        jwt.jwtAuthenticationConverter(authenticationConverter)))
                 .build();
     }
 }
