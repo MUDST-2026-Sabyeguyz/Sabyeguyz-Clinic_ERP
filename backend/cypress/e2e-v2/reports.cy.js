@@ -13,14 +13,24 @@ describe('v2 reports', () => {
 
   it('counts a paid sale in revenue', function () {
     cy.registerPatient().then((patient) => {
-      cy.api('POST', '/api/payments', {
-        patientId: patient.id, branchCode: '01',
-        paymentLabelCode: 'FULL',
-        items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
-      }).its('status').should('equal', 201)
-      cy.api('GET', `/api/reports/revenue${range}`).then(({ body }) => {
-        expect(Number(body.totalRevenue)).to.equal(800)
+      cy.createServiceAppointment(this.fixtures, patient.id).then((appointment) => {
+        cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: this.fixtures.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{
+            type: 'SERVICE',
+            referenceId: this.fixtures.singleVisitServiceId,
+            quantity: 1,
+          }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
+        }).its('status').should('equal', 201)
+
+        cy.api('GET', `/api/reports/revenue${range}`).then(({ body }) => {
+          expect(Number(body.totalRevenue)).to.equal(800)
+        })
       })
     })
   })

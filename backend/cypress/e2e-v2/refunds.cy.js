@@ -1,10 +1,25 @@
 function paidSale(fx, patient) {
-  return cy.api('POST', '/api/payments', {
-    patientId: patient.id, branchCode: '01',
-    paymentLabelCode: 'FULL',
-    items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
-    payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
-  }).then(({ body: sale }) => cy.api('GET', `/api/receipts/${sale.id}`).then(({ body }) => body.payments[0]))
+  return cy.createServiceAppointment(fx, patient.id)
+      .then((appointment) => {
+        return cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: fx.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1,}],
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+        })
+      }).then(({ status, body: sale }) => {
+        expect(status).to.equal(201)
+
+        return cy.api('GET', `/api/receipts/${sale.id}`)
+            .then(({ status, body }) => {
+              expect(status).to.equal(200)
+              expect(body.payments).to.have.length(1)
+              return body.payments[0]
+            })
+      })
 }
 
 const refund = (payment, amount) => cy.api('POST', `/api/payments/${payment.id}/refunds`, {

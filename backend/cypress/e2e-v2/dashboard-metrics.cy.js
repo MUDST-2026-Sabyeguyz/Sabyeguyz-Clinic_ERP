@@ -2,12 +2,22 @@ const day = '2030-10-01'
 const summary = (from = day, to = from, branch = '') =>
   cy.api('GET', `/api/dashboard/summary?from=${from}&to=${to}${branch ? `&branchCode=${branch}` : ''}`)
 const dates = (patientId, values) => cy.api('POST', '/__cypress/dashboard/dates', { patientId, ...values }).its('status').should('equal', 200)
-const sale = (fx, patient) => cy.api('POST', '/api/payments', {
-  patientId: patient.id, branchCode: '01',
-  paymentLabelCode: 'FULL',
-  items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
-  payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
-}).then(({ status, body }) => { expect(status).to.equal(201); return body })
+const sale = (fx, patient) =>
+    cy.createServiceAppointment(fx, patient.id)
+        .then(appointment => {
+          return cy.api('POST', '/api/payments', {
+            patientId: patient.id,
+            branchCode: '01',
+            appointmentId: appointment.id,
+            treatingStaffId: fx.therapistId,
+            paymentLabelCode: 'FULL',
+            items: [{type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1,}],
+            payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+          })
+        }).then(({ status, body }) => {
+      expect(status).to.equal(201)
+      return body
+    })
 
 describe('dashboard registration-based customers and recorded activity', () => {
   it('returns zeros and a daily sales entry for every selected day', () => {
@@ -34,30 +44,29 @@ describe('dashboard registration-based customers and recorded activity', () => {
 
   it('counts only older registrations that attended during the selected period as returning customers', function () {
     cy.registerPatient().then(patient => {
-      cy.configureBookingWindows()
-      for (const hour of ['10', '13']) {
-        cy.api('POST', '/api/appointments', {
-          branchCode: '01',
-          patientId: patient.id,
-          therapistId: this.fixtures.therapistId,
-          serviceId: this.fixtures.serviceId,
-          startAt: `${day}T${hour}:00:00+07:00`,
-          endAt: `${day}T${String(Number(hour) + 1).padStart(2, '0')}:00:00+07:00`,
-        }).then(({ status, body }) => {
-          expect(status).to.equal(201)
-          cy.api('POST', `/api/appointments/${body.id}/check-in`)
-              .its('status').should('equal', 200)
-        })
-      }
-      dates(patient.id, { registeredAt: '2030-09-30T16:59:59Z', visitAt: '2030-10-01T03:00:00Z' })
+      sale(this.fixtures, patient)
+      sale(this.fixtures, patient)
+
+      dates(patient.id, {
+        registeredAt: '2030-09-30T16:59:59Z',
+        visitAt: '2030-10-01T03:00:00Z',
+      })
     })
-    cy.registerPatient().then(patient => dates(patient.id, { registeredAt: '2030-09-01T00:00:00Z' }))
+
+    cy.registerPatient().then(patient => {
+      dates(patient.id, {
+        registeredAt: '2030-09-01T00:00:00Z',
+      })
+    })
+
     summary().then(({ body }) => {
       expect(body.returningCustomers).to.equal(1)
       expect(body.newCustomers).to.equal(0)
       expect(body.visits).to.equal(2)
     })
-    summary(day, day, '02').its('body.returningCustomers').should('equal', 0)
+
+    summary(day, day, '02')
+        .its('body.returningCustomers').should('equal', 0)
   })
 
   it('filters registrations by their registration branch', () => {

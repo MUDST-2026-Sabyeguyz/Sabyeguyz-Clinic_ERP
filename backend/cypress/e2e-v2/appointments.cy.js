@@ -251,6 +251,41 @@ describe('v2 appointments', () => {
     })
   })
 
+  it('rejects course usage without an appointment and preserves remaining rights', function () {
+    cy.registerPatient().then((patient) => {
+      cy.api('POST', '/api/course-purchases', {
+        patientId: patient.id,
+        courseId: this.fixtures.courseId,
+        branchCode: '01',
+        caseOwnerStaffId: this.fixtures.therapistId,
+        paymentLabelCode: 'FULL',
+      }).then(({ status, body: purchase }) => {
+        expect(status).to.equal(201)
+
+        cy.api('POST', '/api/course-usages', {
+          coursePurchaseId: purchase.id,
+          patientId: patient.id,
+          treatingStaffId: this.fixtures.therapistId,
+        }).then((rejected) => {
+          expect(rejected.status).to.equal(400)
+          expect(rejected.body.message).to.include('appointmentId')
+        })
+
+        cy.api('GET', `/api/course-purchases/${purchase.id}`)
+            .then((saved) => {
+              expect(saved.status).to.equal(200)
+              expect(saved.body.purchase.remaining)
+                  .to.equal(purchase.remaining)
+              expect(saved.body.purchase.used)
+                  .to.equal(purchase.used)
+            })
+
+        cy.api('GET', '/api/appointments')
+            .its('body.totalItems').should('equal', 0)
+      })
+    })
+  })
+
   it('confirms an appointment after deducting one course session', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
