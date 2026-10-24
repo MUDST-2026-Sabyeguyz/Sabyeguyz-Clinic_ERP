@@ -267,14 +267,12 @@ public class AppointmentController {
 
     @PostMapping("/{id}/cancel")
     public Response cancel(@PathVariable Long id, @RequestBody CancelRequest request) {
-        branchAccess.requireManager();
         requireAppointmentAccess(id);
         return toResponse(service.cancel(id, request.reason(), actor.currentId()));
     }
 
     @PatchMapping("/{id}")
     public Response reschedule(@PathVariable Long id, @RequestBody RescheduleRequest request) {
-        branchAccess.requireManager();
         requireAppointmentAccess(id);
         if (request.startAt() == null) throw new IllegalArgumentException("ต้องระบุเวลานัดใหม่");
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
