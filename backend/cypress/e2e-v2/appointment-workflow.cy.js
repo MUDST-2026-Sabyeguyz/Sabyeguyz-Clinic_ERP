@@ -142,6 +142,8 @@ describe('P3 non-commission appointment workflow', () => {
         cy.api('POST', '/api/payments', {
           patientId: patient.id,
           branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: this.fixtures.therapistId,
           paymentLabelCode: 'FULL',
           items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
           payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
@@ -152,6 +154,7 @@ describe('P3 non-commission appointment workflow', () => {
 
         cy.api('GET', `/api/appointments/${appointment.id}`)
             .then(({ body: unchanged }) => {
+              expect(unchanged.status).to.equal('CONFIRMED')
               expect(unchanged.patientType).to.equal('NEW')
               expect(unchanged.patient.id).to.equal(null)
               expect(unchanged.patient.hn).to.equal(null)

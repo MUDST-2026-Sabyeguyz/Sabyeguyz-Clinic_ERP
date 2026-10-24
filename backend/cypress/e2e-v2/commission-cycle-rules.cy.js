@@ -95,9 +95,7 @@ describe('v2 a monthly payment keeps its payment date and reference', () => {
   const closedPayment = (fx) =>
       cy.registerPatient().then((patient) =>
           buy(fx, patient).then((course) => {
-            cy.api('POST', '/api/course-usages', {
-              coursePurchaseId: course.id,
-            }).its('status').should('equal', 200)
+            cy.useCourseSession(course.id).its('status').should('equal', 200)
             closeMonth()
 
             cy.api('POST', `/api/commission/payments/prepare?month=${month}&branchCode=01`,).its('status').should('equal', 200)
