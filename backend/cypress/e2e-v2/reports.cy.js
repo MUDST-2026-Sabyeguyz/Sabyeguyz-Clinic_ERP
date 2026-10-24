@@ -11,28 +11,58 @@ describe('v2 reports', () => {
     }
   })
 
-  it('counts a paid sale in revenue', function () {
-    cy.registerPatient().then((patient) => {
-      cy.createServiceAppointment(this.fixtures, patient.id).then((appointment) => {
-        cy.api('POST', '/api/payments', {
-          patientId: patient.id,
-          branchCode: '01',
-          appointmentId: appointment.id,
-          treatingStaffId: this.fixtures.therapistId,
-          paymentLabelCode: 'FULL',
-          items: [{
-            type: 'SERVICE',
-            referenceId: this.fixtures.singleVisitServiceId,
-            quantity: 1,
-          }],
-          payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
-        }).its('status').should('equal', 201)
+  it('counts actual visits by service date and branch even after appointment cancellation', function () {
+    const fx = this.fixtures
+    cy.registerPatient().then((patient) =>
+        cy.createServiceAppointment(fx, patient.id).then((appointment) => {
+          cy.api('POST', '/api/payments', {
+            patientId: patient.id,
+            branchCode: '01',
+            appointmentId: appointment.id,
+            treatingStaffId: fx.therapistId,
+            paymentLabelCode: 'FULL',
+            items: [{type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1,}],
+            payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
+          }).its('status').should('equal', 201)
 
-        cy.api('GET', `/api/reports/revenue${range}`).then(({ body }) => {
-          expect(Number(body.totalRevenue)).to.equal(800)
+          cy.api('GET', `/api/reports/revenue${range}`).then(({ body }) => {
+            expect(Number(body.totalRevenue)).to.equal(800)
+          })
+
+          cy.api('POST', `/api/appointments/${appointment.id}/cancel`, {
+            reason: 'ยกเลิกนัดโดยไม่ย้อนบริการที่รับแล้ว',
+          }).its('status').should('equal', 200)
+
+          // Midnight in Bangkok: included on October 1, excluded on September 30.
+          cy.api('POST', '/__cypress/dashboard/dates', {
+            patientId: patient.id,
+            visitAt: '2030-09-30T17:00:00Z',
+          }).its('status').should('equal', 200)
+
+          cy.api('GET',
+              '/api/reports/appointments?from=2030-10-01&to=2030-10-01&branchCode=01'
+          ).then(({ status, body }) => {
+            expect(status).to.equal(200)
+            expect(body.appointments).to.equal(0)
+            expect(body.visits).to.equal(1)
+          })
+
+          cy.api('GET',
+              '/api/reports/appointments?from=2030-09-30&to=2030-09-30&branchCode=01'
+          ).its('body.visits').should('equal', 0)
+
+          cy.api('GET',
+              '/api/reports/appointments?from=2030-10-01&to=2030-10-01&branchCode=02'
+          ).its('body.visits').should('equal', 0)
+
+          cy.api('GET', `/api/reports/appointments${range}&branchCode=01`)
+              .then(({ body }) => {
+                expect(body.appointments).to.equal(1)
+                expect(body.visits).to.equal(1)
+                expect(body.byStatus).to.deep.equal([{ status: 'Cancelled', appointments: 1 },])
+              })
         })
-      })
-    })
+    )
   })
 
   it('shows a bought course in the balance report', function () {
@@ -67,5 +97,44 @@ describe('v2 reports', () => {
 
   it('requires authentication', () => {
     cy.apiAs(null, 'GET', `/api/reports/revenue${range}`).its('status').should('equal', 401)
+  })
+
+  it('counts two course usages in one Visit as one actual visit', function () {
+    const fx = this.fixtures
+    cy.registerPatient().then((patient) =>
+        cy.api('POST', '/api/course-purchases', {
+          patientId: patient.id,
+          courseId: fx.courseId,
+          branchCode: '01',
+          caseOwnerStaffId: fx.therapistId,
+          paymentLabelCode: 'FULL',
+        }).then(({ status, body: course }) => {
+          expect(status).to.equal(201)
+
+          cy.createServiceAppointment(fx, patient.id).then((appointment) => {
+            cy.api('POST', '/api/course-usages/batch', {
+              usages: Array.from({ length: 2 }, () => ({
+                coursePurchaseId: course.id,
+                appointmentId: appointment.id,
+                patientId: patient.id,
+                treatingStaffId: fx.therapistId,
+              })),
+            }).its('status').should('equal', 200)
+
+            cy.api('GET', `/api/reports/appointments${range}&branchCode=01`)
+                .then(({ status, body }) => {
+                  expect(status).to.equal(200)
+                  expect(body.appointments).to.equal(1)
+                  expect(body.visits).to.equal(1)
+                })
+          })
+        })
+    )
+  })
+
+  it('rejects reversed appointment report dates', () => {
+    cy.api('GET',
+        '/api/reports/appointments?from=2030-10-02&to=2030-10-01'
+    ).its('status').should('equal', 400)
   })
 })
