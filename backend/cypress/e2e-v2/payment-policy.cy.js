@@ -1,8 +1,23 @@
-const sale = (fx, patient, payments, course = false) => cy.api('POST', '/api/payments', {
-  patientId: patient.id, branchCode: '01', salespersonStaffId: fx.managerStaffId,
-  paymentLabelCode: 'FULL',
-  items: [{ type: course ? 'COURSE' : 'SERVICE', referenceId: course ? fx.courseId : fx.singleVisitServiceId, quantity: 1 }], payments,
-})
+const sale = (fx, patient, payments, course = false) => {
+  const send = (appointmentId) =>
+      cy.api('POST', '/api/payments', {
+        patientId: patient.id,
+        branchCode: '01',
+        appointmentId,
+        salespersonStaffId: fx.managerStaffId,
+        treatingStaffId: fx.managerStaffId,
+        paymentLabelCode: 'FULL',
+        items: [{type: course ? 'COURSE' : 'SERVICE', referenceId: course ? fx.courseId : fx.singleVisitServiceId, quantity: 1,}],
+        payments,
+      })
+  if (course) {
+    return send(undefined)
+  }
+
+  return cy.createServiceAppointment(fx, patient.id)
+      .then((appointment) => send(appointment.id))
+}
+
 const counts = () => cy.api('GET', '/__cypress/payment-policy/counts').its('body')
 const refund = (id) => cy.api('POST', `/api/payments/${id}/refunds`, { amount: 100, paymentMethodCode: 'BankTransfer', reason: 'test' })
 
@@ -85,7 +100,7 @@ describe('v2 payment policy', () => {
   })
   it('allows only one concurrent completed payment', function () {
     cy.registerPatient().then(patient =>
-        sale(this.fixtures, patient, []).then(({ status, body }) => {
+        sale(this.fixtures, patient, [], true).then(({ status, body }) => {
           expect(status).to.equal(201)
 
           cy.api('GET', `/api/receipts/${body.id}`).then(({ body: detail }) => {
@@ -115,7 +130,7 @@ describe('v2 payment policy', () => {
   it('refunds only the unused rights of a used course and keeps what was already earned', function () {
     cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 9000 }], true).then(({ body }) => {
       usedCourse(this.fixtures, patient, body).then(({ paymentId, courseId }) => {
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId }).its('status').should('equal', 200)
+        cy.useCourseSession(courseId).its('status').should('equal', 200)
         counts().then(before => {
           // a course receipt needs the course and the sessions to cancel; more than what is left is refused
           refund(paymentId).its('status').should('equal', 400)
@@ -124,11 +139,11 @@ describe('v2 payment policy', () => {
             amount: 1500, paymentMethodCode: 'BankTransfer', reason: 'x', items: [{ courseId, refundAmount: 1000, cancelledVisits: 5 }],
           }).its('status').should('equal', 400)
           counts().should('deep.equal', before)
-          courseRefund(paymentId, courseId, 1500, 5).then(({ status, body: pending }) => {
+          courseRefund(paymentId, courseId, 1500, 4).then(({ status, body: pending }) => {
             expect(status).to.equal(201)
-            expect(pending.items).to.deep.equal([{ courseId, refundAmount: 1500, cancelledVisits: 5 }])
+            expect(pending.items).to.deep.equal([{ courseId, refundAmount: 1500, cancelledVisits: 4 }])
             // asking for the rights does not cut them yet
-            cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 5)
+            cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 4)
             cy.api('POST', `/api/refunds/${pending.id}/complete`).its('status').should('equal', 200)
             cy.api('POST', `/api/refunds/${pending.id}/complete`).its('status').should('equal', 400)
           })
@@ -152,10 +167,10 @@ describe('v2 payment policy', () => {
           cy.api('POST', `/api/refunds/${pending.id}/complete`).its('status').should('equal', 200)
         })
         cy.api('GET', `/api/course-purchases/${courseId}`).then(({ body: course }) => {
-          expect(course.purchase.remaining).to.equal(4)
+          expect(course.purchase.remaining).to.equal(3)
           expect(course.purchase.status).to.equal('ACTIVE')
         })
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId }).its('status').should('equal', 200)
+        cy.useCourseSession(courseId).its('status').should('equal', 200)
       })
     }))
   })
@@ -169,20 +184,20 @@ describe('v2 payment policy', () => {
           cy.api('POST', `/api/refunds/${second.id}/void`).its('body.status').should('equal', 'Voided')
           cy.api('POST', `/api/refunds/${second.id}/complete`).its('status').should('equal', 400)
         })
-        cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 6)
+        cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 5)
       })
     }))
   })
   it('rejects completion when usage left too few rights after the refund request', function () {
     cy.registerPatient().then(patient => sale(this.fixtures, patient, [{ paymentMethodCode: 'BankTransfer', amount: 9000 }], true).then(({ body }) => {
-      usedCourse(this.fixtures, patient, body).then(({ paymentId, courseId }) => courseRefund(paymentId, courseId, 9000, 6).then(({ body: pending, status }) => {
+      usedCourse(this.fixtures, patient, body).then(({ paymentId, courseId }) => courseRefund(paymentId, courseId, 9000, 5).then(({ body: pending, status }) => {
         expect(status).to.equal(201)
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId }).its('status').should('equal', 200)
+        cy.useCourseSession(courseId).its('status').should('equal', 200)
         counts().then(before => {
           cy.api('POST', `/api/refunds/${pending.id}/complete`).its('status').should('equal', 409)
           counts().should('deep.equal', before)
           cy.api('GET', `/api/payments/${paymentId}/refunds`).its('body.0.status').should('equal', 'Pending')
-          cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 5)
+          cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 4)
         })
       }))
     }))
@@ -194,28 +209,43 @@ describe('v2 payment policy', () => {
           const paymentId = detail.payments[0].id
           const prepare = complete ? null : cy.wrap(null)
           cy.api('GET', `/api/patients/${patient.id}/courses`).then(({ body: courses }) => (complete
-            ? courseRefund(paymentId, courses[0].id, 9000, 6).its('body.id') : cy.wrap(null)).then(refundId => {
-            counts().then(before => cy.get('@token').then(token => {
-              cy.task('courseRefundRace', {
-                token, courseId: courses[0].id,
-                refundUrl: complete ? `/api/refunds/${refundId}/complete` : `/api/payments/${paymentId}/refunds`,
-                refundBody: complete ? undefined : {
-                  amount: 9000, paymentMethodCode: 'BankTransfer', reason: 'race test',
-                  items: [{ courseId: courses[0].id, refundAmount: 9000, cancelledVisits: 6 }],
-                },
-              }, { log: false }).then(result => {
-                expect(result.observedWait, 'refund waited on production course row lock').to.equal(true)
-                expect(result.usage.status).to.equal(200)
-                // the usage took one of the six rights, so the refund of all six is refused (400 asked, 409 completed)
-                expect(result.refund.status).to.equal(complete ? 409 : 400)
-                counts().then(after => {
-                  expect(after.refunds).to.equal(before.refunds)
-                  expect(after.cancellations).to.equal(before.cancellations)
-                  // the Owner commission of the session is not known until the month is closed: no allocation yet
-                  expect(after.allocations).to.equal(before.allocations)
+            ? courseRefund(paymentId, courses[0].id, 9000, 5).its('body.id') : cy.wrap(null)).then(refundId => {
+            cy.createServiceAppointment(this.fixtures, patient.id)
+                .then((appointment) => {
+                  return counts().then(before => cy.get('@token').then(token => {
+                    return cy.task('courseRefundRace', {
+                      token,
+                      courseId: courses[0].id,
+                      appointmentId: appointment.id,
+                      refundUrl: complete
+                          ? `/api/refunds/${refundId}/complete`
+                          : `/api/payments/${paymentId}/refunds`,
+                      refundBody: complete ? undefined : {
+                        amount: 9000,
+                        paymentMethodCode: 'BankTransfer',
+                        reason: 'race test',
+                        items: [{
+                          courseId: courses[0].id,
+                          refundAmount: 9000,
+                          cancelledVisits: 5,
+                        }],
+                      },
+                    }, { log: false }).then(result => {
+                      expect(
+                          result.observedWait,
+                          'refund waited on production course row lock'
+                      ).to.equal(true)
+                      expect(result.usage.status).to.equal(200)
+                      expect(result.refund.status).to.equal(complete ? 409 : 400)
+
+                      return counts().then(after => {
+                        expect(after.refunds).to.equal(before.refunds)
+                        expect(after.cancellations).to.equal(before.cancellations)
+                        expect(after.allocations).to.equal(before.allocations)
+                      })
+                    })
+                  }))
                 })
-              })
-            }))
           }))
         })
       }))

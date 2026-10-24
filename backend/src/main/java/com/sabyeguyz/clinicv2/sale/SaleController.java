@@ -206,18 +206,16 @@ public class SaleController {
                         ? TransactionType.Assessment : TransactionType.SingleVisit;
                 // A single visit is treated by one PT, and the sale is tied to that visit.
                 Staff treating = singleVisitTreatingStaff(request, salesperson);
-                PatientVisit visit;
                 if (request.appointmentId() == null) {
-                    visit = visitService.checkInWalkIn(patient, branch, treating, actor.currentId());
-                    visit = visitService.complete(visit.getId(), actor.currentId());
-                } else {
-                    branchAccess.requireAccess(branch);
-                    if (appointmentVisit == null) {
-                        appointmentVisit = visitService.createForService(
-                                request.appointmentId(), patient, branch, treating, actor.currentId());
-                    }
-                    visit = appointmentVisit;
+                    throw new IllegalArgumentException(
+                            "ต้องสร้างนัด NEW หรือ CURRENT ก่อนรับบริการ " + "และส่ง appointmentId มาด้วย");
                 }
+
+                branchAccess.requireAccess(branch);
+                if (appointmentVisit == null) {
+                    appointmentVisit = visitService.createForService(request.appointmentId(), patient, branch, treating, actor.currentId());
+                }
+                PatientVisit visit = appointmentVisit;
                 lines.add(salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, treating,
                         salesperson, Math.max(1, item.quantity()), null, visit, discount, actor.currentId()));
             }

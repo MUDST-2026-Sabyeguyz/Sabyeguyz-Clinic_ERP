@@ -8,12 +8,19 @@ const check = (path, ids) => cy.api('POST', `/__cypress/commission-entities/${pa
 describe('v2 commission tables (entities and database rules)', () => {
   beforeEach(function () {
     cy.registerPatient().then((patient) => {
-      cy.api('POST', '/api/payments', {
-        patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
-        paymentLabelCode: 'FULL',
-        items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
-      }).then(({ body: sale }) => {
+      cy.createServiceAppointment(this.fixtures, patient.id).then((appointment) =>
+          cy.api('POST', '/api/payments', {
+            patientId: patient.id,
+            branchCode: '01',
+            salespersonStaffId: this.fixtures.therapistId,
+            treatingStaffId: this.fixtures.therapistId,
+            appointmentId: appointment.id,
+            paymentLabelCode: 'FULL',
+            items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+            payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
+          })
+      ).then(({ status, body: sale }) => {
+        expect(status).to.equal(201)
         cy.api('GET', `/api/receipts/${sale.id}`).then(({ body: receipt }) => {
           cy.api('POST', `/api/payments/${receipt.payments[0].id}/refunds`, {
             amount: 300, paymentMethodCode: 'BankTransfer', reason: 'ลูกค้าไม่พอใจ',
