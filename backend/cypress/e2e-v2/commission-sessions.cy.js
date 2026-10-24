@@ -53,7 +53,7 @@ const buy = (fx, patient, courseId, ownerId) => cy.api('POST', '/api/course-purc
   expect(status, JSON.stringify(body)).to.equal(201)
   return body
 })
-const use = (courseId, extra = {}) => cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId, ...extra })
+const use = (courseId, extra = {}) => cy.useCourseSession(courseId, extra)
 const closeMonth = (m = month) => cy.api('POST', `/api/commission/closings/${m}?branchCode=01`,).its('status').should('equal', 200)
 const usages = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/usages`).its('body')
 const allocations = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/allocations`).its('body')
@@ -146,39 +146,60 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
     })
   })
 
-  it('links a session to a treatment of the same visit, PT and service, and refuses any other', function () {
+  it('creates the course treatment with its Visit and rejects a treatment from another Visit', function () {
     template('ACC13', 10000, 13).then((courseId) => {
-      cy.registerPatient().then((patient) => buy(this.fixtures, patient, courseId, this.fixtures.managerStaffId).then((course) => {
-        cy.configureBookingWindows()
-        cy.api('POST', '/api/appointments', {
-          branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, serviceId: this.fixtures.serviceId,
-          startAt: `${this.fixtures.tomorrow}T09:00:00+07:00`, endAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
-        }).then(({ body: appointment }) => {
-          cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)
-          const treatment = (extra) => cy.api('POST', '/api/treatments', {
-            patientId: patient.id, appointmentId: appointment.id, staffId: this.fixtures.therapistId,
-            serviceId: courseId, note: 'ใช้คอร์ส', ...extra,
-          }).then(({ status, body }) => {
-            expect(status, JSON.stringify(body)).to.equal(201)
-            return body
-          })
-          treatment({ serviceId: this.fixtures.serviceId }).then((other) => {
-            // a treatment of another service is not this course's
-            use(course.id, { appointmentId: appointment.id, treatingStaffId: this.fixtures.therapistId, treatmentId: other.id })
-              .its('status').should('equal', 400)
-          })
-          treatment({ staffId: this.fixtures.managerStaffId }).then((wrongPt) => {
-            use(course.id, { appointmentId: appointment.id, treatingStaffId: this.fixtures.therapistId, treatmentId: wrongPt.id })
-              .its('status').should('equal', 400)
-          })
-          usages(course.id).should('have.length', 0)
-          treatment({}).then((ok) => {
-            use(course.id, { appointmentId: appointment.id, treatingStaffId: this.fixtures.therapistId, treatmentId: ok.id })
-              .its('status').should('equal', 200)
-            usages(course.id).then((rows) => expect(rows[0].treatment_id).to.equal(ok.id))
+      cy.registerPatient().then((patient) => {
+        buy(
+            this.fixtures,
+            patient,
+            courseId,
+            this.fixtures.managerStaffId
+        ).then((course) => {
+          use(course.id, {
+            treatingStaffId: this.fixtures.therapistId,
+            note: 'ใช้คอร์ส',
+          }).its('status').should('equal', 200)
+
+          usages(course.id).then((rows) => {
+            expect(rows).to.have.length(1)
+            expect(rows[0].treatment_id).to.be.a('number')
+
+            const treatmentId = rows[0].treatment_id
+
+            cy.api('GET', `/api/treatments/patients/${patient.id}`)
+                .then(({ status, body }) => {
+                  expect(status).to.equal(200)
+                  const treatment = body.find(
+                      (entry) => entry.id === treatmentId
+                  )
+                  expect(treatment).to.exist
+                  expect(treatment.patientId).to.equal(patient.id)
+                  expect(treatment.staffId)
+                      .to.equal(this.fixtures.therapistId)
+                  expect(treatment.serviceId).to.equal(courseId)
+                  expect(treatment.note).to.equal('ใช้คอร์ส')
+                })
+
+            cy.createServiceAppointment(this.fixtures, patient.id)
+                .then((appointment) => {
+                  use(course.id, {
+                    appointmentId: appointment.id,
+                    treatingStaffId: this.fixtures.therapistId,
+                    treatmentId,
+                  }).its('status').should('equal', 400)
+
+                  usages(course.id).should('have.length', 1)
+
+                  use(course.id, {
+                    appointmentId: appointment.id,
+                    treatingStaffId: this.fixtures.therapistId,
+                  }).its('status').should('equal', 200)
+
+                  usages(course.id).should('have.length', 2)
+                })
           })
         })
-      }))
+      })
     })
   })
 
@@ -368,15 +389,26 @@ describe('v2 commission: sessions, rounding, substitute PT and the unknown rate 
 })
 
 describe('v2 commission: single-visit treatment fee', () => {
-  const sale = (fx, patient, items, extra = {}) => cy.api('POST', '/api/payments', {
-    patientId: patient.id, branchCode: '01', salespersonStaffId: fx.therapistId, treatingStaffId: fx.therapistId, paymentLabelCode: 'FULL', items, ...extra,
-  })
+  const sale = (fx, patient, items, extra = {}) => {
+    return cy.createServiceAppointment(fx, patient.id)
+        .then((appointment) => {
+          return cy.api('POST', '/api/payments', {
+            patientId: patient.id,
+            branchCode: '01',
+            appointmentId: appointment.id,
+            salespersonStaffId: fx.therapistId,
+            treatingStaffId: fx.therapistId,
+            paymentLabelCode: 'FULL',
+            items, ...extra,
+          })
+        })
+  }
   const fees = () => cy.api('GET', '/__cypress/commission/single-visit-fees').its('body')
 
   it('pays a Fixed fee once per visit, whatever the quantity, only when the receipt is paid', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }])
-        .its('status').should('equal', 201) // not paid: no fee
+          .its('status').should('equal', 400) // payment required: no fee
       fees().should('have.length', 0)
       sale(this.fixtures, patient, [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 2 }],
         { payments: [{ paymentMethodCode: 'BankTransfer', amount: 1600 }] }).its('status').should('equal', 201)
@@ -496,7 +528,7 @@ describe('v2 commission: cancelling or voiding a course keeps what was already e
           totals(courseId).then((row) => {
             expect(row.course_status).to.equal('Cancelled')
             expect(row.remaining_visits).to.equal(0)
-            expect(money(row.substitute_treatment_fee_total)).to.equal(150) // 9,000 x 10% / 6 sessions, kept
+            expect(money(row.substitute_treatment_fee_total)).to.equal(180) // 9,000 x 10% / 5 total sessions, kept
           })
           allocations(courseId).then((rows) => {
             expect(rows).to.have.length(1)
@@ -581,14 +613,26 @@ describe('v2 commission: closing the month while sessions are being recorded', (
           ).then((course) => {
             courses.push(course)
 
-            return race(closeRequest, {
-              method: 'POST',
-              url: '/api/course-usages',
-              body: { coursePurchaseId: course.id },
-            }).then((responses) => {
-              responses.forEach((response) => expect(response.status, JSON.stringify(response.body)).to.equal(200),
-              )
-            })
+            return cy.createServiceAppointment(this.fixtures, patient.id)
+                .then((appointment) => {
+                  return race(closeRequest, {
+                    method: 'POST',
+                    url: '/api/course-usages',
+                    body: {
+                      coursePurchaseId: course.id,
+                      patientId: patient.id,
+                      appointmentId: appointment.id,
+                      treatingStaffId: this.fixtures.therapistId,
+                    },
+                  })
+                }).then((responses) => {
+                  responses.forEach((response) => {
+                    expect(
+                        response.status,
+                        JSON.stringify(response.body)
+                    ).to.equal(200)
+                  })
+                })
           })
         }
         cy.then(() => {
