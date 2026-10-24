@@ -3,10 +3,11 @@ package com.sabyeguyz.clinicv2.commission;
 import com.sabyeguyz.clinicv2.audit.AuditLogService;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
+import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.enums.AuditAction;
 import com.sabyeguyz.clinicv2.enums.PaymentStatus;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
+import com.sabyeguyz.clinicv2.role.PermissionService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -31,18 +32,20 @@ public class CommissionPayrollController {
     private final StaffMonthlyPaymentService paymentService;
     private final StaffPayAdjustmentService adjustmentService;
     private final CurrentActor actor;
+    private final PermissionService permissions;
     private final BranchAccessPolicy branchAccess;
     private final AppUserRepository users;
     private final AuditLogService audit;
 
     public CommissionPayrollController(MonthlyCommissionClosingService closingService, StaffMonthlyPaymentService paymentService,
                                        StaffPayAdjustmentService adjustmentService, CurrentActor actor, AppUserRepository users,
-                                       AuditLogService audit, BranchAccessPolicy branchAccess,
-                                       MonthlyCommissionClosingRepository closings, BranchMonthlyClosingService branchClosingService) {
+                                       AuditLogService audit, BranchAccessPolicy branchAccess, MonthlyCommissionClosingRepository closings,
+                                       BranchMonthlyClosingService branchClosingService, PermissionService permissions) {
         this.closings = closings;
         this.branchAccess = branchAccess;
         this.closingService = closingService;
         this.branchClosingService = branchClosingService;
+        this.permissions = permissions;
         this.paymentService = paymentService;
         this.adjustmentService = adjustmentService;
         this.actor = actor;
@@ -99,6 +102,7 @@ public class CommissionPayrollController {
             @PathVariable String month,
             @RequestParam String branchCode,
             @RequestBody ReasonRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         StaffMonthlyPaymentService.requireMonth(month);
 
         var branch = branchAccess.scope(branchCode);
@@ -122,6 +126,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/closings/{closingId}/reopen")
     public ClosingStateResponse reopenClosing(@PathVariable Long closingId, @RequestBody ReasonRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         MonthlyCommissionClosing existing = closings.findById(closingId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการปิดยอด"));
 
@@ -199,7 +204,7 @@ public class CommissionPayrollController {
     public List<PaymentResponse> prepare(
             @RequestParam String month,
             @RequestParam String branchCode) {
-
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         StaffMonthlyPaymentService.requireMonth(month);
 
         var branch = branchAccess.scope(branchCode);
@@ -229,7 +234,7 @@ public class CommissionPayrollController {
     public List<PaymentResponse> closeBranchMonth(
             @RequestParam String month,
             @RequestParam String branchCode) {
-
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         StaffMonthlyPaymentService.requireMonth(month);
 
         var branch = branchAccess.scope(branchCode);
@@ -256,6 +261,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/payments/{id}/reopen")
     public PaymentResponse reopenPayment(@PathVariable Long id) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         requirePaymentAccess(id);
         StaffMonthlyPayment payment = paymentService.reopen(id, actor.currentId());
         audit.record("staff_monthly_payment", String.valueOf(id), AuditAction.UPDATE, "Closed", "Open", actor.currentId());
@@ -264,6 +270,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/payments/{id}/pay")
     public PaymentResponse pay(@PathVariable Long id, @RequestBody(required = false) PayRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         requirePaymentAccess(id);
         StaffMonthlyPayment payment = request == null ? paymentService.pay(id, actor.currentId())
                 : paymentService.pay(id, request.paidDate(), request.reference(), actor.currentId());
@@ -300,6 +307,7 @@ public class CommissionPayrollController {
     @PostMapping("/adjustments")
     @ResponseStatus(HttpStatus.CREATED)
     public AdjustmentResponse createAdjustment(@RequestBody StaffPayAdjustmentService.CreateRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         StaffPayAdjustment adjustment = adjustmentService.create(request, actor.currentId());
         audit.record("staff_pay_adjustment", String.valueOf(adjustment.getId()), AuditAction.INSERT, null,
                 adjustment.getAmount() + " for staff " + adjustment.getStaff().getId() + ": " + adjustment.getReason(), actor.currentId());
@@ -308,6 +316,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/adjustments/{id}/approve")
     public AdjustmentResponse approveAdjustment(@PathVariable Long id) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         StaffPayAdjustment adjustment = adjustmentService.approve(id, actor.currentId());
         audit.record("staff_pay_adjustment", String.valueOf(id), AuditAction.UPDATE, "Pending", "Approved", actor.currentId());
         return toAdjustment(adjustment);
@@ -315,6 +324,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/adjustments/{id}/cancel")
     public AdjustmentResponse cancelAdjustment(@PathVariable Long id) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         StaffPayAdjustment adjustment = adjustmentService.cancel(id);
         audit.record("staff_pay_adjustment", String.valueOf(id), AuditAction.UPDATE, null, "Cancelled", actor.currentId());
         return toAdjustment(adjustment);
@@ -322,6 +332,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/adjustments/{id}/external-review")
     public AdjustmentResponse externalReview(@PathVariable Long id) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         StaffPayAdjustment adjustment = adjustmentService.externalReview(id);
         audit.record("staff_pay_adjustment", String.valueOf(id), AuditAction.UPDATE, null, "ExternalReview", actor.currentId());
         return toAdjustment(adjustment);
@@ -332,7 +343,7 @@ public class CommissionPayrollController {
     public ApplicationResponse createApplication(
             @PathVariable Long id,
             @RequestBody ApplicationRequest request) {
-
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         var branch = branchAccess.scope(request.branchCode());
         if (branch == null) {
             throw new IllegalArgumentException(
@@ -359,6 +370,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/adjustment-applications/{id}/approve")
     public ApplicationResponse approveApplication(@PathVariable Long id, @RequestBody(required = false) ReferenceRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         AdjustmentApplication application = adjustmentService.approveApplication(id,
                 request == null ? null : request.reference(), actor.currentId());
         audit.record("adjustment_application", String.valueOf(id), AuditAction.UPDATE, "Draft", "Draft approved", actor.currentId());
@@ -367,6 +379,7 @@ public class CommissionPayrollController {
 
     @PostMapping("/adjustment-applications/{id}/cancel")
     public ApplicationResponse cancelApplication(@PathVariable Long id) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         AdjustmentApplication application = adjustmentService.cancelApplication(id);
         audit.record("adjustment_application", String.valueOf(id), AuditAction.UPDATE, "Draft", "Cancelled", actor.currentId());
         return toApplication(application);

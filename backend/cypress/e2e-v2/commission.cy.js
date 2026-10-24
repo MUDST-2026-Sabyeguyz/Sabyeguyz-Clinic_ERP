@@ -98,9 +98,9 @@ describe('v2 commission', () => {
         })
         cy.api('POST', `/api/commission/closings/${month}?branchCode=01`).its('status').should('equal', 200)
         cy.api('GET', `/api/commission/treatment-report${range}`).then(({ body }) => {
-          // 9,000 THB at 5% = 450 over 6 sessions: 75.00 for the first session
-          expect(Number(body[0].ownerNet)).to.equal(75)
-          expect(Number(body[0].gross)).to.equal(75)
+          // 9,000 THB at 5% = 450 over 5 total sessions: 90.00 per session
+          expect(Number(body[0].ownerNet)).to.equal(90)
+          expect(Number(body[0].gross)).to.equal(90)
           expect(body[0].ownerNetPending).to.equal(false)
         })
       })
