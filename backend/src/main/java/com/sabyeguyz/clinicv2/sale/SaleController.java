@@ -7,6 +7,8 @@ import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.catalog.ServiceRepository;
+import com.sabyeguyz.clinicv2.catalog.Course;
+import com.sabyeguyz.clinicv2.course.CourseUsageBatchService;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
@@ -18,6 +20,7 @@ import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -57,6 +60,7 @@ public class SaleController {
     private final PaymentMethodRepository paymentMethods;
     private final CurrentActor actor;
     private final SingleVisitFeeAccrual singleVisitFees;
+    private final CourseUsageBatchService usageBatchService;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
     private final com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService;
     private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
@@ -64,17 +68,19 @@ public class SaleController {
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
-                           PaymentTransactionService paymentTransactionService,
-                           TransactionCancellationService cancellations, TransactionCancellationRepository cancellationRecords, PermissionService permissions,
-                           SalesTransactionRepository transactions,
-                           PaymentTransactionRepository payments, ReceiptRepository receipts,
-                           PatientRepository patients, BranchRepository branches, StaffRepository staff,
-                           ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                     com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
-                                     com.sabyeguyz.clinicv2.auth.AppUserRepository users,
-                                     SingleVisitFeeAccrual singleVisitFees,
-                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+                          PaymentTransactionService paymentTransactionService,
+                          TransactionCancellationService cancellations, TransactionCancellationRepository cancellationRecords, PermissionService permissions,
+                          SalesTransactionRepository transactions,
+                          PaymentTransactionRepository payments, ReceiptRepository receipts,
+                          PatientRepository patients, BranchRepository branches, StaffRepository staff,
+                          ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor,
+                          com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                          com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
+                          com.sabyeguyz.clinicv2.auth.AppUserRepository users,
+                          SingleVisitFeeAccrual singleVisitFees,
+                          com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess,
+                          CourseUsageBatchService usageBatchService) {
+        this.usageBatchService = usageBatchService;
         this.branchAccess = branchAccess;
         this.singleVisitFees = singleVisitFees;
         this.visitService = visitService;
@@ -100,9 +106,13 @@ public class SaleController {
                                BigDecimal discountValue) {}
     public record PaymentRequest(String paymentMethodCode, BigDecimal amount) {}
     /** treatingStaffId (optional) is the PT who treated the single-visit lines; default: the salesperson, else the signed-in staff. */
-    public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note, List<ItemRequest> items,
-                                List<PaymentRequest> payments, String billDiscountType, BigDecimal billDiscountValue,
-                                Long treatingStaffId, String paymentLabelCode, Long appointmentId) {}
+    public record CreateRequest(
+            Long patientId, String branchCode, Long salespersonStaffId, String note,
+            List<ItemRequest> items, List<PaymentRequest> payments,
+            String billDiscountType, BigDecimal billDiscountValue,
+            Long treatingStaffId, String paymentLabelCode,
+            Long appointmentId,
+            List<CourseUsageBatchService.Item> courseUsages) {}
     public record ReverseRequest(String reason) {}
 
     private Staff singleVisitTreatingStaff(CreateRequest request, Staff salesperson) {
@@ -187,6 +197,15 @@ public class SaleController {
         Staff salesperson = request.salespersonStaffId() == null ? null
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
 
+        List<CourseUsageBatchService.Item> usageItems =
+                request.courseUsages() == null
+                        ? List.of()
+                        : request.courseUsages();
+
+        Map<Long, Course> lockedCourses = usageItems.isEmpty()
+                ? Map.of()
+                : usageBatchService.lockCourses(usageItems);
+
         String receiptNo = receiptService.nextReceiptNo(branch, ClinicTime.today());
         Receipt receipt = receiptService.create(
                 receiptNo, patient, branch, ClinicTime.today(),
@@ -220,6 +239,11 @@ public class SaleController {
                         salesperson, Math.max(1, item.quantity()), null, visit, discount, actor.currentId()));
             }
         }
+
+        if (!usageItems.isEmpty() && appointmentVisit == null) {
+            throw new IllegalArgumentException("การใช้คอร์สร่วมรายการขายต้องมีบริการรายครั้งใน Visit เดียวกัน");
+        }
+
         receiptService.finalizeTotals(receipt, lines,
                 Discount.of(request.billDiscountType(), request.billDiscountValue()), actor.currentId());
 
@@ -234,10 +258,10 @@ public class SaleController {
                     patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
 
             if (appointmentVisit != null) {
-                appointmentVisit = visitService.completeForService(
-                        appointmentVisit.getId(),
-                        request.appointmentId(),
-                        actor.currentId());
+                if (!usageItems.isEmpty()) {
+                    usageBatchService.recordForVisit(lockedCourses, usageItems, appointmentVisit, ClinicTime.now(), actor.currentId());
+                }
+                appointmentVisit = visitService.completeForService(appointmentVisit.getId(), request.appointmentId(), actor.currentId());
             }
 
             singleVisitFees.accrue(receipt, lines, actor.currentId());
