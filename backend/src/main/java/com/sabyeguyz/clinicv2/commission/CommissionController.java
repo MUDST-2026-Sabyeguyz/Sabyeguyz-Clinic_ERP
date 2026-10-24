@@ -7,7 +7,7 @@ import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.role.Permission;
-import com.sabyeguyz.clinicv2.role.PermissionRepository;
+import com.sabyeguyz.clinicv2.role.PermissionService;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.math.BigDecimal;
@@ -50,7 +50,7 @@ public class CommissionController {
     private final TreatmentFeeRuleRepository treatmentFeeRules;
     private final CourseRepository courses;
     private final StaffRepository staff;
-    private final PermissionRepository permissions;
+    private final PermissionService permissions;
     private final CurrentActor actor;
     private final BranchAccessPolicy branchAccess;
     private final CommissionRateOverrideService overrideService;
@@ -61,7 +61,7 @@ public class CommissionController {
                                 BranchMonthlyClosingService branchClosingService, CommissionSchemeResolver schemeResolver,
                                 MonthlyCommissionClosingRepository closings, CommissionAllocationLedgerRepository allocationLedger,
                                 TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses, StaffRepository staff,
-                                PermissionRepository permissions, CurrentActor actor, CommissionRateOverrideService overrideService,
+                                PermissionService permissions, CurrentActor actor, CommissionRateOverrideService overrideService,
                                 com.sabyeguyz.clinicv2.audit.AuditLogService audit, TreatmentFeeRuleService treatmentFeeService,
                                 MonthlyTierSalesService tierSales,
                                 com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
@@ -147,6 +147,7 @@ public class CommissionController {
     /** A scheme in use keeps its tiers: a request that carries tiers for it is refused with 409. */
     @PutMapping("/schemes/{id}")
     public SchemeResponse updateScheme(@PathVariable Long id, @RequestBody SchemeRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_SCHEME_MANAGE", actor.currentId());
         java.util.Map<String, Object> before = schemes.findById(id).map(this::schemeSnapshot).orElse(null);
         CommissionScheme scheme = schemeService.update(id, request.name(), request.effectiveFrom(),
                 null, branchAccess.scope(request.branchCode()), toInputs(request.tiers()), actor.currentId());
@@ -159,6 +160,7 @@ public class CommissionController {
     @PostMapping("/schemes/{id}/versions")
     @ResponseStatus(HttpStatus.CREATED)
     public SchemeResponse createSchemeVersion(@PathVariable Long id, @RequestBody SchemeRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_SCHEME_MANAGE", actor.currentId());
         CommissionScheme scheme = schemeService.createVersion(id, request.effectiveFrom(), null,
                 branchAccess.scope(request.branchCode()), toInputs(request.tiers()), actor.currentId());
         audit.recordChange("commission_scheme", String.valueOf(scheme.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
@@ -435,6 +437,7 @@ public class CommissionController {
 
     @PutMapping("/treatment-fees/{id}")
     public TreatmentFeeResponse updateTreatmentFee(@PathVariable Long id, @RequestBody TreatmentFeeRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_SCHEME_MANAGE", actor.currentId());
         var branch = branchAccess.scope(request.branchCode());
         if (branch == null) {
             throw new IllegalArgumentException(
@@ -458,6 +461,7 @@ public class CommissionController {
     /** Records the single-visit fees still missing for paid visits of the period (after a rule was set). */
     @PostMapping("/single-visit-fees/backfill")
     public java.util.Map<String, Integer> backfillSingleVisitFees(@RequestParam LocalDate from, @RequestParam LocalDate to) {
+        permissions.requireManagerAllowed("COMMISSION_SCHEME_MANAGE", actor.currentId());
         if (to.isBefore(from)) throw new IllegalArgumentException("invalid date range");
         int recorded = singleVisitFeeAccrual.backfill(from, to, actor.currentId());
         if (recorded > 0) {
@@ -478,6 +482,7 @@ public class CommissionController {
     }
 
     private TreatmentFeeResponse setTreatmentFeeEnabled(Long id, boolean enabled) {
+        permissions.requireManagerAllowed("COMMISSION_SCHEME_MANAGE", actor.currentId());
         java.util.Map<String, Object> before = treatmentFeeRules.findById(id).map(this::feeSnapshot).orElse(null);
         TreatmentFeeRule rule = treatmentFeeService.setEnabled(id, enabled, actor.currentId());
         java.util.Map<String, Object> after = feeSnapshot(rule);
@@ -526,15 +531,7 @@ public class CommissionController {
     }
 
     private Permission resolveOrCreatePermission(String name) {
-        return permissions.findAll().stream().filter(p -> name.equals(p.getPermissionName())).findFirst()
-                .orElseGet(() -> {
-                    Permission permission = new Permission();
-                    permission.setPermissionName(name);
-                    permission.setModuleName("Commission");
-                    permission.setPermissionCreateAt(Instant.now());
-                    permission.setPermissionCreateBy(actor.currentId());
-                    return permissions.save(permission);
-                });
+        return permissions.requireManagerAllowed(name, actor.currentId());
     }
 
     private SchemeResponse toSchemeResponse(CommissionScheme scheme) {
