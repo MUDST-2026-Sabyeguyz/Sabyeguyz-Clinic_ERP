@@ -154,7 +154,10 @@ public class V2WorkflowScenariosController {
         existing.setAppointment(appointment);
         existing.setVisitStatus(scenario.equals("cancelled") ? VisitStatus.Cancelled : VisitStatus.InService);
         visits.on("findById", args -> Optional.of(existing));
-        var service = new PatientVisitService(visits.proxy(), appointments);
+        var auditRows = new V2RepositoryStub<>(AuditLogRepository.class);
+        var auditService = new AuditLogService(auditRows.proxy());
+        var service = new PatientVisitService(
+                visits.proxy(), appointments, auditService);
         return V2RepositoryStub.outcome(() -> {
             PatientVisit result = switch (scenario) {
                 case "check-in" -> service.checkInFromAppointment(5L, 1L);
