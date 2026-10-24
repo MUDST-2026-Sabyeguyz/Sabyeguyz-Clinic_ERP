@@ -17,11 +17,11 @@ function book(fx, patient, overrides = {}) {
 }
 
 describe('v2 appointments', () => {
-  it('books a registered patient as Confirmed with patient, therapist and service in the response', function () {
+  it('books a registered patient as Unconfirmed with patient, therapist and service in the response', function () {
     cy.registerPatient().then((patient) => {
       book(this.fixtures, patient).then(({ status, body }) => {
         expect(status).to.equal(201)
-        expect(body.status).to.equal('CONFIRMED')
+        expect(body.status).to.equal('UNCONFIRMED')
         expect(body.patientType).to.equal('CURRENT')
         expect(body.patient.id).to.equal(patient.id)
         expect(body.patient.hn).to.equal(patient.hn)
@@ -75,7 +75,7 @@ describe('v2 appointments', () => {
     })
   })
 
-  it('books an unregistered NEW patient as Unconfirmed, then confirms it', function () {
+  it('keeps a NEW appointment Unconfirmed when direct confirmation is rejected', function () {
     cy.api('POST', '/api/appointments', {
       branchCode: '01',
       therapistId: this.fixtures.therapistId,
@@ -85,14 +85,20 @@ describe('v2 appointments', () => {
       patientType: 'NEW',
       contactName: 'สมศรี ใจงาม',
       contactPhone: '0899999999',
-    }).then(({status, body}) => {
+    }).then(({ status, body }) => {
       expect(status).to.equal(201)
       expect(body.status).to.equal('UNCONFIRMED')
       expect(body.patientType).to.equal('NEW')
       expect(body.contactName).to.equal('สมศรี ใจงาม')
-      cy.api('POST', `/api/appointments/${body.id}/confirm`).then((confirmed) => {
-        expect(confirmed.status).to.equal(200)
-        expect(confirmed.body.status).to.equal('CONFIRMED')
+
+      cy.api('POST', `/api/appointments/${body.id}/confirm`)
+          .its('status').should('equal', 409)
+
+      cy.api('GET', `/api/appointments/${body.id}`).then((saved) => {
+        expect(saved.status).to.equal(200)
+        expect(saved.body.status).to.equal('UNCONFIRMED')
+        expect(saved.body.patientType).to.equal('NEW')
+        expect(saved.body.patient.id).to.equal(null)
       })
     })
   })
@@ -121,15 +127,19 @@ describe('v2 appointments', () => {
     })
   })
 
-  it('walks a visit through check-in, start and complete', function () {
+  it('rejects check-in before successful service and keeps the appointment Unconfirmed', function () {
     cy.registerPatient().then((patient) => {
-      book(this.fixtures, patient).then(({ body }) => {
-        const post = (action) => cy.api('POST', `/api/appointments/${body.id}/${action}`)
-        post('check-in').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('ARRIVED') })
-        post('start-service').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('IN_SERVICE') })
-        post('complete').then((r) => { expect(r.status).to.equal(200); expect(r.body.status).to.equal('COMPLETED') })
-        // A completed appointment is final.
-        cy.api('POST', `/api/appointments/${body.id}/cancel`, { reason: 'x' }).its('status').should('equal', 400)
+      book(this.fixtures, patient).then(({ status, body }) => {
+        expect(status).to.equal(201)
+
+        cy.api('POST', `/api/appointments/${body.id}/check-in`)
+            .its('status').should('equal', 409)
+
+        cy.api('GET', `/api/appointments/${body.id}`).then((saved) => {
+          expect(saved.status).to.equal(200)
+          expect(saved.body.status).to.equal('UNCONFIRMED')
+          expect(saved.body.patient.id).to.equal(patient.id)
+        })
       })
     })
   })
@@ -142,13 +152,203 @@ describe('v2 appointments', () => {
     })
   })
 
-  it('marks a no-show', function () {
+  it('rejects no-show and allows cancellation with a reason', function () {
     cy.registerPatient().then((patient) => {
-      book(this.fixtures, patient).then(({ body }) => {
-        cy.api('POST', `/api/appointments/${body.id}/no-show`).then((r) => {
-          expect(r.status).to.equal(200)
-          expect(r.body.status).to.equal('NO_SHOW')
+      book(this.fixtures, patient).then(({ status, body }) => {
+        expect(status).to.equal(201)
+
+        cy.api('POST', `/api/appointments/${body.id}/no-show`)
+            .its('status').should('equal', 409)
+
+        cy.api('GET', `/api/appointments/${body.id}`)
+            .its('body.status').should('equal', 'UNCONFIRMED')
+
+        cy.api('POST', `/api/appointments/${body.id}/cancel`, {
+          reason: 'ผู้ป่วยไม่มาตามนัด',
+        }).then((cancelled) => {
+          expect(cancelled.status).to.equal(200)
+          expect(cancelled.body.status).to.equal('CANCELLED')
+          expect(cancelled.body.cancelReason)
+              .to.equal('ผู้ป่วยไม่มาตามนัด')
         })
+      })
+    })
+  })
+
+  it('confirms a CURRENT appointment only after successful payment', function () {
+    cy.registerPatient().then((patient) => {
+      book(this.fixtures, patient, {
+        serviceId: this.fixtures.singleVisitServiceId,
+      }).then(({ status, body: appointment }) => {
+        expect(status).to.equal(201)
+        expect(appointment.status).to.equal('UNCONFIRMED')
+
+        const payment = {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: this.fixtures.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+        }
+
+        cy.api('POST', '/api/payments', payment).then((paid) => {
+          expect(paid.status).to.equal(201)
+          expect(paid.body.status).to.equal('PAID')
+          expect(Number(paid.body.paid)).to.equal(800)
+        })
+
+        cy.api('GET', `/api/appointments/${appointment.id}`)
+            .then((saved) => {
+              expect(saved.status).to.equal(200)
+              expect(saved.body.status).to.equal('CONFIRMED')
+              expect(saved.body.patient.id).to.equal(patient.id)
+            })
+
+        // Sending the same request again must not create another sale.
+        cy.api('POST', '/api/payments', payment)
+            .its('status').should('equal', 409)
+      })
+    })
+  })
+
+  it('keeps the appointment Unconfirmed after failed payment and allows a retry', function () {
+    cy.registerPatient().then((patient) => {
+      book(this.fixtures, patient, {
+        serviceId: this.fixtures.singleVisitServiceId,
+      }).then(({ status, body: appointment }) => {
+        expect(status).to.equal(201)
+
+        const payment = {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: this.fixtures.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 799,}],
+        }
+
+        cy.api('POST', '/api/payments', payment)
+            .its('status').should('equal', 400)
+
+        cy.api('GET', `/api/appointments/${appointment.id}`)
+            .its('body.status').should('equal', 'UNCONFIRMED')
+
+        cy.api('POST', '/api/payments', {
+          ...payment,
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 800,
+          }],
+        }).then((paid) => {
+          expect(paid.status).to.equal(201)
+          expect(paid.body.status).to.equal('PAID')
+        })
+
+        cy.api('GET', `/api/appointments/${appointment.id}`)
+            .its('body.status').should('equal', 'CONFIRMED')
+      })
+    })
+  })
+
+  it('confirms an appointment after deducting one course session', function () {
+    cy.registerPatient().then((patient) => {
+      cy.api('POST', '/api/course-purchases', {
+        patientId: patient.id,
+        courseId: this.fixtures.courseId,
+        branchCode: '01',
+        caseOwnerStaffId: this.fixtures.therapistId,
+        paymentLabelCode: 'FULL',
+      }).then(({ status, body: purchase }) => {
+        expect(status).to.equal(201)
+
+        book(this.fixtures, patient).then(({ status, body: appointment }) => {
+          expect(status).to.equal(201)
+          expect(appointment.status).to.equal('UNCONFIRMED')
+
+          const usage = {
+            coursePurchaseId: purchase.id,
+            appointmentId: appointment.id,
+            patientId: patient.id,
+            treatingStaffId: this.fixtures.therapistId,
+          }
+
+          // Invalid treatment: the request must roll back.
+          cy.api('POST', '/api/course-usages', {
+            ...usage,
+            treatmentId: 999999,
+          }).its('status').should('equal', 400)
+
+          cy.api('GET', `/api/appointments/${appointment.id}`)
+              .its('body.status').should('equal', 'UNCONFIRMED')
+
+          cy.api('GET', `/api/course-purchases/${purchase.id}`)
+              .then((saved) => {
+                expect(saved.status).to.equal(200)
+                expect(saved.body.purchase.remaining).to.equal(purchase.remaining)
+                expect(saved.body.purchase.used).to.equal(purchase.used)
+              })
+
+          cy.api('POST', '/api/course-usages', usage).then((used) => {
+            expect(used.status).to.equal(200)
+            expect(used.body.remaining).to.equal(purchase.remaining - 1)
+            expect(used.body.used).to.equal(purchase.used + 1)
+          })
+
+          cy.api('GET', `/api/appointments/${appointment.id}`)
+              .its('body.status').should('equal', 'CONFIRMED')
+
+          cy.api('POST', '/api/course-usages', usage)
+              .its('status').should('equal', 409)
+
+          cy.api('GET', `/api/course-purchases/${purchase.id}`)
+              .then((saved) => {
+                expect(saved.status).to.equal(200)
+                expect(saved.body.purchase.remaining).to.equal(purchase.remaining - 1)
+                expect(saved.body.purchase.used).to.equal(purchase.used + 1)
+              })
+        })
+      })
+    })
+  })
+
+  it('confirms a NEW appointment after payment without linking the registered patient', function () {
+    cy.api('POST', '/api/appointments', {
+      branchCode: '01',
+      therapistId: this.fixtures.therapistId,
+      serviceId: this.fixtures.singleVisitServiceId,
+      startAt: at(this.fixtures, '10:00'),
+      endAt: at(this.fixtures, '11:00'),
+      patientType: 'NEW',
+      contactName: 'สมศรี ใจงาม',
+      contactPhone: '0899999999',
+    }).then(({ status, body: appointment }) => {
+      expect(status).to.equal(201)
+      expect(appointment.status).to.equal('UNCONFIRMED')
+
+      cy.registerPatient({
+        firstName: 'สมศรี',
+        lastName: 'ใจงาม',
+        phone: '0899999999',
+      }).then((patient) => {
+        cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: this.fixtures.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+        }).its('status').should('equal', 201)
+
+        cy.api('GET', `/api/appointments/${appointment.id}`)
+            .then((saved) => {
+              expect(saved.status).to.equal(200)
+              expect(saved.body.status).to.equal('CONFIRMED')
+              expect(saved.body.patientType).to.equal('NEW')
+              expect(saved.body.patient.id).to.equal(null)
+              expect(saved.body.patient.hn).to.equal(null)
+            })
       })
     })
   })
@@ -161,6 +361,7 @@ describe('v2 appointments', () => {
           endAt: at(this.fixtures, '15:00'),
         }).then((r) => {
           expect(r.status).to.equal(200)
+          expect(r.body.status).to.equal('UNCONFIRMED')
           expect(new Date(r.body.startAt).toISOString())
               .to.equal(new Date(at(this.fixtures, '14:00')).toISOString())
           expect(new Date(r.body.endAt).toISOString())
