@@ -936,3 +936,34 @@ body:is(.therapist-ui, :not(.therapist-ui))
     justify-self: end;
   }
 }
+
+/* Compact date controls and row-local feedback. */
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-date-filter-wrap {
+  margin-left: auto;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-sort {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-sort small {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-row-notice {
+  display: block;
+  margin-top: 8px;
+  color: #145c59;
+  font-size: 14px;
+  line-height: 1.5;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-row-notice.is-error {
+  color: #b42318;
+}
+@media (max-width: 700px) {
+  body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-date-filter-wrap {
+    width: 100%;
+    margin-left: 0;
+  }
+}
