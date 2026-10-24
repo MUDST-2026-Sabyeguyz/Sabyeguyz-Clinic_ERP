@@ -9,7 +9,7 @@ import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
-import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
+import AppointmentDateFilter from '../components/AppointmentDateFilter.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   appointmentApi,
@@ -183,6 +183,8 @@ const editingId = ref<number | null>(null)
 const originalEditingAppointment = ref<Appointment | null>(null)
 const savingStatusId = ref<number | null>(null)
 const statusNotice = ref('')
+const statusNoticeId = ref<number | null>(null)
+const statusNoticeError = ref(false)
 const errorMessage = ref('')
 const showRequiredValidation = ref(false)
 const appointmentSuccessMessage = ref('')
@@ -326,12 +328,12 @@ const listDateCaption = computed(() => {
     ? format(startDate.value)
     : format(startDate.value) + ' – ' + format(endDate.value)
 })
-function showToday() {
-  const alreadyToday = startDate.value === clinicToday() && endDate.value === clinicToday()
+function applyDateRange(from: string, to: string) {
+  const unchanged = from === startDate.value && to === endDate.value
   selectedMonth.value = ''
-  startDate.value = clinicToday()
-  endDate.value = clinicToday()
-  if (alreadyToday) void load()
+  startDate.value = from
+  endDate.value = to
+  if (unchanged) void load()
 }
 const isCourseAppointment = (item: Appointment) => {
   const courseAppointment = item as Appointment & {
@@ -353,13 +355,6 @@ const patientPhone = (item: Appointment) =>
   patients.value.find((patient) => patient.id === item.patient?.id)?.phone ||
   item.contactPhone ||
   '-'
-const appointmentRoom = (item: Appointment) => {
-  const appointmentWithRoom = item as Appointment & {
-    roomName?: string
-    room?: { name?: string }
-  }
-  return appointmentWithRoom.roomName || appointmentWithRoom.room?.name || '—'
-}
 const editingPatientPhone = computed(() =>
   editingAppointment.value ? patientPhone(editingAppointment.value) : '-',
 )
@@ -925,6 +920,9 @@ function dismissAppointmentSuccess() {
   void router.replace({ name: 'staff-appointments' })
 }
 async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') {
+  if (savingStatusId.value !== null) return false
+  statusNoticeId.value = item.id
+  statusNoticeError.value = false
   savingStatusId.value = item.id
   statusNotice.value = 'กำลังบันทึก...'
   try {
@@ -947,6 +945,7 @@ async function saveStatus(item: Appointment, status: AppointmentStatus, reason =
     statusNotice.value = 'บันทึกแล้ว'
     return true
   } catch (error) {
+    statusNoticeError.value = true
     statusNotice.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ'
     return false
   } finally {
@@ -1576,45 +1575,9 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               รายคอร์ส
             </button>
           </div>
-          <header class="panel-head appointment-list-filters">
-            <button
-              class="appointment-today"
-              type="button"
-              @click="showToday"
-              :aria-pressed="startDate === clinicToday() && endDate === clinicToday()"
-            >
-              วันนี้
-            </button>
-            <div class="appointment-date-range appointment-month-filter">
-              <span>เดือน</span>
-              <MonthFilterPicker
-                v-model="selectedMonth"
-                clearable
-                :past-years="3"
-                :future-years="0"
-              />
-            </div>
-            <label class="appointment-date-range">
-              <span>วันที่เริ่มต้น</span>
-              <ThaiDatePicker
-                v-model="startDate"
-                numeric-month
-                show-calendar-icon
-                hide-caret
-                placeholder="วว/ดด/ปปปป"
-              />
-            </label>
-            <label class="appointment-date-range">
-              <span>วันที่สิ้นสุด</span>
-              <ThaiDatePicker
-                v-model="endDate"
-                numeric-month
-                show-calendar-icon
-                hide-caret
-                placeholder="วว/ดด/ปปปป"
-              />
-            </label>
-          </header>
+          <div class="appointment-date-filter-wrap">
+            <AppointmentDateFilter :from="startDate" :to="endDate" @apply="applyDateRange" />
+          </div>
         </div>
         <div v-if="scheduleView === 'list'" class="appointment-list-summary">
           <p class="appointment-summary-date">{{ listDateCaption }}</p>
@@ -1634,7 +1597,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               "
               @click="toggleSortOrder"
             >
-              {{ sortOrder === 'oldest' ? 'ล่าสุด ↓' : 'ล่าสุด ↑' }}
+              <span>{{ sortOrder === 'oldest' ? 'ล่าสุด↓' : 'ล่าสุด↑' }}</span>
             </button>
             <span v-if="!listLoading && !errorMessage" class="appointment-summary-count">
               {{ filteredAppointments.length.toLocaleString('th-TH') }} นัดหมาย
@@ -1777,11 +1740,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <th>บริการ</th>
                 <th>นักกายภาพ</th>
                 <th>สถานะ</th>
-                <th class="status-notice-cell">
-                  <span v-if="statusNotice" class="status-feedback" aria-live="polite">{{
-                    statusNotice
-                  }}</span>
-                </th>
+                <th scope="col" class="status-notice-cell">การดำเนินการ</th>
               </tr>
             </thead>
             <tbody>
@@ -1820,6 +1779,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                     :data-status="uiStatusFor(item.status)"
                   >
                     <FilterDropdown
+                      :disabled="savingStatusId !== null"
                       :model-value="uiStatusFor(item.status)"
                       :options="
                         appointmentStatusOptions
@@ -1839,6 +1799,13 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                       @update:model-value="requestStatusChange(item, $event)"
                     />
                   </div>
+                  <span
+                    v-if="statusNoticeId === item.id && statusNotice"
+                    class="appointment-row-notice"
+                    :class="{ 'is-error': statusNoticeError }"
+                    :role="statusNoticeError ? 'alert' : 'status'"
+                    >{{ statusNotice }}</span
+                  >
                 </td>
                 <td>
                   <span
