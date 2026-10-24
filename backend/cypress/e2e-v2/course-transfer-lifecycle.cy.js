@@ -105,9 +105,14 @@ describe('v2 course transfer lifecycle', () => {
             endAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
           }).then(({ status, body: appointment }) => {
             expect(status, JSON.stringify(appointment)).to.equal(201)
-            cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)
-            cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id, appointmentId: appointment.id })
-              .its('status').should('equal', 200)
+            cy.useCourseSession(purchase.id, {
+              appointmentId: appointment.id,
+              patientId: friend.id,
+              treatingStaffId: this.fixtures.therapistId,
+            }).its('status').should('equal', 200)
+
+            cy.api('GET', `/api/appointments/${appointment.id}`)
+                .its('body.status').should('equal', 'CONFIRMED')
           })
           coursesOf(friend).its('0.remaining').should('equal', 1)
           coursesOf(owner).its('0.remaining').should('equal', purchase.remaining - 2)
@@ -119,7 +124,7 @@ describe('v2 course transfer lifecycle', () => {
   it('shows the treating therapist name on the course usage list (R38)', function () {
     cy.registerPatient().then((owner) => {
       buy(this.fixtures, owner).then(({ body: purchase }) => {
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('equal', 200)
+        cy.useCourseSession(purchase.id).its('status').should('equal', 200)
         cy.api('GET', '/api/course-usages').its('body').then((rows) => {
           const mine = rows.find((row) => row.coursePurchaseId === purchase.id)
           expect(mine, 'the usage is listed').to.exist
@@ -133,7 +138,7 @@ describe('v2 course transfer lifecycle', () => {
   it('shows the owner HN and name on the course usage list', function () {
     cy.registerPatient().then((owner) => {
       buy(this.fixtures, owner).then(({ body: purchase }) => {
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('equal', 200)
+        cy.useCourseSession(purchase.id).its('status').should('equal', 200)
         cy.api('GET', '/api/course-usages').its('body').then((rows) => {
           const mine = rows.find((row) => row.coursePurchaseId === purchase.id)
           expect(mine, 'the usage is listed').to.exist

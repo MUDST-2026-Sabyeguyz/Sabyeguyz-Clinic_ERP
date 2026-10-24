@@ -22,7 +22,21 @@ public class CypressDashboardFixturesController {
     @PostMapping("/dates")
     public void dates(@RequestBody Dates request) {
         if (request.registeredAt() != null) jdbc.update("UPDATE patient SET registered_at=?::timestamptz AT TIME ZONE 'UTC' WHERE patient_id=?", request.registeredAt().toString(), request.patientId());
-        if (request.visitAt() != null) jdbc.update("UPDATE patient_visit SET visit_date=?::timestamptz AT TIME ZONE 'UTC' WHERE patient_id=?", request.visitAt().toString(), request.patientId());
+        if (request.visitAt() != null) {
+            jdbc.update("""
+            UPDATE patient_visit
+            SET checkout_time = CASE
+                    WHEN checkout_time IS NULL THEN NULL
+                    ELSE (?::timestamptz AT TIME ZONE 'UTC')
+                         + (checkout_time - visit_date)
+                END,
+                visit_date = ?::timestamptz AT TIME ZONE 'UTC'
+            WHERE patient_id = ?
+            """,
+                    request.visitAt().toString(),
+                    request.visitAt().toString(),
+                    request.patientId());
+        }
         if (request.paymentAt() != null) jdbc.update("UPDATE payment_transaction SET payment_date=?::timestamptz AT TIME ZONE 'UTC' WHERE patient_id=?", request.paymentAt().toString(), request.patientId());
         if (request.saleDate() != null) jdbc.update("UPDATE receipt SET sale_date=? WHERE patient_id=?", request.saleDate().atStartOfDay(), request.patientId());
     }

@@ -86,7 +86,7 @@ describe('v2 commission', () => {
       cy.api('POST', '/api/course-purchases', {
         patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',
       }).then(({ body: purchase }) => {
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('equal', 200)
+        cy.useCourseSession(purchase.id).its('status').should('equal', 200)
         cy.api('GET', `/api/commission/treatment-report${range}`).then(({ status, body }) => {
           expect(status).to.equal(200)
           expect(body).to.have.length(1)

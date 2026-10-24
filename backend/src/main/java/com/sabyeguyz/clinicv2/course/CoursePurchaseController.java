@@ -250,22 +250,38 @@ public class CoursePurchaseController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
                 : course.getPurchaserPatient();
 
-        PatientVisit visit;
         if (request.appointmentId() == null) {
-            visit = walkInVisit(course, usingPatient, treating);
-        } else {
-            visit = visitService.createForService(request.appointmentId(), usingPatient, course.getBranch(), treating, actor.currentId());
+            throw new IllegalArgumentException(
+                    "ต้องสร้างนัด NEW หรือ CURRENT ก่อนใช้สิทธิ์คอร์ส " + "และส่ง appointmentId มาด้วย");
         }
+
+        PatientVisit visit = visitService.createForService(
+                request.appointmentId(),
+                usingPatient,
+                course.getBranch(),
+                treating,
+                actor.currentId());
 
         var treatment = request.treatmentId() == null
                 ? null
                 : treatments.findById(request.treatmentId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
-        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
 
-        if (request.appointmentId() != null) {
-            visitService.completeForService(visit.getId(), request.appointmentId(), actor.currentId());
+        if (treatment == null) {
+            treatment = new com.sabyeguyz.clinicv2.treatment.Treatment();
+            treatment.setVisit(visit);
+            treatment.setService(course.getService());
+            treatment.setTreatingStaff(treating);
+            treatment.setNotes(
+                    request.note() == null ? null : request.note().trim());
+            treatment.setTreatmentCreateAt(Instant.now());
+            treatment.setTreatmentCreateBy(actor.currentId());
+            treatment = treatments.save(treatment);
         }
+
+        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
+        visitService.completeForService(visit.getId(), request.appointmentId(), actor.currentId());
+
         return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
@@ -308,12 +324,6 @@ public class CoursePurchaseController {
         audit.record("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Active", "Cancelled: " + request.reason(),
                 actor.currentId());
         return toResponse(saved, saved.getPurchaserPatient().getId());
-    }
-
-    private PatientVisit walkInVisit(Course course, Patient usingPatient, Staff treating) {
-        PatientVisit visit = visitService.checkInWalkIn(usingPatient, course.getReceipt().getBranch(),
-                treating, actor.currentId());
-        return visitService.complete(visit.getId(), actor.currentId());
     }
 
     private static String apiMovementType(CourseLedgerEntryType type) {
