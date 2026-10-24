@@ -143,7 +143,10 @@ const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => 
   name: item.fullName,
   role: item.role === 'MANAGER' ? 'Manager' : 'Therapist',
   branch: item.branchName ?? 'ยังไม่กำหนดสาขา',
-  permission: item.role === 'MANAGER' ? permissions.join(' ') : 'Patient Visit Treatment',
+  permission: storedUserPermissions(
+    item.id,
+    item.role === 'MANAGER' ? permissions : permissions.slice(0, 3),
+  ).join(' '),
   status: status(item.active),
 })
 const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>>) => ({
@@ -466,6 +469,28 @@ watch(pageCount, (count) => {
   if (currentPage.value > count) currentPage.value = count
 })
 const form = reactive<Row>({})
+function userPermissionStorageKey(id: unknown) {
+  return `settings:user-permissions:${id}`
+}
+function storedUserPermissions(id: unknown, fallback: string[]) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(userPermissionStorageKey(id)) ?? '[]')
+    return Array.isArray(saved)
+      ? saved.filter((permission): permission is string => permissions.includes(permission))
+      : fallback
+  } catch {
+    return fallback
+  }
+}
+function saveUserPermissions(id: unknown, values: string[]) {
+  localStorage.setItem(userPermissionStorageKey(id), JSON.stringify(values))
+}
+const selectedUserPermissions = computed<string[]>({
+  get: () => permissionList(form.permission).map((permission) => permission.key),
+  set: (values) => {
+    form.permission = values.filter((value) => permissions.includes(value)).join(' ')
+  },
+})
 const masterItems = computed(() =>
   data.master.map((row) => ({
     id: Number(row.id),
@@ -478,9 +503,6 @@ function editMasterItem(id: number) {
   const index = data.master.findIndex((row) => Number(row.id) === id)
   if (index >= 0) openDrawer(index)
 }
-const rolePermissions = computed(() =>
-  form.role === 'Manager' ? permissions : ['Patient', 'Visit', 'Treatment'],
-)
 function defaults() {
   if (section.value === 'branches')
     Object.assign(form, {
@@ -505,7 +527,7 @@ function defaults() {
       code: '',
       phone: '',
       branch: selectedBranchName.value || openBranches.value[0]?.name || '',
-      permission: '',
+      permission: 'Patient Visit Treatment',
       status: 'ใช้งาน',
     })
   if (section.value === 'services')
@@ -712,6 +734,8 @@ async function save() {
           ? await userManagementApi.update(existing.id, body)
           : await userManagementApi.create({ ...body, password: form.password }),
       )
+      saveUserPermissions(record.id, selectedUserPermissions.value)
+      record.permission = selectedUserPermissions.value.join(' ')
       // the status chosen in the form (ใช้งาน / ปิดใช้งาน) is applied to the user being edited; a new user is always active
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await userManagementApi.activate(existing.id)
@@ -829,7 +853,7 @@ function notify(message: string) {
     savedMessage.value = ''
   }, 2200)
 }
-// Each way of paying has its own Enable / Disable status (any number can be on); every change is confirmed in a pop-up first.
+// Each payment option can be enabled independently; every change is confirmed first.
 const paymentLabels: Record<string, string> = {
   BankTransfer: 'โอนเงินผ่านธนาคาร',
   PromptPay: 'พร้อมเพย์',
@@ -843,6 +867,7 @@ const paymentNotes: Record<string, string> = {
 }
 const paymentNote = (name: string) => paymentNotes[name] ?? 'ช่องทางรับชำระเงิน'
 const paymentChange = ref<{ index: number; enable: boolean } | null>(null)
+const paymentStatusChange = ref<{ index: number; enable: boolean } | null>(null)
 function askPaymentStatus(index: number, enable: boolean) {
   const method = paymentMethods[index]
   if (!method) return
@@ -866,8 +891,15 @@ async function confirmPaymentStatus() {
 async function setPaymentStatusEnabled(index: number, enabled: boolean) {
   const option = paymentStatuses[index]
   if (!option || option.enabled === enabled) return
+  paymentStatusChange.value = { index, enable: enabled }
+}
+async function confirmPaymentStatusChange() {
+  const change = paymentStatusChange.value
+  paymentStatusChange.value = null
+  const option = change ? paymentStatuses[change.index] : undefined
+  if (!change || !option || option.enabled === change.enable) return
   try {
-    const saved = await paymentStatusApi.setEnabled(option.code, enabled)
+    const saved = await paymentStatusApi.setEnabled(option.code, change.enable)
     option.enabled = saved.enabled
     notify(`บันทึกสถานะ${saved.label}อัตโนมัติแล้ว`)
   } catch (error) {
@@ -1038,7 +1070,7 @@ const drawerTitle = computed(() => {
                   :aria-pressed="method.active"
                   @click="askPaymentStatus(index, true)"
                 >
-                  Enable
+                  เปิดใช้งาน
                 </button>
                 <button
                   type="button"
@@ -1047,7 +1079,7 @@ const drawerTitle = computed(() => {
                   :aria-pressed="!method.active"
                   @click="askPaymentStatus(index, false)"
                 >
-                  Disable
+                  ปิดใช้งาน
                 </button>
               </span>
             </div>
@@ -1073,7 +1105,7 @@ const drawerTitle = computed(() => {
                   :aria-pressed="option.enabled"
                   @click="setPaymentStatusEnabled(index, true)"
                 >
-                  Enable
+                  เปิดใช้งาน
                 </button>
                 <button
                   type="button"
@@ -1082,7 +1114,7 @@ const drawerTitle = computed(() => {
                   :aria-pressed="!option.enabled"
                   @click="setPaymentStatusEnabled(index, false)"
                 >
-                  Disable
+                  ปิดใช้งาน
                 </button>
               </span>
             </div>
@@ -1239,12 +1271,29 @@ const drawerTitle = computed(() => {
       <div class="confirm-modal" role="dialog" aria-modal="true" aria-label="ยืนยันการเปลี่ยนสถานะ">
         <h3>ยืนยันการเปลี่ยนสถานะ</h3>
         <p>
-          ต้องการ{{ paymentChange.enable ? 'เปิดใช้งาน (Enable)' : 'ปิดใช้งาน (Disable)' }}
+          ต้องการ{{ paymentChange.enable ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}
           <b>{{ paymentLabel(paymentMethods[paymentChange.index]!.name) }}</b> หรือไม่?
         </p>
         <div class="confirm-actions">
           <button type="button" class="confirm-cancel" @click="paymentChange = null">ยกเลิก</button>
           <button type="button" class="confirm-ok" @click="confirmPaymentStatus">ยืนยัน</button>
+        </div>
+      </div>
+    </div>
+    <div
+      v-if="paymentStatusChange"
+      class="confirm-backdrop"
+      @click.self="paymentStatusChange = null"
+    >
+      <div class="confirm-modal" role="dialog" aria-modal="true" aria-label="ยืนยันการเปลี่ยนสถานะ">
+        <h3>ยืนยันการเปลี่ยนสถานะ</h3>
+        <p>
+          ต้องการ{{ paymentStatusChange.enable ? 'เปิดใช้งาน' : 'ปิดใช้งาน' }}
+          <b>{{ paymentStatuses[paymentStatusChange.index]!.label }}</b> หรือไม่?
+        </p>
+        <div class="confirm-actions">
+          <button type="button" class="confirm-cancel" @click="paymentStatusChange = null">ยกเลิก</button>
+          <button type="button" class="confirm-ok" @click="confirmPaymentStatusChange">ยืนยัน</button>
         </div>
       </div>
     </div>
@@ -1371,11 +1420,11 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false"
           /></label>
-          <fieldset disabled>
+          <fieldset>
             <legend>สิทธิ์ตามบทบาท</legend>
             <label v-for="permission in permissions" :key="permission" class="check"
               ><input
-                :checked="rolePermissions.includes(permission)"
+                v-model="selectedUserPermissions"
                 type="checkbox"
                 :value="permission"
               />{{ permission }}</label
