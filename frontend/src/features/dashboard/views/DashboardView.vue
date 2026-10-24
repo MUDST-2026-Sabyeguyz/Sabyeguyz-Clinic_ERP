@@ -264,6 +264,17 @@ function handleRangeKeys(event: KeyboardEvent) {
   }
 }
 
+function resetDateRange() {
+  const current = clinicToday()
+  const monthStart = current.slice(0, 7) + '-01'
+  const unchanged = from.value === monthStart && to.value === current
+  from.value = monthStart
+  to.value = current
+  customFrom.value = monthStart
+  customTo.value = current
+  if (unchanged) void loadDashboard()
+}
+
 function applyCustomRange() {
   if (!customFrom.value || !customTo.value || customFrom.value > customTo.value) return
   const rangeUnchanged = from.value === customFrom.value && to.value === customTo.value
@@ -391,6 +402,23 @@ function applyCustomRange() {
                 @click="openCustomRange"
               >
                 กำหนดช่วงเวลา
+              </button>
+              <button
+                class="reset-range-button"
+                type="button"
+                aria-label="รีเซ็ตช่วงเวลาเป็นเดือนนี้ถึงวันนี้"
+                title="รีเซ็ตเป็นเดือนนี้ถึงวันนี้"
+                @click="resetDateRange"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M3 10a9 9 0 1 1 9 11M3 10V4m0 6h6m3-3v5h4"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
               </button>
             </div>
           </div>
@@ -1627,5 +1655,32 @@ function applyCustomRange() {
   .bar-area i {
     transition: none;
   }
+}
+</style>
+
+<style scoped>
+.reset-range-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #145c59;
+  cursor: pointer;
+}
+.reset-range-button svg {
+  width: 20px;
+  height: 20px;
+}
+.reset-range-button:hover {
+  background: #edf5f1;
+}
+.reset-range-button:focus-visible {
+  outline: 3px solid #145c59;
+  outline-offset: 3px;
 }
 </style>
