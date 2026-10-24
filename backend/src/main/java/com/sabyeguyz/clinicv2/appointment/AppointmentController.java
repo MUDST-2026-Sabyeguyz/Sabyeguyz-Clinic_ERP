@@ -312,7 +312,9 @@ public class AppointmentController {
     }
 
     private static AppointmentStatus parseInitialStatus(String status) {
-        if (status == null || status.isBlank()) return AppointmentStatus.Confirmed;
+        if (status == null || status.isBlank()) {
+            return AppointmentStatus.Unconfirmed;
+        }
         return parseStatus(status);
     }
 

@@ -44,12 +44,12 @@ public class AppointmentService {
         return appointments.findByIdForUpdate(id).orElseThrow(AppointmentNotFoundException::new);
     }
 
-    /** Books a registered (CURRENT) patient as Confirmed. */
+    /** Books a registered (CURRENT) patient as Unconfirmed. */
     @Transactional
     public Appointment book(Patient patient, Branch branch, Staff staff, Service service, Room room,
                              LocalDate appointmentDate, LocalTime appointmentTime, Long actorId) {
         return book(patient, branch, staff, service, room, appointmentDate, appointmentTime,
-                AppointmentStatus.Confirmed, actorId);
+                AppointmentStatus.Unconfirmed, actorId);
     }
 
     @Transactional
@@ -166,12 +166,49 @@ public class AppointmentService {
     }
 
     @Transactional
+    public Appointment requireServiceAppointment(
+            Long id, Patient patient, Branch branch) {
+        Appointment appointment = getForUpdate(id);
+        if (appointment.getAppointmentStatus()
+                != AppointmentStatus.Unconfirmed) {
+            throw new IllegalStateException("นัดนี้ไม่ได้อยู่ในสถานะรอรับบริการ");
+        }
+        require(patient != null && patient.getId() != null, "ต้องระบุผู้ป่วยที่ลงทะเบียนแล้ว");
+        require(branch != null
+                        && branch.getId() != null
+                        && appointment.getBranch() != null
+                        && branch.getId().equals(
+                        appointment.getBranch().getId()),
+                "สาขารับบริการต้องตรงกับสาขานัดหมาย");
+        if (appointment.getAppointmentPatientType()
+                == AppointmentPatientType.CURRENT) {
+            require(appointment.getPatient() != null
+                            && patient.getId().equals(
+                            appointment.getPatient().getId()),
+                    "ผู้รับบริการต้องตรงกับผู้ป่วยในนัด CURRENT");
+        } else {
+            require(appointment.getPatient() == null, "นัด NEW ต้องไม่ผูกผู้ป่วยย้อนหลัง");
+        }
+        return appointment;
+    }
+
+    @Transactional
     public Appointment confirm(Long id, Long actorId) {
-        Appointment appointment = find(id);
-        require(appointment.getAppointmentStatus() == AppointmentStatus.Unconfirmed
-                        || appointment.getAppointmentStatus() == AppointmentStatus.Rescheduled,
+        throw new IllegalStateException("ต้องบันทึกบริการและรับชำระ หรือใช้สิทธิ์คอร์สสำเร็จก่อนยืนยันนัด");
+    }
+
+    @Transactional
+    public Appointment confirmAfterService(Long id, Long actorId) {
+        Appointment appointment = getForUpdate(id);
+
+        require(
+                appointment.getAppointmentStatus() == AppointmentStatus.Unconfirmed,
                 "นัดหมายนี้ไม่ได้อยู่ในสถานะยังไม่ยืนยัน");
-        changeStatus(appointment, AppointmentStatus.Confirmed, "ยืนยันนัดหมาย", actorId);
+
+        changeStatus(
+                appointment, AppointmentStatus.Confirmed,
+                "ยืนยันหลังรับบริการสำเร็จ", actorId);
+
         appointment.setAppointmentUpdateAt(Instant.now());
         appointment.setAppointmentUpdateBy(actorId);
         return appointments.save(appointment);
@@ -246,7 +283,6 @@ public class AppointmentService {
         appointment.setAppointmentDate(newDate);
         appointment.setAppointmentTime(newTime);
         appointment.setAppointmentEndAt(bookingEnd);
-        changeStatus(appointment, AppointmentStatus.Confirmed, reason, actorId);
         appointment.setAppointmentUpdateAt(Instant.now());
         appointment.setAppointmentUpdateBy(actorId);
         return appointments.save(appointment);
@@ -265,40 +301,26 @@ public class AppointmentService {
 
     @Transactional
     public Appointment markNoShow(Long id, Long actorId) {
-        Appointment appointment = find(id);
-        requireNotTerminal(appointment);
-        changeStatus(appointment, AppointmentStatus.NoShow, "ไม่มาตามนัด", actorId);
-        appointment.setAppointmentUpdateAt(Instant.now());
-        appointment.setAppointmentUpdateBy(actorId);
-        return appointments.save(appointment);
+        throw new IllegalStateException(
+                "ไม่รองรับสถานะ NoShow ให้ยกเลิกนัดพร้อมระบุเหตุผล");
     }
 
-    /** Called by {@code PatientVisitService} when the linked visit progresses; kept as the single writer of Appointment status. */
     @Transactional
     public Appointment markArrived(Long id, Long actorId) {
-        Appointment appointment = find(id);
-        require(appointment.getAppointmentStatus() != AppointmentStatus.Unconfirmed, "ต้องยืนยันนัดหมายก่อนเช็คอิน");
-        require(appointment.getPatient() != null, "ต้องลงทะเบียนผู้ป่วยก่อนเช็คอิน");
-        return transition(id, AppointmentStatus.Arrived, "ผู้ป่วยมาถึงคลินิก", actorId);
+        throw new IllegalStateException(
+                "ไม่รองรับสถานะ Arrived ของนัด ให้ดำเนินการผ่านหน้าบริการ");
     }
 
     @Transactional
     public Appointment markInService(Long id, Long actorId) {
-        return transition(id, AppointmentStatus.InService, "เข้ารับบริการ", actorId);
+        throw new IllegalStateException(
+                "ไม่รองรับสถานะ InService ของนัด ให้ดำเนินการผ่านหน้าบริการ");
     }
 
     @Transactional
     public Appointment markCompleted(Long id, Long actorId) {
-        return transition(id, AppointmentStatus.Completed, "เสร็จสิ้นบริการ", actorId);
-    }
-
-    private Appointment transition(Long id, AppointmentStatus newStatus, String reason, Long actorId) {
-        Appointment appointment = find(id);
-        requireNotTerminal(appointment);
-        changeStatus(appointment, newStatus, reason, actorId);
-        appointment.setAppointmentUpdateAt(Instant.now());
-        appointment.setAppointmentUpdateBy(actorId);
-        return appointments.save(appointment);
+        throw new IllegalStateException(
+                "นัดจะยืนยันเมื่อบันทึกบริการและรับชำระ หรือใช้สิทธิ์คอร์สสำเร็จ");
     }
 
     /** Applies the new status and writes an Appointment_status_history row (audit trail). */
@@ -316,9 +338,8 @@ public class AppointmentService {
     }
 
     private static AppointmentStatus requireInitialStatus(AppointmentStatus status) {
-        AppointmentStatus initial = status == null ? AppointmentStatus.Confirmed : status;
-        require(initial == AppointmentStatus.Unconfirmed || initial == AppointmentStatus.Confirmed,
-                "นัดหมายใหม่ต้องเริ่มที่สถานะยังไม่ยืนยันหรือยืนยันแล้วเท่านั้น");
+        AppointmentStatus initial = status == null ? AppointmentStatus.Unconfirmed : status;
+        require(initial == AppointmentStatus.Unconfirmed, "นัดหมายใหม่ต้องเริ่มที่สถานะยังไม่ยืนยันเท่านั้น");
         return initial;
     }
 
