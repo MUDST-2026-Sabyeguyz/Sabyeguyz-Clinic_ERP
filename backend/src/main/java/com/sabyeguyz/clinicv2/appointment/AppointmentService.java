@@ -177,19 +177,12 @@ public class AppointmentService {
         return appointments.save(appointment);
     }
 
-    /** After a NEW patient registers: the appointment becomes a CURRENT one for that patient. */
+    /** NEW appointments retain their original registration state. */
     @Transactional
-    public Appointment linkRegisteredPatient(Long id, Patient patient, Long actorId) {
-        Appointment appointment = getForUpdate(id);
-        requireNotTerminal(appointment);
-        require(patient != null, "ต้องระบุผู้ป่วย");
-        require(appointment.getAppointmentPatientType() == AppointmentPatientType.NEW && appointment.getPatient() == null,
-                "นัดหมายนี้ผูกกับผู้ป่วยที่ลงทะเบียนแล้ว");
-        appointment.setPatient(patient);
-        appointment.setAppointmentPatientType(AppointmentPatientType.CURRENT);
-        appointment.setAppointmentUpdateAt(Instant.now());
-        appointment.setAppointmentUpdateBy(actorId);
-        return appointments.save(appointment);
+    public Appointment linkRegisteredPatient(
+            Long id, Patient patient, Long actorId) {
+        throw new IllegalStateException(
+                "นัด NEW ไม่ผูกผู้ป่วยย้อนหลัง " + "ให้ส่ง patientId จากการลงทะเบียนไปหน้าบริการ");
     }
 
     /** Moves the same appointment to a new date/time; does not create a new row. */

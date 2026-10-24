@@ -97,7 +97,7 @@ describe('v2 appointments', () => {
     })
   })
 
-  it('links a NEW appointment to a patient registered afterwards', function () {
+  it('keeps a NEW appointment unlinked after patient registration', function () {
     cy.api('POST', '/api/appointments', {
       branchCode: '01',
       therapistId: this.fixtures.therapistId,
@@ -108,9 +108,14 @@ describe('v2 appointments', () => {
       contactPhone: '0899999999',
     }).then(({ body }) => {
       cy.registerPatient({ firstName: 'สมศรี', lastName: 'ใจงาม', phone: '0899999999' }).then((patient) => {
-        cy.api('POST', `/api/appointments/${body.id}/link-patient`, { patientId: patient.id }).then((linked) => {
-          expect(linked.status).to.equal(200)
-          expect(linked.body.patient.id).to.equal(patient.id)
+        cy.api('POST', `/api/appointments/${body.id}/link-patient`, {
+          patientId: patient.id,
+        }).its('status').should('equal', 409)
+
+        cy.api('GET', `/api/appointments/${body.id}`).then(({ body: unchanged }) => {
+          expect(unchanged.patientType).to.equal('NEW')
+          expect(unchanged.patient.id).to.equal(null)
+          expect(unchanged.patient.hn).to.equal(null)
         })
       })
     })

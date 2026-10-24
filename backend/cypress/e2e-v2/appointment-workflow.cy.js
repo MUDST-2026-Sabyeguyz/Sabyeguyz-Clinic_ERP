@@ -130,39 +130,64 @@ describe('P3 non-commission appointment workflow', () => {
     })
   })
 
-  it('confirms NEW, registers once, links, and attends without creating a duplicate patient', function () {
-    cy.api('POST', '/api/appointments', newBooking(this.fixtures, { status: 'Unconfirmed' })).then(({ body }) => {
-      cy.api('POST', `/api/appointments/${body.id}/confirm`).its('status').should('equal', 200)
+  it('serves a registered patient without linking the original NEW appointment', function () {
+    cy.api('POST', '/api/appointments',
+        newBooking(this.fixtures, { status: 'Unconfirmed' })
+    ).then(({ body: appointment }) => {
       cy.registerPatient().then((patient) => {
-        cy.api('POST', `/api/appointments/${body.id}/link-patient`, { patientId: patient.id }).its('status').should('equal', 200)
-        cy.api('GET', `/api/appointments/${body.id}`).then(({ body: linked }) => {
-          expect(linked.patientType).to.equal('CURRENT')
-          expect(linked.patient.id).to.equal(patient.id)
+        cy.api('POST', `/api/appointments/${appointment.id}/link-patient`, {
+          patientId: patient.id,
+        }).its('status').should('equal', 409)
+
+        cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+        }).then(({ status, body: sale }) => {
+          expect(status, JSON.stringify(sale)).to.equal(201)
+          expect(sale.patient.id).to.equal(patient.id)
         })
-        for (const action of ['check-in', 'start-service', 'complete']) {
-          cy.api('POST', `/api/appointments/${body.id}/${action}`).its('status').should('equal', 200)
-        }
-        cy.api('GET', '/api/patients').its('body.totalItems').should('equal', 1)
+
+        cy.api('GET', `/api/appointments/${appointment.id}`)
+            .then(({ body: unchanged }) => {
+              expect(unchanged.patientType).to.equal('NEW')
+              expect(unchanged.patient.id).to.equal(null)
+              expect(unchanged.patient.hn).to.equal(null)
+            })
+
+        cy.api('GET', '/api/patients')
+            .its('body.totalItems').should('equal', 1)
       })
     })
   })
 
-  it('serializes simultaneous links and never silently relinks the appointment', function () {
-    cy.api('POST', '/api/appointments', newBooking(this.fixtures)).then(({ body: appointment }) => {
-      cy.registerPatient().then((first) => {
-        cy.registerPatient({ identityNumber: '1100000000888', firstName: 'อีกคน' }).then((second) => {
-          cy.parallelApi([first, second].map((patient) => ({ method: 'POST',
-            url: `/api/appointments/${appointment.id}/link-patient`, body: { patientId: patient.id } })))
-            .then((results) => {
-              expect(results.map((result) => result.status).sort()).to.deep.equal([200, 400])
-              const winner = results.find((result) => result.status === 200).body.patient.id
-              cy.api('GET', `/api/appointments/${appointment.id}`).its('body.patient.id').should('equal', winner)
-              cy.api('POST', `/api/appointments/${appointment.id}/link-patient`,
-                { patientId: winner === first.id ? second.id : first.id }).its('status').should('equal', 400)
-              cy.api('GET', `/api/appointments/${appointment.id}`).its('body.patient.id').should('equal', winner)
+  it('rejects simultaneous attempts to link a NEW appointment', function () {
+    cy.api('POST', '/api/appointments', newBooking(this.fixtures))
+        .then(({ body: appointment }) => {
+          cy.registerPatient().then((first) => {
+            cy.registerPatient({
+              identityNumber: '1100000000888',
+              firstName: 'อีกคน',
+            }).then((second) => {
+              cy.parallelApi([first, second].map((patient) => ({
+                method: 'POST',
+                url: `/api/appointments/${appointment.id}/link-patient`,
+                body: { patientId: patient.id },
+              }))).then((results) => {
+                expect(results.map((result) => result.status))
+                    .to.deep.equal([409, 409])
+
+                cy.api('GET', `/api/appointments/${appointment.id}`)
+                    .then(({ body: unchanged }) => {
+                      expect(unchanged.patientType).to.equal('NEW')
+                      expect(unchanged.patient.id).to.equal(null)
+                      expect(unchanged.patient.hn).to.equal(null)
+                    })
+              })
             })
+          })
         })
-      })
-    })
   })
 })
