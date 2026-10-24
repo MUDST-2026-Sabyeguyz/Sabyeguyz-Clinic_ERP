@@ -7,6 +7,7 @@ public interface CourseVisitUsageRepository extends JpaRepository<CourseVisitUsa
     boolean existsByCourseId(Long courseId);
 
     List<CourseVisitUsage> findByCourseIdOrderByIdDesc(Long courseId);
+    List<CourseVisitUsage> findByVisitIdOrderByIdAsc(Long visitId);
 
     /** Finds owners with unknown commission in the selling branch. */
     default List<Long> findPendingOwnerStaffIdsForBranch(
