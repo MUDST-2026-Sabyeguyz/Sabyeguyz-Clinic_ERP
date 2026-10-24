@@ -1,6 +1,8 @@
 package com.sabyeguyz.clinicv2.appointment;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.audit.AuditLogService;
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 import com.sabyeguyz.clinicv2.enums.VisitStatus;
 import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
 import com.sabyeguyz.clinicv2.patient.Patient;
@@ -19,10 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class PatientVisitService {
     private final PatientVisitRepository visits;
     private final AppointmentService appointmentService;
+    private final AuditLogService audit;
 
-    public PatientVisitService(PatientVisitRepository visits, AppointmentService appointmentService) {
+    public PatientVisitService(PatientVisitRepository visits, AppointmentService appointmentService, AuditLogService audit) {
         this.visits = visits;
         this.appointmentService = appointmentService;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -119,7 +123,24 @@ public class PatientVisitService {
         touch(visit, actorId);
 
         appointmentService.confirmAfterService(appointmentId, actorId);
-        return visits.save(visit);
+        PatientVisit saved = visits.save(visit);
+
+        audit.recordChange(
+                "appointment",
+                String.valueOf(appointmentId),
+                AuditAction.UPDATE,
+                AuditLogService.fields(
+                        "status", "Unconfirmed"),
+                AuditLogService.fields(
+                        "event", "ServiceCompleted",
+                        "status", "Confirmed",
+                        "visitId", saved.getId(),
+                        "patientId", saved.getPatient().getId(),
+                        "branchId", saved.getBranch().getId(),
+                        "completedAt", completedAt),
+                actorId);
+
+        return saved;
     }
 
     @Transactional
