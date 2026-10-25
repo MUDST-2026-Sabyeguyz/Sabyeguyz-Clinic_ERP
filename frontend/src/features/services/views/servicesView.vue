@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
+import TodayAppointments from '../components/TodayAppointments.vue'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { useCourseCommissionPreview } from '@/features/commission/useCourseCommissionPreview'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -19,6 +20,7 @@ import {
   salesApi,
   staffApi,
   type Course,
+  type Appointment,
   type Branch,
   type Patient,
   type PatientProfile,
@@ -98,6 +100,20 @@ const receiptBranchLabel = computed(() => {
   return name ? (name.startsWith('สาขา') ? name : `สาขา ${name}`) : 'ไม่ระบุสาขา'
 })
 const managerBranchCode = computed(() => (isManager ? (selectedManagerBranch()?.code ?? '') : ''))
+const appointmentBranchCode = computed(() =>
+  isManager
+    ? managerBranchCode.value
+    : (JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ?? ''),
+)
+async function chooseAppointment(item: Appointment) {
+  if (!item.patient?.id || !item.patient.hn || item.branchCode !== appointmentBranchCode.value)
+    return
+  await router.replace({
+    path: '/staff/services',
+    query: { patientId: String(item.patient.id), appointmentId: String(item.id) },
+  })
+  await Promise.all([loadSelectedPatient(), refreshAppointmentProcess()])
+}
 const saleBranchCode = computed(
   () => managerBranchCode.value || patient.value?.branchCode || branches.value[0]?.code || '',
 )
@@ -519,7 +535,7 @@ async function submit() {
         </button>
       </div>
       <template v-else-if="screen === 'search'">
-        <h1>บริการและคอร์ส</h1>
+        <h1>โปรแกรมการรักษา</h1>
         <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
         <section class="service-search">
           <h2>ค้นหาผู้ป่วย</h2>
@@ -560,15 +576,15 @@ async function submit() {
             </button>
             <p v-if="!results.length" class="service-empty-result">ไม่พบผู้ป่วยที่ตรงกับคำค้น</p>
           </section>
-          <section v-else class="service-search-hint">
-            <p>
-              ค้นหาผู้ป่วยจากช่องด้านบน แล้วเลือกคนที่ต้องการทำรายการ<br />ข้อมูลผู้ป่วยและสิทธิ์คอร์สจะแสดงหลังเลือกผู้ป่วย
-            </p>
-          </section>
+          <TodayAppointments
+            :branch-code="appointmentBranchCode"
+            :keyword="query"
+            @select="chooseAppointment"
+          />
         </section>
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
-        <h1>บริการและคอร์ส</h1>
+        <h1>โปรแกรมการรักษา</h1>
         <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
           <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
           <div class="service-menu-patient-info">
