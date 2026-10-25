@@ -316,7 +316,7 @@ function toggleOriginal(key: string) {
             {{
               tab === 'history' && !loading && !hasCancellationHistory
                 ? 'ประวัติการยกเลิก'
-                : 'ยกเลิกและ Void รายการ'
+                : 'ยกเลิกรายการ'
             }}
           </h1>
           <p v-if="tab === 'history' && !loading && !hasCancellationHistory">
