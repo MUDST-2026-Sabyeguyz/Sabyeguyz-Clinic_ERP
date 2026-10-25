@@ -151,7 +151,9 @@ watch([staffId, month], load)
       <header class="detail-head">
         <div>
           <h1>รายละเอียดค่าตอบแทนรายบุคคล</h1>
-          <p v-if="name">{{ name }} · {{ employeeCode }} · {{ branchName }} · งวด{{ monthLabel }}</p>
+          <p v-if="name">
+            {{ name }} · {{ employeeCode }} · {{ branchName }} · งวด{{ monthLabel }}
+          </p>
         </div>
         <span
           v-if="!loading && !errorMessage"
@@ -246,13 +248,16 @@ watch([staffId, month], load)
           </article>
         </section>
         <footer v-if="!approved" class="detail-actions">
-          <button class="commission-primary" :disabled="closingId === null" @click="openConfirmation">
+          <button
+            class="commission-primary"
+            :disabled="closingId === null"
+            @click="openConfirmation"
+          >
             อนุมัติยอด
           </button>
         </footer>
         <p v-else class="approved-note">✓ อนุมัติยอดเรียบร้อยแล้ว</p>
-      </template
-      >
+      </template>
     </main>
     <Teleport to="body"
       ><div v-if="confirmOpen" class="action-backdrop" @click.self="confirmOpen = false">
@@ -394,7 +399,7 @@ watch([staffId, month], load)
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin: -4px 0 0;
+  margin: 20px 0 24px;
 }
 .detail-actions button {
   min-width: 200px;

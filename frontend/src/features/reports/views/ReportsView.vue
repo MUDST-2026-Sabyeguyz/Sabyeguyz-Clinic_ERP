@@ -5,6 +5,7 @@ import TransactionReportView from './TransactionReportView.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import {
   branchApi,
   commissionApi,
@@ -88,7 +89,6 @@ const filters = reactive({
   patient: '',
   staff: '',
   course: 'ทั้งหมด',
-  branch: 'ทุกสาขา',
   treatment: 'ทั้งหมด',
   saleType: 'ทั้งหมด',
   commissionType: 'ทั้งหมด',
@@ -122,14 +122,14 @@ const reportSelection = computed({
   },
 })
 const reportOptions = computed(() => REPORTS.map(([value, label]) => ({ value, label })))
-const branchFilterOptions = computed(() =>
-  branches.value.map((branch) => ({
-    value: branch.code,
-    label: `${branch.name} (${branch.code})`,
-  })),
-)
 const courseFilterOptions = computed(() =>
   courseOptions.value.map((course) => ({ value: course.name, label: course.name })),
+)
+const selectedHeaderBranchCode = computed(
+  () =>
+    selectedManagerBranch()?.code ??
+    JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ??
+    '',
 )
 
 const TABLE_HEADERS: Record<ReportKey, string[]> = {
@@ -195,9 +195,9 @@ function getBranchName(branchCode?: string): string {
     if (found) return found.name
     return branchCode
   }
-  if (filters.branch !== 'ทุกสาขา') {
-    const found = branches.value.find((b) => b.code === filters.branch)
-    return found ? found.name : filters.branch
+  if (selectedHeaderBranchCode.value) {
+    const found = branches.value.find((b) => b.code === selectedHeaderBranchCode.value)
+    return found ? found.name : selectedHeaderBranchCode.value
   }
   return 'ทุกสาขา'
 }
@@ -252,13 +252,12 @@ const filteredRevenueCategories = computed(() => {
     list = list.filter((cat) => cat.type === 'COURSE' || cat.type === 'Course Sales')
   } else if (filters.saleType === 'Single Visit Sales') {
     list = list.filter((cat) => cat.type === 'SINGLE_VISIT' || cat.type === 'Single Visit Sales')
+  } else if (filters.saleType === 'Assessment') {
+    list = list.filter((cat) => cat.type === 'ASSESSMENT' || cat.type === 'Assessment')
   }
 
   if (filters.treatment !== 'ทั้งหมด') {
     list = list.filter((cat) => {
-      const typeName = CATEGORY_NAMES[cat.type] ?? cat.type
-      if (filters.treatment === 'Assessment')
-        return cat.type === 'ASSESSMENT' || typeName === 'Assessment'
       if (filters.treatment === 'Manual Therapy')
         return cat.type === 'COURSE' || cat.type === 'Course Sales'
       if (filters.treatment === 'Exercise Therapy')
@@ -382,9 +381,9 @@ const filteredCommissionRows = computed<CommissionReportRow[]>(() => {
     const qStaff = filters.staff.trim().toLowerCase()
     const matchStaff = !qStaff || (row.staffName && row.staffName.toLowerCase().includes(qStaff))
     const matchBranch =
-      filters.branch === 'ทุกสาขา' ||
-      row.branchCode === filters.branch ||
-      row.branchName === filters.branch
+      !selectedHeaderBranchCode.value ||
+      row.branchCode === selectedHeaderBranchCode.value ||
+      row.branchName === selectedHeaderBranchCode.value
     const matchType =
       filters.commissionType === 'ทั้งหมด' || filters.commissionType === SALES_COMMISSION_TYPE
     return matchStaff && matchBranch && matchType
@@ -433,7 +432,8 @@ const tableRows = computed<string[][]>(() => {
           `${row.sourcePatientName} ${row.sourcePatientHn} ${row.destinationPatientName} ${row.destinationPatientHn}`
             .toLowerCase()
             .includes(q)
-        const matchBranch = filters.branch === 'ทุกสาขา' || row.branchCode === filters.branch
+        const matchBranch =
+          !selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value
         const matchCourse =
           filters.course === 'ทั้งหมด' ||
           getCourseName(row.courseId).toLowerCase().includes(filters.course.toLowerCase())
@@ -483,7 +483,8 @@ const tableRows = computed<string[][]>(() => {
     const keyword = filters.staff.trim().toLowerCase()
     return (data ?? [])
       .filter((row) => {
-        const matchBranch = filters.branch === 'ทุกสาขา' || row.branchCode === filters.branch
+        const matchBranch =
+          !selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value
         const searchable =
           `${row.patientName} ${row.treatingStaffName} ${row.courseCode}`.toLowerCase()
         return matchBranch && (!keyword || searchable.includes(keyword))
@@ -583,7 +584,7 @@ async function fetchReport() {
   errorMessage.value = ''
   reportData.value = null
   try {
-    const branchCode = filters.branch === 'ทุกสาขา' ? undefined : filters.branch
+    const branchCode = selectedHeaderBranchCode.value || undefined
     switch (report.value) {
       case 'revenue':
         reportData.value = await reportApi.revenue(filters.from, filters.to, branchCode)
@@ -640,7 +641,7 @@ onMounted(async () => {
   await fetchReport()
 })
 
-watch([report, () => filters.branch, () => filters.from, () => filters.to], fetchReport)
+watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], fetchReport)
 </script>
 
 <template>
@@ -655,7 +656,7 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
         <p>
           {{
             report === 'payment'
-              ? 'ตรวจสอบเงินที่รับจริงตามวันที่รับชำระ สาขา และประเภทบริการ'
+              ? 'ตรวจสอบเงินที่รับจริงตามวันที่รับชำระและประเภทบริการ'
               : 'ตรวจสอบรายได้ คอร์ส ยอดขาย และค่าคอมมิชชั่น'
           }}
         </p>
@@ -717,10 +718,7 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
             />
           </div>
           <!-- ── Row 1 Filters ── -->
-          <div
-            class="filter-grid-row1"
-            :class="{ 'filter-grid-row1--revenue': report === 'revenue' }"
-          >
+          <div class="filter-grid-row1">
             <!-- Balance / Transfer Report Filters -->
             <template v-if="['balance', 'transfer'].includes(report)">
               <div class="field-group">
@@ -739,16 +737,6 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                   :clear-on-reselect="false"
                 />
               </div>
-
-              <div class="field-group">
-                <label>ตั้งแต่วันที่</label>
-                <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
-              </div>
-
-              <div class="field-group">
-                <label>ถึงวันที่</label>
-                <ThaiDatePicker v-model="filters.to" numeric-month show-calendar-icon />
-              </div>
             </template>
 
             <!-- Payment report filters -->
@@ -756,17 +744,6 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
               <div class="field-group">
                 <label>ผู้ป่วย</label>
                 <input v-model="filters.patient" type="text" placeholder="ค้นหาชื่อผู้ป่วย" />
-              </div>
-              <div class="field-group">
-                <label>สาขา</label>
-                <FilterDropdown
-                  v-model="filters.branch"
-                  :options="branchFilterOptions"
-                  default-value="ทุกสาขา"
-                  default-label="ทุกสาขา"
-                  label="กรองตามสาขา"
-                  :clear-on-reselect="false"
-                />
               </div>
               <div class="field-group">
                 <label>การรักษา</label>
@@ -801,23 +778,10 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
             <!-- Revenue Report Filters -->
             <template v-else-if="report === 'revenue'">
               <div class="field-group">
-                <label>สาขา</label>
-                <FilterDropdown
-                  v-model="filters.branch"
-                  :options="branchFilterOptions"
-                  default-value="ทุกสาขา"
-                  default-label="ทุกสาขา"
-                  label="กรองตามสาขา"
-                  :clear-on-reselect="false"
-                />
-              </div>
-
-              <div class="field-group">
                 <label>การรักษา</label>
                 <FilterDropdown
                   v-model="filters.treatment"
                   :options="[
-                    { value: 'Assessment', label: 'Assessment' },
                     { value: 'Manual Therapy', label: 'Manual Therapy' },
                     { value: 'Exercise Therapy', label: 'Exercise Therapy' },
                   ]"
@@ -833,6 +797,7 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                 <FilterDropdown
                   v-model="filters.saleType"
                   :options="[
+                    { value: 'Assessment', label: 'Assessment' },
                     { value: 'Course Sales', label: 'Course Sales' },
                     { value: 'Single Visit Sales', label: 'Single Visit Sales' },
                   ]"
@@ -841,6 +806,16 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                   label="กรองตามประเภทการขาย"
                   :clear-on-reselect="false"
                 />
+              </div>
+
+              <div class="field-group">
+                <label>ตั้งแต่วันที่</label>
+                <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
+              </div>
+
+              <div class="field-group">
+                <label>ถึงวันที่</label>
+                <ThaiDatePicker v-model="filters.to" numeric-month show-calendar-icon />
               </div>
             </template>
 
@@ -864,18 +839,6 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
               </div>
 
               <div class="field-group">
-                <label>สาขา</label>
-                <FilterDropdown
-                  v-model="filters.branch"
-                  :options="branchFilterOptions"
-                  default-value="ทุกสาขา"
-                  default-label="ทุกสาขา"
-                  label="กรองตามสาขา"
-                  :clear-on-reselect="false"
-                />
-              </div>
-
-              <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
                 <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
               </div>
@@ -889,22 +852,6 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
 
           <!-- ── Row 2 Filters ── -->
           <div class="filter-grid-row2">
-            <!-- Branch for Balance / Transfer -->
-            <div
-              v-if="['balance', 'transfer'].includes(report)"
-              class="field-group field-group--short"
-            >
-              <label>สาขา</label>
-              <FilterDropdown
-                v-model="filters.branch"
-                :options="branchFilterOptions"
-                default-value="ทุกสาขา"
-                default-label="ทุกสาขา"
-                label="กรองตามสาขา"
-                :clear-on-reselect="false"
-              />
-            </div>
-
             <!-- Commission Type Filter for Commission Report -->
             <div v-if="report === 'commission'" class="field-group field-group--short">
               <label>ประเภทค่าคอมมิชชั่น</label>
@@ -921,8 +868,8 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
               />
             </div>
 
-            <!-- Date Pickers for Revenue Report -->
-            <template v-if="['revenue', 'payment'].includes(report)">
+            <!-- Date Pickers for Payment Report -->
+            <template v-if="report === 'payment'">
               <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
                 <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
