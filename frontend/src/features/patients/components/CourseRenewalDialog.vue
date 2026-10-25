@@ -222,6 +222,8 @@ textarea {
 }
 footer {
   justify-content: flex-end;
+  margin-top: 8px;
+  padding-bottom: 16px;
 }
 .course-renewal-history {
   margin-top: 24px;

@@ -60,7 +60,8 @@ const staff = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
 const selectedServiceId = ref(0),
   selectedCourseId = ref(0),
-  selectedStaffId = ref<number | undefined>()
+  selectedTreatingStaffId = ref<number | undefined>(),
+  selectedSalespersonStaffId = ref<number | undefined>()
 const paymentCode = ref(''),
   note = ref('')
 const paymentStatus = ref<'INSTALLMENT' | 'DEPOSIT' | 'PAID'>('PAID')
@@ -136,11 +137,12 @@ async function loadMaster() {
   if (!enabledStatuses.some((status) => status.code === paymentStatus.value))
     paymentStatus.value = enabledStatuses[0]?.code ?? statuses[0]?.code ?? 'PAID'
   paymentAmount.value = 0
-  staff.value = staffList
+  staff.value = staffList.filter((person) => person.role === 'THERAPIST' && person.active)
   selectedServiceId.value = s[0]?.id ?? 0
   selectedCourseId.value = c[0]?.id ?? 0
-  paymentCode.value = methods.find((method) => method.active !== false)?.code ?? ''
-  selectedStaffId.value = staffList[0]?.id
+  paymentCode.value = methods.find((method) => method.active !== false && method.name !== 'Cash')?.code ?? ''
+  selectedTreatingStaffId.value = staff.value[0]?.id
+  selectedSalespersonStaffId.value = staff.value[0]?.id
   try {
     branches.value = await branchApi.list()
     if (isManager) setManagerBranches(branches.value.filter((branch) => branch.active))
@@ -254,7 +256,7 @@ const {
   return {
     courseId: selectedCourseId.value,
     branchCode: saleBranchCode.value,
-    sellerStaffId: selectedStaffId.value,
+    sellerStaffId: selectedSalespersonStaffId.value,
     price: rawPrice.value,
   }
 })
@@ -318,7 +320,7 @@ const printedAt = computed(() =>
   }).format(new Date()),
 )
 const selectedStaffName = computed(
-  () => staff.value.find((person) => person.id === selectedStaffId.value)?.fullName || '-',
+  () => staff.value.find((person) => person.id === selectedSalespersonStaffId.value)?.fullName || '-',
 )
 const staffFilterOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
@@ -331,7 +333,9 @@ function paymentMethodCategory(code: string, name = '') {
   if (value.includes('card') || value.includes('บัตร')) return 'card'
   return 'other'
 }
-const salePaymentMethods = computed(() => paymentMethods.value)
+const salePaymentMethods = computed(() =>
+  paymentMethods.value.filter((method) => method.active !== false && method.name !== 'Cash'),
+)
 function paymentMethodIcon(code: string, name = '') {
   const category = paymentMethodCategory(code, name)
   if (category === 'bank') return paymentBankIcon
@@ -355,7 +359,7 @@ const selectedPaymentLabel = computed(() => {
 const paymentStatusLabel = computed(() => {
   return paymentStatuses.value.find((status) => status.code === paymentStatus.value)?.label ?? '-'
 })
-const enabledPaymentStatuses = computed(() => paymentStatuses.value)
+const enabledPaymentStatuses = computed(() => paymentStatuses.value.filter((status) => status.enabled))
 function selectPaymentStatus(status: PaymentStatusOption['code']) {
   paymentStatus.value = status
   if (
@@ -476,7 +480,8 @@ async function submit() {
       appointmentId: appointmentId.value ?? undefined,
       patientId: patient.value.id,
       branchCode: saleBranchCode.value,
-      salespersonStaffId: selectedStaffId.value,
+      salespersonStaffId: selectedSalespersonStaffId.value,
+      treatingStaffId: mode.value === 'course' ? undefined : selectedTreatingStaffId.value,
       note: note.value,
       paymentLabelCode: paymentStatus.value,
       items: [{ type, referenceId, quantity: 1 }],
@@ -784,33 +789,32 @@ async function submit() {
                 ><b>{{ money(afterItemDiscount) }}</b>
               </div>
               <div class="sale-people">
-                <label
+                <label v-if="mode !== 'course'"
                   >นักกายภาพผู้ให้บริการ<FilterDropdown
-                    :model-value="String(selectedStaffId)"
+                    :model-value="String(selectedTreatingStaffId ?? '')"
                     :options="staffFilterOptions"
                     default-label="เลือกนักกายภาพ"
                     label="นักกายภาพผู้ให้บริการ"
                     :clear-on-reselect="false"
-                    @update:model-value="selectedStaffId = Number($event)" /></label
+                    @update:model-value="selectedTreatingStaffId = Number($event)" /></label
                 ><label
-                  >ผู้ขาย/เจ้าของยอด<FilterDropdown
-                    :model-value="String(selectedStaffId)"
+                  >{{ mode === 'course' ? 'นักกายภาพเจ้าของยอด' : 'ผู้ขาย/เจ้าของยอด' }}<FilterDropdown
+                    :model-value="String(selectedSalespersonStaffId ?? '')"
                     :options="staffFilterOptions"
-                    default-label="เลือกผู้ขาย/เจ้าของยอด"
-                    label="ผู้ขายหรือเจ้าของยอด"
+                    :default-label="mode === 'course' ? 'เลือกนักกายภาพเจ้าของยอด' : 'เลือกผู้ขาย/เจ้าของยอด'"
+                    :label="mode === 'course' ? 'นักกายภาพเจ้าของยอด' : 'ผู้ขายหรือเจ้าของยอด'"
                     :clear-on-reselect="false"
-                    @update:model-value="selectedStaffId = Number($event)"
+                    @update:model-value="selectedSalespersonStaffId = Number($event)"
                 /></label>
               </div>
               <fieldset class="payment-status-group">
                 <legend>สถานะการชำระเงิน</legend>
                 <div>
                   <button
-                    v-for="status in paymentStatuses"
+                    v-for="status in enabledPaymentStatuses"
                     :key="status.code"
                     type="button"
-                    :class="{ active: paymentStatus === status.code, disabled: !status.enabled }"
-                    :disabled="!status.enabled"
+                    :class="{ active: paymentStatus === status.code }"
                     @click="selectPaymentStatus(status.code)"
                   >
                     {{ status.label }}
@@ -844,9 +848,7 @@ async function submit() {
                     type="button"
                     :class="{
                       active: paymentCode === method.code,
-                      disabled: method.active === false,
                     }"
-                    :disabled="method.active === false"
                     @click="paymentCode = method.code"
                   >
                     <img
@@ -858,7 +860,7 @@ async function submit() {
                   </button>
                 </div>
                 <small
-                  v-if="!salePaymentMethods.some((method) => method.active !== false)"
+                  v-if="!salePaymentMethods.length"
                   class="service-error"
                 >
                   ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager
@@ -911,6 +913,7 @@ async function submit() {
                     <span>ประมาณการต่อครั้ง</span>
                     <b>{{ money(courseCommissionPreview.commissionPerVisit) }}</b>
                   </p>
+                  <small>อัตราสุดท้ายจะล็อกตาม Tier สูงสุดจากยอดคอร์สสะสมของนักกายภาพเมื่อปิดยอดเดือน</small>
                 </template>
               </div>
               <div v-else class="commission">
