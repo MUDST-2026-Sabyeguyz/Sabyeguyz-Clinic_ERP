@@ -195,9 +195,7 @@ const router = createRouter({
     },
     {
       path: '/staff/commission/tiers',
-      name: 'commission-tiers',
-      component: () => import('@/features/commission/views/CommissionTierView.vue'),
-      meta: { roles: ['manager'] },
+      redirect: '/staff/settings/commission-tiers',
     },
     {
       path: '/staff/commission/closing',
@@ -339,6 +337,12 @@ const router = createRouter({
       path: '/staff/settings',
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
+      meta: { permission: 'Setup' },
+    },
+    {
+      path: '/staff/settings/commission-tiers',
+      name: 'staff-settings-commission-tiers',
+      component: () => import('@/features/commission/views/CommissionTierView.vue'),
       meta: { permission: 'Setup' },
     },
     {

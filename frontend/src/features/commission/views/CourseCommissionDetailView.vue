@@ -67,7 +67,7 @@ const outstandingPool = computed(() =>
       </section>
       <nav class="commission-nav">
         <RouterLink to="/staff/commission">ภาพรวม</RouterLink
-        ><RouterLink to="/staff/commission/tiers">Commission Tier</RouterLink
+        ><RouterLink to="/staff/settings/commission-tiers">กฎค่าคอมมิชชัน</RouterLink
         ><RouterLink to="/staff/commission/closing">ปิดรอบรายเดือน</RouterLink>
       </nav>
       <section class="staff-panel commission-page-panel">
