@@ -1,6 +1,10 @@
 /* oxlint-disable vitest/valid-expect -- Cypress assertions use Chai, not Vitest. */
 const buy = (fx, patient) => cy.api('POST', '/api/course-purchases', {
-  patientId: patient.id, courseId: fx.courseId, branchCode: '01', caseOwnerStaffId: fx.therapistId,
+  patientId: patient.id,
+  courseId: fx.courseId,
+  branchCode: '01',
+  caseOwnerStaffId: fx.therapistId,
+  paymentLabelCode: 'FULL',
 }).then(({ status, body }) => {
   expect(status).to.be.oneOf([200, 201])
   return body
@@ -130,30 +134,51 @@ describe('v2 the sale list says what each line sold', () => {
   it('gives the type and name of a course sale and of a single-visit sale', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient)
-      cy.api('POST', '/api/payments', {
-        patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.managerStaffId,
-        items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
-      }).its('status').should('equal', 201)
+
+      cy.createServiceAppointment(this.fixtures, patient.id).then((appointment) => {
+        cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          salespersonStaffId: this.fixtures.managerStaffId,
+          treatingStaffId: this.fixtures.therapistId,
+          appointmentId: appointment.id,
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
+        }).its('status').should('equal', 201)
+      })
     })
+
     cy.api('GET', '/api/payments').its('body.items').should((items) => {
       const types = items.map((item) => item.itemType).sort()
       expect(types).to.deep.equal(['CoursePurchase', 'SingleVisit'])
-      expect(items.every((item) => item.itemDescription && item.itemDescription.length > 0)).to.equal(true)
+      expect(items.every(
+          (item) => item.itemDescription && item.itemDescription.length > 0
+      )).to.equal(true)
     })
   })
 })
 
 describe('v2 transactions of another branch are read-only for a therapist', () => {
-  it('refuses a therapist who cancels a sale or a course of another branch, and lets the home branch and a Manager', function () {
+  it('allows reading another branch but requires branch access and cancellation permission to cancel', function () {
     cy.login('therapist', 'therapist123').its('body.token').then((therapist01) => {
       cy.registerPatient({ branchCode: '02' }).then((patient) => {
-        const sellAt02 = () => cy.api('POST', '/api/payments', {
-          patientId: patient.id, branchCode: '02', salespersonStaffId: this.fixtures.therapist2Id,
-          treatingStaffId: this.fixtures.therapist2Id,
-          items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
-          payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
-        })
+        const sellAt02 = () =>
+            cy.createServiceAppointment(this.fixtures, patient.id, {
+              branchCode: '02',
+              therapistId: this.fixtures.therapist2Id,
+            }).then((appointment) =>
+                cy.api('POST', '/api/payments', {
+                  patientId: patient.id,
+                  branchCode: '02',
+                  salespersonStaffId: this.fixtures.therapist2Id,
+                  treatingStaffId: this.fixtures.therapist2Id,
+                  appointmentId: appointment.id,
+                  paymentLabelCode: 'FULL',
+                  items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+                  payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
+                })
+            )
         sellAt02().then(({ status, body: sale }) => {
           expect(status).to.equal(201)
           cy.apiAs(therapist01, 'GET', `/api/receipts/${sale.id}`).its('status').should('equal', 200)
@@ -164,8 +189,13 @@ describe('v2 transactions of another branch are read-only for a therapist', () =
         })
       })
       cy.registerPatient().then((patient) => buy(this.fixtures, patient).then((course) => {
-        cy.apiAs(therapist01, 'POST', `/api/course-purchases/${course.id}/cancel`, { reason: 'สาขาตัวเองยกเลิกได้' })
-          .its('status').should('equal', 200)
+        cy.apiAs(therapist01, 'POST', `/api/course-purchases/${course.id}/cancel`, {
+          reason: 'ไม่มีสิทธิ์ยกเลิกแม้อยู่สาขาตัวเอง',
+        }).its('status').should('equal', 403)
+
+        cy.api('POST', `/api/course-purchases/${course.id}/cancel`, {
+          reason: 'Manager ยกเลิก',
+        }).its('status').should('equal', 200)
       }))
     })
   })

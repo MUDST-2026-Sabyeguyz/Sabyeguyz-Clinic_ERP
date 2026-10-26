@@ -14,4 +14,6 @@ public interface PatientVisitRepository extends JpaRepository<PatientVisit, Long
             + "and (:branchId is null or v.branch.id = :branchId)")
     List<PatientVisit> findByVisitDateBetween(@Param("from") Instant from, @Param("to") Instant to,
                                                @Param("branchId") Long branchId);
+
+    List<PatientVisit> findByAppointmentIdOrderByIdAsc(Long appointmentId);
 }
