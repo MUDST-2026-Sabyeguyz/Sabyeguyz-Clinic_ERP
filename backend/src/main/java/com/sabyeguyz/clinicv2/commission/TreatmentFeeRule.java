@@ -32,6 +32,9 @@ public class TreatmentFeeRule {
     @Column(name = "rule_name", length = 100)
     private String ruleName;
 
+    @Column(name = "rule_version", nullable = false, unique = true)
+    private Integer ruleVersion;
+
     @Column(name = "fee_value", precision = 12, scale = 4, nullable = false)
     private BigDecimal feeValue;
 
@@ -40,9 +43,6 @@ public class TreatmentFeeRule {
 
     @Column(name = "effective_to")
     private LocalDate effectiveTo;
-
-    @Column(name = "treatment_fee_rule_status", nullable = false)
-    private boolean treatmentFeeRuleStatus = true;
 
     @Column(name = "treatment_fee_rule_create_at", nullable = false, updatable = false)
     private Instant treatmentFeeRuleCreateAt;
@@ -65,14 +65,16 @@ public class TreatmentFeeRule {
     public void setFeeType(FeeType feeType) { this.feeType = feeType; }
     public String getRuleName() { return ruleName; }
     public void setRuleName(String ruleName) { this.ruleName = ruleName; }
+
+    public Integer getRuleVersion() {return ruleVersion;}
+    public void setRuleVersion(Integer ruleVersion) {this.ruleVersion = ruleVersion;}
+
     public BigDecimal getFeeValue() { return feeValue; }
     public void setFeeValue(BigDecimal feeValue) { this.feeValue = feeValue; }
     public LocalDate getEffectiveFrom() { return effectiveFrom; }
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
     public LocalDate getEffectiveTo() { return effectiveTo; }
     public void setEffectiveTo(LocalDate effectiveTo) { this.effectiveTo = effectiveTo; }
-    public boolean isTreatmentFeeRuleStatus() { return treatmentFeeRuleStatus; }
-    public void setTreatmentFeeRuleStatus(boolean treatmentFeeRuleStatus) { this.treatmentFeeRuleStatus = treatmentFeeRuleStatus; }
     public Instant getTreatmentFeeRuleCreateAt() { return treatmentFeeRuleCreateAt; }
     public void setTreatmentFeeRuleCreateAt(Instant treatmentFeeRuleCreateAt) { this.treatmentFeeRuleCreateAt = treatmentFeeRuleCreateAt; }
     public Long getTreatmentFeeRuleCreateBy() { return treatmentFeeRuleCreateBy; }
@@ -81,4 +83,5 @@ public class TreatmentFeeRule {
     public void setTreatmentFeeRuleUpdateAt(Instant treatmentFeeRuleUpdateAt) { this.treatmentFeeRuleUpdateAt = treatmentFeeRuleUpdateAt; }
     public Long getTreatmentFeeRuleUpdateBy() { return treatmentFeeRuleUpdateBy; }
     public void setTreatmentFeeRuleUpdateBy(Long treatmentFeeRuleUpdateBy) { this.treatmentFeeRuleUpdateBy = treatmentFeeRuleUpdateBy; }
+
 }

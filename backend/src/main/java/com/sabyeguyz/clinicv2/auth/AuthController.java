@@ -2,6 +2,8 @@ package com.sabyeguyz.clinicv2.auth;
 
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -29,9 +31,7 @@ public class AuthController {
     }
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
-
-    public record RegisterRequest(@NotBlank String username, String email, @NotBlank String password) {}
-
+    public record RegisterRequest(@NotBlank String username,@NotBlank @Size(max = 254) String email, @NotBlank String password) {}
     public record AuthResponse(Long id, String username, String email, String role, String token, String branchCode, String branchName) {}
 
     @PostMapping("/login")
@@ -44,7 +44,7 @@ public class AuthController {
     @PostMapping("/register")
     @PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse register(@RequestBody RegisterRequest request) {
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
         AppUser user = appUserService.register(request.username(), request.email(), request.password(), null, null);
         return respond(user);
     }
