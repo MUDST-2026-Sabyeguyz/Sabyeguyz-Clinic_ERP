@@ -7,6 +7,7 @@ const props = withDefaults(
     disabled?: boolean
     invalid?: boolean
     minDate?: string
+    maxDate?: string
     inclusiveMin?: boolean
     disableSunday?: boolean
     showCalendarIcon?: boolean
@@ -18,6 +19,7 @@ const props = withDefaults(
     disabled: false,
     invalid: false,
     minDate: '',
+    maxDate: '',
     inclusiveMin: false,
     disableSunday: false,
     showCalendarIcon: false,
@@ -49,10 +51,10 @@ const months = [
   'ธันวาคม',
 ]
 const weekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
-const years = Array.from(
-  { length: new Date().getFullYear() - 1900 + 2 },
-  (_, index) => 1900 + index,
-)
+const years = computed(() => {
+  const maxYear = props.maxDate ? Number(props.maxDate.slice(0, 4)) : new Date().getFullYear() + 1
+  return Array.from({ length: Math.max(1, maxYear - 1900 + 1) }, (_, index) => 1900 + index)
+})
 
 const displayValue = computed(() => {
   if (!props.modelValue) return props.placeholder
@@ -73,28 +75,33 @@ const days = computed(() => {
 })
 
 function changeMonth(amount: number) {
-  viewDate.value = new Date(viewDate.value.getFullYear(), viewDate.value.getMonth() + amount, 1)
+  const next = new Date(viewDate.value.getFullYear(), viewDate.value.getMonth() + amount, 1)
+  if (isAfterMaximumMonth(next)) return
+  viewDate.value = next
 }
 
 function setMonth(event: Event) {
-  viewDate.value = new Date(
+  const next = new Date(
     viewDate.value.getFullYear(),
     Number((event.target as HTMLSelectElement).value),
     1,
   )
+  viewDate.value = isAfterMaximumMonth(next) ? maximumMonthStart() : next
 }
 
 function setYear(event: Event) {
-  viewDate.value = new Date(
+  const next = new Date(
     Number((event.target as HTMLSelectElement).value),
     viewDate.value.getMonth(),
     1,
   )
+  viewDate.value = isAfterMaximumMonth(next) ? maximumMonthStart() : next
 }
 
 function toggleOpen() {
   if (props.disabled) return
   if (!open.value) {
+    if (isAfterMaximumMonth(viewDate.value)) viewDate.value = maximumMonthStart()
     window.dispatchEvent(new CustomEvent('thai-date-picker-open', { detail: instanceId.value }))
     open.value = true
   } else {
@@ -139,9 +146,31 @@ function isDisabled(day: number) {
     new Date(viewDate.value.getFullYear(), viewDate.value.getMonth(), day).getDay() === 0
   )
     return true
-  if (!props.minDate) return false
   const candidate = `${viewDate.value.getFullYear()}-${String(viewDate.value.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  if (props.maxDate && candidate > props.maxDate) return true
+  if (!props.minDate) return false
   return props.inclusiveMin ? candidate < props.minDate : candidate <= props.minDate
+}
+
+function maximumMonthStart() {
+  if (!props.maxDate) return new Date(viewDate.value.getFullYear(), viewDate.value.getMonth(), 1)
+  const [year = viewDate.value.getFullYear(), month = viewDate.value.getMonth() + 1] = props.maxDate
+    .split('-')
+    .map(Number)
+  return new Date(year, month - 1, 1)
+}
+
+function isAfterMaximumMonth(date: Date) {
+  if (!props.maxDate) return false
+  const maximum = maximumMonthStart()
+  return (
+    date.getFullYear() > maximum.getFullYear() ||
+    (date.getFullYear() === maximum.getFullYear() && date.getMonth() > maximum.getMonth())
+  )
+}
+
+function isMonthDisabled(month: number) {
+  return isAfterMaximumMonth(new Date(viewDate.value.getFullYear(), month, 1))
 }
 
 function isSelected(day: number) {
@@ -175,7 +204,12 @@ function isSelected(day: number) {
         <button type="button" aria-label="เดือนก่อน" @click="changeMonth(-1)">‹</button>
         <div class="period-select">
           <select :value="viewDate.getMonth()" aria-label="เลือกเดือน" @change="setMonth">
-            <option v-for="(month, index) in months" :key="month" :value="index">
+            <option
+              v-for="(month, index) in months"
+              :key="month"
+              :value="index"
+              :disabled="isMonthDisabled(index)"
+            >
               {{ numericMonth ? String(index + 1).padStart(2, '0') : month }}
             </option>
           </select>
@@ -183,7 +217,16 @@ function isSelected(day: number) {
             <option v-for="year in years" :key="year" :value="year">{{ year + 543 }}</option>
           </select>
         </div>
-        <button type="button" aria-label="เดือนถัดไป" @click="changeMonth(1)">›</button>
+        <button
+          type="button"
+          aria-label="เดือนถัดไป"
+          :disabled="
+            isAfterMaximumMonth(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))
+          "
+          @click="changeMonth(1)"
+        >
+          ›
+        </button>
       </div>
       <div class="weekdays">
         <span v-for="day in weekdays" :key="day">{{ day }}</span>

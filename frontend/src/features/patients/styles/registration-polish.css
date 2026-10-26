@@ -11,21 +11,24 @@
   margin: 0 auto 48px;
 }
 .registration-page .back-link {
-  min-height: 44px;
-  padding: 10px 16px;
+  min-height: auto;
+  padding: 0;
   box-sizing: border-box;
-  border: 1px solid #b7cecc;
-  border-radius: 8px;
-  background: #fff;
-  color: #145c59;
-  font-size: 16px;
-  font-weight: 600;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #0e5d58;
+  font-size: 14px;
+  font-weight: 400;
   line-height: 1.5;
   text-decoration: none;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 .registration-page .back-link:hover {
-  background: #edf5f1;
-  border-color: #145c59;
+  color: #176c68;
+  transform: translateX(-2px);
 }
 .registration-page .intro {
   text-align: left;
@@ -291,22 +294,22 @@
 body:is(.therapist-ui, :not(.therapist-ui)) .registration-page .back-row .back-link {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  border: 1px solid #b7cecc;
-  border-radius: 8px;
-  background: #fff;
-  color: #145c59;
-  font-size: 16px;
-  font-weight: 600;
+  justify-content: flex-start;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #0e5d58;
+  font-size: 14px;
+  font-weight: 400;
   line-height: 1.5;
   text-decoration: none;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .registration-page .back-row .back-link:hover {
-  background: #edf5f1;
-  border-color: #145c59;
-  transform: none;
+  background: transparent;
+  color: #176c68;
+  transform: translateX(-2px);
 }
 .registration-page .actions.end .registration-cancel {
   min-width: 120px;

@@ -221,6 +221,27 @@ main > h1,
   gap: 24px;
   margin-top: 24px;
 }
+.service-menu-back {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  color: #176c68;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.service-menu-back:hover {
+  text-decoration: underline;
+}
+.service-menu-back:focus-visible {
+  outline: 2px solid #1e807c;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 .service-menu-patient {
   display: flex;
   align-items: center;
@@ -581,6 +602,26 @@ main > h1,
   }
 }
 @media (max-width: 480px) {
+  main {
+    width: calc(100% - 28px);
+    padding-top: 22px;
+  }
+  main > h1,
+  .sale-page > h1 {
+    font-size: 28px;
+    line-height: 1.25;
+  }
+  .service-page-intro {
+    margin-top: 8px;
+    font-size: 15px;
+  }
+  .service-search {
+    margin-top: 14px;
+  }
+  .service-search > h2 {
+    margin-bottom: 8px;
+    font-size: 17px;
+  }
   .search-wrap {
     flex-direction: column;
   }
@@ -588,6 +629,16 @@ main > h1,
   .service-search-button {
     box-sizing: border-box;
     width: 100%;
+  }
+  .search,
+  .service-search-button {
+    height: 46px;
+    min-height: 46px;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+  .search input {
+    font-size: 16px;
   }
 }
 

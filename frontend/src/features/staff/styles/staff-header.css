@@ -366,3 +366,9 @@ nav a.router-link-active:after {
     height: 58px;
   }
 }
+
+/* Drawer links align their flex content to the left, not only the text. */
+.staff-header nav.mobile-open > a {
+  justify-content: flex-start;
+  text-align: left;
+}
