@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,20 +32,29 @@ public class SingleVisitFeeAccrual {
 
     /** Fees for the single-visit lines of a receipt that is paid in full; returns how many were recorded. */
     @Transactional
-    public int accrue(Receipt receipt, List<SalesTransaction> lines, Long actorId) {
+    public int accrue(
+            Receipt receipt, List<SalesTransaction> lines, Long actorId) {
         BigDecimal paid = payments.paidAmountOf(receipt.getId());
-        if (paid == null || receipt.getNetAmount() == null || paid.compareTo(receipt.getNetAmount()) < 0) {
+        if (paid == null
+                || receipt.getNetAmount() == null
+                || paid.compareTo(receipt.getNetAmount()) < 0) {
             return 0;
         }
+        var linesByVisit = lines.stream()
+                .filter(line -> line.getTransactionType() == TransactionType.SingleVisit
+                        && line.isTransactionStatus()
+                        && line.getVisit() != null
+                        && line.getTreatingStaff() != null)
+                .collect(Collectors.groupingBy(line -> line.getVisit().getId()));
         int recorded = 0;
-        for (SalesTransaction line : lines) {
-            if (line.getTransactionType() == TransactionType.SingleVisit && line.isTransactionStatus()
-                    && line.getVisit() != null && line.getTreatingStaff() != null) {
-                LocalDate serviceDate = ClinicTime.dateOf(line.getVisit().getVisitDate());
-                if (fees.accrue(line.getVisit(), line.getTreatingStaff(),
-                        line.getAmount().subtract(line.getAllocatedBillDiscountAmount()), serviceDate, actorId).isPresent()) {
-                    recorded++;
-                }
+        for (var visitLines : linesByVisit.values()) {
+            SalesTransaction first = visitLines.get(0);
+            BigDecimal base = visitLines.stream()
+                    .map(line -> line.getAmount().subtract(line.getAllocatedBillDiscountAmount()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            LocalDate serviceDate = ClinicTime.dateOf(first.getVisit().getVisitDate());
+            if (fees.accrue(first.getVisit(), first.getTreatingStaff(), base, serviceDate, actorId).isPresent()) {
+                recorded++;
             }
         }
         return recorded;
@@ -56,11 +66,14 @@ public class SingleVisitFeeAccrual {
         ZoneId zone = ClinicTime.ZONE;
         Instant start = from.atStartOfDay(zone).toInstant();
         Instant end = to.plusDays(1).atStartOfDay(zone).toInstant();
+
+        var linesByReceipt = transactions
+                .findByVisitDateBetween(start, end, TransactionType.SingleVisit)
+                .stream()
+                .collect(Collectors.groupingBy(line -> line.getReceipt().getId()));
         int recorded = 0;
-        for (SalesTransaction line : transactions.findByTransactionDateBetween(start, end, null)) {
-            if (line.getTransactionType() == TransactionType.SingleVisit) {
-                recorded += accrue(line.getReceipt(), List.of(line), actorId);
-            }
+        for (var receiptLines : linesByReceipt.values()) {
+            recorded += accrue(receiptLines.get(0).getReceipt(), receiptLines, actorId);
         }
         return recorded;
     }

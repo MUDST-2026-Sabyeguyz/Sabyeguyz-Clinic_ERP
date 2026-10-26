@@ -22,7 +22,7 @@ public class CommissionScheme {
     @Column(name = "scheme_name", length = 100, nullable = false)
     private String schemeName;
 
-    @Column(name = "scheme_version", nullable = false)
+    @Column(name = "scheme_version", nullable = false, unique = true)
     private int schemeVersion;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

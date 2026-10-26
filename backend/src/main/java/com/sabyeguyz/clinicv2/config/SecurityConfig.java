@@ -22,6 +22,15 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import com.sabyeguyz.clinicv2.auth.AppUser;
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
+import com.sabyeguyz.clinicv2.auth.UserRoleRepository;
 
 /**
  * Security of the v2 application: stateless JWT (HS256, the same app.jwt.secret as the
@@ -48,33 +57,67 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(signingKey).macAlgorithm(MacAlgorithm.HS256).build();
+    JwtDecoder jwtDecoder(AppUserRepository users) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
+                .withSecretKey(signingKey)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
+        OAuth2TokenValidator<Jwt> activeUserValidator = jwt -> {
+            Long userId;
+            try {
+                userId = Long.valueOf(jwt.getSubject());
+            } catch (NumberFormatException ex) {
+                return OAuth2TokenValidatorResult.failure(
+                        new OAuth2Error("invalid_token",
+                                "Invalid token subject", null));
+            }
+            boolean active = users.findById(userId)
+                    .map(AppUser::isUserStatus)
+                    .orElse(false);
+
+            return active
+                    ? OAuth2TokenValidatorResult.success()
+                    : OAuth2TokenValidatorResult.failure(
+                    new OAuth2Error("invalid_token",
+                            "User account is inactive", null));
+        };
+
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(),
+                activeUserValidator));
+
+        return decoder;
     }
 
     @Bean
-    JwtAuthenticationConverter jwtAuthenticationConverter() {
+    JwtAuthenticationConverter jwtAuthenticationConverter(
+            UserRoleRepository userRoles) {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            List<String> roles = jwt.getClaimAsStringList("roles");
-            if (roles == null) {
-                return List.<GrantedAuthority>of();
-            }
-            return roles.stream()
-                    .<GrantedAuthority>map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
-                    .toList();
-        });
+        converter.setJwtGrantedAuthoritiesConverter(jwt ->
+                userRoles.findRoleNamesByUserId(Long.valueOf(jwt.getSubject()))
+                        .stream()
+                        .<GrantedAuthority>map(role ->
+                                new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT)))
+                        .toList());
+
         return converter;
     }
 
     @Bean
-    SecurityFilterChain security(HttpSecurity http) throws Exception {
+    SecurityFilterChain security(HttpSecurity http, JwtAuthenticationConverter authenticationConverter)
+            throws Exception {
         return http.csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/actuator/health", "/error").permitAll()
+                        .requestMatchers(
+                                "/api/auth/login",
+                                "/actuator/health",
+                                "/error")
+                        .permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .oauth2ResourceServer(oauth -> oauth.jwt(jwt ->
+                        jwt.jwtAuthenticationConverter(authenticationConverter)))
                 .build();
     }
 }

@@ -7,6 +7,8 @@ import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.catalog.ServiceRepository;
+import com.sabyeguyz.clinicv2.catalog.Course;
+import com.sabyeguyz.clinicv2.course.CourseUsageBatchService;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
@@ -14,9 +16,11 @@ import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.role.PermissionService;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
+import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -56,6 +60,7 @@ public class SaleController {
     private final PaymentMethodRepository paymentMethods;
     private final CurrentActor actor;
     private final SingleVisitFeeAccrual singleVisitFees;
+    private final CourseUsageBatchService usageBatchService;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
     private final com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService;
     private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
@@ -63,17 +68,19 @@ public class SaleController {
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
-                           PaymentTransactionService paymentTransactionService,
-                           TransactionCancellationService cancellations, TransactionCancellationRepository cancellationRecords, PermissionService permissions,
-                           SalesTransactionRepository transactions,
-                           PaymentTransactionRepository payments, ReceiptRepository receipts,
-                           PatientRepository patients, BranchRepository branches, StaffRepository staff,
-                           ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                     com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
-                                     com.sabyeguyz.clinicv2.auth.AppUserRepository users,
-                                     SingleVisitFeeAccrual singleVisitFees,
-                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+                          PaymentTransactionService paymentTransactionService,
+                          TransactionCancellationService cancellations, TransactionCancellationRepository cancellationRecords, PermissionService permissions,
+                          SalesTransactionRepository transactions,
+                          PaymentTransactionRepository payments, ReceiptRepository receipts,
+                          PatientRepository patients, BranchRepository branches, StaffRepository staff,
+                          ServiceRepository services, PaymentMethodRepository paymentMethods, CurrentActor actor,
+                          com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                          com.sabyeguyz.clinicv2.appointment.PatientVisitService visitService,
+                          com.sabyeguyz.clinicv2.auth.AppUserRepository users,
+                          SingleVisitFeeAccrual singleVisitFees,
+                          com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess,
+                          CourseUsageBatchService usageBatchService) {
+        this.usageBatchService = usageBatchService;
         this.branchAccess = branchAccess;
         this.singleVisitFees = singleVisitFees;
         this.visitService = visitService;
@@ -99,9 +106,13 @@ public class SaleController {
                                BigDecimal discountValue) {}
     public record PaymentRequest(String paymentMethodCode, BigDecimal amount) {}
     /** treatingStaffId (optional) is the PT who treated the single-visit lines; default: the salesperson, else the signed-in staff. */
-    public record CreateRequest(Long patientId, String branchCode, Long salespersonStaffId, String note,
-                                 List<ItemRequest> items, List<PaymentRequest> payments, String billDiscountType,
-                                 BigDecimal billDiscountValue, Long treatingStaffId) {}
+    public record CreateRequest(
+            Long patientId, String branchCode, Long salespersonStaffId, String note,
+            List<ItemRequest> items, List<PaymentRequest> payments,
+            String billDiscountType, BigDecimal billDiscountValue,
+            Long treatingStaffId, String paymentLabelCode,
+            Long appointmentId,
+            List<CourseUsageBatchService.Item> courseUsages) {}
     public record ReverseRequest(String reason) {}
 
     private Staff singleVisitTreatingStaff(CreateRequest request, Staff salesperson) {
@@ -167,9 +178,18 @@ public class SaleController {
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("ต้องมีรายการขายอย่างน้อย 1 รายการ");
         }
-        if (request.payments() != null && request.payments().stream()
-                .map(payment -> PaymentMethod.canonicalName(payment.paymentMethodCode())).distinct().count() > 1) {
-            throw new IllegalArgumentException("หนึ่งใบเสร็จรับชำระได้เพียงช่องทางเดียว");
+        if (request.payments() != null && request.payments().size() > 1) {
+            throw new IllegalArgumentException(
+                    "หนึ่งใบเสร็จมีรายการชำระเงินได้ไม่เกินหนึ่งรายการ");
+        }
+
+        PaymentRequest paymentRequest = null;
+        if (request.payments() != null && !request.payments().isEmpty()) {
+            paymentRequest = request.payments().get(0);
+            if (paymentRequest == null) {
+                throw new IllegalArgumentException("ต้องระบุข้อมูลการชำระเงิน");
+            }
+            PaymentMethod.canonicalName(paymentRequest.paymentMethodCode());
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
@@ -177,10 +197,22 @@ public class SaleController {
         Staff salesperson = request.salespersonStaffId() == null ? null
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
 
+        List<CourseUsageBatchService.Item> usageItems =
+                request.courseUsages() == null
+                        ? List.of()
+                        : request.courseUsages();
+
+        Map<Long, Course> lockedCourses = usageItems.isEmpty()
+                ? Map.of()
+                : usageBatchService.lockCourses(usageItems);
+
         String receiptNo = receiptService.nextReceiptNo(branch, ClinicTime.today());
-        Receipt receipt = receiptService.create(receiptNo, patient, branch, ClinicTime.today(), actor.currentId());
+        Receipt receipt = receiptService.create(
+                receiptNo, patient, branch, ClinicTime.today(),
+                request.paymentLabelCode(), actor.currentId());
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
+        PatientVisit appointmentVisit = null;
         for (ItemRequest item : request.items()) {
             Service svc = services.findById(item.referenceId())
                     .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ/คอร์ส"));
@@ -193,22 +225,49 @@ public class SaleController {
                         ? TransactionType.Assessment : TransactionType.SingleVisit;
                 // A single visit is treated by one PT, and the sale is tied to that visit.
                 Staff treating = singleVisitTreatingStaff(request, salesperson);
-                var visit = visitService.checkInWalkIn(patient, branch, treating, actor.currentId());
-                visit = visitService.complete(visit.getId(), actor.currentId());
+                if (request.appointmentId() == null) {
+                    throw new IllegalArgumentException(
+                            "ต้องสร้างนัด NEW หรือ CURRENT ก่อนรับบริการ " + "และส่ง appointmentId มาด้วย");
+                }
+
+                branchAccess.requireAccess(branch);
+                if (appointmentVisit == null) {
+                    appointmentVisit = visitService.createForService(request.appointmentId(), patient, branch, treating, actor.currentId());
+                }
+                PatientVisit visit = appointmentVisit;
                 lines.add(salesTransactionService.recordVisitSale(receipt, patient, branch, svc, type, treating,
                         salesperson, Math.max(1, item.quantity()), null, visit, discount, actor.currentId()));
             }
         }
+
+        if (!usageItems.isEmpty() && appointmentVisit == null) {
+            throw new IllegalArgumentException("การใช้คอร์สร่วมรายการขายต้องมีบริการรายครั้งใน Visit เดียวกัน");
+        }
+
         receiptService.finalizeTotals(receipt, lines,
                 Discount.of(request.billDiscountType(), request.billDiscountValue()), actor.currentId());
 
-        if (request.payments() != null) {
-            for (PaymentRequest paymentRequest : request.payments()) {
-                PaymentMethod method = paymentMethods.findByMethodNameIgnoreCase(PaymentMethod.canonicalName(paymentRequest.paymentMethodCode()))
-                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + paymentRequest.paymentMethodCode()));
-                paymentTransactionService.record(patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
+        if (paymentRequest != null) {
+            String methodName = PaymentMethod.canonicalName(paymentRequest.paymentMethodCode());
+            PaymentMethod method = paymentMethods
+                    .findByMethodNameIgnoreCase(methodName)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "ไม่พบช่องทางชำระเงิน " + methodName));
+
+            paymentTransactionService.record(
+                    patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
+
+            if (appointmentVisit != null) {
+                if (!usageItems.isEmpty()) {
+                    usageBatchService.recordForVisit(lockedCourses, usageItems, appointmentVisit, ClinicTime.now(), actor.currentId());
+                }
+                appointmentVisit = visitService.completeForService(appointmentVisit.getId(), request.appointmentId(), actor.currentId());
             }
+
             singleVisitFees.accrue(receipt, lines, actor.currentId());
+        } else if (appointmentVisit != null) {
+            throw new IllegalArgumentException(
+                    "ต้องรับชำระเงินสำเร็จก่อนยืนยันการรับบริการจากนัด");
         }
 
         audit.record("receipt", String.valueOf(receipt.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
@@ -220,7 +279,7 @@ public class SaleController {
     public Detail reverse(@PathVariable Long id, @RequestBody ReverseRequest request) {
         SalesTransaction transaction = findTransaction(id);
         branchAccess.requireAccess(transaction.getBranch(), "ยกเลิกได้เฉพาะรายการของสาขาตัวเอง รายการต่างสาขาดูรายละเอียดได้อย่างเดียว");
-        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
+        Permission permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         cancellations.voidSale(transaction, permission, request.reason(), actor.currentId());
         audit.record("sales_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "PAID", "VOIDED: " + request.reason(),
                 actor.currentId());

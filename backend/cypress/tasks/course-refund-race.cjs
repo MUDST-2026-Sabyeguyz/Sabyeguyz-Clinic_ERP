@@ -1,6 +1,9 @@
 // Hold the production usage transaction, observe a PostgreSQL lock wait, then release it.
-module.exports = async function courseRefundRace({ token, courseId, refundUrl, refundBody }) {
-  if (!Number.isSafeInteger(courseId) || !(/^\/api\/payments\/\d+\/refunds$/.test(refundUrl) || /^\/api\/refunds\/\d+\/complete$/.test(refundUrl))) {
+module.exports = async function courseRefundRace({token, courseId, appointmentId, refundUrl, refundBody}) {
+  if (!Number.isSafeInteger(courseId)
+      || !Number.isSafeInteger(appointmentId)
+      || !(/^\/api\/payments\/\d+\/refunds$/.test(refundUrl)
+          || /^\/api\/refunds\/\d+\/complete$/.test(refundUrl))) {
     throw new Error('Only isolated course/refund routes are supported')
   }
   const call = async (method, url, body) => {
@@ -13,7 +16,10 @@ module.exports = async function courseRefundRace({ token, courseId, refundUrl, r
   const route = `/__cypress/payment-policy/held-usage/${courseId}`
   // Observe rejection immediately while polling, and always settle started HTTP jobs.
   const observe = promise => promise.then(value => ({ value }), error => ({ error }))
-  const usage = observe(call('POST', route))
+  const usage = observe(call(
+      'POST',
+      `${route}?appointmentId=${appointmentId}`
+  ))
   let refund
   let settled = false
   let observedWait = false
@@ -41,5 +47,9 @@ module.exports = async function courseRefundRace({ token, courseId, refundUrl, r
   if (setupError) throw setupError
   if (releaseError) throw releaseError
   if (failure) throw failure.error
-  return { observedWait, usage: outcomes[0].value, refund: outcomes[1].value }
+  return {
+    observedWait,
+    usage: outcomes[0].value,
+    refund: outcomes[1].value
+  }
 }
