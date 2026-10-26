@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -79,7 +80,18 @@ public class CourseVisitUsageService {
      */
     @Transactional
     public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
-                                 LocalDate visitDate, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+                                LocalDate visitDate, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+        return use(
+                course, visit, usingPatient, treatingStaff,
+                visitDate == null ? null : visitDate.atStartOfDay(),
+                treatment, actorId);
+    }
+
+    @Transactional
+    public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
+                                LocalDateTime usedAt, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+        require(usedAt != null, "ต้องระบุวันเวลาที่ใช้บริการ");
+        LocalDate visitDate = usedAt.toLocalDate();
         require(course != null, "ต้องระบุคอร์ส");
         require(course.getCourseStatus() == com.sabyeguyz.clinicv2.enums.CourseStatus.Active,
                 "คอร์สนี้ไม่อยู่ในสถานะพร้อมใช้งาน");
@@ -129,7 +141,7 @@ public class CourseVisitUsageService {
         if (visit.getTreatingStaff() == null) {
             visit.setTreatingStaff(treatingStaff);
         }
-        usage.setVisitDate(visitDate.atStartOfDay());
+        usage.setVisitDate(usedAt);
         usage.setVisitQty(1);
         usage.setUsageStatus(UsageStatus.Completed);
         placeInCourse(usage, course);

@@ -152,18 +152,45 @@ public class ReportController {
     }
 
     @GetMapping("/api/reports/appointments")
-    public AppointmentReport appointments(@RequestParam LocalDate from, @RequestParam LocalDate to,
-                                           @RequestParam(required = false) String branchCode) {
+    public AppointmentReport appointments(
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to,
+            @RequestParam(required = false) String branchCode) {
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น");
+        }
+
         Long branchId = resolveBranchId(branchCode);
         List<Appointment> rows = appointments.findByAppointmentDateBetween(from, to, branchId);
+
         Map<AppointmentStatus, Long> byStatus = new EnumMap<>(AppointmentStatus.class);
         rows.forEach(a -> byStatus.merge(a.getAppointmentStatus(), 1L, Long::sum));
-        long attended = rows.stream().filter(a -> AppointmentStatus.attended().contains(a.getAppointmentStatus())).count();
+
+        Instant fromInstant = from.atStartOfDay(CLINIC_ZONE).toInstant();
+        Instant toInstant = to.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
+
+        long actualVisits = visits
+                .findByVisitDateBetween(fromInstant, toInstant, branchId)
+                .stream()
+                .filter(v -> v.getVisitDate().isBefore(toInstant))
+                .filter(v -> v.getVisitStatus() == VisitStatus.Completed)
+                .count();
+
         long noShow = byStatus.getOrDefault(AppointmentStatus.NoShow, 0L);
-        BigDecimal noShowRate = rows.isEmpty() ? BigDecimal.ZERO
-                : BigDecimal.valueOf(noShow).divide(BigDecimal.valueOf(rows.size()), 4, java.math.RoundingMode.HALF_UP);
-        return new AppointmentReport(byStatus.entrySet().stream().map(e -> new StatusCount(e.getKey().name(), e.getValue())).toList(),
-                rows.size(), attended, noShowRate);
+        BigDecimal noShowRate = rows.isEmpty()
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(noShow).divide(
+                BigDecimal.valueOf(rows.size()),
+                4,
+                java.math.RoundingMode.HALF_UP);
+
+        return new AppointmentReport(
+                byStatus.entrySet().stream()
+                        .map(e -> new StatusCount(e.getKey().name(), e.getValue()))
+                        .toList(),
+                rows.size(),
+                actualVisits,
+                noShowRate);
     }
 
     @GetMapping("/api/reports/revenue")

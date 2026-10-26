@@ -44,10 +44,16 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
     value('appointment', 'confirm').should('include', { status: 'Confirmed', historySaves: 1 })
   })
   it('rejectsConfirmingAnAppointmentThatIsNotUnconfirmed', () => rejected('appointment', 'confirm-already-confirmed'))
-  it('registeringANewPatientMakesTheAppointmentCurrent', () => {
-    value('appointment', 'link-patient').should('include', { patientType: 'CURRENT', hasPatient: true })
-  })
-  it('rejectsLinkingAPatientToAnAppointmentThatAlreadyHasOne', () => rejected('appointment', 'link-patient-already-linked', 'ลงทะเบียนแล้ว'))
+
+  for (const name of ['link-patient', 'link-patient-already-linked']) {
+    it(`rejects retroactive patient linking: ${name}`, () => {
+      scenario('appointment', name).then((body) => {
+        expect(body.error).to.equal('IllegalStateException')
+        expect(body.errorMessage).to.include('ไม่ผูกผู้ป่วยย้อนหลัง')
+      })
+    })
+  }
+
   it('rejectsCheckInOfAnUnconfirmedAppointment', () => rejected('appointment', 'arrive-unconfirmed', 'ยืนยัน'))
   it('rejectsCheckInOfANewPatientWhoIsNotRegistered', () => rejected('appointment', 'arrive-new-patient', 'ลงทะเบียน'))
   it('cancelRecordsStatusHistory', () => {
