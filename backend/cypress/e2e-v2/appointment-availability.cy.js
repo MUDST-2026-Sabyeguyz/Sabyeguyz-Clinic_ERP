@@ -1,5 +1,7 @@
 /* oxlint-disable vitest/valid-expect -- Cypress assertions use Chai, not Vitest. */
 const at = (fx, time) => `${fx.tomorrow}T${time}:00+07:00`
+const oneHourAfter = (fx, time) =>
+    new Date(Date.parse(at(fx, time)) + 60 * 60 * 1000).toISOString()
 
 const branch01 = () => cy.api('GET', '/api/branches').then(({ body }) => body.find((row) => row.branchCode === '01'))
 const putBranch = (branch, extra) => cy.api('PUT', `/api/branches/${branch.id}`, {
@@ -70,7 +72,7 @@ describe('v2 service appointment length and course validity units', () => {
       })
     })
     cy.registerPatient().then((patient) => cy.api('POST', '/api/course-purchases', {
-      patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId,
+      patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', caseOwnerStaffId: this.fixtures.therapistId, paymentLabelCode: 'FULL',
     }).then(({ status, body }) => {
       expect(status).to.be.oneOf([200, 201])
       const days = (new Date(body.expiresAt) - new Date()) / 86400000
@@ -110,7 +112,7 @@ describe('v2 free times and overlapping appointments', () => {
     window9to12()
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/appointments', {
-        branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '10:00'),
+        branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '10:00'), endAt: oneHourAfter(this.fixtures, '10:00'),
       }).its('status').should('equal', 201)
       slots(this.fixtures, this.fixtures.therapistId).then((result) => {
         const free = Object.fromEntries(result.slots.map((slot) => [slot.time, slot.available]))
@@ -126,7 +128,7 @@ describe('v2 free times and overlapping appointments', () => {
     window9to12()
     cy.registerPatient().then((patient) => {
       const book = (time) => cy.api('POST', '/api/appointments', {
-        branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, time),
+        branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, time), endAt: oneHourAfter(this.fixtures, time),
       })
       book('10:00').its('status').should('equal', 201)
       book('10:30').its('status').should('equal', 400)
@@ -140,7 +142,7 @@ describe('v2 free times and overlapping appointments', () => {
   it('frees the times again when the appointment is cancelled', function () {
     window9to12()
     cy.registerPatient().then((patient) => cy.api('POST', '/api/appointments', {
-      branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '10:00'),
+      branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '10:00'), endAt: oneHourAfter(this.fixtures, '10:00'),
     }).then(({ body }) => {
       cy.api('POST', `/api/appointments/${body.id}/cancel`, { reason: 'ผู้ป่วยขอยกเลิก' }).its('status').should('equal', 200)
       slots(this.fixtures, this.fixtures.therapistId).its('slots').should((all) => {
@@ -163,11 +165,12 @@ describe('v2 free times and overlapping appointments', () => {
     })
   })
 
-  it('shows a default 09:00-18:00 day when the branch has no booking window yet', function () {
+  it('offers no slots when the branch has no booking window', function () {
     slots(this.fixtures, this.fixtures.therapistId).then((result) => {
       expect(result.windowConfigured).to.equal(false)
-      expect(result.openTime).to.equal('09:00')
-      expect(result.closeTime).to.equal('18:00')
+      expect(result.openTime).to.equal(null)
+      expect(result.closeTime).to.equal(null)
+      expect(result.slots).to.deep.equal([])
     })
   })
 
@@ -179,8 +182,12 @@ describe('v2 free times and overlapping appointments', () => {
 
 describe('v2 appointment without a service', () => {
   it('books a registered patient before any service is chosen', function () {
+    branch01().then((branch) => putBranch(branch, {
+      bookingOpenTime: '09:00',
+      bookingCloseTime: '12:00',
+    }).its('status').should('equal', 200))
     cy.registerPatient().then((patient) => cy.api('POST', '/api/appointments', {
-      branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '09:00'),
+      branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId, startAt: at(this.fixtures, '09:00'), endAt: oneHourAfter(this.fixtures, '09:00'),
     }).then(({ status, body }) => {
       expect(status).to.equal(201)
       expect(body.patientType).to.equal('CURRENT')
@@ -199,10 +206,11 @@ describe('v2 free times and Busy time in the branch Google Calendar', () => {
     calendarId: CAL, start: `${fx.tomorrow}T${from}`, end: `${fx.tomorrow}T${to}`,
   }).its('status').should('equal', 200)
   const book = (fx, patient, time) => cy.api('POST', '/api/appointments', {
-    branchCode: '01', patientId: patient.id, therapistId: fx.therapistId, startAt: at(fx, time),
+    branchCode: '01', patientId: patient.id, therapistId: fx.therapistId, startAt: at(fx, time), endAt: oneHourAfter(fx, time),
   })
 
   it('says so when the branch has no calendar', function () {
+    window9to12()
     slots(this.fixtures, this.fixtures.therapistId).its('googleCalendar').should('equal', 'NOT_CONNECTED')
   })
 
@@ -233,16 +241,26 @@ describe('v2 free times and Busy time in the branch Google Calendar', () => {
     })
   })
 
-  it('does not block a booking and says so when Google cannot be read', function () {
+  it('offers no available slots and refuses booking when Google cannot be read', function () {
     window9to12()
     connect()
     busy(this.fixtures, '10:00', '11:00')
-    cy.api('POST', '/__cypress/calendar/fail-busy?count=1').its('status').should('equal', 200)
+
+    cy.api('POST', '/__cypress/calendar/fail-busy?count=1')
+        .its('status').should('equal', 200)
+
     slots(this.fixtures, this.fixtures.therapistId).then((result) => {
       expect(result.googleCalendar).to.equal('UNAVAILABLE')
-      expect(result.slots.every((slot) => slot.available)).to.equal(true)
+      expect(result.slots.length).to.be.greaterThan(0)
+      expect(result.slots.every((slot) => !slot.available)).to.equal(true)
     })
-    cy.api('POST', '/__cypress/calendar/fail-busy?count=1').its('status').should('equal', 200)
-    cy.registerPatient().then((patient) => book(this.fixtures, patient, '10:00').its('status').should('equal', 201))
+
+    cy.api('POST', '/__cypress/calendar/fail-busy?count=1')
+        .its('status').should('equal', 200)
+
+    cy.registerPatient().then((patient) =>
+        book(this.fixtures, patient, '10:00')
+            .its('status').should('equal', 409)
+    )
   })
 })

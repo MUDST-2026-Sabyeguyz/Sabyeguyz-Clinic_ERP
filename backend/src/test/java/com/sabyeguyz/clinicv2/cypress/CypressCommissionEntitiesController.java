@@ -171,6 +171,7 @@ public class CypressCommissionEntitiesController {
     private StaffMonthlyPayment payment(Ids ids, String month, PaymentStatus status) {
         StaffMonthlyPayment row = new StaffMonthlyPayment();
         row.setStaff(staff.findById(ids.staffId()).orElseThrow());
+        row.setBranch(courses.findById(ids.courseId()).orElseThrow().getBranch());
         row.setPaymentMonth(month);
         row.setPaymentStatus(status);
         row.setStatusChangedBy(ids.userId());
