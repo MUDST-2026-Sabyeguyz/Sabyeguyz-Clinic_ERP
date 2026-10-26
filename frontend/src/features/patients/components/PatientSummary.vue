@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import PhoneIcon from '@/components/PhoneIcon.vue'
 const props = defineProps<{
   name: string
   title?: string | null
@@ -10,6 +11,10 @@ const props = defineProps<{
 const displayName = computed(
   () => [props.title?.trim(), props.name.trim()].filter(Boolean).join(' ') || '-',
 )
+const displayPhone = computed(() => {
+  const value = props.phone?.trim()
+  return value && value !== '-' ? value : ''
+})
 const initials = computed(
   () =>
     props.name
@@ -30,16 +35,10 @@ const initials = computed(
       <div class="patient-summary__meta">
         <span>HN {{ hn || '-' }}</span>
         <span class="patient-summary__phone">
-          <svg v-if="phone" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2Z"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span><span class="patient-summary__sr-only">โทรศัพท์ </span>{{ phone || '-' }}</span>
+          <PhoneIcon v-if="displayPhone" />
+          <span
+            ><span class="patient-summary__sr-only">โทรศัพท์ </span>{{ displayPhone || '-' }}</span
+          >
         </span>
       </div>
     </div>
@@ -99,11 +98,6 @@ const initials = computed(
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-.patient-summary__phone svg {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
 }
 .patient-summary__branch {
   max-width: 240px;
