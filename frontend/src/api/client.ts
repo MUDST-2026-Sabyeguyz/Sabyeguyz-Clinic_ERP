@@ -359,7 +359,8 @@ export type SaleDetail = SaleReceipt & {
   }>
 }
 export type CourseUsageTransaction = {
-  id: number
+  id: number | null
+  usageId: number
   coursePurchaseId: number
   patientName: string
   patientHn: string

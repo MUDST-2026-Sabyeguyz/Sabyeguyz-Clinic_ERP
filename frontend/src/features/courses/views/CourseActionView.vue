@@ -5,6 +5,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import CourseRenewalDialog from '@/features/patients/components/CourseRenewalDialog.vue'
+import PhoneIcon from '@/components/PhoneIcon.vue'
 import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
 import {
   branchApi,
@@ -41,6 +43,7 @@ const appointmentNeedsReview = computed(() =>
   ),
 )
 const router = useRouter()
+const canRenewCourses = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const action = ref<CourseAction>('manage')
 const recipientSearch = ref('')
 const recipientSearchOpen = ref(false)
@@ -65,6 +68,16 @@ type CourseMovement = {
   createdAt: string
 }
 const owner = ref<Patient | null>(null)
+const openedFromPatientProfile = computed(() => route.path.startsWith('/staff/patients/'))
+const patientCoursesLocation = computed(() => ({
+  path: `/staff/patients/${owner.value?.id ?? route.params.patientId}/history`,
+  query: { tab: 'courses' },
+}))
+const sourceLocation = computed(() =>
+  openedFromPatientProfile.value
+    ? patientCoursesLocation.value
+    : { path: '/staff/services', query: { patientId: owner.value?.id } },
+)
 const owners = ref<Patient[]>([])
 const patientCourses = ref<UiCourse[]>([])
 const recipientResults = ref<Patient[]>([])
@@ -73,6 +86,7 @@ const branches = ref<Branch[]>([])
 const courseUsageHistory = ref<CourseMovement[]>([])
 const errorMessage = ref('')
 const selectedCourse = ref<UiCourse>({} as UiCourse)
+const renewingCourse = ref<CoursePurchase | null>(null)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
 const usageDate = ref('2026-09-17')
@@ -258,6 +272,14 @@ async function loadCourses(patientId: number) {
     transferStep.value = 'form'
   } else action.value = 'manage'
 }
+async function refreshCoursesAfterRenewal() {
+  if (!owner.value) return
+  try {
+    await loadCourses(owner.value.id)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลคอร์สใหม่ไม่สำเร็จ'
+  }
+}
 onMounted(async () => {
   await refreshAppointmentProcess()
   try {
@@ -359,11 +381,8 @@ function selectCourse() {
   if (course) selectedCourse.value = course
 }
 function goBack() {
-  if (route.path.startsWith('/staff/patients/') && owner.value) {
-    void router.push({
-      path: `/staff/patients/${owner.value.id}/history`,
-      query: { tab: 'courses' },
-    })
+  if (openedFromPatientProfile.value) {
+    void router.push(patientCoursesLocation.value)
     return
   }
   action.value = 'manage'
@@ -388,16 +407,17 @@ function goBack() {
   }
 }
 function cancelPatientCourseDetail() {
-  if (route.path.startsWith('/staff/patients/') && owner.value) {
-    void router.push({
-      path: `/staff/patients/${owner.value.id}/history`,
-      query: { tab: 'courses' },
-    })
+  if (openedFromPatientProfile.value) {
+    void router.push(patientCoursesLocation.value)
     return
   }
   coursePrintPreview.value = false
 }
 function returnToCourseManager() {
+  if (openedFromPatientProfile.value) {
+    void router.push(patientCoursesLocation.value)
+    return
+  }
   action.value = 'manage'
   usageReview.value = false
   usageSuccess.value = false
@@ -681,7 +701,10 @@ function closePrintSuccess() {
             <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) }}</i>
             <div>
               <strong>{{ owner?.fullName }}</strong
-              ><span>HN {{ owner?.hn }}　☎ {{ owner?.phone }}</span>
+              ><span class="patient-contact-inline"
+                >HN {{ owner?.hn }} <PhoneIcon v-if="owner?.phone" />
+                {{ owner?.phone || '-' }}</span
+              >
             </div>
             <b>{{ branchLabel(owner) }}</b>
           </section>
@@ -889,7 +912,10 @@ function closePrintSuccess() {
             <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) }}</i>
             <div>
               <strong>{{ owner?.fullName }}</strong
-              ><span>HN {{ owner?.hn }}　☎ {{ owner?.phone }}</span>
+              ><span class="patient-contact-inline"
+                >HN {{ owner?.hn }} <PhoneIcon v-if="owner?.phone" />
+                {{ owner?.phone || '-' }}</span
+              >
             </div>
             <b>{{ branchLabel(owner) }}</b>
           </section>
@@ -1142,7 +1168,7 @@ function closePrintSuccess() {
               <span
                 >HN {{ owner?.hn
                 }}<template v-if="!transferReceiptId || historyFromInactive"
-                  >　☎ {{ owner?.phone }}</template
+                  ><PhoneIcon v-if="owner?.phone" /> {{ owner?.phone || '-' }}</template
                 ></span
               >
             </div>
@@ -1345,11 +1371,19 @@ function closePrintSuccess() {
       >
         <RouterLink
           class="course-use-back"
-          :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
-          >← กลับไปหน้าบริการ</RouterLink
+          :to="sourceLocation"
+          >{{ openedFromPatientProfile ? '← กลับไปคอร์สของผู้ป่วย' : '← กลับไปหน้าบริการ' }}</RouterLink
         >
         <h1>คอร์สของผู้ป่วย</h1>
         <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
+        <CourseRenewalDialog
+          v-if="renewingCourse && owner"
+          :key="renewingCourse.id"
+          :course="renewingCourse"
+          :patient-id="owner.id"
+          @close="renewingCourse = null"
+          @renewed="refreshCoursesAfterRenewal"
+        />
         <section v-if="transferReceiptId" class="course-after-patient">
           <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
           <span>HN {{ owner?.hn || '-' }}</span>
@@ -1358,7 +1392,13 @@ function closePrintSuccess() {
           <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) || '--' }}</i>
           <div>
             <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong
-            ><span>HN {{ owner?.hn || '-' }} <b>⌕</b> {{ owner?.phone || '-' }}</span>
+            ><span class="patient-contact-inline"
+              >HN {{ owner?.hn || '-' }}
+              <template v-if="owner?.phone && owner.phone !== '-'"
+                ><PhoneIcon /> {{ owner.phone }}</template
+              >
+              <template v-else>-</template>
+            </span>
           </div>
           <em>{{ branchLabel(owner) }}</em>
         </section>
@@ -1424,6 +1464,13 @@ function closePrintSuccess() {
                 @click="start('use', course)"
               >
                 ใช้สิทธิ์คอร์ส
+              </button>
+              <button
+                v-if="canRenewCourses && !isSharedCourse(course)"
+                type="button"
+                @click="renewingCourse = course"
+              >
+                ต่ออายุคอร์ส
               </button>
             </div>
             <button
@@ -3658,20 +3705,23 @@ function closePrintSuccess() {
 }
 .course-history-main {
   position: relative;
-  width: min(1200px, calc(100% - 48px));
-  padding: 28px 0 80px;
+  width: min(1120px, calc(100% - 48px));
+  padding: 32px 0 80px;
 }
 .course-history-back {
   margin-top: 0;
-  color: #66766f;
-  font-size: 12px;
+  color: #176c68;
+  font-size: 14px;
+  font-weight: 600;
 }
 .course-history-main > h1 {
-  margin: 14px 0 1px;
-  font-size: 30px;
+  margin: 16px 0 4px;
+  color: #173d47;
+  font-size: clamp(30px, 3vw, 36px);
+  letter-spacing: -0.02em;
 }
 .course-history-intro {
-  margin: 0 0 20px;
+  margin: 0 0 24px;
   color: #70817a;
   font-size: 14px;
 }
@@ -3682,11 +3732,15 @@ function closePrintSuccess() {
   gap: 16px;
   min-height: 104px;
   box-sizing: border-box;
-  padding: 18px 20px 18px 15px;
+  padding: 20px 24px 20px 15px;
+  border-top: 1px solid #e1ebe7;
+  border-right: 1px solid #e1ebe7;
+  border-bottom: 1px solid #e1ebe7;
   border-left: 5px solid #1f8883;
   border-radius: 12px;
   color: #25372f;
   background: #fff;
+  box-shadow: 0 8px 22px rgba(37, 55, 47, 0.04);
 }
 .course-history-patient > i {
   display: grid;
@@ -3721,19 +3775,21 @@ function closePrintSuccess() {
 }
 .course-history-summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
-  min-height: 126px;
-  margin-top: 18px;
-  padding: 16px 18px;
-  border: 1px solid #d8e1de;
-  border-radius: 10px;
+  min-height: 112px;
+  margin-top: 16px;
+  padding: 20px 22px;
+  border: 1px solid #dbe7e2;
+  border-radius: 12px;
   background: #fff;
+  box-shadow: 0 6px 18px rgba(37, 55, 47, 0.025);
 }
 .course-history-summary h2 {
-  margin: 0 0 5px;
-  font-size: 20px;
+  margin: 0 0 6px;
+  color: #173d47;
+  font-size: 21px;
 }
 .course-history-summary p,
 .course-history-summary span {
@@ -3744,24 +3800,27 @@ function closePrintSuccess() {
 .course-history-summary > div:last-child {
   display: grid;
   gap: 6px;
+  padding-left: 28px;
+  border-left: 1px solid #dbe7e2;
   text-align: right;
 }
 .course-history-summary strong {
-  color: #2e7548;
-  font-size: 22px;
+  color: #176c68;
+  font-size: 24px;
 }
 .course-history-print {
   position: static;
   min-width: 212px;
   min-height: 46px;
-  border-color: #5f9855;
+  border-color: #1f8883;
   border-radius: 8px;
   color: #fff;
-  background: #5f9855;
+  background: #1f8883;
+  box-shadow: 0 6px 14px rgba(31, 136, 131, 0.18);
 }
 .course-history-entries {
-  gap: 12px;
-  margin-top: 22px;
+  gap: 10px;
+  margin-top: 26px;
 }
 .course-history-entries-header {
   display: flex;
@@ -3772,19 +3831,31 @@ function closePrintSuccess() {
 }
 .course-history-entries h2 {
   margin: 0;
-  font-size: 16px;
+  color: #25372f;
+  font-size: 18px;
 }
 .course-history-entry {
   display: grid;
   grid-template-columns: 140px 1fr 170px;
   align-items: start;
-  min-height: 96px;
+  min-height: 92px;
   box-sizing: border-box;
-  padding: 16px 17px;
-  border-color: #d8e1de;
-  border-radius: 10px;
+  padding: 17px 20px;
+  border-color: #dbe7e2;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(37, 55, 47, 0.02);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+.course-history-entry:hover {
+  border-color: #b8d9d4;
+  box-shadow: 0 8px 18px rgba(31, 136, 131, 0.07);
+  transform: translateY(-1px);
 }
 .course-history-entry > strong {
+  color: #34514c;
   font-size: 14px;
 }
 .course-history-entry > div {
@@ -3800,6 +3871,8 @@ function closePrintSuccess() {
 .course-history-entry aside {
   gap: 8px;
   color: #2e7548;
+  padding-left: 18px;
+  border-left: 1px solid #e1ebe7;
   text-align: left;
 }
 .course-history-entry aside b {
@@ -3828,6 +3901,10 @@ function closePrintSuccess() {
     gap: 18px;
   }
   .course-history-summary > div:last-child {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid #dbe7e2;
+    border-left: 0;
     text-align: left;
   }
   .course-history-entries-header {
@@ -3846,6 +3923,10 @@ function closePrintSuccess() {
     gap: 10px;
   }
   .course-history-entry aside {
+    padding-top: 10px;
+    padding-left: 0;
+    border-top: 1px solid #e1ebe7;
+    border-left: 0;
     text-align: left;
   }
 }

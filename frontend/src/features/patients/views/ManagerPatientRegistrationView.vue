@@ -18,7 +18,7 @@ import {
 import { type PatientRegistrationForm } from '../data/managerPatientRegistration'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
 import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
-import { clinicToday } from '@/utils/clinicDate'
+import { clinicToday, clinicYesterday } from '@/utils/clinicDate'
 import {
   patientTitleOptions,
   titleForNationality,
@@ -593,6 +593,7 @@ async function submit() {
                 <ThaiDatePicker
                   v-model="form.birthDate"
                   :invalid="birthDateErrorVisible"
+                  :max-date="clinicYesterday()"
                   show-calendar-icon
                   numeric-month
                   hide-caret
@@ -601,7 +602,7 @@ async function submit() {
                   >กรุณากรอกข้อมูล</small
                 >
                 <small v-else-if="birthDateErrorVisible" class="required-error" role="alert"
-                  >วันเกิดต้องเป็นวันในอดีต</small
+                  >วันเกิดต้องเป็นวันก่อนวันนี้</small
                 >
               </label>
             </div>
@@ -728,13 +729,7 @@ async function submit() {
               class="primary"
               :disabled="submitting || sourceLoading || Boolean(sourceError)"
             >
-              {{
-                submitting
-                  ? 'กำลังบันทึก...'
-                  : route.query.appointmentId
-                    ? 'บันทึก'
-                    : 'บันทึก'
-              }}
+              {{ submitting ? 'กำลังบันทึก...' : route.query.appointmentId ? 'บันทึก' : 'บันทึก' }}
             </button>
           </div>
           <p v-if="errorMessage" class="error" role="alert">
@@ -774,14 +769,14 @@ async function submit() {
           aria-labelledby="registration-confirmation-title"
         >
           <h2 id="registration-confirmation-title">ยืนยันลงทะเบียนผู้ป่วย?</h2>
-          <p>{{ registeredPatientName }}</p>
+          <p class="confirmation-patient-name">{{ registeredPatientName }}</p>
           <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
           <div class="registration-modal-actions">
             <button type="button" class="secondary" autofocus @click="confirmationOpen = false">
-              กลับไปตรวจสอบ
+              ยกเลิก
             </button>
             <button type="button" class="primary" :disabled="submitting" @click="submit">
-              ยืนยันบันทึก
+              {{ submitting ? 'กำลังบันทึก...' : 'ยืนยัน' }}
             </button>
           </div>
         </section>

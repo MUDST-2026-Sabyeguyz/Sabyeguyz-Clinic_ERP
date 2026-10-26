@@ -12,6 +12,7 @@ import {
   type PatientUpdatePayload,
 } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import { clinicYesterday } from '@/utils/clinicDate'
 import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 
 const route = useRoute()
@@ -466,7 +467,12 @@ onMounted(loadProfile)
               <label>ชื่อเล่น<input v-model.trim="draft.nickname" /></label>
               <label>
                 วันเกิด <em v-if="!isForeignNationality">*</em>
-                <ThaiDatePicker v-model="draft.birthDateInput" show-calendar-icon hide-caret />
+                <ThaiDatePicker
+                  v-model="draft.birthDateInput"
+                  :max-date="clinicYesterday()"
+                  show-calendar-icon
+                  hide-caret
+                />
               </label>
             </div>
             <div class="patient-edit-two-column-grid">
