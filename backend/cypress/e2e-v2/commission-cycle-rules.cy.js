@@ -9,17 +9,22 @@ const nextMonthStart = () => {
 }
 const tiers = [{ minimum: 0, maximum: null, rate: 0.06, order: 1 }]
 const defaultScheme = () => cy.api('GET', '/api/commission/schemes').then(({ body }) => body.find((row) => row.name === 'Default Tier Scheme'))
-const version = (scheme, effectiveFrom) => cy.api('POST', `/api/commission/schemes/${scheme.id}/versions`, { effectiveFrom, tiers })
+const version = (scheme, effectiveFrom) =>
+    cy.api('POST', `/api/commission/schemes/${scheme.id}/versions`, {
+      branchCode: '01', effectiveFrom, tiers,
+    })
 const buy = (fx, patient) => cy.api('POST', '/api/course-purchases', {
-  patientId: patient.id, courseId: fx.courseId, branchCode: '01', caseOwnerStaffId: fx.therapistId,
+  patientId: patient.id, courseId: fx.courseId, branchCode: '01', caseOwnerStaffId: fx.therapistId, paymentLabelCode: 'FULL',
 }).then(({ status, body }) => {
   expect(status, JSON.stringify(body)).to.equal(201)
   return body
 })
-const closeMonth = () => cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
+const closeMonth = () =>
+    cy.api('POST', `/api/commission/closings/${month}?branchCode=01`,).its('status').should('equal', 200)
 
 describe('v2 new commission tiers: after the current cycle is closed, from the next cycle', () => {
   it('starts only on the first day of a month', () => {
+    closeMonth()
     defaultScheme().then((scheme) => {
       const [year, number] = month.split('-').map(Number)
       const mid = new Date(Date.UTC(year, number + 1, 15)).toISOString().slice(0, 10)
@@ -28,6 +33,7 @@ describe('v2 new commission tiers: after the current cycle is closed, from the n
   })
 
   it('cannot start in the current month or earlier', () => {
+    closeMonth()
     defaultScheme().then((scheme) => {
       version(scheme, `${month}-01`).its('status').should('equal', 400)
       version(scheme, '2026-01-01').its('status').should('equal', 400)
@@ -48,6 +54,7 @@ describe('v2 new commission tiers: after the current cycle is closed, from the n
   })
 
   it('is accepted from the next cycle when nothing is waiting to be closed', () => {
+    closeMonth()
     defaultScheme().then((scheme) => version(scheme, nextMonthStart()).then(({ status, body }) => {
       expect(status, JSON.stringify(body)).to.equal(201)
       expect(body.effectiveFrom).to.equal(nextMonthStart())
@@ -59,11 +66,11 @@ describe('v2 reopening a closed month keeps the reason', () => {
   it('stores the latest reason, who reopened and when on the closing', function () {
     cy.registerPatient().then((patient) => buy(this.fixtures, patient).then(() => {
       closeMonth()
-      cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+      cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).then(({ body }) => {
         const closing = body.find((row) => row.status === 'CLOSED')
         expect(closing.reopenReason).to.equal(null)
         cy.api('POST', `/api/commission/closings/${closing.id}/reopen`, { reason: 'บันทึกผู้ขายผิดคน' }).its('status').should('equal', 200)
-        cy.api('GET', `/api/commission/closings?month=${month}`).its('body').should((rows) => {
+        cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).its('body').should((rows) => {
           const reopened = rows.find((row) => row.id === closing.id)
           expect(reopened.status).to.equal('OPEN')
           expect(reopened.reopenReason).to.equal('บันทึกผู้ขายผิดคน')
@@ -76,7 +83,7 @@ describe('v2 reopening a closed month keeps the reason', () => {
   it('refuses a Reopen without a reason', function () {
     cy.registerPatient().then((patient) => buy(this.fixtures, patient).then(() => {
       closeMonth()
-      cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => {
+      cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).then(({ body }) => {
         const closing = body.find((row) => row.status === 'CLOSED')
         cy.api('POST', `/api/commission/closings/${closing.id}/reopen`, { reason: '  ' }).its('status').should('equal', 400)
       })
@@ -85,18 +92,23 @@ describe('v2 reopening a closed month keeps the reason', () => {
 })
 
 describe('v2 a monthly payment keeps its payment date and reference', () => {
-  const closedPayment = (fx) => cy.registerPatient().then((patient) => buy(fx, patient).then((course) => {
-    cy.api('POST', '/api/course-usages', { coursePurchaseId: course.id }).its('status').should('equal', 200)
-    closeMonth()
-    cy.api('POST', `/api/commission/payments/prepare?month=${month}`).its('status').should('equal', 200)
-    return cy.api('GET', `/api/commission/payments?month=${month}`).then(({ body }) => {
-      const payment = body.find((row) => row.staffId === fx.therapistId)
-      return cy.api('POST', `/api/commission/payments/${payment.id}/close`).then(({ status }) => {
-        expect(status).to.equal(200)
-        return payment
-      })
-    })
-  }))
+  const closedPayment = (fx) =>
+      cy.registerPatient().then((patient) =>
+          buy(fx, patient).then((course) => {
+            cy.useCourseSession(course.id).its('status').should('equal', 200)
+            closeMonth()
+
+            cy.api('POST', `/api/commission/payments/prepare?month=${month}&branchCode=01`,).its('status').should('equal', 200)
+            return cy.api(
+                'POST', `/api/commission/payments/close?month=${month}&branchCode=01`,).then(({ status, body }) => {
+              expect(status, JSON.stringify(body)).to.equal(200)
+              const payment = body.find((row) => row.staffId === fx.therapistId,)
+              expect(payment).to.exist
+
+              return payment
+            })
+          }),
+      )
 
   it('records the date and reference the Manager enters', function () {
     closedPayment(this.fixtures).then((payment) => {

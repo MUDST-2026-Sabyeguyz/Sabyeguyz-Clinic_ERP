@@ -1,8 +1,9 @@
 // One Cypress case for each original commission/sale JUnit test (24 total).
 describe('Clinic v2 commission and sale services', () => {
   const originalNames = {
-    'override-applies': 'recordsTheAuditAndAppliesTheNewRate',
+    'override-applies': 'rejectsDirectManualRateOverride',
     'override-reason': 'requiresAReason',
+    'closing-reclose-same-rate': 'doesNotRecordARateChangeWhenTheRateIsUnchanged',
     'override-unlocked': 'rejectsOverridingACourseThatWasNeverLocked',
     'scheme-covers': 'picksTheSchemeWhoseRangeCoversTheDate',
     'scheme-newest': 'newestVersionTakesOverTheDayAfterThePreviousEnds',
@@ -24,13 +25,19 @@ describe('Clinic v2 commission and sale services', () => {
     'schemecrud-referenced-rename': 'aSchemeInUseMayStillBeRenamed',
     'feeadmin-create': 'createsTheClinicWideTreatmentFeeRule',
     'feeadmin-takes-over': 'aNewOpenEndedRuleEndsTheOldOneTheDayBefore',
-    'feeadmin-used-can-end': 'aRuleInUseKeepsItsValueAndMayEnd',
     'feeadmin-unused-editable': 'anUnusedRuleCanBeEdited',
     'scheme-missing': 'throwsWhenNoSchemeCoversTheDate',
     'tier-example': 'resolvesTheSeventyPercentTierFromTheRequirementDocExample',
     'tier-top': 'openEndedTopTierHasNoUpperBound',
     'tier-missing': 'throwsWhenNoTierCoversTheAmount',
     'closing-locks': 'locksTheRateAndStampsItOntoEveryCourseSoldThatMonth',
+    'closing-reclose-preserves-scheme': 'preservesOriginalSchemeWhenClosingAReopenedMonth',
+    'closing-reclose-audit': 'recordsTheCalculatedRateChangeAfterReopen',
+    'closing-reclose-missing-old-rate': 'rejectsReclosingWithoutThePreviousRate',
+    'closing-reclose-missing-reason': 'rejectsARateChangeWithoutAReopenReason',
+    'closing-reclose-finalized': 'rejectsReclosingAFinalizedMonth',
+    'closing-reclose-missing-scheme': 'rejectsReclosingWithoutTheOriginalScheme',
+    'closing-reclose-version-mismatch': 'rejectsReclosingWithAMismatchedSchemeVersion',
     'closing-duplicate': 'rejectsClosingTheSameStaffAndMonthTwice',
     'closing-malformed': 'rejectsAMalformedMonth',
     'fee-fixed': 'fixedFeeMatchesTheDocExample',
@@ -39,6 +46,9 @@ describe('Clinic v2 commission and sale services', () => {
     'payment-record': 'recordsAPaymentAgainstAnActiveTransaction',
     'payment-void': 'rejectsPaymentAgainstAVoidedReceipt',
     'payment-zero': 'rejectsZeroOrNegativeAmount',
+    'payment-duplicate': 'rejectsASecondCompletedPayment',
+    'payment-underpaid': 'rejectsPaymentBelowReceiptNetAmount',
+    'payment-overpaid': 'rejectsPaymentAboveReceiptNetAmount',
     'receipt-create': 'createsAReceipt',
     'receipt-duplicate': 'rejectsDuplicateReceiptNo',
     'cancel-void-paid-sale': 'voidingTheOnlyLineVoidsItsPaymentsAndTheReceipt',
@@ -82,10 +92,11 @@ describe('Clinic v2 commission and sale services', () => {
     'sale-void': 'voidRejectsAnAlreadyVoidedTransaction',
     'schemecrud-create': 'createsASchemeWithItsTiers',
     'schemecrud-next-version': 'nextVersionIncrementsFromTheLatestExistingScheme',
+    'schemecrud-different-name-version': 'incrementsVersionAcrossDifferentSchemeNames',
+    'schemecrud-other-branch-open': 'allowsNewSchemeWithoutWaitingForOtherBranches',
     'schemecrud-update-keeps-tiers': 'updateOnlyTouchesNameAndDatesNeverTiers',
   }
   const cases = [
-    ['override-applies', { oldRate: 0.07, newRate: 0.10, rate: 0.10, pool: 1000, outstanding: 1000 }],
     ['scheme-covers', { sameV1: true, sameV2: false }],
     ['scheme-newest', { sameV1: false, sameV2: true }],
     ['scheme-last-day', { sameV1: true, sameV2: false }],
@@ -103,11 +114,13 @@ describe('Clinic v2 commission and sale services', () => {
     ['schemecrud-referenced-rename', { name: 'Renamed', tiersDeleted: 0 }],
     ['feeadmin-create', { type: 'Percentage', value: 10, enabled: true }],
     ['feeadmin-takes-over', { predecessorEnds: '2026-06-30', newStarts: '2026-07-01' }],
-    ['feeadmin-used-can-end', { value: 45, ends: '2026-12-31' }],
     ['feeadmin-unused-editable', { type: 'Percentage', value: 12.5 }],
     ['tier-example', 0.07],
     ['tier-top', 0.10],
     ['closing-locks', { rate: 0.07, status: true, courseStatus: 'Locked', courseRate: 0.07, pool: 700, perVisit: 70 }],
+    ['closing-reclose-preserves-scheme', {closingId: 10, schemeId: 7, schemeVersion: 7, rate: 0.07, status: 'Closed',}],
+    ['closing-reclose-audit', {auditCount: 1, closingId: 10, permissionId: 1, oldRate: 0.05, newRate: 0.07, changedBy: 9, hasChangedAt: true, reason: 'แก้ไขข้อมูลยอดขายต้นทาง',}],
+    ['closing-reclose-same-rate', {auditCount: 0, rate: 0.07,}],
     ['fee-fixed', 45],
     ['fee-percentage', 30],
     ['fee-specific', { present: true, fee: 45 }],
@@ -138,6 +151,8 @@ describe('Clinic v2 commission and sale services', () => {
     ['sale-course', { sameCourse: true, sameLine: true, amount: 10000, type: 'CoursePurchase', saveOrder: ['transaction', 'course'] }],
     ['schemecrud-create', { version: 1, tiersSaved: 2, firstRate: 0.05 }],
     ['schemecrud-next-version', { version: 2, predecessorEnds: '2026-12-31' }],
+    ['schemecrud-different-name-version', {version: 8, originalVersion: 7, lockCalls: 1,}],
+    ['schemecrud-other-branch-open', { version: 2, globalOpenChecks: 0 }],
     ['schemecrud-update-keeps-tiers', { name: 'Renamed', tiersSaveCallsDuringUpdate: 0 }],
   ]
   cases.forEach(([scenario, expected]) => {
@@ -150,6 +165,7 @@ describe('Clinic v2 commission and sale services', () => {
     })
   })
   const failures = [
+    ['override-applies', 'IllegalArgumentException'],
     ['override-reason', 'IllegalArgumentException'],
     ['override-unlocked', 'IllegalArgumentException'],
     ['scheme-missing', 'IllegalStateException'],
@@ -158,9 +174,17 @@ describe('Clinic v2 commission and sale services', () => {
     ['tier-overlap', 'IllegalStateException'],
     ['tier-missing', 'IllegalStateException'],
     ['closing-duplicate', 'IllegalStateException'],
+    ['closing-reclose-missing-scheme', 'IllegalStateException'],
+    ['closing-reclose-version-mismatch', 'IllegalStateException'],
+    ['closing-reclose-missing-old-rate', 'IllegalStateException'],
+    ['closing-reclose-missing-reason', 'IllegalArgumentException'],
+    ['closing-reclose-finalized', 'IllegalStateException'],
     ['closing-malformed', 'IllegalArgumentException'],
     ['payment-void', 'IllegalArgumentException'],
     ['payment-zero', 'IllegalArgumentException'],
+    ['payment-duplicate', 'IllegalArgumentException'],
+    ['payment-underpaid', 'IllegalArgumentException'],
+    ['payment-overpaid', 'IllegalArgumentException'],
     ['receipt-duplicate', 'IllegalArgumentException'],
     ['sale-wrong-type', 'IllegalArgumentException'],
     ['sale-void', 'IllegalArgumentException'],
@@ -191,6 +215,7 @@ describe('Clinic v2 commission and sale services', () => {
   // schemeCrud(), so their IllegalArgumentException is caught one level down:
   // the outer run() wraps that already-caught result in its own {value: ...}.
   const nestedFailures = [
+    ['schemecrud-branch-open', 'rejectsCreatingASchemeWhileSelectedBranchIsOpen', 'IllegalStateException'],
     ['schemecrud-overlap', 'rejectsOverlappingTierRanges', 'IllegalArgumentException'],
     ['schemecrud-gap', 'rejectsAGapBetweenTierRanges', 'IllegalArgumentException'],
     ['schemecrud-bad-whole-baht', 'rejectsWholeBahtTiersThatLeaveSatangUncovered', 'IllegalArgumentException'],
@@ -210,6 +235,9 @@ describe('Clinic v2 commission and sale services', () => {
     ['feeadmin-overlap', 'rejectsOverlappingEnabledRules', 'IllegalArgumentException'],
     ['feeadmin-takeover-used', 'rejectsEndingARuleBeforeTreatmentsItAlreadyPaid', 'IllegalStateException'],
     ['feeadmin-used-immutable', 'rejectsChangingTheValueOfARuleInUse', 'IllegalStateException'],
+    ['feeadmin-started-unused-immutable', 'rejectsChangingAnEffectiveRuleEvenWhenUnused', 'IllegalStateException'],
+    ['feeadmin-used-cannot-end', 'rejectsManuallyEndingARuleAlreadyUsed', 'IllegalStateException'],
+    ['feeadmin-future-used-immutable', 'rejectsChangingAFutureRuleAlreadyUsed', 'IllegalStateException'],
   ]
   nestedFailures.forEach(([scenario, name, error]) => {
     it(name, () => {
