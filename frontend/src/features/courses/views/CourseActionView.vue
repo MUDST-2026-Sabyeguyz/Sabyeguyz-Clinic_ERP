@@ -1369,11 +1369,9 @@ function closePrintSuccess() {
         class="course-manager-main"
         :class="{ 'after-transfer': transferReceiptId }"
       >
-        <RouterLink
-          class="course-use-back"
-          :to="sourceLocation"
-          >{{ openedFromPatientProfile ? '← กลับไปคอร์สของผู้ป่วย' : '← กลับไปหน้าบริการ' }}</RouterLink
-        >
+        <RouterLink class="course-use-back" :to="sourceLocation">{{
+          openedFromPatientProfile ? '← กลับไปคอร์สของผู้ป่วย' : '← กลับไปหน้าบริการ'
+        }}</RouterLink>
         <h1>คอร์สของผู้ป่วย</h1>
         <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
         <CourseRenewalDialog
