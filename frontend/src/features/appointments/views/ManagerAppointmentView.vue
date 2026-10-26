@@ -29,6 +29,7 @@ import {
 } from '@/api/client'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
 import { isContactPhoneValid, limitPhoneDigits } from '@/utils/phone'
+import { sanitizePatientName } from '../newPatientName'
 
 const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   id?: number
@@ -186,6 +187,7 @@ const statusNoticeError = ref(false)
 const errorMessage = ref('')
 const showRequiredValidation = ref(false)
 const appointmentSuccessMessage = ref('')
+let cancelAppointmentSuccessDismiss: (() => void) | null = null
 const savingAppointment = ref(false)
 const checkingAvailability = ref(false)
 const pendingSaveConfirmation = ref(false)
@@ -532,7 +534,10 @@ onMounted(async () => {
     if (therapistId) form.value.therapistId = therapistId
   }
 })
-onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
+onBeforeUnmount(() => {
+  window.removeEventListener('manager-branch-changed', applyManagerBranch)
+  cancelAppointmentSuccessDismiss?.()
+})
 watch([startDate, endDate], () => {
   if (selectedMonth.value) {
     const [year, month] = selectedMonth.value.split('-').map(Number)
@@ -903,9 +908,9 @@ async function save() {
       ...appointments.value.filter((item) => item.id !== savedAppointment.id),
     ]
     if (wasEditing) {
-      appointmentSuccessMessage.value = 'เลื่อนนัดหมายสำเร็จ'
+      showAppointmentSuccess('เลื่อนนัดหมายสำเร็จ')
     } else {
-      appointmentSuccessMessage.value = 'สร้างนัดหมายสำเร็จ'
+      showAppointmentSuccess('สร้างนัดหมายสำเร็จ')
     }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'บันทึกนัดหมายไม่สำเร็จ'
@@ -914,8 +919,16 @@ async function save() {
   }
 }
 function dismissAppointmentSuccess() {
+  cancelAppointmentSuccessDismiss?.()
+  cancelAppointmentSuccessDismiss = null
   appointmentSuccessMessage.value = ''
   void router.replace({ name: 'staff-appointments' })
+}
+function showAppointmentSuccess(message: string) {
+  cancelAppointmentSuccessDismiss?.()
+  appointmentSuccessMessage.value = message
+  const timer = window.setTimeout(() => dismissAppointmentSuccess(), 2200)
+  cancelAppointmentSuccessDismiss = () => window.clearTimeout(timer)
 }
 async function saveStatus(item: Appointment, status: AppointmentStatus, reason = '') {
   if (savingStatusId.value !== null) return false
@@ -1029,7 +1042,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
         v-modal-focus="isEditing ? { close: goToAppointmentList, busy: savingAppointment } : null"
       >
         <div class="appointment-back-row">
-          <button class="appointment-back" type="button" @click="goToAppointmentList">
+          <button class="appointment-back-link" type="button" @click="goToAppointmentList">
             {{ isCalendarCreate ? '← กลับไปหน้าปฏิทิน' : '← กลับไปหน้านัดหมาย' }}
           </button>
         </div>
@@ -1253,6 +1266,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   v-model.trim="newPatientForm.firstName"
                   autocomplete="given-name"
                   placeholder="กรอกชื่อ"
+                  @input="newPatientForm.firstName = sanitizePatientName(newPatientForm.firstName)"
                 />
               </label>
               <label>
@@ -1261,11 +1275,16 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   v-model.trim="newPatientForm.lastName"
                   autocomplete="family-name"
                   placeholder="กรอกนามสกุล"
+                  @input="newPatientForm.lastName = sanitizePatientName(newPatientForm.lastName)"
                 />
               </label>
               <label>
                 <span>ชื่อเล่น <em>*</em></span>
-                <input v-model.trim="newPatientForm.nickname" placeholder="กรอกชื่อเล่น" />
+                <input
+                  v-model.trim="newPatientForm.nickname"
+                  placeholder="กรอกชื่อเล่น"
+                  @input="newPatientForm.nickname = sanitizePatientName(newPatientForm.nickname)"
+                />
               </label>
               <label>
                 <span>เบอร์โทรศัพท์ <em>*</em></span>
@@ -1949,29 +1968,33 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
         <h2 id="appointment-confirmation-title">
           {{ isEditing ? 'ยืนยันการเลื่อนนัดหมายหรือไม่?' : 'ยืนยันการสร้างนัดหมายหรือไม่?' }}
         </h2>
-        <div>
+        <div class="appointment-confirm-actions">
           <button
             type="button"
             class="secondary"
             :disabled="savingAppointment"
             @click="pendingSaveConfirmation = false"
           >
-            กลับไปแก้ไข
+            ยกเลิก
           </button>
           <button type="button" class="primary" :disabled="savingAppointment" @click="confirmSave">
-            {{ savingAppointment ? 'กำลังบันทึก…' : 'ยืนยันนัดหมาย' }}
+            {{ savingAppointment ? 'กำลังบันทึก…' : 'ยืนยัน' }}
           </button>
         </div>
       </section>
     </div>
-    <div
-      v-if="appointmentSuccessMessage"
-      class="status-modal-backdrop"
-      @click.self="dismissAppointmentSuccess"
-    >
-      <section class="status-modal appointment-success-modal" role="status" aria-live="polite">
-        <h2>{{ appointmentSuccessMessage }}</h2>
-        <button type="button" class="primary" @click="dismissAppointmentSuccess">ตกลง</button>
+    <div v-if="appointmentSuccessMessage" class="status-modal-backdrop">
+      <section
+        class="status-modal appointment-success-modal"
+        role="status"
+        aria-live="polite"
+        aria-labelledby="appointment-success-title"
+      >
+        <span class="appointment-success-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false"><path d="m5 12 4.2 4.2L19 6.5" /></svg>
+        </span>
+        <h2 id="appointment-success-title">{{ appointmentSuccessMessage }}</h2>
+        <p>ระบบบันทึกข้อมูลเรียบร้อยแล้ว</p>
       </section>
     </div>
     <div

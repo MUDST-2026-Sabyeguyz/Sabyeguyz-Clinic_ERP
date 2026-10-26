@@ -413,7 +413,65 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-clear
   cursor: pointer;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-history-table {
-  min-width: 800px;
+  min-width: 920px;
+  table-layout: fixed;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  th:nth-child(1),
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  td:nth-child(1) {
+  width: 26% !important;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  th:nth-child(2),
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  td:nth-child(2) {
+  width: 24% !important;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  th:nth-child(3),
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  td:nth-child(3) {
+  width: 14% !important;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  th:nth-child(4),
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  td:nth-child(4) {
+  width: 12% !important;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  th:nth-child(5),
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  td:nth-child(5) {
+  width: 24% !important;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  .course-actions {
+  min-width: 0;
+  overflow: visible;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-purchase-date {
   display: block;
@@ -423,11 +481,14 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-purcha
   line-height: 1.5;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-more-actions {
-  display: inline-grid;
+  position: relative;
+  display: inline-block;
   min-width: 140px;
-  gap: 4px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-more-actions summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   padding: 10px 12px;
   box-sizing: border-box;
@@ -441,11 +502,80 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-more-a
 body:is(.therapist-ui, :not(.therapist-ui))
   .patient-profile-page
   .course-more-actions
+  summary::marker {
+  content: '';
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-more-actions
+  summary::after {
+  margin-left: 8px;
+  content: '⌄';
+  color: #176c68;
+  font-size: 15px;
+  line-height: 1;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-more-actions[open]
+  summary {
+  border-color: #176c68;
+  box-shadow: 0 0 0 3px #e1f0ec;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-more-actions[open]
+  summary::after {
+  transform: rotate(180deg);
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-more-actions-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  min-width: 188px;
+  padding: 6px;
+  border: 1px solid #d7e6e1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(24, 66, 61, 0.16);
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .history-table-wrap:has(.course-more-actions[open]) {
+  overflow: visible;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-history-table
+  td:has(.course-more-actions[open]) {
+  height: auto;
+  overflow: visible;
+  vertical-align: top;
+  white-space: normal;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-more-actions
   .history-row-action {
   display: flex;
-  margin-top: 8px;
-  min-height: 44px;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 0;
+  padding: 8px 10px;
   align-items: center;
+  border: 0;
+  border-radius: 7px;
+  color: #176c68;
+  background: transparent;
+  text-align: left;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .patient-profile-page
+  .course-more-actions-menu
+  .history-row-action:hover {
+  background: #eaf5f2;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page summary:focus-visible {
   outline: 3px solid #145c59;

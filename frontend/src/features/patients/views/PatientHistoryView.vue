@@ -2,7 +2,6 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import CourseRenewalDialog from '../components/CourseRenewalDialog.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import {
@@ -19,18 +18,6 @@ import {
 
 defineProps<{ embedded?: boolean }>()
 const route = useRoute()
-const canRenewCourses = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
-const renewingCourse = ref<CoursePurchase | null>(null)
-const renewalRefreshError = ref('')
-async function refreshCoursesAfterRenewal() {
-  if (!patient.value) return
-  renewalRefreshError.value = ''
-  try {
-    courses.value = await courseApi.patientCourses(patient.value.id)
-  } catch {
-    renewalRefreshError.value = 'ต่ออายุสำเร็จ แต่โหลดรายการคอร์สใหม่ไม่สำเร็จ กรุณาลองใหม่'
-  }
-}
 const activeTab = ref<'payments' | 'courses'>(
   route.query.tab === 'payments' ? 'payments' : 'courses',
 )
@@ -94,7 +81,7 @@ function clearHistoryFilters() {
 }
 function courseActionLink(
   item: CoursePurchase,
-  action: 'use' | 'history' | 'transfer',
+  action: 'manage' | 'use' | 'history' | 'transfer',
   print = false,
 ) {
   return {
@@ -368,18 +355,6 @@ onMounted(async () => {
       <p v-if="!embedded" class="history-subtitle">
         ตรวจสอบใบเสร็จ การชำระเงิน และสิทธิ์คอร์สรักษาของผู้ป่วย
       </p>
-      <p v-if="renewalRefreshError" role="alert">
-        {{ renewalRefreshError }}
-        <button type="button" @click="refreshCoursesAfterRenewal">โหลดคอร์สใหม่</button>
-      </p>
-      <CourseRenewalDialog
-        v-if="renewingCourse && patient"
-        :key="renewingCourse.id"
-        :course="renewingCourse"
-        :patient-id="patient.id"
-        @close="renewingCourse = null"
-        @renewed="refreshCoursesAfterRenewal"
-      />
       <section
         v-if="!loading && !errorMessage"
         class="course-overview"
@@ -517,40 +492,10 @@ onMounted(async () => {
                 </td>
                 <td class="history-actions course-actions">
                   <RouterLink
-                    v-if="item.usable"
-                    class="history-row-action"
-                    :to="courseActionLink(item, 'use')"
-                    >ใช้สิทธิ์</RouterLink
+                    class="history-row-action outline"
+                    :to="courseActionLink(item, 'manage')"
+                    >รายละเอียดคอร์ส</RouterLink
                   >
-                  <details class="course-more-actions">
-                    <summary>รายละเอียดคอร์ส</summary>
-                    <RouterLink
-                      class="history-row-action outline"
-                      :to="courseActionLink(item, 'history')"
-                      >ประวัติใช้สิทธิ์</RouterLink
-                    >
-                    <RouterLink
-                      class="history-row-action outline"
-                      :to="courseActionLink(item, 'history', true)"
-                      >ดูใบตัดคอร์ส</RouterLink
-                    >
-                    <RouterLink
-                      v-if="item.usable && (item.purchaser?.id ?? item.patient.id) === patient?.id"
-                      class="history-row-action outline"
-                      :to="courseActionLink(item, 'transfer')"
-                      >แชร์คอร์ส</RouterLink
-                    >
-                    <button
-                      v-if="
-                        canRenewCourses && (item.purchaser?.id ?? item.patient.id) === patient?.id
-                      "
-                      type="button"
-                      class="history-row-action outline"
-                      @click="renewingCourse = item"
-                    >
-                      ต่ออายุ / ประวัติ
-                    </button>
-                  </details>
                 </td>
               </tr>
               <tr v-if="!filteredCourses.length">
