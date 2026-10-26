@@ -7,6 +7,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import PhoneIcon from '@/components/PhoneIcon.vue'
 import paymentBankIcon from '@/assets/payment-bank.svg'
 import paymentQrIcon from '@/assets/payment-qr.svg'
 import paymentCardIcon from '@/assets/payment-card.svg'
@@ -140,7 +141,8 @@ async function loadMaster() {
   staff.value = staffList.filter((person) => person.role === 'THERAPIST' && person.active)
   selectedServiceId.value = s[0]?.id ?? 0
   selectedCourseId.value = c[0]?.id ?? 0
-  paymentCode.value = methods.find((method) => method.active !== false && method.name !== 'Cash')?.code ?? ''
+  paymentCode.value =
+    methods.find((method) => method.active !== false && method.name !== 'Cash')?.code ?? ''
   selectedTreatingStaffId.value = staff.value[0]?.id
   selectedSalespersonStaffId.value = staff.value[0]?.id
   try {
@@ -320,7 +322,8 @@ const printedAt = computed(() =>
   }).format(new Date()),
 )
 const selectedStaffName = computed(
-  () => staff.value.find((person) => person.id === selectedSalespersonStaffId.value)?.fullName || '-',
+  () =>
+    staff.value.find((person) => person.id === selectedSalespersonStaffId.value)?.fullName || '-',
 )
 const staffFilterOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
@@ -359,7 +362,9 @@ const selectedPaymentLabel = computed(() => {
 const paymentStatusLabel = computed(() => {
   return paymentStatuses.value.find((status) => status.code === paymentStatus.value)?.label ?? '-'
 })
-const enabledPaymentStatuses = computed(() => paymentStatuses.value.filter((status) => status.enabled))
+const enabledPaymentStatuses = computed(() =>
+  paymentStatuses.value.filter((status) => status.enabled),
+)
 function selectPaymentStatus(status: PaymentStatusOption['code']) {
   paymentStatus.value = status
   if (
@@ -589,6 +594,9 @@ async function submit() {
         </section>
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
+        <button type="button" class="service-menu-back" @click="clearPatient">
+          ← กลับไปเลือกผู้ป่วย
+        </button>
         <h1>โปรแกรมการรักษา</h1>
         <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
           <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
@@ -602,7 +610,6 @@ async function submit() {
           <span class="service-menu-branch">{{
             patientProfile?.branch?.name || patient.branchName || '—'
           }}</span>
-          <button type="button" @click="clearPatient">↻ เปลี่ยนผู้ป่วย</button>
         </section>
         <div class="service-menu-actions">
           <article>
@@ -765,7 +772,10 @@ async function submit() {
             <i>{{ initials }}</i>
             <div>
               <strong>{{ patient.fullName }}</strong
-              ><span>HN {{ patient.hn }}　☎ {{ patient.phone }}</span>
+              ><span class="patient-contact-inline"
+                >HN {{ patient.hn }} <PhoneIcon v-if="patient.phone" />
+                {{ patient.phone || '-' }}</span
+              >
             </div>
             <b>{{ patientProfile?.branch?.name || patient.branchName || '—' }}</b>
           </section>
@@ -798,10 +808,13 @@ async function submit() {
                     :clear-on-reselect="false"
                     @update:model-value="selectedTreatingStaffId = Number($event)" /></label
                 ><label
-                  >{{ mode === 'course' ? 'นักกายภาพเจ้าของยอด' : 'ผู้ขาย/เจ้าของยอด' }}<FilterDropdown
+                  >{{ mode === 'course' ? 'นักกายภาพเจ้าของยอด' : 'ผู้ขาย/เจ้าของยอด'
+                  }}<FilterDropdown
                     :model-value="String(selectedSalespersonStaffId ?? '')"
                     :options="staffFilterOptions"
-                    :default-label="mode === 'course' ? 'เลือกนักกายภาพเจ้าของยอด' : 'เลือกผู้ขาย/เจ้าของยอด'"
+                    :default-label="
+                      mode === 'course' ? 'เลือกนักกายภาพเจ้าของยอด' : 'เลือกผู้ขาย/เจ้าของยอด'
+                    "
                     :label="mode === 'course' ? 'นักกายภาพเจ้าของยอด' : 'ผู้ขายหรือเจ้าของยอด'"
                     :clear-on-reselect="false"
                     @update:model-value="selectedSalespersonStaffId = Number($event)"
@@ -859,10 +872,7 @@ async function submit() {
                     <span>{{ paymentMethodLabel(method.code, method.name) }}</span>
                   </button>
                 </div>
-                <small
-                  v-if="!salePaymentMethods.length"
-                  class="service-error"
-                >
+                <small v-if="!salePaymentMethods.length" class="service-error">
                   ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager
                 </small>
               </div>
@@ -913,7 +923,10 @@ async function submit() {
                     <span>ประมาณการต่อครั้ง</span>
                     <b>{{ money(courseCommissionPreview.commissionPerVisit) }}</b>
                   </p>
-                  <small>อัตราสุดท้ายจะล็อกตาม Tier สูงสุดจากยอดคอร์สสะสมของนักกายภาพเมื่อปิดยอดเดือน</small>
+                  <small
+                    >อัตราสุดท้ายจะล็อกตาม Tier
+                    สูงสุดจากยอดคอร์สสะสมของนักกายภาพเมื่อปิดยอดเดือน</small
+                  >
                 </template>
               </div>
               <div v-else class="commission">

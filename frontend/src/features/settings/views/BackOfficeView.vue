@@ -993,8 +993,8 @@ const drawerTitle = computed(() => {
             <div v-else-if="section === 'tiers'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/commission-history"
                 >ประวัติเวอร์ชัน</RouterLink
-              ><RouterLink class="settings-add" to="/staff/commission/tiers"
-                >ตั้งค่า Tier</RouterLink
+              ><RouterLink class="settings-add" to="/staff/settings/commission-tiers"
+                >ตั้งค่ากฎค่าคอมมิชชัน</RouterLink
               >
             </div>
             <p v-else-if="section === 'payments'" class="auto-save-note">
@@ -1021,7 +1021,8 @@ const drawerTitle = computed(() => {
                 default-value="ทั้งหมด"
                 default-label="ทั้งหมด"
                 label="บทบาท"
-                :clear-on-reselect="false" />
+                :clear-on-reselect="false"
+              />
             </label>
             <label v-if="section === 'users'">
               <span>สถานะ</span>
@@ -1031,7 +1032,8 @@ const drawerTitle = computed(() => {
                 default-value="ทั้งหมด"
                 default-label="ทั้งหมด"
                 label="สถานะ"
-                :clear-on-reselect="false" />
+                :clear-on-reselect="false"
+              />
             </label>
             <label v-if="section === 'services'">
               <span>ประเภท</span>
@@ -1041,7 +1043,8 @@ const drawerTitle = computed(() => {
                 default-value="ทั้งหมด"
                 default-label="ทั้งหมด"
                 label="ประเภท"
-                :clear-on-reselect="false" />
+                :clear-on-reselect="false"
+              />
             </label>
           </div>
           <p v-if="loadError" class="validation-message" role="alert">{{ loadError }}</p>
@@ -1292,8 +1295,12 @@ const drawerTitle = computed(() => {
           <b>{{ paymentStatuses[paymentStatusChange.index]!.label }}</b> หรือไม่?
         </p>
         <div class="confirm-actions">
-          <button type="button" class="confirm-cancel" @click="paymentStatusChange = null">ยกเลิก</button>
-          <button type="button" class="confirm-ok" @click="confirmPaymentStatusChange">ยืนยัน</button>
+          <button type="button" class="confirm-cancel" @click="paymentStatusChange = null">
+            ยกเลิก
+          </button>
+          <button type="button" class="confirm-ok" @click="confirmPaymentStatusChange">
+            ยืนยัน
+          </button>
         </div>
       </div>
     </div>
@@ -1423,11 +1430,9 @@ const drawerTitle = computed(() => {
           <fieldset>
             <legend>สิทธิ์ตามบทบาท</legend>
             <label v-for="permission in permissions" :key="permission" class="check"
-              ><input
-                v-model="selectedUserPermissions"
-                type="checkbox"
-                :value="permission"
-              />{{ permission }}</label
+              ><input v-model="selectedUserPermissions" type="checkbox" :value="permission" />{{
+                permission
+              }}</label
             >
           </fieldset>
           <label
