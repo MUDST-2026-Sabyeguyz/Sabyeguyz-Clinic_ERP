@@ -17,14 +17,20 @@ public class InitialManagerProvisioner implements ApplicationRunner {
     private final RoleRepository roles;
     private final JdbcTemplate jdbc;
     private final String username;
+    private final String email;
     private final String password;
 
-    public InitialManagerProvisioner(AppUserRepository users, AppUserService service, RoleRepository roles,
-            JdbcTemplate jdbc,
-            @Value("${app.bootstrap.manager-username:}") String username,
-            @Value("${app.bootstrap.manager-password:}") String password) {
-        this.users = users; this.service = service; this.roles = roles; this.jdbc = jdbc;
-        this.username = username; this.password = password;
+    public InitialManagerProvisioner(AppUserRepository users, AppUserService service, RoleRepository roles, JdbcTemplate jdbc,
+                                     @Value("${app.bootstrap.manager-username:}") String username,
+                                     @Value("${app.bootstrap.manager-email:}") String email,
+                                     @Value("${app.bootstrap.manager-password:}") String password) {
+        this.users = users;
+        this.service = service;
+        this.roles = roles;
+        this.jdbc = jdbc;
+        this.username = username;
+        this.email = email;
+        this.password = password;
     }
 
     @Override
@@ -36,7 +42,7 @@ public class InitialManagerProvisioner implements ApplicationRunner {
         if (jdbc.queryForObject("select count(*) from app_user where username <> 'system'", Long.class) != 0) return;
         if (username.isBlank() || username.length() > 50 || password.length() < 12)
             throw new IllegalArgumentException("Initial manager needs a username (1-50 characters) and a password of at least 12 characters");
-        AppUser manager = service.register(username, password, null, null);
+        AppUser manager = service.register(username, email, password, null, null);
         Role role = roles.findByRoleName("Manager").orElseGet(() -> {
             Role created = new Role();
             created.setRoleName("Manager"); created.setRoleCreateAt(java.time.Instant.now());
