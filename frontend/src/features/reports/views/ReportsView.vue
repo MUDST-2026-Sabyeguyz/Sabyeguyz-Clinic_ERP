@@ -51,61 +51,15 @@ type ReportData =
   | SaleSummary[]
   | null
 
-const route = useRoute()
-const initialReport = String(route.query.report ?? 'revenue')
-const report = ref<ReportKey>(
-  [
-    'revenue',
-    'balance',
-    'transfer',
-    'commission',
-    'salesTransaction',
-    'treatmentTransaction',
-    'payment',
-  ].includes(initialReport)
-    ? (initialReport as ReportKey)
-    : 'revenue',
-)
-watch(
-  () => route.query.report,
-  (value) => {
-    const next = String(value ?? 'revenue')
-    if (
-      [
-        'revenue',
-        'balance',
-        'transfer',
-        'commission',
-        'salesTransaction',
-        'treatmentTransaction',
-        'payment',
-      ].includes(next)
-    ) {
-      report.value = next as ReportKey
-    }
-  },
-)
-const filters = reactive({
-  patient: '',
-  staff: '',
-  course: 'ทั้งหมด',
-  treatment: 'ทั้งหมด',
-  saleType: 'ทั้งหมด',
-  commissionType: 'ทั้งหมด',
-  from: `${new Date().getFullYear()}-08-01`,
-  to: new Date().toISOString().slice(0, 10),
-})
-
-// ── Pagination State ──────────────────────────────────────────────────────────
-const page = ref(1)
-const pageSize = 10
-
-const branches = ref<Branch[]>([])
-const courseOptions = ref<Array<{ id: number; name: string }>>([])
-const reportData = ref<ReportData>(null)
-const loading = ref(false)
-const errorMessage = ref('')
-const lastUpdatedText = ref('')
+const REPORT_KEYS: readonly ReportKey[] = [
+  'revenue',
+  'balance',
+  'transfer',
+  'commission',
+  'salesTransaction',
+  'treatmentTransaction',
+  'payment',
+]
 
 const REPORTS: Array<[ReportKey, string]> = [
   ['revenue', 'รายงานยอดขาย'],
@@ -115,22 +69,6 @@ const REPORTS: Array<[ReportKey, string]> = [
   ['salesTransaction', 'Transaction'],
   ['payment', 'รายงานยอดรับชำระ'],
 ]
-const reportSelection = computed({
-  get: () => (report.value === 'treatmentTransaction' ? 'salesTransaction' : report.value),
-  set: (value: string) => {
-    report.value = value as ReportKey
-  },
-})
-const reportOptions = computed(() => REPORTS.map(([value, label]) => ({ value, label })))
-const courseFilterOptions = computed(() =>
-  courseOptions.value.map((course) => ({ value: course.name, label: course.name })),
-)
-const selectedHeaderBranchCode = computed(
-  () =>
-    selectedManagerBranch()?.code ??
-    JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ??
-    '',
-)
 
 const TABLE_HEADERS: Record<ReportKey, string[]> = {
   revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่', 'ยอดขายสุทธิ', 'สัดส่วน'],
@@ -178,11 +116,71 @@ const TREATMENT_NAMES: Record<string, string> = {
   'Single Visit Sales': 'Exercise Therapy',
 }
 
+function isReportKey(value: string): value is ReportKey {
+  return REPORT_KEYS.includes(value as ReportKey)
+}
+
+function reportFromQuery(value: unknown): ReportKey {
+  const reportKey = String(value ?? 'revenue')
+  return isReportKey(reportKey) ? reportKey : 'revenue'
+}
+
+const route = useRoute()
+const report = ref<ReportKey>(reportFromQuery(route.query.report))
+watch(
+  () => route.query.report,
+  (value) => {
+    report.value = reportFromQuery(value)
+  },
+)
+
+const filters = reactive({
+  patient: '',
+  staff: '',
+  course: 'ทั้งหมด',
+  treatment: 'ทั้งหมด',
+  saleType: 'ทั้งหมด',
+  commissionType: 'ทั้งหมด',
+  from: `${new Date().getFullYear()}-08-01`,
+  to: new Date().toISOString().slice(0, 10),
+})
+
+const page = ref(1)
+const pageSize = 10
+
+const branches = ref<Branch[]>([])
+const courseOptions = ref<Array<{ id: number; name: string }>>([])
+const reportData = ref<ReportData>(null)
+const loading = ref(false)
+const errorMessage = ref('')
+const lastUpdatedText = ref('')
+
+const reportSelection = computed({
+  get: () => (report.value === 'treatmentTransaction' ? 'salesTransaction' : report.value),
+  set: (value: string) => {
+    report.value = value as ReportKey
+  },
+})
+const reportOptions = computed(() => REPORTS.map(([value, label]) => ({ value, label })))
+const courseFilterOptions = computed(() =>
+  courseOptions.value.map((course) => ({ value: course.name, label: course.name })),
+)
+const selectedHeaderBranchCode = computed(
+  () =>
+    selectedManagerBranch()?.code ??
+    JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ??
+    '',
+)
+
 const currentReportTitle = computed(() => {
   if (['salesTransaction', 'treatmentTransaction'].includes(report.value)) return 'Transaction'
   if (report.value === 'commission') return 'รายงานค่าคอมมิชชั่น'
   return REPORTS.find(([k]) => k === report.value)?.[1] ?? ''
 })
+
+const isTransactionReport = computed(() =>
+  ['salesTransaction', 'treatmentTransaction'].includes(report.value),
+)
 
 function getTreatmentName(type: string): string {
   if (filters.treatment !== 'ทั้งหมด') return filters.treatment
@@ -227,6 +225,15 @@ const formatMoney = (val: number) => `฿${Number(val).toLocaleString()}`
 const formatPeriod = (from: string, to: string) =>
   from === to ? formatDate(from) : `${formatDate(from)} – ${formatDate(to)}`
 
+function getSaleCategory(sale: Pick<SaleSummary, 'itemDescription'>) {
+  const description = sale.itemDescription?.toLowerCase() ?? ''
+  const isCourse = description.includes('course') || description.includes('คอร์ส')
+  return {
+    category: isCourse ? 'Course Sales' : 'Single Visit Sales',
+    treatment: isCourse ? 'Manual Therapy' : 'Exercise Therapy',
+  }
+}
+
 function updateTimestamp() {
   const now = new Date()
   const dateStr = new Intl.DateTimeFormat('th-TH', {
@@ -239,8 +246,6 @@ function updateTimestamp() {
   )
   lastUpdatedText.value = `${dateStr}, ${timeStr}`
 }
-
-// ── Dynamic Filtering ────────────────────────────────────────────────────────
 
 const revenueData = computed(() => reportData.value as RevenueReport | null)
 
@@ -269,7 +274,6 @@ const filteredRevenueCategories = computed(() => {
   return list
 })
 
-// KPI Items (Only active for Revenue report per Figma)
 const kpiItems = computed(() => {
   if (report.value !== 'revenue' || !revenueData.value) return []
   const list = filteredRevenueCategories.value
@@ -302,24 +306,18 @@ const paymentRows = computed(() => {
     .filter((sale) => {
       const soldDate = sale.soldAt.slice(0, 10)
       const query = filters.patient.trim().toLowerCase()
-      const description = sale.itemDescription?.toLowerCase() ?? ''
-      const isCourse = description.includes('course') || description.includes('คอร์ส')
-      const category = isCourse ? 'Course Sales' : 'Single Visit Sales'
+      const { category, treatment } = getSaleCategory(sale)
       return (
         soldDate >= filters.from &&
         soldDate <= filters.to &&
         (!query || `${sale.patient.fullName} ${sale.patient.hn}`.toLowerCase().includes(query)) &&
         (filters.saleType === 'ทั้งหมด' || filters.saleType === category) &&
-        (filters.treatment === 'ทั้งหมด' ||
-          filters.treatment === (isCourse ? 'Manual Therapy' : 'Exercise Therapy'))
+        (filters.treatment === 'ทั้งหมด' || filters.treatment === treatment)
       )
     })
     .map((sale) => {
-      const description = sale.itemDescription?.toLowerCase() ?? ''
-      const isCourse = description.includes('course') || description.includes('คอร์ส')
       return {
-        category: isCourse ? 'Course Sales' : 'Single Visit Sales',
-        treatment: isCourse ? 'Manual Therapy' : 'Exercise Therapy',
+        ...getSaleCategory(sale),
         branch: getBranchName(sale.branchCode),
         date: sale.soldAt,
         paid: Number(sale.paid),
@@ -341,7 +339,6 @@ const paymentKpis = computed(() => {
   ]
 })
 
-// Filtered Course Balance Rows
 const balanceData = computed(() => reportData.value as CourseBalanceReport | null)
 
 type ExtendedBalanceRow = {
@@ -373,7 +370,6 @@ const filteredBalanceRows = computed<ExtendedBalanceRow[]>(() => {
   return list
 })
 
-// Filtered Commission Rows
 const filteredCommissionRows = computed<CommissionReportRow[]>(() => {
   const data = (reportData.value as CommissionReportRow[] | null) ?? []
 
@@ -390,7 +386,6 @@ const filteredCommissionRows = computed<CommissionReportRow[]>(() => {
   })
 })
 
-// All Table Rows
 const tableRows = computed<string[][]>(() => {
   if (report.value === 'revenue') {
     const list = filteredRevenueCategories.value
@@ -515,7 +510,6 @@ const tableRows = computed<string[][]>(() => {
   return []
 })
 
-// Pagination Calculations
 const totalPages = computed(() => Math.max(1, Math.ceil(tableRows.value.length / pageSize)))
 
 const paginatedRows = computed(() => {
@@ -523,7 +517,6 @@ const paginatedRows = computed(() => {
   return tableRows.value.slice(start, start + pageSize)
 })
 
-// Reset page to 1 when filters or report change
 watch(
   [report, filters],
   () => {
@@ -532,7 +525,6 @@ watch(
   { deep: true },
 )
 
-// Dynamic Total Row
 const totalRow = computed<string[] | null>(() => {
   if (!tableRows.value.length) return null
 
@@ -579,7 +571,7 @@ const totalRow = computed<string[] | null>(() => {
 })
 
 async function fetchReport() {
-  if (['salesTransaction', 'treatmentTransaction'].includes(report.value)) return
+  if (isTransactionReport.value) return
   loading.value = true
   errorMessage.value = ''
   reportData.value = null
@@ -648,7 +640,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
   <div class="reports-page-wrapper">
     <StaffHeader />
 
-    <TransactionReportView v-if="['salesTransaction', 'treatmentTransaction'].includes(report)" />
+    <TransactionReportView v-if="isTransactionReport" />
     <main v-else class="reports-page-container">
       <!-- ── Header Section ──────────────────────────────────────────────── -->
       <section class="page-title-section">
