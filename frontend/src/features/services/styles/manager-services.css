@@ -1,50 +1,54 @@
 .service-page {
   min-height: 100vh;
   color: #1f2937;
-  background: #f9f4ee;
+  background: #faf6f0;
 }
 .service-header-shell {
   display: contents;
 }
-main {
-  width: min(1080px, calc(100% - 48px));
+.service-page > main {
+  width: min(1296px, calc(100% - 48px));
   margin: auto;
   padding: 32px 0 48px;
 }
-main > h1,
+.service-page > main > h1,
 .sale-page > h1 {
   margin: 0;
-  color: #25372e;
-  font-size: clamp(30px, 3.2vw, 38px);
-  font-weight: 700;
+  color: #145c59;
+  font-size: clamp(30px, 2.4vw, 36px);
+  font-weight: 800;
   line-height: 1.4;
 }
 .service-page-intro {
-  margin: 12px 0 0;
+  margin: 8px 0 28px;
   color: #56665d;
   font-size: 16px;
 }
 .service-search {
-  margin-top: 18px;
+  margin-top: 0;
+  padding: 20px;
+  border: 1px solid #dce6e1;
+  border-radius: 13px;
+  background: #fff;
 }
 .service-search > h2 {
-  margin: 0 0 12px;
-  color: #1f2937;
-  font-size: 18px;
+  margin: 0 0 14px;
+  color: #25372e;
+  font-size: 20px;
 }
 .search-wrap {
   display: flex;
-  gap: 16px;
+  gap: 12px;
 }
 .search {
   display: flex;
   flex: 1;
-  height: 52px;
+  height: 44px;
   align-items: center;
-  padding: 0 16px;
-  border: 1px solid #8f8f8f;
-  border-radius: 12px;
-  background: #fff;
+  padding: 0 14px;
+  border: 1px solid #b8ccca;
+  border-radius: 9px;
+  background: #fbfdfc;
   box-shadow: none;
 }
 .search-icon {
@@ -52,7 +56,7 @@ main > h1,
   width: 22px;
   height: 22px;
   margin-right: 10px;
-  color: #789c69;
+  color: #71837c;
   place-items: center;
 }
 .search-icon svg {
@@ -70,23 +74,23 @@ main > h1,
   background: transparent;
   color: #1f2937;
   font: inherit;
-  font-size: 18px;
+  font-size: 15px;
 }
 .service-search-button,
 .order-summary button {
-  height: 52px;
-  padding: 0 16px;
+  height: 44px;
+  padding: 0 22px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 9px;
   color: #fff;
   background: #1e807c;
   font: inherit;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
 }
 .service-search-button {
-  width: 200px;
+  width: 168px;
 }
 .service-search-button:hover,
 .order-summary button:hover {
@@ -111,10 +115,11 @@ main > h1,
 .service-results-card {
   display: grid;
   gap: 20px;
-  margin-top: 24px;
-  padding: 28px;
-  border-radius: 20px;
-  background: #fff;
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #dce6e1;
+  border-radius: 10px;
+  background: #f8fbfa;
 }
 .service-results-card > h2 {
   margin: 0;

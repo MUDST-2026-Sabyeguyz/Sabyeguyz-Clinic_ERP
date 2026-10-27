@@ -161,37 +161,52 @@ onMounted(async () => {
     </main>
     <main v-else class="round-main">
       <header class="round-heading">
+        <span class="round-eyebrow">การจ่ายค่าตอบแทน</span>
         <h1>รอบค่าตอบแทน {{ monthLabel }}</h1>
-        <p>รอบถูกล็อกเพื่อรอชำระ · ตรวจสอบยอดก่อนยืนยันการจ่าย</p>
+        <p>ตรวจยอดรายบุคคลให้ครบก่อนบันทึกการจ่ายเงิน</p>
       </header>
-      <nav class="round-status">
-        <span>OPEN</span><span class="active">CLOSED / PENDING PAYMENT</span
-        ><span>PAID / FINALIZED</span>
-      </nav>
-      <section class="round-kpis">
+      <section class="round-progress-note">
+        <span class="pending-dot"></span>
+        <div>
+          <strong>สถานะ: ปิดรอบแล้ว · รอการยืนยันจ่ายเงิน</strong
+          ><small>ตรวจสอบยอดด้านล่าง แล้วระบุวันที่และช่องทางจ่าย</small>
+        </div>
+      </section>
+      <section class="round-kpis" aria-label="ยอดสรุปก่อนจ่าย">
         <article>
-          <span>Course Commission</span><strong>{{ money(totalCommission) }}</strong>
+          <span>คอมมิชชันคอร์ส</span><strong>{{ money(totalCommission) }}</strong>
+          <small>จากยอดขายคอร์สที่ปิดรอบแล้ว</small>
         </article>
         <article>
-          <span>ค่ามือ</span><strong>{{ money(totalTreatment) }}</strong>
+          <span>ค่ามือและค่ารักษา</span><strong>{{ money(totalTreatment) }}</strong>
+          <small>จากรายการให้บริการในรอบนี้</small>
         </article>
-        <article><span>Adjustment</span><strong>—</strong></article>
+        <article>
+          <span>รายการปรับยอด</span><strong>—</strong><small>ยังไม่มีรายการปรับยอด</small>
+        </article>
         <article class="net">
-          <span>Net Payout</span><strong>{{ money(totalCommission + totalTreatment) }}</strong>
+          <span>ยอดสุทธิรอจ่าย</span><strong>{{ money(totalCommission + totalTreatment) }}</strong>
+          <small>ยอดรวมก่อนยืนยันจ่ายเงิน</small>
         </article>
       </section>
       <section class="round-table">
-        <h2>สรุปค่าตอบแทนรายบุคคล</h2>
+        <header class="section-heading">
+          <div>
+            <h2>ผู้รับเงินในรอบนี้</h2>
+            <p>เลือกแถวเพื่อดูฐาน Tier และยอดคำนวณของบุคลากร</p>
+          </div>
+          <span v-if="!loading && !errorMessage" class="person-count">{{ rows.length }} คน</span>
+        </header>
         <p v-if="loading" class="state">กำลังโหลดข้อมูล...</p>
         <p v-else-if="errorMessage" class="state error">{{ errorMessage }}</p>
         <table v-else>
           <thead>
             <tr>
               <th>ผู้รับเงิน</th>
-              <th>Course Commission</th>
+              <th>คอมมิชชันคอร์ส</th>
               <th>ค่ามือ</th>
-              <th>Adjustment</th>
-              <th>Net Payout</th>
+              <th>ปรับยอด</th>
+              <th>ยอดสุทธิ</th>
               <th>สถานะ</th>
             </tr>
           </thead>
@@ -216,7 +231,7 @@ onMounted(async () => {
                   )
                 }}</b>
               </td>
-              <td><span class="pending">Pending</span></td>
+              <td><span class="pending">รอจ่าย</span></td>
             </tr>
             <tr v-if="!rows.length">
               <td colspan="6" class="empty">ไม่พบข้อมูลค่าตอบแทนในรอบนี้</td>
@@ -225,7 +240,12 @@ onMounted(async () => {
         </table>
       </section>
       <section class="tier-detail">
-        <h2>รายละเอียดรอบและฐาน Tier</h2>
+        <header class="section-heading">
+          <div>
+            <h2>ฐาน Tier ของผู้ที่เลือก</h2>
+            <p>ใช้ตรวจสอบที่มาของคอมมิชชันก่อนยืนยันจ่าย</p>
+          </div>
+        </header>
         <template v-if="selectedRow"
           ><label>พนักงาน / เดือนขาย</label>
           <div>{{ selectedRow.staffName }} · {{ monthLabel }}</div>
@@ -250,9 +270,10 @@ onMounted(async () => {
         <p v-else class="state">เลือกพนักงานจากตารางเพื่อดูรายละเอียดฐาน Tier</p>
       </section>
       <footer class="round-actions">
-        <button class="secondary" type="button" @click="openMode('reopen')">เปิดรอบอีกครั้ง</button
+        <button class="secondary" type="button" @click="openMode('reopen')">
+          เปิดรอบเพื่อแก้ไข</button
         ><button class="primary" type="button" @click="openMode('finalize')">
-          ตรวจสอบและยืนยันจ่าย
+          ดำเนินการยืนยันจ่าย
         </button>
       </footer>
     </main>
@@ -275,41 +296,61 @@ onMounted(async () => {
 .tier-detail h2 {
   margin: 0;
 }
+.round-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #16837d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.round-heading h1 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+}
 .round-heading p {
   margin: 8px 0 0;
   color: #728580;
 }
-.round-status {
-  display: flex;
-  gap: 22px;
-  margin: 24px 0 32px;
-}
-.round-status span {
-  min-width: 170px;
-  padding: 14px 18px;
-  border: 1px solid #d9e4e0;
-  border-radius: 999px;
-  background: #fff;
-  color: #728580;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: center;
-}
-.round-status .active,
 .primary {
   background: #1d8c86;
   color: #fff;
 }
+.round-progress-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 760px;
+  margin-bottom: 28px;
+  padding: 13px 16px;
+  border-radius: 10px;
+  background: #fff7dc;
+  color: #6e5721;
+}
+.round-progress-note div {
+  display: grid;
+  gap: 2px;
+}
+.round-progress-note small {
+  color: #81734f;
+  font-size: 0.8rem;
+}
+.pending-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #d59b20;
+  box-shadow: 0 0 0 5px #ffebad;
+}
 .round-kpis {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 38px;
+  gap: 16px;
+  margin-bottom: 30px;
 }
 .round-kpis article {
   display: grid;
-  gap: 10px;
-  padding: 22px 18px;
+  gap: 7px;
+  padding: 20px;
   border: 1px solid #d9e4e0;
   border-radius: 12px;
   background: #fff;
@@ -320,17 +361,42 @@ onMounted(async () => {
   font-size: 14px;
 }
 .round-kpis strong {
-  font-size: 28px;
+  font-size: 1.5rem;
+}
+.round-kpis small {
+  color: #788984;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 .round-kpis .net strong {
   color: #16837d;
 }
 .round-table,
 .tier-detail {
-  padding: 20px 16px;
+  padding: 24px;
   border: 1px solid #d9e4e0;
   border-radius: 12px;
   background: #fff;
+}
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.section-heading p {
+  margin: 6px 0 0;
+  color: #728580;
+  font-size: 0.84rem;
+}
+.person-count {
+  flex: none;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #52726b;
+  background: #eef5f2;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 .round-table table {
   width: 100%;
@@ -352,6 +418,9 @@ onMounted(async () => {
 .round-table tr.selected td {
   background: #eef8f5;
 }
+.round-table tbody tr:hover td {
+  background: #f7fbf9;
+}
 .pending {
   padding: 7px 18px;
   border-radius: 999px;
@@ -368,7 +437,7 @@ onMounted(async () => {
   color: #bf4242;
 }
 .tier-detail {
-  margin-top: 52px;
+  margin-top: 22px;
   display: grid;
   gap: 10px;
 }
@@ -389,7 +458,9 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: 18px;
-  margin-top: 48px;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #d9e4e0;
 }
 .round-actions button {
   min-width: 180px;
@@ -416,9 +487,6 @@ onMounted(async () => {
   .round-main {
     width: min(100% - 28px, 1280px);
     padding: 36px 0;
-  }
-  .round-status {
-    overflow: auto;
   }
   .round-kpis {
     grid-template-columns: 1fr 1fr;
