@@ -15,12 +15,14 @@ import saleSuccessCheck from '@/assets/sale-success-check.svg'
 import {
   branchApi,
   catalogApi,
+  courseApi,
   patientApi,
   paymentMethodApi,
   paymentStatusApi,
   salesApi,
   staffApi,
   type Course,
+  type CoursePurchase,
   type Appointment,
   type Branch,
   type Patient,
@@ -53,6 +55,9 @@ const query = ref(''),
 const results = ref<Patient[]>([])
 const allPatients = ref<Patient[]>([])
 const patientProfile = ref<PatientProfile | null>(null)
+const patientCoursePurchases = ref<CoursePurchase[]>([])
+const patientCourseLoading = ref(false)
+const patientCourseError = ref(false)
 const services = ref<ServiceOption[]>([])
 const courses = ref<Course[]>([])
 const paymentMethods = ref<PaymentMethod[]>([])
@@ -85,6 +90,18 @@ const assessmentService = computed(
         service.code.includes('ASSESS') || service.name.toLowerCase().includes('assessment'),
     ) ?? services.value[0],
 )
+const patientCourseSummary = computed(() => {
+  if (patientCourseLoading.value) return 'กำลังตรวจสอบสิทธิ์คอร์ส'
+  if (patientCourseError.value) return 'ตรวจสอบสิทธิ์คอร์สไม่ได้'
+
+  const usableCourses = patientCoursePurchases.value.filter(
+    (course) => course.usable && course.remaining > 0,
+  )
+  if (!usableCourses.length) return 'ยังไม่มีสิทธิ์คอร์สที่ใช้งานได้'
+
+  const remainingSessions = usableCourses.reduce((total, course) => total + course.remaining, 0)
+  return `มีสิทธิ์คอร์ส ${usableCourses.length} คอร์ส · คงเหลือ ${remainingSessions} ครั้ง`
+})
 const receiptBranch = computed(() => {
   const code = patient.value?.branchCode?.toLocaleLowerCase('th')
   const name = patient.value?.branchName?.replace(/^สาขา/, '').toLocaleLowerCase('th')
@@ -161,6 +178,7 @@ async function loadSelectedPatient() {
       patient.value = profile
       patientProfile.value = profile
       screen.value = 'menu'
+      void loadPatientCourseSummary(profile.id)
     } catch {
       patientLoadError.value = 'ไม่สามารถโหลดข้อมูลผู้ป่วยได้ กรุณากลับไปหน้านัดหมายแล้วลองอีกครั้ง'
     } finally {
@@ -169,6 +187,24 @@ async function loadSelectedPatient() {
   } else if (route.query.patientId) {
     patientLoadError.value = 'ไม่พบข้อมูลผู้ป่วยที่ระบุ กรุณากลับไปหน้านัดหมายแล้วลองอีกครั้ง'
     patientLoading.value = false
+  }
+}
+let patientCourseRequest = 0
+async function loadPatientCourseSummary(patientId: number) {
+  const requestId = ++patientCourseRequest
+  patientCourseLoading.value = true
+  patientCourseError.value = false
+  try {
+    const purchases = await courseApi.patientCourses(patientId)
+    if (requestId !== patientCourseRequest || patient.value?.id !== patientId) return
+    patientCoursePurchases.value = purchases
+  } catch {
+    if (requestId !== patientCourseRequest || patient.value?.id !== patientId) return
+    patientCoursePurchases.value = []
+    patientCourseError.value = true
+  } finally {
+    if (requestId === patientCourseRequest && patient.value?.id === patientId)
+      patientCourseLoading.value = false
   }
 }
 onMounted(async () => {
@@ -396,6 +432,7 @@ async function choose(p: Patient) {
   patientProfile.value = null
   query.value = `${p.fullName} ${p.hn}`
   screen.value = 'menu'
+  void loadPatientCourseSummary(p.id)
   try {
     patientProfile.value = await patientApi.get(p.id)
   } catch {
@@ -417,8 +454,12 @@ function openPatientCourses() {
     })
 }
 function clearPatient() {
+  patientCourseRequest += 1
   patient.value = null
   patientProfile.value = null
+  patientCoursePurchases.value = []
+  patientCourseLoading.value = false
+  patientCourseError.value = false
   query.value = ''
   searched.value = false
   reviewing.value = false
@@ -611,24 +652,59 @@ async function submit() {
             <strong>{{ patientProfile?.title }}{{ patient.fullName }}</strong>
             <p>
               <span>HN {{ patient.hn }}</span
-              ><span>{{ patient.phone || '—' }}</span>
+              ><span v-if="patient.phone" class="service-menu-phone"
+                ><PhoneIcon aria-hidden="true" />{{ patient.phone }}</span
+              ><span v-else>-</span>
             </p>
           </div>
           <span class="service-menu-branch">{{
             patientProfile?.branch?.name || patient.branchName || '—'
           }}</span>
+          <button type="button" class="service-menu-change" @click="clearPatient">
+            เปลี่ยนผู้ป่วย
+          </button>
         </section>
         <div class="service-menu-actions">
-          <article>
-            <h2>ขายบริการและคอร์ส</h2>
-            <p>บันทึกบริการรายครั้ง หรือขายคอร์สใหม่<br />พร้อมตรวจสอบยอดก่อนชำระเงิน</p>
-            <button type="button" @click="startSale">เริ่มขายบริการ</button>
-          </article>
-          <article>
-            <h2>ใช้สิทธิ์และจัดการคอร์ส</h2>
-            <p>ตรวจสอบสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</p>
-            <button type="button" @click="openPatientCourses">ดูคอร์สผู้ป่วย</button>
-          </article>
+          <button
+            type="button"
+            class="service-menu-action service-menu-action--sale"
+            @click="startSale"
+          >
+            <span class="service-menu-action-title">
+              <span class="service-menu-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+              </span>
+              <span class="service-menu-action-heading">เริ่มรายการขาย</span>
+            </span>
+            <span class="service-menu-action-description"
+              >บันทึกบริการรายครั้ง หรือขายคอร์สใหม่<br />พร้อมตรวจสอบยอดก่อนชำระเงิน</span
+            >
+          </button>
+          <button
+            type="button"
+            class="service-menu-action service-menu-action--entitlement"
+            @click="openPatientCourses"
+          >
+            <span class="service-menu-action-title">
+              <span class="service-menu-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M7 3h10v18H7zM10 8h4M10 12h4M10 16h2" /></svg>
+              </span>
+              <span class="service-menu-action-heading">ใช้สิทธิ์</span>
+            </span>
+            <span class="service-menu-action-description"
+              >ตรวจสอบสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</span
+            >
+            <span
+              class="service-menu-course-status"
+              :class="{
+                'is-loading': patientCourseLoading,
+                'is-unavailable': patientCourseError,
+              }"
+              aria-live="polite"
+            >
+              {{ patientCourseSummary }}
+            </span>
+          </button>
         </div>
       </section>
       <section v-else-if="screen === 'receipt' && patient" class="service-receipt-page">
