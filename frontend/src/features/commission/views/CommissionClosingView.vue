@@ -295,8 +295,14 @@ function selectView(event: Event) {
         </section>
         <section class="closing-workspace">
           <article class="commission-card calculation">
-            <h2>รายละเอียดรอบคำนวณ</h2>
-            <p class="calculation-caption">สรุปฐานที่ใช้คำนวณค่าคอมมิชชันก่อนปิดรอบ</p>
+            <div class="workspace-heading">
+              <div>
+                <span class="eyebrow">ขั้นตอนที่ 1</span>
+                <h2>ตรวจสอบยอดสำหรับปิดรอบ</h2>
+                <p class="calculation-caption">ข้อมูลสรุปที่จะใช้ล็อกอัตราค่าคอมมิชชันของรอบนี้</p>
+              </div>
+              <span class="period-badge">{{ fullMonthLabel }}</span>
+            </div>
             <div class="period-cards">
               <div class="period-card">
                 <span>รอบคำนวณ</span><b>{{ periodLabel }}</b>
@@ -309,55 +315,75 @@ function selectView(event: Event) {
               <div><span>ยอดขายคอร์สรวมก่อนส่วนลด</span><b>—</b></div>
               <div><span>ส่วนลดรายรายการ</span><b>—</b></div>
               <div class="base-total">
-                <span>ฐานคำนวณ Tier</span><b>{{ currency(totalBase) }}</b>
+                <span>ฐานคำนวณ Tier</span>
+                <b>{{ currency(totalBase) }}</b>
               </div>
             </div>
-            <p class="calculation-caption">ระบบยังไม่ส่งยอดก่อนส่วนลดและส่วนลดแยกในรายงานรอบนี้</p>
-            <div class="pool">
-              <span>Commission Pool ที่จะสร้าง<small>คำนวณตาม Tier ของแต่ละบุคคล</small></span
-              ><b>{{ currency(commissionPool) }}</b>
+            <p class="data-note">ยอดก่อนส่วนลดและส่วนลดรายรายการจะแสดงเมื่อรายงานส่งข้อมูลครบ</p>
+            <div class="pool" aria-label="Commission Pool ที่จะสร้าง">
+              <span>
+                <small>Commission Pool ที่จะสร้าง</small>
+                <b>{{ currency(commissionPool) }}</b>
+              </span>
+              <em>คำนวณตาม Tier ของแต่ละบุคคล</em>
             </div>
-            <aside>
-              <strong>เมื่อปิดรอบ อัตราค่าคอมมิชชันจะถูกล็อกตาม Course ID</strong
-              ><br />การแก้ย้อนหลังต้องใช้ Admin Override พร้อมระบุเหตุผลและเก็บ Audit Log
-            </aside>
           </article>
           <article class="commission-card checklist">
-            <h2>ตรวจสอบก่อนปิดรอบ</h2>
-            <p :class="{ warn: hasBlockingIssues }">
-              <strong>{{
-                validationLoading
-                  ? 'กำลังตรวจสอบ'
-                  : hasBlockingIssues
-                    ? 'ต้องตรวจสอบเพิ่มเติม'
-                    : 'พร้อมปิดรอบ'
-              }}</strong
-              ><small
-                >ผ่าน {{ passedChecks }} รายการ · ต้องตรวจ {{ 4 - passedChecks }} รายการ</small
+            <div class="workspace-heading checklist-heading">
+              <div>
+                <span class="eyebrow">ขั้นตอนที่ 2</span>
+                <h2>ตรวจสอบความพร้อม</h2>
+              </div>
+              <span
+                class="readiness-badge"
+                :class="{ ready: !validationLoading && !hasBlockingIssues }"
               >
+                {{
+                  validationLoading
+                    ? 'กำลังตรวจ'
+                    : hasBlockingIssues
+                      ? 'ต้องตรวจสอบ'
+                      : 'พร้อมปิดรอบ'
+                }}
+              </span>
+            </div>
+            <p class="checklist-summary">
+              ผ่าน <b>{{ passedChecks }}</b> จาก 4 รายการ
+              <span v-if="hasBlockingIssues"> · แก้รายการที่แจ้งก่อนดำเนินการ</span>
             </p>
-            <p v-if="validationLoading" class="checking">… กำลังตรวจสอบข้อมูลรอบนี้</p>
-            <template v-else>
-              <p
+            <div v-if="validationLoading" class="check-row checking">กำลังตรวจสอบข้อมูลรอบนี้…</div>
+            <ul v-else class="check-list">
+              <li
                 v-for="check in closeChecks"
                 :key="check.key"
-                :class="{ warn: check.result === false, unknown: check.result === null }"
+                :class="{ issue: check.result === false, unknown: check.result === null }"
               >
-                {{ check.result === true ? '✓' : check.result === false ? '!' : '?' }}
-                {{ check.label }}
-                <small v-if="check.result === null">ยังตรวจสอบไม่ได้</small>
-              </p>
-            </template>
-            <button
-              class="commission-primary"
-              :disabled="validationLoading || hasBlockingIssues"
-              @click="isConfirming = true"
-            >
-              ปิดรอบ
-            </button>
-            <button class="commission-secondary" @click="saveDraft">บันทึกฉบับร่าง</button>
-            <small v-if="draftMessage" role="status">{{ draftMessage }}</small>
-            <small>เมื่อยืนยันแล้ว การแก้ไขต้องผ่าน Admin Override</small>
+                <span class="check-icon">{{
+                  check.result === true ? '✓' : check.result === false ? '!' : '?'
+                }}</span>
+                <span>{{ check.label }}</span>
+                <small>{{
+                  check.result === true
+                    ? 'ผ่าน'
+                    : check.result === false
+                      ? 'ต้องแก้ไข'
+                      : 'ตรวจไม่ได้'
+                }}</small>
+              </li>
+            </ul>
+            <div class="closing-actions">
+              <button class="commission-secondary" @click="saveDraft">บันทึกฉบับร่าง</button>
+              <button
+                class="commission-primary"
+                :disabled="validationLoading || hasBlockingIssues"
+                @click="isConfirming = true"
+              >
+                ปิดรอบ{{ fullMonthLabel }}
+              </button>
+            </div>
+            <small v-if="draftMessage" class="draft-message" role="status">{{
+              draftMessage
+            }}</small>
           </article>
         </section>
       </template>
@@ -509,10 +535,44 @@ function selectView(event: Event) {
   margin-top: 24px;
 }
 .closing-workspace article {
-  padding: 24px;
+  padding: 28px;
 }
 .closing-workspace h2 {
-  margin: 0 0 18px;
+  margin: 3px 0 0;
+  font-size: 1.25rem;
+}
+.workspace-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.eyebrow {
+  display: block;
+  color: #16877f;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.period-badge,
+.readiness-badge {
+  flex: none;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #647a63;
+  background: #f0f5f1;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.readiness-badge {
+  color: #9a6517;
+  background: #fff1c7;
+}
+.readiness-badge.ready {
+  color: #16875b;
+  background: #def3e7;
 }
 .calculation > div {
   display: flex;
@@ -520,16 +580,14 @@ function selectView(event: Event) {
   padding: 14px 0;
 }
 .calculation .pool {
-  color: #16877f;
-  font-weight: 700;
+  align-items: center;
+  color: #135f5a;
 }
 .calculation aside {
-  margin-top: 24px;
-  padding: 18px;
-  border-radius: 9px;
-  background: #fff1c7;
+  margin-top: 18px;
 }
 .calculation-caption {
+  margin: 6px 0 0;
   color: #6d7d78;
   font-size: 14px;
 }
@@ -550,39 +608,119 @@ function selectView(event: Event) {
   border-top: 1px solid #dce5e1;
 }
 .calculation .pool {
-  padding: 18px;
-  border-radius: 10px;
-  background: #d5efe4;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: #dff2eb;
 }
 .pool small {
   display: block;
-  margin-top: 6px;
+  margin-bottom: 4px;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 600;
+}
+.pool b {
+  font-size: 1.4rem;
+}
+.pool em {
+  color: #54716b;
+  font-size: 0.8rem;
+  font-style: normal;
+  text-align: right;
+}
+.data-note {
+  margin: 10px 0 0;
+  color: #7a8782;
+  font-size: 0.78rem;
 }
 .closing-summary small {
   color: #6d7d78;
   font-size: 13px;
 }
 .checklist {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: block;
 }
-.checklist p {
+.checklist-summary {
+  margin: 16px 0 12px;
+  color: #687a74;
+  font-size: 0.86rem;
+}
+.checklist-summary b {
+  color: #25372e;
+}
+.check-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
   margin: 0;
-  padding: 12px;
-  border-radius: 8px;
-  background: #def3e7;
+  list-style: none;
 }
-.checklist p.warn {
-  background: #fff1c7;
+.check-list li,
+.check-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #d7eadf;
+  border-radius: 9px;
+  color: #35584d;
+  background: #f3faf6;
+  font-size: 0.84rem;
 }
-.checklist button {
-  margin-top: 0;
+.check-list li.issue {
+  border-color: #f2dda4;
+  color: #76551b;
+  background: #fff8e6;
 }
-.checklist p.warn + button {
-  margin-top: 6px;
+.check-list li.unknown,
+.check-row.checking {
+  border-color: #e0e6e2;
+  color: #6b7d76;
+  background: #f6f8f7;
+}
+.check-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  color: #16875b;
+  background: #dff2e8;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.issue .check-icon {
+  color: #9a6517;
+  background: #fff0c1;
+}
+.unknown .check-icon {
+  color: #6b7d76;
+  background: #e8ece9;
+}
+.check-list small {
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.closing-actions {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 10px;
+  margin-top: 20px;
+}
+.closing-actions button {
+  min-height: 46px;
+}
+.draft-message {
+  display: block;
+  margin-top: 8px;
+  color: #16875b;
+  text-align: center;
 }
 .closed-success {
   width: min(760px, 100%);
@@ -624,16 +762,6 @@ function selectView(event: Event) {
 .closed-success button {
   width: 280px;
   max-width: 100%;
-}
-.checklist p.unknown,
-.checklist p.checking {
-  background: #eef1ef;
-  color: #667a72;
-}
-.checklist p small {
-  display: block;
-  margin-top: 4px;
-  color: #7c8983;
 }
 .checklist .commission-primary:disabled {
   cursor: not-allowed;
@@ -933,6 +1061,16 @@ td {
   }
   .confirm-modal button {
     width: 100%;
+  }
+  .workspace-heading,
+  .pool {
+    flex-direction: column;
+  }
+  .pool em {
+    text-align: left;
+  }
+  .closing-actions {
+    grid-template-columns: 1fr;
   }
 }
 @media (min-width: 1201px) {
