@@ -16,7 +16,6 @@ canvas {
     .settings-main,
     .patient-workspace > main,
     .registration-page .registration-shell,
-    .service-page,
     .sale-page
   ) {
     width: min(1440px, calc(100% - 80px)) !important;
