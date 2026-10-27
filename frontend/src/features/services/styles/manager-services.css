@@ -253,9 +253,9 @@
   gap: 18px;
   min-height: 104px;
   padding: 22px 28px 22px 15px;
-  border-left: 5px solid #1f8883;
   border-radius: 12px;
   background: #fff;
+  box-shadow: 0 10px 28px rgb(33 67 59 / 7%);
   color: #25372f;
 }
 .service-menu-avatar {
@@ -285,6 +285,16 @@
   color: #667a72;
   font-size: 14px;
 }
+.service-menu-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.service-menu-phone :deep(.phone-icon) {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
 .service-menu-branch {
   padding: 8px 20px;
   border-radius: 24px;
@@ -292,24 +302,115 @@
   color: #34724c;
   font-size: 13px;
 }
-.service-menu-patient button {
+.service-menu-change {
   min-height: 40px;
   padding: 8px 16px;
   border: 1px solid #218b85;
   border-radius: 8px;
   background: #fff;
-  color: #218b85;
+  color: #176c68;
   font: inherit;
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }
-.service-menu .service-menu-actions article {
-  min-height: 282px;
+.service-menu-change:hover {
+  background: #eef6f3;
+}
+.service-menu-change:focus-visible,
+.service-menu-actions button:focus-visible {
+  outline: 3px solid rgb(30 128 124 / 28%);
+  outline-offset: 3px;
+}
+.service-menu .service-menu-action {
+  min-height: 0;
   align-content: start;
   border-radius: 16px;
 }
-.service-menu .service-menu-actions h2 {
+.service-menu .service-menu-action-heading {
+  font-size: 26px;
+}
+.service-menu-action {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  min-height: 236px;
+  padding: 28px;
+  border: 0;
+  border-radius: 16px;
+  color: #25372f;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+.service-menu-action--sale {
+  border: 1px solid #d7e4df;
+  background: #fff;
+}
+.service-menu-action--entitlement {
+  background: #eef7f4;
+}
+.service-menu-action:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px rgb(33 67 59 / 10%);
+}
+.service-menu-action-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.service-menu-action-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  color: #176c68;
+  background: #dcefe9;
+  place-items: center;
+}
+.service-menu-action-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+.service-menu-action-heading {
+  color: #25372e;
   font-size: 28px;
+  font-weight: 700;
+}
+.service-menu-action-description {
+  color: #56665d;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.service-menu-course-status {
+  margin-top: auto;
+  min-height: 24px;
+  color: #176c68;
+  font-size: 14px;
+  font-weight: 700;
+}
+.service-menu-course-status.is-loading,
+.service-menu-course-status.is-unavailable {
+  color: #667a72;
+}
+@media (prefers-reduced-motion: reduce) {
+  .service-menu-action {
+    transition: none;
+  }
+  .service-menu-action:hover {
+    transform: none;
+  }
 }
 @media (max-width: 760px) {
   .service-menu-patient {
@@ -319,42 +420,9 @@
   .service-menu-patient-info {
     flex-basis: calc(100% - 66px);
   }
-  .service-menu .service-menu-actions h2 {
+  .service-menu .service-menu-action-heading {
     font-size: 24px;
   }
-}
-.service-menu-actions article {
-  display: grid;
-  gap: 20px;
-  padding: 28px;
-  border-radius: 20px;
-  background: #fff;
-}
-.service-menu-actions h2 {
-  margin: 0;
-  color: #25372e;
-  font-size: 32px;
-}
-.service-menu-actions p {
-  margin: 0;
-  color: #56665d;
-  font-size: 18px;
-  line-height: 1.5;
-}
-.service-menu-actions button,
-.service-menu-actions a {
-  display: grid;
-  min-height: 52px;
-  place-items: center;
-  border: 0;
-  border-radius: 12px;
-  color: #fff;
-  background: #1e807c;
-  font: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
 }
 .sale-columns {
   display: grid;
