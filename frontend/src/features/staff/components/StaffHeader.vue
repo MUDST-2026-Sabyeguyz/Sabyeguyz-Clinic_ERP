@@ -253,12 +253,6 @@ function branchLabel(name: string) {
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
           ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : profileBranchLabel }}</span>
         </div>
-        <RouterLink
-          v-if="!isManager"
-          :to="{ path: '/staff/appointments/calendar', query: { googleCalendar: 'status' } }"
-          @click="profileOpen = false"
-          >สถานะ Google Calendar</RouterLink
-        >
         <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>
     </div>
