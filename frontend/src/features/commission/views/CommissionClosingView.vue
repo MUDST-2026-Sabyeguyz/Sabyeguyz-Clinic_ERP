@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
@@ -25,7 +25,13 @@ const isConfirming = ref(false)
 const isSaving = ref(false)
 const closedSuccessfully = ref(false)
 const validationLoading = ref(false)
-const draftMessage = ref('')
+const closingsLoading = ref(false)
+const validationError = ref('')
+const tierIssue = ref('')
+const dialogRef = ref<HTMLElement | null>(null)
+const cancelRef = ref<HTMLButtonElement | null>(null)
+let triggerElement: HTMLElement | null = null
+let requestId = 0
 const reportRows = ref<Awaited<ReturnType<typeof commissionApi.report>>>([])
 const schemeLabel = ref('ยังไม่มีข้อมูล Scheme')
 const schemePeriodLabel = ref('ยังไม่มีข้อมูลช่วงวันที่')
@@ -42,14 +48,6 @@ const proposedRate = computed(() => {
   const rates = [...new Set(reportRows.value.map((r) => Number(r.rate) * 100))]
   return rates.length === 1 ? `${rates[0]}%` : rates.length ? 'ตาม Tier รายบุคคล' : '—'
 })
-function saveDraft() {
-  try {
-    localStorage.setItem('commission-closing-draft-month', selectedMonth.value)
-    draftMessage.value = 'บันทึกฉบับร่างแล้ว'
-  } catch {
-    draftMessage.value = 'บันทึกฉบับร่างในเครื่องไม่สำเร็จ'
-  }
-}
 const validationResults = ref({
   tiers: null as boolean | null,
   sales: null as boolean | null,
@@ -57,21 +55,28 @@ const validationResults = ref({
   treatment: null as boolean | null,
 })
 
-async function validatePeriod() {
+async function validatePeriod(id: number, selectedPeriod: string) {
   validationLoading.value = true
+  validationError.value = ''
+  tierIssue.value = ''
   reportRows.value = []
   schemeLabel.value = 'ยังไม่มีข้อมูล Scheme'
   schemePeriodLabel.value = 'ยังไม่มีข้อมูลช่วงวันที่'
   validationResults.value = { tiers: null, sales: null, courses: null, treatment: null }
-  const [year, number] = month.value.split('-').map(Number)
-  const from = `${month.value}-01`
-  const to = `${month.value}-${String(new Date(year!, number!, 0).getDate()).padStart(2, '0')}`
+  const [year, number] = selectedPeriod.split('-').map(Number)
+  const from = `${selectedPeriod}-01`
+  const to = `${selectedPeriod}-${String(new Date(year!, number!, 0).getDate()).padStart(2, '0')}`
 
   const [schemesResult, salesResult, treatmentResult] = await Promise.allSettled([
     commissionApi.schemes(),
     commissionApi.report(from, to),
     commissionApi.treatmentReport(from, to),
   ])
+  if (id !== requestId) return
+
+  if (schemesResult.status === 'rejected' || salesResult.status === 'rejected' || treatmentResult.status === 'rejected') {
+    validationError.value = 'โหลดข้อมูลตรวจสอบไม่ครบ กรุณาตรวจอีกครั้งก่อนปิดรอบ'
+  }
 
   if (salesResult.status === 'fulfilled') reportRows.value = salesResult.value
   validationResults.value.sales =
@@ -117,30 +122,58 @@ async function validatePeriod() {
           maximum: number | null
         }>
         const tiers = [...tierData].sort((a, b) => Number(a.minimum) - Number(b.minimum))
-        validationResults.value.tiers =
-          tiers.length > 0 &&
-          tiers.every((tier, index) => {
-            if (index === 0) return Number(tier.minimum) === 0
-            const previous = tiers[index - 1]!
-            return (
-              previous.maximum !== null &&
-              Math.abs(Number(tier.minimum) - Number(previous.maximum) - 0.01) < 0.001
-            )
-          })
+        if (id !== requestId) return
+        if (!tiers.length) tierIssue.value = 'ยังไม่มีช่วงยอดขายในกฎนี้'
+        else if (Number(tiers[0]!.minimum) !== 0) tierIssue.value = `ช่วงแรกต้องเริ่มที่ ฿0 (ขณะนี้เริ่มที่ ${currency(Number(tiers[0]!.minimum))})`
+        else {
+          for (let index = 0; index < tiers.length; index++) {
+            const tier = tiers[index]!
+            const minimum = Number(tier.minimum)
+            const maximum = tier.maximum === null ? null : Number(tier.maximum)
+            if (maximum !== null && maximum < minimum) {
+              tierIssue.value = `ช่วงที่ ${index + 1}: ยอดสูงสุดต่ำกว่ายอดขั้นต่ำ`
+              break
+            }
+            if (index < tiers.length - 1) {
+              const nextMinimum = Number(tiers[index + 1]!.minimum)
+              if (maximum === null) {
+                tierIssue.value = `ช่วงที่ ${index + 1} ไม่จำกัดยอดสูงสุด แต่ยังมีช่วงถัดไป`
+                break
+              }
+              if (Math.abs(nextMinimum - maximum - 0.01) >= 0.001) {
+                tierIssue.value = nextMinimum > maximum
+                  ? `มีช่วงว่างระหว่าง ${currency(maximum)} ถึง ${currency(nextMinimum)}`
+                  : `มีช่วงซ้อนระหว่าง ${currency(nextMinimum)} ถึง ${currency(maximum)}`
+                break
+              }
+            }
+          }
+        }
+        validationResults.value.tiers = !tierIssue.value
       } catch {
+        if (id !== requestId) return
         validationResults.value.tiers = null
+        tierIssue.value = 'โหลดช่วงยอดขายไม่สำเร็จ'
       }
-    } else validationResults.value.tiers = false
+    } else {
+      validationResults.value.tiers = false
+      tierIssue.value = 'ไม่พบกฎค่าคอมมิชชันที่ใช้งานในเดือนนี้'
+    }
   } else validationResults.value.tiers = null
   validationLoading.value = false
 }
 
 async function load() {
+  const id = ++requestId
+  const selectedPeriod = month.value
   closedSuccessfully.value = false
-  draftMessage.value = ''
-  void validatePeriod()
+  rows.value = []
+  errorMessage.value = ''
+  closingsLoading.value = true
+  void validatePeriod(id, selectedPeriod)
   try {
-    const data = await commissionApi.closings(month.value)
+    const data = await commissionApi.closings(selectedPeriod)
+    if (id !== requestId) return
     rows.value = data.map((row) => ({
       id: row.id,
       staff: row.employeeName,
@@ -150,7 +183,41 @@ async function load() {
     }))
     errorMessage.value = ''
   } catch (error) {
+    if (id !== requestId) return
     errorMessage.value = error instanceof Error ? error.message : 'โหลดรอบคอมมิชชันไม่สำเร็จ'
+  } finally {
+    if (id === requestId) closingsLoading.value = false
+  }
+}
+
+function openConfirm(event: Event) {
+  triggerElement = event.currentTarget as HTMLElement
+  isConfirming.value = true
+  void nextTick(() => cancelRef.value?.focus())
+}
+
+function closeConfirm() {
+  if (isSaving.value) return
+  isConfirming.value = false
+  void nextTick(() => triggerElement?.focus())
+}
+
+function onDialogKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeConfirm()
+    return
+  }
+  if (event.key !== 'Tab' || !dialogRef.value) return
+  const controls = [...dialogRef.value.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+  const first = controls[0]
+  const last = controls[controls.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
   }
 }
 
@@ -171,6 +238,7 @@ async function confirmClosing() {
 
 onMounted(load)
 watch(month, load)
+onUnmounted(() => { requestId++ })
 
 const visible = computed(() => {
   const keyword = search.value.trim().toLowerCase()
@@ -219,6 +287,7 @@ const closeChecks = computed(() =>
 )
 const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result !== true))
 const passedChecks = computed(() => closeChecks.value.filter((item) => item.result === true).length)
+const periodStatus = computed(() => closingsLoading.value ? 'กำลังโหลด' : errorMessage.value ? 'ตรวจสอบไม่ได้' : rows.value.length && !openCount.value ? 'ปิดรอบแล้ว' : 'เปิดอยู่')
 
 function selectView(event: Event) {
   const value = (event.target as HTMLSelectElement).value
@@ -236,7 +305,7 @@ function selectView(event: Event) {
         <p>
           {{
             closedSuccessfully
-              ? 'อัตราค่าคอมมิชชันของคอร์สในรอบนี้ถูกล็อกและบันทึก Audit Log แล้ว'
+              ? 'ระบบบันทึกรอบค่าคอมมิชชันเรียบร้อยแล้ว'
               : 'ตรวจยอดขาย กำหนด Tier และล็อกอัตราของคอร์สในรอบเดือน'
           }}
         </p>
@@ -267,10 +336,6 @@ function selectView(event: Event) {
             <dt>Commission Pool</dt>
             <dd>{{ currency(commissionPool) }}</dd>
           </div>
-          <div>
-            <dt>ผู้ดำเนินการ</dt>
-            <dd>Manager / Finance</dd>
-          </div>
         </dl>
         <button class="commission-primary" @click="router.push('/staff/commission')">
           กลับหน้าภาพรวม
@@ -279,8 +344,8 @@ function selectView(event: Event) {
       <template v-else>
         <section class="closing-summary" aria-label="สรุปรอบรายเดือน">
           <article>
-            <span>ยอดขายคอร์ส</span><b>{{ currency(totalBase) }}</b
-            ><small>ฐานสุทธิจากรายงาน · {{ reportCount }} รายการขาย</small>
+            <span>ยอดขายคอร์ส</span><b>{{ validationLoading || validationError ? '—' : currency(totalBase) }}</b
+            ><small>{{ validationLoading ? 'กำลังโหลดรายงาน' : validationError ? 'ตรวจสอบข้อมูลไม่ได้' : `ฐานสุทธิจากรายงาน · ${reportCount} รายการขาย` }}</small>
           </article>
           <article>
             <span>อัตราที่เสนอ</span><b>{{ proposedRate }}</b>
@@ -289,7 +354,7 @@ function selectView(event: Event) {
             <span>คอร์สรอล็อก</span><b>—</b><small>ระบบยังไม่ส่งจำนวนคอร์สรอล็อก</small>
           </article>
           <article>
-            <span>สถานะรอบ</span><b>{{ rows.length && !openCount ? 'ปิดรอบแล้ว' : 'เปิดอยู่' }}</b
+            <span>สถานะรอบ</span><b>{{ periodStatus }}</b
             ><small>{{ fullMonthLabel }}</small>
           </article>
         </section>
@@ -316,14 +381,14 @@ function selectView(event: Event) {
               <div><span>ส่วนลดรายรายการ</span><b>—</b></div>
               <div class="base-total">
                 <span>ฐานคำนวณ Tier</span>
-                <b>{{ currency(totalBase) }}</b>
+                <b>{{ validationLoading || validationError ? '—' : currency(totalBase) }}</b>
               </div>
             </div>
             <p class="data-note">ยอดก่อนส่วนลดและส่วนลดรายรายการจะแสดงเมื่อรายงานส่งข้อมูลครบ</p>
             <div class="pool" aria-label="Commission Pool ที่จะสร้าง">
               <span>
                 <small>Commission Pool ที่จะสร้าง</small>
-                <b>{{ currency(commissionPool) }}</b>
+                <b>{{ validationLoading || validationError ? '—' : currency(commissionPool) }}</b>
               </span>
               <em>คำนวณตาม Tier ของแต่ละบุคคล</em>
             </div>
@@ -351,6 +416,7 @@ function selectView(event: Event) {
               ผ่าน <b>{{ passedChecks }}</b> จาก 4 รายการ
               <span v-if="hasBlockingIssues"> · แก้รายการที่แจ้งก่อนดำเนินการ</span>
             </p>
+            <p v-if="validationError" class="validation-error" role="alert">{{ validationError }}</p>
             <div v-if="validationLoading" class="check-row checking">กำลังตรวจสอบข้อมูลรอบนี้…</div>
             <ul v-else class="check-list">
               <li
@@ -371,19 +437,23 @@ function selectView(event: Event) {
                 }}</small>
               </li>
             </ul>
+            <div v-if="tierIssue" class="tier-recovery" role="status">
+              <p>{{ tierIssue }}</p>
+              <div>
+                <RouterLink to="/staff/settings/commission-tiers">แก้กฎค่าคอมมิชชัน</RouterLink>
+                <button type="button" :disabled="validationLoading" @click="validatePeriod(requestId, month)">ตรวจอีกครั้ง</button>
+              </div>
+            </div>
+            <button v-else-if="validationError" type="button" class="retry-button" :disabled="validationLoading" @click="load">โหลดข้อมูลอีกครั้ง</button>
             <div class="closing-actions">
-              <button class="commission-secondary" @click="saveDraft">บันทึกฉบับร่าง</button>
               <button
                 class="commission-primary"
-                :disabled="validationLoading || hasBlockingIssues"
-                @click="isConfirming = true"
+                :disabled="validationLoading || closingsLoading || !!errorMessage || hasBlockingIssues"
+                @click="openConfirm"
               >
                 ปิดรอบ{{ fullMonthLabel }}
               </button>
             </div>
-            <small v-if="draftMessage" class="draft-message" role="status">{{
-              draftMessage
-            }}</small>
           </article>
         </section>
       </template>
@@ -392,12 +462,18 @@ function selectView(event: Event) {
       v-if="isConfirming"
       class="modal-backdrop"
       role="presentation"
-      @click.self="isConfirming = false"
+      @click.self="closeConfirm"
     >
-      <section class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="close-title">
-        <h2 id="close-title">ต้องการปิดรอบเดือนหรือไม่?</h2>
-        <div>
-          <button class="cancel" type="button" :disabled="isSaving" @click="isConfirming = false">
+      <section ref="dialogRef" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="close-title" aria-describedby="close-description" @keydown="onDialogKeydown">
+        <h2 id="close-title">ยืนยันปิดรอบ{{ fullMonthLabel }}</h2>
+        <p id="close-description">ตรวจสอบยอดและรายการก่อนปิดรอบ เมื่อยืนยันแล้วระบบจะล็อกอัตราค่าคอมมิชชันของรอบนี้</p>
+        <dl class="confirm-facts">
+          <div><dt>รายการขาย</dt><dd>{{ reportCount }} รายการ</dd></div>
+          <div><dt>ฐานคำนวณ</dt><dd>{{ currency(totalBase) }}</dd></div>
+          <div><dt>ค่าคอมมิชชันรวม</dt><dd>{{ currency(commissionPool) }}</dd></div>
+        </dl>
+        <div class="confirm-actions">
+          <button ref="cancelRef" class="cancel" type="button" :disabled="isSaving" @click="closeConfirm">
             ยกเลิก</button
           ><button class="confirm" type="button" :disabled="isSaving" @click="confirmClosing">
             {{ isSaving ? 'กำลังบันทึก...' : 'ยืนยันปิดรอบ' }}
@@ -707,20 +783,45 @@ function selectView(event: Event) {
   font-weight: 700;
   white-space: nowrap;
 }
+.tier-recovery,
+.validation-error {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid #e9d6a4;
+  border-radius: 10px;
+  color: #634b1d;
+  background: #fff8e9;
+  font-size: 0.85rem;
+}
+.tier-recovery p { margin: 0 0 10px; }
+.tier-recovery div { display: flex; flex-wrap: wrap; gap: 10px; }
+.tier-recovery a,
+.tier-recovery button,
+.retry-button {
+  padding: 8px 11px;
+  border: 1px solid #9cbfbb;
+  border-radius: 8px;
+  color: #155f5c;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.retry-button { margin-top: 12px; }
+.tier-recovery a:hover,
+.tier-recovery button:hover,
+.retry-button:hover { background: #e7f4f1; }
+.tier-recovery :is(a, button):focus-visible,
+.retry-button:focus-visible { outline: 3px solid #16877f; outline-offset: 2px; }
 .closing-actions {
-  display: grid;
-  grid-template-columns: 0.85fr 1.15fr;
-  gap: 10px;
+  display: flex;
+  justify-content: flex-end;
   margin-top: 20px;
 }
 .closing-actions button {
   min-height: 46px;
-}
-.draft-message {
-  display: block;
-  margin-top: 8px;
-  color: #16875b;
-  text-align: center;
+  min-width: 210px;
 }
 .closed-success {
   width: min(760px, 100%);
@@ -974,11 +1075,23 @@ td {
   font-size: 20px;
   text-align: center;
 }
-.confirm-modal div {
+.confirm-actions {
   display: flex;
   gap: 10px;
   margin-top: 18px;
 }
+.confirm-modal p {
+  margin: 12px 0 0;
+  color: #536a63;
+  line-height: 1.5;
+  text-align: center;
+}
+.confirm-facts { margin: 18px 0 0; padding: 8px 14px; border-radius: 10px; background: #eef6f3; }
+.confirm-facts div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; }
+.confirm-facts div + div { border-top: 1px solid #d9e6e1; }
+.confirm-facts dt { color: #536a63; }
+.confirm-facts dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.confirm-modal :is(.cancel, .confirm):focus-visible { outline: 3px solid #16877f; outline-offset: 2px; }
 .cancel {
   flex: 1;
   min-height: 46px;
@@ -1056,7 +1169,7 @@ td {
   .confirm-modal {
     padding: 27px 23px;
   }
-  .confirm-modal div {
+  .confirm-actions {
     flex-direction: column-reverse;
   }
   .confirm-modal button {
@@ -1070,7 +1183,10 @@ td {
     text-align: left;
   }
   .closing-actions {
-    grid-template-columns: 1fr;
+    display: block;
+  }
+  .closing-actions button {
+    width: 100%;
   }
 }
 @media (min-width: 1201px) {
