@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { commissionApi, type ManagerAdjustment } from '@/api/client'
@@ -11,6 +11,16 @@ const errorMessage = ref('')
 const search = ref('')
 const month = ref('')
 const status = ref('')
+const page = ref(1)
+const pageSize = 10
+const statusNames: Record<string, string> = {
+  Pending: 'รอดำเนินการ',
+  Approved: 'อนุมัติ',
+  PartiallyApplied: 'ดำเนินการบางส่วน',
+  Applied: 'ดำเนินการ',
+  ExternalReview: 'รอตรวจสอบ',
+  Cancelled: 'ยกเลิก',
+}
 
 const monthLabel = (value: string) => {
   const [year, number] = value.split('-').map(Number)
@@ -31,7 +41,9 @@ const reference = (row: ManagerAdjustment) => {
   if (row.singleVisitFeeId) return `FEE-${String(row.singleVisitFeeId).padStart(5, '0')}`
   return `ADJ-${String(row.id).padStart(5, '0')}`
 }
-const statusLabel = (value: string) => (value === 'Applied' ? 'ดำเนินการ' : 'รอดำเนินการ')
+const statusLabel = (value: string) => statusNames[value] ?? 'สถานะอื่น'
+const clearFilters = () => { search.value = ''; month.value = ''; status.value = '' }
+const hasFilters = computed(() => Boolean(search.value || month.value || status.value))
 const visible = computed(() => {
   const keyword = search.value.trim().toLowerCase()
   return adjustments.value.filter(
@@ -40,12 +52,21 @@ const visible = computed(() => {
         row.staffName.toLowerCase().includes(keyword) ||
         reference(row).toLowerCase().includes(keyword)) &&
       (!month.value || row.originalMonth === month.value) &&
-      (!status.value || statusLabel(row.status) === status.value),
-  )
+      (!status.value || row.status === status.value),
+  ).sort((a, b) => Number(a.status === 'Applied') - Number(b.status === 'Applied') || b.id - a.id)
 })
 const monthOptions = computed(() =>
   [...new Set(adjustments.value.map((row) => row.originalMonth))].sort().reverse(),
 )
+const statusOptions = computed(() =>
+  [...new Set(adjustments.value.map((row) => row.status))].map((value) => ({
+    value,
+    label: statusLabel(value),
+  })),
+)
+const totalPages = computed(() => Math.max(1, Math.ceil(visible.value.length / pageSize)))
+const pageRows = computed(() => visible.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+watch([search, month, status], () => { page.value = 1 })
 
 async function load() {
   loading.value = true
@@ -68,7 +89,7 @@ onMounted(load)
       <header class="adjustment-title">
         <div>
           <h1>รายการปรับปรุงค่าตอบแทน</h1>
-          <p>จัดการผลต่างค่าตอบแทนหลัง Finalized · เลือกรายการเพื่อดูรายละเอียด</p>
+          <p>ตรวจสอบและจัดการรายการปรับปรุงค่าตอบแทนหลังปิดรอบ</p>
         </div>
         <RouterLink class="commission-primary add-adjustment" to="/staff/commission/adjustments/new"
           >+ เพิ่มรายการปรับปรุง</RouterLink
@@ -90,18 +111,16 @@ onMounted(load)
           />
           <FilterDropdown
             v-model="status"
-            label="สถานะ Adjustment"
-            default-label="สถานะ: Adjustment ทั้งหมด"
-            :options="[
-              { value: 'รอดำเนินการ', label: 'รอดำเนินการ' },
-              { value: 'ดำเนินการ', label: 'ดำเนินการ' },
-            ]"
+            label="สถานะรายการ"
+            default-label="ทุกสถานะ"
+            :options="statusOptions"
           />
+          <button v-if="hasFilters" type="button" class="clear-filters" @click="clearFilters">ล้างตัวกรอง</button>
         </header>
         <div class="directory-results">
           <div>
             <h2>รายการปรับปรุง</h2>
-            <p>ผลต่างค่าตอบแทนที่ต้องตรวจสอบและดำเนินการ</p>
+            <p>รอดำเนินการ {{ visible.filter((row) => row.status === 'Pending').length }} รายการ · แสดงรายการที่ยังไม่เสร็จก่อน</p>
           </div>
           <span v-if="!loading && !errorMessage">ทั้งหมด {{ visible.length }} รายการ</span>
         </div>
@@ -116,19 +135,19 @@ onMounted(load)
                   <th>รายการอ้างอิง</th>
                   <th>รอบที่อ้างอิง</th>
                   <th>สถานะรอบ</th>
-                  <th>ยอด Adjustment</th>
-                  <th>สถานะ Adjustment</th>
+                  <th>ยอดปรับปรุง</th>
+                  <th>สถานะรายการ</th>
                   <th><span class="sr-only">การทำงาน</span></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in visible" :key="row.id">
+                <tr v-for="row in pageRows" :key="row.id">
                   <td>{{ row.staffName }}</td>
                   <td>{{ reference(row) }}</td>
                   <td>{{ monthLabel(row.originalMonth) }}</td>
-                  <td>Paid / Finalized</td>
+                  <td>ปิดรอบแล้ว</td>
                   <td :class="{ deduction: row.amount < 0 }">{{ amount(row.amount) }}</td>
-                  <td>{{ statusLabel(row.status) }}</td>
+                  <td><span class="adjustment-status" :class="`status-${row.status}`">{{ statusLabel(row.status) }}</span></td>
                   <td>
                     <RouterLink
                       class="detail-button"
@@ -139,12 +158,18 @@ onMounted(load)
                 </tr>
                 <tr v-if="visible.length === 0">
                   <td colspan="7" class="empty-row">
-                    ยังไม่มีรายการ Adjustment ตามเงื่อนไขที่เลือก
+                    ไม่พบรายการตามเงื่อนไขที่เลือก
+                    <button v-if="hasFilters" type="button" class="empty-clear" @click="clearFilters">ล้างตัวกรอง</button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <nav v-if="visible.length > pageSize" class="adjustment-pagination" aria-label="หน้ารายการปรับปรุง">
+            <button type="button" :disabled="page === 1" @click="page--">← ก่อนหน้า</button>
+            <span>หน้า {{ page }} จาก {{ totalPages }}</span>
+            <button type="button" :disabled="page === totalPages" @click="page++">ถัดไป →</button>
+          </nav>
           <footer class="adjustment-table-footer">
             <span>รวม {{ visible.length }} รายการ</span>
             <span>ยอดคงเหลือจะยังไม่ถูกหักเงินจริงอัตโนมัติ</span>
@@ -203,6 +228,21 @@ onMounted(load)
   padding: 20px 24px;
   border-bottom: 1px solid #e7ede9;
 }
+.clear-filters, .empty-clear { border: 0; background: transparent; color: #145c59; font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.clear-filters { grid-column: 1 / -1; justify-self: end; }
+.empty-clear { display: block; margin: 12px auto 0; }
+.adjustment-status { display: inline-block; padding: 5px 10px; border-radius: 999px; background: #edf0f1; color: #40545b; font-weight: 700; white-space: nowrap; }
+.status-Pending { background: #fff0c6; color: #74510a; }
+.status-Approved { background: #dff2e4; color: #21613b; }
+.status-PartiallyApplied { background: #e9e5fa; color: #59448f; }
+.status-Applied { background: #def1f0; color: #12625e; }
+.status-ExternalReview { background: #e3edfa; color: #315f91; }
+.status-Cancelled { background: #f9e4e8; color: #923f50; }
+.adjustment-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px; color: #50645a; }
+.adjustment-pagination button { min-height: 40px; padding: 0 14px; border: 1px solid #b7cecc; border-radius: 8px; background: #fff; color: #145c59; font: inherit; font-weight: 700; cursor: pointer; }
+.adjustment-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.adjustment-pagination button:focus-visible { outline: 2px solid #145c59; outline-offset: 3px; }
+.clear-filters:focus-visible, .empty-clear:focus-visible, .detail-button:focus-visible { outline: 2px solid #145c59; outline-offset: 3px; }
 .adjustment-filters input {
   width: 100%;
   min-height: 46px;
@@ -365,6 +405,8 @@ tbody tr:hover td {
     background: #fff;
     border-left: 1px solid #e7ede9;
   }
+  .adjustment-table-wrap table :is(th, td):first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
+  .adjustment-table-wrap table th:first-child { background: #f2f7f4; }
   .adjustment-title .commission-primary {
     width: 100%;
   }

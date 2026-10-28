@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import StaffHeader from "@/features/staff/components/StaffHeader.vue";
-import CommissionTabs from "./CommissionTabs.vue";
 import { commissionApi, staffApi } from "@/api/client";
 type TreatmentRow = Awaited<
   ReturnType<typeof commissionApi.treatmentReport>
@@ -16,6 +15,11 @@ const staffId = computed(() => {
 const month = computed(() =>
   String(route.query.month || new Date().toISOString().slice(0, 7)).slice(0, 7),
 );
+const overviewQuery = computed(() => ({
+  month: month.value,
+  ...(typeof route.query.search === "string" && route.query.search ? { search: route.query.search } : {}),
+  ...(route.query.status === "pending" || route.query.status === "approved" ? { status: route.query.status } : {}),
+}));
 const from = computed(() => `${month.value}-01`);
 const to = computed(() => {
   const [y, m] = month.value.split("-").map(Number);
@@ -158,7 +162,7 @@ async function confirm() {
     confirmOpen.value = false;
     await router.push({
       path: "/staff/commission",
-      query: { month: month.value },
+      query: overviewQuery.value,
     });
   } catch (error) {
     validationMessage.value =
@@ -174,6 +178,7 @@ watch([staffId, month], load);
   <div class="commission-manager-page">
     <StaffHeader />
     <main class="commission-manager-main">
+      <RouterLink class="detail-back" :to="{ path: '/staff/commission', query: overviewQuery }">← กลับไปภาพรวมค่าตอบแทน</RouterLink>
       <header class="detail-head">
         <div>
           <h1>รายละเอียดค่าตอบแทนรายบุคคล</h1>
@@ -190,7 +195,6 @@ watch([staffId, month], load);
           >{{ approved ? "อนุมัติแล้ว" : "รอตรวจสอบ" }}</span
         >
       </header>
-      <CommissionTabs active="overview" />
       <p v-if="loading" class="state-card">กำลังโหลดข้อมูลจริง…</p>
       <p v-else-if="errorMessage" class="state-card error">
         {{ errorMessage }}
@@ -304,9 +308,14 @@ watch([staffId, month], load);
         class="action-backdrop"
         @click.self="confirmOpen = false"
       >
-        <section class="action-modal" role="dialog" aria-modal="true">
-          <h2>ยืนยันอนุมัติยอดหรือไม่?</h2>
-          <p>ยอดสุทธิ {{ money(netTotal) }} จะถูกเปลี่ยนเป็นสถานะอนุมัติแล้ว</p>
+        <section class="action-modal" role="dialog" aria-modal="true" aria-labelledby="approval-title" aria-describedby="approval-description">
+          <h2 id="approval-title">ยืนยันการอนุมัติยอด</h2>
+          <p id="approval-description">ตรวจสอบยอดค่าตอบแทนก่อนยืนยัน</p>
+          <dl class="approval-summary">
+            <div><dt>ผู้รับค่าตอบแทน</dt><dd>{{ name }}</dd></div>
+            <div><dt>รอบคำนวณ</dt><dd>{{ monthLabel }}</dd></div>
+            <div class="approval-total"><dt>ยอดสุทธิ</dt><dd>{{ money(netTotal) }}</dd></div>
+          </dl>
           <p v-if="validationMessage" class="action-error">
             {{ validationMessage }}
           </p>
@@ -322,7 +331,7 @@ watch([staffId, month], load);
               :disabled="saving"
               @click="confirm"
             >
-              {{ saving ? "กำลังบันทึก..." : "ยืนยันอนุมัติ" }}
+              {{ saving ? "กำลังบันทึก..." : "ยืนยัน" }}
             </button>
           </div>
         </section>
@@ -332,6 +341,18 @@ watch([staffId, month], load);
 </template>
 <style scoped>
 @import "../styles/commission-manager.css";
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 20px;
+  color: #155f5c;
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 4px;
+  transition: color 160ms ease, transform 160ms ease;
+}
+.detail-back:hover { color: #0d4745; text-decoration: underline; transform: translateX(-3px); }
+.detail-back:focus-visible { outline: 3px solid #16877f; outline-offset: 4px; border-radius: 3px; }
 .detail-head {
   display: flex;
   justify-content: space-between;
@@ -504,7 +525,7 @@ watch([staffId, month], load);
   overflow-y: auto;
 }
 .action-modal {
-  width: min(430px, 100%);
+  width: min(460px, 100%);
   box-sizing: border-box;
   padding: 28px;
   border-radius: 16px;
@@ -520,6 +541,12 @@ watch([staffId, month], load);
   color: #667a72;
   text-align: center;
 }
+.approval-summary { margin: 20px 0 0; padding: 4px 16px; border-radius: 12px; background: #eef6f3; }
+.approval-summary div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 12px 0; }
+.approval-summary div + div { border-top: 1px solid #d6e6e0; }
+.approval-summary dt { color: #526e66; }
+.approval-summary dd { margin: 0; color: #243a33; font-weight: 700; text-align: right; }
+.approval-summary .approval-total dd { color: #116a64; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
 .action-modal > div {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -534,7 +561,9 @@ watch([staffId, month], load);
 }
 .action-modal button {
   justify-content: center;
+  min-height: 46px;
 }
+.action-modal button:focus-visible { outline: 3px solid #16877f; outline-offset: 3px; }
 .action-modal .commission-primary {
   border: 0;
 }
