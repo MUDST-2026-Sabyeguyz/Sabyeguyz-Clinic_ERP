@@ -7,6 +7,7 @@ import { commissionApi, type ManagerAdjustment } from '@/api/client'
 const route = useRoute()
 const router = useRouter()
 const adjustment = ref<ManagerAdjustment | null>(null)
+const canSchedule = computed(() => !!adjustment.value && adjustment.value.remaining > 0 && ['Approved', 'PartiallyApplied'].includes(adjustment.value.status))
 const loading = ref(true)
 const errorMessage = ref('')
 const appliedAmount = ref('')
@@ -26,6 +27,7 @@ async function load() {
   finally { loading.value = false }
 }
 function review() {
+  if (!canSchedule.value) return
   void router.push({
     name: 'commission-adjustment-review',
     params: { id: String(route.params.id) },
@@ -42,6 +44,7 @@ onMounted(load)
       <RouterLink class="back-link" :to="{ name: 'commission-adjustment-detail', params: { id: route.params.id } }">← กลับรายละเอียด Adjustment</RouterLink>
       <p v-if="loading" class="state-card">กำลังโหลดข้อมูลงวด...</p>
       <p v-else-if="errorMessage" class="state-card error">{{ errorMessage }}</p>
+      <p v-else-if="!canSchedule" class="state-card" role="status">รายการนี้ไม่สามารถกำหนดงวดได้</p>
       <template v-else-if="adjustment">
         <header><h1>กำหนดยอดดำเนินการในงวด</h1><p>หมายเลข Z · {{ monthLabel }} · เลือกยอดดำเนินการ</p></header>
         <section class="schedule-metrics"><article><span>Adjustment คงเหลือ</span><b>{{ adjustment.amount < 0 ? '-' : '+' }}฿{{ Math.abs(adjustment.remaining).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }}</b><small>ยอดอ้างอิงจากงวด Paid / Finalized</small></article><article><span>ดำเนินการแล้ว</span><b>฿{{ adjustment.processed.toLocaleString('th-TH', { minimumFractionDigits: 2 }) }}</b><small>ยอดที่บันทึกดำเนินการ</small></article><article><span>คงเหลือหลังดำเนินการ</span><b>{{ adjustment.amount < 0 ? '-' : '+' }}฿{{ Math.abs(adjustment.remaining).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }}</b><small>ยอดคงเหลือในรายการ</small></article></section>
