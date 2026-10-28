@@ -6,6 +6,7 @@ import { commissionApi, type ManagerAdjustment } from '@/api/client'
 
 const route = useRoute()
 const adjustment = ref<ManagerAdjustment | null>(null)
+const canSchedule = computed(() => !!adjustment.value && adjustment.value.remaining > 0 && ['Approved', 'PartiallyApplied'].includes(adjustment.value.status))
 const loading = ref(true)
 const errorMessage = ref('')
 const month = computed(() => {
@@ -24,7 +25,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="commission-manager-page"><StaffHeader /><main class="commission-manager-main choice-main"><RouterLink class="back-link" :to="{ name: 'commission-adjustment-detail', params: { id: route.params.id } }">← กลับรายการ Adjustment</RouterLink><p v-if="loading" class="state-card">กำลังโหลดข้อมูลงวด...</p><p v-else-if="errorMessage" class="state-card error">{{ errorMessage }}</p><template v-else-if="adjustment"><header><h1>เลือกงวดที่จะดำเนินการ</h1><p>ชื่อรายการ Adjustment · {{ adjustment.staffName }} · เลือกงวดดำเนินการ {{ month }}</p></header><section class="choice-card"><h2>สถานะระบบของงวดปลายทาง</h2><div><RouterLink class="active" :to="{ name: 'commission-adjustment-schedule', params: { id: adjustment.id } }">{{ month }} · Open</RouterLink><RouterLink :to="{ name: 'commission-adjustment-closed', params: { id: adjustment.id } }">{{ month }} · Closed</RouterLink><RouterLink :to="{ name: 'commission-adjustment-finalized', params: { id: adjustment.id } }">งวดก่อนหน้า · Paid / Finalized</RouterLink></div></section></template></main></div>
+  <div class="commission-manager-page"><StaffHeader /><main class="commission-manager-main choice-main"><RouterLink class="back-link" :to="{ name: 'commission-adjustment-detail', params: { id: route.params.id } }">← กลับรายการ Adjustment</RouterLink><p v-if="loading" class="state-card">กำลังโหลดข้อมูลงวด...</p><p v-else-if="errorMessage" class="state-card error">{{ errorMessage }}</p><p v-else-if="!canSchedule" class="state-card" role="status">รายการนี้ไม่สามารถกำหนดงวดได้</p><template v-else-if="adjustment"><header><h1>เลือกงวดที่จะดำเนินการ</h1><p>ชื่อรายการ Adjustment · {{ adjustment.staffName }} · เลือกงวดดำเนินการ {{ month }}</p></header><section class="choice-card"><h2>สถานะระบบของงวดปลายทาง</h2><div><RouterLink class="active" :to="{ name: 'commission-adjustment-schedule', params: { id: adjustment.id } }">{{ month }} · Open</RouterLink><RouterLink :to="{ name: 'commission-adjustment-closed', params: { id: adjustment.id } }">{{ month }} · Closed</RouterLink><RouterLink :to="{ name: 'commission-adjustment-finalized', params: { id: adjustment.id } }">งวดก่อนหน้า · Paid / Finalized</RouterLink></div></section></template></main></div>
 </template>
 
 <style scoped>

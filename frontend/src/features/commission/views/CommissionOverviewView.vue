@@ -21,9 +21,9 @@ type PersonRow = {
 };
 const rows = ref<PersonRow[]>([]);
 const errorMessage = ref("");
-const search = ref("");
-const status = ref("");
 const route = useRoute();
+const search = ref(typeof route.query.search === "string" ? route.query.search : "");
+const status = ref(route.query.status === "pending" || route.query.status === "approved" ? route.query.status : "");
 const selectedMonth = String(route.query.month ?? "");
 const date = ref(
   /^\d{4}-(0[1-9]|1[0-2])$/.test(selectedMonth)
@@ -221,7 +221,11 @@ watch(date, loadOverview);
                     class="detail-button"
                     :to="{
                       path: `/staff/commission/staff/${row.id}`,
-                      query: { month: date.slice(0, 7) },
+                      query: {
+                        month: date.slice(0, 7),
+                        ...(search.trim() ? { search: search.trim() } : {}),
+                        ...(status ? { status } : {}),
+                      },
                     }"
                     >ดูรายละเอียด</RouterLink
                   >
