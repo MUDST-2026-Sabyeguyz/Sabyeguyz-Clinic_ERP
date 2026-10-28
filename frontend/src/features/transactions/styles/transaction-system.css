@@ -344,25 +344,85 @@
   scroll-margin-top: 24px;
 }
 .transaction-page .transaction-reason-flow > header {
-  padding: 20px 24px;
-  margin-bottom: 16px;
-  border: 1px solid #b7cecc;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  border: 1px solid #c9ddd5;
   border-radius: 12px;
-  background: #e7f3ef;
+  background: #f1f7f4;
 }
 .transaction-page .transaction-reason-flow > header h2 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  font-size: 24px;
+  font-size: 21px;
   font-weight: 700;
 }
 .transaction-page .transaction-reason-flow > header p {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: #365e55;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.transaction-page .transaction-reason-panel {
+  padding: 20px;
+  border-color: #dce8e1;
+  background: #fff;
+}
+.transaction-page .transaction-reason-panel h2 {
+  margin: 0 0 12px;
+  color: #25372e;
+  font-size: 18px;
+  line-height: 1.4;
+}
+.transaction-page .transaction-reason-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.transaction-page .transaction-reason-option {
+  min-height: 54px;
+  margin: 0;
+  padding: 12px 14px;
+  border-color: #dce8e1;
+  color: #25372e;
+  line-height: 1.45;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.transaction-page .transaction-reason-option:hover {
+  border-color: #8fbab7;
+  background: #f8fbf9;
+}
+.transaction-page .transaction-reason-option.selected {
+  border-color: #1e807c;
+  background: #e7f3ef;
+  box-shadow: inset 0 0 0 1px #1e807c;
+}
+.transaction-page .transaction-reason-option:last-child {
+  grid-column: 1 / -1;
+}
+.transaction-page .transaction-note-field,
+.transaction-page .transaction-other-reason > label {
+  margin-top: 16px;
+}
+.transaction-page .transaction-reason-panel textarea {
+  border-color: #dce8e1;
+  font-size: 14px;
+}
+@media (max-width: 700px) {
+  .transaction-page .transaction-reason-flow > header,
+  .transaction-page .transaction-reason-panel {
+    padding: 16px;
+  }
+  .transaction-page .transaction-reason-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .transaction-page .transaction-reason-option:last-child {
+    grid-column: auto;
+  }
 }
 .transaction-page .transaction-required-label {
   padding: 3px 10px;
@@ -506,8 +566,14 @@
   padding: 28px;
   overscroll-behavior: contain;
 }
-.transaction-page .transaction-modal h2 {
+.transaction-page .transaction-modal-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 8px;
+}
+.transaction-page .transaction-modal h2 {
+  margin: 0;
   color: #25372e;
   font-size: 24px;
   line-height: 1.4;
@@ -519,6 +585,45 @@
   font-size: 16px;
   line-height: 1.6;
   text-align: left;
+}
+.transaction-page .transaction-cancellation-info-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #145c59;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.transaction-page .transaction-cancellation-info-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+.transaction-page .transaction-cancellation-info-toggle:hover {
+  color: #0e4644;
+}
+.transaction-page .transaction-cancellation-info-toggle:focus-visible {
+  outline: 3px solid rgb(30 128 124 / 28%);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.transaction-page .transaction-cancellation-info {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border: 1px solid #b7cecc;
+  border-radius: 8px;
+  color: #365e55;
+  background: #f1f7f4;
+  font-size: 14px;
+  line-height: 1.6;
 }
 .transaction-page .transaction-modal-summary {
   display: block;
