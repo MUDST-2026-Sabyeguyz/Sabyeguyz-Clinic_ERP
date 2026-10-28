@@ -122,25 +122,21 @@ function toggleSortOrder() {
 const loading = ref(false)
 const submitting = ref(false)
 const showCancelWarning = ref(false)
+const showCancellationInfo = ref(false)
 const cancelWarningBackButton = ref<HTMLButtonElement | null>(null)
 const errorMessage = ref('')
 const loadError = ref('')
-const reasonSection = ref<HTMLElement | null>(null)
-function jumpToReason() {
-  reasonSection.value?.focus({ preventScroll: true })
-  reasonSection.value?.scrollIntoView({
-    block: 'start',
-    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-  })
-}
 const reasonType = ref('')
 const otherReason = ref('')
-const internalNote = ref('')
 const lastCancelledKey = ref('')
 const showPostCancellationNotice = ref(false)
 let postCancellationNoticeTimer: ReturnType<typeof setTimeout> | undefined
 const cancellationActor = ref('')
 const pageSize = computed(() => (tab.value === 'history' ? 5 : 10))
+
+function hasRecordValue(value?: string) {
+  return Boolean(value && value !== '—' && value !== '-')
+}
 
 function formatShortDate(value?: string) {
   if (!value) return '—'
@@ -263,7 +259,7 @@ const reason = computed(() =>
   reasonType.value === 'อื่น ๆ' ? otherReason.value.trim() : reasonType.value,
 )
 const canReview = computed(() =>
-  reasonType.value === 'อื่น ๆ' ? otherReason.value.trim().length >= 10 : Boolean(reasonType.value),
+  reasonType.value === 'อื่น ๆ' ? Boolean(otherReason.value.trim()) : Boolean(reasonType.value),
 )
 watch([tab, search, startDate, endDate], () => {
   page.value = 1
@@ -291,20 +287,23 @@ async function openDetail(row: Transaction) {
   errorMessage.value = ''
   reasonType.value = ''
   otherReason.value = ''
-  internalNote.value = ''
   step.value = tab.value === 'history' || row.status !== 'ปกติ' ? 'history-detail' : 'detail'
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function openCancelWarning() {
   if (!selected.value || !canReview.value || submitting.value) return
+  showCancellationInfo.value = false
   showCancelWarning.value = true
   await nextTick()
   cancelWarningBackButton.value?.focus()
 }
 
 function closeCancelWarning() {
-  if (!submitting.value) showCancelWarning.value = false
+  if (!submitting.value) {
+    showCancelWarning.value = false
+    showCancellationInfo.value = false
+  }
 }
 
 async function confirmCancellation() {
@@ -316,7 +315,7 @@ async function confirmCancellation() {
   try {
     const updated = await transactionRepository.void({
       key: row.key,
-      reason: [reason.value, internalNote.value.trim()].filter(Boolean).join(' — หมายเหตุ: '),
+      reason: reason.value,
     })
     Object.assign(row, updated)
     const index = rows.value.findIndex((item) => item.key === updated.key)
@@ -678,23 +677,6 @@ function backToList(next: Tab = tab.value) {
               }}</span
             >
           </header>
-          <button
-            v-if="selected.status === 'ปกติ'"
-            class="transaction-reason-shortcut"
-            type="button"
-            @click="jumpToReason"
-          >
-            ระบุเหตุผลการยกเลิก
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 5v14m-6-6 6 6 6-6"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
           <div class="transaction-review-layout">
             <section class="transaction-review-card">
               <h2>ข้อมูลรายการ</h2>
@@ -711,20 +693,20 @@ function backToList(next: Tab = tab.value) {
                   <dt>ประเภท</dt>
                   <dd>{{ selected.kind === 'sale' ? 'รายการขาย' : 'รายการใช้บริการ' }}</dd>
                 </div>
-                <div>
+                <div v-if="hasRecordValue(selected.performedBy)">
                   <dt>ผู้บันทึก</dt>
                   <dd>{{ selected.performedBy }}</dd>
                 </div>
-                <div>
+                <div v-if="hasRecordValue(selected.paymentMethod)">
                   <dt>ช่องทางชำระ</dt>
                   <dd>{{ selected.paymentMethod }}</dd>
                 </div>
               </dl>
             </section>
             <aside class="transaction-review-patient">
-              <b>ผู้ป่วย</b><strong>{{ selected.patient }}</strong
-              ><span>HN {{ selected.hn }}</span
-              ><small>เบอร์โทรศัพท์ -</small>
+              <b>ผู้ป่วย</b>
+              <strong>{{ selected.patient }}</strong>
+              <span>HN {{ selected.hn }}</span>
             </aside>
           </div>
           <section class="transaction-service-detail">
@@ -746,8 +728,6 @@ function backToList(next: Tab = tab.value) {
           </section>
           <section
             v-if="selected.status === 'ปกติ'"
-            ref="reasonSection"
-            tabindex="-1"
             aria-labelledby="transaction-reason-title"
             class="transaction-reason-flow"
           >
@@ -759,28 +739,31 @@ function backToList(next: Tab = tab.value) {
               รายการนี้ไม่มีข้อมูลการตัดสิทธิ์อ้างอิง กรุณาให้ผู้ดูแลตรวจสอบก่อนยกเลิก
             </p>
             <header>
-              <h2 id="transaction-reason-title">
-                ระบุเหตุผลการยกเลิก
-              </h2>
+              <h2 id="transaction-reason-title">ระบุเหตุผลการยกเลิก *</h2>
               <p>เหตุผลเป็นข้อมูลบังคับและจะแสดงในประวัติการยกเลิก</p>
             </header>
             <div class="transaction-reason-panel">
-              <h2>เลือกเหตุผล *</h2>
-              <label
-                v-for="option in [
-                  'ลงรายการหรือเลือกบริการผิด',
-                  'บันทึกรายการซ้ำ',
-                  'ผู้ป่วยขอยกเลิกรายการ',
-                  'การชำระเงินไม่สำเร็จหรือยอดไม่ถูกต้อง',
-                  'อื่น ๆ',
-                ]"
-                :key="option"
-                class="transaction-reason-option"
-                :class="{ selected: reasonType === option }"
+              <div
+                class="transaction-reason-options"
+                role="radiogroup"
+                aria-label="เลือกเหตุผลการยกเลิก"
               >
-                <input v-model="reasonType" type="radio" name="void-reason" :value="option" />
-                <span>{{ option }}</span>
-              </label>
+                <label
+                  v-for="option in [
+                    'ลงรายการหรือเลือกบริการผิด',
+                    'บันทึกรายการซ้ำ',
+                    'ผู้ป่วยขอยกเลิกรายการ',
+                    'การชำระเงินไม่สำเร็จหรือยอดไม่ถูกต้อง',
+                    'อื่น ๆ',
+                  ]"
+                  :key="option"
+                  class="transaction-reason-option"
+                  :class="{ selected: reasonType === option }"
+                >
+                  <input v-model="reasonType" type="radio" name="void-reason" :value="option" />
+                  <span>{{ option }}</span>
+                </label>
+              </div>
               <div v-if="reasonType === 'อื่น ๆ'" class="transaction-other-reason">
                 <label for="transaction-other-reason">รายละเอียดเหตุผล *</label>
                 <textarea
@@ -789,19 +772,7 @@ function backToList(next: Tab = tab.value) {
                   rows="3"
                   placeholder="กรุณาระบุรายละเอียดเพื่อให้ตรวจสอบย้อนหลังได้"
                 />
-                <p v-if="otherReason.trim().length < 10" class="transaction-validation">
-                  กรุณาระบุรายละเอียดอย่างน้อย 10 ตัวอักษร
-                </p>
               </div>
-              <label class="transaction-note-field" for="transaction-note"
-                >หมายเหตุภายใน (ไม่บังคับ)</label
-              >
-              <textarea
-                id="transaction-note"
-                v-model="internalNote"
-                rows="3"
-                placeholder="ข้อมูลเพิ่มเติมสำหรับเจ้าหน้าที่"
-              />
             </div>
             <div class="transaction-reason-actions">
               <button class="transaction-secondary" type="button" @click="backToList()">
@@ -901,9 +872,43 @@ function backToList(next: Tab = tab.value) {
         aria-labelledby="transaction-modal-title"
         aria-describedby="transaction-modal-description"
       >
-        <h2 id="transaction-modal-title">ยืนยันการยกเลิกรายการ</h2>
+        <div class="transaction-modal-heading">
+          <h2 id="transaction-modal-title">ยืนยันการยกเลิกรายการ</h2>
+          <button
+            class="transaction-cancellation-info-toggle"
+            type="button"
+            title="ข้อมูลเพิ่มเติมเกี่ยวกับการยกเลิก"
+            aria-label="ข้อมูลเพิ่มเติมเกี่ยวกับการยกเลิก"
+            :aria-expanded="showCancellationInfo"
+            aria-controls="transaction-cancellation-info"
+            @click="showCancellationInfo = !showCancellationInfo"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.7" />
+              <path
+                d="M12 10.5v5"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+              />
+              <path
+                d="M12 7.25h.01"
+                stroke="currentColor"
+                stroke-width="2.3"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
         <p id="transaction-modal-description">
           ต้องการยกเลิกรายการ {{ selected.number }} ใช่หรือไม่?
+        </p>
+        <p
+          v-if="showCancellationInfo"
+          id="transaction-cancellation-info"
+          class="transaction-cancellation-info"
+        >
+          ระบบจะเก็บรายการเดิมและประวัติการยกเลิกไว้เพื่อตรวจสอบย้อนหลัง
         </p>
         <dl class="transaction-modal-summary">
           <div class="transaction-modal-patient">
@@ -924,10 +929,6 @@ function backToList(next: Tab = tab.value) {
             <dt>เหตุผล</dt>
             <dd>{{ reason }}</dd>
           </div>
-          <div v-if="internalNote.trim()">
-            <dt>หมายเหตุ</dt>
-            <dd>{{ internalNote.trim() }}</dd>
-          </div>
         </dl>
         <div class="transaction-actions">
           <button
@@ -937,7 +938,7 @@ function backToList(next: Tab = tab.value) {
             :disabled="submitting"
             @click="closeCancelWarning"
           >
-            กลับไปแก้ไข
+            ยกเลิก
           </button>
           <button
             class="transaction-danger"
@@ -945,7 +946,7 @@ function backToList(next: Tab = tab.value) {
             :disabled="submitting"
             @click="confirmCancellation"
           >
-            {{ submitting ? 'กำลังยกเลิก...' : 'ยืนยันการยกเลิก' }}
+            {{ submitting ? 'กำลังยกเลิก...' : 'ยืนยัน' }}
           </button>
         </div>
       </section>
