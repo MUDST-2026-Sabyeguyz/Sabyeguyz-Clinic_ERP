@@ -2,11 +2,12 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import CalendarSyncIndicator from './CalendarSyncIndicator.vue'
 import GoogleCalendarPanel from './GoogleCalendarPanel.vue'
 import {
+  ApiError,
   appointmentApi,
   branchApi,
+  calendarApi,
   type Appointment,
   type AppointmentAvailability,
   type Branch,
@@ -78,8 +79,10 @@ const appointments = ref<Appointment[]>([]),
 const availability = ref<Record<string, AppointmentAvailability>>({})
 const loading = ref(true),
   refreshing = ref(false),
+  syncingCalendar = ref(false),
   error = ref(''),
-  availabilityError = ref('')
+  availabilityError = ref(''),
+  syncMessage = ref('')
 const detail = ref<Appointment | null>(null),
   dialog = ref<HTMLDialogElement | null>(null)
 const dates = computed(() => (mode.value === 'week' ? weekDates(date.value) : [date.value]))
@@ -309,6 +312,22 @@ async function initialize() {
     loading.value = false
   }
 }
+
+async function syncCalendar() {
+  if (syncingCalendar.value) return
+
+  syncingCalendar.value = true
+  syncMessage.value = ''
+  try {
+    const result = await calendarApi.syncNow()
+    syncMessage.value = `ซิงก์ปฏิทินแล้ว: เพิ่ม/อัปเดต ${result.pushed} · ลบ ${result.removed} · ล้มเหลว ${result.failed}`
+    await loadPeriod()
+  } catch (caught) {
+    syncMessage.value = caught instanceof ApiError ? caught.message : 'ซิงก์ Google Calendar ไม่สำเร็จ'
+  } finally {
+    syncingCalendar.value = false
+  }
+}
 onMounted(initialize)
 watch([date, mode, branchCode], ([, , code], [, , oldCode]) => {
   dialog.value?.close()
@@ -355,6 +374,14 @@ watch(
             @click="createAppointment"
           >
             + สร้างนัดหมาย</button
+          ><button
+            type="button"
+            class="control calendar-sync"
+            :disabled="loading || syncingCalendar || !branchCode"
+            @click="syncCalendar"
+          >
+            {{ syncingCalendar ? 'กำลังซิงก์…' : 'ซิงก์ปฏิทิน ↻' }}
+          </button
           ><button
             type="button"
             class="control"
@@ -423,7 +450,7 @@ watch(
           /><span class="person-dot"></span>{{ person.fullName }}</label
         >
       </fieldset>
-      <CalendarSyncIndicator v-if="branchCode" :key="branchCode" :branch-code="branchCode" />
+      <p v-if="syncMessage" class="calendar-note" role="status">{{ syncMessage }}</p>
       <section v-if="route.query.googleCalendar === 'status'" class="google-status">
         <h2>สถานะ Google Calendar</h2>
         <GoogleCalendarPanel /><button
