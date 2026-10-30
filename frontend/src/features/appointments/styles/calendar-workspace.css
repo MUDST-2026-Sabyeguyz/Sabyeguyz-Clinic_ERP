@@ -78,6 +78,16 @@ h1 {
 .control.calendar-primary:hover:not(:disabled) {
   background: #176965;
 }
+.control.calendar-sync {
+  border-color: #1e807c;
+  color: #fff;
+  background: #1e807c;
+}
+.control.calendar-sync:hover:not(:disabled) {
+  border-color: #176965;
+  color: #fff;
+  background: #176965;
+}
 .control:disabled {
   opacity: 0.55;
   cursor: not-allowed;
