@@ -213,7 +213,7 @@ body.therapist-ui .profile-copy {
 }
 
 /* A full desktop header no longer fits below this width. */
-@media (max-width: 900px) {
+@media (max-width: 1280px) {
   body.therapist-ui .staff-header {
     height: 72px;
     min-height: 72px;
@@ -222,12 +222,26 @@ body.therapist-ui .profile-copy {
     gap: 12px;
   }
 
+  body.therapist-ui .staff-header.manager-header {
+    grid-template-columns: auto minmax(0, 1fr) 142px auto;
+  }
+
   body.therapist-ui .staff-header .brand {
     display: none;
   }
 
   body.therapist-ui .staff-header .menu-toggle {
     grid-column: 1;
+  }
+
+  body.therapist-ui .staff-header.manager-header .branch-switcher {
+    grid-column: 3;
+    width: 142px;
+    justify-content: flex-end;
+  }
+
+  body.therapist-ui .staff-header.manager-header .profile-wrap {
+    grid-column: 4;
   }
 
   body.therapist-ui .staff-header .menu-toggle {
@@ -359,7 +373,7 @@ body.therapist-ui .profile-copy {
 }
 
 /* Keep the shared drawer readable on narrow Manager and therapist screens. */
-@media (max-width: 900px) {
+@media (max-width: 1280px) {
   body.therapist-ui .staff-header nav .nav-pill,
   body.therapist-ui .staff-header.manager-header nav .nav-pill {
     display: none !important;
@@ -384,9 +398,8 @@ body.therapist-ui .profile-copy {
   }
 }
 
-/* Keep the regular logo and tab scale on shared Manager screens. The tab strip
-   scrolls horizontally if the complete Manager menu cannot fit. */
-@media (min-width: 821px) {
+/* Above the tablet breakpoint, Manager keeps the full navigation strip. */
+@media (min-width: 1281px) {
   body.therapist-ui .staff-header.manager-header nav {
     justify-content: flex-start;
     gap: 18px;
