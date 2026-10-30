@@ -37,7 +37,6 @@ async function signIn() {
     <section class="login-content">
       <form class="login-shell" @submit.prevent="signIn">
         <div class="intro">
-          <small>ยินดีต้อนรับกลับมา!</small>
           <h1>เข้าสู่ระบบ</h1>
         </div>
         <label
