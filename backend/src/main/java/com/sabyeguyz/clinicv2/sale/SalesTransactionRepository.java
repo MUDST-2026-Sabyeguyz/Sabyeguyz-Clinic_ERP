@@ -44,4 +44,18 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
             @Param("from") Instant from,
             @Param("to") Instant to,
             @Param("type") TransactionType type);
+
+    /**
+     * Returns all sale lines in document order, including voided lines.
+     * Historical receipt details must preserve each line's status.
+     */
+    @Query("""
+        select t
+        from SalesTransaction t
+        where t.receipt.id = :receiptId
+        order by t.lineNo asc, t.id asc
+    """)
+    List<SalesTransaction> findReceiptLines(
+            @Param("receiptId") Long receiptId
+    );
 }
