@@ -882,13 +882,64 @@ public class V2FinanceScenarios {
     }
     private Object refund(String scenario) {
         var refunds = new V2RepositoryStub<>(RefundTransactionRepository.class);
-        var cancellations = new V2RepositoryStub<>(TransactionCancellationRepository.class);
-        var service = new RefundService(refunds.proxy(),
-                new TransactionCancellationService(cancellations.proxy(), null, null, null, null, null, null, null, null),
-                new V2RepositoryStub<>(com.sabyeguyz.clinicv2.catalog.CourseRepository.class).proxy(),
-                new V2RepositoryStub<>(com.sabyeguyz.clinicv2.course.CourseRefundItemRepository.class).proxy(), null);
-        var paid = payment("1000.00", !scenario.equals("refund-voided-payment"));
+        var cancellations =
+                new V2RepositoryStub<>(TransactionCancellationRepository.class);
+
+        var paid = payment(
+                "1000.00",
+                !scenario.equals("refund-voided-payment")
+        );
         paid.setReceipt(new Receipt());
+
+// These scenarios test refund rules, not database locking.
+        var paymentLocks = new PaymentLockService(null, null, null) {
+            @Override
+            public PaymentTransaction lockForUpdate(Long paymentId) {
+                return paid;
+            }
+        };
+
+        var paymentSources = new CoursePaymentSourceService(
+                new V2RepositoryStub<>(
+                        com.sabyeguyz.clinicv2.catalog.CourseRepository.class
+                ).proxy(),
+                new V2RepositoryStub<>(
+                        ReceiptCoursePaymentRepository.class
+                ).proxy()
+        );
+
+        // These scenarios test state transitions without database locks.
+        var refundLocks = new RefundLockService(
+                refunds.proxy(),
+                paymentLocks,
+                null
+        ) {
+            @Override
+            public RefundTransaction lockForUpdate(Long refundId) {
+                return refunds.proxy().findById(refundId)
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "ไม่พบรายการคืนเงิน"
+                        ));
+            }
+        };
+
+        var service = new RefundService(
+                refunds.proxy(),
+                new TransactionCancellationService(
+                        cancellations.proxy(),
+                        null, null, null, null, null, null, null, null
+                ),
+                new V2RepositoryStub<>(
+                        com.sabyeguyz.clinicv2.catalog.CourseRepository.class
+                ).proxy(),
+                new V2RepositoryStub<>(
+                        com.sabyeguyz.clinicv2.course.CourseRefundItemRepository.class
+                ).proxy(),
+                null,
+                paymentSources,
+                paymentLocks,
+                refundLocks
+        );
         refunds.on("refundedOrPendingAmountOf", a -> scenario.equals("refund-over") ? decimal("700.00") : BigDecimal.ZERO);
         var pending = new RefundTransaction();
         pending.setOriginalPayment(paid);
