@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Comparator;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -33,14 +34,22 @@ public class RefundService {
     private final CourseRepository courses;
     private final CourseRefundItemRepository refundItems;
     private final CourseRightsService rights;
+    private final CoursePaymentSourceService paymentSources;
+    private final PaymentLockService paymentLocks;
+    private final RefundLockService refundLocks;
 
-    public RefundService(RefundTransactionRepository refunds, TransactionCancellationService cancellationService,
-                          CourseRepository courses, CourseRefundItemRepository refundItems, CourseRightsService rights) {
+    public RefundService(
+            RefundTransactionRepository refunds, TransactionCancellationService cancellationService,
+            CourseRepository courses, CourseRefundItemRepository refundItems, CourseRightsService rights,
+            CoursePaymentSourceService paymentSources, PaymentLockService paymentLocks, RefundLockService refundLocks) {
         this.refunds = refunds;
         this.cancellationService = cancellationService;
         this.courses = courses;
         this.refundItems = refundItems;
         this.rights = rights;
+        this.paymentSources = paymentSources;
+        this.paymentLocks = paymentLocks;
+        this.refundLocks = refundLocks;
     }
 
     /** One course covered by a refund: the manual amount for it and the unused sessions to cancel. */
@@ -50,18 +59,26 @@ public class RefundService {
     public RefundTransaction request(PaymentTransaction payment, BigDecimal amount, PaymentMethod method,
                                       Permission permission, String reason, Long actorId, List<ItemRequest> items) {
         require(payment != null, "ต้องระบุรายการชำระเงิน");
+        // Lock and reload before checking status or refund totals.
+        payment = paymentLocks.lockForUpdate(payment.getId());
         require(payment.isPaymentStatus(), "รายการชำระเงินนี้ถูกยกเลิกแล้ว ไม่สามารถคืนเงินได้");
         require(method != null, "ต้องระบุช่องทางคืนเงิน");
         require(amount != null && amount.signum() > 0, "จำนวนเงินที่คืนต้องมากกว่า 0");
-        List<Long> receiptCourses = courses.findIdsByReceiptId(payment.getReceipt().getId());
+        List<Long> receiptCourses = courses.findLinkedCourseIdsByReceiptId(payment.getReceipt().getId());
         List<ItemRequest> requested = items == null ? List.of() : items;
+        require(requested.stream().noneMatch(
+                item -> item == null || item.courseId() == null
+                ), "ต้องระบุคอร์สทุกรายการ"
+        );
+        // Acquire course locks in ascending course ID order.
+        requested = requested.stream().sorted(Comparator.comparing(ItemRequest::courseId)).toList();
         require(receiptCourses.isEmpty() || !requested.isEmpty(),
                 "ใบเสร็จนี้มีคอร์ส ต้องระบุคอร์สและจำนวนสิทธิ์ที่ยกเลิก (items)");
         require(requested.isEmpty() || !receiptCourses.isEmpty(), "ใบเสร็จนี้ไม่มีคอร์ส จึงไม่ต้องระบุ items");
         BigDecimal alreadyRefunded = refunds.refundedOrPendingAmountOf(payment.getId());
         require(alreadyRefunded.add(amount).compareTo(payment.getAmount()) <= 0,
                 "จำนวนเงินที่คืนรวมกันต้องไม่เกินยอดที่ชำระ");
-        List<Course> itemCourses = checkItems(requested, receiptCourses, amount);
+        List<Course> itemCourses = checkItems(requested, receiptCourses, amount, payment);
 
         TransactionCancellation cancellation = cancellationService.recordRefundCancellation(payment, permission,
                 reason, actorId);
@@ -86,7 +103,8 @@ public class RefundService {
     }
 
     /** Every item names a course of the receipt once, with a positive amount and sessions that can still be cancelled. */
-    private List<Course> checkItems(List<ItemRequest> items, List<Long> receiptCourses, BigDecimal total) {
+    private List<Course> checkItems(List<ItemRequest> items, List<Long> receiptCourses, BigDecimal total, PaymentTransaction payment
+    ) {
         List<Course> result = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
         BigDecimal sum = BigDecimal.ZERO;
@@ -101,9 +119,13 @@ public class RefundService {
                     .orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
             require(course.getRemainingVisits() - refundItems.pendingCancelledVisitsOfCourse(course.getId()) >= item.cancelledVisits(),
                     "สิทธิ์ที่ยังไม่ใช้ของคอร์ส " + course.getCourseNo() + " ไม่พอสำหรับการยกเลิก " + item.cancelledVisits() + " ครั้ง");
-            BigDecimal paidForCourse = course.getTreatmentFeeBaseAmount();
-            require(refundItems.refundedAmountOfCourse(course.getId()).add(item.refundAmount()).compareTo(paidForCourse) <= 0,
-                    "ยอดคืนของคอร์ส " + course.getCourseNo() + " รวมกันต้องไม่เกินยอดที่ชำระสำหรับคอร์สนี้");
+            // Limit refunds to this course's net amount from the original payment.
+            BigDecimal paidForCourse = paymentSources.netAmountFor(payment.getReceipt().getId(), course.getId());
+            BigDecimal alreadyRefundedForCourse = refundItems.refundedOrPendingAmountOfCoursePayment(course.getId(), payment.getId());
+            require(
+                    alreadyRefundedForCourse.add(item.refundAmount()).compareTo(paidForCourse) <= 0,
+                    "ยอดคืนของคอร์ส " + course.getCourseNo() + " จากรายการชำระเงินนี้เกินยอดรับสุทธิ"
+            );
             sum = sum.add(item.refundAmount());
             result.add(course);
         }
@@ -114,8 +136,15 @@ public class RefundService {
     @Transactional
     public RefundTransaction complete(Long refundId, Long actorId) {
         RefundTransaction refund = pending(refundId);
-        for (CourseRefundItem item : refundItems.findByRefundIdOrderByIdAsc(refund.getId())) {
-            rights.cutForRefund(item, actorId); // locks the course; fails (rolls everything back) when no rights are left
+        // Use the same course lock order as refund requests.
+        List<CourseRefundItem> orderedItems = refundItems
+                .findByRefundIdOrderByIdAsc(refund.getId())
+                .stream()
+                .sorted(Comparator.comparing(item -> item.getCourse().getId()))
+                .toList();
+
+        for (CourseRefundItem item : orderedItems) {
+            rights.cutForRefund(item, actorId);
         }
         refund.setRefundStatus(RefundStatus.Completed);
         refund.setApprovedAt(Instant.now());
@@ -147,9 +176,11 @@ public class RefundService {
     }
 
     private RefundTransaction pending(Long refundId) {
-        RefundTransaction refund = refunds.findById(refundId)
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการคืนเงิน"));
-        require(refund.getRefundStatus() == RefundStatus.Pending, "รายการคืนเงินนี้ไม่ได้อยู่ในสถานะรอดำเนินการ");
+        RefundTransaction refund = refundLocks.lockForUpdate(refundId);
+        require(
+                refund.getRefundStatus() == RefundStatus.Pending,
+                "รายการคืนเงินนี้ไม่ได้อยู่ในสถานะรอดำเนินการ"
+        );
         return refund;
     }
 

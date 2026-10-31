@@ -13,4 +13,9 @@ public interface ReceiptCoursePaymentRepository
     List<ReceiptCoursePayment> findByCourse_IdOrderByReceipt_IdAsc(
             Long courseId
     );
+
+    /**
+     * Checks whether the receipt contains existing-course collection items.
+     */
+    boolean existsByReceipt_Id(Long receiptId);
 }

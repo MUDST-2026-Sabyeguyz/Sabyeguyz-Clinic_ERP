@@ -3,6 +3,7 @@ package com.sabyeguyz.clinicv2.sale;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,4 +22,12 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             + "and p.paymentStatus = true and (:branchId is null or p.branch.id = :branchId)")
     List<PaymentTransaction> findByPaymentDateBetween(@Param("from") Instant from, @Param("to") Instant to,
                                                         @Param("branchId") Long branchId);
+
+    /**
+     * Returns the completed payment for a receipt.
+     * The database allows at most one completed payment per receipt.
+     */
+    Optional<PaymentTransaction> findByReceiptIdAndPaymentStatusTrue(
+            Long receiptId
+    );
 }

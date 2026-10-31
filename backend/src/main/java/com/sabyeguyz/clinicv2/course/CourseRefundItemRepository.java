@@ -29,4 +29,35 @@ public interface CourseRefundItemRepository extends JpaRepository<CourseRefundIt
     @Query("select coalesce(sum(i.cancelledVisits), 0) from CourseRefundItem i "
             + "where i.course.id = :courseId and i.refund.refundStatus in :statuses")
     Long sumCancelledVisitsOfCourse(@Param("courseId") Long courseId, @Param("statuses") List<RefundStatus> statuses);
+
+    /**
+     * Reserves pending refunds and counts completed refunds against one
+     * course's collected amount from a specific original payment.
+     */
+    default BigDecimal refundedOrPendingAmountOfCoursePayment(
+            Long courseId,
+            Long paymentId
+    ) {
+        return sumRefundAmountOfCoursePayment(
+                courseId,
+                paymentId,
+                List.of(RefundStatus.Pending, RefundStatus.Completed)
+        );
+    }
+
+    /**
+     * Sums refund items by course, original payment and selected statuses.
+     */
+    @Query("""
+        select coalesce(sum(i.refundAmount), 0)
+        from CourseRefundItem i
+        where i.course.id = :courseId
+            and i.refund.originalPayment.id = :paymentId
+            and i.refund.refundStatus in :statuses
+    """)
+    BigDecimal sumRefundAmountOfCoursePayment(
+            @Param("courseId") Long courseId,
+            @Param("paymentId") Long paymentId,
+            @Param("statuses") List<RefundStatus> statuses
+    );
 }
