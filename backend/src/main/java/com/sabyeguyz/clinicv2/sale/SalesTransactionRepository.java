@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -7,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 
 public interface SalesTransactionRepository extends JpaRepository<SalesTransaction, Long> {
@@ -57,5 +59,28 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
     """)
     List<SalesTransaction> findReceiptLines(
             @Param("receiptId") Long receiptId
+    );
+
+    /**
+     * Returns net sales from effective sale lines on one receipt.
+     * Existing-course collection items do not create new sales.
+     */
+    default BigDecimal netSalesOfReceipt(Long receiptId) {
+        return sumNetSalesOfReceipt(receiptId, ReceiptStatus.Voided);
+    }
+
+    @Query("""
+        select coalesce(
+            sum(t.amount - t.allocatedBillDiscountAmount),
+            0
+        )
+        from SalesTransaction t
+        where t.receipt.id = :receiptId
+          and t.transactionStatus = true
+          and t.receipt.receiptStatus <> :voidedStatus
+        """)
+    BigDecimal sumNetSalesOfReceipt(
+            @Param("receiptId") Long receiptId,
+            @Param("voidedStatus") ReceiptStatus voidedStatus
     );
 }
