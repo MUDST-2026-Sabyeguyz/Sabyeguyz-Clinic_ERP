@@ -938,7 +938,10 @@ public class V2FinanceScenarios {
                 null,
                 paymentSources,
                 paymentLocks,
-                refundLocks
+                refundLocks,
+                new V2RepositoryStub<>(
+                        com.sabyeguyz.clinicv2.course.CourseLedgerRepository.class
+                ).proxy()
         );
         refunds.on("refundedOrPendingAmountOf", a -> scenario.equals("refund-over") ? decimal("700.00") : BigDecimal.ZERO);
         var pending = new RefundTransaction();
