@@ -1,9 +1,7 @@
 package com.sabyeguyz.schemacheck;
 
 import com.sabyeguyz.clinicv2.ClinicV2Application;
-import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.course.*;
-import com.sabyeguyz.clinicv2.enums.RefundStatus;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.sale.*;
 import jakarta.persistence.EntityManager;
@@ -11,8 +9,17 @@ import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Consumer;
 import org.springframework.boot.SpringApplication;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import static org.junit.jupiter.api.Assertions.*;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -21,11 +28,16 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * PostgreSQL integration check against a disposable copy of the collection fixture.
- * Requires one purchased course and a later collection payment for its original buyer.
- * Most scenarios roll back; concurrency scenarios intentionally commit in the test copy.
+ * Run with mvn test and Docker. PostgreSQL, migrations and fixture data are isolated
+ * from local databases; every test gets a fresh transactional fixture.
  */
-public final class SharedCourseRefundCheck {
+@Testcontainers
+@Timeout(90)
+class SharedCourseRefundTest {
+    @Container
+    private static final PostgreSQLContainer<?> POSTGRES =
+            new PostgreSQLContainer<>("postgres:16-alpine");
+    private static boolean legacyPreserved;
     private static ConfigurableApplicationContext context;
     private static JdbcTemplate db;
     private static TransactionTemplate tx;
@@ -34,15 +46,12 @@ public final class SharedCourseRefundCheck {
     private static CourseRefundItemRepository items;
     private static PaymentTransactionRepository payments;
     private static Long courseId, actorId, permissionId, paymentA, paymentB;
-    private static int passed;
 
     private record Group(Long mainRefund, Long relatedRefund, Long mainItem, Long relatedItem) {}
 
     private static BigDecimal amount(String value) { return new BigDecimal(value); }
     private static void check(boolean condition, String label) {
-        if (!condition) throw new AssertionError(label);
-        passed++;
-        System.out.println("PASS " + label);
+        assertTrue(condition, label);
     }
     private static EntityManager em() {
         return EntityManagerFactoryUtils.getTransactionalEntityManager(
@@ -81,12 +90,9 @@ public final class SharedCourseRefundCheck {
         tx.executeWithoutResult(status -> { status.setRollbackOnly(); body.run(); });
     }
     private static void rejected(String expected, Runnable body) {
-        try {
-            rollback(() -> { body.run(); throw new AssertionError("Expected rejection: " + expected); });
-            throw new AssertionError("Expected rejection: " + expected);
-        } catch (IllegalArgumentException e) {
-            check(e.getMessage().contains(expected), "reject " + expected);
-        }
+        IllegalArgumentException failure = assertThrows(
+                IllegalArgumentException.class, () -> rollback(body));
+        assertTrue(failure.getMessage().contains(expected), failure.getMessage());
     }
     private static void sequential() {
         for (boolean relatedFirst : List.of(false, true)) rollback(() -> {
@@ -374,42 +380,109 @@ public final class SharedCourseRefundCheck {
                     "concurrent " + label + " preserves rights");
         } finally { release.countDown(); pool.shutdownNow(); }
     }
-    public static void main(String[] args) throws Exception {
-        String url = System.getenv("SPRING_DATASOURCE_URL");
-        if (url == null || !url.matches(".*/clinic_erp_[a-z0-9_]*_it_[a-z0-9_]+")) {
-            throw new IllegalStateException("Use a disposable clinic_erp_*_it_* database");
-        }
-        SpringApplication application = new SpringApplication(ClinicV2Application.class);
-        try (var app = application.run("--spring.profiles.active=v2", "--server.port=0",
-                "--app.calendar.enabled=false", "--logging.level.root=WARN")) {
-            context = app;
-            db = app.getBean(JdbcTemplate.class);
-            tx = new TransactionTemplate(app.getBean(PlatformTransactionManager.class));
-            refunds = app.getBean(RefundService.class); rights = app.getBean(CourseRightsService.class);
-            items = app.getBean(CourseRefundItemRepository.class); payments = app.getBean(PaymentTransactionRepository.class);
-            courseId = db.queryForObject("select course_id from course order by course_id limit 1", Long.class);
-            actorId = db.queryForObject("select receipt_create_by from receipt order by receipt_id limit 1", Long.class);
-            permissionId = db.queryForObject("select permission_id from permission order by permission_id limit 1", Long.class);
-            paymentA = db.queryForObject("select p.payment_id from payment_transaction p join course c on c.receipt_id=p.receipt_id "
-                    + "where c.course_id=? and p.payment_status=true", Long.class, courseId);
-            paymentB = db.queryForObject("select p.payment_id from payment_transaction p join receipt_course_payment i "
-                    + "on i.receipt_id=p.receipt_id where i.course_id=? and p.payment_status=true order by p.payment_id limit 1",
-                    Long.class, courseId);
-            check(db.queryForObject("select count(*) from flyway_schema_history where version='1022' and success", Long.class) == 1,
-                    "Flyway V1022 applied");
-            check(items.findAll().stream().allMatch(item -> item.getRightsCancellationItem() == null
-                    && item.getCancelledVisits() != null), "legacy items retain main-item shape");
-            int initialRemaining = remaining(courseId);
-            Long initialRefunds = db.queryForObject("select count(*) from refund_transaction", Long.class);
-            sequential(); validation(); multipleCourses(); sharedHolders(); closedCourseRestoration();
-            check(remaining(courseId) == initialRemaining, "rollback scenarios restore original rights");
-            check(initialRefunds.equals(db.queryForObject("select count(*) from refund_transaction", Long.class)),
-                    "rollback scenarios restore original refunds");
-            race("complete", "complete");
-            race("void", "complete");
-            race("complete", "retry");
-            race("void", "related");
-            System.out.println("SHARED_COURSE_REFUND_CHECK_OK assertions=" + passed);
-        }
+    @BeforeAll
+    static void startApplication() {
+        String[] locations = {"classpath:db/migration", "classpath:db/seed_v2"};
+        Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations(locations).outOfOrder(true).target("1021").load().migrate();
+        DriverManagerDataSource source = new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        JdbcTemplate beforeUpgrade = new JdbcTemplate(source);
+        loadFixture(source);
+        var originalItems = beforeUpgrade.queryForList(
+                "select course_refund_item_id,refund_id,course_id,refund_amount,cancelled_visits "
+                        + "from course_refund_item order by course_refund_item_id");
+        assertFalse(originalItems.isEmpty(), "legacy upgrade must exercise an existing refund item");
+        Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations(locations).outOfOrder(true).load().migrate();
+        legacyPreserved = originalItems.equals(beforeUpgrade.queryForList(
+                "select course_refund_item_id,refund_id,course_id,refund_amount,cancelled_visits "
+                        + "from course_refund_item order by course_refund_item_id"))
+                && beforeUpgrade.queryForObject("select count(*) from course_refund_item "
+                        + "where rights_cancellation_item_id is not null", Long.class) == 0;
+        context = SpringApplication.run(ClinicV2Application.class,
+                "--spring.profiles.active=v2", "--server.port=0", "--server.address=127.0.0.1",
+                "--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
+                "--spring.datasource.username=" + POSTGRES.getUsername(),
+                "--spring.datasource.password=" + POSTGRES.getPassword(),
+                "--spring.datasource.hikari.data-source-properties.options=-c lock_timeout=5000",
+                "--spring.flyway.locations=classpath:db/migration,classpath:db/seed_v2",
+                "--spring.jpa.hibernate.ddl-auto=validate",
+                "--app.jwt.secret=shared-refund-test-only-secret-at-least-32-characters",
+                "--app.calendar.enabled=false", "--logging.level.root=WARN");
+        db = context.getBean(JdbcTemplate.class);
+        tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+        refunds = context.getBean(RefundService.class);
+        rights = context.getBean(CourseRightsService.class);
+        items = context.getBean(CourseRefundItemRepository.class);
+        payments = context.getBean(PaymentTransactionRepository.class);
+    }
+
+    private static void loadFixture(javax.sql.DataSource source) {
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
+                new ClassPathResource("fixtures/shared-course-refund.sql"));
+        populator.setSeparator(
+                org.springframework.jdbc.datasource.init.ScriptUtils.EOF_STATEMENT_SEPARATOR);
+        populator.execute(source);
+    }
+
+    @BeforeEach
+    void resetFixture() {
+        db.execute("TRUNCATE TABLE receipt RESTART IDENTITY CASCADE");
+        loadFixture(context.getBean(javax.sql.DataSource.class));
+        courseId = db.queryForObject("select course_id from course order by course_id limit 1", Long.class);
+        actorId = db.queryForObject("select user_id from app_user where username='manager'", Long.class);
+        permissionId = db.queryForObject("select permission_id from permission where permission_name='SALE_CANCEL'", Long.class);
+        paymentA = db.queryForObject("select p.payment_id from payment_transaction p join course c on c.receipt_id=p.receipt_id "
+                + "where c.course_id=? and p.payment_status=true", Long.class, courseId);
+        paymentB = db.queryForObject("select p.payment_id from payment_transaction p join receipt_course_payment i "
+                + "on i.receipt_id=p.receipt_id where i.course_id=? and p.payment_status=true", Long.class, courseId);
+    }
+
+    @AfterAll
+    static void stopApplication() {
+        if (context != null) context.close();
+    }
+
+    @Test
+    void flywayUpgradePreservesLegacyRefundItemsAndValidatesMappings() {
+        assertTrue(legacyPreserved);
+        assertEquals(1L, db.queryForObject("select count(*) from flyway_schema_history "
+                + "where version='1022' and success", Long.class));
+    }
+
+    @Test
+    void approvalsRetriesAndGroupVoidsPreserveRights() {
+        int before = remaining(courseId);
+        Long refundCount = db.queryForObject("select count(*) from refund_transaction", Long.class);
+        sequential();
+        assertEquals(before, remaining(courseId));
+        assertEquals(refundCount, db.queryForObject("select count(*) from refund_transaction", Long.class));
+    }
+
+    @Test
+    void invalidReferencesTransitionsAmountsAndUnavailableRightsAreRejected() {
+        validation();
+    }
+
+    @Test
+    void eachCourseGroupIsRestoredIndependently() {
+        multipleCourses();
+    }
+
+    @Test
+    void reversalsRestoreEveryOriginalHolder() {
+        sharedHolders();
+    }
+
+    @Test
+    void fullRestorationReopensCourseAndAllowsANewCancellationEvent() {
+        closedCourseRestoration();
+    }
+
+    @ParameterizedTest(name = "{0} and {1} serialize through the cancellation group")
+    @CsvSource({"complete,complete", "void,complete", "complete,retry", "void,related"})
+    void concurrentTransitionsWaitForGroupLocks(String first, String second) throws Exception {
+        race(first, second);
     }
 }
