@@ -49,7 +49,12 @@ public class RefundController {
     public record RefundRequest(BigDecimal amount, String paymentMethodCode, String reason,
                                  List<RefundService.ItemRequest> items) {}
 
-    public record ItemResponse(Long courseId, BigDecimal refundAmount, int cancelledVisits) {}
+    public record ItemResponse(
+            Long courseId,
+            BigDecimal refundAmount,
+            Integer cancelledVisits,
+            Long courseRefundItemId,
+            Long rightsCancellationItemId) {}
 
     public record Response(Long id, Long paymentId, BigDecimal amount, String paymentMethodCode, String status,
                             Instant requestedAt, Instant refundedAt, List<ItemResponse> items) {}
@@ -86,8 +91,9 @@ public class RefundController {
     @PostMapping("/api/refunds/{id}/void")
     public Response voidRequest(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
-        RefundTransaction refund = refundService.voidRequest(id);
-        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Voided", actor.currentId());
+        String previousStatus = refundService.lockStatusForUpdate(id).name();
+        RefundTransaction refund = refundService.voidRequest(id, actor.currentId());
+        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, previousStatus, "Voided", actor.currentId());
         return toResponse(refund);
     }
 
@@ -99,9 +105,28 @@ public class RefundController {
         return toResponse(refund);
     }
 
+    @PostMapping("/api/refunds/{id}/retry")
+    public Response retry(@PathVariable Long id) {
+        permissions.requireAllowed("SALE_CANCEL", actor.currentId());
+        String previousStatus = refundService.lockStatusForUpdate(id).name();
+        RefundTransaction refund = refundService.retry(id);
+        audit.record("refund_transaction", String.valueOf(id),
+                com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                previousStatus, "Pending", actor.currentId());
+        return toResponse(refund);
+    }
+
     private Response toResponse(RefundTransaction refund) {
         List<ItemResponse> items = refundService.itemsOf(refund.getId()).stream()
-                .map(item -> new ItemResponse(item.getCourse().getId(), item.getRefundAmount(), item.getCancelledVisits())).toList();
+                .map(item -> new ItemResponse(
+                        item.getCourse().getId(),
+                        item.getRefundAmount(),
+                        item.getCancelledVisits(),
+                        item.getId(),
+                        item.getRightsCancellationItem() == null
+                                ? null
+                                : item.getRightsCancellationItem().getId()))
+                .toList();
         return new Response(refund.getId(), refund.getOriginalPayment().getId(), refund.getRefundAmount(),
                 refund.getPaymentMethod().getMethodName(), refund.getRefundStatus().name(), refund.getRequestedAt(),
                 refund.getRefundedAt(), items);
