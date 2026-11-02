@@ -78,7 +78,7 @@ public class V2WorkflowScenariosController {
                 LocalDate.of(2026, 12, 1).atTime(10, 0));
         existing.setAppointmentStatus(switch (scenario) {
             case "completed" -> AppointmentStatus.Completed;
-            case "confirm", "arrive-unconfirmed" -> AppointmentStatus.Unconfirmed;
+            case "confirm", "confirm-after-service", "arrive-unconfirmed" -> AppointmentStatus.Unconfirmed;
             default -> AppointmentStatus.Confirmed;
         });
         if (scenario.equals("link-patient") || scenario.equals("arrive-new-patient")) {
@@ -111,6 +111,7 @@ public class V2WorkflowScenariosController {
                 case "new-without-name" -> service.bookNewPatient("  ", "0812345678", branch, therapist,
                         null, null, LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), null, 1L);
                 case "confirm", "confirm-already-confirmed" -> service.confirm(1L, 9L);
+                case "confirm-after-service", "confirm-after-service-already-confirmed" -> service.confirmAfterService(1L, 9L);
                 case "link-patient", "link-patient-already-linked" -> service.linkRegisteredPatient(1L, new Patient(), 9L);
                 case "arrive-unconfirmed", "arrive-new-patient", "arrive-confirmed" -> service.markArrived(1L, 9L);
                 default -> throw new IllegalArgumentException("Unknown scenario");
