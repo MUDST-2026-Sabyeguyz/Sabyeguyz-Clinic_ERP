@@ -1,4 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import View from '../views/ManagerPatientRegistrationView.vue'
 import TherapistView from '../views/PatientRegistrationView.vue'
@@ -17,11 +19,20 @@ vi.mock('@/api/client', () => ({
   patientApi: { searchAll: async () => [] },
 }))
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ push: vi.fn() }),
 }))
 
 describe('Manager patient registration save flow', () => {
+  it('does not send invented login credentials for a patient registration', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/features/patients/views/ManagerPatientRegistrationView.vue'),
+      'utf-8',
+    )
+    expect(source).not.toContain('username: `patient-${Date.now()}`')
+    expect(source).not.toContain('password: `Temp${form.identityNumber.slice(-6)}!`')
+  })
   it('locks the Manager branch and updates it when the Header branch changes', async () => {
     localStorage.setItem('authUser', JSON.stringify({ role: 'MANAGER' }))
     setSelectedManagerBranch({ code: '01', name: 'พระราม 9' })
