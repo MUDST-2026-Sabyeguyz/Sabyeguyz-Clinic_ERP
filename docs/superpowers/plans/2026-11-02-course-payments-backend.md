@@ -1,5 +1,15 @@
 # Course Payments and Shared Refund Backend Implementation Plan
 
+## สถานะการดำเนินงานล่าสุด — 3 พฤศจิกายน 2026
+
+ผู้ใช้สั่งให้ดำเนินการตามแผนต่อ และตอบรับ decisions ในแชท: refund คง Manager-only ทุก action, approval คงรวมใน complete(), การอ่านคง BranchAccessPolicy/fail-all เดิม และอนุญาตใช้ audit_log เดิมร่วม database transaction lock สำหรับ idempotency โดยไม่เพิ่ม schema
+
+Backend Tasks 2–5 implement แล้ว และมี real JWT/HTTP tests เพิ่ม ใช้ JUnit/Testcontainers แทนการสร้าง Cypress specs ใหม่ที่ mirror การทดสอบเดียวกัน ส่วน Cypress ชุดเดิมใช้ตรวจ regression แยก Read-only review โดย agent คนละงานไม่พบ blocker; precision validation ที่พบจาก review แก้พร้อม failing test แล้ว
+
+Task 1 contract ฉบับส่งต่ออยู่ที่ [course-payments.md](../../api/course-payments.md) ข้อความ draft/review เก่าด้านล่างเป็นประวัติก่อน decisions ล่าสุด ไม่ใช้แทนข้อสรุปผู้ใช้ ขอบเขต backend ไม่รวมการเพิ่มหน้ารับเงินหรือเปลี่ยน UI/frontend; ส่ง contract และ UI E2E checklist ให้ทีม frontend ใช้ต่อโดยไม่อ้างว่าได้รัน UI ที่ยังไม่มีแล้ว
+
+Task 6 ฝั่ง backend เสร็จแล้ว: JUnit64testsผ่านทั้งAsia/BangkokและUTC, Cypressv2 339/339, legacyCypress450/450, packageสำเร็จ และ independent reviewผ่าน ดู [implementation verification](../../testing/2026-11-02-course-payments-implementation.md) สำหรับหลักฐานแทน snapshot ระหว่างทางด้านล่าง ไม่ได้ push/merge/deploy และ UIใหม่เป็นงานส่งต่อfrontendตามcontract
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This document plans work only; no application implementation is authorized by its creation.
 
 **Goal:** เชื่อม backend HTTP API สำหรับรับเงินคอร์สเดิมหลายใบเสร็จ อ่านประวัติ และ void ใบรับเงิน พร้อมใช้งาน shared refund เดิมโดยไม่ตัดสิทธิ์ซ้ำและไม่ทำ frontend เดิมเสีย
@@ -118,7 +128,7 @@ XML ระบุ Java 21.0.12 และ Windows 11; test ที่ fail คื�
 
 **Assumption สำหรับแผน:** ใช้ API ใหม่ควบคู่ legacy adapter เพื่อรักษาความหมาย id เดิม; backend เพิ่ม API และเอกสาร contract ส่วน frontend เปลี่ยนโดยเจ้าของหน้าจอ; ยังไม่เพิ่ม mixed-receipt creation API เพราะ handoff ระบุ subsequent collection เป็นงานรับต่อ แม้ service totals รองรับ mixed lines
 
-**Open Question ที่ต้องปิดก่อนงานที่เกี่ยวข้อง:**
+**Historical Open Questions ก่อน implementation — ใช้ข้อสรุปปัจจุบันใน contract และสถานะล่าสุดด้านบนแทน:**
 
 1. **ปิดประเด็นเอกสารขาดแล้ว:** ได้รับและอ่าน DD#10 ส่วนที่เกี่ยวข้องและ README ต้นฉบับทั้งสองครบ ข้อความ handoff ที่ว่า Excel ยังรออัปเดตเป็นสถานะเก่าซึ่งไม่ตรงกับ DD#10 ที่ได้รับ; ใช้รายละเอียด shared refund จาก README ร่วมกับ Excel ที่อัปเดตแล้ว
 2. ยืนยัน URL/DTO/error contract และ action-level role/permission matrix ของ collect/read/history/void/request refund/approve/complete/fail/retry โดยแก้ข้อขัดแย้ง DD อนุญาต Manager หรือ Therapist บันทึกยอดคืน แต่โค้ด refund จำกัด Manager ทั้ง controller; ยืนยันขอบเขตต่างสาขาดูอย่างเดียวและสิทธิ์สาขาปิด; ไม่สร้าง permission code ใหม่หรือเปิด approve/complete จากการเดา
@@ -184,17 +194,17 @@ Error draft: 400 validation/business rule ตาม baseline, 401 ไม่ม�
 
 ### Task 1 — P0: ปิด contract และบันทึก baseline
 
-**Progress 2 พฤศจิกายน 2026:** เริ่ม Task 1 แล้ว สร้าง draft `docs/api/course-payments.md` และแก้ README เรื่อง test runners ผู้ใช้ยืนยันว่าทีมยังไม่มีข้อสรุปเรื่อง Therapist/approve/idempotency ให้ทำข้อเสนอไว้ก่อน จึงยังไม่ปิด contract หรือเริ่ม Task 2; ยังไม่ได้ประสานเจ้าของ service/repository และไม่ได้แก้ไฟล์ implementation
+**Historical progress ก่อนเริ่ม implementation 2 พฤศจิกายน 2026:** เริ่ม Task 1 แล้ว สร้าง draft `docs/api/course-payments.md` และแก้ README เรื่อง test runners ผู้ใช้ยืนยันว่าทีมยังไม่มีข้อสรุปเรื่อง Therapist/approve/idempotency ให้ทำข้อเสนอไว้ก่อน จึงยังไม่ปิด contract หรือเริ่ม Task 2; ยังไม่ได้ประสานเจ้าของ service/repository และไม่ได้แก้ไฟล์ implementation
 
 **Files:** สร้าง `docs/api/course-payments.md`; แก้ `backend/README.md` เฉพาะข้อเท็จจริงเรื่อง test runner; ใช้ README ต้นฉบับที่อ่านแล้วและ DD cells ข้างต้นเป็นหลักฐาน
 
 **Consumes:** source/requirements ในส่วน 1–3
 **Produces:** route table, ID semantics, role/permission matrix, reasonCode policy, error examples, idempotency decision และ print field mapping ที่ทีมตกลง
 
-- [ ] เก็บ HEAD/status/diff ใหม่ก่อน implement และประสานเจ้าของ service/repository
-- [ ] บันทึกว่าข้อ 1 ปิดแล้ว ใช้ DD#11 เป็นฐาน และยืนยันคำถาม 2–8 โดยแยกคำตอบที่ยืนยันแล้วออกจากข้อเสนอข้างต้น; บันทึกข้อขัดแย้ง Manager-only/สิทธิ์อ่านต่างสาขาและ approve lifecycle เป็น decision ที่มีเจ้าของยืนยัน ไม่ใช้ test เก่าเป็นตัวตัดสิน requirement
-- [ ] ปรับ contract draft โดยเก็บเนื้อหาเดิมที่เกี่ยวข้อง ย้ายข้อความ review ที่แทรกกลางย่อหน้าเปิดไป source/review section และเพิ่ม decision log ที่ระบุเจ้าของ/สถานะรายประเด็น
-- [ ] บันทึก legacy contract fixtures: detail อ่านด้วย SalesTransaction ID, refund ผูก Payment ID, receipt API ใหม่ผูก Receipt ID
+- [x] เก็บ HEAD/status/diff ใหม่ก่อน implement และรับคำสั่งผู้ใช้ให้ดำเนินงาน backend ต่อแล้ว ไม่ส่งข้อความหาเจ้าของงานภายนอกแทนผู้ใช้
+- [x] บันทึกว่าข้อ 1 ปิดแล้ว ใช้ DD#11 เป็นฐาน และยืนยันคำถาม 2–8 โดยแยกคำตอบที่ยืนยันแล้วออกจากข้อเสนอข้างต้น; บันทึกข้อขัดแย้ง Manager-only/สิทธิ์อ่านต่างสาขาและ approve lifecycle เป็น decision ที่มีเจ้าของยืนยัน ไม่ใช้ test เก่าเป็นตัวตัดสิน requirement
+- [x] ปรับ contract draft โดยเก็บเนื้อหาเดิมที่เกี่ยวข้อง ย้ายข้อความ review ที่แทรกกลางย่อหน้าเปิดไป source/review section และเพิ่ม decision log ที่ระบุเจ้าของ/สถานะรายประเด็น
+- [x] บันทึก legacy contract fixtures: detail อ่านด้วย SalesTransaction ID, refund ผูก Payment ID, receipt API ใหม่ผูก Receipt ID
 - [x] รัน database baseline สองคลาสตามส่วน 5 เก็บ XML และ commit SHA; ถ้ามี environment failure ให้แยกจาก application failure — HEAD `9d80dca2`; 30 tests, 1 failure, 0 errors/skips; รายละเอียดในเอกสาร contract ไม่ถือว่า baseline ผ่าน
 - [x] แก้คำอธิบาย tests ใน backend README ให้ตรง pom/scripts โดยไม่อ้างผลทดสอบก่อนรัน
 
@@ -217,74 +227,74 @@ Error draft: 400 validation/business rule ตาม baseline, 401 ไม่ม�
 
 ### Task 2 — P1: Receipt read/search/history API
 
-**Create:** `backend/src/main/java/com/sabyeguyz/clinicv2/sale/ReceiptDocumentController.java`, `backend/cypress/e2e-v2/receipt-documents.cy.js`
+**Create:** `backend/src/main/java/com/sabyeguyz/clinicv2/sale/ReceiptDocumentController.java`, `backend/src/test/java/com/sabyeguyz/schemacheck/ReceiptDocumentHttpTest.java`
 **Modify only if needed:** `ReceiptReadService.java` เพื่อประกอบ display/tax DTO ตาม contract โดยประสานเจ้าของไฟล์; ไม่ย้าย business logic ไป controller
 
 **Consumes:** getDetail(Long), getCourseHistory(Long), searchReceiptHistory(Long,String,int,int)
 **Produces:** receipt-based detail/list/history ตาม route ที่ตกลง; แยก DTO จาก legacy SaleController.Detail
 
-- [ ] เขียน HTTP cases ก่อน: ใบซื้อแรก + ใบรับเงินสองใบ ปรากฏครบครั้งเดียว; pagination page=0, size=1/100 และ reject page<0/size=0/101
-- [ ] สร้าง fixture ที่ SalesTransaction ID ต่างจาก Receipt ID เพื่อจับการสลับ id จริง ไม่ใช้ fixture ที่เลขบังเอิญเท่ากัน
-- [ ] เพิ่ม controller ที่ delegate เข้า ReceiptReadService และ map Page เป็น envelope ที่ตกลง; ติด role guard ตาม matrix
-- [ ] ทดสอบ detail แยก sales/coursePayments/payments, snapshot, stored totals, label และ branch รวมกรณี empty history/empty search; print header ใช้สาขาออกใบและไม่มีภาษีตาม DD
-- [ ] รัน receipt spec และ legacy payments/refunds specs; เก็บผลก่อน commit `feat(api): expose receipt document history`
+- [x] เขียน HTTP cases ก่อน: ใบซื้อแรก + ใบรับเงินสองใบ ปรากฏครบครั้งเดียว; pagination page=0, size=1/100 และ reject page<0/size=0/101
+- [x] สร้าง fixture ที่ SalesTransaction ID ต่างจาก Receipt ID เพื่อจับการสลับ id จริง ไม่ใช้ fixture ที่เลขบังเอิญเท่ากัน
+- [x] เพิ่ม controller ที่ delegate เข้า ReceiptReadService และ map Page เป็น envelope ที่ตกลง; ติด role guard ตาม matrix
+- [x] ทดสอบ detail แยก sales/coursePayments/payments, snapshot, stored totals, label และ branch รวมกรณี empty history/empty search; print header ใช้สาขาออกใบและไม่มีภาษีตาม DD
+- [x] รัน receipt spec และ legacy payments/refunds specs; เก็บผลก่อน commit `feat(api): expose receipt document history`
 
 **Acceptance:** อ่าน collection-only ได้โดยไม่สร้าง dummy SalesTransaction และ GET `/api/receipts/{id}` เดิมยังทำงานด้วยความหมายเดิม
 
 ### Task 3 — P1: Collection API และการป้องกันคำขอซ้ำ
 
-**Create:** `backend/src/main/java/com/sabyeguyz/clinicv2/sale/CoursePaymentCollectionController.java`, `backend/cypress/e2e-v2/course-payment-collections.cy.js`
+**Create:** `backend/src/main/java/com/sabyeguyz/clinicv2/sale/CoursePaymentCollectionController.java`, `backend/src/test/java/com/sabyeguyz/schemacheck/CoursePaymentCollectionHttpTest.java`
 **Modify after agreement:** `CoursePaymentCollectionService.java` และไฟล์กลไก idempotency ที่ระบุใน decision ของ Task 1 เท่านั้น; ไม่สร้าง migration/ตารางล่วงหน้า
 
 **Consumes:** `collect(Patient,Branch,List<ReceiptCoursePaymentService.ItemRequest>,Discount,String,PaymentMethod,BigDecimal)`
 **Produces:** CoursePaymentCollectionService.Result; boundary ที่ resolve patient/branch/method, validate nested DTO และอ่าน actor จากระบบ
 
-- [ ] เขียน failing HTTP cases สำหรับ multi-course, buyer mismatch, duplicate course, null item, amount<0/เกิน 2 decimals, disabled label/method, Cash/unknown channel/split payment, payment mismatch และ 0-net
-- [ ] โหลด referenced entities แล้วเรียก collect ด้วย Discount.of; ใช้ @Valid/@NotNull/@NotEmpty และ nested validation โดยไม่บังคับ paymentAmount>0 เพราะ 0-net ถูกต้อง
-- [ ] ตรวจ response 201 และ rollback ผ่าน DB assertions ว่า receipt/items/payment/audit ไม่ค้างเมื่อ service ล้มเหลว
-- [ ] เพิ่ม acceptance จาก README §8: กรอก amount=10000, FIXED discount=3000 ได้ net/payment=7000 โดยไม่มีการดึงยอดจ่ายเดิมมาหักซ้ำ และไม่เปลี่ยนราคา/ฐานของคอร์สต้นทาง
-- [ ] ทดสอบสิทธิ์และ branch ตาม matrix รวม actorId ปลอมใน payload ต้องไม่เปลี่ยนผู้บันทึก
-- [ ] Implement กลไก idempotency ที่ตกลง พร้อม tests same key/same payload, same key/different payload, simultaneous requests, restart/crash และ legitimate repeat amount ใช้ identity ใหม่ต้องทำได้
-- [ ] ตรวจจำนวน Course/Sale/Visit/rights ledger และ commission base ก่อน–หลังรับเงินต้องไม่เพิ่ม/เปลี่ยน และไม่ใช้ payment label/ยอดรับสะสมเป็น gate ให้ใช้คอร์สไม่ได้
-- [ ] ทดสอบเลข REYYMMNNNN แยกสาขา/เดือน concurrent issuance ไม่ซ้ำ, void แล้วไม่ใช้เลขเดิม และ 9999 ไม่วน; หากพบปัญหาใน receipt sequence ให้ประสานเจ้าของ service ก่อนแก้
-- [ ] รัน database + HTTP specs ก่อน commit `feat(api): collect existing course payments`
+- [x] เขียน failing HTTP cases สำหรับ multi-course, buyer mismatch, duplicate course, null item, amount<0/เกิน 2 decimals, disabled label/method, Cash/unknown channel/split payment, payment mismatch และ 0-net
+- [x] โหลด referenced entities แล้วเรียก collect ด้วย Discount.of; ใช้ @Valid/@NotNull/@NotEmpty และ nested validation โดยไม่บังคับ paymentAmount>0 เพราะ 0-net ถูกต้อง
+- [x] ตรวจ response 201 และ rollback ผ่าน DB assertions ว่า receipt/items/payment/audit ไม่ค้างเมื่อ service ล้มเหลว
+- [x] เพิ่ม acceptance จาก README §8: กรอก amount=10000, FIXED discount=3000 ได้ net/payment=7000 โดยไม่มีการดึงยอดจ่ายเดิมมาหักซ้ำ และไม่เปลี่ยนราคา/ฐานของคอร์สต้นทาง
+- [x] ทดสอบสิทธิ์และ branch ตาม matrix รวม actorId ปลอมใน payload ต้องไม่เปลี่ยนผู้บันทึก
+- [x] Implement กลไก idempotency ที่ตกลง พร้อม tests same key/same payload, same key/different payload, simultaneous requests, restart/crash และ legitimate repeat amount ใช้ identity ใหม่ต้องทำได้
+- [x] ตรวจจำนวน Course/Sale/Visit/rights ledger และ commission base ก่อน–หลังรับเงินต้องไม่เพิ่ม/เปลี่ยน และไม่ใช้ payment label/ยอดรับสะสมเป็น gate ให้ใช้คอร์สไม่ได้
+- [x] ทดสอบเลข REYYMMNNNN แยกสาขา/เดือน concurrent issuance ไม่ซ้ำ, void แล้วไม่ใช้เลขเดิม และ 9999 ไม่วน; หากพบปัญหาใน receipt sequence ให้ประสานเจ้าของ service ก่อนแก้
+- [x] รัน database + HTTP specs ก่อน commit `feat(api): collect existing course payments`
 
 **Acceptance:** retry ไม่สร้างใบซ้ำตามนิยามที่ตกลง และรับเงินเท่ากันอีกครั้งที่เป็นคนละคำขอได้; ถ้ายังไม่มีวิธี idempotency ที่ผ่าน tests ห้ามรายงานว่า requirement นี้เสร็จ ส่วนข้อเสนอชะลอเปิดรับเงินจริงต้องมี release decision จากทีม ไม่ถือว่าได้รับอนุมัติจาก DB review แล้ว
 
 ### Task 4 — P1: Collection-only void API
 
 **Modify:** `ReceiptDocumentController.java`
-**Create:** `backend/cypress/e2e-v2/course-payment-void.cy.js`
+**Create:** `backend/src/test/java/com/sabyeguyz/schemacheck/ReceiptDocumentHttpTest.java`
 **Reuse:** `CoursePaymentVoidService.java` โดยไม่สร้าง flow reverse สิทธิ์เพิ่ม
 
 **Consumes:** `voidReceipt(Long,ReasonCode,String)`
 **Produces:** Result(receiptId,paymentId,cancellationId) และ audit ที่ตรวจสอบย้อนหลังได้
 
-- [ ] เขียน cases success, ขาด reasonCode, reason ว่าง/whitespace/>255, enum ไม่ถูกต้อง, ไม่มี SALE_CANCEL, role/branch ไม่ผ่าน
-- [ ] เพิ่ม request DTO และ delegate service; enum ใช้ค่าจริงจาก ReasonCode.java ได้แก่ WrongEntryOrService, DuplicateEntry, PatientRequested, PaymentFailedOrIncorrectAmount, Other
-- [ ] ทดสอบ reject ใบซื้อแรก, mixed receipt, ไม่ใช่ Issued, void ซ้ำ และ payment ที่มี active refund ตาม guard เดิม
-- [ ] ตรวจ void กระทบเฉพาะ receipt/payment ใบนั้น เก็บ cancellation/reasonCode/audit และไม่เปลี่ยน rights ledger/course/ใบอื่น
-- [ ] เพิ่ม race void กับ refund โดยใช้ PostgreSQL แล้วตรวจว่าไม่มีการยกเลิกเงินขัดกัน; รัน spec ก่อน commit `feat(api): void course collection receipts`
+- [x] เขียน cases success, ขาด reasonCode, reason ว่าง/whitespace/>255, enum ไม่ถูกต้อง, ไม่มี SALE_CANCEL, role/branch ไม่ผ่าน
+- [x] เพิ่ม request DTO และ delegate service; enum ใช้ค่าจริงจาก ReasonCode.java ได้แก่ WrongEntryOrService, DuplicateEntry, PatientRequested, PaymentFailedOrIncorrectAmount, Other
+- [x] ทดสอบ reject ใบซื้อแรก, mixed receipt, ไม่ใช่ Issued, void ซ้ำ และ payment ที่มี active refund ตาม guard เดิม
+- [x] ตรวจ void กระทบเฉพาะ receipt/payment ใบนั้น เก็บ cancellation/reasonCode/audit และไม่เปลี่ยน rights ledger/course/ใบอื่น
+- [x] เพิ่ม race void กับ refund โดยใช้ PostgreSQL แล้วตรวจว่าไม่มีการยกเลิกเงินขัดกัน; รัน spec ก่อน commit `feat(api): void course collection receipts`
 
 ### Task 5 — P1: เติม refund boundary และ shared-refund HTTP tests
 
 **Modify:** `backend/src/main/java/com/sabyeguyz/clinicv2/sale/RefundController.java`, `backend/cypress/e2e-v2/refunds.cy.js`
-**Create:** `backend/cypress/e2e-v2/shared-course-refunds.cy.js`
+**Create:** `backend/src/test/java/com/sabyeguyz/schemacheck/RefundHttpContractTest.java`
 **Modify after coordination:** `RefundService.java`, `TransactionCancellationService.java` เฉพาะ reasonCode propagation ตาม contract; helper ใน `backend/src/test/java/com/sabyeguyz/clinicv2/cypress/` หรือ `backend/cypress/tasks/` เมื่อจำเป็นสำหรับ fixture/race
 
 **Consumes:** existing payment-refund routes, ItemRequest(courseId,refundAmount,cancelledVisits,rightsCancellationItemId)
 **Produces:** API เดิมที่ตรวจ access ครบและหลักฐาน shared group invariants ผ่าน HTTP
 
-- [ ] เขียน failing tests ตาม action-level matrix ที่ยืนยันใน Task 1: Manager ทำรายการข้ามสาขา; Therapist ที่มีสิทธิ์ทำเฉพาะ action ที่อนุญาตในสาขาตน และ mutation ต่างสาขาต้อง 403; แยกทดสอบ read-only ต่างสาขาตามข้อสรุป ไม่เหมารวมว่า Therapist ทุก action ต้อง 403
-- [ ] ทดสอบทุก route ว่า resolve branch ของ original payment ผ่าน receipt และตรวจสถานะสาขาตาม policy ที่ยืนยัน; เปลี่ยน test `is manager-only` ให้ระบุ action ที่ยังเป็น Manager-only จริง
-- [ ] เติม branch access ทุก route รวม list; หลีกเลี่ยงการสรุปว่า service lock ตรวจ access แล้ว และคง lock order ของ PaymentLockService/RefundLockService/shared main item เดิม
-- [ ] เพิ่ม reasonCode ตาม compatibility decision ส่งผ่านถึง TransactionCancellation และ audit โดยไม่เปลี่ยนสูตร/refund state machine
-- [ ] ผ่าน HTTP สร้าง refund หลักและร่วมจากหลาย payments ของคอร์สเดียวกัน แล้ว complete ในลำดับต่างกัน ตรวจตัดสิทธิ์ครั้งเดียว
-- [ ] ให้รายการร่วม complete ก่อน และให้ refund หลัก Voided ก่อนรายการร่วม complete ได้ตามกฎ; ตรวจว่ารายการหลักยังอยู่และ approved_by/approved_at ของรายการหลักไม่ถูกเขียนแทนผู้อนุมัติรายการร่วม
-- [ ] ทดสอบ self-reference, อ้าง child, ต่างคอร์ส, child มี cancelledVisits, เงินเกิน payment/ยอดสุทธิคอร์ส และกลุ่มที่กลับสิทธิ์แล้วต้อง reject
-- [ ] ทดสอบ HTTP fail/retry และ retry หลังรายการอื่นในกลุ่มตัดสิทธิ์แล้วต้องไม่ตัดซ้ำ/ไม่ reject จากยอดหลังตัด; ตรวจ Completed ห้าม Void และ void ก่อนเคยตัดไม่สร้าง phantom Reversal
-- [ ] ทดสอบ service/database ว่า void บางรายการไม่กลับสิทธิ์, Failed ยังขวาง group restoration, ทั้งกลุ่ม Voided และไม่มี Completed จึงกลับ Cancellation จริงครบชุดรายผู้ถือสิทธิ์ครั้งเดียว และหลายคอร์สกลับแยกกลุ่ม; เปิด HTTP coverage ของสถานะตัดแล้วแต่ยังไม่ Completed หลังตกลง approve lifecycle เท่านั้น ไม่อ้างว่า helper setup เป็น production workflow
-- [ ] เพิ่ม concurrent HTTP transitions ด้วย barrier/lock evidence แล้วตรวจ DB/ledger จริง; รัน SharedCourseRefundTest และ refund specs ก่อน commit `fix(api): enforce refund access and shared cancellation contract`
+- [x] เขียน failing tests ตาม action-level matrix ที่ยืนยันใน Task 1: Manager ทำรายการข้ามสาขา; Therapist ที่มีสิทธิ์ทำเฉพาะ action ที่อนุญาตในสาขาตน และ mutation ต่างสาขาต้อง 403; แยกทดสอบ read-only ต่างสาขาตามข้อสรุป ไม่เหมารวมว่า Therapist ทุก action ต้อง 403
+- [x] ทดสอบทุก route ว่า resolve branch ของ original payment ผ่าน receipt และตรวจสถานะสาขาตาม policy ที่ยืนยัน; เปลี่ยน test `is manager-only` ให้ระบุ action ที่ยังเป็น Manager-only จริง
+- [x] เติม branch access ทุก route รวม list; หลีกเลี่ยงการสรุปว่า service lock ตรวจ access แล้ว และคง lock order ของ PaymentLockService/RefundLockService/shared main item เดิม
+- [x] เพิ่ม reasonCode ตาม compatibility decision ส่งผ่านถึง TransactionCancellation และ audit โดยไม่เปลี่ยนสูตร/refund state machine
+- [x] ผ่าน HTTP สร้าง refund หลักและร่วมจากหลาย payments ของคอร์สเดียวกัน แล้ว complete ในลำดับต่างกัน ตรวจตัดสิทธิ์ครั้งเดียว
+- [x] ให้รายการร่วม complete ก่อน และให้ refund หลัก Voided ก่อนรายการร่วม complete ได้ตามกฎ; ตรวจว่ารายการหลักยังอยู่และ approved_by/approved_at ของรายการหลักไม่ถูกเขียนแทนผู้อนุมัติรายการร่วม
+- [x] ทดสอบ self-reference, อ้าง child, ต่างคอร์ส, child มี cancelledVisits, เงินเกิน payment/ยอดสุทธิคอร์ส และกลุ่มที่กลับสิทธิ์แล้วต้อง reject
+- [x] ทดสอบ HTTP fail/retry และ retry หลังรายการอื่นในกลุ่มตัดสิทธิ์แล้วต้องไม่ตัดซ้ำ/ไม่ reject จากยอดหลังตัด; ตรวจ Completed ห้าม Void และ void ก่อนเคยตัดไม่สร้าง phantom Reversal
+- [x] ทดสอบ service/database ว่า void บางรายการไม่กลับสิทธิ์, Failed ยังขวาง group restoration, ทั้งกลุ่ม Voided และไม่มี Completed จึงกลับ Cancellation จริงครบชุดรายผู้ถือสิทธิ์ครั้งเดียว และหลายคอร์สกลับแยกกลุ่ม; เปิด HTTP coverage ของสถานะตัดแล้วแต่ยังไม่ Completed หลังตกลง approve lifecycle เท่านั้น ไม่อ้างว่า helper setup เป็น production workflow
+- [x] เพิ่ม concurrent HTTP transitions ด้วย barrier/lock evidence แล้วตรวจ DB/ledger จริง; รัน SharedCourseRefundTest และ refund specs ก่อน commit `fix(api): enforce refund access and shared cancellation contract`
 
 **Acceptance:** flow เดิมยังทำงาน ไม่มีระบบคืนเงินอีกชุด สิทธิ์แต่ละ action ตรงข้อสรุป DD/ทีม และ tests ตรวจ field อ้างอิงผ่าน JSON จริง; การแก้ Manager-only guard ต้องสัมพันธ์กับ permission และ branch tests ไม่ใช่ลบ annotation อย่างเดียว
 
@@ -293,14 +303,14 @@ Error draft: 400 validation/business rule ตาม baseline, 401 ไม่ม�
 **Modify:** `docs/api/course-payments.md`, `backend/README.md`, `.github/workflows/backend-ci.yml` หากต้องเพิ่มการเก็บ Surefire XML
 **Frontend files for owner coordination:** `frontend/src/api/client.ts`, `frontend/src/features/patients/views/PatientHistoryView.vue`, `ManagerPatientHistoryView.vue`, `frontend/src/features/reports/views/TransactionReportView.vue`, `frontend/src/features/transactions/views/TransactionView.vue`; เจ้าของหน้าพิมพ์ระบุ component เพิ่มจาก contract review
 
-- [ ] รัน full backend Maven/JUnit และ Cypress v2 พร้อมเก็บจำนวน tests/failures/errors/skips และ SHA; npm test รวม build ที่เรียก Maven อยู่แล้ว อย่านับผล Maven ซ้ำเป็นสองชุดอิสระ
-- [ ] คง v2 API CI ที่เรียก npm run test:v2 และเพิ่ม/ตรวจ artifact `backend/target/surefire-reports/*.xml` ควบคู่ Cypress XML; configuration CI ที่มีอยู่ไม่ใช่หลักฐานว่า run ล่าสุดผ่าน
-- [ ] ตรวจ upgrade V1021/V1022 และ mappings ใน PostgreSQL ชุดทดสอบ; ทดสอบ fresh database และ existing data ตาม SharedCourseRefundTest ไม่แตะฐานข้อมูลหลัก
-- [ ] ตรวจรายงาน cash รับ collection แต่ sale/Tier ไม่ถูกนับเพิ่ม และ boundary 00:00/from-inclusive/to-exclusive ใน Asia/Bangkok; callers ปัจจุบันถูกต้องอยู่แล้ว เปลี่ยนเฉพาะเมื่อพบ regression
-- [ ] ส่ง route/DTO/status/error examples และ field mapping สำหรับ detail/print; frontend ต้องเพิ่ม coursePayments และใช้ receiptId ใน API ใหม่ ไม่ใช้ SaleSummary.id แทน
-- [ ] History แสดงวันที่ เลขใบเสร็จ ยอดรับจริง label ช่องทาง สถานะเอกสารและเงินครบจาก backend; ใช้ใบเสร็จปกติ ไม่มี receipt_type/ตัวเลือกชื่อรับชำระเพิ่ม และไม่สร้าง received_amount แทน net_amount
-- [ ] ประสาน E2E: ซื้อครั้งแรก → รับเงินเพิ่มสองใบ → เปิด history/detail/print → shared refund หลาย payments → ตรวจตัดสิทธิ์ครั้งเดียว; ทดสอบ collection-only void แยก scenario
-- [ ] ส่งไฟล์/commits/test artifacts/ประเด็นค้างและข้อจำกัดจริง ก่อน commit `docs(api): document course payments and verification`
+- [x] รัน full backend Maven/JUnit และ Cypress v2 พร้อมเก็บจำนวน tests/failures/errors/skips และ SHA; npm test รวม build ที่เรียก Maven อยู่แล้ว อย่านับผล Maven ซ้ำเป็นสองชุดอิสระ
+- [x] คง v2 API CI ที่เรียก npm run test:v2 และเพิ่ม/ตรวจ artifact `backend/target/surefire-reports/*.xml` ควบคู่ Cypress XML; configuration CI ที่มีอยู่ไม่ใช่หลักฐานว่า run ล่าสุดผ่าน
+- [x] ตรวจ upgrade V1021/V1022 และ mappings ใน PostgreSQL ชุดทดสอบ; ทดสอบ fresh database และ existing data ตาม SharedCourseRefundTest ไม่แตะฐานข้อมูลหลัก
+- [x] ตรวจรายงาน cash รับ collection แต่ sale/Tier ไม่ถูกนับเพิ่ม และ boundary 00:00/from-inclusive/to-exclusive ใน Asia/Bangkok; callers ปัจจุบันถูกต้องอยู่แล้ว เปลี่ยนเฉพาะเมื่อพบ regression
+- [x] ส่ง route/DTO/status/error examples และ field mapping สำหรับ detail/print; frontend ต้องเพิ่ม coursePayments และใช้ receiptId ใน API ใหม่ ไม่ใช้ SaleSummary.id แทน
+- [x] History แสดงวันที่ เลขใบเสร็จ ยอดรับจริง label ช่องทาง สถานะเอกสารและเงินครบจาก backend; ใช้ใบเสร็จปกติ ไม่มี receipt_type/ตัวเลือกชื่อรับชำระเพิ่ม และไม่สร้าง received_amount แทน net_amount
+- [x] ส่ง checklist สำหรับ frontend E2E (ยังไม่รัน UI ใหม่): ซื้อครั้งแรก → รับเงินเพิ่มสองใบ → เปิด history/detail/print → shared refund หลาย payments → ตรวจตัดสิทธิ์ครั้งเดียว; ทดสอบ collection-only void แยก scenario
+- [x] ส่งไฟล์/commits/test artifacts/ประเด็นค้างและข้อจำกัดจริง ก่อน commit `docs(api): document course payments and verification`
 
 ## 5. วิธีตรวจสอบเมื่อเริ่ม implement
 
@@ -315,17 +325,14 @@ mvn --batch-mode --no-transfer-progress test
 
 # Set DATABASE_URL / DATABASE_USERNAME / DATABASE_PASSWORD to an isolated test DB first.
 # This v2 runner starts ClinicV2Application on 18080 with JMX 19001 and stops it.
-npm run test:v2 -- --spec cypress/e2e-v2/receipt-documents.cy.js
-npm run test:v2 -- --spec cypress/e2e-v2/course-payment-collections.cy.js
-npm run test:v2 -- --spec cypress/e2e-v2/course-payment-void.cy.js
-npm run test:v2 -- --spec cypress/e2e-v2/shared-course-refunds.cy.js
+mvn --batch-mode --no-transfer-progress -Dtest=ReceiptDocumentHttpTest,CoursePaymentCollectionHttpTest,RefundHttpContractTest test
 npm run test:v2
 
 # Existing package + legacy Cypress regression; v2 HTTP suite remains separate.
 npm test
 ```
 
-Spec files ใหม่นี้จะมีหลังทำ tasks ที่เกี่ยวข้องเท่านั้น ไม่ใช่คำสั่งที่อ้างว่ารันผ่านแล้ว รายงานต้องระบุ command, environment, SHA และ artifacts; ถ้า run ไม่ได้ ให้ระบุเหตุผลแทนการอ้างผล handoff
+HTTP test classes ข้างต้นสร้างและรันแล้วตามรายงาน verification ส่วน Cypress ใช้ชุดเดิมตรวจ regression ไม่สร้าง specs ที่ mirror JUnit HTTP อีกชุด รายงานต้องระบุ command, environment, SHA และ artifacts; ถ้า run ไม่ได้ ให้ระบุเหตุผลแทนการอ้างผล handoff
 
 ตัวอย่าง test แรกที่เพิ่มได้ใน `receipt-documents.cy.js` หลังสร้าง fixture receipt ผ่าน flow ทดสอบ:
 
@@ -344,11 +351,11 @@ function expectCollectionDetail(receiptId, courseId) {
 
 ## 6. เกณฑ์จบงาน
 
-- [ ] Contract และ ownership ของไฟล์ตกลงแล้ว; legacy IDs/routes ผ่าน regression
-- [ ] Collection/read/search/history/void ใช้งานผ่าน HTTP จริง ครบ validation/security/audit
-- [ ] Shared refund HTTP และ concurrency ผ่านโดยตัด/กลับสิทธิ์ตามหลักฐาน ledger ครั้งเดียว
-- [ ] Idempotency มี implementation และ tests ตามข้อตกลง ไม่มีการนับ disable ปุ่มหรือ lock อย่างเดียวว่าเสร็จ
-- [ ] Database tests, HTTP tests, frontend E2E และสถานะ deployment รายงานแยกกันตามที่รันจริง
-- [ ] ส่ง source commits, route/DTO docs และ artifacts; ประเด็นค้างต้องมองเห็นได้ก่อนรวมงาน
+- [x] Contract ฝั่ง backend และรายการไฟล์ที่แก้บันทึกแล้ว; legacy IDs/routes ผ่าน regression โดยไม่อ้างว่า frontend UI เชื่อมต่อแล้ว
+- [x] Collection/read/search/history/void ใช้งานผ่าน HTTP จริง ครบ validation/security/audit
+- [x] Shared refund HTTP และ concurrency ผ่านโดยตัด/กลับสิทธิ์ตามหลักฐาน ledger ครั้งเดียว
+- [x] Idempotency มี implementation และ tests ตามข้อตกลง ไม่มีการนับ disable ปุ่มหรือ lock อย่างเดียวว่าเสร็จ
+- [x] Database tests, HTTP tests, frontend E2E และสถานะ deployment รายงานแยกกันตามที่รันจริง
+- [x] ส่ง source commits, route/DTO docs และ artifacts; ประเด็นค้างต้องมองเห็นได้ก่อนรวมงาน
 
-ลำดับที่แนะนำ: Task 1 → Task 2 → Task 3 → Task 4 → Task 5 → Task 6 โดยเริ่มทบทวน idempotency และ reasonCode ตั้งแต่ Task 1 เพราะเป็นการตัดสินใจร่วม ไม่ควรรอจน API เขียนเสร็จ
+ลำดับที่ดำเนินการฝั่ง backend: Task 1 → Task 2 → Task 3 → Task 4 → Task 5 → Task 6 โดยเริ่มทบทวน idempotency และ reasonCode ตั้งแต่ Task 1 เพราะเป็นการตัดสินใจร่วม ไม่ควรรอจน API เขียนเสร็จ
