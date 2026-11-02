@@ -1,6 +1,9 @@
 package com.sabyeguyz.clinicv2.sale;
 
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
+import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
+import com.sabyeguyz.clinicv2.enums.AuditAction;
+import com.sabyeguyz.clinicv2.enums.ReasonCode;
 import com.sabyeguyz.clinicv2.role.PermissionService;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @PreAuthorize("hasRole('MANAGER')")
 public class RefundController {
+    private final BranchAccessPolicy branchAccess;
     private final RefundService refundService;
     private final RefundTransactionRepository refunds;
     private final PaymentTransactionRepository payments;
@@ -35,7 +39,8 @@ public class RefundController {
     public RefundController(RefundService refundService, RefundTransactionRepository refunds,
                              PaymentTransactionRepository payments, PaymentMethodRepository paymentMethods,
                              PermissionService permissions, CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                                     BranchAccessPolicy branchAccess) {
         this.refundService = refundService;
         this.refunds = refunds;
         this.payments = payments;
@@ -43,11 +48,12 @@ public class RefundController {
         this.permissions = permissions;
         this.actor = actor;
         this.audit = audit;
+        this.branchAccess = branchAccess;
     }
 
     /** items: per course of a course receipt, the amount refunded and the unused sessions to cancel. */
     public record RefundRequest(BigDecimal amount, String paymentMethodCode, String reason,
-                                 List<RefundService.ItemRequest> items) {}
+                                 List<RefundService.ItemRequest> items, ReasonCode reasonCode) {}
 
     public record ItemResponse(
             Long courseId,
@@ -62,27 +68,36 @@ public class RefundController {
     @PostMapping("/api/payments/{paymentId}/refunds")
     @ResponseStatus(HttpStatus.CREATED)
     public Response request(@PathVariable Long paymentId, @RequestBody RefundRequest request) {
-        PaymentTransaction payment = payments.findById(paymentId)
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการชำระเงิน"));
+        if (request == null || request.reason() == null || request.reason().isBlank()
+                || request.reason().trim().length() > 255) {
+            throw new IllegalArgumentException("ต้องระบุเหตุผลความยาวไม่เกิน 255 ตัวอักษร");
+        }
+        PaymentTransaction payment = accessiblePayment(paymentId);
         PaymentMethod method = request.paymentMethodCode() == null ? null
                 : paymentMethods.findByMethodNameIgnoreCase(request.paymentMethodCode())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
         var permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         RefundTransaction refund = refundService.request(payment, request.amount(), method, permission,
-                request.reason(), actor.currentId(), request.items());
-        audit.record("refund_transaction", String.valueOf(refund.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
-                "Pending " + request.amount() + " (payment " + paymentId + ")", actor.currentId());
+                request.reason().trim(), actor.currentId(), request.items());
+        ReasonCode reasonCode = request.reasonCode() == null ? ReasonCode.Other : request.reasonCode();
+        refund.getCancellation().setReasonCode(reasonCode);
+        audit.recordChange("refund_transaction", String.valueOf(refund.getId()), AuditAction.INSERT, null,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields(
+                        "status", "Pending", "amount", request.amount(), "payment_id", paymentId,
+                        "reason_code", reasonCode.name(), "reason", request.reason().trim()), actor.currentId());
         return toResponse(refund);
     }
 
     @GetMapping("/api/payments/{paymentId}/refunds")
     public List<Response> forPayment(@PathVariable Long paymentId) {
+        accessiblePayment(paymentId);
         return refunds.findByOriginalPaymentId(paymentId).stream().map(this::toResponse).toList();
     }
 
     @PostMapping("/api/refunds/{id}/complete")
     public Response complete(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
+        requireRefundAccess(id);
         RefundTransaction refund = refundService.complete(id, actor.currentId());
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Completed", actor.currentId());
         return toResponse(refund);
@@ -91,6 +106,7 @@ public class RefundController {
     @PostMapping("/api/refunds/{id}/void")
     public Response voidRequest(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
+        requireRefundAccess(id);
         String previousStatus = refundService.lockStatusForUpdate(id).name();
         RefundTransaction refund = refundService.voidRequest(id, actor.currentId());
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, previousStatus, "Voided", actor.currentId());
@@ -100,6 +116,7 @@ public class RefundController {
     @PostMapping("/api/refunds/{id}/fail")
     public Response fail(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
+        requireRefundAccess(id);
         RefundTransaction refund = refundService.fail(id);
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Failed", actor.currentId());
         return toResponse(refund);
@@ -108,12 +125,27 @@ public class RefundController {
     @PostMapping("/api/refunds/{id}/retry")
     public Response retry(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
+        requireRefundAccess(id);
         String previousStatus = refundService.lockStatusForUpdate(id).name();
         RefundTransaction refund = refundService.retry(id);
         audit.record("refund_transaction", String.valueOf(id),
                 com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
                 previousStatus, "Pending", actor.currentId());
         return toResponse(refund);
+    }
+
+    /** The original receipt determines access for every refund route, including reads. */
+    private PaymentTransaction accessiblePayment(Long paymentId) {
+        PaymentTransaction payment = payments.findById(paymentId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการชำระเงิน"));
+        branchAccess.requireAccess(payment.getReceipt().getBranch());
+        return payment;
+    }
+
+    private void requireRefundAccess(Long refundId) {
+        RefundTransaction refund = refunds.findById(refundId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการคืนเงิน"));
+        branchAccess.requireAccess(refund.getOriginalPayment().getReceipt().getBranch());
     }
 
     private Response toResponse(RefundTransaction refund) {
