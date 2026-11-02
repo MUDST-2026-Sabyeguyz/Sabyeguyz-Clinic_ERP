@@ -24,4 +24,12 @@ describe('PatientRegistrationView', () => {
     expect(stylesheet).toContain('.patient-name-grid')
     expect(stylesheet).toContain('.personal-details-grid')
   })
+
+  it('submits separate Thai name parts for the main PatientController contract', () => {
+    expect(viewSource).toContain('firstName: form.firstName')
+    expect(viewSource).toContain('middleName: form.middleName || null')
+    expect(viewSource).toContain('lastName: form.lastName')
+    expect(viewSource).not.toContain('username: `patient-${Date.now()}`')
+    expect(viewSource).not.toContain('password: `Temp${form.identityNumber.slice(-6)}!`')
+  })
 })

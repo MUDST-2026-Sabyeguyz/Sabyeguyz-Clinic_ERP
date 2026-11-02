@@ -31,7 +31,7 @@ const isManager = authUser?.role === 'MANAGER'
 
 const submitting = ref(false)
 const route = useRoute()
-// A completed request may outlive this screen. Do not redirect the user after they have gone back.
+// ป้องกันผลคำขอเก่าพากลับไปหน้าเดิมหลังผู้ใช้ออกจากฟอร์มแล้ว
 const registrationActive = ref(true)
 onBeforeUnmount(() => {
   registrationActive.value = false
@@ -81,11 +81,12 @@ async function loadSourceAppointment() {
     if (!registrationActive.value) return
     if (item.patient?.id)
       throw new Error('นัดหมายนี้มีผู้ป่วยที่ลงทะเบียนแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
-    if (item.status !== 'CONFIRMED')
+    if (item.patientType !== 'NEW') throw new Error('นัดหมายนี้ไม่ใช่นัดสำหรับผู้ป่วยใหม่')
+    if (item.status !== 'UNCONFIRMED')
       throw new Error('นัดหมายนี้ยังไม่พร้อมลงทะเบียน กรุณากลับไปตรวจสอบสถานะ')
     sourceAppointment.value = item
     form.branchCode = item.branchCode
-    // A booking contact may be a nickname; never guess legal first and last names.
+    // ชื่อในนัดอาจเป็นชื่อเล่น จึงไม่เดาชื่อจริงหรือนามสกุล
     if (!form.nickname) form.nickname = item.contactName || ''
     if (!form.phone) form.phone = limitPhoneDigits(item.contactPhone || '')
   } catch (error) {
@@ -334,7 +335,7 @@ async function requestSubmit() {
       return
     }
   } catch {
-    // The backend still performs the authoritative duplicate validation on submit.
+    // backend ตรวจผู้ป่วยซ้ำอีกครั้งก่อนบันทึกจริง
   }
   confirmationOpen.value = true
 }
@@ -358,11 +359,14 @@ async function continueToServices(patientId: number) {
   continuingAppointment.value = true
   errorMessage.value = ''
   try {
+    // ตรวจสถานะนัดอีกครั้งก่อนพาไปหน้าบริการ
     const appointment = await appointmentApi.get(appointmentId)
-    if (appointment.patient?.id && appointment.patient.id !== patientId)
-      throw new Error('นัดหมายนี้เชื่อมกับผู้ป่วยรายอื่นแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
-    if (!appointment.patient?.id) await appointmentApi.linkPatient(appointmentId, patientId)
+    if (!Number.isSafeInteger(patientId) || patientId <= 0)
+      throw new Error('ไม่พบรหัสผู้ป่วยที่ลงทะเบียน')
+    if (appointment.patientType !== 'NEW' || appointment.status !== 'UNCONFIRMED')
+      throw new Error('สถานะนัดหมายเปลี่ยนแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
     if (!registrationActive.value) return true
+    // ส่ง patientId จริงคู่กับ appointmentId โดยไม่ผูกนัดย้อนหลัง
     await router.push({
       name: 'staff-services',
       query: { patientId: String(patientId), appointmentId: String(appointmentId) },
@@ -370,7 +374,7 @@ async function continueToServices(patientId: number) {
     return true
   } catch (error) {
     errorMessage.value =
-      error instanceof Error ? error.message : 'เชื่อมนัดหมายไม่สำเร็จ กรุณาลองใหม่'
+      error instanceof Error ? error.message : 'ไปหน้าบริการไม่สำเร็จ กรุณาลองใหม่'
     return false
   } finally {
     continuingAppointment.value = false
@@ -406,13 +410,15 @@ async function submit() {
     const fullName = `${form.firstName} ${form.middleName} ${form.lastName}`
       .replace(/\s+/g, ' ')
       .trim()
+    // ส่งข้อมูลสุขภาพ ผู้ติดต่อฉุกเฉิน และความยินยอมไปบันทึกพร้อมโปรไฟล์
     const result = await registerPatient({
       branchCode: form.branchCode,
-      username: `patient-${Date.now()}`,
-      password: `Temp${form.identityNumber.slice(-6)}!`,
       email: form.email,
       title: form.title,
       fullName,
+      firstName: form.firstName,
+      middleName: form.middleName || null,
+      lastName: form.lastName,
       birthDate: form.birthDate,
       gender: form.gender,
       phone: form.phone,
