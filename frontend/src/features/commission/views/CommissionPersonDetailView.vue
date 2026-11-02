@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import StaffHeader from "@/features/staff/components/StaffHeader.vue";
 import { commissionApi, staffApi } from "@/api/client";
+import { selectedManagerBranch } from "@/features/staff/data/managerBranch";
+import { clinicToday } from "@/utils/clinicDate";
 type TreatmentRow = Awaited<
   ReturnType<typeof commissionApi.treatmentReport>
 >[number];
-const route = useRoute(),
-  router = useRouter();
+const route = useRoute();
 const staffId = computed(() => {
   const n = Number(String(route.params.staffId ?? "").replace(/^PT-0*/i, ""));
   return Number.isFinite(n) ? n : 0;
 });
 const month = computed(() =>
-  String(route.query.month || new Date().toISOString().slice(0, 7)).slice(0, 7),
+  String(route.query.month || clinicToday().slice(0, 7)).slice(0, 7),
 );
+const selectedBranchCode = computed(() => selectedManagerBranch()?.code ?? "");
 const overviewQuery = computed(() => ({
   month: month.value,
   ...(typeof route.query.search === "string" && route.query.search ? { search: route.query.search } : {}),
@@ -59,10 +61,11 @@ const tierProgress = computed(() =>
 );
 const treatments = ref<TreatmentRow[]>([]),
   closingId = ref<number | null>(null),
-  approved = ref(false);
-const confirmOpen = ref(false),
-  validationMessage = ref(""),
+  approved = ref(false),
+  finalized = ref(false);
+const validationMessage = ref(""),
   saving = ref(false);
+const reopenReason = ref("");
 const treatmentTotal = computed(() =>
   treatments.value.reduce(
     (sum, item) => sum + Number(item.treatmentFee || 0),
@@ -87,12 +90,17 @@ async function load() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    const [report, treatmentReport, closings] = await Promise.all([
+    // อ่านข้อมูลรายงาน ปิดยอด และงวดจ่ายของพนักงานในเดือน/สาขาเดียวกัน
+    if (!selectedBranchCode.value) throw new Error("กรุณาเลือกสาขาก่อนดูรายละเอียดค่าตอบแทน");
+    const [report, treatmentReport, closings, payments] = await Promise.all([
       commissionApi.report(from.value, to.value),
       commissionApi.treatmentReport(from.value, to.value),
-      commissionApi.closings(month.value),
+      commissionApi.closings(month.value, selectedBranchCode.value),
+      commissionApi.payments(month.value, selectedBranchCode.value),
     ]);
-    const person = report.find((item) => item.staffId === staffId.value);
+    const person = report.find(
+      (item) => item.staffId === staffId.value && item.branchCode === selectedBranchCode.value,
+    );
     if (!person) {
       errorMessage.value = "ไม่พบข้อมูลค่าตอบแทนของบุคลากรรายนี้";
       return;
@@ -106,11 +114,15 @@ async function load() {
     treatments.value = treatmentReport.filter(
       (item) =>
         item.treatingStaffId === staffId.value &&
+        item.branchCode === selectedBranchCode.value &&
         item.ownerStaffId !== item.treatingStaffId,
     );
     const closing = closings.find((item) => item.employeeId === staffId.value);
+    const payment = payments.find((item) => item.staffId === staffId.value);
+    // สถานะ PAID ถือว่าจ่ายครบ ส่วนยอดที่ API ไม่ส่งมาจะไม่แทนด้วยศูนย์
     closingId.value = closing?.id ?? null;
-    approved.value = closing?.status === "CLOSED";
+    finalized.value = closing?.status === "FINALIZED" || payment?.status === "PAID";
+    approved.value = closing?.status === "CLOSED" || finalized.value;
     const staff = await staffApi.get(staffId.value).catch(() => null);
     employeeCode.value = staff?.employeeCode ?? String(staffId.value);
     tiers.value = [];
@@ -118,14 +130,14 @@ async function load() {
     try {
       const schemes = (await commissionApi.schemes()) as Array<{
         id: number;
-        version: string;
+        version: number;
         active: boolean;
         effectiveFrom: string;
         effectiveTo: string | null;
       }>;
       const scheme = schemes.find((s) =>
         closing
-          ? s.version === closing.version
+          ? String(s.version) === String(closing.version)
           : s.active &&
             s.effectiveFrom <= to.value &&
             (!s.effectiveTo || s.effectiveTo > to.value),
@@ -146,33 +158,23 @@ async function load() {
     loading.value = false;
   }
 }
-function openConfirmation() {
-  validationMessage.value = "";
-  confirmOpen.value = true;
-}
-async function confirm() {
-  if (closingId.value === null) {
-    validationMessage.value = "ยังไม่มีรอบคอมมิชชันให้อนุมัติ";
-    return;
-  }
+async function reopen() {
+  const reason = reopenReason.value.trim();
+  if (closingId.value === null || finalized.value || !reason || reason.length > 255 || saving.value) return;
   saving.value = true;
+  validationMessage.value = "";
   try {
-    await commissionApi.closeClosing(closingId.value);
-    approved.value = true;
-    confirmOpen.value = false;
-    await router.push({
-      path: "/staff/commission",
-      query: overviewQuery.value,
-    });
+    await commissionApi.reopenClosing(closingId.value, reason);
+    reopenReason.value = "";
+    await load();
   } catch (error) {
-    validationMessage.value =
-      error instanceof Error ? error.message : "อนุมัติยอดไม่สำเร็จ";
+    validationMessage.value = error instanceof Error ? error.message : "เปิดรอบรายบุคคลไม่สำเร็จ";
   } finally {
     saving.value = false;
   }
 }
 onMounted(load);
-watch([staffId, month], load);
+watch([staffId, month, selectedBranchCode], load);
 </script>
 <template>
   <div class="commission-manager-page">
@@ -291,52 +293,27 @@ watch([staffId, month], load);
           </article>
         </section>
         <footer v-if="!approved" class="detail-actions">
-          <button
+          <p>การปิดคอมมิชชันทำเป็นรอบระดับสาขาตามระบบหลัก</p>
+          <RouterLink
             class="commission-primary"
-            :disabled="closingId === null"
-            @click="openConfirmation"
+            :to="{ path: '/staff/commission/closing', query: { month: month } }"
           >
-            อนุมัติยอด
-          </button>
+            ไปตรวจและปิดรอบสาขา
+          </RouterLink>
+          <p v-if="validationMessage" class="action-error" role="alert">{{ validationMessage }}</p>
         </footer>
-        <p v-else class="approved-note">✓ อนุมัติยอดเรียบร้อยแล้ว</p>
+        <section v-else class="approved-note">
+          <p>✓ ปิดยอดรายบุคคลแล้ว</p>
+          <template v-if="finalized">
+            <p>งวดนี้จ่ายแล้วและปิดแก้ไขถาวร หากต้องแก้ยอดให้สร้างรายการปรับยอดในงวดถัดไป</p>
+          </template>
+          <template v-else>
+            <label>เหตุผลที่เปิดยอดอีกครั้ง<textarea v-model="reopenReason" maxlength="255" rows="2" /></label>
+            <button class="commission-secondary" :disabled="saving || !reopenReason.trim()" @click="reopen">เปิดยอดรายบุคคลอีกครั้ง</button>
+          </template>
+        </section>
       </template>
     </main>
-    <Teleport to="body"
-      ><div
-        v-if="confirmOpen"
-        class="action-backdrop"
-        @click.self="confirmOpen = false"
-      >
-        <section class="action-modal" role="dialog" aria-modal="true" aria-labelledby="approval-title" aria-describedby="approval-description">
-          <h2 id="approval-title">ยืนยันการอนุมัติยอด</h2>
-          <p id="approval-description">ตรวจสอบยอดค่าตอบแทนก่อนยืนยัน</p>
-          <dl class="approval-summary">
-            <div><dt>ผู้รับค่าตอบแทน</dt><dd>{{ name }}</dd></div>
-            <div><dt>รอบคำนวณ</dt><dd>{{ monthLabel }}</dd></div>
-            <div class="approval-total"><dt>ยอดสุทธิ</dt><dd>{{ money(netTotal) }}</dd></div>
-          </dl>
-          <p v-if="validationMessage" class="action-error">
-            {{ validationMessage }}
-          </p>
-          <div>
-            <button
-              class="commission-secondary"
-              :disabled="saving"
-              @click="confirmOpen = false"
-            >
-              ยกเลิก</button
-            ><button
-              class="commission-primary"
-              :disabled="saving"
-              @click="confirm"
-            >
-              {{ saving ? "กำลังบันทึก..." : "ยืนยัน" }}
-            </button>
-          </div>
-        </section>
-      </div></Teleport
-    >
   </div>
 </template>
 <style scoped>

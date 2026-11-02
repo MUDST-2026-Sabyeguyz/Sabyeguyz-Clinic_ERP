@@ -76,10 +76,12 @@ describe('manager commission overview', () => {
     expect(view.findAll('.commission-metrics article')[2]!.text()).toContain('฿180')
     setSelectedManagerBranch({ code: '02', name: 'แบริ่ง' })
     await nextTick()
+    await flushPromises()
     expect(view.get('tbody').text()).toContain('Bearing therapist')
     expect(view.get('tbody').text()).not.toContain('Rama therapist')
     expect(view.findAll('.commission-metrics article')[2]!.text()).toContain('฿135')
-    expect(mocks.payments).toHaveBeenCalledWith('2026-07')
+    expect(mocks.payments).toHaveBeenCalledWith('2026-07', '01')
+    expect(mocks.payments).toHaveBeenCalledWith('2026-07', '02')
     view.unmount()
   })
   it('does not replace a missing payroll fee snapshot with zero', async () => {
