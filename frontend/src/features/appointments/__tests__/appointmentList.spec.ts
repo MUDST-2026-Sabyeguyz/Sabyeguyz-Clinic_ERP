@@ -3,7 +3,7 @@ import { readAppointmentRange } from '../appointmentList'
 import type { Appointment } from '@/api/client'
 
 const search = vi.hoisted(() => vi.fn())
-vi.mock('@/api/client', () => ({ appointmentApi: { search } }))
+vi.mock('@/api/client', () => ({ appointmentApi: { search }, getToken: () => 'test-token' }))
 const filters = { branchCode: '01', startDate: '2026-10-21', endDate: '2026-10-21' }
 const appointment = (id: number) => ({ id }) as Appointment
 
