@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// แสดงค่าตอบแทนของ Therapist ตามเดือนที่เลือก
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
@@ -96,7 +97,7 @@ function moveMonth(offset: number) {
       :payment="payment"
       :lines="lines"
       :month="month"
-      :pending-sessions="data?.pendingSessions ?? 0"
+      :pending-sessions="data?.pendingSessions ?? null"
     />
     <section v-else-if="activeTab === 'commission'" class="therapist-table-card">
       <h2>ค่าคอมมิชชันของ{{ monthLabel(month) }}</h2>

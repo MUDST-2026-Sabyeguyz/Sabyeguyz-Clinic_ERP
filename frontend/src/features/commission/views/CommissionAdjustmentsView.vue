@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// รายการปรับยอดคอมมิชชันสำหรับ Manager
 import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
@@ -11,15 +12,20 @@ const errorMessage = ref('')
 const search = ref('')
 const month = ref('')
 const status = ref('')
+const statusGroups: Record<string, string[]> = {
+  pending: ['Pending', 'Approved', 'ExternalReview'],
+  completed: ['PartiallyApplied', 'Applied'],
+  cancelled: ['Cancelled'],
+}
 const page = ref(1)
 const pageSize = 10
+const statusGroup = (value: string) =>
+  Object.keys(statusGroups).find((group) => statusGroups[group]?.includes(value)) ?? 'other'
 const statusNames: Record<string, string> = {
-  Pending: 'รอดำเนินการ',
-  Approved: 'อนุมัติ',
-  PartiallyApplied: 'ดำเนินการบางส่วน',
-  Applied: 'ดำเนินการ',
-  ExternalReview: 'รอตรวจสอบ',
-  Cancelled: 'ยกเลิก',
+  pending: 'รอดำเนินการ',
+  completed: 'ดำเนินการแล้ว',
+  cancelled: 'ยกเลิก',
+  other: 'สถานะอื่น',
 }
 
 const monthLabel = (value: string) => {
@@ -41,32 +47,64 @@ const reference = (row: ManagerAdjustment) => {
   if (row.singleVisitFeeId) return `FEE-${String(row.singleVisitFeeId).padStart(5, '0')}`
   return `ADJ-${String(row.id).padStart(5, '0')}`
 }
-const statusLabel = (value: string) => statusNames[value] ?? 'สถานะอื่น'
-const clearFilters = () => { search.value = ''; month.value = ''; status.value = '' }
+const statusLabel = (value: string) => statusNames[statusGroup(value)] ?? 'สถานะอื่น'
+const stepLabel: Record<string, string> = {
+  Pending: 'รออนุมัติรายการ',
+  Approved: 'อนุมัติรายการแล้ว',
+  PartiallyApplied: 'นำยอดไปใช้บางส่วน',
+  Applied: 'นำยอดไปใช้ครบ',
+  ExternalReview: 'ยอดของพนักงานลาออก',
+  Cancelled: 'ยกเลิกรายการแล้ว',
+}
+const reservedAmount = (row: ManagerAdjustment) =>
+  row.applications
+    .filter((item) => item.status === 'Draft')
+    .reduce((sum, item) => sum + Math.abs(item.amount), 0)
+const statusPriority: Record<string, number> = {
+  Pending: 0,
+  ExternalReview: 1,
+  Approved: 2,
+  PartiallyApplied: 3,
+  Applied: 4,
+  Cancelled: 5,
+}
+const reasonSummary = (value: string) => value?.trim() || 'ไม่ระบุเหตุผล'
+const clearFilters = () => {
+  search.value = ''
+  month.value = ''
+  status.value = ''
+}
 const hasFilters = computed(() => Boolean(search.value || month.value || status.value))
 const visible = computed(() => {
   const keyword = search.value.trim().toLowerCase()
-  return adjustments.value.filter(
-    (row) =>
-      (!keyword ||
-        row.staffName.toLowerCase().includes(keyword) ||
-        reference(row).toLowerCase().includes(keyword)) &&
-      (!month.value || row.originalMonth === month.value) &&
-      (!status.value || row.status === status.value),
-  ).sort((a, b) => Number(a.status === 'Applied') - Number(b.status === 'Applied') || b.id - a.id)
+  return adjustments.value
+    .filter(
+      (row) =>
+        (!keyword ||
+          row.staffName.toLowerCase().includes(keyword) ||
+          reference(row).toLowerCase().includes(keyword)) &&
+        (!month.value || row.originalMonth === month.value) &&
+        (!status.value || statusGroups[status.value]?.includes(row.status)),
+    )
+    .sort(
+      (a, b) => (statusPriority[a.status] ?? 3) - (statusPriority[b.status] ?? 3) || b.id - a.id,
+    )
 })
 const monthOptions = computed(() =>
   [...new Set(adjustments.value.map((row) => row.originalMonth))].sort().reverse(),
 )
-const statusOptions = computed(() =>
-  [...new Set(adjustments.value.map((row) => row.status))].map((value) => ({
-    value,
-    label: statusLabel(value),
-  })),
-)
+const statusOptions = [
+  { value: 'pending', label: 'รอดำเนินการ' },
+  { value: 'completed', label: 'ดำเนินการแล้ว' },
+  { value: 'cancelled', label: 'ยกเลิก' },
+]
 const totalPages = computed(() => Math.max(1, Math.ceil(visible.value.length / pageSize)))
-const pageRows = computed(() => visible.value.slice((page.value - 1) * pageSize, page.value * pageSize))
-watch([search, month, status], () => { page.value = 1 })
+const pageRows = computed(() =>
+  visible.value.slice((page.value - 1) * pageSize, page.value * pageSize),
+)
+watch([search, month, status], () => {
+  page.value = 1
+})
 
 async function load() {
   loading.value = true
@@ -115,12 +153,24 @@ onMounted(load)
             default-label="ทุกสถานะ"
             :options="statusOptions"
           />
-          <button v-if="hasFilters" type="button" class="clear-filters" @click="clearFilters">ล้างตัวกรอง</button>
+          <button v-if="hasFilters" type="button" class="clear-filters" @click="clearFilters">
+            ล้างตัวกรอง
+          </button>
         </header>
         <div class="directory-results">
           <div>
             <h2>รายการปรับปรุง</h2>
-            <p>รอดำเนินการ {{ visible.filter((row) => row.status === 'Pending').length }} รายการ · แสดงรายการที่ยังไม่เสร็จก่อน</p>
+            <p>
+              ต้องตรวจสอบหรือดำเนินการ
+              {{
+                visible.filter((row) =>
+                  ['Pending', 'ExternalReview', 'Approved', 'PartiallyApplied'].includes(
+                    row.status,
+                  ),
+                ).length
+              }}
+              รายการ · เรียงงานที่ต้องทำไว้ก่อน
+            </p>
           </div>
           <span v-if="!loading && !errorMessage">ทั้งหมด {{ visible.length }} รายการ</span>
         </div>
@@ -132,9 +182,8 @@ onMounted(load)
               <thead>
                 <tr>
                   <th>พนักงาน</th>
-                  <th>รายการอ้างอิง</th>
+                  <th>รายการปรับปรุง</th>
                   <th>รอบที่อ้างอิง</th>
-                  <th>สถานะรอบ</th>
                   <th>ยอดปรับปรุง</th>
                   <th>สถานะรายการ</th>
                   <th><span class="sr-only">การทำงาน</span></th>
@@ -143,12 +192,27 @@ onMounted(load)
               <tbody>
                 <tr v-for="row in pageRows" :key="row.id">
                   <td>{{ row.staffName }}</td>
-                  <td>{{ reference(row) }}</td>
-                  <td>{{ monthLabel(row.originalMonth) }}</td>
-                  <td>ปิดรอบแล้ว</td>
-                  <td :class="{ deduction: row.amount < 0 }">{{ amount(row.amount) }}</td>
-                  <td><span class="adjustment-status" :class="`status-${row.status}`">{{ statusLabel(row.status) }}</span></td>
-                  <td>
+                  <td data-label="รายการปรับปรุง">
+                    <strong>{{ reference(row) }}</strong>
+                    <small class="row-reason">{{ reasonSummary(row.reason) }}</small>
+                  </td>
+                  <td data-label="รอบที่อ้างอิง">{{ monthLabel(row.originalMonth) }}</td>
+                  <td data-label="ยอดปรับปรุง" :class="{ deduction: row.amount < 0 }">
+                    {{ amount(row.amount) }}
+                    <small v-if="reservedAmount(row) > 0" class="amount-context"
+                      >กันไว้ {{ amount(Math.sign(row.amount) * reservedAmount(row)) }}</small
+                    >
+                    <small v-if="row.status === 'Cancelled'" class="amount-context"
+                      >ยอดเดิมก่อนยกเลิก</small
+                    >
+                  </td>
+                  <td data-label="สถานะรายการ">
+                    <span class="adjustment-status" :class="`status-${statusGroup(row.status)}`">{{
+                      statusLabel(row.status)
+                    }}</span>
+                    <small class="row-step">{{ stepLabel[row.status] ?? 'ไม่ทราบขั้นตอน' }}</small>
+                  </td>
+                  <td data-label="รายละเอียด">
                     <RouterLink
                       class="detail-button"
                       :to="{ name: 'commission-adjustment-detail', params: { id: row.id } }"
@@ -157,15 +221,26 @@ onMounted(load)
                   </td>
                 </tr>
                 <tr v-if="visible.length === 0">
-                  <td colspan="7" class="empty-row">
+                  <td colspan="6" class="empty-row">
                     ไม่พบรายการตามเงื่อนไขที่เลือก
-                    <button v-if="hasFilters" type="button" class="empty-clear" @click="clearFilters">ล้างตัวกรอง</button>
+                    <button
+                      v-if="hasFilters"
+                      type="button"
+                      class="empty-clear"
+                      @click="clearFilters"
+                    >
+                      ล้างตัวกรอง
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <nav v-if="visible.length > pageSize" class="adjustment-pagination" aria-label="หน้ารายการปรับปรุง">
+          <nav
+            v-if="visible.length > pageSize"
+            class="adjustment-pagination"
+            aria-label="หน้ารายการปรับปรุง"
+          >
             <button type="button" :disabled="page === 1" @click="page--">← ก่อนหน้า</button>
             <span>หน้า {{ page }} จาก {{ totalPages }}</span>
             <button type="button" :disabled="page === totalPages" @click="page++">ถัดไป →</button>
@@ -228,21 +303,85 @@ onMounted(load)
   padding: 20px 24px;
   border-bottom: 1px solid #e7ede9;
 }
-.clear-filters, .empty-clear { border: 0; background: transparent; color: #145c59; font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-.clear-filters { grid-column: 1 / -1; justify-self: end; }
-.empty-clear { display: block; margin: 12px auto 0; }
-.adjustment-status { display: inline-block; padding: 5px 10px; border-radius: 999px; background: #edf0f1; color: #40545b; font-weight: 700; white-space: nowrap; }
-.status-Pending { background: #fff0c6; color: #74510a; }
-.status-Approved { background: #dff2e4; color: #21613b; }
-.status-PartiallyApplied { background: #e9e5fa; color: #59448f; }
-.status-Applied { background: #def1f0; color: #12625e; }
-.status-ExternalReview { background: #e3edfa; color: #315f91; }
-.status-Cancelled { background: #f9e4e8; color: #923f50; }
-.adjustment-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px; color: #50645a; }
-.adjustment-pagination button { min-height: 40px; padding: 0 14px; border: 1px solid #b7cecc; border-radius: 8px; background: #fff; color: #145c59; font: inherit; font-weight: 700; cursor: pointer; }
-.adjustment-pagination button:disabled { opacity: .45; cursor: not-allowed; }
-.adjustment-pagination button:focus-visible { outline: 2px solid #145c59; outline-offset: 3px; }
-.clear-filters:focus-visible, .empty-clear:focus-visible, .detail-button:focus-visible { outline: 2px solid #145c59; outline-offset: 3px; }
+.clear-filters,
+.empty-clear {
+  border: 0;
+  background: transparent;
+  color: #145c59;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.clear-filters {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+.empty-clear {
+  display: block;
+  margin: 12px auto 0;
+}
+.adjustment-status {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #edf0f1;
+  color: #40545b;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.row-step {
+  display: block;
+  margin-top: 6px;
+  color: #536a61;
+  font-size: 0.78rem;
+}
+.status-pending {
+  background: #fff0c6;
+  color: #74510a;
+}
+.status-completed {
+  background: #def1f0;
+  color: #12625e;
+}
+.status-cancelled {
+  background: #f9e4e8;
+  color: #923f50;
+}
+.adjustment-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 24px;
+  color: #50645a;
+}
+.adjustment-pagination button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #b7cecc;
+  border-radius: 8px;
+  background: #fff;
+  color: #145c59;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.adjustment-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.adjustment-pagination button:focus-visible {
+  outline: 2px solid #145c59;
+  outline-offset: 3px;
+}
+.clear-filters:focus-visible,
+.empty-clear:focus-visible,
+.detail-button:focus-visible {
+  outline: 2px solid #145c59;
+  outline-offset: 3px;
+}
 .adjustment-filters input {
   width: 100%;
   min-height: 46px;
@@ -322,6 +461,18 @@ tbody tr:hover td {
   color: #bd514c;
   font-weight: 700;
 }
+.row-reason,
+.amount-context {
+  display: block;
+  margin-top: 4px;
+  color: #667a72;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.amount-context {
+  color: #923f50;
+}
 .detail-button {
   display: inline-flex;
   min-height: 38px;
@@ -399,14 +550,70 @@ tbody tr:hover td {
   .adjustment-directory .directory-results {
     padding: 16px;
   }
-  .adjustment-table-wrap table :is(th, td):last-child {
-    position: sticky;
-    right: 0;
-    background: #fff;
-    border-left: 1px solid #e7ede9;
+  .adjustment-table-wrap {
+    overflow: visible;
+    padding: 0 12px;
   }
-  .adjustment-table-wrap table :is(th, td):first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
-  .adjustment-table-wrap table th:first-child { background: #f2f7f4; }
+  table {
+    display: block;
+    min-width: 0;
+  }
+  thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  tbody {
+    display: grid;
+    gap: 10px;
+  }
+  tbody tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
+    padding: 12px;
+    border: 1px solid #dce7e2;
+    border-radius: 10px;
+    background: #fff;
+  }
+  tbody td,
+  tbody tr:last-child td {
+    display: block;
+    min-width: 0;
+    padding: 7px 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  tbody td::before {
+    display: block;
+    margin-bottom: 4px;
+    color: #667a72;
+    content: attr(data-label);
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  tbody td:first-child {
+    grid-column: 1 / -1;
+    position: static;
+  }
+  tbody td:last-child {
+    grid-column: 1 / -1;
+    position: static;
+    border: 0;
+  }
+  tbody td:last-child::before {
+    content: none;
+  }
+  .detail-button {
+    width: 100%;
+  }
+  .empty-row {
+    grid-column: 1 / -1;
+  }
   .adjustment-title .commission-primary {
     width: 100%;
   }
