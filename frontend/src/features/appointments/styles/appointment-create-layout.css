@@ -1,4 +1,25 @@
 /* Create uses the same desktop rhythm for both patient types; edit keeps its modal layout. */
+/* Both role views share the explicit start/end controls. */
+body
+  .appointment-page
+  .appointment-create-card
+  :is(div.appointment-time-field, div.reschedule-time-field) {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+body
+  .appointment-page
+  .appointment-create-card
+  :is(div.appointment-time-field, div.reschedule-time-field)
+  > label {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
 /* Native radios must not inherit the text-input height/border from the older form theme. */
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page

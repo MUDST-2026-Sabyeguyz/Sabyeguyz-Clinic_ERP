@@ -54,6 +54,12 @@ body .appointment-page .appointment-list-feedback {
   line-height: 1.5;
   font-size: 16px;
 }
+body .appointment-page .appointment-list-notice {
+  margin: 0;
+  padding: 12px 24px;
+  color: #145c59;
+  text-align: right;
+}
 body .appointment-page .appointment-table-scroll:not(:has(table)) {
   min-height: 0;
 }

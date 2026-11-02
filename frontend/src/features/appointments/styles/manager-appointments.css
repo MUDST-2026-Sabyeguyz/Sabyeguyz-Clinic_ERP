@@ -322,10 +322,6 @@
   opacity: 0.72;
   white-space: nowrap;
 }
-.status-notice-cell {
-  min-width: 125px;
-  text-align: right;
-}
 .status-modal-backdrop {
   position: fixed;
   z-index: 20;

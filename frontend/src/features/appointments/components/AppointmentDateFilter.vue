@@ -34,7 +34,9 @@ const years = computed(() =>
   ].sort((a, b) => b - a),
 )
 const todaySelected = computed(() => props.from === clinicToday() && props.to === clinicToday())
-const customSelected = computed(() => Boolean(props.from || props.to) && !todaySelected.value)
+const customSelected = computed(
+  () => Boolean(props.from || props.to) && !todaySelected.value,
+)
 function show() {
   draftFrom.value = props.from
   draftTo.value = props.to
@@ -92,32 +94,44 @@ function apply() {
   emit('apply', draftFrom.value, draftTo.value)
   open.value = false
 }
+function applyToday() {
+  const today = clinicToday()
+  emit('apply', today, today)
+}
+function resetDateRange() {
+  emit('apply', '', '')
+}
 </script>
 <template>
-  <div class="appointment-date-toolbar" role="group" aria-label="เลือกช่วงวันที่นัดหมาย">
+  <div class="appointment-date-toolbar" role="group" aria-label="ตัวกรองช่วงเวลานัดหมาย">
     <button
       type="button"
+      class="appointment-date-today"
       :aria-pressed="todaySelected"
-      @click="emit('apply', clinicToday(), clinicToday())"
+      @click="applyToday"
     >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3.5" y="5" width="17" height="16" rx="2" stroke="currentColor" stroke-width="1.8" />
+        <path d="M7.5 3v4M16.5 3v4M3.5 9.5h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      </svg>
       วันนี้
     </button>
     <button
       type="button"
+      class="appointment-date-range-button"
       :aria-pressed="customSelected"
       :aria-expanded="open"
       aria-haspopup="dialog"
       @click="show"
     >
-      กำหนดเอง
+      กำหนดช่วงเวลา
     </button>
     <button
       type="button"
       class="appointment-date-clear"
-      aria-label="ล้างช่วงวันที่เพื่อดูทุกนัดหมาย"
-      title="ล้างช่วงวันที่"
-      :disabled="!from && !to"
-      @click="emit('apply', '', '')"
+      aria-label="แสดงนัดหมายทั้งหมด"
+      title="แสดงนัดหมายทั้งหมด"
+      @click="resetDateRange"
     >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
@@ -219,6 +233,25 @@ select {
   font-size: 16px;
   cursor: pointer;
   box-sizing: border-box;
+}
+.appointment-date-range-button,
+.appointment-date-today {
+  border-color: #1e807c;
+  font-weight: 700;
+}
+.appointment-date-range-button {
+  min-width: 132px;
+}
+.appointment-date-today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 116px;
+}
+.appointment-date-today svg {
+  width: 18px;
+  height: 18px;
 }
 button:hover:not(:disabled) {
   background: #edf5f1;

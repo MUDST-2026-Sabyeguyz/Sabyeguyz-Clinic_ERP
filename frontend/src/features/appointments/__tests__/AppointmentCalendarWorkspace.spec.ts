@@ -7,6 +7,7 @@ const mock = vi.hoisted(() => ({
   search: vi.fn(),
   availability: vi.fn(),
   branches: vi.fn(),
+  syncNow: vi.fn(),
   therapists: vi.fn(),
   push: vi.fn(),
 }))
@@ -17,6 +18,8 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api/client', () => ({
   appointmentApi: { search: mock.search, availability: mock.availability },
   branchApi: { list: mock.branches },
+  calendarApi: { syncNow: mock.syncNow },
+  ApiError: class ApiError extends Error {},
 }))
 vi.mock('../therapists', () => ({ loadAppointmentTherapists: mock.therapists }))
 const fixture = (id: number, branchCode = '01', status = 'CONFIRMED') => ({
@@ -53,6 +56,7 @@ beforeEach(() => {
     { code: '01', name: 'พระราม 9', bookingOpenTime: '09:00', bookingCloseTime: '10:00' },
     { code: '02', name: 'แบริ่ง' },
   ])
+  mock.syncNow.mockResolvedValue({ pushed: 0, removed: 0, failed: 0, movedFromGoogle: 0, cancelledFromGoogle: 0, revertedInGoogle: 0 })
   mock.therapists.mockResolvedValue([
     { id: 1, branchCode: '01', fullName: 'Therapist A' },
     { id: 2, branchCode: '02', fullName: 'Therapist B' },
@@ -114,7 +118,21 @@ describe('shared appointment calendar', () => {
     expect(view.get('dialog').text()).toContain('Patient 1')
     expect(view.get('dialog').text()).not.toContain('จัดการนัดหมาย')
     expect(view.get('dialog').text()).not.toContain('ยกเลิกนัด')
+    expect(view.find('.calendar-sync').exists()).toBe(false)
     view.unmount()
+  })
+  it('shows the sync action to a Manager but not a therapist', async () => {
+    const managerView = render(true)
+    await flushPromises()
+    expect(managerView.find('.calendar-sync').exists()).toBe(true)
+    managerView.unmount()
+
+    localStorage.setItem('authUser', JSON.stringify({ role: 'THERAPIST', branchCode: '01' }))
+    const therapistView = render()
+    await flushPromises()
+    expect(therapistView.find('.calendar-sync').exists()).toBe(false)
+    expect(mock.syncNow).not.toHaveBeenCalled()
+    therapistView.unmount()
   })
   it('fetches every appointment page and reloads with the Header branch', async () => {
     mock.search.mockImplementation(({ page }: { page: number }) =>
@@ -135,7 +153,7 @@ describe('shared appointment calendar', () => {
     const view = render()
     await flushPromises()
     expect(mock.search).not.toHaveBeenCalled()
-    expect(view.text()).toContain('ไม่พบสาขาที่มีสิทธิ์ใช้งาน')
+    expect(view.text()).toContain('ไม่มีสิทธิ์เข้าถึง กรุณาติดต่อ Manager')
     view.unmount()
   })
 })

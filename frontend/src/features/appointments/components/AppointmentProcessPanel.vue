@@ -1,213 +1,76 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import {
-  appointmentApi,
-  paymentMethodApi,
-  type AppointmentProgress,
-  type PaymentMethod,
-} from '@/api/client'
-const props = defineProps<{ progress: AppointmentProgress }>()
-const emit = defineEmits<{ refresh: [] }>()
-const collecting = ref(false)
-const confirming = ref(false)
-const method = ref('')
-const methods = ref<PaymentMethod[]>([])
-const error = ref('')
-const reviewReason = ref('')
-const reviewing = ref(false)
-const candidates = ref<{
-  receipts: Array<{ id: number; label: string }>
-  usages: Array<{ id: number; label: string }>
-} | null>(null)
-const previousReceipt = ref('')
-const previousUsage = ref('')
-async function openReview() {
-  error.value = ''
-  try {
-    candidates.value = await appointmentApi.documentCandidates(props.progress.appointmentId)
-    reviewing.value = true
-  } catch {
-    error.value = 'โหลดรายการเดิมไม่สำเร็จ กรุณาลองใหม่'
+import { computed } from 'vue'
+import type { AppointmentProgress } from '@/api/client'
+import { progressStateLabel } from '../appointmentRequests'
+const props = defineProps<{ progress: AppointmentProgress; fromServices?: boolean; blockReason?: string; recoveryRequired?: boolean }>()
+const emit = defineEmits<{ refresh: []; backToPatients: [] }>()
+const receiptDocuments = computed(() => {
+  const byReceiptId = new Map<number, AppointmentProgress['sales']>()
+  for (const sale of props.progress.sales) {
+    const group = byReceiptId.get(sale.receiptId) ?? []
+    group.push(sale)
+    byReceiptId.set(sale.receiptId, group)
   }
-}
-async function finishReview() {
-  if (collecting.value || !reviewReason.value.trim()) return
-  collecting.value = true
-  error.value = ''
-  try {
-    if (previousReceipt.value || previousUsage.value) {
-      await appointmentApi.linkDocuments(
-        props.progress.appointmentId,
-        Number(previousReceipt.value) || null,
-        Number(previousUsage.value) || null,
-        reviewReason.value.trim(),
-      )
-    } else {
-      await appointmentApi.verifyNoDocuments(
-        props.progress.appointmentId,
-        reviewReason.value.trim(),
-      )
-    }
-    reviewing.value = false
-    emit('refresh')
-  } catch (problem) {
-    error.value = problem instanceof Error ? problem.message : 'บันทึกผลการตรวจสอบไม่สำเร็จ'
-  } finally {
-    collecting.value = false
-  }
-}
-async function reviewPayment() {
-  error.value = ''
-  try {
-    methods.value = (await paymentMethodApi.list()).filter((item) => item.active !== false)
-    method.value = methods.value[0]?.code ?? ''
-    confirming.value = true
-  } catch {
-    error.value = 'โหลดช่องทางชำระเงินไม่สำเร็จ กรุณาลองใหม่'
-  }
-}
-async function settle() {
-  if (collecting.value || !method.value) return
-  collecting.value = true
-  error.value = ''
-  try {
-    // Full outstanding balance of the same bill; backend rechecks under a lock before collecting.
-    await appointmentApi.settle(
-      props.progress.appointmentId,
-      props.progress.outstanding,
-      method.value,
-    )
-    confirming.value = false
-    emit('refresh')
-  } catch (problem) {
-    error.value =
-      problem instanceof Error ? problem.message : 'รับชำระไม่สำเร็จ กรุณาตรวจสอบรายการก่อนลองใหม่'
-  } finally {
-    collecting.value = false
-  }
-}
+  return [...byReceiptId.values()].map((sales) => ({
+    ...sales[0]!,
+    active: sales.every((sale) => sale.active),
+    saleCount: sales.length,
+  }))
+})
+const appointmentStatusLabel = (status: AppointmentProgress['appointmentStatus']) => ({
+  UNCONFIRMED: 'ยังไม่ยืนยัน', CONFIRMED: 'ยืนยัน', CANCELLED: 'ยกเลิก',
+})[status]
 </script>
 <template>
-  <section class="appointment-process-panel" aria-label="ความคืบหน้านัดหมาย">
-    <h1>รายการของนัดหมายนี้</h1>
-    <p>{{ progress.registered ? 'ลงทะเบียนแล้ว' : 'ยังไม่ได้ลงทะเบียนผู้ป่วย' }}</p>
-    <template v-if="progress.paymentStatus === 'REVIEW_REQUIRED'">
-      <p>นัดหมายเก่า: ให้ผู้จัดการตรวจสอบใบรายการและการใช้สิทธิ์เดิมก่อนทำรายการต่อ</p>
-      <button v-if="progress.canReview && !reviewing" type="button" @click="openReview">
-        ตรวจสอบเอกสารเดิม
-      </button>
-      <form v-if="reviewing && candidates" @submit.prevent="finishReview">
-        <label
-          >ใบรายการเดิม
-          <select v-model="previousReceipt" :disabled="collecting">
-            <option value="">ไม่พบใบรายการที่ตรงกับนัดนี้</option>
-            <option v-for="item in candidates.receipts" :key="item.id" :value="String(item.id)">
-              {{ item.label }}
-            </option>
-          </select></label
-        >
-        <label
-          >รายการใช้สิทธิ์เดิม
-          <select v-model="previousUsage" :disabled="collecting">
-            <option value="">ไม่พบการใช้สิทธิ์ที่ตรงกับนัดนี้</option>
-            <option v-for="item in candidates.usages" :key="item.id" :value="String(item.id)">
-              {{ item.label }}
-            </option>
-          </select></label
-        >
-        <label
-          >ผลการตรวจสอบ
-          <textarea v-model="reviewReason" required :disabled="collecting" rows="3"></textarea>
-        </label>
-        <button type="submit" :disabled="collecting || !reviewReason.trim()">
-          {{
-            collecting
-              ? 'กำลังบันทึก…'
-              : previousReceipt || previousUsage
-                ? 'ยืนยันเชื่อมเอกสารที่เลือก'
-                : 'ยืนยันตรวจแล้วว่าไม่มีรายการเดิม'
-          }}
-        </button>
-        <button type="button" :disabled="collecting" @click="reviewing = false">ยกเลิก</button>
-      </form>
-    </template>
-    <p v-if="progress.paymentStatus === 'PAID'">ชำระครบแล้ว · {{ progress.receiptNo }}</p>
-    <p v-else-if="progress.paymentStatus === 'PARTIAL' || progress.paymentStatus === 'UNPAID'">
-      {{ progress.receiptNo }} · คงเหลือ
-      {{ progress.outstanding.toLocaleString('th-TH', { minimumFractionDigits: 2 }) }} บาท
-    </p>
-    <p v-if="progress.courseStatus === 'USED'">ใช้สิทธิ์คอร์สแล้ว</p>
-    <p v-if="progress.paymentStatus === 'REVERSED' || progress.courseStatus === 'REVERSED'">
-      มีรายการย้อนคืน กรุณาตรวจสอบประวัติ
-    </p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <div v-if="confirming" class="process-payment-review">
-      <label
-        >ช่องทางชำระเงิน
-        <select v-model="method" :disabled="collecting">
-          <option v-for="item in methods" :key="item.code" :value="item.code">
-            {{ item.name }}
-          </option>
-        </select></label
-      >
-      <button type="button" :disabled="collecting || !method" @click="settle">
-        {{ collecting ? 'กำลังบันทึก…' : 'ยืนยันรับชำระยอดคงเหลือ' }}
-      </button>
-      <button type="button" :disabled="collecting" @click="confirming = false">ยกเลิก</button>
-    </div>
-    <div class="process-actions">
-      <button
-        v-if="
-          progress.canManage &&
-          !confirming &&
-          (progress.paymentStatus === 'PARTIAL' || progress.paymentStatus === 'UNPAID')
-        "
-        type="button"
-        @click="reviewPayment"
-      >
-        ชำระยอดคงเหลือ
-      </button>
+  <div class="appointment-process-wrapper">
+    <button v-if="fromServices" type="button" class="back-to-patients" @click="emit('backToPatients')">← กลับไปเลือกผู้ป่วย</button>
+    <section class="appointment-process-panel" aria-label="ผลบริการของนัดหมาย">
+      <h1>รายการของนัดหมายนี้</h1>
+      <p>{{ progressStateLabel(progress.state) }}</p>
+      <p>สถานะนัดหมาย: {{ appointmentStatusLabel(progress.appointmentStatus) }} · {{ progress.patientType }}</p>
+      <p v-if="progress.reason" role="status">{{ progress.reason }}</p>
+      <p v-if="blockReason">{{ blockReason }}</p>
+      <p v-if="recoveryRequired" role="alert">คำขอก่อนหน้าอาจบันทึกสำเร็จแล้ว กรุณาตรวจสอบเอกสารก่อนทำรายการใหม่</p>
+      <p v-if="progress.visitId">Visit #{{ progress.visitId }}</p>
+      <p v-if="progress.servedPatientId">ผู้ป่วย #{{ progress.servedPatientId }}</p>
+      <p v-if="progress.completedAt">รับบริการเมื่อ {{ new Date(progress.completedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }) }}</p>
+      <div v-for="receipt in receiptDocuments" :key="receipt.receiptId" class="process-document">
+        <RouterLink :to="{ name: 'staff-receipt', params: { id: receipt.saleId } }">
+          {{ receipt.receiptNo || `รายการขาย #${receipt.saleId}` }}
+        </RouterLink>
+        <span>
+          สถานะใบเสร็จ {{ receipt.receiptStatus }}
+          <template v-if="receipt.saleCount > 1"> · {{ receipt.saleCount }} รายการขาย</template>
+          <template v-if="!receipt.active"> · รายการไม่ทำงาน</template>
+        </span>
+      </div>
       <RouterLink
-        v-if="progress.patientId"
-        :to="{ path: `/staff/patients/${progress.patientId}/history`, query: { tab: 'payments' } }"
-        >{{ progress.saleId ? 'ดูใบรายการเดิม' : 'ดูประวัติผู้ป่วย' }}</RouterLink
-      >
-      <RouterLink
-        v-if="progress.courseStatus !== 'NOT_STARTED'"
+        v-for="usage in progress.usages"
+        :key="usage.usageId"
         :to="{
           name: 'staff-courses',
           query: {
-            patientId: String(progress.patientId),
-            courseId: String(progress.courseId),
+            patientId: progress.servedPatientId ? String(progress.servedPatientId) : undefined,
+            courseId: String(usage.coursePurchaseId),
             action: 'history',
             appointmentId: String(progress.appointmentId),
           },
         }"
-        >ดูประวัติใช้สิทธิ์</RouterLink
       >
-      <RouterLink
-        v-if="
-          progress.canManage &&
-          progress.includesCourse &&
-          progress.paymentStatus === 'PAID' &&
-          progress.courseStatus === 'NOT_STARTED'
-        "
-        :to="{
-          name: 'staff-courses',
-          query: {
-            patientId: String(progress.patientId),
-            appointmentId: String(progress.appointmentId),
-          },
-        }"
-        >ใช้สิทธิ์คอร์ส</RouterLink
-      >
-      <RouterLink :to="{ name: 'staff-appointments' }">กลับหน้านัดหมาย</RouterLink>
-      <button type="button" @click="emit('refresh')">ตรวจสอบล่าสุด</button>
-    </div>
-  </section>
+        การใช้คอร์ส #{{ usage.coursePurchaseId }} · {{ usage.status }}
+      </RouterLink>
+      <div class="process-actions">
+        <RouterLink v-if="progress.servedPatientId" :to="{ path: '/staff/patients/' + progress.servedPatientId + '/history' }">ดูประวัติผู้ป่วย</RouterLink>
+        <button type="button" @click="emit('refresh')">ตรวจสอบล่าสุด</button>
+      </div>
+    </section>
+  </div>
 </template>
 <style scoped>
 .appointment-process-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
   max-width: 900px;
   margin: 32px auto;
   padding: 32px;
@@ -216,12 +79,52 @@ async function settle() {
   border: 1px solid #e6e1dc;
   border-radius: 12px;
 }
+.back-to-patients {
+  display: inline-block;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: #176c68;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 180ms ease;
+}
+.back-to-patients:hover {
+  text-decoration: underline;
+  transform: translateX(-4px);
+}
+.back-to-patients:focus-visible {
+  outline: 2px solid #176c68;
+  outline-offset: 3px;
+}
 h1 {
-  margin: 0 0 20px;
+  margin: 0 0 8px;
   font-size: 28px;
 }
 p {
+  margin: 0;
   line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.appointment-process-panel > a,
+.process-document > a {
+  justify-self: start;
+  max-width: 100%;
+}
+.process-document {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+.appointment-process-panel a,
+.appointment-process-panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .process-actions,
 .process-payment-review {
@@ -229,7 +132,16 @@ p {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 8px;
+}
+@media (max-width: 600px) {
+  .appointment-process-panel {
+    margin: 20px 12px;
+    padding: 20px;
+  }
+  .process-actions > * {
+    max-width: 100%;
+  }
 }
 form,
 form label {

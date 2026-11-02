@@ -322,10 +322,6 @@
   opacity: 0.72;
   white-space: nowrap;
 }
-.status-notice-cell {
-  min-width: 125px;
-  text-align: right;
-}
 .status-modal-backdrop {
   position: fixed;
   z-index: 20;
@@ -1474,6 +1470,8 @@
     'phone therapist'
     '. date'
     '. time'
+    '. end-date'
+    '. end-time'
     '. note'
     '. summary';
   justify-content: space-between;
@@ -1486,6 +1484,8 @@
     'new-patient therapist'
     'new-patient date'
     'new-patient time'
+    'new-patient end-date'
+    'new-patient end-time'
     'new-patient note'
     '. summary';
 }
@@ -1495,6 +1495,8 @@
     'phone date'
     'service-mode time'
     'selection note'
+    '. end-date'
+    '. end-time'
     'summary summary';
 }
 .appointment-create-card.is-editing {
@@ -1519,6 +1521,7 @@
     'patient service'
     'therapist date'
     'time branch'
+    'end-date end-time'
     'note note';
   justify-content: space-between;
   gap: 24px 76px;
@@ -1537,6 +1540,12 @@
 }
 .reschedule-time-field {
   grid-area: time;
+}
+.reschedule-end-date-field {
+  grid-area: end-date;
+}
+.reschedule-end-time-field {
+  grid-area: end-time;
 }
 .reschedule-branch-field {
   grid-area: branch;
@@ -1654,6 +1663,12 @@
 }
 .appointment-time-field {
   grid-area: time;
+}
+.appointment-end-date-field {
+  grid-area: end-date;
+}
+.appointment-end-time-field {
+  grid-area: end-time;
 }
 .appointment-note-field {
   grid-area: note;
@@ -1982,13 +1997,13 @@
     grid-template-columns: 1fr;
     grid-template-areas:
       'patient-type' 'summary' 'patient' 'phone' 'service-mode' 'selection'
-      'therapist' 'date' 'time' 'note';
+      'therapist' 'date' 'time' 'end-date' 'end-time' 'note';
     gap: 18px;
   }
   .appointment-create-card .appointment-create-grid.is-editing {
     grid-template-areas:
       'patient' 'phone' 'service-mode' 'selection'
-      'therapist' 'date' 'time' 'note' 'summary';
+      'therapist' 'date' 'time' 'end-date' 'end-time' 'note' 'summary';
   }
   .appointment-create-card .appointment-create-grid.is-new-patient {
     grid-template-areas:
@@ -2004,7 +2019,7 @@
   }
   .appointment-reschedule-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: 'patient' 'service' 'therapist' 'date' 'time' 'branch' 'note';
+    grid-template-areas: 'patient' 'service' 'therapist' 'date' 'time' 'end-date' 'end-time' 'branch' 'note';
     gap: 18px;
   }
   .appointment-create-card.is-editing .appointment-save {
