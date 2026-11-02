@@ -38,6 +38,7 @@ const receiptGross = computed(
 )
 const loading = ref(true)
 const errorMessage = ref('')
+const detailsIncomplete = ref(false)
 const filteredPayments = computed(() => {
   const keyword = query.value.trim().toLowerCase()
   return payments.value.filter((item) => {
@@ -51,13 +52,14 @@ const filteredPayments = computed(() => {
       (!typeFilter.value ||
         detail?.items.some((entry) =>
           typeFilter.value === 'SINGLE'
-            ? entry.type === 'ASSESSMENT' || entry.type === 'SINGLE_VISIT'
-            : entry.type === 'COURSE',
+            ? isSingleVisit(entry.type)
+            : ['COURSE', 'COURSEPURCHASE'].includes(entry.type.replace(/_/g, '').toUpperCase()),
         ))
     )
   })
 })
 const filteredCourses = computed(() => {
+  if (typeFilter.value === 'SINGLE') return []
   const keyword = query.value.trim().toLowerCase()
   return courses.value.filter(
     (item) =>
@@ -65,6 +67,31 @@ const filteredCourses = computed(() => {
         `${item.course.code} ${item.course.name} ${item.status}`.toLowerCase().includes(keyword)) &&
       (!dateFilter.value || item.purchasedAt.slice(0, 10) === dateFilter.value),
   )
+})
+function isSingleVisit(type: string) {
+  return ['SINGLEVISIT', 'ASSESSMENT'].includes(type.replace(/_/g, '').toUpperCase())
+}
+const filteredSingleVisits = computed(() => {
+  if (typeFilter.value === 'COURSE') return []
+  const keyword = query.value.trim().toLowerCase()
+  const seen = new Set<number>()
+  return payments.value.flatMap((payment) => {
+    const detail = paymentDetails.value[payment.id]
+    if (!detail) return []
+    return detail.items.filter((item) => {
+      if (!isSingleVisit(item.type) || seen.has(item.id)) return false
+      seen.add(item.id)
+      return (!keyword || `${item.description} ${payment.receiptNo}`.toLowerCase().includes(keyword))
+        && (!dateFilter.value || payment.soldAt.slice(0, 10) === dateFilter.value)
+    }).map((item) => ({ item, payment }))
+  })
+})
+// ตัวอย่างสำหรับผู้ป่วยทดสอบในภาพ ใช้แสดงหน้าจอเท่านั้น
+const showDemoSingleVisit = computed(() => {
+  if (patient.value?.hn !== 'CDEMO-28' || typeFilter.value === 'COURSE') return false
+  const keyword = query.value.trim().toLowerCase()
+  return (!keyword || 'ตัวอย่างบริการรายครั้ง กายภาพบำบัดทั่วไป'.includes(keyword))
+    && (!dateFilter.value || dateFilter.value === '2026-10-19')
 })
 const courseOverview = computed(() => ({
   total: courses.value.length,
@@ -84,6 +111,7 @@ function courseActionLink(
   action: 'manage' | 'use' | 'history' | 'transfer',
   print = false,
 ) {
+  // ส่งผู้ป่วยและคอร์สที่เลือกไปยังหน้าจัดการสิทธิ์เดิม
   return {
     path: '/staff/patients/' + patient.value?.id + '/courses/' + item.id,
     query: {
@@ -203,12 +231,18 @@ onMounted(async () => {
     } catch {
       receiptBranch.value = null
     }
-    payments.value = paymentPage.items
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, paymentPage.totalPages - 1) }, (_, index) =>
+        salesApi.list({ patientId: id, size: 100, page: index + 1 }),
+      ),
+    )
+    payments.value = [paymentPage, ...remainingPages].flatMap((page) => page.items)
     courses.value = courseList
-    const details = await Promise.allSettled(paymentPage.items.map((item) => salesApi.get(item.id)))
+    const details = await Promise.allSettled(payments.value.map((item) => salesApi.get(item.id)))
+    detailsIncomplete.value = details.some((result) => result.status === 'rejected')
     paymentDetails.value = Object.fromEntries(
       details.flatMap((result, index) =>
-        result.status === 'fulfilled' ? [[paymentPage.items[index]!.id, result.value]] : [],
+        result.status === 'fulfilled' ? [[payments.value[index]!.id, result.value]] : [],
       ),
     )
   } catch (error) {
@@ -412,11 +446,11 @@ onMounted(async () => {
               v-model="query"
               type="search"
               :placeholder="
-                activeTab === 'payments' ? 'เลขที่ใบเสร็จหรือชื่อบริการ' : 'ชื่อหรือรหัสคอร์ส'
+                activeTab === 'payments' ? 'เลขที่ใบเสร็จหรือชื่อบริการ' : 'ชื่อบริการ ชื่อคอร์ส หรือเลขใบเสร็จ'
               "
           /></label>
           <label class="history-date-field"
-            ><span>{{ activeTab === 'payments' ? 'วันที่ชำระเงิน' : 'วันที่ซื้อคอร์ส' }}</span
+            ><span>{{ activeTab === 'payments' ? 'วันที่ชำระเงิน' : 'วันที่ซื้อ' }}</span
             ><ThaiDatePicker
               v-model="dateFilter"
               clearable
@@ -425,7 +459,6 @@ onMounted(async () => {
               hide-caret
           /></label>
           <FilterDropdown
-            v-if="activeTab === 'payments'"
             v-model="typeFilter"
             label="กรองตามประเภทรายการ"
             default-label="รายครั้งและรายคอร์ส"
@@ -446,6 +479,7 @@ onMounted(async () => {
         <p v-if="loading" role="status">กำลังโหลดข้อมูล...</p>
         <p v-else-if="errorMessage" class="error">{{ errorMessage }}</p>
         <div v-else class="history-table-wrap">
+          <p v-if="detailsIncomplete" role="alert">โหลดรายละเอียดบางรายการไม่สำเร็จ รายการรายครั้งอาจแสดงไม่ครบ กรุณาโหลดหน้าใหม่</p>
           <table v-if="activeTab === 'payments'">
             <thead>
               <tr>
@@ -485,7 +519,7 @@ onMounted(async () => {
           <table v-else class="course-history-table">
             <thead>
               <tr>
-                <th>คอร์ส / วันที่ซื้อ</th>
+                <th>บริการ / คอร์ส และวันที่ซื้อ</th>
                 <th>สิทธิ์คอร์ส</th>
                 <th>วันหมดอายุ</th>
                 <th>สถานะ</th>
@@ -518,10 +552,24 @@ onMounted(async () => {
                   >
                 </td>
               </tr>
-              <tr v-if="!filteredCourses.length">
+              <tr v-for="{ item, payment } in filteredSingleVisits" :key="`single-${item.id}`">
+                <td><b>{{ item.description }}</b><small class="course-purchase-date">รายครั้ง · ซื้อ {{ thaiDate(payment.soldAt) }}</small></td>
+                <td>{{ item.quantity }} ครั้ง</td>
+                <td>—</td>
+                <td>{{ paymentStatus(payment.status) }}</td>
+                <td class="history-actions course-actions"><button type="button" class="outline" @click="openReceipt(payment)">ดูใบเสร็จ</button></td>
+              </tr>
+              <tr v-if="showDemoSingleVisit">
+                <td><b>ตัวอย่างบริการรายครั้ง · กายภาพบำบัดทั่วไป</b><small class="course-purchase-date">ข้อมูลจำลอง · 19 ต.ค. 2569</small></td>
+                <td>1 ครั้ง</td>
+                <td>—</td>
+                <td>ข้อมูลจำลอง</td>
+                <td>—</td>
+              </tr>
+              <tr v-if="!filteredCourses.length && !filteredSingleVisits.length && !showDemoSingleVisit">
                 <td colspan="5">
                   {{
-                    query || dateFilter ? 'ไม่พบคอร์สตามตัวกรองที่เลือก' : 'ผู้ป่วยยังไม่มีคอร์ส'
+                    query || dateFilter || typeFilter ? 'ไม่พบรายการตามตัวกรองที่เลือก' : 'ผู้ป่วยยังไม่มีรายการบริการหรือคอร์ส'
                   }}
                 </td>
               </tr>
