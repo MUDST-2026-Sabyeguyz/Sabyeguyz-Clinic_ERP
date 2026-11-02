@@ -1,14 +1,29 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ApiError, type Appointment, type AppointmentProgress } from '@/api/client'
-import { readAppointmentProgress } from '../appointmentRequests'
+import { progressStateLabel, readAppointmentProgress } from '../appointmentRequests'
 const props = defineProps<{ appointment: Appointment; canManage: boolean }>()
 const progress = ref<AppointmentProgress | null>(null)
 const loading = ref(false)
 const error = ref('')
+const receiptDocuments = computed(() => {
+  const byReceiptId = new Map<number, AppointmentProgress['sales']>()
+  for (const sale of progress.value?.sales ?? []) {
+    const group = byReceiptId.get(sale.receiptId) ?? []
+    group.push(sale)
+    byReceiptId.set(sale.receiptId, group)
+  }
+  return [...byReceiptId.values()].map((sales) => ({
+    ...sales[0]!,
+    active: sales.every((sale) => sale.active),
+    saleCount: sales.length,
+  }))
+})
 let request = 0
 async function refresh() {
+  // ใช้เลขคำขอทิ้งผลเก่าที่กลับมาหลังเปลี่ยนนัดหรือเริ่มโหลดรอบใหม่
   const current = ++request
+  progress.value = null
   loading.value = true
   error.value = ''
   try {
@@ -43,45 +58,30 @@ watch(
       ><button type="button" @click="refresh">ลองใหม่</button>
     </div>
     <template v-else-if="progress">
-      <span v-if="progress.paymentStatus === 'REVIEW_REQUIRED'">ต้องตรวจสอบประวัติเดิม</span>
-      <span v-if="progress.paymentStatus === 'PAID'">ชำระครบแล้ว</span>
-      <span v-if="progress.courseStatus === 'USED'">ใช้สิทธิ์แล้ว</span>
-      <span v-if="progress.paymentStatus === 'REVERSED' || progress.courseStatus === 'REVERSED'"
-        >มีรายการย้อนคืน</span
-      >
+      <span>{{ progressStateLabel(progress.state) }}</span>
+      <span v-if="progress.reason" class="process-row-error">{{ progress.reason }}</span>
       <RouterLink
-        :to="{
-          name: 'staff-services',
-          query: {
-            patientId: String(appointment.patient?.id),
-            appointmentId: String(appointment.id),
-          },
-        }"
+        v-for="receipt in receiptDocuments"
+        :key="receipt.receiptId"
+        :to="{ name: 'staff-receipt', params: { id: receipt.saleId } }"
       >
-        {{
-          progress.paymentStatus === 'PARTIAL' || progress.paymentStatus === 'UNPAID'
-            ? 'ชำระยอดคงเหลือ'
-            : progress.paymentStatus !== 'NOT_STARTED' || progress.courseStatus !== 'NOT_STARTED'
-              ? 'ดูรายการเดิม'
-              : 'บริการและชำระเงิน'
-        }}
+        {{ receipt.receiptNo || `เปิดรายการขาย #${receipt.saleId}` }}
       </RouterLink>
       <RouterLink
-        v-if="
-          canManage &&
-          progress.canManage &&
-          progress.paymentStatus === 'NOT_STARTED' &&
-          progress.courseStatus === 'NOT_STARTED'
-        "
+        v-for="usage in progress.usages"
+        :key="usage.usageId"
         :to="{
           name: 'staff-courses',
           query: {
-            patientId: String(appointment.patient?.id),
-            appointmentId: String(appointment.id),
+            patientId: progress.servedPatientId ? String(progress.servedPatientId) : undefined,
+            courseId: String(usage.coursePurchaseId),
+            action: 'history',
+            appointmentId: String(progress.appointmentId),
           },
         }"
-        >ใช้สิทธิ์คอร์ส</RouterLink
       >
+        ใช้คอร์ส #{{ usage.coursePurchaseId }} · {{ usage.status }}
+      </RouterLink>
     </template>
   </div>
 </template>
