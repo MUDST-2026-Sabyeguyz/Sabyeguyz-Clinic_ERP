@@ -40,10 +40,11 @@ const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   role?: string
   branchName?: string
 } | null
+// แยกเมนูและสาขาที่แสดงตาม role ของบัญชี
 const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
 const activeManagerBranch = computed(() => selectedManagerBranch())
-const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
+const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/appointments'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
 const profileBranchLabel = computed(() => storedUser?.branchName || 'สาขาที่ได้รับมอบหมาย')
 const navItems = computed(() =>
@@ -120,8 +121,7 @@ onMounted(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
   })
   document.fonts?.ready.then(positionPillWithoutAnimation)
-  // Role styles and fonts can resize tabs after mount. Keep the highlight tied
-  // to the final link box instead of retaining an earlier, wider measurement.
+  // วัดตำแหน่งเมนูหลัง layout เสร็จ เพื่อให้แถบเลือกตรงกับรายการจริง
   if (typeof ResizeObserver !== 'undefined' && navRef.value) {
     navResizeObserver = new ResizeObserver(positionPillWithoutAnimation)
     navResizeObserver.observe(navRef.value)
@@ -162,6 +162,7 @@ function signOut() {
 }
 async function loadManagerBranches() {
   try {
+    // โหลดสาขาที่เปิดใช้งานให้ Manager เลือกดูข้อมูล
     const branches = (await branchApi.list())
       .filter((branch) => branch.active)
       .map((branch) => ({
@@ -174,6 +175,7 @@ async function loadManagerBranches() {
   } catch {}
 }
 function switchManagerBranch(code: string) {
+  // แจ้งหน้าอื่นให้โหลดข้อมูลใหม่หลังเปลี่ยนสาขา
   const branch = managerBranches.value.find((item) => item.code === code)
   if (!branch) return
   setSelectedManagerBranch(branch)
