@@ -13,6 +13,7 @@ type Transaction = {
   kind: 'sale' | 'usage'
   id: number
   movementId?: number | null
+  courseId?: number
   number: string
   date: string
   patient: string
@@ -35,10 +36,10 @@ interface TransactionRepository {
 
 const transactionRepository: TransactionRepository = {
   async list() {
-    const first = await salesApi.list({ page: 0, size: 100 })
+    const first = await salesApi.list({ page: 0, size: 100, receiptsOnly: true })
     const sales = [...first.items]
     for (let page = 1; page < first.totalPages; page++)
-      sales.push(...(await salesApi.list({ page, size: 100 })).items)
+      sales.push(...(await salesApi.list({ page, size: 100, receiptsOnly: true })).items)
     const usages = await courseApi.usageTransactions()
     return [
       ...sales.map((row): Transaction => ({
@@ -59,11 +60,12 @@ const transactionRepository: TransactionRepository = {
         voidReason: row.voidReason,
       })),
       ...usages.map((row): Transaction => ({
-        key: `usage-${row.usageId}`,
+        key: `usage-${row.id}`,
         movementId: row.id,
+        courseId: row.coursePurchaseId,
         kind: 'usage',
-        id: row.usageId,
-        number: String(row.usageId),
+        id: row.id ?? 0,
+        number: String(row.id),
         date: row.usedAt,
         patient: row.patientName,
         hn: row.patientHn,
@@ -71,7 +73,7 @@ const transactionRepository: TransactionRepository = {
         branchCode: row.branchCode,
         quantity: '1 ครั้ง',
         status: row.voidedAt ? 'ยกเลิก (Void)' : 'ปกติ',
-        performedBy: '—',
+        performedBy: row.therapistName || '—',
         paymentMethod: '—',
         voidedAt: row.voidedAt || undefined,
         voidReason: row.voidReason || undefined,
@@ -87,7 +89,7 @@ const transactionRepository: TransactionRepository = {
         throw new Error('รายการนี้ไม่มี ledger อ้างอิง กรุณาให้ผู้ดูแลตรวจสอบ')
       await courseApi.reverse(row.movementId, command.reason)
       // Re-read the persisted reversal rather than inventing its time or reason locally.
-      const saved = (await courseApi.usageTransactions()).find((item) => item.usageId === row.id)
+      const saved = (await courseApi.usageTransactions()).find((item) => item.id === row.movementId)
       if (!saved?.voidedAt)
         throw new Error('ส่งคำขอยกเลิกแล้ว แต่ยังยืนยันผลไม่ได้ กรุณาโหลดรายการใหม่ก่อนทำซ้ำ')
       return {
@@ -179,6 +181,7 @@ function formatShortDateTime(value?: string) {
 }
 
 async function loadTransactions() {
+  // โหลดรายการธุรกรรม แล้วรักษารายการที่กำลังเปิดอยู่เมื่อรีเฟรชข้อมูล
   loading.value = true
   loadError.value = ''
   errorMessage.value = ''
@@ -215,6 +218,7 @@ watch(headerBranch, () => {
   page.value = 1
 })
 const visibleRows = computed(() => {
+  // กรองตามสาขา ประเภทรายการ สถานะ และวันที่ตามเวลาไทย
   const term = search.value.trim().toLocaleLowerCase()
   return rows.value
     .filter((row) => Boolean(headerBranch.value) && row.branchCode === headerBranch.value)
@@ -581,6 +585,7 @@ function backToList(next: Tab = tab.value) {
         </button>
 
         <template v-if="step === 'history-detail'">
+          <RouterLink v-if="selected.kind === 'sale'" class="transaction-receipt-link" :to="{ name: 'staff-receipt', params: { id: selected.id } }">ดูใบเสร็จเดิม</RouterLink>
           <section class="transaction-history-detail">
             <header>
               <div>
@@ -657,6 +662,8 @@ function backToList(next: Tab = tab.value) {
         </template>
 
         <template v-else-if="step === 'detail'">
+          <RouterLink v-if="selected.kind === 'usage' && selected.courseId" class="transaction-receipt-link" :to="{ name: 'staff-course-prints', params: { courseId: selected.courseId } }">ดูใบตัดคอร์สและประวัติการพิมพ์</RouterLink>
+          <RouterLink v-if="selected.kind === 'sale'" class="transaction-receipt-link" :to="{ name: 'staff-receipt', params: { id: selected.id } }">ดูและพิมพ์ใบเสร็จ</RouterLink>
           <header class="transaction-detail-heading">
             <div>
               <h1>รายละเอียดรายการ</h1>
