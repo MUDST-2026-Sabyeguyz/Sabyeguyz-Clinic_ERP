@@ -729,3 +729,18 @@
     width: 100%;
   }
 }
+.transaction-receipt-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  margin: 0 0 16px;
+  padding: 8px 16px;
+  border: 1px solid #a9cbc5;
+  border-radius: 8px;
+  background: #fff;
+  color: #126b68;
+  font-weight: 600;
+  text-decoration: none;
+}
+.transaction-receipt-link:hover { background: #eaf5f1; }
+.transaction-receipt-link:focus-visible { outline: 2px solid #126b68; outline-offset: 2px; }
