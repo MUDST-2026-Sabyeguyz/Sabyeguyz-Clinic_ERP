@@ -1,6 +1,6 @@
 import { clinicToday } from '@/utils/clinicDate'
 
-// What the commission settings pages say about a Scheme Version (its state today and the months it covers).
+// สรุปสถานะ Version และรอบเดือนที่มีผล
 export type VersionRange = { effectiveFrom: string; effectiveTo: string | null }
 
 export function versionStatus(item: VersionRange) {
@@ -13,7 +13,17 @@ export function versionStatus(item: VersionRange) {
 export const thaiMonth = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`))
 
-/** "มีผลสำหรับรอบเดือน…": a version starts on the 1st of a month and ends on the last day of one. */
+/** หา date เริ่ม Version ใหม่ต่อจากวันสิ้นสุดเดิมหรือเดือนถัดไป */
+export function nextSchemeEffectiveFrom(effectiveTo: string | null, today = clinicToday()) {
+  if (effectiveTo) {
+    const [year, month, day] = effectiveTo.split('-').map(Number)
+    return new Date(Date.UTC(year!, month! - 1, day! + 1)).toISOString().slice(0, 10)
+  }
+  const [year, month] = today.slice(0, 7).split('-').map(Number)
+  return new Date(Date.UTC(year!, month!, 1)).toISOString().slice(0, 10)
+}
+
+/** แปลงช่วงวันที่ของ Version เป็นข้อความรอบเดือน */
 export function versionCycles(item: VersionRange) {
   if (!item.effectiveTo) return `มีผลตั้งแต่รอบเดือน${thaiMonth(item.effectiveFrom)} เป็นต้นไป`
   return item.effectiveFrom.slice(0, 7) === item.effectiveTo.slice(0, 7)
@@ -21,7 +31,7 @@ export function versionCycles(item: VersionRange) {
     : `มีผลสำหรับรอบเดือน${thaiMonth(item.effectiveFrom)} – ${thaiMonth(item.effectiveTo)}`
 }
 
-/** A date and time in clinic time, for the "last changed" columns; "-" when there is none. */
+/** แสดงวันเวลาที่แก้ไขตามเวลาไทย หรือขีดเมื่อไม่มีข้อมูล */
 export const recordedAt = (value: string | null | undefined) =>
   value
     ? new Intl.DateTimeFormat('th-TH', {
