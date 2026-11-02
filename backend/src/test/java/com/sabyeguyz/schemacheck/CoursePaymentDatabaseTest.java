@@ -445,14 +445,24 @@ class CoursePaymentDatabaseTest {
         var otherBranch = collect(patientId, secondBranch, one("1"), Discount.none(), "FULL", "1");
         Instant from = Instant.parse("2026-01-01T17:00:00Z");
         Instant to = Instant.parse("2026-01-02T17:00:00Z");
-        for (var entry : Map.of(
+        var boundaryDates = Map.of(
                 originalPayment, from, fixtureCollection, to, lastInside.paymentId(), to.minusMillis(1),
                 beforeStart.paymentId(), from.minusMillis(1), afterEnd.paymentId(), to.plusMillis(1),
-                otherBranch.paymentId(), from).entrySet()) {
-            db.update("update payment_transaction set payment_date=? where payment_id=?",
-                    java.sql.Timestamp.from(entry.getValue()), entry.getKey());
-        }
+                otherBranch.paymentId(), from);
+        // Use the production Instant mapping instead of JDBC's default-zone Timestamp conversion.
+        transaction(() -> {
+            for (var entry : boundaryDates.entrySet()) {
+                em().find(PaymentTransaction.class, entry.getKey()).setPaymentDate(entry.getValue());
+            }
+            em().flush();
+            em().clear();
+            return null;
+        });
         var repo = bean(PaymentTransactionRepository.class);
+        for (var entry : boundaryDates.entrySet()) {
+            assertEquals(entry.getValue(), repo.findById(entry.getKey()).orElseThrow().getPaymentDate(),
+                    "Payment date must round-trip as the intended Instant for payment " + entry.getKey());
+        }
         assertEquals(Set.of(originalPayment, lastInside.paymentId()),
                 new HashSet<>(repo.findByPaymentDateBetween(from, to, branchId).stream().map(PaymentTransaction::getId).toList()));
         assertEquals(Set.of(originalPayment, lastInside.paymentId(), otherBranch.paymentId()),
