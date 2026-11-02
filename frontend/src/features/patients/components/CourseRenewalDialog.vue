@@ -1,66 +1,68 @@
 <script setup lang="ts">
+// ส่งคำขอต่ออายุและแสดงประวัติ โดยให้ Manager อนุมัติก่อนเปลี่ยนวันหมดอายุ
 import { computed, onMounted, ref } from 'vue'
-import { courseApi, type CoursePurchase, type CourseRenewalHistory } from '@/api/client'
-import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import {
+  courseApi,
+  type CourseExtensionRequest,
+  type CoursePurchase,
+} from '@/api/client'
 import { vModalFocus } from '@/features/appointments/modalFocus'
-import { clinicToday } from '@/utils/clinicDate'
 const props = defineProps<{ course: CoursePurchase; patientId: number }>()
-const emit = defineEmits<{ close: []; renewed: [] }>()
-const expiry = ref(''),
+const emit = defineEmits<{ close: []; requested: [] }>()
+const value = ref(1),
+  unit = ref<CourseExtensionRequest['unit']>('Month'),
   reason = ref(''),
   busy = ref(false),
   error = ref('')
-const history = ref<CourseRenewalHistory[]>([]),
+const requests = ref<CourseExtensionRequest[]>([]),
   historyLoading = ref(true),
   historyError = ref('')
-const completed = ref(false)
-const canRenew = computed(
-  () => props.course.status === 'ACTIVE' && props.course.purchased > props.course.used,
-)
-const oldExpiry = props.course.expiresAt.slice(0, 10)
-const valid = computed(
-  () =>
-    expiry.value > oldExpiry &&
-    expiry.value > clinicToday() &&
-    Boolean(reason.value.trim()) &&
-    reason.value.trim().length <= 1000,
-)
+const submitted = ref(false)
+const canRequest = computed(() => props.course.status === 'ACTIVE')
+const pending = computed(() => requests.value.some((request) => request.status === 'Pending'))
 const dateLabel = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeZone: 'Asia/Bangkok' }).format(
     new Date(value.length === 10 ? value + 'T12:00:00+07:00' : value),
   )
-async function loadHistory() {
+const unitLabel = (value: CourseExtensionRequest['unit']) =>
+  ({ Day: 'วัน', Month: 'เดือน', Year: 'ปี' })[value]
+const statusLabel = (status: CourseExtensionRequest['status']) =>
+  ({ Pending: 'รอ Manager พิจารณา', Approved: 'อนุมัติแล้ว', Rejected: 'ไม่อนุมัติ' })[status]
+async function loadRequests() {
   historyLoading.value = true
   historyError.value = ''
   try {
-    history.value = await courseApi.renewals(props.course.id)
+    // โหลดคำขอและผลพิจารณาของคอร์สนี้
+    requests.value = await courseApi.extensions({ courseId: props.course.id })
   } catch (err) {
-    historyError.value = err instanceof Error ? err.message : 'โหลดประวัติไม่สำเร็จ'
+    historyError.value = err instanceof Error ? err.message : 'โหลดคำขอต่ออายุไม่สำเร็จ'
   } finally {
     historyLoading.value = false
   }
 }
-onMounted(loadHistory)
+onMounted(loadRequests)
 async function submit() {
-  if (busy.value || completed.value || !canRenew.value) return
-  if (!valid.value) {
-    error.value = 'เลือกวันใหม่ที่หลังวันเดิมและหลังวันนี้ พร้อมระบุเหตุผล'
+  if (busy.value || submitted.value || pending.value || !canRequest.value) return
+  if (!Number.isInteger(value.value) || value.value < 1 || !reason.value.trim() || reason.value.trim().length > 255) {
+    error.value = 'ระบุระยะเวลาต่ออายุอย่างน้อย 1 หน่วย และเหตุผลไม่เกิน 255 ตัวอักษร'
     return
   }
   busy.value = true
   error.value = ''
   try {
-    await courseApi.renew(props.course.id, {
-      patientId: props.patientId,
-      expectedExpiryDate: oldExpiry,
-      newExpiryDate: expiry.value,
+    // ส่งคำขอเท่านั้น ไม่แก้วันหมดอายุจากหน้าเว็บ
+    await courseApi.requestExtension({
+      courseId: props.course.id,
+      value: value.value,
+      unit: unit.value,
       reason: reason.value.trim(),
+      requestedByPatientId: props.patientId,
     })
-    completed.value = true
-    emit('renewed')
-    await loadHistory()
+    submitted.value = true
+    emit('requested')
+    await loadRequests()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'ต่ออายุไม่สำเร็จ กรุณาลองใหม่'
+    error.value = err instanceof Error ? err.message : 'ส่งคำขอต่ออายุไม่สำเร็จ กรุณาลองใหม่'
   } finally {
     busy.value = false
   }
@@ -77,7 +79,7 @@ async function submit() {
         aria-labelledby="course-renewal-title"
       >
         <header>
-          <h2 id="course-renewal-title">ต่ออายุคอร์ส</h2>
+          <h2 id="course-renewal-title">ขอต่ออายุคอร์ส</h2>
           <button
             type="button"
             :disabled="busy"
@@ -90,51 +92,57 @@ async function submit() {
         <p>
           <strong>{{ course.course.name }}</strong>
         </p>
-        <p>วันหมดอายุเดิม {{ dateLabel(oldExpiry) }}</p>
+        <p>วันหมดอายุปัจจุบัน {{ dateLabel(course.expiresAt) }}</p>
         <p class="course-renewal-note">
-          เปลี่ยนเฉพาะวันหมดอายุของคอร์สและสิทธิ์ที่แชร์ ไม่เพิ่มจำนวนครั้งหรือสร้างยอดชำระใหม่
+          คำขอนี้ยังไม่เปลี่ยนวันหมดอายุ Manager ต้องอนุมัติก่อน ระบบจึงบันทึกวันใหม่และประวัติ
         </p>
-        <form v-if="!completed && canRenew" @submit.prevent="submit">
+        <form v-if="canRequest && !pending && !submitted" @submit.prevent="submit">
           <label
-            >วันหมดอายุใหม่ <span aria-hidden="true">*</span
-            ><ThaiDatePicker
-              v-model="expiry"
-              :disabled="busy"
-              :min-date="oldExpiry > clinicToday() ? oldExpiry : clinicToday()"
-              show-calendar-icon
-              numeric-month
-              hide-caret
-          /></label>
+            >ระยะเวลาที่ขอเพิ่ม <span aria-hidden="true">*</span>
+            <input v-model.number="value" type="number" min="1" step="1" required :disabled="busy" />
+          </label>
+          <label
+            >หน่วยเวลา <span aria-hidden="true">*</span>
+            <select v-model="unit" required :disabled="busy">
+              <option value="Day">วัน</option>
+              <option value="Month">เดือน</option>
+              <option value="Year">ปี</option>
+            </select>
+          </label>
           <label
             >เหตุผล <span aria-hidden="true">*</span
-            ><textarea v-model="reason" rows="3" maxlength="1000" required :disabled="busy" />
+            ><textarea v-model="reason" rows="3" maxlength="255" required :disabled="busy" />
           </label>
           <p v-if="error" class="course-renewal-error" role="alert">{{ error }}</p>
           <footer>
             <button type="button" :disabled="busy" @click="emit('close')">ยกเลิก</button
             ><button type="submit" class="course-renewal-primary" :disabled="busy">
-              {{ busy ? 'กำลังบันทึก…' : 'ยืนยันต่ออายุ' }}
+              {{ busy ? 'กำลังส่งคำขอ…' : 'ส่งคำขอให้ Manager' }}
             </button>
           </footer>
         </form>
-        <p v-else-if="completed" class="course-renewal-success" role="status">
-          ต่ออายุถึง {{ dateLabel(expiry) }} แล้ว
+        <p v-else-if="submitted" class="course-renewal-success" role="status">
+          ส่งคำขอแล้ว รอ Manager อนุมัติก่อนวันหมดอายุจะเปลี่ยน
         </p>
-        <p v-else>คอร์สนี้ต่ออายุไม่ได้ สามารถดูประวัติการต่ออายุด้านล่างได้</p>
+        <p v-else-if="pending" class="course-renewal-success" role="status">
+          คอร์สนี้มีคำขอต่ออายุที่รอ Manager พิจารณาอยู่แล้ว
+        </p>
+        <p v-else>คอร์สนี้ไม่อยู่ในสถานะที่ขอต่ออายุได้</p>
         <section class="course-renewal-history">
-          <h3>ประวัติการต่ออายุ</h3>
+          <h3>คำขอและประวัติการต่ออายุ</h3>
           <p v-if="historyLoading" role="status">กำลังโหลดประวัติ…</p>
           <div v-else-if="historyError" role="alert">
-            {{ historyError }} <button type="button" @click="loadHistory">ลองใหม่</button>
+            {{ historyError }} <button type="button" @click="loadRequests">ลองใหม่</button>
           </div>
-          <p v-else-if="!history.length">ยังไม่มีประวัติการต่ออายุ</p>
+          <p v-else-if="!requests.length">ยังไม่มีคำขอต่ออายุ</p>
           <ol v-else>
-            <li v-for="item in history" :key="item.id">
-              <strong
-                >{{ dateLabel(item.oldExpiryDate) }} → {{ dateLabel(item.newExpiryDate) }}</strong
-              >
-              <p>{{ item.reason }}</p>
-              <small>{{ dateLabel(item.changedAt) }} · ผู้ดำเนินการ #{{ item.changedBy }}</small>
+            <li v-for="item in requests" :key="item.id">
+              <strong>{{ statusLabel(item.status) }} · เพิ่ม {{ item.value }} {{ unitLabel(item.unit) }}</strong>
+              <p v-if="item.reason">เหตุผล: {{ item.reason }}</p>
+              <p v-if="item.oldExpiry && item.newExpiry">
+                วันหมดอายุ {{ dateLabel(item.oldExpiry) }} → {{ dateLabel(item.newExpiry) }}
+              </p>
+              <small v-if="item.decisionNote">หมายเหตุ Manager: {{ item.decisionNote }}</small>
             </li>
           </ol>
         </section>
@@ -218,6 +226,16 @@ textarea {
   border: 1px solid #b7cecc;
   border-radius: 8px;
   resize: vertical;
+  font: inherit;
+}
+input,
+select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #b7cecc;
+  border-radius: 8px;
   font: inherit;
 }
 footer {
