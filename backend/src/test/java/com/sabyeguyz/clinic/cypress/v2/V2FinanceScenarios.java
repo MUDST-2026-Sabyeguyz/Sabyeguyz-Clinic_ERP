@@ -318,7 +318,7 @@ public class V2FinanceScenarios {
     private Object tier(String scenario) {
         if (scenario.equals("tier-satang-edges")) {
             var edges = new V2RepositoryStub<>(CommissionTierRepository.class)
-                    .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder", a -> tiers());
+                    .on("findByCommissionSchemeIdOrderByTierOrder", a -> tiers());
             var resolver = new CommissionTierResolver(edges.proxy());
             var scheme = new CommissionScheme();
             return Map.of("topOfTier1", resolver.resolve(scheme, decimal("59999.99")).getCommissionRate(),
@@ -329,12 +329,12 @@ public class V2FinanceScenarios {
         if (scenario.equals("tier-overlap")) {
             // two tiers both covering 100.00: the amount must never find two tiers
             var clash = new V2RepositoryStub<>(CommissionTierRepository.class)
-                    .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder",
+                    .on("findByCommissionSchemeIdOrderByTierOrder",
                             a -> List.of(tierValue(1,"0.00","200.00","0.05"), tierValue(2,"100.00",null,"0.10")));
             return new CommissionTierResolver(clash.proxy()).resolve(new CommissionScheme(), decimal("100.00")).getCommissionRate();
         }
         var repository = new V2RepositoryStub<>(CommissionTierRepository.class)
-                .on("findByCommissionSchemeIdAndTierStatusTrueOrderByTierOrder", a -> scenario.equals("tier-missing") ? List.of() : tiers());
+                .on("findByCommissionSchemeIdOrderByTierOrder", a -> scenario.equals("tier-missing") ? List.of() : tiers());
         return new CommissionTierResolver(repository.proxy()).resolve(new CommissionScheme(),
                 decimal(scenario.equals("tier-top") ? "500000" : scenario.equals("tier-missing") ? "1000" : "75000")).getCommissionRate();
     }
@@ -491,12 +491,13 @@ public class V2FinanceScenarios {
     private Object fee(String scenario) {
         var repository = new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
         var rule = new TreatmentFeeRule(); rule.setFeeType(FeeType.Fixed); rule.setFeeValue(decimal("45"));
-        if (scenario.equals("fee-specific")) {
-            // one clinic-wide rule: when two rules are in force the one that took effect last is used
+        if (scenario.equals("fee-single-effective") || scenario.equals("fee-overlap")) {
+            // Exactly one clinic-wide rule may cover the treatment date.
             var older = new TreatmentFeeRule(); older.setFeeType(FeeType.Fixed); older.setFeeValue(decimal("40"));
             older.setEffectiveFrom(LocalDate.of(2026,1,1));
+            older.setEffectiveTo(scenario.equals("fee-overlap") ? null : LocalDate.of(2026,5,31));
             rule.setEffectiveFrom(LocalDate.of(2026,6,1));
-            repository.on("findActiveOn", a -> List.of(older,rule));
+            repository.on("findActiveOn", a -> scenario.equals("fee-overlap") ? List.of(older,rule) : List.of(rule));
             var resolved = new TreatmentFeeRuleResolver(repository.proxy()).resolve(LocalDate.of(2026,8,20));
             return Map.of("present",resolved.isPresent(),"fee",resolved.map(TreatmentFeeRule::getFeeValue).orElse(BigDecimal.ZERO));
         }
@@ -557,13 +558,16 @@ public class V2FinanceScenarios {
         var guard = new BranchClosingGuard(closingRepository.proxy(), courseRepository.proxy(), branchClosingRepository.proxy());
 
         var repository =
-                new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
+                new V2RepositoryStub<>(TreatmentFeeRuleRepository.class)
+                        .on("findMaxRuleVersion", args -> scenario.equals("feeadmin-create") ? 0 : 1);
 
         var service = new TreatmentFeeRuleService(repository.proxy(), guard);
         var existing = new TreatmentFeeRule(); existing.setFeeType(FeeType.Fixed); existing.setFeeValue(decimal("45"));
         existing.setEffectiveFrom(LocalDate.of(2026,1,1));
         setId(existing, 1L);
+        existing.setRuleVersion(1);
         Permission permission = new Permission();
+        LocalDate nextCycle = com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1);
         switch (scenario) {
             case "feeadmin-create" -> {
                 var created = service.create(FeeType.Percentage, decimal("10"), LocalDate.of(2026,1,1), null, branch, permission, 1L);
@@ -587,13 +591,13 @@ public class V2FinanceScenarios {
             }
             case "feeadmin-takes-over" -> {
                 repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
-                var created = service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, branch, permission, 1L);
+                var created = service.create(FeeType.Fixed, decimal("50"), nextCycle, null, branch, permission, 1L);
                 return Map.of("predecessorEnds", existing.getEffectiveTo().toString(), "newStarts", created.getEffectiveFrom().toString());
             }
             case "feeadmin-takeover-used" -> {
                 repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
                 repository.on("isUsedAfter", a -> true);
-                return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, branch, permission, 1L));
+                return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), nextCycle, null, branch, permission, 1L));
             }
             case "feeadmin-used-immutable" -> {
                 repository.on("findById", a -> Optional.of(existing));
@@ -723,6 +727,10 @@ public class V2FinanceScenarios {
         List<SalesTransaction> lines = new ArrayList<>();
         for (String amount : rounding ? new String[]{"100.00","100.00","100.00"} : new String[]{"1500.00","500.00"}) {
             var line = new SalesTransaction(); line.setAmount(decimal(amount)); line.setCommissionableAmount(decimal(amount));
+            setId(line, (long) lines.size() + 1);
+            line.setTransactionType(TransactionType.SingleVisit);
+            line.setQuantity(1);
+            line.setUnitPrice(decimal(amount));
             lines.add(line);
         }
         if (scenario.equals("receipt-totals-no-lines")) lines.clear();
