@@ -15,10 +15,23 @@ const menus = [
   { key: 'tiers', label: 'กฎค่าคอมมิชชัน', hint: 'อัตราตามยอดขาย', icon: 'tiers' },
   { key: 'master', label: 'Master Data', hint: 'ข้อมูลพื้นฐานระบบ', icon: 'master' },
 ] as const
-const selectedCode = computed(() => selectedManagerBranch()?.code ?? '')
-const visibleBranches = computed(
-  () => status.value?.branches.filter((branch) => branch.branchCode === selectedCode.value) ?? [],
-)
+const authUser = computed(() => {
+  try {
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string; branchCode?: string; branchName?: string } | null
+  } catch {
+    return null
+  }
+})
+// Manager จัดการได้เฉพาะสาขาที่เลือก ส่วน Therapist เห็นสาขาของบัญชีตน
+const isManager = computed(() => authUser.value?.role === 'MANAGER')
+const selectedCode = computed(() => selectedManagerBranch()?.code ?? authUser.value?.branchCode ?? '')
+const selectedBranchName = computed(() => selectedManagerBranch()?.name ?? authUser.value?.branchName ?? '')
+const visibleBranches = computed(() => {
+  const branches = status.value?.branches ?? []
+  return isManager.value
+    ? branches.filter((branch) => branch.branchCode === selectedCode.value)
+    : branches
+})
 const branch = computed(() => visibleBranches.value[0])
 const changed = computed(
   () =>
@@ -63,6 +76,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
+    // โหลดสถานะจาก backend แล้วเติม Calendar ID ที่ยังไม่มีในฟอร์ม
     status.value = await calendarApi.status()
     for (const branch of status.value.branches)
       if (!(branch.branchCode in calendarIds))
@@ -86,6 +100,7 @@ async function save(branchCode: string) {
   error.value = ''
   message.value = ''
   try {
+    // บันทึก Calendar ID; การบันทึกไม่ได้ยืนยันสิทธิ์เชื่อมต่อ Google
     const saved = await calendarApi.setBranchCalendar(branchCode, calendarId)
     const current = status.value?.branches.find((item) => item.branchCode === branchCode)
     if (current) current.googleCalendarId = saved.googleCalendarId
@@ -106,6 +121,7 @@ async function syncNow() {
   error.value = ''
   message.value = ''
   try {
+    // สั่ง sync แล้วแสดงจำนวนรายการที่ส่ง เปลี่ยน และล้มเหลวจากผล API
     const result = await calendarApi.syncNow()
     message.value =
       `sync แล้ว ส่งไปยัง Google ${result.pushed}, ลบ ${result.removed}, ` +
@@ -164,12 +180,12 @@ onMounted(load)
         <div>
           <span class="settings-eyebrow">ศูนย์ควบคุมระบบ</span>
           <h1>การตั้งค่า</h1>
-          <p>จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ</p>
+              <p>{{ isManager ? 'จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ' : 'ดูสถานะปฏิทินของสาขาที่คุณสังกัด' }}</p>
         </div>
       </header>
 
       <div class="settings-layout">
-        <aside class="settings-nav">
+        <aside v-if="isManager" class="settings-nav">
           <div class="settings-nav-head">
             <div>
               <h2>หมวดการตั้งค่า</h2>
@@ -209,10 +225,10 @@ onMounted(load)
           <header class="settings-panel-head calendar-heading">
             <div>
               <h2>Google Calendar</h2>
-              <p>เชื่อมปฏิทินนัดหมายแต่ละสาขา</p>
+              <p>{{ isManager ? 'ตั้งค่าปฏิทินและตรวจสถานะ sync ของแต่ละสาขา' : 'สถานะปฏิทินของสาขาที่คุณสังกัด' }}</p>
             </div>
             <span class="branch-tag">{{
-              selectedManagerBranch()?.name || 'ยังไม่ได้เลือกสาขา'
+              selectedBranchName || branch?.branchName || 'ยังไม่ได้เลือกสาขา'
             }}</span>
           </header>
           <div class="calendar-body">
@@ -227,12 +243,13 @@ onMounted(load)
                   status.enabled ? 'ระบบ sync เปิดใช้งาน' : 'ระบบ sync ยังไม่พร้อมใช้งาน'
                 }}</strong>
                 <p v-if="!status.enabled">กรุณาลองใหม่</p>
-                <p v-else>บันทึกปฏิทินของสาขา แล้วใช้ปุ่ม sync เพื่ออัปเดตนัดหมาย</p>
+                <p v-else-if="isManager">บันทึกปฏิทินของสาขา แล้วใช้ปุ่ม sync เพื่ออัปเดตนัดหมาย</p>
+                <p v-else>ดูปฏิทินได้โดยไม่สามารถแก้ Calendar ID หรือสั่ง sync</p>
               </div>
               <div class="calendar-workspace">
                 <div class="calendar-connection">
                   <form
-                    v-if="branch"
+                    v-if="branch && isManager"
                     class="calendar-form"
                     :data-cy="`calendar-row-${branch.branchCode}`"
                     novalidate
@@ -304,8 +321,14 @@ onMounted(load)
                   ยกเลิกการเชื่อมต่อ
                 </button>
                   </form>
-                  <p v-else class="calendar-hint">เลือกสาขาจาก Header เพื่อเริ่มตั้งค่า</p>
-                  <details class="calendar-help">
+                  <section v-else-if="branch" class="calendar-form calendar-readonly">
+                    <h3>ปฏิทินของ{{ branch.branchName }}</h3>
+                    <p>{{ branch.googleCalendarId ? 'เชื่อม Calendar ID แล้ว' : 'ยังไม่ได้ตั้งค่าปฏิทิน' }}</p>
+                    <a v-if="openUrl" :href="openUrl" class="calendar-secondary" data-cy="calendar-open" target="_blank" rel="noopener noreferrer">เปิด Google Calendar ↗</a>
+                    <p v-else class="calendar-hint">ยังไม่มี Calendar ID สำหรับสาขานี้</p>
+                  </section>
+                  <p v-else-if="isManager" class="calendar-hint">เลือกสาขาจาก Header เพื่อเริ่มตั้งค่า</p>
+                  <details v-if="isManager" class="calendar-help">
                     <summary>วิธีตั้งค่าและเชิญนักกายภาพ</summary>
                     <ol>
                       <li>เปิด Google Calendar สร้างหรือเลือกปฏิทินของสาขาที่ต้องการ</li>
@@ -340,6 +363,7 @@ onMounted(load)
                 <p class="calendar-hint">sync ล่าสุด : {{ formatTime(status.lastRunAt) }}</p>
                 <p v-if="!status.enabled" class="calendar-hint"></p>
                 <button
+                  v-if="isManager"
                   type="button"
                   class="calendar-sync"
                   data-cy="calendar-sync"
