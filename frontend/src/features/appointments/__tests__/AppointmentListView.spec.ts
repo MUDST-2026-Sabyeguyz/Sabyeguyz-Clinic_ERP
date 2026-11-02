@@ -7,8 +7,10 @@ import { clinicToday } from '@/utils/clinicDate'
 
 const api = vi.hoisted(() => ({ search: vi.fn() }))
 vi.mock('@/api/client', () => ({
+  getToken: () => 'test-token',
   appointmentApi: { search: api.search },
   branchApi: { list: vi.fn(async () => [{ code: '01', name: 'Demo branch', active: true }]) },
+  staffApi: { list: vi.fn(async () => [{ id: 1, fullName: 'Demo therapist', branchCode: '01' }]) },
   patientApi: { searchAll: vi.fn(async () => []) },
   catalogApi: { services: vi.fn(async () => []) },
   courseApi: {},
@@ -41,7 +43,10 @@ for (const [role, Component] of [
         history: createMemoryHistory(),
         routes: [{ path: '/staff/appointments', name: 'staff-appointments', component: Component }],
       })
-      await router.push('/staff/appointments')
+      await router.push({
+        path: '/staff/appointments',
+        query: { startDate: clinicToday(), endDate: clinicToday() },
+      })
       return mount(Component, {
         global: {
           plugins: [router],
@@ -78,7 +83,7 @@ for (const [role, Component] of [
       await flushPromises()
       expect(view.findAll('tbody tr')).toHaveLength(1)
       expect(view.get('tbody').text()).toContain('Course patient')
-      expect(view.find('.appointment-pagination').exists()).toBe(false)
+      expect(view.get('.appointment-pagination').text()).toContain('หน้า 1 จาก 1')
       expect(api.search.mock.calls).toHaveLength(requests)
       view.unmount()
     })
@@ -96,9 +101,7 @@ for (const [role, Component] of [
       expect(view.find('.appointment-empty').exists()).toBe(false)
       finish({ items: [], totalPages: 0 })
       await flushPromises()
-      expect(view.get('.appointment-empty').text()).toContain(
-        'ไม่มีนัดหมายตามวันที่และประเภทที่เลือก',
-      )
+      expect(view.get('.appointment-list-feedback').text()).toContain('วันนี้ไม่มีนัดหมาย')
       view.unmount()
     })
 
