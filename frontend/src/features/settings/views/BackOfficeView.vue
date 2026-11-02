@@ -6,8 +6,11 @@ import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue
 import TimeFilterPicker from '@/features/staff/components/TimeFilterPicker.vue'
 import MasterDataGroups from '../components/MasterDataGroups.vue'
 import SettingsNavIcon from '../components/SettingsNavIcon.vue'
+import TreatmentFeeRuleDrawer from '../components/TreatmentFeeRuleDrawer.vue'
 import {
   type TreatmentFeeRule,
+  type PermissionCatalogItem,
+  type UserPermissionOverride,
   branchApi,
   commissionApi,
   courseApi,
@@ -29,7 +32,7 @@ type SettingsNavIconName = Exclude<
   InstanceType<typeof SettingsNavIcon>['$props']['name'],
   'calendar' | 'settings'
 >
-// Rows are edited generically from form fields of different shapes, so their values stay loosely typed.
+// ฟอร์มหลายประเภทใช้แถวข้อมูลร่วมกัน จึงตรวจชนิดค่าก่อนบันทึก
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
 const sections: Array<{ key: SectionKey; label: string; hint: string; icon: SettingsNavIconName }> =
@@ -43,7 +46,7 @@ const sections: Array<{ key: SectionKey; label: string; hint: string; icon: Sett
     { key: 'tiers', label: 'กฎค่าคอมมิชชัน', hint: 'อัตราตามยอดขาย', icon: 'tiers' },
     { key: 'master', label: 'Master Data', hint: 'ข้อมูลพื้นฐานระบบ', icon: 'master' },
   ]
-// ?section=tiers opens that category (the history page links back to it)
+// เปิดหมวดที่ส่งมาจาก URL เช่นหน้าประวัติ Scheme
 function initialSection(): SectionKey {
   const wanted = new URLSearchParams(window.location.search).get('section')
   return sections.find((item) => item.key === wanted)?.key ?? 'branches'
@@ -53,10 +56,19 @@ const section = ref<SectionKey>(initialSection()),
   editingIndex = ref<number | null>(null),
   savedMessage = ref(''),
   saveModalOpen = ref(false)
-const permissions = ['Patient', 'Visit', 'Treatment', 'Course', 'Transaction', 'Commission']
 const fieldErrors = reactive<Record<string, boolean>>({})
 const validationMessage = ref('')
 const loadError = ref('')
+const permissionOverrides = ref<UserPermissionOverride[]>([])
+const permissionCatalog = ref<PermissionCatalogItem[]>([])
+const permissionOverridesLoading = ref(false)
+const permissionOverridesError = ref('')
+const selectedPermissionId = ref('')
+const newOverrideAllowed = ref(true)
+const availablePermissions = computed(() => {
+  const existing = new Set(permissionOverrides.value.map((override) => override.permissionId))
+  return permissionCatalog.value.filter((permission) => !existing.has(permission.id))
+})
 const option = (value: string) => ({ value, label: value })
 const serviceTypeOptions = [
   { value: 'Single Visit', label: 'บริการรายครั้ง' },
@@ -74,21 +86,13 @@ const serviceTypeLabel = (value: unknown) =>
       : value === 'Treatment Room'
         ? 'ห้องรักษา'
         : String(value ?? '-')
-const permissionLabels: Record<string, string> = {
-  Patient: 'ผู้ป่วย',
-  Visit: 'นัดหมาย',
-  Treatment: 'บริการ',
-  Course: 'คอร์ส',
-  Transaction: 'รายการขาย',
-  Commission: 'คอมมิชชัน',
-}
 const roleLabel = (value: unknown) =>
   value === 'Therapist' ? 'นักกายภาพ' : value === 'Manager' ? 'ผู้จัดการ' : String(value ?? '-')
 const permissionList = (value: unknown) =>
   String(value ?? '')
     .split(/[\s,]+/)
     .filter(Boolean)
-    .map((permission) => ({ key: permission, label: permissionLabels[permission] ?? permission }))
+    .map((permission) => ({ key: permission, label: permission }))
 const statusOptions = computed(() => {
   return [option('ใช้งาน'), option('ปิดใช้งาน')]
 })
@@ -111,9 +115,9 @@ const paymentMethods = reactive<Array<{ id: number; name: string; note: string; 
   [],
 )
 const paymentStatuses = reactive<
-  Array<{ code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID'; label: string; enabled: boolean }>
+  Array<{ code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID' | 'FULL'; label: string; enabled: boolean }>
 >([])
-// a closed branch (ปิดใช้งาน) is not offered anywhere: not for a user, a room or a resource
+// ไม่แสดงสาขาที่ปิดใช้งานให้เลือกกับผู้ใช้ ห้อง หรือทรัพยากร
 const openBranches = computed(() => data.branches.filter((branch) => branch.status === 'ใช้งาน'))
 const branchOptions = computed(() =>
   openBranches.value.map((branch) => option(String(branch.name))),
@@ -143,16 +147,13 @@ const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => 
   name: item.fullName,
   role: item.role === 'MANAGER' ? 'Manager' : 'Therapist',
   branch: item.branchName ?? 'ยังไม่กำหนดสาขา',
-  permission: storedUserPermissions(
-    item.id,
-    item.role === 'MANAGER' ? permissions : permissions.slice(0, 3),
-  ).join(' '),
+  permission: 'ตามบทบาทหลัก',
   status: status(item.active),
 })
 const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>>) => ({
   ...item,
   type: 'Single Visit',
-  // a single visit is always one visit; its own field is the optional appointment length
+  // บริการรายครั้งมีจำนวน 1 ครั้ง ส่วน duration คือระยะเวลานัดที่เลือกได้
   sessions: '1',
   duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
   status: status(item.active),
@@ -160,8 +161,8 @@ const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>
 const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
   ...item,
   type: 'Course',
-  // there is no separate bonus: any earlier bonus sessions are counted in the total
-  sessions: String(item.sessions + Number(item.bonusSessions ?? 0)),
+  // จำนวนครั้งรวมรวมโบนัสเดิมไว้แล้ว จึงไม่บวกโบนัสแยกอีก
+  sessions: String(item.sessions),
   duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
   validityValue: item.validityValue ?? item.validityDays,
   validityUnit: item.validityUnit ?? 'Day',
@@ -199,8 +200,7 @@ const feeRow = (rule: TreatmentFeeRule) => ({
   effectiveTo: rule.effectiveTo ?? '',
   used: rule.used,
 })
-// The "กฎค่ามือ" page lists the treatment fee rules, which the Manager sets here; the "กฎค่าคอมมิชชัน" page shows the Scheme
-// Version in force today with its tiers (a version still waiting to start is on the history page).
+// ส่วนนี้แสดงกฎค่ามือและ Scheme Version ที่มีผลในปัจจุบัน
 type LatestVersion = {
   id: number
   version: number
@@ -215,7 +215,7 @@ async function loadCommissionRows() {
     const rules = (await commissionApi.treatmentFees()) as TreatmentFeeRule[]
     const rows: Row[] = rules.map(feeRow)
     try {
-      // the schemes come newest start first: the first one that has started and not ended is the one in force
+      // เลือก Scheme ที่มีผลตามวันที่ปัจจุบัน
       const today = clinicToday()
       const inForce =
         ((await commissionApi.schemes()) as LatestVersion[]).find(
@@ -228,7 +228,7 @@ async function loadCommissionRows() {
             .sort((a, b) => a.order - b.order)
         : []
     } catch {
-      // the version detail is a convenience: the fee rules still show
+      // ถ้าโหลดรายละเอียด Scheme ไม่ได้ ยังแสดงกฎค่ามือได้
     }
     data.commission.splice(0, data.commission.length, ...rows)
     return true
@@ -236,7 +236,7 @@ async function loadCommissionRows() {
     return false
   }
 }
-// The treatment fee rules as versions (V1, V2… by start date): the one in force and the one waiting to start are shown.
+// เรียงกฎค่ามือตามวันเริ่มใช้เพื่อแสดงกฎปัจจุบันและกฎที่รอเริ่ม
 const feeVersions = computed(() =>
   data.commission
     .slice()
@@ -260,7 +260,7 @@ const shownFeeVersions = computed(() =>
     (item): item is NonNullable<typeof item> => item !== null,
   ),
 )
-/** The month the next version of a rule can start: the one after the current month ("YYYY-MM"). */
+/** คืนเดือนเริ่มใช้รอบถัดไปในรูปแบบ YYYY-MM */
 function nextCycleMonth() {
   const [year, month] = clinicToday().split('-').map(Number)
   return new Date(Date.UTC(year!, month!, 1)).toISOString().slice(0, 7)
@@ -315,7 +315,7 @@ async function loadBackendSettings() {
     paymentMethods.splice(
       0,
       paymentMethods.length,
-      // there is no cash payment in the system, so it is not offered
+      // ระบบไม่รองรับเงินสด จึงไม่นำมาเป็นตัวเลือก
       ...payments.value
         .filter((item) => item.name !== 'Cash')
         .map((item) => ({ ...item, note: 'ช่องทางรับชำระเงิน' })),
@@ -330,7 +330,7 @@ async function loadBackendSettings() {
   loadError.value = failures.length ? `ยังโหลดข้อมูลไม่ได้: ${failures.join(', ')}` : ''
   fillDefaultBranch()
 }
-// A form opened before the branches arrived starts without a branch: give it the default one as soon as it is known.
+// เติมสาขาเริ่มต้นให้ฟอร์มที่เปิดก่อนข้อมูลสาขาโหลดเสร็จ
 function fillDefaultBranch() {
   if (
     drawerOpen.value &&
@@ -469,28 +469,63 @@ watch(pageCount, (count) => {
   if (currentPage.value > count) currentPage.value = count
 })
 const form = reactive<Row>({})
-function userPermissionStorageKey(id: unknown) {
-  return `settings:user-permissions:${id}`
-}
-function storedUserPermissions(id: unknown, fallback: string[]) {
+async function loadPermissionOverrides(userId: number) {
+  permissionOverridesLoading.value = true
+  permissionOverridesError.value = ''
   try {
-    const saved = JSON.parse(localStorage.getItem(userPermissionStorageKey(id)) ?? '[]')
-    return Array.isArray(saved)
-      ? saved.filter((permission): permission is string => permissions.includes(permission))
-      : fallback
-  } catch {
-    return fallback
+    // โหลด override ของผู้ใช้พร้อม catalog ที่มี permission ID จริงจาก backend
+    const [overrides, catalog] = await Promise.all([
+      userManagementApi.permissionOverrides(userId),
+      userManagementApi.permissionCatalog(),
+    ])
+    permissionOverrides.value = overrides
+    permissionCatalog.value = catalog
+    if (!availablePermissions.value.some((permission) => String(permission.id) === selectedPermissionId.value))
+      selectedPermissionId.value = String(availablePermissions.value[0]?.id ?? '')
+  } catch (error) {
+    permissionOverrides.value = []
+    permissionCatalog.value = []
+    permissionOverridesError.value = error instanceof Error ? error.message : 'โหลดสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
+  } finally {
+    permissionOverridesLoading.value = false
   }
 }
-function saveUserPermissions(id: unknown, values: string[]) {
-  localStorage.setItem(userPermissionStorageKey(id), JSON.stringify(values))
+async function addPermissionOverride() {
+  const userId = Number(form.id)
+  const permissionId = Number(selectedPermissionId.value)
+  if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(permissionId) || permissionId <= 0) return
+  permissionOverridesError.value = ''
+  try {
+    // เพิ่ม override ด้วย ID จาก catalog แล้วโหลดผลล่าสุดกลับมา
+    await userManagementApi.setPermissionOverride(userId, permissionId, newOverrideAllowed.value)
+    await loadPermissionOverrides(userId)
+  } catch (error) {
+    permissionOverridesError.value = error instanceof Error ? error.message : 'เพิ่มสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
+  }
 }
-const selectedUserPermissions = computed<string[]>({
-  get: () => permissionList(form.permission).map((permission) => permission.key),
-  set: (values) => {
-    form.permission = values.filter((value) => permissions.includes(value)).join(' ')
-  },
-})
+async function updatePermissionOverride(override: UserPermissionOverride, allowed: boolean) {
+  const userId = Number(form.id)
+  if (!Number.isSafeInteger(userId) || userId <= 0) return
+  permissionOverridesError.value = ''
+  try {
+    // เปลี่ยนเฉพาะค่า allow/deny ของ permission ที่เลือก
+    await userManagementApi.setPermissionOverride(userId, override.permissionId, allowed)
+    await loadPermissionOverrides(userId)
+  } catch (error) {
+    permissionOverridesError.value = error instanceof Error ? error.message : 'บันทึกสิทธิ์ไม่สำเร็จ'
+  }
+}
+async function resetPermissionOverride(override: UserPermissionOverride) {
+  const userId = Number(form.id)
+  if (!Number.isSafeInteger(userId) || userId <= 0) return
+  permissionOverridesError.value = ''
+  try {
+    await userManagementApi.resetPermissionOverride(userId, override.permissionId)
+    await loadPermissionOverrides(userId)
+  } catch (error) {
+    permissionOverridesError.value = error instanceof Error ? error.message : 'คืนค่าสิทธิ์ตามบทบาทไม่สำเร็จ'
+  }
+}
 const masterItems = computed(() =>
   data.master.map((row) => ({
     id: Number(row.id),
@@ -527,7 +562,6 @@ function defaults() {
       code: '',
       phone: '',
       branch: selectedBranchName.value || openBranches.value[0]?.name || '',
-      permission: 'Patient Visit Treatment',
       status: 'ใช้งาน',
     })
   if (section.value === 'services')
@@ -561,6 +595,11 @@ function defaults() {
     Object.assign(form, { category: 'Customer Group', count: 1, examples: '', status: 'ใช้งาน' })
 }
 function openDrawer(index: number | null) {
+  permissionOverrides.value = []
+  permissionCatalog.value = []
+  permissionOverridesError.value = ''
+  selectedPermissionId.value = ''
+  newOverrideAllowed.value = true
   editingIndex.value = index
   Object.keys(form).forEach((key) => delete form[key])
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
@@ -571,36 +610,16 @@ function openDrawer(index: number | null) {
   else defaults()
   if (section.value === 'branches') form.contact = limitPhoneDigits(String(form.contact ?? ''))
   if (section.value === 'users') form.phone = limitPhoneDigits(String(form.phone ?? ''))
-  // a rule starts on the 1st of a month: the form takes the month only
-  if (section.value === 'commission')
-    form.effectiveFrom = String(form.effectiveFrom ?? '').slice(0, 7)
   drawerOpen.value = true
-}
-/**
- * The page edits "the fee rule": the form opens with the values of the rule in force, and saving for a later month makes a new
- * version behind the scenes. When a version already waits to start, that version is edited instead of a new one made.
- */
-function openFeeEditor() {
-  const pending = feePending.value
-  if (pending) {
-    openDrawer(data.commission.indexOf(pending.row))
-    return
-  }
-  openDrawer(null)
-  const current = feeInForce.value?.row
-  if (current)
-    Object.assign(form, {
-      name: current.name,
-      feeType: current.feeType,
-      feeValue: current.feeValue,
-    })
+  if (section.value === 'users' && index !== null && Number.isSafeInteger(Number(form.id)))
+    void loadPermissionOverrides(Number(form.id))
 }
 const textOrUndefined = (value: unknown) => String(value ?? '').trim() || undefined
 const numberOrUndefined = (value: unknown) => {
   const text = String(value ?? '').trim()
   return text === '' ? undefined : Number(text)
 }
-// Appointment lengths are optional whole minutes from 5 to 480.
+// ระยะเวลานัดไม่บังคับและรับเฉพาะจำนวนเต็ม 5–480 นาที
 function invalidMinutes(value: unknown) {
   const text = String(value ?? '').trim()
   if (text === '') return false
@@ -613,10 +632,10 @@ async function save() {
   validationMessage.value = ''
   const required: Record<Exclude<SectionKey, 'payments'>, string[]> = {
     branches: ['code', 'name', 'address', 'contact'],
-    users: ['name', 'role', 'branch', 'username', 'code'],
+    users: ['name', 'role', 'branch', 'username', 'code', 'email'],
     services: ['name', 'type', 'price'],
     rooms: ['name', 'branch', 'type'],
-    commission: ['name', 'feeValue', 'effectiveFrom'],
+    commission: [],
     tiers: [],
     master: ['category', 'examples'],
   }
@@ -630,13 +649,18 @@ async function save() {
   if (section.value === 'users' && String(form.phone ?? '').trim()) {
     fieldErrors.phone = !isOptionalPhoneValid(String(form.phone).trim())
   }
+  if (section.value === 'users') {
+    // บัญชีผู้ใช้ต้องมีอีเมลรูปแบบถูกต้องและยาวไม่เกิน 254 ตัวอักษร
+    const email = String(form.email ?? '').trim()
+    fieldErrors.email = email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
   if (section.value === 'branches') {
     fieldErrors.code = !/^\d{2}$/.test(String(form.code))
     const email = String(form.email ?? '').trim()
     fieldErrors.email = email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     const open = String(form.openTime ?? '').trim()
     const close = String(form.closeTime ?? '').trim()
-    // the booking window needs both ends, opening before closing
+    // เวลาทำการต้องกรอกต้นและปลายคู่กัน และเวลาเปิดต้องมาก่อนเวลาปิด
     fieldErrors.openTime = (open === '') !== (close === '') || (open !== '' && open >= close)
     fieldErrors.closeTime = fieldErrors.openTime
     fieldErrors.appointmentMinutes = invalidMinutes(form.appointmentMinutes)
@@ -653,24 +677,9 @@ async function save() {
         !Number.isInteger(Number(form.validityValue)) || Number(form.validityValue) < 1
     }
   }
-  if (section.value === 'commission') {
-    const value = Number(form.feeValue)
-    fieldErrors.feeValue =
-      String(form.feeValue ?? '').trim() === '' ||
-      !Number.isFinite(value) ||
-      value < 0 ||
-      (form.feeType === 'Percentage' && value > 100)
-    fieldErrors.effectiveFrom = !/^[0-9]{4}-[0-9]{2}$/.test(String(form.effectiveFrom ?? ''))
-  }
   if (Object.values(fieldErrors).some(Boolean)) {
     validationMessage.value =
-      section.value === 'commission'
-        ? fieldErrors.feeValue
-          ? form.feeType === 'Percentage'
-            ? 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
-            : 'จำนวนเงินต้องเป็นตัวเลขไม่ติดลบ'
-          : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
-        : fieldErrors.contact
+      fieldErrors.contact
           ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
           : fieldErrors.phone
             ? 'เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก'
@@ -710,7 +719,7 @@ async function save() {
       record = branchRow(
         existing?.id ? await branchApi.update(existing.id, body) : await branchApi.create(body),
       )
-      // the status chosen in the form (ใช้งาน / ปิดใช้งาน) is applied to the branch being edited; a new branch is always open
+      // ใช้สถานะจากฟอร์ม; สาขาใหม่เริ่มต้นเป็นใช้งาน
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await branchApi.activate(record.id as number)
         else await branchApi.deactivate(record.id as number)
@@ -719,7 +728,7 @@ async function save() {
     } else if (section.value === 'users') {
       const body = {
         username: form.username,
-        email: form.email || undefined,
+        email: String(form.email).trim(),
         ...(form.password ? { password: form.password } : {}),
         role: form.role === 'Manager' ? ('MANAGER' as const) : ('THERAPIST' as const),
         employeeCode: form.code,
@@ -734,9 +743,7 @@ async function save() {
           ? await userManagementApi.update(existing.id, body)
           : await userManagementApi.create({ ...body, password: form.password }),
       )
-      saveUserPermissions(record.id, selectedUserPermissions.value)
-      record.permission = selectedUserPermissions.value.join(' ')
-      // the status chosen in the form (ใช้งาน / ปิดใช้งาน) is applied to the user being edited; a new user is always active
+      // ใช้สถานะจากฟอร์ม; ผู้ใช้ใหม่เริ่มต้นเป็นใช้งาน
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await userManagementApi.activate(existing.id)
         else await userManagementApi.deactivate(existing.id)
@@ -744,7 +751,7 @@ async function save() {
       }
     } else if (section.value === 'services') {
       const code = existing?.code || form.code || `SV-${Date.now()}`
-      // the type chosen in the form is applied first (the server refuses it once the item has been used)
+      // ส่งประเภทที่เลือกก่อน; backend ปฏิเสธการเปลี่ยนเมื่อมีการใช้งานแล้ว
       if (existing?.id && existing.type && form.type !== existing.type) {
         await serviceManagementApi.changeType(
           existing.id,
@@ -779,7 +786,7 @@ async function save() {
             : await serviceManagementApi.create(body),
         )
       }
-      // the status chosen in the form (ใช้งาน / ปิดใช้งาน) is applied to the item being edited
+      // ใช้สถานะจากฟอร์มกับรายการที่กำลังแก้ไข
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await serviceManagementApi.activate(existing.id)
         else await serviceManagementApi.deactivate(existing.id)
@@ -791,7 +798,7 @@ async function save() {
         code: existing?.code || form.code || `RES-${Date.now()}`,
         name: form.name,
         type: form.type === 'Treatment Room' ? 'ROOM' : 'EQUIPMENT',
-        // Enabled (ใช้งาน, green) or Disabled (ปิดใช้งาน, red)
+        // แสดงสีตามสถานะเปิดหรือปิดใช้งาน
         status: form.status === 'ปิดใช้งาน' ? 'INACTIVE' : 'ACTIVE',
       }
       record = resourceRow(
@@ -808,35 +815,16 @@ async function save() {
           ? await masterDataApi.update(existing.id, body)
           : await masterDataApi.create(body),
       )
-      // the status chosen in the form (ใช้งาน / ปิดใช้งาน) is applied to the item being edited; a new item is always active
+      // ใช้สถานะจากฟอร์ม; รายการใหม่เริ่มต้นเป็นใช้งาน
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await masterDataApi.activate(existing.id)
         else await masterDataApi.deactivate(existing.id)
         record.status = String(form.status)
       }
     } else {
-      const body = {
-        name: String(form.name).trim(),
-        feeType: form.feeType as 'Fixed' | 'Percentage',
-        feeValue: Number(form.feeValue),
-        // a rule begins on the 1st of the month picked; its end is set by the system (the day before the next rule)
-        // keeping the month of a version that waits to start keeps its start date as it is
-        effectiveFrom:
-          existing?.effectiveFrom &&
-          String(existing.effectiveFrom).slice(0, 7) === String(form.effectiveFrom).slice(0, 7)
-            ? String(existing.effectiveFrom)
-            : `${String(form.effectiveFrom).slice(0, 7)}-01`,
-      }
-      const rule = existing?.id
-        ? await commissionApi.updateTreatmentFee(existing.id, body)
-        : await commissionApi.createTreatmentFee(body)
-      // saving a rule can end the one that was running, so the whole list is read again
-      await loadCommissionRows()
-      record = feeRow(rule)
+      throw new Error('หมวดนี้อ่านอย่างเดียว กรุณาใช้หน้าจัดการกฎค่ามือ')
     }
-    if (section.value === 'commission') {
-      // the rows were reloaded above
-    } else if (editingIndex.value === null) rows.push(record)
+    if (editingIndex.value === null) rows.push(record)
     else rows[editingIndex.value] = record
     drawerOpen.value = false
     saveModalOpen.value = true
@@ -853,7 +841,7 @@ function notify(message: string) {
     savedMessage.value = ''
   }, 2200)
 }
-// Each payment option can be enabled independently; every change is confirmed first.
+// ยืนยันก่อนเปลี่ยนสถานะของช่องทางชำระแต่ละรายการ
 const paymentLabels: Record<string, string> = {
   BankTransfer: 'โอนเงินผ่านธนาคาร',
   PromptPay: 'พร้อมเพย์',
@@ -988,7 +976,7 @@ const drawerTitle = computed(() => {
             <div v-else-if="section === 'commission'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/fee-history"
                 >ประวัติเวอร์ชัน</RouterLink
-              ><button class="settings-add" @click="openFeeEditor">แก้กฎค่ามือ</button>
+              ><TreatmentFeeRuleDrawer @saved="loadBackendSettings" />
             </div>
             <div v-else-if="section === 'tiers'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/commission-history"
@@ -1391,7 +1379,14 @@ const drawerTitle = computed(() => {
             >Username<input
               v-model="form.username"
               :class="{ invalid: fieldErrors.username }" /></label
-          ><label>อีเมล<input v-model="form.email" type="email" /></label
+          ><label
+            >อีเมล<input
+              v-model="form.email"
+              type="email"
+              required
+              maxlength="254"
+              :class="{ invalid: fieldErrors.email }" />
+            <small v-if="fieldErrors.email" role="alert">กรอกอีเมลบัญชีที่ถูกต้อง ไม่เกิน 254 ตัวอักษร</small></label
           ><label
             >รหัสผ่าน<input
               v-model="form.password"
@@ -1427,14 +1422,50 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false"
           /></label>
-          <fieldset>
-            <legend>สิทธิ์ตามบทบาท</legend>
-            <label v-for="permission in permissions" :key="permission" class="check"
-              ><input v-model="selectedUserPermissions" type="checkbox" :value="permission" />{{
-                permission
-              }}</label
-            >
-          </fieldset>
+          <section class="user-permission-overrides" aria-label="สิทธิ์เฉพาะผู้ใช้">
+            <h3>สิทธิ์เฉพาะผู้ใช้</h3>
+            <p>สิทธิ์หลักมาจากบทบาท บรรทัดด้านล่างคือรายการ override ที่ backend บันทึกไว้เท่านั้น</p>
+            <p v-if="editingIndex === null">บันทึกบัญชีก่อนจึงดูและจัดการ override ของผู้ใช้ได้</p>
+            <p v-else-if="permissionOverridesLoading" role="status">กำลังโหลด override…</p>
+            <p v-else-if="permissionOverrides.length === 0">ไม่มี override ที่บันทึกไว้ · ใช้สิทธิ์ตามบทบาท</p>
+            <p v-if="permissionOverridesError" role="alert">{{ permissionOverridesError }}</p>
+            <ul v-if="permissionOverrides.length">
+              <li v-for="override in permissionOverrides" :key="override.permissionId">
+                <span>{{ override.permissionName }}</span>
+                <label>
+                  <input
+                    type="checkbox"
+                    :checked="override.allowed"
+                    @change="updatePermissionOverride(override, ($event.target as HTMLInputElement).checked)"
+                  />
+                  {{ override.allowed ? 'อนุญาต' : 'ปฏิเสธ' }}
+                </label>
+                <button type="button" @click="resetPermissionOverride(override)">คืนค่าตามบทบาท</button>
+              </li>
+            </ul>
+            <div v-if="editingIndex !== null && !permissionOverridesLoading" class="permission-override-add">
+              <label>
+                เพิ่มสิทธิ์เฉพาะผู้ใช้
+                <select v-model="selectedPermissionId" :disabled="availablePermissions.length === 0">
+                  <option value="" disabled>เลือกสิทธิ์</option>
+                  <option v-for="permission in availablePermissions" :key="permission.id" :value="String(permission.id)">
+                    {{ permission.moduleName ? `${permission.moduleName} · ` : '' }}{{ permission.permissionName }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                ผล override
+                <select v-model="newOverrideAllowed" :disabled="availablePermissions.length === 0">
+                  <option :value="true">อนุญาต</option>
+                  <option :value="false">ปฏิเสธ</option>
+                </select>
+              </label>
+              <button type="button" :disabled="!selectedPermissionId || availablePermissions.length === 0" @click="addPermissionOverride">
+                เพิ่ม override
+              </button>
+              <small v-if="availablePermissions.length === 0">ไม่มี permission ที่ยังไม่ได้กำหนด override</small>
+            </div>
+          </section>
           <label
             v-if="editingIndex !== null"
             class="status-field"
@@ -1524,56 +1555,9 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false" /></label
         ></template>
-        <template v-else-if="section === 'commission'"
-          ><label
-            >ชื่อกฎค่ามือ<input
-              v-model="form.name"
-              maxlength="100"
-              :class="{ invalid: fieldErrors.name }"
-              placeholder="ระบุชื่อเกณฑ์" /></label
-          ><label
-            >ผู้ได้รับค่ามือ<input
-              class="locked-field"
-              value="นักกายภาพทั้งหมด"
-              disabled
-              readonly
-              aria-label="ผู้ได้รับค่ามือ"
-          /></label>
-          <fieldset class="fee-type" :disabled="form.used">
-            <legend>วิธีคำนวณ</legend>
-            <label class="check"
-              ><input v-model="form.feeType" type="radio" value="Fixed" />จำนวนเงิน (บาท /
-              ครั้ง)</label
-            >
-            <label class="check"
-              ><input v-model="form.feeType" type="radio" value="Percentage" />เปอร์เซ็นต์
-              (%)</label
-            >
-          </fieldset>
-          <label
-            >{{ form.feeType === 'Percentage' ? 'อัตรา (%)' : 'จำนวนเงินต่อครั้ง (บาท)'
-            }}<input
-              v-model="form.feeValue"
-              type="number"
-              min="0"
-              step="0.01"
-              :disabled="form.used"
-              :class="{ invalid: fieldErrors.feeValue }"
-              :placeholder="
-                form.feeType === 'Percentage' ? 'เช่น 10' : 'จำนวนเงินต่อครั้ง เช่น 300 บาท / ครั้ง'
-              " /></label
-          ><label
-            >เดือนที่เริ่มมีผล (เริ่มวันที่ 1 · วันสิ้นสุดระบบกำหนดให้)<MonthFilterPicker
-              v-model="form.effectiveFrom"
-              :min="editingIndex === null ? nextCycleMonth() : undefined"
-              :disabled="form.used"
-              :class="{ invalid: fieldErrors.effectiveFrom }"
-          /></label>
-          <p v-if="form.used" class="hint">
-            กฎนี้ถูกใช้คำนวณแล้ว แก้ได้เฉพาะชื่อ
-            ถ้าต้องการเปลี่ยนอัตราให้แก้กฎค่ามือเพื่อสร้างเวอร์ชันใหม่
-          </p></template
-        >
+        <template v-else-if="section === 'commission'">
+          <p>ตั้งค่ากฎค่ามือได้จากปุ่มด้านบน ระบบจะสร้างเวอร์ชันใหม่ตามเดือนที่เริ่มใช้งาน</p>
+        </template>
         <template v-else-if="section === 'master'"
           ><label :class="{ 'invalid-field': fieldErrors.category }"
             >ประเภทข้อมูล<FilterDropdown
