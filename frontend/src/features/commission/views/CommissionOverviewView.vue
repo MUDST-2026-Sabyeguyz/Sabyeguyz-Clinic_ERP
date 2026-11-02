@@ -7,6 +7,7 @@ import MonthFilterPicker from "@/features/staff/components/MonthFilterPicker.vue
 import CommissionTabs from "./CommissionTabs.vue";
 import { commissionApi, staffApi } from "@/api/client";
 import { selectedManagerBranch } from "@/features/staff/data/managerBranch";
+import { clinicToday } from "@/utils/clinicDate";
 
 type PersonRow = {
   id: string;
@@ -24,11 +25,12 @@ const errorMessage = ref("");
 const route = useRoute();
 const search = ref(typeof route.query.search === "string" ? route.query.search : "");
 const status = ref(route.query.status === "pending" || route.query.status === "approved" ? route.query.status : "");
+const selectedBranchCode = computed(() => selectedManagerBranch()?.code ?? "");
 const selectedMonth = String(route.query.month ?? "");
 const date = ref(
   /^\d{4}-(0[1-9]|1[0-2])$/.test(selectedMonth)
     ? `${selectedMonth}-01`
-    : new Date().toISOString().slice(0, 10),
+    : clinicToday(),
 );
 const monthFilter = computed({
   get: () => date.value.slice(0, 7),
@@ -39,7 +41,7 @@ const monthFilter = computed({
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
-      row.branch === selectedManagerBranch()?.code &&
+      row.branch === selectedBranchCode.value &&
       (!search.value ||
         row.name.includes(search.value) ||
         row.id.toLowerCase().includes(search.value.toLowerCase())) &&
@@ -64,6 +66,7 @@ const money = (value: number | null) =>
   value === null ? "—" : `฿${value.toLocaleString("th-TH")}`;
 let requestVersion = 0;
 async function loadOverview() {
+  // โหลดรายงาน ปิดยอด งวดจ่าย และบุคลากรตามเดือน/สาขาที่เลือก
   const version = ++requestVersion;
   errorMessage.value = "";
   rows.value = [];
@@ -74,13 +77,16 @@ async function loadOverview() {
       2,
       "0",
     );
+    const branchCode = selectedBranchCode.value;
+    if (!branchCode) throw new Error("กรุณาเลือกสาขาก่อนดูภาพรวมค่าตอบแทน");
     const [data, closings, payments, staff] = await Promise.all([
       commissionApi.report(`${period}-01`, `${period}-${lastDay}`),
-      commissionApi.closings(period),
-      commissionApi.payments(period),
+      commissionApi.closings(period, branchCode),
+      commissionApi.payments(period, branchCode),
       staffApi.list(),
     ]);
     if (version !== requestVersion) return;
+    // รวมแหล่งข้อมูลเป็นแถวเดียวต่อพนักงาน โดยคงยอดที่ยังไม่ทราบเป็น null
     const closingStatus = new Map(
       closings.map((item) => [item.employeeId, item.status]),
     );
@@ -90,7 +96,7 @@ async function loadOverview() {
     );
     const salesByStaff = new Map(
       data
-        .filter((row) => row.staffId !== null)
+        .filter((row) => row.staffId !== null && row.branchCode === branchCode)
         .map((row) => [row.staffId!, row]),
     );
     const ids = new Set([...salesByStaff.keys(), ...payroll.keys()]);
@@ -123,7 +129,7 @@ async function loadOverview() {
   }
 }
 onMounted(loadOverview);
-watch(date, loadOverview);
+watch([date, selectedBranchCode], loadOverview);
 </script>
 <template>
   <div class="commission-manager-page">
