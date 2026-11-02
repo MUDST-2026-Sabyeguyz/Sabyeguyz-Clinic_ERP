@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { commissionApi } from '@/api/client'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
+import { clinicToday } from '@/utils/clinicDate'
+import { nextSchemeEffectiveFrom } from '@/features/settings/commissionVersion'
 
 type Tier = { order: number; min: number; max: number | null; rate: number; active: boolean }
 const tiers = reactive<Tier[]>([])
-const router = useRouter()
 const editingIndex = ref(-1)
 const editorOpen = ref(false)
 const editorType = ref<'tier' | 'scheme'>('tier')
@@ -16,24 +17,24 @@ const error = ref('')
 const scheme = reactive({
   id: 0,
   name: '',
-  version: '',
+  version: '' as number | '',
   effectiveFrom: '',
   active: true,
+  locked: false,
   effectiveTo: null as string | null,
 })
 const form = reactive({ min: 0, max: '' as number | '', rate: 5, active: true })
 const schemeForm = reactive({
   name: 'Commission Scheme',
-  version: '2',
   effectiveFrom: '2027-01-01',
-  effectiveTo: '',
   basis: 'net',
 })
 const schemeTiers = reactive<Tier[]>([])
 const moneyStep = 0.01
 const loading = ref(false)
+// Scheme ที่เริ่มมีผลแล้วห้ามแก้ย้อนหลัง ให้สร้าง Version ใหม่แทน
 const schemeLocked = computed(
-  () => Boolean(scheme.effectiveFrom) && new Date(`${scheme.effectiveFrom}T00:00:00`) <= new Date(),
+  () => scheme.locked || (Boolean(scheme.effectiveFrom) && scheme.effectiveFrom <= clinicToday()),
 )
 const dateLabel = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
@@ -51,12 +52,6 @@ function rateLabel(rate: number) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(Number(rate.toFixed(2)))
-}
-function editInSettings(index: number) {
-  void router.push({
-    path: '/staff/settings',
-    query: { section: 'commission', schemeId: scheme.id, tier: tiers[index]?.order },
-  })
 }
 const formStatus = computed({
   get: () => (form.active ? 'active' : 'inactive'),
@@ -80,13 +75,12 @@ function openEditor(index = -1) {
   editorOpen.value = true
 }
 function openSchemeEditor() {
+  // คัดลอก Tier ปัจจุบันไปตั้งต้นสำหรับ Version ใหม่
   editorType.value = 'scheme'
   error.value = ''
   Object.assign(schemeForm, {
     name: scheme.name,
-    version: String(Number(scheme.version || 0) + 1),
-    effectiveFrom: scheme.effectiveTo || `${new Date().getFullYear() + 1}-01-01`,
-    effectiveTo: '',
+    effectiveFrom: nextSchemeEffectiveFrom(scheme.effectiveTo),
   })
   schemeTiers.splice(0, schemeTiers.length, ...tiers.map((tier) => ({ ...tier })))
   editorOpen.value = true
@@ -147,19 +141,16 @@ function removeSchemeTier(index: number) {
 }
 async function saveSchemeVersion() {
   error.value = ''
-  if (!schemeForm.name.trim() || !schemeForm.version.trim() || !schemeForm.effectiveFrom) {
-    error.value = 'กรุณากรอกชื่อ Version และวันที่เริ่มมีผล'
+  if (!schemeForm.name.trim() || !schemeForm.effectiveFrom) {
+    error.value = 'กรุณากรอกชื่อ Scheme และวันที่เริ่มมีผล'
     return
   }
   try {
-    if (scheme.effectiveTo && schemeForm.effectiveFrom < scheme.effectiveTo) {
+    if (scheme.effectiveTo && schemeForm.effectiveFrom <= scheme.effectiveTo) {
       error.value = 'วันที่เริ่มมีผลต้องไม่ทับ Version เดิม'
       return
     }
-    if (schemeForm.effectiveTo && schemeForm.effectiveTo < schemeForm.effectiveFrom) {
-      error.value = 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มมีผล'
-      return
-    }
+    // ตรวจช่วงยอดขายให้ต่อเนื่องก่อนส่งสร้าง Version ใหม่
     const activeTiers = schemeTiers.filter((t) => t.active).sort((a, b) => a.min - b.min)
     const invalidTier = activeTiers.some(
       (tier, index) =>
@@ -179,29 +170,26 @@ async function saveSchemeVersion() {
       error.value = 'ตรวจช่วงยอดขายและอัตราของ Tier ให้ต่อเนื่องกัน'
       return
     }
-    // The API stores an exclusive end date; the date picker shows the last active day.
-    const endDate = schemeForm.effectiveTo ? new Date(`${schemeForm.effectiveTo}T12:00:00`) : null
-    if (endDate) endDate.setDate(endDate.getDate() + 1)
-    const effectiveTo = endDate
-      ? `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
-      : null
-    const created = (await commissionApi.createScheme({
+    const branchCode = selectedManagerBranch()?.code
+    if (!branchCode) throw new Error('กรุณาเลือกสาขาก่อนบันทึกกฎ')
+    const created = (await commissionApi.createSchemeVersion(scheme.id, {
       name: schemeForm.name,
-      version: schemeForm.version,
       effectiveFrom: schemeForm.effectiveFrom,
-      effectiveTo,
+      branchCode,
       tiers: activeTiers.map((t, index) => ({
         minimum: t.min,
         maximum: t.max,
+        // หน้าจอรับเปอร์เซ็นต์ เช่น 5 แต่ API เก็บอัตราเป็น 0.05
         rate: t.rate / 100,
         order: index + 1,
       })),
     })) as {
       id: number
       name: string
-      version: string
+      version: number
       effectiveFrom: string
       effectiveTo: string | null
+      locked?: boolean
     }
     Object.assign(scheme, created)
     tiers.splice(
@@ -216,6 +204,11 @@ async function saveSchemeVersion() {
 }
 async function saveTier() {
   error.value = ''
+  const branchCode = selectedManagerBranch()?.code
+  if (!branchCode) {
+    error.value = 'กรุณาเลือกสาขาก่อนบันทึกกฎค่าคอมมิชชัน'
+    return
+  }
   const maximum = form.max === '' ? null : Number(form.max)
   if (form.min < 0 || form.rate < 0 || (maximum !== null && form.min > maximum)) {
     error.value = 'ตรวจสอบยอดขายขั้นต่ำ ยอดขายสูงสุด และอัตราคอมมิชชันอีกครั้ง'
@@ -246,6 +239,7 @@ async function saveTier() {
       version: scheme.version,
       effectiveFrom: scheme.effectiveFrom,
       effectiveTo: scheme.effectiveTo,
+      branchCode,
       tiers: tiers
         .filter((t) => t.active)
         .sort((a, b) => a.min - b.min)
@@ -267,7 +261,7 @@ onMounted(async () => {
     const schemes = (await commissionApi.schemes()) as Array<{
       id: number
       name: string
-      version: string
+      version: number
       effectiveFrom: string
       effectiveTo: string | null
     }>
@@ -369,7 +363,9 @@ onMounted(async () => {
                   }}</span>
                 </td>
                 <td>
-                  <button class="commission-secondary" @click="editInSettings(index)">แก้ไข</button>
+                  <button class="commission-secondary" :disabled="schemeLocked" @click="openEditor(index)">
+                    {{ schemeLocked ? 'อ่านอย่างเดียว' : 'แก้ไขเวอร์ชันที่ยังไม่เริ่ม' }}
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -415,14 +411,6 @@ onMounted(async () => {
               <label
                 >วันที่เริ่มมีผล *<ThaiDatePicker
                   v-model="schemeForm.effectiveFrom"
-                  numeric-month
-                  show-calendar-icon
-                  hide-caret
-              /></label>
-              <label
-                >วันที่สิ้นสุด<ThaiDatePicker
-                  v-model="schemeForm.effectiveTo"
-                  placeholder="ไม่กำหนด"
                   numeric-month
                   show-calendar-icon
                   hide-caret
