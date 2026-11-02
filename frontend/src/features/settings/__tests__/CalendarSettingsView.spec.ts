@@ -11,6 +11,7 @@ vi.mock('@/api/client', () => ({
 describe('calendar settings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.setItem('authUser', JSON.stringify({ role: 'MANAGER' }))
     HTMLDialogElement.prototype.showModal = function () {
       this.setAttribute('open', '')
     }
@@ -26,7 +27,7 @@ describe('calendar settings', () => {
         {
           branchCode: '01',
           branchName: 'พระราม 9',
-          googleCalendarId: 'rama@example.com',
+          googleCalendarId: 'rama@gmail.com',
           waiting: 2,
           failed: 1,
         },
@@ -38,11 +39,11 @@ describe('calendar settings', () => {
     })
     await flushPromises()
     expect(view.find('table').exists()).toBe(false)
-    expect(view.text()).toContain('บันทึกการเชื่อมต่อ')
+    expect(view.text()).toContain('บันทึก')
     expect(view.get('a[data-cy="calendar-open"]').attributes('href')).toContain(
-      encodeURIComponent('rama@example.com'),
+      encodeURIComponent('rama@gmail.com'),
     )
-    expect(view.text()).toContain('ซิงก์ล่าสุด:')
+    expect(view.text()).toContain('sync ล่าสุด :')
     expect(view.text()).not.toContain('รอบรวมทุกสาขา')
     expect(view.get('[data-cy="calendar-sync"]').text()).toBe('sync ↻')
     view.unmount()
@@ -54,14 +55,14 @@ describe('calendar settings', () => {
         {
           branchCode: '01',
           branchName: 'พระราม 9',
-          googleCalendarId: 'rama@example.com',
+          googleCalendarId: 'rama@gmail.com',
           waiting: 0,
           failed: 0,
         },
         {
           branchCode: '02',
           branchName: 'แบริ่ง',
-          googleCalendarId: 'bearing@example.com',
+          googleCalendarId: 'bearing@gmail.com',
           waiting: 0,
           failed: 0,
         },
@@ -81,21 +82,21 @@ describe('calendar settings', () => {
     setSelectedManagerBranch({ code: '02', name: 'แบริ่ง' })
     await nextTick()
     expect(view.find('[data-cy="calendar-row-01"]').exists()).toBe(false)
-    expect((view.get('input').element as HTMLInputElement).value).toBe('bearing@example.com')
-    await view.get('input').setValue('rama@example.com')
-    api.save.mockResolvedValue({ branchCode: '02', googleCalendarId: 'rama@example.com' })
+    expect((view.get('input').element as HTMLInputElement).value).toBe('bearing@gmail.com')
+    await view.get('input').setValue('rama@gmail.com')
+    api.save.mockResolvedValue({ branchCode: '02', googleCalendarId: 'rama@gmail.com' })
     await view.get('form').trigger('submit')
     await flushPromises()
-    expect(api.save).toHaveBeenCalledExactlyOnceWith('02', 'rama@example.com')
+    expect(api.save).toHaveBeenCalledExactlyOnceWith('02', 'rama@gmail.com')
     expect(view.text()).not.toContain('แต่ละสาขาต้องใช้ Calendar ID คนละค่า')
     setSelectedManagerBranch({ code: '01', name: 'พระราม 9' })
     await nextTick()
-    expect((view.get('input').element as HTMLInputElement).value).toBe('rama@example.com')
+    expect((view.get('input').element as HTMLInputElement).value).toBe('rama@gmail.com')
     view.unmount()
   })
   it('only disconnects the selected branch after confirmation', async () => {
     api.status.mockResolvedValue({ enabled: true, branches: [
-      { branchCode: '01', branchName: 'พระราม 9', googleCalendarId: 'rama@example.com', waiting: 0, failed: 0 },
+      { branchCode: '01', branchName: 'พระราม 9', googleCalendarId: 'rama@gmail.com', waiting: 0, failed: 0 },
     ] })
     api.save.mockResolvedValue({ branchCode: '01', googleCalendarId: null })
     setManagerBranches([{ code: '01', name: 'พระราม 9' }])
@@ -111,7 +112,7 @@ describe('calendar settings', () => {
   })
   it('does not use an empty input as a disconnect request', async () => {
     api.status.mockResolvedValue({ enabled: true, branches: [
-      { branchCode: '01', branchName: 'พระราม 9', googleCalendarId: 'rama@example.com', waiting: 0, failed: 0 },
+      { branchCode: '01', branchName: 'พระราม 9', googleCalendarId: 'rama@gmail.com', waiting: 0, failed: 0 },
     ] })
     setManagerBranches([{ code: '01', name: 'พระราม 9' }])
     const view = mount(CalendarSettingsView, { global: { stubs: { StaffHeader: true, RouterLink: true } } })
@@ -120,6 +121,30 @@ describe('calendar settings', () => {
     await view.get('form').trigger('submit')
     expect(api.save).not.toHaveBeenCalled()
     expect(view.get('[data-cy="calendar-error"]').text()).toContain('กรุณากรอก Calendar ID')
+    view.unmount()
+  })
+  it('lets a therapist read their own branch calendar status without settings or sync controls', async () => {
+    localStorage.setItem('authUser', JSON.stringify({ role: 'THERAPIST' }))
+    api.status.mockResolvedValue({
+      enabled: true,
+      lastRunAt: null,
+      lastResult: null,
+      branches: [
+        { branchCode: 'PT01', branchName: 'สาขานักกายภาพ', googleCalendarId: 'clinic@gmail.com', waiting: 1, failed: 0 },
+      ],
+    })
+    setManagerBranches([])
+    const view = mount(CalendarSettingsView, {
+      global: { stubs: { StaffHeader: true, RouterLink: true } },
+    })
+    await flushPromises()
+    expect(view.text()).toContain('ดูสถานะปฏิทินของสาขาที่คุณสังกัด')
+    expect(view.text()).toContain('ปฏิทินของสาขานักกายภาพ')
+    expect(view.find('input').exists()).toBe(false)
+    expect(view.find('[data-cy="calendar-sync"]').exists()).toBe(false)
+    expect(decodeURIComponent(view.get('[data-cy="calendar-open"]').attributes('href')!)).toContain('clinic@gmail.com')
+    expect(api.save).not.toHaveBeenCalled()
+    expect(api.sync).not.toHaveBeenCalled()
     view.unmount()
   })
 })
