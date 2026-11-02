@@ -3,6 +3,48 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('AppointmentView', () => {
+  for (const filename of ['AppointmentView.vue', 'ManagerAppointmentView.vue']) {
+    it(`${filename} follows the main appointment status and interval contract`, () => {
+      const source = readFileSync(
+        resolve(process.cwd(), `src/features/appointments/views/${filename}`),
+        'utf8',
+      )
+      const statusChange = source.match(/async function requestStatusChange\([\s\S]*?\n\}/)?.[0] ?? ''
+      const statusChoices = source.match(/const appointmentStatusOptions:[\s\S]*?\n\]/)?.[0] ?? ''
+
+      expect(source).toContain('appointmentInterval(')
+      expect(source).toContain('endAt: interval.endAt')
+      expect(source).toContain('appointmentLocalFields(item.endAt)')
+      expect(source).toContain('availabilityDurationMinutes.value ?? selectedService.value?.durationMinutes ?? 60')
+      expect(source).toContain('availabilityDurationMinutes.value = result.durationMinutes')
+      expect(source).not.toMatch(/appointmentApi\.(confirm|checkIn|startService|complete|noShow)\(/)
+      expect(source).not.toMatch(/status === '(RESCHEDULED|NO_SHOW|COMPLETED|ARRIVED|IN_SERVICE)'/)
+      expect(statusChoices).not.toContain("'PENDING'")
+      expect(statusChange).toContain("item.status !== 'UNCONFIRMED'")
+      expect(statusChange).toContain("name: 'patient-registration'")
+      expect(statusChange).toContain("name: 'staff-services'")
+      expect(statusChange).not.toContain("saveStatus(item, 'CONFIRMED')")
+      expect(source).toContain("value !== 'PENDING'")
+    })
+
+    it(`${filename} keeps the appointment table free of a separate actions column`, () => {
+      const source = readFileSync(
+        resolve(process.cwd(), `src/features/appointments/views/${filename}`),
+        'utf8',
+      )
+      const table = source.match(/<table[\s\S]*?class="staff-table"[\s\S]*?>([\s\S]*?)<\/table>/)?.[1] ?? ''
+      const header = table.match(/<thead>([\s\S]*?)<\/thead>/)?.[1] ?? ''
+      const row = table.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? ''
+
+      expect(header.match(/<th\b/g) ?? []).toHaveLength(7)
+      expect(row.match(/<td\b/g) ?? []).toHaveLength(7)
+      expect(header).not.toContain('status-notice-cell')
+      expect(table).not.toContain('AppointmentProcessActions')
+      expect(source).toContain('class="appointment-register"')
+      expect(source).toContain('class="appointment-edit"')
+    })
+  }
+
   it('does not show a patient search box in the appointment list filters', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
@@ -10,9 +52,10 @@ describe('AppointmentView', () => {
     )
 
     const filters = source.match(
-      /<header class="panel-head appointment-list-filters">([\s\S]*?)<\/header>/,
+      /<div v-show="scheduleView === 'list'" class="appointment-list-controls">([\s\S]*?)<\/div>\s*<div v-if="scheduleView === 'list'" class="appointment-list-summary">/,
     )
 
+    expect(filters?.[1]).toBeDefined()
     expect(filters?.[1]).not.toContain('class="search-box"')
     expect(filters?.[1]).not.toContain('v-model="query"')
   })
@@ -24,11 +67,13 @@ describe('AppointmentView', () => {
     )
 
     const controls = source.match(
-      /<div v-show="scheduleView === 'list'" class="appointment-list-controls">([\s\S]*?)<\/header>\s*<\/div>/,
+      /<div v-show="scheduleView === 'list'" class="appointment-list-controls">([\s\S]*?)<\/div>\s*<div v-if="scheduleView === 'list'" class="appointment-list-summary">/,
     )
 
+    expect(controls?.[1]).toBeDefined()
     expect(controls?.[1]).toContain('class="appointment-list-mode-toggle"')
-    expect(controls?.[1]).toContain('class="panel-head appointment-list-filters"')
+    expect(controls?.[1]).toContain('appointment-list-filters')
+    expect(controls?.[1]).toContain('appointment-date-range')
   })
 
   it('shows the Figma patient details form when creating an appointment for a new patient', () => {
@@ -109,8 +154,9 @@ describe('AppointmentView', () => {
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
     )
-    const table = source.match(/<table class="staff-table">([\s\S]*?)<\/table>/)
+    const table = source.match(/<table[\s\S]*?class="staff-table"[\s\S]*?>([\s\S]*?)<\/table>/)
 
+    expect(table?.[1]).toBeDefined()
     expect(table?.[1]).not.toContain('<th>ห้อง</th>')
     expect(table?.[1]).not.toContain('{{ appointmentRoom(item) }}')
   })
@@ -120,10 +166,10 @@ describe('AppointmentView', () => {
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
     )
-    const table = source.match(/<table class="staff-table">([\s\S]*?)<\/table>/)
+    const table = source.match(/<table[\s\S]*?class="staff-table"[\s\S]*?>([\s\S]*?)<\/table>/)
 
+    expect(table?.[1]).toBeDefined()
     expect(table?.[1]).not.toContain('<th>สาขา</th>')
     expect(table?.[1]).not.toContain('{{ branchName(item.branchCode) }}')
-    expect(table?.[1]).toContain('colspan="8"')
   })
 })

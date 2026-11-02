@@ -93,7 +93,7 @@ const branchTherapists = computed(() => {
       .filter((item) => item.branchCode === branchCode.value)
       .map((item) => [item.id, item]),
   )
-  // Historical appointments remain visible even if their therapist is no longer in the active catalog.
+  // แสดงนัดเดิมแม้ผู้รักษาจะไม่อยู่ในรายการที่เปิดใช้งานแล้ว
   for (const item of activeAppointments(appointments.value, branchCode.value)) {
     if (!people.has(item.therapist.id))
       people.set(item.therapist.id, {
@@ -149,6 +149,7 @@ const times = computed(() =>
   ),
 )
 function events(day: string) {
+  // ใช้ startAt/endAt ของนัดจริงเพื่อจัดตำแหน่งและความสูงในปฏิทิน
   return layoutEvents(
     filteredAppointments.value
       .filter((item) => bangkokDate(item.startAt) === day)
@@ -200,6 +201,7 @@ function createAppointment() {
   })
 }
 function create(day: string, time: number) {
+  // ส่งวัน เวลา และผู้รักษาที่ว่างไปตั้งต้นในฟอร์มสร้างนัด
   if (!canCreate.value || refreshing.value || !branchCode.value) return
   const free = freeTherapists(day, time)
   if (!free.length) return
@@ -227,6 +229,7 @@ function editAppointment() {
 }
 let version = 0
 async function loadPeriod() {
+  // โหลดนัดทุกหน้าในช่วงปฏิทิน และยกเลิกผลจากคำขอรอบเก่า
   const request = ++version
   error.value = ''
   availabilityError.value = ''
@@ -268,7 +271,7 @@ async function loadPeriod() {
         .map((person) => ({ day, person })),
     )
     let failed = false
-    // Limit concurrency; the service may consult Google for availability.
+    // จำกัดจำนวนคำขอพร้อมกัน เพราะการตรวจเวลาว่างอาจเรียก Google Calendar
     for (let index = 0; index < requests.length; index += 5) {
       await Promise.all(
         requests.slice(index, index + 5).map(async ({ day, person }) => {
@@ -346,7 +349,7 @@ watch(
         JSON.stringify({ date: date.value, mode: mode.value, therapists: selectedIds.value }),
       )
     } catch {
-      /* Calendar remains usable without browser storage. */
+      /* ปฏิทินยังใช้งานได้แม้อ่านข้อมูลจาก browser storage ไม่สำเร็จ */
     }
   },
   { deep: true },
@@ -375,6 +378,7 @@ watch(
           >
             + สร้างนัดหมาย</button
           ><button
+            v-if="isManager"
             type="button"
             class="control calendar-sync"
             :disabled="loading || syncingCalendar || !branchCode"

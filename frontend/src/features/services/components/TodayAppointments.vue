@@ -41,6 +41,7 @@ async function load() {
   if (!branch) return
   loading.value = true
   try {
+    // อ่านทุกหน้าของนัดวันนี้ แล้วคัดเฉพาะสถานะที่ยังดูหรือเริ่มบริการได้
     const items: Appointment[] = []
     let page = 0
     let pages = 1
@@ -57,7 +58,7 @@ async function load() {
       page++
     }
     appointments.value = items
-      .filter((item) => item.branchCode === branch)
+      .filter((item) => item.branchCode === branch && (item.status === 'UNCONFIRMED' || item.status === 'CONFIRMED'))
       .sort((a, b) => a.startAt.localeCompare(b.startAt))
   } catch {
     if (current === request) error.value = 'โหลดรายการนัดวันนี้ไม่สำเร็จ'
@@ -84,7 +85,7 @@ onBeforeUnmount(() => {
       <button type="button" @click="load">ลองใหม่</button>
     </div>
     <p v-else-if="!visible.length" role="status">
-      {{ keyword?.trim() ? 'ไม่พบนัดวันนี้ที่ตรงกับคำค้น' : 'ไม่มีนัดหมายในวันนี้' }}
+      {{ keyword?.trim() ? 'ไม่พบนัดหมายวันนี้ตามคำค้น' : 'ไม่มีนัดหมายในวันนี้' }}
     </p>
     <div v-else class="today-table-scroll">
       <table>
@@ -111,15 +112,11 @@ onBeforeUnmount(() => {
             <td>
               <button
                 type="button"
-                :disabled="!item.patient?.id || !item.patient?.hn || item.status === 'CANCELLED'"
+                :disabled="item.status === 'UNCONFIRMED' && item.patientType !== 'NEW' && !item.patient?.id"
                 @click="$emit('select', item)"
               >
                 {{
-                  item.status === 'CANCELLED'
-                    ? 'ยกเลิกแล้ว'
-                    : item.patient?.hn
-                      ? 'เลือกผู้ป่วย'
-                      : 'ยังไม่ลงทะเบียน'
+                  item.status === 'CONFIRMED' ? 'ดูรายการเดิม' : item.patientType === 'NEW' ? 'ลงทะเบียนผู้ป่วย' : 'เริ่มบริการ'
                 }}
               </button>
             </td>

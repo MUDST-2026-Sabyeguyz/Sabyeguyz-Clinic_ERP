@@ -13,6 +13,7 @@ export function weekDates(value: string) {
   return Array.from({ length: 7 }, (_, index) => addDays(monday, index))
 }
 export function bangkokDate(value: string) {
+  // คำนวณวันตามเวลาคลินิก ไม่ใช้ timezone ของเครื่องผู้ใช้
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
@@ -48,15 +49,11 @@ export function therapistColor(id: number) {
   const pair = palette[Math.abs(id) % palette.length]!
   return { background: pair[0], color: pair[1] }
 }
+// ใช้สถานะสามค่าที่ฐานข้อมูลอนุญาตให้บันทึก
 export const statusText: Record<AppointmentStatus, string> = {
   UNCONFIRMED: 'ยังไม่ยืนยัน',
   CONFIRMED: 'ยืนยันแล้ว',
-  ARRIVED: 'มาถึงแล้ว',
-  IN_SERVICE: 'กำลังรักษา',
-  COMPLETED: 'ใช้บริการแล้ว',
   CANCELLED: 'ยกเลิก',
-  RESCHEDULED: 'เลื่อนนัด',
-  NO_SHOW: 'ไม่มาตามนัด',
 }
 export function activeAppointments(items: Appointment[], branch: string) {
   return items.filter((item) => item.branchCode === branch && item.status !== 'CANCELLED')
@@ -65,6 +62,7 @@ type Interval = { id: number; start: number; end: number }
 export function layoutEvents<T extends Interval>(
   items: T[],
 ): Array<T & { lane: number; lanes: number }> {
+  // จัดนัดที่เวลาทับกันให้อยู่คนละ lane เพื่อให้แสดงในปฏิทินพร้อมกัน
   const sorted = items.slice().sort((a, b) => a.start - b.start || b.end - a.end || a.id - b.id)
   const result: Array<T & { lane: number; lanes: number }> = []
   let group: Array<T & { lane: number; lanes: number }> = [],
