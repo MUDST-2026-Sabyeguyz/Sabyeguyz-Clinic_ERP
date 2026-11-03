@@ -6,6 +6,10 @@ const viewSource = readFileSync(
   resolve(process.cwd(), 'src/features/patients/views/PatientRegistrationView.vue'),
   'utf-8',
 )
+const managerViewSource = readFileSync(
+  resolve(process.cwd(), 'src/features/patients/views/ManagerPatientRegistrationView.vue'),
+  'utf-8',
+)
 const stylesheet = readFileSync(
   resolve(process.cwd(), 'src/features/patients/styles/patient-registration.css'),
   'utf-8',
@@ -32,4 +36,17 @@ describe('PatientRegistrationView', () => {
     expect(viewSource).not.toContain('username: `patient-${Date.now()}`')
     expect(viewSource).not.toContain('password: `Temp${form.identityNumber.slice(-6)}!`')
   })
+
+  it.each([viewSource, managerViewSource])(
+    'marks and validates only fields required by the registration backend',
+    (source) => {
+      expect(source).toContain('คำนำหน้า <em>*</em>')
+      expect(source).toContain("{{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }} <em v-if=\"!isForeign\">*</em>")
+      expect(source).toContain('สาขาที่ลงทะเบียน <em>*</em>')
+      expect(source).toContain('กลุ่มลูกค้า <em v-if="!isForeign">*</em>')
+      expect(source).toContain('if (!form.identityNumber.trim()) return isForeign.value')
+      expect(source).toContain('!form.birthDate || form.birthDate < clinicToday()')
+      expect(source).not.toContain('วันเกิด <em v-if="!isForeign">*</em>')
+    },
+  )
 })

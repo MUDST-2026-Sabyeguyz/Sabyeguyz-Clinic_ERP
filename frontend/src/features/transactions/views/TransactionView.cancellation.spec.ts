@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import source from './TransactionView.vue?raw'
 
 describe('transaction cancellation review', () => {
+  it('orders transaction tabs from newest to oldest by default', () => {
+    expect(source).toContain("const sortOrder = ref<'oldest' | 'newest'>('newest')")
+    expect(source).toContain("sortOrder === 'newest' ? 'ล่าสุด↓' : 'ล่าสุด↑'")
+  })
+
+  it('uses the transaction list heading on the main workspace', () => {
+    expect(source).toContain(": 'รายการธุรกรรม'")
+  })
+
   it('keeps cancellation information behind the heading icon', () => {
     expect(source).not.toContain('class="transaction-reason-shortcut"')
     expect(source).toContain('aria-label="ข้อมูลเพิ่มเติมเกี่ยวกับการยกเลิก"')

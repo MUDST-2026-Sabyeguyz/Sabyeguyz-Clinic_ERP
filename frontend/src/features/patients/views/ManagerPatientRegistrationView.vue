@@ -94,7 +94,10 @@ async function loadSourceAppointment() {
     sourceLoading.value = false
   }
 }
+// เปิดเฉพาะตอนระบบพาไปหน้าชำระเงินเอง ไม่ให้ guard ด้านล่างบล็อกการนำทางนี้
+const leavingToServices = ref(false)
 onBeforeRouteLeave(() => {
+  if (leavingToServices.value) return true
   if (submitting.value || continuingAppointment.value) return false
   if (!registeredPatientId.value && initialForm.value && JSON.stringify(form) !== initialForm.value)
     return window.confirm('ข้อมูลที่กรอกยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?')
@@ -362,12 +365,15 @@ async function continueToServices(patientId: number) {
       throw new Error('สถานะนัดหมายเปลี่ยนแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
     if (!registrationActive.value) return true
     // ส่ง patientId จริงคู่กับ appointmentId โดยไม่ผูกนัดย้อนหลัง
-    await router.push({
+    leavingToServices.value = true
+    const failure = await router.push({
       name: 'staff-services',
       query: { patientId: String(patientId), appointmentId: String(appointmentId) },
     })
+    if (failure) throw new Error('ไปหน้าชำระเงินไม่สำเร็จ กรุณาลองใหม่')
     return true
   } catch (error) {
+    leavingToServices.value = false
     errorMessage.value =
       error instanceof Error ? error.message : 'ไปหน้าบริการไม่สำเร็จ กรุณาลองใหม่'
     return false
@@ -438,7 +444,11 @@ async function submit() {
     registeredPatientId.value = result.id
     localStorage.setItem('patientCreationHn', result.hn)
     successOpen.value = true
-    if (route.query.appointmentId) await openRegisteredPatient()
+    if (route.query.appointmentId) {
+      // ให้เห็นป๊อปอัปลงทะเบียนสำเร็จและ HN ก่อนพาไปหน้าชำระเงิน
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+      await openRegisteredPatient()
+    }
   } catch (error) {
     try {
       duplicatePatient.value = await findDuplicatePatient()
@@ -622,7 +632,7 @@ async function submit() {
                 />
               </label>
               <label :class="{ 'invalid-field': identityErrorVisible }">
-                {{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }}
+                {{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }} <em>*</em>
                 <input
                   v-model.trim="form.identityNumber"
                   :inputmode="isForeign ? 'text' : 'numeric'"
@@ -743,12 +753,28 @@ async function submit() {
       <section v-else class="success-card">
         <span class="success-icon">✓</span>
         <h1>ลงทะเบียนสำเร็จ</h1>
-        <p>เลขประจำตัวผู้ป่วย (HN)</p>
+        <p>หมายเลข HN</p>
         <strong>{{ registeredHn }}</strong>
-        <div class="success-actions">
-          <RouterLink class="secondary" :to="registrationBackTarget">{{
-            route.query.appointmentId ? 'กลับไปหน้านัดหมาย' : 'กลับไปรายชื่อผู้ป่วย'
-          }}</RouterLink
+        <template v-if="route.query.appointmentId">
+          <p v-if="!errorMessage" role="status">กำลังไปหน้าชำระเงิน…</p>
+          <template v-else>
+            <p role="alert">{{ errorMessage }}</p>
+            <div class="success-actions">
+              <RouterLink class="secondary" :to="registrationBackTarget"
+                >กลับไปหน้านัดหมาย</RouterLink
+              ><button
+                type="button"
+                class="primary"
+                :disabled="continuingAppointment"
+                @click="openRegisteredPatient"
+              >
+                ไปหน้าชำระเงินอีกครั้ง
+              </button>
+            </div>
+          </template>
+        </template>
+        <div v-else class="success-actions">
+          <RouterLink class="secondary" :to="registrationBackTarget">กลับไปรายชื่อผู้ป่วย</RouterLink
           ><RouterLink
             v-if="registeredPatientId"
             class="primary"
@@ -818,7 +844,7 @@ async function submit() {
             >
               {{
                 continuingAppointment
-                  ? 'กำลังเชื่อมนัดหมาย…'
+                  ? 'กำลังไปหน้าชำระเงิน…'
                   : route.query.appointmentId
                     ? 'ใช้ผู้ป่วยนี้และไปชำระเงิน'
                     : 'แสดงข้อมูลผู้ป่วยเดิม'
@@ -848,7 +874,11 @@ async function submit() {
             </span>
           </div>
           <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
+          <p v-else-if="route.query.appointmentId" class="registration-redirect" role="status">
+            กำลังไปหน้าชำระเงิน<span class="redirect-dots" aria-hidden="true"></span>
+          </p>
           <button
+            v-if="errorMessage || !route.query.appointmentId"
             type="button"
             class="primary"
             :disabled="continuingAppointment"
@@ -856,7 +886,7 @@ async function submit() {
           >
             {{
               continuingAppointment
-                ? 'กำลังเชื่อมนัดหมาย…'
+                ? 'กำลังไปหน้าชำระเงิน…'
                 : route.query.appointmentId
                   ? 'บริการและชำระเงิน'
                   : 'แสดงข้อมูลผู้ป่วย'
