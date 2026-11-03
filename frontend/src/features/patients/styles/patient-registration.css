@@ -969,3 +969,30 @@ fieldset {
     grid-template-columns: 1fr;
   }
 }
+
+.registration-redirect {
+  margin: 12px 0 0;
+  color: #1f6f68;
+  font-size: 16px;
+  font-weight: 700;
+}
+.redirect-dots {
+  display: inline-block;
+  width: 1.4em;
+  text-align: left;
+}
+.redirect-dots::after {
+  content: '.';
+  animation: redirect-dots 1s steps(1, end) infinite;
+}
+@keyframes redirect-dots {
+  0% {
+    content: '.';
+  }
+  33% {
+    content: '..';
+  }
+  66% {
+    content: '...';
+  }
+}

@@ -179,6 +179,7 @@ type BackendBranch = {
   phone?: string
   email?: string | null
   licenseNo?: string | null
+  taxId?: string | null
   bookingOpenTime?: string | null
   bookingCloseTime?: string | null
   defaultAppointmentMinutes?: number | null
@@ -197,6 +198,7 @@ function normalizeBranch(branch: BackendBranch): Branch {
     email: branch.email ?? undefined,
     licenseNumber: branch.licenseNo ?? undefined,
     licenseNo: branch.licenseNo,
+    taxId: branch.taxId ?? undefined,
     bookingOpenTime: branch.bookingOpenTime,
     bookingCloseTime: branch.bookingCloseTime,
     defaultAppointmentMinutes: branch.defaultAppointmentMinutes,
@@ -362,6 +364,7 @@ export type SaleSummary = {
 export type SaleReceipt = SaleSummary & { note?: string }
 // Payload ขายรวมรายการชำระและการใช้คอร์สในคำขอเดียว
 export type SaleCreateRequest = {
+  requestKey?: string
   appointmentId?: number
   patientId: number
   branchCode: string
@@ -386,6 +389,8 @@ export type SaleDetail = SaleReceipt & {
   subtotalBeforeDiscount: number
   billDiscountAmount: number
   netAmount: number
+  taxableAmount?: number
+  taxAmount?: number
   branch?: { code: string; name: string; address: string; phone: string; email?: string; licenseNumber?: string }
   items: Array<{
     id: number
