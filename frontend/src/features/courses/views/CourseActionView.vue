@@ -108,6 +108,15 @@ const selectedUsageQuantity = computed(() =>
 const treatingOptions = computed(() =>
   therapists.value.filter((person) => person.branchCode === sourceAppointment.value?.branchCode),
 )
+const selectedTreatingStaff = computed(() =>
+  treatingOptions.value.find((person) => person.id === treatingStaffId.value),
+)
+const usageBranchName = computed(
+  () =>
+    branches.value.find((branch) => branch.code === sourceAppointment.value?.branchCode)?.name ??
+    sourceAppointment.value?.branchCode ??
+    '—',
+)
 watch(
   () => selectedCourse.value.id,
   (id) => {
@@ -221,6 +230,16 @@ async function loadOwner() {
     (person) =>
       (person.position ?? person.role ?? '').toLowerCase() === 'therapist' && person.active,
   )
+  const appointmentTherapistId = sourceAppointment.value?.therapist.id
+  if (
+    appointmentTherapistId &&
+    therapists.value.some(
+      (person) =>
+        person.id === appointmentTherapistId &&
+        person.branchCode === sourceAppointment.value?.branchCode,
+    )
+  )
+    treatingStaffId.value = appointmentTherapistId
   try {
     branches.value = await branchApi.list()
   } catch {
@@ -668,7 +687,7 @@ function closePrintSuccess() {
         class="course-use-main"
         :class="{ 'after-transfer': transferReceiptId }"
       >
-        <section v-if="!usageSuccess" class="course-use-form">
+        <section v-if="!usageSuccess && !usageReview" class="course-use-form">
           <label>ผู้รับบริการจริง<input :value="owner?.fullName" readonly /></label>
           <label
             >ผู้รักษา<select
@@ -720,8 +739,8 @@ function closePrintSuccess() {
             <h2>{{ owner?.fullName }}　HN {{ owner?.hn }}</h2>
             <h3>{{ selectedCourse.name }}</h3>
             <p>วันที่รับบริการ　{{ formattedUsageDate }}</p>
-            <p>นักกายภาพ　กภ. ศิริพร</p>
-            <p>สาขา　แบริ่ง</p>
+            <p>นักกายภาพ　{{ selectedTreatingStaff?.fullName || '—' }}</p>
+            <p>สาขา　{{ usageBranchName }}</p>
             <strong>สิทธิ์คงเหลือ</strong>
             <b
               >{{ selectedCourse.balance }} <small>/ {{ selectedCourse.total }} ครั้ง</small></b
@@ -778,11 +797,11 @@ function closePrintSuccess() {
                 </div>
                 <div>
                   <dt>นักกายภาพ</dt>
-                  <dd>กภ. ศิริพร</dd>
+                  <dd>{{ selectedTreatingStaff?.fullName || '—' }}</dd>
                 </div>
                 <div>
                   <dt>สาขา</dt>
-                  <dd>แบริ่ง</dd>
+                  <dd>{{ usageBranchName }}</dd>
                 </div>
                 <div>
                   <dt>จำนวนที่ใช้ครั้งนี้</dt>
@@ -924,6 +943,7 @@ function closePrintSuccess() {
                 ><b>{{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</b>
               </p>
             </div>
+            <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
             <div class="course-confirm-actions">
               <button type="button" @click="usageConfirmDialog = false">ยกเลิก</button
               ><button type="button" :disabled="usageSubmitting" @click="confirm">

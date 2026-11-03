@@ -31,7 +31,7 @@ const {
       <section class="page-heading">
         <div>
           <h1>ค้นหาผู้ป่วย</h1>
-          <p>ค้นหาด้วยชื่อหรือเลขประจำตัวผู้ป่วย</p>
+          <p>ค้นหาด้วยชื่อหรือหมายเลข HN</p>
           <RouterLink class="primary" to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
         </div>
       </section>
@@ -50,7 +50,7 @@ const {
               spellcheck="false"
               @input="refreshSearch"
               aria-label="ค้นหาผู้ป่วย"
-              placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
+              placeholder="ค้นหาชื่อหรือหมายเลข HN"
             />
           </div>
           <FilterDropdown
@@ -90,7 +90,7 @@ const {
             </caption>
             <thead>
               <tr>
-                <th scope="col">เลขประจำตัวผู้ป่วย</th>
+                <th scope="col">หมายเลข HN</th>
                 <th
                   scope="col"
                   :aria-sort="

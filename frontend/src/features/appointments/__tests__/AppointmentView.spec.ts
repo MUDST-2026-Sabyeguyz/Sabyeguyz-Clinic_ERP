@@ -40,7 +40,7 @@ describe('AppointmentView', () => {
       expect(row.match(/<td\b/g) ?? []).toHaveLength(7)
       expect(header).not.toContain('status-notice-cell')
       expect(table).not.toContain('AppointmentProcessActions')
-      expect(source).toContain('class="appointment-register"')
+      expect(source).not.toContain('class="appointment-register"')
       expect(source).toContain('class="appointment-edit"')
     })
   }
@@ -145,7 +145,8 @@ describe('AppointmentView', () => {
 
     expect(source).toContain('<span>ชื่อ <small>(ไม่บังคับ)</small></span>')
     expect(source).toContain('<span>นามสกุล <small>(ไม่บังคับ)</small></span>')
-    expect(source).toContain('<span>ชื่อเล่น <em>*</em></span>')
+    expect(source).toContain('<span>ชื่อเล่น</span>')
+    expect(source).not.toContain('<span>ชื่อเล่น <em>*</em></span>')
     expect(source).toContain('<span>เบอร์โทรศัพท์ <em>*</em></span>')
   })
 

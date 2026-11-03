@@ -1,5 +1,5 @@
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import View from '../views/CourseActionView.vue'
 const mock = vi.hoisted(() => ({ use: vi.fn(), batch: vi.fn(), push: vi.fn() }))
@@ -14,7 +14,7 @@ vi.mock('vue-router', () => ({
 vi.mock('@/features/appointments/useAppointmentProcess', () => ({
   useAppointmentProcess: () => ({
     appointmentId: ref(55),
-    sourceAppointment: ref({ branchCode: '01' }),
+    sourceAppointment: ref({ branchCode: '01', therapist: { id: 4, fullName: 'Treating PT' } }),
     appointmentProgress: ref(null),
     processLoading: ref(false),
     processError: ref(''),
@@ -65,6 +65,7 @@ type State = {
   usageSelections: Array<{ coursePurchaseId: number; quantity: number }>
   errorMessage: string
   usageSuccess: boolean
+  usageReview: boolean
   confirm: () => Promise<void>
   patientCourses: Array<{ id: number; remaining: number }>
 }
@@ -88,10 +89,25 @@ async function render() {
   })
   await flushPromises()
   const state = view.vm as unknown as State
-  state.treatingStaffId = 4
   return { view, state }
 }
 describe('course usage main contract', () => {
+  it('defaults the treating therapist from the appointment', async () => {
+    const { view, state } = await render()
+    expect(state.treatingStaffId).toBe(4)
+    expect(view.text()).toContain('Treating PT')
+    view.unmount()
+  })
+
+  it('hides the setup card while reviewing course usage', async () => {
+    const { view, state } = await render()
+    state.usageReview = true
+    await nextTick()
+    expect(view.find('.course-use-main > .course-use-form').exists()).toBe(false)
+    expect(view.find('.course-use-review').exists()).toBe(true)
+    view.unmount()
+  })
+
   it('sends actual recipient, appointment and therapist for a single entitlement', async () => {
     const { view, state } = await render()
     state.usageSelections = [{ coursePurchaseId: 101, quantity: 1 }]

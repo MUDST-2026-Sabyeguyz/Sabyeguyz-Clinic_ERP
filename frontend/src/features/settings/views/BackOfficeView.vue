@@ -11,6 +11,7 @@ import {
   type TreatmentFeeRule,
   type PermissionCatalogItem,
   type UserPermissionOverride,
+  ApiError,
   branchApi,
   commissionApi,
   courseApi,
@@ -594,6 +595,12 @@ function defaults() {
   if (section.value === 'master')
     Object.assign(form, { category: 'Customer Group', count: 1, examples: '', status: 'ใช้งาน' })
 }
+// ปิด drawer เมื่อกดและปล่อยบนพื้นหลังทั้งคู่ กันกรณีลากเลือกข้อความในช่องแล้วปล่อยเมาส์นอกกรอบ
+const drawerBackdropPressed = ref(false)
+function closeDrawerFromBackdrop() {
+  if (drawerBackdropPressed.value) drawerOpen.value = false
+  drawerBackdropPressed.value = false
+}
 function openDrawer(index: number | null) {
   permissionOverrides.value = []
   permissionCatalog.value = []
@@ -692,13 +699,18 @@ async function save() {
                   : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }
-  if (
-    section.value === 'users' &&
-    editingIndex.value === null &&
-    String(form.password ?? '').length < 8
-  ) {
-    validationMessage.value = 'ผู้ใช้ใหม่ต้องมีรหัสผ่านอย่างน้อย 8 ตัวอักษร'
-    return
+  if (section.value === 'users') {
+    const password = String(form.password ?? '')
+    if (editingIndex.value === null && password.length < 8) {
+      validationMessage.value = 'ผู้ใช้ใหม่ต้องมีรหัสผ่านอย่างน้อย 8 ตัวอักษร'
+      return
+    }
+    // แก้ไขผู้ใช้: เว้นว่างได้ แต่ถ้ากรอกต้องไม่ต่ำกว่า 8 ตัว (backend ปฏิเสธรหัสที่สั้นกว่านี้)
+    if (editingIndex.value !== null && password !== '' && password.length < 8) {
+      fieldErrors.password = true
+      validationMessage.value = 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร (เว้นว่างไว้ถ้าไม่เปลี่ยน)'
+      return
+    }
   }
   const rows = data[section.value as Exclude<SectionKey, 'payments'>]
   const existing = editingIndex.value === null ? undefined : rows[editingIndex.value]
@@ -832,7 +844,19 @@ async function save() {
       saveModalOpen.value = false
     }, 1800)
   } catch (error) {
-    validationMessage.value = error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ'
+    // ถ้า backend ระบุช่องที่ไม่ผ่าน ให้แสดงรายละเอียดต่อท้ายข้อความกว้างๆ
+    const details =
+      error instanceof ApiError && error.body?.fields
+        ? Object.entries(error.body.fields)
+            .map(([field, message]) => `${field}: ${message}`)
+            .join(', ')
+        : ''
+    validationMessage.value =
+      error instanceof Error
+        ? details
+          ? `${error.message} (${details})`
+          : error.message
+        : 'บันทึกไม่สำเร็จ'
   }
 }
 function notify(message: string) {
@@ -1295,7 +1319,12 @@ const drawerTitle = computed(() => {
     <div v-if="saveModalOpen" class="save-success-backdrop" @click="saveModalOpen = false">
       <div class="save-success-modal" role="status">บันทึกเรียบร้อยแล้ว</div>
     </div>
-    <div v-if="drawerOpen" class="drawer-backdrop" @click.self="drawerOpen = false">
+    <div
+      v-if="drawerOpen"
+      class="drawer-backdrop"
+      @mousedown="drawerBackdropPressed = $event.target === $event.currentTarget"
+      @click.self="closeDrawerFromBackdrop"
+    >
       <aside class="drawer">
         <header>
           <h2>{{ drawerTitle }}</h2>
@@ -1390,6 +1419,7 @@ const drawerTitle = computed(() => {
           ><label
             >รหัสผ่าน<input
               v-model="form.password"
+              :class="{ invalid: fieldErrors.password }"
               type="password"
               autocomplete="new-password"
               placeholder="เว้นว่างได้เมื่อแก้ไข" /></label
@@ -1422,50 +1452,6 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false"
           /></label>
-          <section class="user-permission-overrides" aria-label="สิทธิ์เฉพาะผู้ใช้">
-            <h3>สิทธิ์เฉพาะผู้ใช้</h3>
-            <p>สิทธิ์หลักมาจากบทบาท บรรทัดด้านล่างคือรายการ override ที่ backend บันทึกไว้เท่านั้น</p>
-            <p v-if="editingIndex === null">บันทึกบัญชีก่อนจึงดูและจัดการ override ของผู้ใช้ได้</p>
-            <p v-else-if="permissionOverridesLoading" role="status">กำลังโหลด override…</p>
-            <p v-else-if="permissionOverrides.length === 0">ไม่มี override ที่บันทึกไว้ · ใช้สิทธิ์ตามบทบาท</p>
-            <p v-if="permissionOverridesError" role="alert">{{ permissionOverridesError }}</p>
-            <ul v-if="permissionOverrides.length">
-              <li v-for="override in permissionOverrides" :key="override.permissionId">
-                <span>{{ override.permissionName }}</span>
-                <label>
-                  <input
-                    type="checkbox"
-                    :checked="override.allowed"
-                    @change="updatePermissionOverride(override, ($event.target as HTMLInputElement).checked)"
-                  />
-                  {{ override.allowed ? 'อนุญาต' : 'ปฏิเสธ' }}
-                </label>
-                <button type="button" @click="resetPermissionOverride(override)">คืนค่าตามบทบาท</button>
-              </li>
-            </ul>
-            <div v-if="editingIndex !== null && !permissionOverridesLoading" class="permission-override-add">
-              <label>
-                เพิ่มสิทธิ์เฉพาะผู้ใช้
-                <select v-model="selectedPermissionId" :disabled="availablePermissions.length === 0">
-                  <option value="" disabled>เลือกสิทธิ์</option>
-                  <option v-for="permission in availablePermissions" :key="permission.id" :value="String(permission.id)">
-                    {{ permission.moduleName ? `${permission.moduleName} · ` : '' }}{{ permission.permissionName }}
-                  </option>
-                </select>
-              </label>
-              <label>
-                ผล override
-                <select v-model="newOverrideAllowed" :disabled="availablePermissions.length === 0">
-                  <option :value="true">อนุญาต</option>
-                  <option :value="false">ปฏิเสธ</option>
-                </select>
-              </label>
-              <button type="button" :disabled="!selectedPermissionId || availablePermissions.length === 0" @click="addPermissionOverride">
-                เพิ่ม override
-              </button>
-              <small v-if="availablePermissions.length === 0">ไม่มี permission ที่ยังไม่ได้กำหนด override</small>
-            </div>
-          </section>
           <label
             v-if="editingIndex !== null"
             class="status-field"

@@ -224,7 +224,7 @@ watch(reportSelection, (report) => {
         </div>
         <div class="field-group">
           <label>ค้นหาผู้ป่วย</label>
-          <input v-model="search" type="text" placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย" />
+          <input v-model="search" type="text" placeholder="ค้นหาชื่อหรือหมายเลข HN" />
         </div>
         <div class="field-group">
           <label>ตั้งแต่วันที่</label>

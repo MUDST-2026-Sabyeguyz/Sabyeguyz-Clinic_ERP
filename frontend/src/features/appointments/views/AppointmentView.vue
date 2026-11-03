@@ -74,6 +74,8 @@ const viewMode = ref<'list' | 'create' | 'edit'>('list')
 const createSource = ref<'standard' | 'calendar'>('standard')
 const appointmentPatientType = ref<'CURRENT' | 'NEW'>('CURRENT')
 const serviceMode = ref<'single' | 'course'>('course')
+// คอร์สที่ตั้งไว้ในหน้าการตั้งค่า (บริการและคอร์ส) ใช้เป็นตัวเลือกของผู้ป่วย NEW
+const catalogCourses = ref<Awaited<ReturnType<typeof catalogApi.courses>>>([])
 const patientCourses = ref<CoursePurchase[]>([])
 const selectedCourseId = ref(0)
 const timeDrawerOpen = ref(false)
@@ -88,27 +90,18 @@ const listServiceMode = ref<'all' | 'single' | 'course'>(
 const calendarSyncOpen = ref(false)
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
-const hasDateRangeQuery = route.query.startDate !== undefined || route.query.endDate !== undefined
 const startDate = ref(
-  typeof route.query.startDate === 'string'
-    ? route.query.startDate
-    : hasDateRangeQuery
-      ? ''
-      : clinicToday(),
+  typeof route.query.startDate === 'string' ? route.query.startDate : '',
 )
 const endDate = ref(
-  typeof route.query.endDate === 'string'
-    ? route.query.endDate
-    : hasDateRangeQuery
-      ? ''
-      : clinicToday(),
+  typeof route.query.endDate === 'string' ? route.query.endDate : '',
 )
 const yesterday = new Date()
 yesterday.setDate(yesterday.getDate() - 1)
 const minimumAppointmentDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
 type AppointmentUiStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED'
 const selectedTherapistId = ref('ทั้งหมด')
-const sortOrder = ref<'newest' | 'oldest'>('oldest')
+const sortOrder = ref<'newest' | 'oldest'>('newest')
 function toggleSortOrder() {
   sortOrder.value = sortOrder.value === 'oldest' ? 'newest' : 'oldest'
   page.value = 0
@@ -125,22 +118,25 @@ async function ensureFormData() {
   formDataScope = scope
   patients.value = []
   services.value = []
+  catalogCourses.value = []
   therapists.value = []
   formDataLoading.value = true
   formDataError.value = ''
   const pending = (async () => {
     try {
-      const [branchList, patientList, serviceList, therapistList] = await Promise.all([
+      const [branchList, patientList, serviceList, therapistList, courseList] = await Promise.all([
         branchApi.list(),
         patientApi.searchAll('', scope),
         catalogApi.services(),
         loadAppointmentTherapists(),
+        catalogApi.courses().catch(() => []),
         loadStaffIdentity(),
       ])
       if (scope !== managerBranchCode.value) return
       branches.value = branchList
       patients.value = patientList
       services.value = serviceList
+      catalogCourses.value = courseList
       therapists.value = therapistList.filter(
         (item) =>
           (!scope || item.branchCode === scope) && (isManager || item.id === ownStaffId.value),
@@ -267,10 +263,12 @@ type AppointmentCourse = CoursePurchase & {
 const availablePatientCourses = computed(() =>
   patientCourses.value.filter((course) => course.usable && !course.expired && course.remaining > 0),
 )
+// แสดงสิทธิ์คอร์สของผู้ป่วยเฉพาะเมื่อเขามีคอร์สที่เลือกอยู่
 const selectedPatientCourse = computed(
   () =>
-    availablePatientCourses.value.find((course) => course.id === selectedCourseId.value) as
-      AppointmentCourse | undefined,
+    availablePatientCourses.value.find((course) => course.course.id === form.value.serviceId) as
+      | AppointmentCourse
+      | undefined,
 )
 const selectedService = computed(() =>
   services.value.find((service) => service.id === form.value.serviceId),
@@ -285,10 +283,13 @@ const currentBranchLabel = computed(() =>
     : `สาขา${currentBranchName.value}`,
 )
 const drawerServiceLabel = computed(() => {
-  const label = selectedService.value?.name || selectedPatientCourse.value?.course.name || 'บริการ'
+  const label =
+    selectedService.value?.name ||
+    catalogCourses.value.find((course) => course.id === form.value.serviceId)?.name ||
+    'บริการ'
   return /นาที/.test(label)
     ? label
-    : `${label} ${selectedService.value?.durationMinutes || 60} นาที`
+    : `${label} ${appointmentDurationMinutes.value} นาที`
 })
 const morningTimeOptions = computed(() =>
   availabilitySlots.value.filter((slot) => Number(slot.time.slice(0, 2)) < 12),
@@ -409,6 +410,16 @@ const formBranchModel = computed({
   get: () => form.value.branchCode,
   set: (value: string) => {
     form.value.branchCode = value
+  },
+})
+// รายชื่อคอร์สมาจากหน้าการตั้งค่า (คอร์สคือบริการประเภท Course) และบันทึกเป็นบริการของนัด
+const courseDropdownOptions = computed(() =>
+  catalogCourses.value.map((course) => ({ value: String(course.id), label: course.name })),
+)
+const courseDropdownModel = computed({
+  get: () => String(form.value.serviceId || ''),
+  set: (value: string) => {
+    form.value.serviceId = Number(value) || 0
   },
 })
 const selectedCourseModel = computed({
@@ -701,10 +712,18 @@ function changePatientQuery() {
 function hidePatientResults() {
   window.setTimeout(() => (showPatientResults.value = false), 160)
 }
+// เปลี่ยนประเภทบริการแล้วล้างบริการ/คอร์สที่เลือกไว้ เพราะรายการตัวเลือกต่างกัน
+function changeServiceMode(mode: 'single' | 'course') {
+  if (serviceMode.value === mode) return
+  serviceMode.value = mode
+  form.value.serviceId = 0
+  selectedCourseId.value = 0
+}
 function changeAppointmentPatientType() {
   errorMessage.value = ''
   showRequiredValidation.value = false
   form.value.patientId = 0
+  form.value.serviceId = 0
   patientQuery.value = ''
   patientCourses.value = []
   selectedCourseId.value = 0
@@ -742,7 +761,13 @@ async function loadTimeAvailability() {
       serviceId: form.value.serviceId || undefined,
       excludeAppointmentId: editingId.value ?? undefined,
     })
-    if (requestId === availabilityRequest) availabilitySlots.value = result.slots
+    if (requestId === availabilityRequest) {
+      availabilitySlots.value = result.slots
+      // ความยาวนัดตามที่ backend ใช้สร้างช่องเวลา (ระยะเวลาของบริการ/คอร์ส หรือค่าสาขา)
+      if (form.value.serviceId && result.durationMinutes) {
+        appointmentDurationMinutes.value = result.durationMinutes
+      }
+    }
   } catch (error) {
     if (requestId === availabilityRequest) {
       availabilityError.value = error instanceof Error ? error.message : 'โหลดเวลาว่างไม่สำเร็จ'
@@ -799,16 +824,7 @@ async function requestSaveConfirmation() {
     errorMessage.value = 'ไม่สามารถเลื่อนนัดหมายไปวันย้อนหลังได้'
     return
   }
-  if (
-    !editingId.value &&
-    appointmentPatientType.value === 'CURRENT' &&
-    serviceMode.value === 'course' &&
-    createSource.value !== 'calendar'
-  ) {
-    errorMessage.value = 'ยังไม่รองรับการผูกนัดหมายกับสิทธิ์คอร์ส กรุณาใช้บริการรายครั้ง'
-    return
-  }
-  if (savingAppointment.value || checkingAvailability.value) return
+if (savingAppointment.value || checkingAvailability.value) return
   const original = originalEditingAppointment.value
   const scheduleChanged =
     !original ||
@@ -818,6 +834,10 @@ async function requestSaveConfirmation() {
     form.value.serviceId !== (original.service.id ?? 0) ||
     form.value.branchCode !== original.branchCode
   if (!scheduleChanged) {
+    if (isEditing.value) {
+      await save()
+      return
+    }
     pendingSaveConfirmation.value = true
     return
   }
@@ -830,11 +850,18 @@ async function requestSaveConfirmation() {
       serviceId: form.value.serviceId || undefined,
       excludeAppointmentId: editingId.value ?? undefined,
     })
+    if (form.value.serviceId && availability.durationMinutes) {
+      appointmentDurationMinutes.value = availability.durationMinutes
+    }
     const slot = availability.slots.find((item) => item.time === form.value.time)
     if (!slot?.available) {
       errorMessage.value = slot?.reason
         ? `เลือกเวลานี้ไม่ได้: ${slot.reason}`
         : 'เวลานี้ไม่อยู่ในช่วงเปิดรับนัด กรุณาเลือกเวลาใหม่'
+      return
+    }
+    if (isEditing.value) {
+      await save()
       return
     }
     pendingSaveConfirmation.value = true
@@ -919,7 +946,7 @@ async function save() {
     selectedDate.value = ''
     startDate.value = ''
     endDate.value = ''
-    sortOrder.value = 'oldest'
+    sortOrder.value = 'newest'
     page.value = 0
     viewMode.value = 'list'
     await load()
@@ -1306,14 +1333,14 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <button
                   type="button"
                   :class="{ active: serviceMode === 'single' }"
-                  @click="serviceMode = 'single'"
+                  @click="changeServiceMode('single')"
                 >
                   รายครั้ง
                 </button>
                 <button
                   type="button"
                   :class="{ active: serviceMode === 'course' }"
-                  @click="serviceMode = 'course'"
+                  @click="changeServiceMode('course')"
                 >
                   รายคอร์ส
                 </button>
@@ -1342,25 +1369,20 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             <label v-else class="appointment-course-field">
               {{ appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อคอร์ส' }}
               <FilterDropdown
-                v-model="selectedCourseModel"
+                v-model="courseDropdownModel"
                 searchable
                 empty-search-label="ไม่พบโปรแกรมที่ค้นหา"
                 class="appointment-form-filter"
                 label="เลือกคอร์ส"
                 default-label="เลือกคอร์ส"
                 :clear-on-reselect="false"
-                :options="
-                  availablePatientCourses.map((course) => ({
-                    value: String(course.id),
-                    label: course.course.name,
-                  }))
-                "
+                :options="courseDropdownOptions"
               />
               <span
-                v-if="selectedFormPatient && !availablePatientCourses.length"
+                v-if="!catalogCourses.length"
                 class="appointment-course-empty"
               >
-                ไม่พบคอร์สที่ยังใช้งานได้สำหรับผู้ป่วยรายนี้
+                ยังไม่มีคอร์สที่เปิดใช้งานในหน้าการตั้งค่า
               </span>
             </label>
             <label class="appointment-therapist-field">
@@ -1615,7 +1637,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               "
               @click="toggleSortOrder"
             >
-              {{ sortOrder === 'oldest' ? 'ล่าสุด ↓' : 'ล่าสุด ↑' }}
+              {{ sortOrder === 'newest' ? 'ล่าสุด ↓' : 'ล่าสุด ↑' }}
             </button>
             <span v-if="listLoading" role="status">กำลังโหลดนัดหมาย…</span>
           </div>
@@ -1773,24 +1795,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   <b>{{ item.patient?.fullName || item.contactName || 'ผู้ป่วยไม่ประจำ' }}</b>
                   <span v-if="item.patient?.hn" class="appointment-patient-hn"
                     >HN {{ item.patient.hn }}</span
-                  >
-                  <RouterLink
-                    v-if="
-                      item.status === 'UNCONFIRMED' &&
-                      item.patientType === 'NEW' &&
-                      canManageOwnAppointment(item)
-                    "
-                    class="appointment-register"
-                    :to="{
-                      name: 'patient-registration',
-                      query: {
-                        appointmentId: String(item.id),
-                        returnStartDate: startDate,
-                        returnEndDate: endDate,
-                        returnType: listServiceMode,
-                      },
-                    }"
-                    >ลงทะเบียนผู้ป่วย</RouterLink
                   >
                   <span
                     v-if="
