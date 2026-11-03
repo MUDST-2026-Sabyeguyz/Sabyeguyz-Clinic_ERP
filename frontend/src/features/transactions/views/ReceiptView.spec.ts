@@ -8,6 +8,13 @@ vi.mock('vue-router', () => ({
 }))
 vi.mock('@/api/client', () => ({
   salesApi: { get },
+  patientApi: {
+    get: async () => ({
+      identityNumber: '1234567890123',
+      phone: '0812345678',
+      address: 'Test patient address',
+    }),
+  },
   branchApi: {
     list: async () => [
       { code: '01', name: 'Transaction branch', address: 'Test address', phone: '020000000' },
@@ -37,6 +44,8 @@ describe('receipt main response', () => {
     expect(get).toHaveBeenCalledWith(11)
     expect(view.text()).toContain('Transaction branch')
     expect(view.text()).toContain('TEST99')
+    expect(view.text()).not.toContain('เลขที่อ้างอิง')
+    expect(view.text()).not.toContain('เลขประจำตัวผู้เสียภาษี')
     expect(view.text()).not.toMatch(/NaN|undefined|Invalid Date/)
     expect(view.findAll('tbody td').map((cell) => cell.text())).toContain('—')
     view.unmount()

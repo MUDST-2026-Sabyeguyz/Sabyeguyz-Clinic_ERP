@@ -116,7 +116,7 @@ const search = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const page = ref(1)
-const sortOrder = ref<'oldest' | 'newest'>('oldest')
+const sortOrder = ref<'oldest' | 'newest'>('newest')
 function toggleSortOrder() {
   sortOrder.value = sortOrder.value === 'oldest' ? 'newest' : 'oldest'
   page.value = 1
@@ -362,7 +362,7 @@ function backToList(next: Tab = tab.value) {
             {{
               tab === 'history' && !loading && !hasCancellationHistory
                 ? 'ประวัติการยกเลิก'
-                : 'ยกเลิกรายการ'
+                : 'รายการธุรกรรม'
             }}
           </h1>
           <p v-if="tab === 'history' && !loading && !hasCancellationHistory">
@@ -459,7 +459,7 @@ function backToList(next: Tab = tab.value) {
                       : 'เรียงใหม่ไปเก่า กดเพื่อสลับเป็นเก่าไปใหม่'
                   "
                 >
-                  {{ sortOrder === 'oldest' ? 'ล่าสุด↓' : 'ล่าสุด↑' }}
+                  {{ sortOrder === 'newest' ? 'ล่าสุด↓' : 'ล่าสุด↑' }}
                 </button>
                 <span role="status">{{
                   loading
