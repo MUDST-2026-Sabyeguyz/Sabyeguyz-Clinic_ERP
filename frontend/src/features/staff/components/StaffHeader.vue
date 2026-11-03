@@ -52,8 +52,8 @@ const navItems = computed(() =>
     ? [
         { to: '/staff/dashboard', label: 'แดชบอร์ด' },
         { to: '/staff/appointments', label: 'นัดหมาย' },
+        { to: '/staff/services', label: 'ชำระเงิน' },
         { to: '/staff/patients', label: 'ผู้ป่วย' },
-        { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'รายการธุรกรรม' },
         { to: '/staff/commission', label: 'คอมมิชชั่น' },
         { to: '/staff/reports', label: 'รายงาน' },
@@ -61,8 +61,8 @@ const navItems = computed(() =>
       ]
     : [
         { to: '/staff/appointments', label: 'นัดหมาย' },
+        { to: '/staff/services', label: 'ชำระเงิน' },
         { to: '/staff/patients', label: 'ผู้ป่วย' },
-        { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
         { to: '/staff/compensation', label: 'คอมมิชชัน' },
       ],

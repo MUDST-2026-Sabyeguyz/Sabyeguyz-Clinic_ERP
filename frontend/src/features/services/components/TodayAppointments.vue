@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
                 @click="$emit('select', item)"
               >
                 {{
-                  item.status === 'CONFIRMED' ? 'ดูรายการเดิม' : item.patientType === 'NEW' ? 'ลงทะเบียนผู้ป่วย' : 'เริ่มบริการ'
+                  item.status === 'CONFIRMED' ? 'ดูรายการเดิม' : item.patientType === 'NEW' ? 'ลงทะเบียนผู้ป่วย' : 'ชำระเงิน'
                 }}
               </button>
             </td>

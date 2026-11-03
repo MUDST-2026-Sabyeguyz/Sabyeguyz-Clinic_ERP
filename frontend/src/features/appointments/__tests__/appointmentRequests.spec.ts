@@ -14,6 +14,17 @@ const result = {
   sales: [],
   usages: [],
 }
+const appointment = {
+  id: 55,
+  branchCode: '01',
+  patientType: 'CURRENT' as const,
+  patient: { id: 7, hn: 'HN-7', fullName: 'Test Patient' },
+  therapist: { id: 9, fullName: 'Test Therapist' },
+  service: { id: 1, name: 'Service', durationMinutes: 60 },
+  startAt: '2026-11-03T10:00:00+07:00',
+  endAt: '2026-11-03T11:00:00+07:00',
+  status: 'UNCONFIRMED' as const,
+}
 beforeEach(() => progress.mockReset())
 describe('progress reads', () => {
   it('coalesces overlapping reads but reads fresh again after completion', async () => {
@@ -41,6 +52,30 @@ describe('progress reads', () => {
   it('rejects progress outside the main response contract', async () => {
     progress.mockResolvedValue({ appointmentId: 55, paymentStatus: 'NOT_STARTED' })
     await expect(readAppointmentProgress(55)).rejects.toThrow('รูปแบบ')
+  })
+  it('adapts the running legacy backend response and allows a new appointment with no linked records', async () => {
+    progress.mockResolvedValue({
+      appointmentId: 55, registered: true, patientId: 7,
+      paymentStatus: 'NOT_STARTED', saleId: null, receiptNo: null,
+      paid: 0, outstanding: 0, courseStatus: 'NOT_STARTED', courseId: null,
+      includesCourse: false, canManage: false, canReview: true,
+    })
+    const current = await readAppointmentProgress(55, appointment)
+    expect(current.state).toBe('NO_LINKED_RECORD')
+    expect(current.appointmentStatus).toBe('UNCONFIRMED')
+    expect(hasProgressRecord(current)).toBe(false)
+  })
+  it('blocks legacy progress with existing payment or course evidence instead of treating it as empty', async () => {
+    progress.mockResolvedValue({
+      appointmentId: 55, registered: true, patientId: 7,
+      paymentStatus: 'PAID', saleId: 18, receiptNo: 'R-18',
+      paid: 1200, outstanding: 0, courseStatus: 'NOT_STARTED', courseId: null,
+      includesCourse: false, canManage: true, canReview: false,
+    })
+    const current = await readAppointmentProgress(55, appointment)
+    expect(current.state).toBe('FOUND')
+    expect(current.reason).toContain('PAID')
+    expect(hasProgressRecord(current)).toBe(true)
   })
   it('does not retain a network failure as an empty result or cache it', async () => {
     progress.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(result)

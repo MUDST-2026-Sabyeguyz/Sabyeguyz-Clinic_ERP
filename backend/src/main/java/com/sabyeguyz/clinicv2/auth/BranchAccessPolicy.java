@@ -58,18 +58,7 @@ public class BranchAccessPolicy {
                 .anyMatch(role -> "Manager".equalsIgnoreCase(role.getRole().getRoleName()));
     }
 
-    /** Status changes are allowed for Managers and Therapists; callers must also check appointment branch access. */
-    public void requireAppointmentStatusEditor() {
-        boolean allowed = roles.findByUserId(actor.requireId()).stream()
-                .anyMatch(role -> "Manager".equalsIgnoreCase(role.getRole().getRoleName())
-                        || "Therapist".equalsIgnoreCase(role.getRole().getRoleName()));
-        if (!allowed) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "เฉพาะผู้จัดการและนักกายภาพเท่านั้นที่เปลี่ยนสถานะนัดหมายได้");
-        }
-    }
-
-    /** Editing appointment details/rescheduling remains Manager-only. */
+    /** Only the Manager changes an appointment (status, reschedule, cancel); anyone else only views and books their own time. */
     public void requireManager() {
         if (!isManager()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "เฉพาะผู้จัดการเท่านั้นที่เปลี่ยนสถานะหรือแก้ไขนัดหมายได้");

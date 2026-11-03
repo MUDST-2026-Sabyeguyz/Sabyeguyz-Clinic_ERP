@@ -16,25 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Matches frontend/src/api/client.ts's patientApi (GET/POST/PUT
- * /api/patients). Known gaps vs. the old PatientProfile type, all flagged
- * for the team since the v2 Patient data dictionary simply does not define
- * these columns:
- * <ul>
- *   <li>drugAllergy, foodAllergy, chronicDisease, emergencyContactName/
- *   Relationship/Phone, privacyConsent — no equivalent column exists;
- *   always returned as false/null here.</li>
- *   <li>identityDocumentType/identityNumber are derived from v2's separate
- *   nationalId/passportNo columns (NATIONAL_ID wins if both are set).</li>
- *   <li>customerType (old: a free-text Master Data value like "VIP") maps
- *   to v2's customerGroup, NOT v2's own customerType enum (Thai/Foreigner)
- *   — those are different concepts that happen to share an old field name.
- *   v2's real Thai/Foreigner value is exposed as an extra
- *   {@code customerTypeCode} field the old frontend type doesn't know
- *   about yet.</li>
- * </ul>
- */
+/** รับและแปลงคำขอ API สำหรับค้นหา ลงทะเบียน และแก้ไขโปรไฟล์ผู้ป่วย */
 @Transactional
 @RestController
 @RequestMapping("/api/patients")
@@ -59,7 +41,9 @@ public class PatientController {
             String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
             String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
             String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email,
-            String customerSource, String insuranceCompany) {}
+            String customerSource, String insuranceCompany, Boolean drugAllergy, Boolean foodAllergy,
+            String chronicDisease, String emergencyContactName, String emergencyContactRelationship,
+            String emergencyContactPhone, Boolean privacyConsent) {}
 
     public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -150,7 +134,10 @@ public class PatientController {
                 request.nationality(),
                 request.address(),
                 null, resolveMasterDataValue("Referral Channel", request.customerSource()), null,
-                resolveMasterDataValue("Insurance Company", request.insuranceCompany()), middleName);
+                resolveMasterDataValue("Insurance Company", request.insuranceCompany()), middleName,
+                Boolean.TRUE.equals(request.drugAllergy()), Boolean.TRUE.equals(request.foodAllergy()),
+                request.chronicDisease(), request.emergencyContactName(), request.emergencyContactRelationship(),
+                request.emergencyContactPhone(), Boolean.TRUE.equals(request.privacyConsent()));
         Patient patient = service.register(registration, actor.currentId());
         patient.setEmail(validEmail(request.email()));
         return toSummary(patient);
@@ -178,6 +165,9 @@ public class PatientController {
                 passport ? request.identityNumber() : null, request.birthDate(),
                 parseBloodGroup(request.bloodGroup()), request.nationality(), request.address(),
                 middleName, request.middleName() != null, actor.currentId());
+        patient = service.updateMedicalProfile(id, request.drugAllergy(), request.foodAllergy(), request.chronicDisease(),
+                request.emergencyContactName(), request.emergencyContactRelationship(), request.emergencyContactPhone(),
+                request.privacyConsent(), actor.currentId());
         if (request.customerSource() != null) {
             patient.setReferralChannel(resolveMasterDataValue("Referral Channel", request.customerSource()));
         }
@@ -220,7 +210,9 @@ public class PatientController {
                 branch == null ? null : new BranchSummary(branch.getId(), branch.getBranchCode(), branch.getBranchName(), branch.isBranchStatus()),
                 patient.getTitle(), patient.getBirthdate(), patient.getGender() == null ? null : patient.getGender().name(),
                 identityDocumentType, identityNumber, patient.getAddress(),
-                false, false, null, null, null, null, false,
+                patient.isDrugAllergy(), patient.isFoodAllergy(), patient.getChronicDisease(),
+                patient.getEmergencyContactName(), patient.getEmergencyContactRelationship(),
+                patient.getEmergencyContactPhone(), patient.isPrivacyConsent(),
                 patient.getPatientNickname(), patient.getBloodGroup() == null ? null : patient.getBloodGroup().name(),
                 patient.getNationality(),
                 patient.getCustomerGroup() == null ? null : patient.getCustomerGroup().getValueName(),

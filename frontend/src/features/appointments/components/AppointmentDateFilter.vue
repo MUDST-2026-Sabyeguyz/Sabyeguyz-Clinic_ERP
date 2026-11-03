@@ -124,7 +124,7 @@ function resetDateRange() {
       aria-haspopup="dialog"
       @click="show"
     >
-      กำหนดช่วงเวลา
+      กำหนดช่วงเวลาเอง
     </button>
     <button
       type="button"
