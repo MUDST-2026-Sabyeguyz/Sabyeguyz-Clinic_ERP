@@ -115,7 +115,7 @@ const patientCourseSummary = computed(() => {
   if (!usableCourses.length) return 'ยังไม่มีสิทธิ์คอร์สที่ใช้งานได้'
 
   const remainingSessions = usableCourses.reduce((total, course) => total + course.remaining, 0)
-  return `มีสิทธิ์คอร์ส ${usableCourses.length} คอร์ส · คงเหลือ ${remainingSessions} ครั้ง`
+  return `(คงเหลือ ${usableCourses.length} คอร์ส · ${remainingSessions} ครั้ง)`
 })
 const receiptBranch = computed(() => {
   const code = patient.value?.branchCode?.toLocaleLowerCase('th')
@@ -599,7 +599,6 @@ async function submit() {
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <p v-if="appointmentProgress?.state === 'NO_LINKED_RECORD' && canStartAppointment" role="status">{{ appointmentProgress.reason }} กรุณาตรวจสอบรายการเดิมก่อนทำรายการใหม่</p>
       <p v-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         <p>{{ processError }}</p>
@@ -622,7 +621,7 @@ async function submit() {
         <button type="button" @click="returnToAppointments">กลับหน้านัดหมาย</button>
       </div>
       <template v-else-if="screen === 'search'">
-        <h1>โปรแกรมการรักษา</h1>
+        <h1>ชำระเงิน</h1>
         <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
         <section class="service-search">
           <h2>ค้นหาผู้ป่วย</h2>
@@ -672,9 +671,9 @@ async function submit() {
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
         <button type="button" class="service-menu-back" @click="clearPatient">
-          ← กลับไปเลือกผู้ป่วย
+          ← กลับ
         </button>
-        <h1>โปรแกรมการรักษา</h1>
+        <h1>กรุณาเลือกวิธีการชำระเงิน</h1>
         <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
           <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
           <div class="service-menu-patient-info">
@@ -689,9 +688,6 @@ async function submit() {
           <span class="service-menu-branch">{{
             patientProfile?.branch?.name || patient.branchName || '—'
           }}</span>
-          <button type="button" class="service-menu-change" @click="clearPatient">
-            เปลี่ยนผู้ป่วย
-          </button>
         </section>
         <div class="service-menu-actions">
           <button
@@ -700,14 +696,9 @@ async function submit() {
             @click="startSale"
           >
             <span class="service-menu-action-title">
-              <span class="service-menu-action-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
-              </span>
-              <span class="service-menu-action-heading">เริ่มรายการขาย</span>
+              <span class="service-menu-action-heading">ชำระเงิน</span>
             </span>
-            <span class="service-menu-action-description"
-              >บันทึกบริการรายครั้ง หรือขายคอร์สใหม่<br />พร้อมตรวจสอบยอดก่อนชำระเงิน</span
-            >
+            <span class="service-menu-action-next">ถัดไป →</span>
           </button>
           <button
             type="button"
@@ -715,24 +706,19 @@ async function submit() {
             @click="openPatientCourses"
           >
             <span class="service-menu-action-title">
-              <span class="service-menu-action-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M7 3h10v18H7zM10 8h4M10 12h4M10 16h2" /></svg>
+              <span class="service-menu-action-heading">ใช้สิทธิ์คอร์สที่มีอยู่</span>
+              <span
+                class="service-menu-course-status"
+                :class="{
+                  'is-loading': patientCourseLoading,
+                  'is-unavailable': patientCourseError,
+                }"
+                aria-live="polite"
+              >
+                {{ patientCourseSummary }}
               </span>
-              <span class="service-menu-action-heading">ใช้สิทธิ์</span>
             </span>
-            <span class="service-menu-action-description"
-              >ตรวจสอบสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</span
-            >
-            <span
-              class="service-menu-course-status"
-              :class="{
-                'is-loading': patientCourseLoading,
-                'is-unavailable': patientCourseError,
-              }"
-              aria-live="polite"
-            >
-              {{ patientCourseSummary }}
-            </span>
+            <span class="service-menu-action-next">ถัดไป →</span>
           </button>
         </div>
       </section>

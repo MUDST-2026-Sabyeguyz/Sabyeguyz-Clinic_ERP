@@ -5,7 +5,6 @@ import com.sabyeguyz.clinicv2.enums.FeeType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -24,11 +23,17 @@ public class TreatmentFeeRuleResolver {
         this.rules = rules;
     }
 
-    /** The enabled rule in force on the date (the one that took effect last when several overlap). */
+    /** Finds the rule effective on the given date and rejects overlapping rules. */
     @Transactional(readOnly = true)
     public Optional<TreatmentFeeRule> resolve(LocalDate date) {
         List<TreatmentFeeRule> active = rules.findActiveOn(date);
-        return active.stream().max(Comparator.comparing(TreatmentFeeRule::getEffectiveFrom));
+
+        if (active.size() > 1) {
+            throw new IllegalStateException(
+                    "พบกฎค่ามือที่มีผลในวันที่ " + date + " มากกว่าหนึ่งรายการ");
+        }
+
+        return active.stream().findFirst();
     }
 
     /** THB amount to pay the substitute Treating PT for one visit of the given Course. */

@@ -30,6 +30,7 @@ public class RuntimeCheck {
                 "--spring.datasource.username=" + required("DB_USER"),
                 "--spring.datasource.password=" + required("DB_PASSWORD"),
                 "--app.bootstrap.manager-username=runtime-manager",
+                "--app.bootstrap.manager-email=runtime-manager@example.com",
                 "--app.bootstrap.manager-password=runtime-test-password")) {
             base = "http://127.0.0.1:" + context.getWebServer().getPort();
             JdbcTemplate db = context.getBean(JdbcTemplate.class);
@@ -165,7 +166,10 @@ public class RuntimeCheck {
                     "login timestamp persisted in v2 app_user");
             check(branch.path("branchCode").asText().equals("01"), "v2 branch response");
             // A normal therapist must retain the same authorization limits as the legacy API.
-            db.update("insert into app_user(username,password_hash) values (?,?)", "runtime-therapist",
+            db.update(
+                    "insert into app_user(username,email,password_hash) values (?,?,?)",
+                    "runtime-therapist",
+                    "runtime-therapist@example.com",
                     new BCryptPasswordEncoder().encode("runtime-test-password"));
             Long therapistId = db.queryForObject("select user_id from app_user where username='runtime-therapist'", Long.class);
             db.update("insert into user_role(user_id,role_id) select ?,role_id from role where role_name='Therapist'", therapistId);

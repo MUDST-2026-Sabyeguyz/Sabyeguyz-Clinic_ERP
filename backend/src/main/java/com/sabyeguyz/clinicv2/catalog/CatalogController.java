@@ -34,7 +34,7 @@ public class CatalogController {
         return services.findByServiceTypeAndServiceStatusTrueOrderByServiceName(ServiceType.Course).stream()
                 .map(s -> new CourseOption(s.getId(), s.getServiceCode(), s.getServiceName(), s.getServicePrice(),
                         s.getDefaultTotalVisits() == null ? 0 : s.getDefaultTotalVisits(),
-                        s.getDefaultBonusVisits() == null ? 0 : s.getDefaultBonusVisits(),
+                        0, // Sessions already includes promotional sessions.
                         s.getDefaultValidityDays() == null ? 0 : s.getDefaultValidityDays(), true))
                 .toList();
     }

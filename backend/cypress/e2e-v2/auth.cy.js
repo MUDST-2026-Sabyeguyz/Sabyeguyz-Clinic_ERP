@@ -26,8 +26,11 @@ describe('v2 auth and roles', () => {
     cy.login('therapist', 'therapist123').then(({ body }) => {
       cy.apiAs(body.token, 'GET', '/api/branches').its('status').should('equal', 200)
       cy.apiAs(body.token, 'GET', '/api/users').its('status').should('equal', 403)
-      cy.apiAs(body.token, 'POST', '/api/auth/register', { username: 'x', password: 'password123' })
-        .its('status').should('equal', 403)
+      cy.apiAs(body.token, 'POST', '/api/auth/register', {
+        username: 'x',
+        email: 'x@example.com',
+        password: 'password123',
+      }).its('status').should('equal', 403)
     })
   })
 
@@ -36,7 +39,11 @@ describe('v2 auth and roles', () => {
     cy.api('GET', '/api/users').then((response) => {
       expect(response.status, `list users: ${describe(response)}`).to.equal(200)
     })
-    cy.api('POST', '/api/auth/register', { username: 'newuser01', password: 'password123' }).then((response) => {
+    cy.api('POST', '/api/auth/register', {
+      username: 'newuser01',
+      email: 'newuser01@example.com',
+      password: 'password123',
+    }).then((response) => {
       expect(response.status, `register: ${describe(response)}`).to.equal(201)
     })
     cy.login('newuser01', 'password123').then((response) => {

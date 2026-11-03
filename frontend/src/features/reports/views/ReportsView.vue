@@ -11,14 +11,14 @@ import {
   commissionApi,
   courseApi,
   reportApi,
-  salesApi,
   type Branch,
   type CourseBalanceReport,
   type RevenueReport,
-  type SaleSummary,
   type StaffSalesReport,
   type TransferRecord,
 } from '@/api/client'
+import { clinicToday } from '@/utils/clinicDate'
+import { filterPaymentReportRows } from '../lib/paymentReport'
 
 type ReportKey =
   | 'revenue'
@@ -48,7 +48,6 @@ type ReportData =
   | TransferRecord[]
   | StaffSalesReport
   | TreatmentTransactionRow[]
-  | SaleSummary[]
   | null
 
 const REPORT_KEYS: readonly ReportKey[] = [
@@ -62,7 +61,7 @@ const REPORT_KEYS: readonly ReportKey[] = [
 ]
 
 const REPORTS: Array<[ReportKey, string]> = [
-  ['revenue', 'รายงานยอดขาย'],
+  ['revenue', 'รายรับตามวันที่รับชำระ'],
   ['balance', 'ยอดคงเหลือคอร์ส'],
   ['transfer', 'ประวัติการโอนคอร์ส'],
   ['commission', 'ค่าคอมมิชชั่น'],
@@ -71,13 +70,13 @@ const REPORTS: Array<[ReportKey, string]> = [
 ]
 
 const TABLE_HEADERS: Record<ReportKey, string[]> = {
-  revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่', 'ยอดขายสุทธิ', 'สัดส่วน'],
-  balance: ['ผู้ป่วย', 'คอร์ส', 'สาขา', 'วันที่', 'ซื้อ', 'ใช้', 'โอน', 'คงเหลือ', 'หมดอายุ'],
-  transfer: ['เลขที่รายการ', 'ผู้โอน', 'ผู้รับ', 'สาขา', 'คอร์ส', 'ครั้ง', 'วันที่'],
-  commission: ['พนักงาน', 'สาขา', 'ประเภทงาน', 'วันที่', 'จำนวนรายการ', 'ค่าคอมมิชชั่น'],
-  salesTransaction: ['ผู้ขาย', 'จำนวนใบเสร็จ', 'ยอดขาย', 'ช่วงวันที่'],
+  revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระสุทธิ', 'สัดส่วน'],
+  balance: ['ผู้ป่วย', 'คอร์ส', 'สาขา', 'วันที่ซื้อ', 'ซื้อ', 'ใช้', 'โอน', 'คงเหลือ', 'หมดอายุ'],
+  transfer: ['เลขที่รายการ', 'ผู้โอน', 'ผู้รับ', 'สาขา', 'คอร์ส', 'ครั้ง', 'วันที่โอน'],
+  commission: ['พนักงาน', 'สาขา', 'ประเภทงาน', 'ช่วงงวดขาย', 'จำนวนรายการ', 'ค่าคอมมิชชั่น'],
+  salesTransaction: ['ผู้ขาย', 'จำนวนใบเสร็จ', 'ยอดขาย', 'ช่วงวันที่ขาย'],
   treatmentTransaction: [
-    'วันที่',
+    'วันที่ให้บริการ',
     'สาขา',
     'ผู้ป่วย',
     'นักกายภาพบำบัด',
@@ -85,7 +84,7 @@ const TABLE_HEADERS: Record<ReportKey, string[]> = {
     'ค่ามือ',
     'มูลค่าบริการ',
   ],
-  payment: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่', 'ยอดรับชำระ', 'สัดส่วน'],
+  payment: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระ', 'สัดส่วน'],
 }
 
 const RIGHT_ALIGNED: Partial<Record<ReportKey, number[]>> = {
@@ -141,8 +140,8 @@ const filters = reactive({
   treatment: 'ทั้งหมด',
   saleType: 'ทั้งหมด',
   commissionType: 'ทั้งหมด',
-  from: `${new Date().getFullYear()}-08-01`,
-  to: new Date().toISOString().slice(0, 10),
+  from: `${clinicToday().slice(0, 7)}-01`,
+  to: clinicToday(),
 })
 
 const page = ref(1)
@@ -217,6 +216,7 @@ const formatDate = (value: string) => {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Bangkok',
   }).format(d)
 }
 
@@ -225,15 +225,6 @@ const formatMoney = (val: number) => `฿${Number(val).toLocaleString()}`
 const formatPeriod = (from: string, to: string) =>
   from === to ? formatDate(from) : `${formatDate(from)} – ${formatDate(to)}`
 
-function getSaleCategory(sale: Pick<SaleSummary, 'itemDescription'>) {
-  const description = sale.itemDescription?.toLowerCase() ?? ''
-  const isCourse = description.includes('course') || description.includes('คอร์ส')
-  return {
-    category: isCourse ? 'Course Sales' : 'Single Visit Sales',
-    treatment: isCourse ? 'Manual Therapy' : 'Exercise Therapy',
-  }
-}
-
 function updateTimestamp() {
   const now = new Date()
   const dateStr = new Intl.DateTimeFormat('th-TH', {
@@ -241,7 +232,7 @@ function updateTimestamp() {
     month: 'short',
     year: 'numeric',
   }).format(now)
-  const timeStr = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit' }).format(
+  const timeStr = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }).format(
     now,
   )
   lastUpdatedText.value = `${dateStr}, ${timeStr}`
@@ -291,7 +282,7 @@ const kpiItems = computed(() => {
       }
     })
 
-  return [{ label: 'ยอดขายสุทธิ', amount: formatMoney(total), share: '100%' }, ...items]
+  return [{ label: 'ยอดรับชำระ', amount: formatMoney(total), share: '100%' }, ...items]
 })
 
 const activeKpis = computed(() => {
@@ -301,28 +292,13 @@ const activeKpis = computed(() => {
 })
 
 const paymentRows = computed(() => {
-  const data = (reportData.value as SaleSummary[] | null) ?? []
-  return data
-    .filter((sale) => {
-      const soldDate = sale.soldAt.slice(0, 10)
-      const query = filters.patient.trim().toLowerCase()
-      const { category, treatment } = getSaleCategory(sale)
-      return (
-        soldDate >= filters.from &&
-        soldDate <= filters.to &&
-        (!query || `${sale.patient.fullName} ${sale.patient.hn}`.toLowerCase().includes(query)) &&
-        (filters.saleType === 'ทั้งหมด' || filters.saleType === category) &&
-        (filters.treatment === 'ทั้งหมด' || filters.treatment === treatment)
-      )
-    })
-    .map((sale) => {
-      return {
-        ...getSaleCategory(sale),
-        branch: getBranchName(sale.branchCode),
-        date: sale.soldAt,
-        paid: Number(sale.paid),
-      }
-    })
+  const data = reportData.value as RevenueReport | null
+  return filterPaymentReportRows(data?.dailyByCategory ?? [], {
+    from: filters.from,
+    to: filters.to,
+    saleType: filters.saleType,
+    treatment: filters.treatment,
+  }).map((row) => ({ ...row, branch: getBranchName() }))
 })
 
 const paymentKpis = computed(() => {
@@ -386,6 +362,7 @@ const filteredCommissionRows = computed<CommissionReportRow[]>(() => {
   })
 })
 
+// สร้างแถวตามชนิดรายงาน เพื่อใช้วันที่และยอดจาก contract ของรายงานนั้น
 const tableRows = computed<string[][]>(() => {
   if (report.value === 'revenue') {
     const list = filteredRevenueCategories.value
@@ -597,8 +574,7 @@ async function fetchReport() {
         reportData.value = await commissionApi.treatmentReport(filters.from, filters.to)
         break
       case 'payment': {
-        const result = await salesApi.list({ branchCode, page: 0, size: 100 })
-        reportData.value = result.items
+        reportData.value = await reportApi.revenue(filters.from, filters.to, branchCode)
         break
       }
     }
@@ -642,19 +618,21 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
 
     <TransactionReportView v-if="isTransactionReport" />
     <main v-else class="reports-page-container">
-      <!-- ── Header Section ──────────────────────────────────────────────── -->
+      <!-- ส่วนหัวรายงาน -->
       <section class="page-title-section">
-        <h1>{{ report === 'payment' ? 'รายงานยอดรับชำระ' : 'รายงาน' }}</h1>
+        <h1>{{ ['payment', 'revenue'].includes(report) ? 'รายงานยอดรับชำระ' : 'รายงาน' }}</h1>
         <p>
           {{
             report === 'payment'
               ? 'ตรวจสอบเงินที่รับจริงตามวันที่รับชำระและประเภทบริการ'
-              : 'ตรวจสอบรายได้ คอร์ส ยอดขาย และค่าคอมมิชชั่น'
+              : ['revenue', 'payment'].includes(report)
+                ? 'ยอดรับชำระและประเภทบริการตามวันที่รับเงินจริง'
+                : 'ตรวจสอบรายงานคอร์ส ยอดขาย และค่าคอมมิชชั่น'
           }}
         </p>
       </section>
 
-      <!-- ── KPI Summary Box (Only for Revenue Report per Figma) ──────────── -->
+      <!-- สรุป KPI ของรายงานรายรับ -->
       <section
         v-if="['revenue', 'payment'].includes(report) && activeKpis.length"
         class="kpi-summary-box"
@@ -669,9 +647,9 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
         </div>
       </section>
 
-      <!-- ── Filter Card Section ─────────────────────────────────────────── -->
+      <!-- ส่วนตัวกรองรายงาน -->
       <section class="filter-card">
-        <!-- Top bar: Title left, Select dropdown right -->
+        <!-- ชื่อรายงานและตัวเลือกประเภท -->
         <div class="filter-card-header">
           <h2>{{ currentReportTitle }}</h2>
           <div class="report-select-group">
@@ -681,7 +659,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               v-model="reportSelection"
               :options="reportOptions"
               default-value="revenue"
-              default-label="รายงานยอดขาย"
+              default-label="รายรับตามวันที่รับชำระ"
               label="เลือกรายงาน"
               hide-default-option
               :clear-on-reselect="false"
@@ -689,7 +667,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
           </div>
         </div>
 
-        <!-- Filter Grid -->
+        <!-- กลุ่มตัวกรอง -->
         <div class="filter-card-body">
           <div
             v-if="['salesTransaction', 'treatmentTransaction'].includes(report)"
@@ -709,9 +687,9 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               :clear-on-reselect="false"
             />
           </div>
-          <!-- ── Row 1 Filters ── -->
+          <!-- ตัวกรองหลัก -->
           <div class="filter-grid-row1">
-            <!-- Balance / Transfer Report Filters -->
+            <!-- ตัวกรองยอดคงเหลือและการโอน -->
             <template v-if="['balance', 'transfer'].includes(report)">
               <div class="field-group">
                 <label>ผู้ป่วย</label>
@@ -731,12 +709,8 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               </div>
             </template>
 
-            <!-- Payment report filters -->
+            <!-- ตัวกรองการรับชำระ -->
             <template v-else-if="report === 'payment'">
-              <div class="field-group">
-                <label>ผู้ป่วย</label>
-                <input v-model="filters.patient" type="text" placeholder="ค้นหาชื่อผู้ป่วย" />
-              </div>
               <div class="field-group">
                 <label>การรักษา</label>
                 <FilterDropdown
@@ -767,7 +741,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               </div>
             </template>
 
-            <!-- Revenue Report Filters -->
+            <!-- ตัวกรองรายรับ -->
             <template v-else-if="report === 'revenue'">
               <div class="field-group">
                 <label>การรักษา</label>
@@ -811,7 +785,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               </div>
             </template>
 
-            <!-- Commission and transaction report filters -->
+            <!-- ตัวกรองคอมมิชชันและธุรกรรม -->
             <template
               v-else-if="
                 ['commission', 'salesTransaction', 'treatmentTransaction'].includes(report)
@@ -842,9 +816,9 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
             </template>
           </div>
 
-          <!-- ── Row 2 Filters ── -->
+          <!-- ตัวกรองเพิ่มเติม -->
           <div class="filter-grid-row2">
-            <!-- Commission Type Filter for Commission Report -->
+            <!-- ประเภทคอมมิชชัน -->
             <div v-if="report === 'commission'" class="field-group field-group--short">
               <label>ประเภทค่าคอมมิชชั่น</label>
               <FilterDropdown
@@ -860,7 +834,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               />
             </div>
 
-            <!-- Date Pickers for Payment Report -->
+            <!-- ช่วงวันที่รับชำระ -->
             <template v-if="report === 'payment'">
               <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
@@ -876,7 +850,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
         </div>
       </section>
 
-      <!-- ── Data Table Section ─────────────────────────────────────────── -->
+      <!-- ตารางรายงาน -->
       <section class="table-card">
         <p v-if="errorMessage" class="report-error" role="alert">{{ errorMessage }}</p>
         <p v-else-if="loading" class="report-loading">กำลังโหลดรายงาน...</p>
@@ -904,7 +878,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
                 </td>
               </tr>
 
-              <!-- Total Row -->
+              <!-- แถวสรุปยอดรวม -->
               <tr v-if="totalRow" class="total-row">
                 <td
                   v-for="(cell, cIdx) in totalRow"
@@ -924,7 +898,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
           </table>
         </div>
 
-        <!-- ── Pagination Bar & Last Updated ─────────────────────────────── -->
+        <!-- แบ่งหน้าและเวลาอัปเดต -->
         <div class="table-card-footer">
           <nav v-if="tableRows.length > 0" class="report-pagination" aria-label="เปลี่ยนหน้ารายการ">
             <button type="button" class="btn-prev" :disabled="page === 1" @click="page -= 1">
