@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReceiptRepository extends JpaRepository<Receipt, Long> {
-    List<Receipt> findByPatientIdAndBranchIdOrderByIdDesc(Long patientId, Long branchId);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Receipt r where r.id = :id")
     Optional<Receipt> findByIdForUpdate(@Param("id") Long id);

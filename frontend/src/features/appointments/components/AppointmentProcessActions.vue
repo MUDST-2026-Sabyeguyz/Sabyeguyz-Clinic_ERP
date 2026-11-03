@@ -27,7 +27,7 @@ async function refresh() {
   loading.value = true
   error.value = ''
   try {
-    const result = await readAppointmentProgress(props.appointment.id)
+    const result = await readAppointmentProgress(props.appointment.id, props.appointment)
     if (request === current) progress.value = result
   } catch (cause) {
     if (request === current)
