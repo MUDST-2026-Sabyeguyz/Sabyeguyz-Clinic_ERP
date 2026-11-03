@@ -247,10 +247,14 @@
   outline-offset: 3px;
   border-radius: 3px;
 }
+.service-menu > h1 {
+  margin-bottom: 24px;
+}
 .service-menu-patient {
   display: flex;
   align-items: center;
   gap: 18px;
+  margin-top: 24px;
   min-height: 104px;
   padding: 22px 28px 22px 15px;
   border-radius: 12px;
@@ -302,22 +306,6 @@
   color: #34724c;
   font-size: 13px;
 }
-.service-menu-change {
-  min-height: 40px;
-  padding: 8px 16px;
-  border: 1px solid #218b85;
-  border-radius: 8px;
-  background: #fff;
-  color: #176c68;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.service-menu-change:hover {
-  background: #eef6f3;
-}
-.service-menu-change:focus-visible,
 .service-menu-actions button:focus-visible {
   outline: 3px solid rgb(30 128 124 / 28%);
   outline-offset: 3px;
@@ -348,12 +336,10 @@
     box-shadow 180ms ease,
     border-color 180ms ease;
 }
-.service-menu-action--sale {
+.service-menu-action--sale,
+.service-menu-action--entitlement {
   border: 1px solid #d7e4df;
   background: #fff;
-}
-.service-menu-action--entitlement {
-  background: #eef7f4;
 }
 .service-menu-action:hover {
   transform: translateY(-3px);
@@ -361,32 +347,20 @@
 }
 .service-menu-action-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-}
-.service-menu-action-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  border-radius: 12px;
-  color: #176c68;
-  background: #dcefe9;
-  place-items: center;
-}
-.service-menu-action-icon svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
 }
 .service-menu-action-heading {
   color: #25372e;
   font-size: 28px;
   font-weight: 700;
+}
+.service-menu-action-next {
+  color: #176c68;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 .service-menu-action-description {
   color: #56665d;
@@ -400,6 +374,11 @@
   font-size: 14px;
   font-weight: 700;
 }
+.service-menu-action-title .service-menu-course-status {
+  margin-top: 0;
+  min-height: 0;
+}
+
 .service-menu-course-status.is-loading,
 .service-menu-course-status.is-unavailable {
   color: #667a72;

@@ -32,12 +32,10 @@ public class AppUserService {
     }
 
     @Transactional
-    public AppUser register(String username, String rawPassword, Staff staff, Long actorId) {
-        return register(username, null, rawPassword, staff, actorId);
-    }
-
-    @Transactional
     public AppUser register(String username, String email, String rawPassword, Staff staff, Long actorId) {
+        if (staff != null && staff.getTerminationDate() != null) {
+            throw new IllegalArgumentException("ไม่สามารถสร้างบัญชีให้พนักงานที่มีวันลาออกแล้ว");
+        }
         String normalized = requireText(username, "username");
         if (normalized.contains("@")) throw new IllegalArgumentException("ชื่อผู้ใช้ห้ามมี @");
         if (users.findByUsername(normalized).isPresent()) {
@@ -99,12 +97,17 @@ public class AppUserService {
             userRoles.deleteAll(userRoles.findByUserId(userId));
             userRoles.flush();
             userRoles.save(new UserRole(user, role));
+            user.setAuthVersion(user.getAuthVersion() + 1);
+            users.save(user);
         }
     }
 
     @Transactional
     public void revokeRole(Long userId, Long roleId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
         userRoles.deleteById(new UserRoleId(userId, roleId));
+        user.setAuthVersion(user.getAuthVersion() + 1);
+        users.save(user);
     }
 
     /** Idempotent: granting Branch access the user already has is a no-op. */
@@ -128,13 +131,21 @@ public class AppUserService {
     public AppUser deactivate(Long userId) {
         AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
         user.setUserStatus(false);
+        user.setAuthVersion(user.getAuthVersion() + 1);
         return users.save(user);
     }
 
     @Transactional
     public AppUser activate(Long userId) {
-        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        AppUser user = users.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        Staff staff = user.getStaff();
+        if (staff != null && staff.getTerminationDate() != null) {
+            throw new IllegalArgumentException(
+                    "ไม่สามารถเปิดบัญชีของพนักงานที่มีวันลาออกแล้ว");
+        }
         user.setUserStatus(true);
+        user.setAuthVersion(user.getAuthVersion() + 1);
         return users.save(user);
     }
 
@@ -163,6 +174,7 @@ public class AppUserService {
             }
             user.setPasswordHash(passwordEncoder.encode(rawPassword));
         }
+        user.setAuthVersion(user.getAuthVersion() + 1);
         user.setUserUpdateAt(Instant.now());
         user.setUserUpdateBy(actorId);
         return users.save(user);
@@ -176,9 +188,9 @@ public class AppUserService {
     }
 
     private static String normalizeEmail(String email) {
-        if (email == null || email.isBlank()) return null;
-        String normalized = email.trim();
-        if (normalized.length() > 254 || !EMAIL_FORMAT.matcher(normalized).matches()) {
+        String normalized = requireText(email, "email");
+        if (normalized.length() > 254
+                || !EMAIL_FORMAT.matcher(normalized).matches()) {
             throw new IllegalArgumentException("รูปแบบอีเมลไม่ถูกต้อง");
         }
         return normalized;
