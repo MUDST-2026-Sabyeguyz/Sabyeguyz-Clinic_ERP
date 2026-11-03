@@ -471,6 +471,13 @@ function clearPatient() {
   confirmed.value = false
   screen.value = 'search'
 }
+function backFromPaymentMenu() {
+  if (appointmentId.value) {
+    void router.push({ name: 'staff-appointments' })
+    return
+  }
+  clearPatient()
+}
 async function backToPatientSelection() {
   clearPatient()
   appointmentProgress.value = null
@@ -572,6 +579,15 @@ async function submit() {
     loading.value = false
   }
 }
+// นัดที่ยืนยันและมีรายการแล้ว (เช่น กดกลับจากใบเสร็จ) ไม่ต้องแสดงแผงรายการ ให้กลับหน้านัดหมายเลย
+const appointmentAlreadyProcessed = computed(
+  () =>
+    appointmentProgress.value?.state === 'FOUND' &&
+    appointmentProgress.value.appointmentStatus === 'CONFIRMED',
+)
+watch(appointmentAlreadyProcessed, (done) => {
+  if (done) void router.replace({ name: 'staff-appointments' })
+})
 </script>
 <template>
   <div class="service-page">
@@ -587,7 +603,7 @@ async function submit() {
       </div>
       <AppointmentProcessPanel
         v-else-if="
-          appointmentProgress && !canStartAppointment
+          appointmentProgress && !canStartAppointment && !appointmentAlreadyProcessed
         "
         :progress="appointmentProgress"
         :block-reason="processBlockReason" :recovery-required="recoveryRequired"
@@ -652,7 +668,7 @@ async function submit() {
         </section>
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
-        <button type="button" class="service-menu-back" @click="clearPatient">
+        <button type="button" class="service-menu-back" @click="backFromPaymentMenu">
           ← กลับ
         </button>
         <h1>กรุณาเลือกวิธีการชำระเงิน</h1>

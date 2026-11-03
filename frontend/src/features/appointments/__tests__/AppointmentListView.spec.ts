@@ -43,10 +43,7 @@ for (const [role, Component] of [
         history: createMemoryHistory(),
         routes: [{ path: '/staff/appointments', name: 'staff-appointments', component: Component }],
       })
-      await router.push({
-        path: '/staff/appointments',
-        query: { startDate: clinicToday(), endDate: clinicToday() },
-      })
+      await router.push('/staff/appointments')
       return mount(Component, {
         global: {
           plugins: [router],
@@ -61,7 +58,7 @@ for (const [role, Component] of [
       })
     }
 
-    it('opens today, includes both service types, and filters across server pages before local pagination', async () => {
+    it('opens without a date filter, includes both service types, and filters across server pages before local pagination', async () => {
       api.search.mockImplementation(async ({ page }: { page: number }) => ({
         items:
           page === 0 ? Array.from({ length: 20 }, (_, i) => record(i + 1)) : [record(21, true)],
@@ -71,13 +68,15 @@ for (const [role, Component] of [
       await flushPromises()
       expect(api.search).toHaveBeenCalledWith(
         expect.objectContaining({
-          startDate: clinicToday(),
-          endDate: clinicToday(),
-          sortOrder: 'oldest',
+          startDate: undefined,
+          endDate: undefined,
+          sortOrder: 'newest',
         }),
       )
+      expect(view.get('.appointment-summary-date').text()).toBe('นัดหมายทั้งหมด')
       expect(view.findAll('tbody tr')).toHaveLength(20)
-      expect(view.get('.appointment-list-summary').text()).toContain('21 นัดหมาย')
+      expect(view.get('.appointment-sort').text()).toBe('ล่าสุด ↓')
+      expect(view.find('tbody tr').text()).toContain('Course patient')
       const requests = api.search.mock.calls.length
       await view.findAll('.appointment-list-mode-toggle button')[2]!.trigger('click')
       await flushPromises()
@@ -101,7 +100,7 @@ for (const [role, Component] of [
       expect(view.find('.appointment-empty').exists()).toBe(false)
       finish({ items: [], totalPages: 0 })
       await flushPromises()
-      expect(view.get('.appointment-list-feedback').text()).toContain('วันนี้ไม่มีนัดหมาย')
+      expect(view.get('.appointment-list-feedback').text()).toContain('ยังไม่มีนัดหมาย')
       view.unmount()
     })
 

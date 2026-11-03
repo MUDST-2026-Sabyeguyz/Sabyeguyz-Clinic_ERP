@@ -75,8 +75,9 @@ type State = {
   treatingId: number
   paymentLabel: string
   methodCode: string
+  billDiscountType: string
+  billDiscountValue: number
   error: string
-  usageSelections: Array<{ coursePurchaseId: number; quantity: number }>
   uncertainSale: boolean
   save: () => Promise<void>
 }
@@ -118,13 +119,49 @@ async function render() {
       discountValue: 0,
     },
   ]
-  state.sellerId = 1
   state.treatingId = 4
   state.paymentLabel = 'PAID'
   state.methodCode = 'BankTransfer'
   return { view, state }
 }
 describe('checkout main payload', () => {
+  it('submits the sale from the payment button and shows the receipt action', async () => {
+    const { view } = await render()
+    await view.get('button.primary').trigger('click')
+    await flushPromises()
+    expect(mock.create).toHaveBeenCalledOnce()
+    expect(mock.create.mock.calls[0]![0].requestKey).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    )
+    expect(mock.push).toHaveBeenCalledWith({ name: 'staff-receipt', params: { id: 77 } })
+    expect(view.find('h1').text()).toBe('บันทึกการขายสำเร็จ')
+    expect(view.text()).toContain('ดูและพิมพ์ใบเสร็จ')
+    view.unmount()
+  })
+  it('warns immediately and hides the net amount when the bill discount exceeds the subtotal', async () => {
+    const { view, state } = await render()
+    state.billDiscountType = 'FIXED'
+    state.billDiscountValue = 10_000_000
+    await view.vm.$nextTick()
+    expect(view.find('#bill-discount-error').text()).toContain('ส่วนลดต้องไม่เกินยอดหลังส่วนลดรายการ')
+    expect(view.find('.net strong').text()).toBe('—')
+    await state.save()
+    expect(state.error).toBe('ส่วนลดท้ายบิลเกินยอดรายการ')
+    expect(mock.create).not.toHaveBeenCalled()
+    view.unmount()
+  })
+  it('hides the seller picker and uses the signed-in therapist for the sale', async () => {
+    localStorage.setItem(
+      'authUser',
+      JSON.stringify({ id: 4, staffId: 4, role: 'THERAPIST', branchCode: '01' }),
+    )
+    const { view, state } = await render()
+    expect(view.text()).not.toContain('ผู้ขาย / เจ้าของคอร์ส')
+    expect(state.sellerId).toBe(4)
+    await state.save()
+    expect(mock.create.mock.calls[0]![0].salespersonStaffId).toBe(4)
+    view.unmount()
+  })
   it('keeps the successful sale and receipt action visible after progress becomes FOUND', async () => {
     const { view, state } = await render()
     mock.create.mockImplementationOnce(async () => {
@@ -172,15 +209,13 @@ describe('checkout main payload', () => {
     )
     view.unmount()
   })
-  it('sends mixed usages in one sale without a second usage POST', async () => {
+  it('hides course usage controls and sells a service without course usages', async () => {
     const { view, state } = await render()
-    state.usageSelections = [{ coursePurchaseId: 101, quantity: 2 }]
+    await view.vm.$nextTick()
+    expect(view.text()).not.toContain('สิทธิ์คอร์สเสริมที่ใช้ในครั้งนี้')
+    expect(view.text()).not.toContain('เพิ่มคอร์สที่ใช้สิทธิ์')
     await state.save()
-    expect(mock.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        courseUsages: [{ coursePurchaseId: 101 }, { coursePurchaseId: 101 }],
-      }),
-    )
+    expect(mock.create.mock.calls[0]![0].courseUsages).toBeUndefined()
     expect(mock.use).not.toHaveBeenCalled()
     view.unmount()
   })

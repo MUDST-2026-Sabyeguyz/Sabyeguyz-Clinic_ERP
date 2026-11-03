@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   appointmentApi,
-  courseApi,
   ApiError,
   catalogApi,
   patientApi,
@@ -13,7 +12,6 @@ import {
   paymentStatusApi,
   salesApi,
   staffApi,
-  type CoursePurchase,
   type Course,
   type PatientProfile,
   type PaymentMethod,
@@ -22,8 +20,7 @@ import {
   type ServiceOption,
   type Staff,
 } from '@/api/client'
-import { allowedPaymentMethod, buildSaleRequest, type UsageSelection } from '../careTransactions'
-import CourseUsagePicker from '@/features/courses/components/CourseUsagePicker.vue'
+import { allowedPaymentMethod, buildSaleRequest } from '../careTransactions'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
@@ -62,8 +59,6 @@ const sellerId = ref(0)
 const treatingId = ref(0)
 const methodCode = ref('')
 const paymentLabel = ref<SaleCreateRequest['paymentLabelCode'] | ''>('')
-const usageSelections = ref<UsageSelection[]>([])
-const patientCourses = ref<CoursePurchase[]>([])
 const uncertainSale = ref(false)
 const billDiscountType = ref<DiscountType>('NONE')
 const billDiscountValue = ref(0)
@@ -72,6 +67,7 @@ const stage = ref<'edit' | 'review' | 'success'>('edit')
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
+const errorMessage = ref<HTMLElement | null>(null)
 const saved = ref<{ id: number; receiptNo: string; receiptId?: number | null } | null>(null)
 const {
   appointmentId,
@@ -138,6 +134,7 @@ const subtotalCents = computed(() => grossCents.value - itemDiscountCents.value)
 const billDiscountCents = computed(() =>
   discountCents(subtotalCents.value, billDiscountType.value, Number(billDiscountValue.value)),
 )
+const billDiscountExceedsSubtotal = computed(() => billDiscountCents.value > subtotalCents.value)
 const netCents = computed(() => subtotalCents.value - billDiscountCents.value)
 const money = (value: number) =>
   new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(value / 100)
@@ -145,6 +142,7 @@ const storageKey = computed(
   () =>
     `sale-pending:${branchCode.value}:${patient.value?.id || route.query.patientId}:${appointmentId.value || 'no-appointment'}`,
 )
+const requestKeyStorageKey = computed(() => `sale-request:${storageKey.value}`)
 const hasService = computed(() => lines.value.some((line) => line.category === 'service'))
 const staffOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: person.fullName })),
@@ -168,10 +166,10 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    // โหลดผู้ป่วย รายการขาย ช่องทางชำระ และสิทธิ์คอร์สสำหรับ checkout
+    // โหลดผู้ป่วย รายการขาย และช่องทางชำระสำหรับ checkout
     const patientId = Number(route.query.patientId)
     if (!Number.isInteger(patientId) || patientId < 1) throw new Error('กรุณาเลือกผู้ป่วยก่อนขาย')
-    const [person, serviceList, courseList, staffList, methodList, labelList, purchases] =
+    const [person, serviceList, courseList, staffList, methodList, labelList] =
       await Promise.all([
         patientApi.get(patientId),
         catalogApi.services(),
@@ -179,7 +177,6 @@ async function load() {
         staffApi.list(),
         paymentMethodApi.list(),
         paymentStatusApi.list(),
-        courseApi.patientCourses(patientId),
       ])
     if (
       current !== loadRequest ||
@@ -191,7 +188,6 @@ async function load() {
     services.value = serviceList.filter(
       (item) => !/assessment|ประเมิน/i.test(`${item.code} ${item.name}`),
     )
-    patientCourses.value = purchases
     courses.value = courseList
     staff.value = staffList.filter(
       (item) =>
@@ -201,7 +197,11 @@ async function load() {
     )
     methods.value = methodList.filter(allowedPaymentMethod)
     labels.value = labelList.filter((item) => item.enabled)
-    sellerId.value = 0
+    const signedInUser = JSON.parse(localStorage.getItem('authUser') || 'null') as {
+      staffId?: number | null
+    } | null
+    sellerId.value =
+      staff.value.find((person) => person.id === signedInUser?.staffId)?.id ?? staff.value[0]?.id ?? 0
     treatingId.value = 0
     methodCode.value = ''
     uncertainSale.value = Boolean(sessionStorage.getItem(storageKey.value))
@@ -269,7 +269,7 @@ function check() {
     throw new Error('ส่วนลดท้ายบิลต้องไม่ติดลบและมีทศนิยมไม่เกิน 2 ตำแหน่ง')
   if (billDiscountType.value === 'PERCENT' && billDiscountValue.value > 100)
     throw new Error('ส่วนลดท้ายบิลต้องไม่เกิน 100%')
-  if (billDiscountCents.value > subtotalCents.value) throw new Error('ส่วนลดท้ายบิลเกินยอดรายการ')
+  if (billDiscountExceedsSubtotal.value) throw new Error('ส่วนลดท้ายบิลเกินยอดรายการ')
   if (billDiscountCents.value > 0 && itemDiscountCents.value > 0)
     throw new Error('ใช้ส่วนลดรายการกับส่วนลดท้ายบิลพร้อมกันไม่ได้')
   if (netCents.value <= 0) throw new Error('ยอดสุทธิต้องมากกว่า 0 เพื่อรับชำระและออกใบเสร็จ')
@@ -277,7 +277,7 @@ function check() {
 function saleRequest() {
   // รวมข้อมูลหน้าจอเป็น payload ตาม contract เดียวก่อนตรวจหรือส่งขาย
   if (hasService.value && !staff.value.some((person) => person.id === treatingId.value))
-    throw new Error('กรุณาเลือกผู้รักษาจริง')
+    throw new Error('กรุณาเลือกนักกายภาพ')
   return buildSaleRequest({
     patientId: patient.value!.id,
     branchCode: branchCode.value,
@@ -303,20 +303,7 @@ function saleRequest() {
         discountValue: line.discountValue,
       }
     }),
-    usageSelections: usageSelections.value,
-    courses: patientCourses.value,
   })
-}
-function review() {
-  error.value = ''
-  try {
-    check()
-    saleRequest()
-    stage.value = 'review'
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'ตรวจรายการไม่สำเร็จ'
-  }
 }
 async function save() {
   if (saving.value || !patient.value || uncertainSale.value || stage.value === 'success') return
@@ -332,6 +319,9 @@ async function save() {
     }
     check()
     const request = saleRequest()
+    const requestKey = sessionStorage.getItem(requestKeyStorageKey.value) || crypto.randomUUID()
+    sessionStorage.setItem(requestKeyStorageKey.value, requestKey)
+    request.requestKey = requestKey
     // ตั้ง recovery marker ก่อนส่ง เพื่อให้กู้ผลได้เมื่อ request timeout
     sessionStorage.setItem(storageKey.value, 'pending')
     uncertainSale.value = true
@@ -341,8 +331,10 @@ async function save() {
     if (appointmentId.value) await refreshAppointmentProcess()
     saved.value = { id: result.id, receiptNo: result.receiptNo, receiptId: result.receiptId }
     sessionStorage.removeItem(storageKey.value)
+    sessionStorage.removeItem(requestKeyStorageKey.value)
     uncertainSale.value = false
     stage.value = 'success'
+    void router.push({ name: 'staff-receipt', params: { id: result.id } })
   } catch (cause) {
     if (cause instanceof ApiError && [400, 401, 403, 422].includes(cause.status)) {
       sessionStorage.removeItem(storageKey.value)
@@ -351,6 +343,8 @@ async function save() {
     await recoverAppointmentWrite(cause)
     error.value =
       cause instanceof Error ? cause.message : 'ยังยืนยันผลการขายไม่ได้ กรุณาตรวจสอบรายการเดิม'
+    await nextTick()
+    errorMessage.value?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
   } finally {
     saving.value = false
   }
@@ -364,7 +358,6 @@ watch(
   async () => {
     patient.value = null
     stage.value = 'edit'
-    usageSelections.value = []
     lines.value = [
       {
         key: crypto.randomUUID(),
@@ -442,7 +435,7 @@ watch(
                   ? 'บันทึกการขายสำเร็จ'
                   : stage === 'review'
                     ? 'ตรวจสอบและชำระเงิน'
-                    : 'ขายบริการและคอร์ส'
+                    : 'รายละเอียดการชำระเงิน'
               }}
             </h1>
             <p>{{ patient.fullName }} · HN {{ patient.hn }}</p>
@@ -479,7 +472,7 @@ watch(
           <div class="checkout-main">
             <section class="panel">
               <div class="section-heading">
-                <h2>รายการขาย</h2>
+                <h2>ประเภทการชำระ</h2>
                 <button v-if="stage === 'edit'" type="button" @click="addLine">
                   + เพิ่มรายการ
                 </button>
@@ -530,7 +523,7 @@ watch(
                   </select></label
                 >
                 <label v-if="line.discountType !== 'NONE'"
-                  >ค่า<input
+                  >{{ line.discountType === 'FIXED' ? 'ระบุจำนวนบาท' : 'ระบุเปอร์เซ็นต์' }}<input
                     v-model.number="line.discountValue"
                     type="number"
                     min="0"
@@ -548,37 +541,19 @@ watch(
                 </button>
               </div>
             </section>
-            <section class="panel">
-              <h2>ผู้รับผิดชอบและการชำระ</h2>
-              <CourseUsagePicker
-                v-if="hasService && appointmentId"
-                v-model="usageSelections"
-                :courses="patientCourses"
-                :branch-code="branchCode"
-                :disabled="stage === 'review' || saving"
+            <section v-if="hasService" class="panel">
+              <h2>นักกายภาพ</h2>
+              <FilterDropdown
+                :model-value="String(treatingId || '')"
+                :options="staffOptions"
+                label="นักกายภาพ"
+                default-label="เลือกนักกายภาพ"
+                :disabled="stage === 'review'"
+                @update:model-value="treatingId = Number($event)"
               />
-              <label v-if="hasService"
-                >ผู้รักษาจริง<FilterDropdown
-                  :model-value="String(treatingId || '')"
-                  :options="staffOptions"
-                  label="ผู้รักษาจริง"
-                  default-label="เลือกผู้รักษา"
-                  :disabled="stage === 'review'"
-                  @update:model-value="treatingId = Number($event)"
-              /></label>
-              <div class="fields">
-                <label
-                  >ผู้ขาย / เจ้าของคอร์ส<FilterDropdown
-                    :model-value="sellerId ? String(sellerId) : ''"
-                    :options="staffOptions"
-                    :disabled="stage === 'review'"
-                    default-label="เลือกนักกายภาพ"
-                    label="ค้นหานักกายภาพ"
-                    searchable
-                    empty-search-label="ไม่พบผลการค้นหา"
-                    @update:model-value="sellerId = Number($event)"
-                /></label>
-              </div>
+            </section>
+            <section class="panel">
+              <h2>การชำระเงิน</h2>
               <fieldset class="payment-group">
                 <legend>ลักษณะการชำระ</legend>
                 <div class="payment-options">
@@ -615,7 +590,6 @@ watch(
                   </button>
                 </div>
               </fieldset>
-              <p class="helper">ลักษณะการชำระเป็นคำอธิบาย รับเงินเต็มยอดสุทธิในครั้งเดียว</p>
               <label
                 >หมายเหตุ (ถ้ามี)<textarea v-model="note" :readonly="stage === 'review'" rows="3" />
               </label>
@@ -644,25 +618,35 @@ watch(
               </select></label
             >
             <label v-if="billDiscountType !== 'NONE'"
-              >ค่า<input
+              >{{ billDiscountType === 'FIXED' ? 'ระบุจำนวนบาท' : 'ระบุเปอร์เซ็นต์' }}<input
                 v-model.number="billDiscountValue"
                 type="number"
                 min="0"
-                :max="billDiscountType === 'PERCENT' ? 100 : undefined"
+                :max="billDiscountType === 'PERCENT' ? 100 : subtotalCents / 100"
                 step="0.01"
                 :disabled="stage === 'review'"
+                :aria-invalid="billDiscountExceedsSubtotal"
+                :aria-describedby="billDiscountExceedsSubtotal ? 'bill-discount-error' : undefined"
             /></label>
+            <p v-if="billDiscountExceedsSubtotal" id="bill-discount-error" class="error" role="alert">
+              {{
+                billDiscountType === 'PERCENT'
+                  ? 'ส่วนลดต้องไม่เกิน 100%'
+                  : `ส่วนลดต้องไม่เกินยอดหลังส่วนลดรายการ ${money(subtotalCents)}`
+              }}
+            </p>
             <p>
               <span>ส่วนลดท้ายบิล</span><strong>− {{ money(billDiscountCents) }}</strong>
             </p>
             <p class="net">
-              <span>ยอดสุทธิที่รับชำระ</span><strong>{{ money(netCents) }}</strong>
+              <span>ยอดสุทธิที่รับชำระ</span
+              ><strong>{{ billDiscountExceedsSubtotal ? '—' : money(netCents) }}</strong>
             </p>
             <p v-if="stage === 'review'" class="helper">
               ตรวจรายการ ผู้ขาย ส่วนลด และช่องทางก่อนยืนยันบันทึก
             </p>
-            <button v-if="stage === 'edit'" class="primary" type="button" @click="review">
-              ตรวจสอบรายการ
+            <button v-if="stage === 'edit'" class="primary" type="button" :disabled="saving || uncertainSale" @click="save">
+              {{ saving ? 'กำลังบันทึก…' : 'ชำระเงิน' }}
             </button>
             <div v-else class="actions">
               <button type="button" :disabled="saving" @click="stage = 'edit'">แก้ไข</button
@@ -677,7 +661,7 @@ watch(
             </div>
           </aside>
         </div>
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <p v-if="error" ref="errorMessage" class="error" role="alert">{{ error }}</p>
       </template>
     </main>
   </div>
@@ -855,12 +839,6 @@ textarea {
   background: #fff;
   font: inherit;
 }
-.fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  margin: 18px 0;
-}
 .helper {
   color: #59736f;
   font-size: 13px;
@@ -928,7 +906,6 @@ textarea {
   .heading {
     display: block;
   }
-  .fields,
   .line-row {
     grid-template-columns: 1fr 1fr;
   }
