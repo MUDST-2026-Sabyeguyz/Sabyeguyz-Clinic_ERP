@@ -86,8 +86,21 @@ const listServiceMode = ref<'all' | 'single' | 'course'>(
 const calendarSyncOpen = ref(false)
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
-const startDate = ref(typeof route.query.startDate === 'string' ? route.query.startDate : '')
-const endDate = ref(typeof route.query.endDate === 'string' ? route.query.endDate : '')
+const hasDateRangeQuery = route.query.startDate !== undefined || route.query.endDate !== undefined
+const startDate = ref(
+  typeof route.query.startDate === 'string'
+    ? route.query.startDate
+    : hasDateRangeQuery
+      ? ''
+      : clinicToday(),
+)
+const endDate = ref(
+  typeof route.query.endDate === 'string'
+    ? route.query.endDate
+    : hasDateRangeQuery
+      ? ''
+      : clinicToday(),
+)
 const yesterday = new Date()
 yesterday.setDate(yesterday.getDate() - 1)
 const minimumAppointmentDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
@@ -190,11 +203,9 @@ const form = ref({
   branchCode: '',
   date: new Date().toISOString().slice(0, 10),
   time: '09:00',
-  endDate: new Date().toISOString().slice(0, 10),
-  endTime: '',
   note: '',
 })
-const customEndAt = ref(false)
+const appointmentDurationMinutes = ref(60)
 const managerBranchCode = computed(() =>
   isManager ? selectedManagerBranch()?.code : authUser?.branchCode,
 )
@@ -383,8 +394,8 @@ const formServiceModel = computed({
   get: () => String(form.value.serviceId || ''),
   set: (value: string) => {
     form.value.serviceId = Number(value) || 0
-    customEndAt.value = false
-    setDefaultAppointmentEnd()
+    appointmentDurationMinutes.value =
+      services.value.find((service) => service.id === form.value.serviceId)?.durationMinutes || 60
   },
 })
 const formTherapistModel = computed({
@@ -432,13 +443,12 @@ const normalizeHn = (value: string) =>
     .toLowerCase()
 const formatTimeRange = (time: string) => {
   if (!time) return 'ยังไม่ได้เลือกเวลา'
-  if (form.value.endTime) return `${time}–${form.value.endTime}`
-  const [hour = 0, minute = 0] = time.split(':').map(Number)
-  const duration = selectedService.value?.durationMinutes || 60
-  const endMinutes = hour * 60 + minute + duration
-  const endHour = Math.floor(endMinutes / 60) % 24
-  const endMinute = endMinutes % 60
-  return `${time}–${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
+  const end = appointmentEndFields(
+    form.value.date,
+    time,
+    appointmentDurationMinutes.value,
+  )
+  return `${time}–${end.time}`
 }
 const calendarDate = computed(() => selectedDate.value || new Date().toISOString().slice(0, 10))
 const calendarTherapists = computed(() =>
@@ -475,8 +485,14 @@ function moveCalendarDate(days: number) {
   date.setDate(date.getDate() + days)
   selectedDate.value = date.toISOString().slice(0, 10)
 }
-const appointmentFormInterval = () =>
-  appointmentInterval(form.value.date, form.value.time, form.value.endDate, form.value.endTime)
+const appointmentFormInterval = () => {
+  const end = appointmentEndFields(
+    form.value.date,
+    form.value.time,
+    appointmentDurationMinutes.value,
+  )
+  return appointmentInterval(form.value.date, form.value.time, end.date, end.time)
+}
 async function load() {
   const requestId = ++appointmentLoadRequest
   if (startDate.value && endDate.value && startDate.value > endDate.value) {
@@ -580,7 +596,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   const branch = branchOptions.value[0]
   const branchCode = branch?.code ?? ''
   const today = clinicToday()
-  customEndAt.value = false
+  appointmentDurationMinutes.value = 60
   form.value = {
     patientId: 0,
     therapistId: 0,
@@ -588,8 +604,6 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
     branchCode,
     date: today,
     time: '',
-    endDate: today,
-    endTime: '',
     note: '',
   }
   viewMode.value = 'create'
@@ -604,9 +618,7 @@ function openCalendarSlot(therapist: Therapist, time: string) {
   openCreate('calendar')
   form.value.therapistId = therapist.id
   form.value.date = calendarDate.value
-  form.value.endDate = calendarDate.value
   form.value.time = time
-  setDefaultAppointmentEnd()
   form.value.branchCode = therapist.branchCode || form.value.branchCode
 }
 async function loadPatientCourses(patientId: number) {
@@ -634,8 +646,10 @@ function openEdit(item: Appointment) {
   patientQuery.value = item.patient?.fullName ?? item.contactName ?? ''
   showPatientResults.value = false
   const startFields = appointmentLocalFields(item.startAt)
-  const endFields = appointmentLocalFields(item.endAt)
-  customEndAt.value = true
+  appointmentDurationMinutes.value = Math.max(
+    1,
+    Math.round((Date.parse(item.endAt) - Date.parse(item.startAt)) / 60_000),
+  )
   form.value = {
     patientId: item.patient?.id ?? 0,
     therapistId: item.therapist.id ?? 0,
@@ -643,8 +657,6 @@ function openEdit(item: Appointment) {
     branchCode: item.branchCode,
     date: startFields.date,
     time: startFields.time,
-    endDate: endFields.date,
-    endTime: endFields.time,
     note: item.note ?? '',
   }
   viewMode.value = 'edit'
@@ -702,31 +714,13 @@ function changeSchedule() {
 function changeAppointmentDate(date: string) {
   if (form.value.date !== date) {
     form.value.time = ''
-    form.value.endDate = date
-    form.value.endTime = ''
-    customEndAt.value = false
   }
   form.value.date = date
   changeSchedule()
 }
-function setDefaultAppointmentEnd() {
-  if (!form.value.date || !form.value.time || customEndAt.value) return
-  const end = appointmentEndFields(
-    form.value.date,
-    form.value.time,
-    selectedService.value?.durationMinutes || 60,
-  )
-  form.value.endDate = end.date
-  form.value.endTime = end.time
-}
-function changeAppointmentEndDate(date: string) {
-  form.value.endDate = date
-  customEndAt.value = true
-}
+
 function selectAppointmentTime(time: string) {
   form.value.time = time
-  customEndAt.value = false
-  setDefaultAppointmentEnd()
   changeSchedule()
 }
 async function loadTimeAvailability() {
@@ -881,8 +875,8 @@ async function save() {
     if (isNewBooking && (!contactName || !isContactPhoneValid(newPatientForm.value.phone)))
       throw new Error('กรุณากรอกชื่อหรือชื่อเล่น และเบอร์โทรศัพท์ของผู้ป่วยใหม่')
     if (!form.value.therapistId) throw new Error('กรุณาเลือกนักกายภาพ')
-    if (!form.value.date || !form.value.time || !form.value.endDate || !form.value.endTime)
-      throw new Error('กรุณาเลือกวันและเวลาเริ่มกับจบนัดให้ครบถ้วน')
+    if (!form.value.date || !form.value.time)
+      throw new Error('กรุณาเลือกวันและเวลาเริ่มนัดให้ครบถ้วน')
     if (new Date(`${form.value.date}T00:00:00+07:00`).getUTCDay() === 0)
       throw new Error('ไม่สามารถนัดหมายในวันอาทิตย์ได้')
     const interval = appointmentFormInterval()
@@ -1010,11 +1004,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
 <template>
   <div
     class="staff-page appointment-page"
-    :class="{ 'appointment-form-open': viewMode !== 'list' }"
+    :class="{ 'appointment-form-open': viewMode !== 'list' && !isEditing }"
   >
     <StaffHeader />
     <main class="staff-main">
-      <section v-if="viewMode === 'list'" class="staff-hero">
+      <section v-if="viewMode === 'list' || isEditing" class="staff-hero">
         <h1>นัดหมาย</h1>
         <p>ตรวจตารางและจัดการนัดหมาย</p>
         <div class="appointment-hero-actions">
@@ -1172,21 +1166,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <span>{{ formatTimeRange(form.time) }}</span>
                 <strong>ดูตารางเวลาว่าง</strong>
               </button>
-            </label>
-            <label class="reschedule-end-date-field">
-              วันที่จบ
-              <ThaiDatePicker
-                :model-value="form.endDate"
-                :min-date="form.date"
-                show-calendar-icon
-                numeric-month
-                hide-caret
-                @update:model-value="changeAppointmentEndDate"
-              />
-            </label>
-            <label class="reschedule-end-time-field">
-              เวลาจบ
-              <input v-model="form.endTime" type="time" required @input="customEndAt = true" />
             </label>
             <label v-if="!isManager" class="reschedule-branch-field">
               สาขา
@@ -1421,21 +1400,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <button type="button" @click="openTimeDrawer">ดูตารางเวลาว่าง</button>
               </span>
             </label>
-            <label class="appointment-end-date-field">
-              <span class="appointment-field-label">วันที่จบ <em>*</em></span>
-              <ThaiDatePicker
-                :model-value="form.endDate"
-                :min-date="form.date"
-                show-calendar-icon
-                numeric-month
-                hide-caret
-                @update:model-value="changeAppointmentEndDate"
-              />
-            </label>
-            <label class="appointment-end-time-field">
-              <span class="appointment-field-label">เวลาจบ <em>*</em></span>
-              <input v-model="form.endTime" type="time" required @input="customEndAt = true" />
-            </label>
             <label class="wide appointment-note-field"
               >หมายเหตุ<textarea
                 v-model.trim="form.note"
@@ -1586,7 +1550,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           </footer>
         </aside>
       </div>
-      <section v-if="viewMode === 'list'" class="staff-panel appointment-panel">
+      <section v-if="viewMode === 'list' || isEditing" class="staff-panel appointment-panel">
         <p v-if="errorMessage" class="error" role="alert">
           {{ errorMessage }}
           <button class="appointment-retry" type="button" @click="load" :disabled="listLoading">
@@ -1620,16 +1584,14 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               รายคอร์ส
             </button>
           </div>
-          <header class="panel-head appointment-list-filters">
-            <AppointmentDateFilter
-              :from="startDate"
-              :to="endDate"
-            @apply="applyDateRange"
-            />
-          </header>
         </div>
         <div v-if="scheduleView === 'list'" class="appointment-list-summary">
-          <p class="appointment-summary-date">{{ listDateCaption }}</p>
+          <div class="appointment-summary-context">
+            <p class="appointment-summary-date">{{ listDateCaption }}</p>
+            <header class="panel-head appointment-list-filters">
+              <AppointmentDateFilter :from="startDate" :to="endDate" @apply="applyDateRange" />
+            </header>
+          </div>
           <div class="appointment-summary-actions">
             <button
               class="appointment-sort"
@@ -1648,9 +1610,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             >
               {{ sortOrder === 'oldest' ? 'ล่าสุด ↓' : 'ล่าสุด ↑' }}
             </button>
-            <span v-if="!listLoading && !errorMessage" class="appointment-summary-count">
-              {{ filteredAppointments.length.toLocaleString('th-TH') }} นัดหมาย
-            </span>
             <span v-if="listLoading" role="status">กำลังโหลดนัดหมาย…</span>
           </div>
         </div>
@@ -1840,51 +1799,55 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <td>{{ item.service.name || 'ยังไม่ระบุบริการ' }}</td>
                 <td>{{ item.therapist.fullName }}</td>
                 <td>
-                  <div
-                    v-if="item.status !== 'UNCONFIRMED' || !canManageOwnAppointment(item)"
-                    class="appointment-status-filter appointment-status-readonly"
-                    :data-status="uiStatusFor(item.status)"
-                  >
-                    {{ appointmentStatusLabels[uiStatusFor(item.status)] }}
+                  <div class="appointment-status-actions">
+                    <div
+                      v-if="item.status !== 'UNCONFIRMED' || !canManageOwnAppointment(item)"
+                      class="appointment-status-filter appointment-status-readonly"
+                      :data-status="uiStatusFor(item.status)"
+                    >
+                      {{ appointmentStatusLabels[uiStatusFor(item.status)] }}
+                    </div>
+                    <div
+                      v-else
+                      class="appointment-status-filter"
+                      :data-status="uiStatusFor(item.status)"
+                    >
+                      <FilterDropdown
+                        :model-value="uiStatusFor(item.status)"
+                        :options="
+                          appointmentStatusOptions
+                            .filter(
+                              ([value]) =>
+                                value !== 'PENDING' || uiStatusFor(item.status) === 'PENDING',
+                            )
+                            .map(([value, label]) => ({
+                              value,
+                              label,
+                            }))
+                        "
+                        :default-label="appointmentStatusLabels[uiStatusFor(item.status)]"
+                        :label="`สถานะนัดหมายของ ${item.patient?.fullName || item.contactName || 'ผู้ป่วยไม่ประจำ'}`"
+                        :clear-on-reselect="false"
+                        :disabled="savingStatusId === item.id"
+                        hide-default-option
+                        @update:model-value="requestStatusChange(item, $event)"
+                      />
+                    </div>
+                    <span
+                      v-if="item.status === 'CANCELLED' && item.cancelReason"
+                      class="appointment-cancel-reason"
+                      >เหตุผล: {{ item.cancelReason }}</span
+                    >
+                    
+                  
+                                        <button
+                      v-if="canManageOwnAppointment(item) && uiStatusFor(item.status) === 'PENDING'"
+                      class="appointment-edit"
+                      @click="goToEdit(item)"
+                    >
+                      แก้ไข
+                    </button>
                   </div>
-                  <div
-                    v-else
-                    class="appointment-status-filter"
-                    :data-status="uiStatusFor(item.status)"
-                  >
-                    <FilterDropdown
-                      :model-value="uiStatusFor(item.status)"
-                      :options="
-                        appointmentStatusOptions
-                          .filter(
-                            ([value]) =>
-                              value !== 'PENDING' || uiStatusFor(item.status) === 'PENDING',
-                          )
-                          .map(([value, label]) => ({
-                            value,
-                            label,
-                          }))
-                      "
-                      :default-label="appointmentStatusLabels[uiStatusFor(item.status)]"
-                      :label="`สถานะนัดหมายของ ${item.patient?.fullName || item.contactName || 'ผู้ป่วยไม่ประจำ'}`"
-                      :clear-on-reselect="false"
-                      :disabled="savingStatusId === item.id"
-                      hide-default-option
-                      @update:model-value="requestStatusChange(item, $event)"
-                    />
-                  </div>
-                  <span
-                    v-if="item.status === 'CANCELLED' && item.cancelReason"
-                    class="appointment-cancel-reason"
-                    >เหตุผล: {{ item.cancelReason }}</span
-                  >
-                  <button
-                    v-if="canManageOwnAppointment(item) && uiStatusFor(item.status) === 'PENDING'"
-                    class="appointment-edit"
-                    @click="goToEdit(item)"
-                  >
-                    แก้ไข
-                  </button>
                 </td>
               </tr>
             </tbody>
@@ -2010,7 +1973,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             :disabled="savingAppointment"
             @click="pendingSaveConfirmation = false"
           >
-            กลับไปแก้ไข
+            ยกเลิก
           </button>
           <button type="button" class="primary" :disabled="savingAppointment" @click="confirmSave">
             {{ savingAppointment ? 'กำลังบันทึก…' : 'ยืนยันนัดหมาย' }}

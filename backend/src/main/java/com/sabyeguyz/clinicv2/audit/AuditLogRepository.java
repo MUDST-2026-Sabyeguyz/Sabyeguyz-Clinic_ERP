@@ -11,10 +11,12 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSp
     long countByTableNameAndActionAndChangedAtGreaterThanEqualAndChangedAtLessThan(
             String tableName, AuditAction action, Instant from, Instant to);
 
-    /** Course expiry changes reuse the existing audit store, without a schema migration. */
-    List<AuditLog> findByTableNameAndRecordIdOrderByChangedAtDesc(String tableName, String recordId);
-
     /** The tables that have audit rows, for the filter of the audit page. */
     @Query("select distinct a.tableName from AuditLog a order by a.tableName")
     List<String> findDistinctTableNames();
+
+    List<AuditLog> findByTableNameAndRecordIdAndActionOrderByIdAsc(
+            String tableName,
+            String recordId,
+            AuditAction action);
 }

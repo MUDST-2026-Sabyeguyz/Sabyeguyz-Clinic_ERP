@@ -6,12 +6,15 @@ import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import java.time.LocalDate;
 import java.util.Optional;
 
 public class StaffServiceScenarios {
     V2RepositoryStub<StaffRepository> repositoryStub = new V2RepositoryStub<>(StaffRepository.class);
     StaffRepository repository = repositoryStub.proxy();
+    V2RepositoryStub<AppUserRepository> usersStub = new V2RepositoryStub<>(AppUserRepository.class);
+    AppUserRepository users = usersStub.proxy();
 
     public Map<String, Object> createsStaffAssignedToABranch() {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -19,7 +22,7 @@ public class StaffServiceScenarios {
 
         Branch branch = new Branch();
 
-        Staff staff = new StaffService(repository).create(
+        Staff staff = new StaffService(repository, users).create(
                 "THP-001", "สมชาย", "ใจดี", StaffPosition.Therapist, branch, LocalDate.of(2026, 1, 1), 1L);
 
         out.put("staffCode", staff.getStaffCode());
@@ -31,7 +34,7 @@ public class StaffServiceScenarios {
     public Map<String, Object> rejectsDuplicateStaffCode() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findByStaffCode", args -> Optional.of(new Staff()));
-        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).create(
+        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).create(
                 "THP-001", "สมชาย", "ใจดี", StaffPosition.Therapist, new Branch(), LocalDate.now(), 1L); return null; }));
         return out;
     }
@@ -39,7 +42,7 @@ public class StaffServiceScenarios {
     public Map<String, Object> rejectsMissingBranch() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findByStaffCode", args -> Optional.empty());
-        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).create(
+        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).create(
                 "THP-002", "สมหญิง", "ใจดี", StaffPosition.Therapist, null, LocalDate.now(), 1L); return null; }));
         return out;
     }
@@ -50,7 +53,7 @@ public class StaffServiceScenarios {
         staff.setStaffStatus(true);
         repositoryStub.on("findById", args -> Optional.of(staff));
 
-        Staff terminated = new StaffService(repository).terminate(5L, LocalDate.of(2026, 6, 30), 9L);
+        Staff terminated = new StaffService(repository, users).terminate(5L, LocalDate.of(2026, 6, 30), 9L);
 
         out.put("staffStatus", terminated.isStaffStatus());
         out.put("terminationDate", terminated.getTerminationDate());
@@ -60,7 +63,7 @@ public class StaffServiceScenarios {
     public Map<String, Object> terminateRequiresADate() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findById", args -> Optional.of(new Staff()));
-        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(5L, null, 9L); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).terminate(5L, null, 9L); return null; }));
         return out;
     }
 
@@ -69,7 +72,7 @@ public class StaffServiceScenarios {
         Staff staff = new Staff();
         staff.setHireDate(LocalDate.of(2026, 7, 1));
         repositoryStub.on("findById", args -> Optional.of(staff));
-        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository).terminate(5L, LocalDate.of(2026, 6, 30), 9L); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).terminate(5L, LocalDate.of(2026, 6, 30), 9L); return null; }));
         return out;
     }
 }

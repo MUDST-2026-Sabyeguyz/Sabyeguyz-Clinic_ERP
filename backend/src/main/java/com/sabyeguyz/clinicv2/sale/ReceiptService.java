@@ -30,10 +30,54 @@ public class ReceiptService {
     private final ReceiptRepository repository;
 
     private final CourseRepository courses;
+    private final PaymentLabelOptionRepository paymentLabels;
 
-    public ReceiptService(ReceiptRepository repository, CourseRepository courses) {
+    public ReceiptService(ReceiptRepository repository, CourseRepository courses, PaymentLabelOptionRepository paymentLabels) {
         this.repository = repository;
         this.courses = courses;
+        this.paymentLabels = paymentLabels;
+    }
+
+    /**
+     * Assigns an enabled payment label selected for a new receipt.
+     * Writes both the new FK and the legacy enum during migration.
+     */
+    public void assignPaymentLabel(Receipt receipt, String code) {
+        if (receipt == null) {
+            throw new IllegalArgumentException("ต้องระบุใบเสร็จ");
+        }
+        if (code == null || code.isBlank()) {
+            throw new IllegalArgumentException("ต้องเลือกสถานะการชำระเงิน");
+        }
+
+        String normalized = code.trim().toUpperCase(java.util.Locale.ROOT);
+        String databaseCode = "PAID".equals(normalized)
+                ? "FULL" : normalized;
+
+        PaymentLabelOption option = paymentLabels.findByCode(databaseCode)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("ไม่พบสถานะการชำระเงิน"));
+
+        if (!option.isEnabled()) {
+            throw new IllegalArgumentException(
+                    "สถานะการชำระเงินนี้ถูกปิดใช้งาน");
+        }
+
+        com.sabyeguyz.clinicv2.enums.PaymentLabel legacyLabel =
+                switch (option.getCode()) {
+                    case "FULL" ->
+                            com.sabyeguyz.clinicv2.enums.PaymentLabel.FullyPaid;
+                    case "INSTALLMENT" ->
+                            com.sabyeguyz.clinicv2.enums.PaymentLabel.Installment;
+                    case "DEPOSIT" ->
+                            com.sabyeguyz.clinicv2.enums.PaymentLabel.Deposit;
+                    default ->
+                            throw new IllegalArgumentException(
+                                    "รหัสสถานะการชำระเงินไม่รองรับ");
+                };
+
+        receipt.setPaymentLabelOption(option);
+        receipt.setPaymentLabel(legacyLabel);
     }
 
     @Transactional(readOnly = true)
@@ -50,7 +94,7 @@ public class ReceiptService {
     }
 
     @Transactional
-    public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, Long actorId) {
+    public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, String paymentLabelCode, Long actorId) {
         String no = requireText(receiptNo, "receiptNo");
         if (!no.matches(RECEIPT_NO_FORMAT)) {
             throw new IllegalArgumentException("เลขที่ใบเสร็จต้องอยู่ในรูปแบบ REYYMMNNNN");
@@ -71,6 +115,7 @@ public class ReceiptService {
         receipt.setSaleDate(saleDate == null ? ClinicTime.now() : saleDate.atStartOfDay());
         receipt.setReceiptCreateAt(Instant.now());
         receipt.setReceiptCreateBy(actorId);
+        assignPaymentLabel(receipt, paymentLabelCode);
         return repository.save(receipt);
     }
 

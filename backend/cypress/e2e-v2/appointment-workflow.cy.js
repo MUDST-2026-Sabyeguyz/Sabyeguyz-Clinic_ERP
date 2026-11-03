@@ -1,8 +1,40 @@
 const at = (fx, time = '09:00') => `${fx.tomorrow}T${time}:00+07:00`
-const newBooking = (fx, overrides = {}) => ({ branchCode: '01', therapistId: fx.therapistId,
-  startAt: at(fx), patientType: 'NEW', contactName: 'ผู้ป่วย ใหม่', contactPhone: '0891234567', ...overrides })
+function newBooking(fx, overrides = {}) {
+  const startAt = overrides.startAt ?? at(fx)
+  const endAt = new Date(
+      new Date(startAt).getTime() + 60 * 60 * 1000
+  ).toISOString()
+
+  return {
+    branchCode: '01',
+    therapistId: fx.therapistId,
+    startAt, endAt,
+    patientType: 'NEW',
+    contactName: 'ผู้ป่วย ใหม่',
+    contactPhone: '0891234567',
+    ...overrides,
+  }
+}
 
 describe('P3 non-commission appointment workflow', () => {
+  beforeEach(() => {
+    cy.api('GET', '/api/branches').then(({ body }) => {
+      body
+          .filter((branch) => ['01', '02'].includes(branch.branchCode))
+          .forEach((branch) => {
+            cy.api('PUT', `/api/branches/${branch.id}`, {
+              branchCode: branch.branchCode,
+              name: branch.name,
+              address: branch.address,
+              phone: branch.phone,
+              bookingOpenTime: '09:00',
+              bookingCloseTime: '18:00',
+              defaultAppointmentMinutes: 60,
+            }).its('status').should('equal', 200)
+          })
+    })
+  })
+
   it('requires NEW contact name and phone, therapist and time, but no room', function () {
     for (const overrides of [{ contactName: '' }, { contactPhone: '' }, { therapistId: null }, { startAt: null }]) {
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, overrides)).its('status').should('equal', 400)
@@ -27,22 +59,43 @@ describe('P3 non-commission appointment workflow', () => {
   })
 
   it('preserves omitted notes and supports editing/clearing notes without a false conflict with its own slot', function () {
-    cy.api('POST', '/api/appointments', newBooking(this.fixtures, { note: 'Original' })).then(({ body }) => {
-      cy.api('PATCH', `/api/appointments/${body.id}`, { startAt: at(this.fixtures, '10:00') })
-        .its('body.note').should('equal', 'Original')
-      cy.api('PATCH', `/api/appointments/${body.id}`, { startAt: at(this.fixtures, '10:00'), note: 'Edited' })
-        .its('status').should('equal', 200)
-      cy.api('GET', `/api/appointments/${body.id}`).its('body.note').should('equal', 'Edited')
-      cy.api('PATCH', `/api/appointments/${body.id}`, { startAt: at(this.fixtures, '10:00'), note: null })
-        .its('status').should('equal', 200)
-      cy.api('GET', `/api/appointments/${body.id}`).its('body.note').should('be.null')
+    cy.api('POST', '/api/appointments',
+        newBooking(this.fixtures, { note: 'Original' })
+    ).then(({ body }) => {
+      const times = {
+        startAt: at(this.fixtures, '10:00'),
+        endAt: at(this.fixtures, '11:00'),
+      }
+
+      cy.api('PATCH', `/api/appointments/${body.id}`, times)
+          .its('body.note').should('equal', 'Original')
+
+      cy.api('PATCH', `/api/appointments/${body.id}`, {
+        ...times, note: 'Edited',
+      }).its('status').should('equal', 200)
+
+      cy.api('GET', `/api/appointments/${body.id}`)
+          .its('body.note').should('equal', 'Edited')
+
+      cy.api('PATCH', `/api/appointments/${body.id}`, {
+        ...times, note: null,
+      }).its('status').should('equal', 200)
+
+      cy.api('GET', `/api/appointments/${body.id}`)
+          .its('body.note').should('be.null')
     })
   })
 
   it('searches CURRENT full name/middle/nickname/phone and NEW name/phone within the authorized branch', function () {
     cy.registerPatient({ firstName: 'สมชาย', middleName: 'กลาง', lastName: 'ใจดี', nickname: 'ชายน้อย' }).then((patient) => {
-      cy.api('POST', '/api/appointments', { branchCode: '01', therapistId: this.fixtures.therapistId,
-        patientId: patient.id, serviceId: this.fixtures.serviceId, startAt: at(this.fixtures) }).its('status').should('equal', 201)
+      cy.api('POST', '/api/appointments', {
+        branchCode: '01',
+        therapistId: this.fixtures.therapistId,
+        patientId: patient.id,
+        serviceId: this.fixtures.serviceId,
+        startAt: at(this.fixtures),
+        endAt: at(this.fixtures, '10:00'),
+      }).its('status').should('equal', 201)
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, { startAt: at(this.fixtures, '10:00') }))
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, {
         branchCode: '02', therapistId: this.fixtures.therapist2Id, contactName: 'สาขาสอง เท่านั้น', contactPhone: '0822222222',
@@ -62,8 +115,11 @@ describe('P3 non-commission appointment workflow', () => {
 
   it('applies the query before pagination, including records beyond the first page', function () {
     for (let index = 0; index < 21; index++) {
+      const start = Date.parse(at(this.fixtures)) + index * 15 * 60 * 1000
+
       cy.api('POST', '/api/appointments', newBooking(this.fixtures, {
-        startAt: `${this.fixtures.tomorrow}T09:${String(index).padStart(2, '0')}:00+07:00`,
+        startAt: new Date(start).toISOString(),
+        endAt: new Date(start + 15 * 60 * 1000).toISOString(),
         contactName: index === 20 ? 'เป้าหมาย หน้าสอง' : `รายการ ${index}`,
       })).its('status').should('equal', 201)
     }
@@ -74,39 +130,67 @@ describe('P3 non-commission appointment workflow', () => {
     })
   })
 
-  it('confirms NEW, registers once, links, and attends without creating a duplicate patient', function () {
-    cy.api('POST', '/api/appointments', newBooking(this.fixtures, { status: 'Unconfirmed' })).then(({ body }) => {
-      cy.api('POST', `/api/appointments/${body.id}/confirm`).its('status').should('equal', 200)
+  it('serves a registered patient without linking the original NEW appointment', function () {
+    cy.api('POST', '/api/appointments',
+        newBooking(this.fixtures, { status: 'Unconfirmed' })
+    ).then(({ body: appointment }) => {
       cy.registerPatient().then((patient) => {
-        cy.api('POST', `/api/appointments/${body.id}/link-patient`, { patientId: patient.id }).its('status').should('equal', 200)
-        cy.api('GET', `/api/appointments/${body.id}`).then(({ body: linked }) => {
-          expect(linked.patientType).to.equal('CURRENT')
-          expect(linked.patient.id).to.equal(patient.id)
+        cy.api('POST', `/api/appointments/${appointment.id}/link-patient`, {
+          patientId: patient.id,
+        }).its('status').should('equal', 409)
+
+        cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: this.fixtures.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+        }).then(({ status, body: sale }) => {
+          expect(status, JSON.stringify(sale)).to.equal(201)
+          expect(sale.patient.id).to.equal(patient.id)
         })
-        for (const action of ['check-in', 'start-service', 'complete']) {
-          cy.api('POST', `/api/appointments/${body.id}/${action}`).its('status').should('equal', 200)
-        }
-        cy.api('GET', '/api/patients').its('body.totalItems').should('equal', 1)
+
+        cy.api('GET', `/api/appointments/${appointment.id}`)
+            .then(({ body: unchanged }) => {
+              expect(unchanged.status).to.equal('CONFIRMED')
+              expect(unchanged.patientType).to.equal('NEW')
+              expect(unchanged.patient.id).to.equal(null)
+              expect(unchanged.patient.hn).to.equal(null)
+            })
+
+        cy.api('GET', '/api/patients')
+            .its('body.totalItems').should('equal', 1)
       })
     })
   })
 
-  it('serializes simultaneous links and never silently relinks the appointment', function () {
-    cy.api('POST', '/api/appointments', newBooking(this.fixtures)).then(({ body: appointment }) => {
-      cy.registerPatient().then((first) => {
-        cy.registerPatient({ identityNumber: '1100000000888', firstName: 'อีกคน' }).then((second) => {
-          cy.parallelApi([first, second].map((patient) => ({ method: 'POST',
-            url: `/api/appointments/${appointment.id}/link-patient`, body: { patientId: patient.id } })))
-            .then((results) => {
-              expect(results.map((result) => result.status).sort()).to.deep.equal([200, 400])
-              const winner = results.find((result) => result.status === 200).body.patient.id
-              cy.api('GET', `/api/appointments/${appointment.id}`).its('body.patient.id').should('equal', winner)
-              cy.api('POST', `/api/appointments/${appointment.id}/link-patient`,
-                { patientId: winner === first.id ? second.id : first.id }).its('status').should('equal', 400)
-              cy.api('GET', `/api/appointments/${appointment.id}`).its('body.patient.id').should('equal', winner)
+  it('rejects simultaneous attempts to link a NEW appointment', function () {
+    cy.api('POST', '/api/appointments', newBooking(this.fixtures))
+        .then(({ body: appointment }) => {
+          cy.registerPatient().then((first) => {
+            cy.registerPatient({
+              identityNumber: '1100000000888',
+              firstName: 'อีกคน',
+            }).then((second) => {
+              cy.parallelApi([first, second].map((patient) => ({
+                method: 'POST',
+                url: `/api/appointments/${appointment.id}/link-patient`,
+                body: { patientId: patient.id },
+              }))).then((results) => {
+                expect(results.map((result) => result.status))
+                    .to.deep.equal([409, 409])
+
+                cy.api('GET', `/api/appointments/${appointment.id}`)
+                    .then(({ body: unchanged }) => {
+                      expect(unchanged.patientType).to.equal('NEW')
+                      expect(unchanged.patient.id).to.equal(null)
+                      expect(unchanged.patient.hn).to.equal(null)
+                    })
+              })
             })
+          })
         })
-      })
-    })
   })
 })

@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
 
 public interface SalesTransactionRepository extends JpaRepository<SalesTransaction, Long> {
     long countByReceiptId(Long receiptId);
@@ -31,4 +32,16 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
             + "and (:branchId is null or t.branch.id = :branchId)")
     List<SalesTransaction> findByTransactionDateBetween(@Param("from") Instant from, @Param("to") Instant to,
                                                           @Param("branchId") Long branchId);
+
+    @Query("""
+        select t
+        from SalesTransaction t
+        where t.transactionType = :type
+          and t.visit.visitDate >= :from
+          and t.visit.visitDate < :to
+        """)
+    List<SalesTransaction> findByVisitDateBetween(
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("type") TransactionType type);
 }

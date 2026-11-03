@@ -26,6 +26,7 @@ const selectedDateRange = computed(() => {
 const customRangeOpen = ref(false)
 const customFrom = ref(from.value)
 const customTo = ref(to.value)
+const shortcutSelectionStarted = ref(false)
 const selectedDraftMonths = computed(() => {
   const endPeriod = customTo.value.slice(0, 7)
   const [year, month] = endPeriod.split('-').map(Number)
@@ -63,12 +64,20 @@ const patients = ref(0)
 const visits = ref(0)
 const revenue = ref(0)
 const courses = ref(0)
+const sales = ref(0)
+const newCustomers = ref(0)
+const returningCustomers = ref(0)
+const packageUpdates = ref(0)
+const packageUpdatesScope = ref('CLINIC')
 const appointmentStatuses = ref<Array<{ status: string; appointments: number }>>([])
 const appointmentTotal = ref(0)
 const monthlyRevenue = ref<
   Array<{ key: string; label: string; course: number; singleVisit: number }>
 >([])
-const normalizeStatus = (status: string) => status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+const normalizeStatus = (status: string) => {
+  const normalized = status.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+  return normalized === 'UN_CONFIRMED' ? 'UNCONFIRMED' : normalized
+}
 
 const maxMonthlyRevenue = computed(() =>
   Math.max(...monthlyRevenue.value.flatMap((item) => [item.course, item.singleVisit]), 1),
@@ -108,12 +117,7 @@ const statusLabel = (status: string) =>
   ({
     CONFIRMED: 'ยืนยันแล้ว',
     UNCONFIRMED: 'ยังไม่ยืนยัน',
-    ARRIVED: 'มาถึงแล้ว',
-    IN_SERVICE: 'กำลังให้บริการ',
-    COMPLETED: 'เสร็จสิ้น',
     CANCELLED: 'ยกเลิก',
-    RESCHEDULED: 'เลื่อนนัด',
-    NO_SHOW: 'ไม่มาตามนัด',
   })[status] ?? status
 const statusClass = (status: string) => `status-${status.toLowerCase().replaceAll('_', '-')}`
 
@@ -127,6 +131,7 @@ async function loadDashboard() {
   loading.value = true
   errorMessage.value = ''
   try {
+    // ใช้ค่าจาก dashboard, appointments, balances และ revenue API ตามความหมายของแต่ละ metric
     const [summary, appointments, balances, revenueReport, dailySummary] = await Promise.all([
       reportApi.dashboard(from.value, to.value, branchCode.value || undefined),
       reportApi.appointments(from.value, to.value, branchCode.value || undefined),
@@ -135,10 +140,16 @@ async function loadDashboard() {
       reportApi.dashboard(today, today, branchCode.value),
     ])
     if (requestId !== dashboardRequest) return
+    // แสดงยอดรายวันแยกจากช่วงวันที่ที่เลือกด้านบน
     patients.value = summary.uniquePatients
     visits.value = summary.visits
     appointmentTotal.value = appointments.appointments
     revenue.value = Number(summary.totalRevenue)
+    sales.value = Number(summary.salesTotal)
+    newCustomers.value = summary.newCustomers
+    returningCustomers.value = summary.returningCustomers
+    packageUpdates.value = summary.packageUpdates
+    packageUpdatesScope.value = summary.packageUpdatesScope
     courses.value = balances.purchases
     todaySummary.value = {
       patients: dailySummary.uniquePatients,
@@ -191,6 +202,14 @@ onMounted(async () => {
 })
 watch([from, to, branchCode], loadDashboard)
 function chooseDraftMonth(period: string) {
+  if (!shortcutSelectionStarted.value) {
+    const [year, month] = period.split('-').map(Number)
+    const lastDay = new Date(year!, month!, 0).getDate()
+    customFrom.value = `${period}-01`
+    customTo.value = `${period}-${String(lastDay).padStart(2, '0')}`
+    shortcutSelectionStarted.value = true
+    return
+  }
   let start = period
   let end = period
   const range = selectedDraftMonths.value
@@ -225,6 +244,7 @@ function openCustomRange() {
   lastEditedRangeField.value = 'from'
   customFrom.value = from.value
   customTo.value = to.value
+  shortcutSelectionStarted.value = false
   shortcutYear.value = Number(from.value.slice(0, 4)) || now.getFullYear()
   customRangeOpen.value = true
   void nextTick(() => rangeDialog.value?.focus())
@@ -429,7 +449,11 @@ function applyCustomRange() {
                 <b>{{ patients.toLocaleString() }} คน</b>
               </article>
               <article class="summary-card">
-                <p>ยอดรับชำระ</p>
+                <p>ยอดขายตามวันที่ขาย</p>
+                <b>{{ money(sales) }}</b>
+              </article>
+              <article class="summary-card">
+                <p>ยอดรับชำระตามวันที่รับเงิน</p>
                 <b>{{ money(revenue) }}</b>
               </article>
             </div>
@@ -441,6 +465,14 @@ function applyCustomRange() {
               <article class="summary-card">
                 <p>คอร์สที่ซื้อ</p>
                 <b>{{ courses.toLocaleString() }} คอร์ส</b>
+              </article>
+              <article class="summary-card">
+                <p>ลูกค้าใหม่ · กลับมาใช้บริการ</p>
+                <b>{{ Number(newCustomers || 0).toLocaleString() }} · {{ Number(returningCustomers || 0).toLocaleString() }} คน</b>
+              </article>
+              <article class="summary-card">
+                <p>ปรับสิทธิ์คอร์ส ({{ packageUpdatesScope === 'CLINIC' ? 'ทั้งคลินิก' : packageUpdatesScope }})</p>
+                <b>{{ Number(packageUpdates || 0).toLocaleString() }} รายการ</b>
               </article>
             </div>
           </div>

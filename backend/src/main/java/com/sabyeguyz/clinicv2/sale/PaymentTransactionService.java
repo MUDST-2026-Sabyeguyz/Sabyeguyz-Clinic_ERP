@@ -27,16 +27,22 @@ public class PaymentTransactionService {
         require(receipt != null, "ต้องระบุใบเสร็จ");
         receipt = receipts.findByIdForUpdate(receipt.getId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบใบเสร็จ"));
+        require(patient.getId() != null && patient.getId().equals(receipt.getPatient().getId()),
+                "ผู้ป่วยของรายการชำระเงินต้องตรงกับใบเสร็จ");
+        require(branch.getId() != null && branch.getId().equals(receipt.getBranch().getId()),
+                "สาขาของรายการชำระเงินต้องตรงกับใบเสร็จ");
         require(receipt.getReceiptStatus() == ReceiptStatus.Issued, "ใบเสร็จนี้ถูกยกเลิกแล้ว ไม่สามารถรับชำระได้");
         require(paymentMethod != null, "ต้องระบุช่องทางชำระเงิน");
         require(paymentMethod.isPaymentMethodStatus(), "ช่องทางการชำระเงินนี้ถูกปิดใช้งาน");
         require(amount != null && amount.signum() > 0, "จำนวนเงินต้องมากกว่า 0");
 
-        String method = PaymentMethod.canonicalName(paymentMethod.getMethodName());
-        require(payments.findByReceiptIdOrderByIdAsc(receipt.getId()).stream()
-                .filter(PaymentTransaction::isPaymentStatus)
-                .allMatch(existing -> method.equals(PaymentMethod.canonicalName(existing.getPaymentMethod().getMethodName()))),
-                "หนึ่งใบเสร็จรับชำระได้เพียงช่องทางเดียว");
+        PaymentMethod.canonicalName(paymentMethod.getMethodName());
+
+        require(!payments.existsByReceiptIdAndPaymentStatusTrue(receipt.getId()),
+                "ใบเสร็จนี้มีรายการชำระเงินที่สำเร็จแล้ว");
+
+        require(receipt.getNetAmount() != null && amount.compareTo(receipt.getNetAmount()) == 0,
+                "จำนวนเงินที่ชำระต้องเท่ากับยอดสุทธิของใบเสร็จ");
 
         PaymentTransaction payment = new PaymentTransaction();
         payment.setPatient(patient);
@@ -49,7 +55,6 @@ public class PaymentTransactionService {
         payment.setPaymentCreateAt(Instant.now());
         payment.setPaymentCreateBy(actorId);
         PaymentTransaction saved = payments.saveAndFlush(payment);
-        refreshPaymentLabel(receipt);
         return saved;
     }
 
@@ -67,16 +72,7 @@ public class PaymentTransactionService {
         payment.setPaymentUpdateAt(Instant.now());
         payment.setPaymentUpdateBy(actorId);
         PaymentTransaction saved = payments.saveAndFlush(payment);
-        refreshPaymentLabel(payment.getReceipt());
         return saved;
-    }
-
-    private void refreshPaymentLabel(Receipt receipt) {
-        BigDecimal paid = payments.paidAmountOf(receipt.getId());
-        receipt.setPaymentLabel(paid.compareTo(receipt.getNetAmount()) >= 0
-                ? com.sabyeguyz.clinicv2.enums.PaymentLabel.FullyPaid
-                : paid.signum() > 0 ? com.sabyeguyz.clinicv2.enums.PaymentLabel.Installment
-                : com.sabyeguyz.clinicv2.enums.PaymentLabel.Deposit);
     }
 
     private static void require(boolean condition, String message) {
