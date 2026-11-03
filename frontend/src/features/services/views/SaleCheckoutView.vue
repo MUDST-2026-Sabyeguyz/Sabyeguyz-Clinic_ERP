@@ -417,12 +417,6 @@ watch(
           >ดูประวัติขาย</RouterLink
         >
       </p>
-      <p
-        v-if="appointmentProgress?.state === 'NO_LINKED_RECORD' && canStartAppointment"
-        role="status"
-      >
-        {{ appointmentProgress.reason }} กรุณาตรวจสอบรายการเดิมก่อนทำรายการใหม่
-      </p>
       <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         {{ processError

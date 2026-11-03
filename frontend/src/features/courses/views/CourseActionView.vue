@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { clinicToday } from '@/utils/clinicDate'
+import { buildCourseUsages, type UsageSelection } from '@/features/services/careTransactions'
+import CourseUsagePicker from '../components/CourseUsagePicker.vue'
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -8,7 +11,6 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { vModalFocus } from '@/features/appointments/modalFocus'
 import CourseRenewalDialog from '@/features/patients/components/CourseRenewalDialog.vue'
 import PhoneIcon from '@/components/PhoneIcon.vue'
-import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
 import {
   branchApi,
   courseApi,
@@ -24,27 +26,24 @@ type CourseAction = 'manage' | 'transfer' | 'history' | 'use'
 const route = useRoute()
 const {
   appointmentId,
+  sourceAppointment,
   appointmentProgress,
   processLoading,
   processError,
   refreshAppointmentProcess,
+  canStartAppointment,
+  processBlockReason,
+  recoveryRequired,
+  beginAppointmentWrite,
+  finishAppointmentWrite,
+  recoverAppointmentWrite,
 } = useAppointmentProcess()
 const usageSubmitting = ref(false)
 const appointmentNeedsReview = computed(() =>
-  Boolean(
-    appointmentProgress.value &&
-    action.value !== 'history' &&
-    (appointmentProgress.value.courseStatus !== 'NOT_STARTED' ||
-      !appointmentProgress.value.canManage ||
-      (appointmentProgress.value.paymentStatus !== 'NOT_STARTED' &&
-        !(
-          appointmentProgress.value.paymentStatus === 'PAID' &&
-          appointmentProgress.value.includesCourse
-        ))),
-  ),
+  Boolean(appointmentProgress.value && action.value !== 'history' && !canStartAppointment.value),
 )
 const router = useRouter()
-const canRenewCourses = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
+const canReviewCourseExtensions = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const action = ref<CourseAction>('manage')
 const recipientSearch = ref('')
 const recipientSearchOpen = ref(false)
@@ -95,7 +94,26 @@ const selectedCourse = ref<UiCourse>({} as UiCourse)
 const renewingCourse = ref<CoursePurchase | null>(null)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
-const usageDate = ref('2026-09-17')
+const usageDate = ref(clinicToday())
+const treatingStaffId = ref(0)
+const usageSelections = ref<UsageSelection[]>([])
+const usageCount = computed(() =>
+  usageSelections.value.reduce((total, row) => total + row.quantity, 0),
+)
+const selectedUsageQuantity = computed(() =>
+  usageSelections.value
+    .filter((row) => row.coursePurchaseId === selectedCourse.value.id)
+    .reduce((total, row) => total + row.quantity, 0),
+)
+const treatingOptions = computed(() =>
+  therapists.value.filter((person) => person.branchCode === sourceAppointment.value?.branchCode),
+)
+watch(
+  () => selectedCourse.value.id,
+  (id) => {
+    if (id) usageSelections.value = [{ coursePurchaseId: id, quantity: 1 }]
+  },
+)
 const usageReview = ref(false)
 const usageSuccess = ref(false)
 const usageConfirmDialog = ref(false)
@@ -166,7 +184,7 @@ function courseUsagePercent(course: UiCourse) {
 }
 function courseUsageProgressWidth(course: Pick<UiCourse, 'balance' | 'total'>) {
   if (!course.total || course.total < 0) return '0%'
-  return `${Math.min(100, Math.max(0, (Math.max(0, course.balance - 1) / course.total) * 100))}%`
+  return `${Math.min(100, Math.max(0, (Math.max(0, course.balance - selectedUsageQuantity.value) / course.total) * 100))}%`
 }
 function courseInactiveReason(course: UiCourse) {
   return course.balance <= 0 ? 'ใช้สิทธิ์ครบ' : 'หมดอายุ'
@@ -199,14 +217,18 @@ function purchaseDate(course: UiCourse) {
 async function loadOwner() {
   const [patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
   owners.value = patientList
-  therapists.value = staffList.filter((person) => person.role === 'THERAPIST' && person.active)
+  therapists.value = staffList.filter(
+    (person) =>
+      (person.position ?? person.role ?? '').toLowerCase() === 'therapist' && person.active,
+  )
   try {
     branches.value = await branchApi.list()
   } catch {
     branches.value = []
   }
   const patientId = Number(route.query.patientId)
-  owner.value = owners.value.find((patient) => patient.id === patientId) ?? owners.value[0] ?? null
+  owner.value = owners.value.find((patient) => patient.id === patientId) ?? null
+  if (!owner.value && route.query.patientId) throw new Error('ไม่พบผู้รับบริการที่ระบุ')
   if (owner.value) await loadCourses(owner.value.id)
 }
 async function loadCourses(patientId: number) {
@@ -220,72 +242,13 @@ async function loadCourses(patientId: number) {
   }))
   patientCourses.value = courses
   const requestedCourseId = Number(route.query.courseId)
-  const requestedCourse = patientCourses.value.find((course) => course.id === requestedCourseId)
+  const purchasedWithReceipt = patientCourses.value.filter(
+    (course) => course.receiptId && course.receiptId === Number(route.query.receiptId),
+  )
+  const requestedCourse =
+    patientCourses.value.find((course) => course.id === requestedCourseId) ??
+    (purchasedWithReceipt.length === 1 ? purchasedWithReceipt[0] : undefined)
   selectedCourseId.value = requestedCourse?.id ?? patientCourses.value[0]?.id ?? 0
-  if (route.query.view === 'after-transfer') {
-    transferReceiptId.value = 1
-    const persistedCourseId = Number(route.query.courseId)
-    selectedCourse.value =
-      patientCourses.value.find((course) => course.id === persistedCourseId) ??
-      patientCourses.value[0] ??
-      ({} as UiCourse)
-    const persistedBalance = Number(route.query.balance)
-    const afterTransferBalance =
-      Number.isFinite(persistedBalance) && route.query.balance !== undefined
-        ? persistedBalance
-        : Math.max(0, selectedCourse.value.balance - transferAmount.value)
-    selectedCourse.value = {
-      ...selectedCourse.value,
-      balance: afterTransferBalance,
-      remaining: afterTransferBalance,
-    }
-    patientCourses.value = patientCourses.value.map((course) =>
-      course.id === selectedCourse.value.id ? selectedCourse.value : course,
-    )
-    selectedCourseId.value = selectedCourse.value.id ?? 0
-    if (route.query.action === 'inactive-history') {
-      historyFromInactive.value = true
-      action.value = 'history'
-      try {
-        const ledger = await courseApi.ledger(selectedCourse.value.id)
-        courseUsageHistory.value = ledger.movements as CourseMovement[]
-      } catch {
-        courseUsageHistory.value = []
-      }
-      return
-    }
-    if (route.query.action === 'use-success') {
-      action.value = 'use'
-      usageReview.value = false
-      usageSuccess.value = true
-      return
-    }
-    if (route.query.action === 'use') {
-      action.value = 'use'
-      usageReview.value = true
-      usageSuccess.value = false
-      return
-    }
-    if (route.query.action === 'history') {
-      action.value = 'history'
-      try {
-        const ledger = await courseApi.ledger(selectedCourse.value.id)
-        courseUsageHistory.value = ledger.movements as CourseMovement[]
-      } catch {
-        courseUsageHistory.value = []
-      }
-      return
-    }
-    if (route.query.action === 'transfer-success') {
-      action.value = 'transfer'
-      transferStep.value = 'success'
-      selectedRecipient.value =
-        owners.value.find((patient) => patient.id !== owner.value?.id) ?? null
-      return
-    }
-    action.value = 'manage'
-    return
-  }
   selectedCourse.value = requestedCourse ?? patientCourses.value[0] ?? ({} as UiCourse)
   if (route.query.action === 'history') {
     action.value = 'history'
@@ -305,7 +268,7 @@ async function loadCourses(patientId: number) {
     transferStep.value = 'form'
   } else action.value = 'manage'
 }
-async function refreshCoursesAfterRenewal() {
+async function refreshCoursesAfterExtensionRequest() {
   if (!owner.value) return
   try {
     await loadCourses(owner.value.id)
@@ -334,6 +297,13 @@ async function searchRecipients() {
   }
 }
 async function start(nextAction: CourseAction, course: UiCourse) {
+  if (nextAction === 'use' && !appointmentId.value) {
+    await router.push({
+      name: 'staff-appointment-create',
+      query: { patientId: String(owner.value?.id ?? '') },
+    })
+    return
+  }
   if (nextAction === 'use' && (!course.usable || course.balance <= 0)) {
     errorMessage.value = 'คอร์สนี้ใช้สิทธิ์ครบแล้ว'
     return
@@ -497,30 +467,43 @@ async function confirm() {
   try {
     const isCourseUsage = action.value === 'use'
     const usedCourseId = selectedCourse.value.id
-    const balanceBeforeUse = selectedCourse.value.balance
-    let usedCourse: CoursePurchase | null = null
+    let usedCourses: CoursePurchase[] = []
     if (isCourseUsage) {
-      if (appointmentId.value) {
+      // ใช้สิทธิ์ได้เมื่อมีนัด ผู้รับบริการ ผู้รักษา และสาขาที่ตรงกัน
+      if (!appointmentId.value) throw new Error('กรุณาสร้างนัดหมายก่อนใช้สิทธิ์คอร์ส')
+      if (route.query.appointmentId) {
         await refreshAppointmentProcess()
-        if (
-          processError.value ||
-          !appointmentProgress.value?.canManage ||
-          appointmentProgress.value.courseStatus !== 'NOT_STARTED' ||
-          (appointmentProgress.value.paymentStatus !== 'NOT_STARTED' &&
-            !(
-              appointmentProgress.value.paymentStatus === 'PAID' &&
-              appointmentProgress.value.includesCourse
-            ))
-        )
-          throw new Error(processError.value || 'นัดหมายนี้มีรายการแล้ว กรุณาตรวจสอบรายการเดิม')
+        if (!canStartAppointment.value) throw new Error(processBlockReason.value)
+        if (owner.value.id !== Number(route.query.patientId))
+          throw new Error('ผู้ป่วยในหน้าจอไม่ตรงกับนัดหมาย กรุณาเปิดหน้าใหม่')
       }
+      const usages = buildCourseUsages(
+        {
+          appointmentId: appointmentId.value ?? undefined,
+          patientId: owner.value.id,
+          treatingStaffId: treatingStaffId.value || undefined,
+          branchCode: sourceAppointment.value?.branchCode ?? '',
+        },
+        usageSelections.value.map((row) => ({ ...row, note: usageNote.value })),
+        patientCourses.value,
+      )
+      if (!treatingOptions.value.some((person) => person.id === treatingStaffId.value))
+        throw new Error('กรุณาเลือกผู้รักษาของสาขานัดหมาย')
       usageConfirmDialog.value = false
-      usedCourse = await courseApi.use({
-        appointmentId: appointmentId.value ?? undefined,
-        coursePurchaseId: selectedCourse.value.id,
-        patientId: owner.value.id,
-        note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
-      })
+      // ใช้ endpoint เดี่ยวหรือ batch ตามจำนวนสิทธิ์ แต่บันทึกใน Visit เดียว
+      beginAppointmentWrite()
+      usedCourses =
+        usages.length === 1
+          ? [await courseApi.use(usages[0]!)]
+          : await courseApi.useBatch({ usages })
+      if (
+        !usedCourses.length ||
+        usedCourses.some(
+          (course) => !Number.isFinite(course.remaining) || !Number.isFinite(course.used),
+        )
+      )
+        throw new Error('ยังยืนยันสิทธิ์คงเหลือไม่ได้ กรุณาตรวจรายการเดิม')
+      finishAppointmentWrite()
       if (appointmentId.value) await refreshAppointmentProcess()
     } else {
       if (!selectedRecipient.value) return
@@ -533,20 +516,16 @@ async function confirm() {
       transferReceiptId.value = transfer.id
     }
     if (isCourseUsage) {
-      const responseBalance = Number(usedCourse?.remaining)
-      const responseUsed = Number(usedCourse?.used)
-      const newBalance = Number.isFinite(responseBalance)
-        ? responseBalance
-        : Math.max(0, balanceBeforeUse - 1)
-      selectedCourse.value = {
-        ...selectedCourse.value,
-        balance: newBalance,
-        remaining: newBalance,
-        used: Number.isFinite(responseUsed) ? responseUsed : selectedCourse.value.used + 1,
-      }
-      patientCourses.value = patientCourses.value.map((course) =>
-        course.id === usedCourseId ? selectedCourse.value : course,
-      )
+      const updated = usedCourses.find((course) => course.id === usedCourseId)
+      if (!updated) throw new Error('ไม่พบผลของคอร์สที่เลือก กรุณาตรวจรายการเดิม')
+      const newBalance = updated.remaining
+      patientCourses.value = patientCourses.value.map((course) => {
+        const result = usedCourses.find((item) => item.id === course.id)
+        return result
+          ? { ...course, ...result, balance: result.remaining, total: result.purchased }
+          : course
+      })
+      selectedCourse.value = patientCourses.value.find((course) => course.id === usedCourseId)!
       action.value = 'use'
       usageReview.value = false
       usageSuccess.value = true
@@ -573,6 +552,7 @@ async function confirm() {
       transferStep.value = 'success'
     }
   } catch (error) {
+    await recoverAppointmentWrite(error)
     errorMessage.value =
       error instanceof Error
         ? error.message
@@ -678,6 +658,8 @@ function closePrintSuccess() {
     <AppointmentProcessPanel
       v-else-if="appointmentProgress && appointmentNeedsReview"
       :progress="appointmentProgress"
+      :block-reason="processBlockReason"
+      :recovery-required="recoveryRequired"
       @refresh="refreshAppointmentProcess"
     />
     <template v-else>
@@ -686,7 +668,27 @@ function closePrintSuccess() {
         class="course-use-main"
         :class="{ 'after-transfer': transferReceiptId }"
       >
-        <section v-if="usageSuccess && transferReceiptId" class="course-after-use-success-backdrop">
+        <section v-if="!usageSuccess" class="course-use-form">
+          <label>ผู้รับบริการจริง<input :value="owner?.fullName" readonly /></label>
+          <label
+            >ผู้รักษา<select
+              v-model.number="treatingStaffId"
+              :disabled="usageSubmitting || usageReview"
+            >
+              <option :value="0" disabled>เลือกผู้รักษาจริง</option>
+              <option v-for="person in treatingOptions" :key="person.id" :value="person.id">
+                {{ person.fullName }}
+              </option>
+            </select></label
+          >
+          <CourseUsagePicker
+            v-model="usageSelections"
+            :courses="patientCourses"
+            :branch-code="sourceAppointment?.branchCode ?? ''"
+            :disabled="usageSubmitting || usageReview"
+          />
+        </section>
+        <section v-if="usageSuccess" class="course-after-use-success-backdrop">
           <article
             v-modal-focus="{ close: returnToCourseManager }"
             class="course-after-use-success-modal"
@@ -695,7 +697,7 @@ function closePrintSuccess() {
             aria-labelledby="after-use-success-title"
           >
             <h1 id="after-use-success-title">ใช้สิทธิ์สำเร็จ</h1>
-            <p>บันทึกการใช้สิทธิ์ {{ selectedCourse.name }} 1 ครั้งแล้ว</p>
+            <p>บันทึกการใช้สิทธิ์ {{ selectedCourse.name }} {{ usageCount }} ครั้งแล้ว</p>
             <div>
               <h2>{{ owner?.fullName }}　HN {{ owner?.hn }}</h2>
               <h3>{{ selectedCourse.name }}</h3>
@@ -711,24 +713,6 @@ function closePrintSuccess() {
               </button>
             </footer>
           </article>
-        </section>
-        <section v-else-if="usageSuccess" class="course-use-success">
-          <div class="course-use-success-icon" aria-hidden="true">
-            <img :src="courseUsageSuccessIcon" alt="" />
-            <span>✓</span>
-          </div>
-          <h1>ใช้สิทธิ์สำเร็จ</h1>
-          <p>บันทึก {{ selectedCourse.name }} จำนวน 1 ครั้งเรียบร้อยแล้ว</p>
-          <div class="course-use-success-details">
-            <p><span>ใช้สิทธิ์ครั้งนี้</span><strong>1 ครั้ง</strong></p>
-            <p>
-              <span>สิทธิ์คงเหลือ</span><strong>{{ usageSuccessBalance }} ครั้ง</strong>
-            </p>
-          </div>
-          <footer>
-            <button type="button" @click="start('history', selectedCourse)">ดูประวัติการใช้</button>
-            <button type="button" @click="returnToCourseManager">กลับหน้าคอร์ส</button>
-          </footer>
         </section>
         <section v-else-if="usageReview && transferReceiptId" class="course-after-use-confirm">
           <h1>ตรวจสอบการใช้สิทธิ์คอร์ส</h1>
@@ -810,8 +794,10 @@ function closePrintSuccess() {
               <h2>สรุปสิทธิ์</h2>
               <div>
                 <span>สิทธิ์คงเหลือหลังทำรายการ</span>
-                <strong>{{ Math.max(0, selectedCourse.balance - 1) }} ครั้ง</strong>
-                <small>ใช้สิทธิ์ครั้งนี้ 1 ครั้ง</small>
+                <strong
+                  >{{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</strong
+                >
+                <small>ใช้สิทธิ์ครั้งนี้ {{ usageCount }} ครั้ง</small>
               </div>
               <footer>
                 <button
@@ -852,15 +838,18 @@ function closePrintSuccess() {
                 </select></label
               >
               <label>บริการที่ใช้สิทธิ์ได้<input :value="selectedCourse.name" readonly /></label>
-              <label>นักกายภาพ<input value="ผู้ให้บริการตามตาราง" readonly /></label>
               <label
-                >วันที่ใช้บริการ<ThaiDatePicker
-                  v-model="usageDate"
-                  show-calendar-icon
-                  numeric-month
-                  hide-caret
+                >นักกายภาพ<input
+                  :value="
+                    treatingOptions.find((person) => person.id === treatingStaffId)?.fullName ||
+                    'กรุณาเลือกผู้รักษาด้านบน'
+                  "
+                  readonly
               /></label>
-              <label>จำนวนสิทธิ์ที่ใช้ครั้งนี้<input value="1 ครั้ง" readonly /></label>
+              <label>วันที่ใช้บริการ<input :value="formattedUsageDate" readonly /></label>
+              <label
+                >จำนวนสิทธิ์ที่ใช้ครั้งนี้<input :value="usageCount + ' ครั้ง'" readonly
+              /></label>
               <label
                 >หมายเหตุ (ไม่บังคับ)<textarea
                   v-model.trim="usageNote"
@@ -875,8 +864,11 @@ function closePrintSuccess() {
               </button>
               <b>{{ selectedCourse.name }}</b>
               <p>ก่อนใช้ {{ selectedCourse.balance }} ครั้ง</p>
-              <p>ใช้ครั้งนี้ 1 ครั้ง</p>
-              <strong>จำนวนคงเหลือ {{ Math.max(0, selectedCourse.balance - 1) }} ครั้ง</strong>
+              <p>ใช้ครั้งนี้ {{ usageCount }} ครั้ง</p>
+              <strong
+                >จำนวนคงเหลือ
+                {{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</strong
+              >
               <div class="course-progress">
                 <i :style="{ width: courseUsageProgressWidth(selectedCourse) }" />
               </div>
@@ -929,7 +921,7 @@ function closePrintSuccess() {
               </p>
               <p>
                 <span>คงเหลือหลังใช้</span
-                ><b>{{ Math.max(0, selectedCourse.balance - 1) }} ครั้ง</b>
+                ><b>{{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</b>
               </p>
             </div>
             <div class="course-confirm-actions">
@@ -1086,7 +1078,10 @@ function closePrintSuccess() {
             @click.self="transferConfirmDialog = false"
           >
             <section
-              v-modal-focus="{ close: () => (transferConfirmDialog = false), busy: usageSubmitting }"
+              v-modal-focus="{
+                close: () => (transferConfirmDialog = false),
+                busy: usageSubmitting,
+              }"
               class="course-confirm-dialog course-transfer-confirm"
               role="dialog"
               aria-modal="true"
@@ -1373,9 +1368,14 @@ function closePrintSuccess() {
                   v-if="!transferReceiptId && !historyFromInactive"
                   class="course-history-print"
                   type="button"
-                  @click="coursePrintPreview = true"
+                  @click="
+                    router.push({
+                      name: 'staff-course-prints',
+                      params: { courseId: selectedCourse.id },
+                    })
+                  "
                 >
-                  พิมพ์ใบตัดคอร์ส
+                  ดูใบตัดคอร์สและประวัติพิมพ์
                 </button>
               </div>
               <article
@@ -1467,13 +1467,20 @@ function closePrintSuccess() {
         }}</RouterLink>
         <h1>คอร์สของผู้ป่วย</h1>
         <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
+        <RouterLink
+          v-if="canReviewCourseExtensions"
+          class="course-use-back"
+          :to="{ name: 'staff-course-extensions' }"
+        >
+          ตรวจคำขอต่ออายุคอร์ส
+        </RouterLink>
         <CourseRenewalDialog
           v-if="renewingCourse && owner"
           :key="renewingCourse.id"
           :course="renewingCourse"
           :patient-id="owner.id"
           @close="renewingCourse = null"
-          @renewed="refreshCoursesAfterRenewal"
+          @requested="refreshCoursesAfterExtensionRequest"
         />
         <section v-if="transferReceiptId" class="course-after-patient">
           <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
@@ -1598,11 +1605,11 @@ function closePrintSuccess() {
                   ใช้สิทธิ์คอร์ส
                 </button>
                 <button
-                  v-if="canRenewCourses && !isSharedCourse(course)"
+                  v-if="course.status === 'ACTIVE' && !isSharedCourse(course)"
                   type="button"
                   @click="renewingCourse = course"
                 >
-                  ต่ออายุคอร์ส
+                  ขอต่ออายุคอร์ส
                 </button>
               </div>
               <button
@@ -3389,6 +3396,40 @@ function closePrintSuccess() {
   }
   .course-transfer-success-actions button {
     width: 100%;
+  }
+}
+</style>
+<style scoped>
+.course-page .course-transfer-back,
+.course-page .course-history-back {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #176c68;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
+}
+.course-page .course-transfer-back:hover,
+.course-page .course-history-back:hover,
+.course-page .course-transfer-back:focus-visible,
+.course-page .course-history-back:focus-visible {
+  color: #0b5652;
+  text-decoration: underline;
+}
+.course-page .course-transfer-back:hover,
+.course-page .course-history-back:hover {
+  transform: translateX(-4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .course-transfer-back,
+  .course-history-back {
+    transition: none;
   }
 }
 </style>
@@ -5393,13 +5434,13 @@ function closePrintSuccess() {
   background: #1f8f89;
 }
 .course-manager-actions .course-share-button {
-  border-color: #1f8f89;
-  color: #fff;
-  background: #1f8f89;
-  box-shadow: 0 5px 12px rgb(31 143 137 / 20%);
+  border-color: #d8e1de;
+  color: #25372f;
+  background: #fff;
+  box-shadow: none;
 }
 .course-manager-actions .course-share-button:hover {
-  background: #1f8f89;
+  background: #f7faf8;
 }
 @media (max-width: 820px) {
   .course-manager-main {

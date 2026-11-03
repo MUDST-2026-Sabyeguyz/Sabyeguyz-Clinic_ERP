@@ -8,7 +8,7 @@ import {
   type AppointmentProgress,
 } from '@/api/client'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
-import { hasProgressRecord, validateAppointmentProgress } from './appointmentRequests'
+import { hasProgressRecord, normalizeAppointmentProgress } from './appointmentRequests'
 
 // รวมการตรวจผลบริการ สิทธิ์ และการกู้สถานะการเขียนธุรกรรมของนัดหมาย
 export function useAppointmentProcess() {
@@ -53,10 +53,10 @@ export function useAppointmentProcess() {
         user?.role === 'THERAPIST' ? staffApi.list() : Promise.resolve([]),
       ])
       if (current !== request || id !== appointmentId.value) return
-      validateAppointmentProgress(result, id)
+      const normalizedProgress = normalizeAppointmentProgress(result, id, booking)
       appointment.value = booking
-      appointmentProgress.value = result
-      if (hasProgressRecord(result)) {
+      appointmentProgress.value = normalizedProgress
+      if (hasProgressRecord(normalizedProgress)) {
         sessionStorage.removeItem(recoveryKey())
         recoveryRequired.value = false
       }
@@ -89,7 +89,7 @@ export function useAppointmentProcess() {
     if (processError.value) return processError.value
     if (processLoading.value || !appointmentProgress.value) return 'กำลังตรวจสอบรายการของนัดหมาย'
     if (recoveryRequired.value)
-      return 'ยังยืนยันผลคำขอก่อนหน้าไม่ได้ กรุณาตรวจสอบรายการเดิมก่อนทำรายการใหม่'
+      return 'ยังยืนยันผลคำขอก่อนหน้าไม่ได้ กรุณาให้ Manager ตรวจสอบก่อนทำรายการต่อ'
     if (missingStaffIdentity.value) return 'ไม่พบข้อมูลพนักงานของบัญชี กรุณาเข้าสู่ระบบใหม่'
     if (!mayManage.value) return 'ไม่มีสิทธิ์จัดการนัดหมายนี้ หรือสาขาที่เลือกไม่ตรงกับนัด'
     const progress = appointmentProgress.value

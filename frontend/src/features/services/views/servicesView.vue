@@ -109,7 +109,7 @@ const patientCourseSummary = computed(() => {
   if (patientCourseError.value) return 'ตรวจสอบสิทธิ์คอร์สไม่ได้'
   const usable = patientCoursePurchases.value.filter((course) => course.usable && course.remaining > 0)
   if (!usable.length) return 'ยังไม่มีสิทธิ์คอร์สที่ใช้งานได้'
-  return `มีสิทธิ์คอร์ส ${usable.length} คอร์ส · คงเหลือ ${usable.reduce((sum, course) => sum + course.remaining, 0)} ครั้ง`
+  return `(คงเหลือ ${usable.length} คอร์ส · ${usable.reduce((sum, course) => sum + course.remaining, 0)} ครั้ง)`
 })
 const receiptBranch = computed(() => {
   const code = patient.value?.branchCode?.toLocaleLowerCase('th')
@@ -577,7 +577,6 @@ async function submit() {
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <p v-if="appointmentProgress?.state === 'NO_LINKED_RECORD' && canStartAppointment" role="status">{{ appointmentProgress.reason }} กรุณาตรวจสอบรายการเดิมก่อนทำรายการใหม่</p>
       <p v-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         <p>{{ processError }}</p>
@@ -604,7 +603,7 @@ async function submit() {
         </button>
       </div>
       <template v-else-if="screen === 'search'">
-        <h1>โปรแกรมการรักษา</h1>
+        <h1>ชำระเงิน</h1>
         <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
         <section class="service-search">
           <h2>ค้นหาผู้ป่วย</h2>
@@ -654,9 +653,9 @@ async function submit() {
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
         <button type="button" class="service-menu-back" @click="clearPatient">
-          ← กลับไปเลือกผู้ป่วย
+          ← กลับ
         </button>
-        <h1>โปรแกรมการรักษา</h1>
+        <h1>กรุณาเลือกวิธีการชำระเงิน</h1>
         <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
           <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
           <div class="service-menu-patient-info">
@@ -670,17 +669,15 @@ async function submit() {
           <span class="service-menu-branch">{{
             patientProfile?.branch?.name || patient.branchName || '—'
           }}</span>
-          <button type="button" class="service-menu-change" @click="clearPatient">เปลี่ยนผู้ป่วย</button>
         </section>
         <div class="service-menu-actions">
           <button type="button" class="service-menu-action service-menu-action--sale" @click="startSale">
-            <span class="service-menu-action-title"><span class="service-menu-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span><span class="service-menu-action-heading">เริ่มรายการขาย</span></span>
-            <span class="service-menu-action-description">บันทึกบริการรายครั้ง หรือขายคอร์สใหม่<br />พร้อมตรวจสอบยอดก่อนชำระเงิน</span>
+            <span class="service-menu-action-title"><span class="service-menu-action-heading">ชำระเงิน</span></span>
+            <span class="service-menu-action-next">ถัดไป →</span>
           </button>
           <button type="button" class="service-menu-action service-menu-action--entitlement" @click="openPatientCourses">
-            <span class="service-menu-action-title"><span class="service-menu-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H7zM10 8h4M10 12h4M10 16h2" /></svg></span><span class="service-menu-action-heading">ใช้สิทธิ์</span></span>
-            <span class="service-menu-action-description">ตรวจสอบสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</span>
-            <span class="service-menu-course-status" :class="{ 'is-loading': patientCourseLoading, 'is-unavailable': patientCourseError }" aria-live="polite">{{ patientCourseSummary }}</span>
+            <span class="service-menu-action-title"><span class="service-menu-action-heading">ใช้สิทธิ์คอร์สที่มีอยู่</span><span class="service-menu-course-status" :class="{ 'is-loading': patientCourseLoading, 'is-unavailable': patientCourseError }" aria-live="polite">{{ patientCourseSummary }}</span></span>
+            <span class="service-menu-action-next">ถัดไป →</span>
           </button>
         </div>
       </section>
@@ -1099,15 +1096,15 @@ async function submit() {
   color: #25372f; text-align: left; font: inherit; cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
-.service-menu .service-menu-actions .service-menu-action--sale { border: 1px solid #d7e4df; background: #fff; }
-.service-menu .service-menu-actions .service-menu-action--entitlement { background: #eef7f4; }
+.service-menu .service-menu-actions .service-menu-action--sale,
+.service-menu .service-menu-actions .service-menu-action--entitlement { border: 1px solid #d7e4df; background: #fff; }
 .service-menu .service-menu-actions .service-menu-action:hover { transform: translateY(-3px); box-shadow: 0 14px 28px rgb(33 67 59 / 10%); }
-.service-menu-action-title { display: flex; align-items: center; gap: 12px; }
-.service-menu-action-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; color: #176c68; background: #dcefe9; }
-.service-menu-action-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.service-menu-action-title { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .service-menu-action-heading { color: #25372e; font-size: 26px; font-weight: 700; }
+.service-menu-action-next { color: #176c68; font-size: 15px; font-weight: 600; line-height: 1.4; }
 .service-menu-action-description { color: #56665d; font-size: 16px; line-height: 1.55; }
 .service-menu-course-status { margin-top: auto; min-height: 24px; color: #176c68; font-size: 14px; font-weight: 700; }
+.service-menu-action-title .service-menu-course-status { margin-top: 0; min-height: 0; }
 .service-menu-course-status.is-loading, .service-menu-course-status.is-unavailable { color: #667a72; }
 @media (prefers-reduced-motion: reduce) { .service-menu .service-menu-actions .service-menu-action { transition: none; } }
 </style>

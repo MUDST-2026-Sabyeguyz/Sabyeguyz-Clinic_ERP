@@ -17,6 +17,10 @@ const report = vi.hoisted(() => ({
     cashReceived: 0,
     salesTotal: 0,
     courseRenewals: 0,
+    newCustomers: 0,
+    returningCustomers: 0,
+    packageUpdates: 0,
+    packageUpdatesScope: 'CLINIC',
   })),
   appointments: vi.fn(async () => ({
     appointments: 0,
@@ -39,6 +43,10 @@ beforeEach(() => {
     cashReceived: 0,
     salesTotal: 0,
     courseRenewals: 0,
+    newCustomers: 0,
+    returningCustomers: 0,
+    packageUpdates: 0,
+    packageUpdatesScope: 'CLINIC',
   }))
   clearSelectedManagerBranch()
 })
@@ -109,6 +117,10 @@ describe('branch-only Manager dashboard', () => {
       cashReceived: 100,
       salesTotal: 250,
       courseRenewals: 2,
+      newCustomers: from === to ? 1 : 4,
+      returningCustomers: from === to ? 2 : 6,
+      packageUpdates: from === to ? 5 : 8,
+      packageUpdatesScope: 'CLINIC',
     }))
     const view = await mountSelectedDashboard()
     expect(view.get('.today-section').text()).toContain('3 คน')
@@ -118,6 +130,9 @@ describe('branch-only Manager dashboard', () => {
     expect(todayCards[3]!.text()).toContain('2 คอร์ส')
     expect(view.get('.summary-layout').text()).toContain('20 คน')
     expect(view.get('.summary-layout').text()).toContain('ยอดรับชำระ')
+    expect(view.get('.summary-layout').text()).toContain('ยอดขายตามวันที่ขาย')
+    expect(view.get('.summary-layout').text()).toContain('ลูกค้าใหม่')
+    expect(view.get('.summary-layout').text()).toContain('ปรับสิทธิ์คอร์ส (ทั้งคลินิก)')
     expect(view.get('.summary-layout').text()).toContain('คอร์สที่ซื้อ')
     await applyDateRange(view, '2025-01-01', '2025-01-31')
     expect(report.dashboard).toHaveBeenCalledWith('2025-01-01', '2025-01-31', '01')
@@ -139,12 +154,12 @@ describe('branch-only Manager dashboard', () => {
     view.unmount()
   })
 
-  it('shows no-shows and future statuses and exposes exact chart figures as table cells', async () => {
+  it('shows supported appointment statuses without inferring no-show and exposes chart figures', async () => {
     report.appointments.mockResolvedValueOnce({
       appointments: 3,
       byStatus: [
-        { status: 'NoShow', appointments: 2 },
-        { status: 'WAITLISTED', appointments: 1 },
+        { status: 'Cancelled', appointments: 2 },
+        { status: 'Confirmed', appointments: 1 },
       ],
     })
     report.revenue.mockResolvedValueOnce({
@@ -155,13 +170,14 @@ describe('branch-only Manager dashboard', () => {
     expect(
       view
         .findAll('.status-row')
-        .some((row) => row.text().includes('ไม่มาตามนัด') && row.text().includes('2')),
+        .some((row) => row.text().includes('ยกเลิก') && row.text().includes('2')),
     ).toBe(true)
     expect(
       view
         .findAll('.status-row')
-        .some((row) => row.text().includes('WAITLISTED') && row.text().includes('1')),
+        .some((row) => row.text().includes('ยืนยันแล้ว') && row.text().includes('1')),
     ).toBe(true)
+    expect(view.text()).not.toContain('ไม่มาตามนัด')
     report.revenue.mockResolvedValueOnce({
       dailyByCategory: [{ date: '2025-01-05', type: 'CoursePurchase', amount: 1234.5 }],
     })
@@ -182,25 +198,23 @@ describe('branch-only Manager dashboard', () => {
     view.unmount()
   })
 
-  it('adds unconfirmed at zero alongside the three statuses returned for the selected report', async () => {
+  it('adds unconfirmed at zero alongside confirmed and cancelled statuses when absent', async () => {
     report.appointments.mockResolvedValueOnce({
       appointments: 6,
       byStatus: [
         { status: 'Confirmed', appointments: 3 },
-        { status: 'Completed', appointments: 2 },
         { status: 'Cancelled', appointments: 1 },
       ],
     })
     const view = await mountSelectedDashboard()
     const rows = view.findAll('.status-row')
-    expect(rows).toHaveLength(4)
+    expect(rows).toHaveLength(3)
     expect(rows.map((row) => row.get('span').text())).toEqual([
       'ยังไม่ยืนยัน',
       'ยืนยันแล้ว',
-      'เสร็จสิ้น',
       'ยกเลิก',
     ])
-    expect(rows.map((row) => row.get('b').text())).toEqual(['0', '3', '2', '1'])
+    expect(rows.map((row) => row.get('b').text())).toEqual(['0', '3', '1'])
     view.unmount()
   })
 
@@ -218,7 +232,7 @@ describe('branch-only Manager dashboard', () => {
 
   it('uses one period button and applies a preset month only after confirmation', async () => {
     const view = await mountSelectedDashboard()
-    expect(view.findAll('.period-actions button')).toHaveLength(1)
+    expect(view.findAll('.period-actions button')).toHaveLength(2)
     const requestCount = report.dashboard.mock.calls.length
     await view.get('.custom-range-button').trigger('click')
     await view.findAll('.range-month-button')[1]!.trigger('click')

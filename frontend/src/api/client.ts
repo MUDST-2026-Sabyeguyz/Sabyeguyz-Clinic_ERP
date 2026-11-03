@@ -630,7 +630,7 @@ export const serviceManagementApi = {
 }
 
 export const appointmentApi = {
-  progress: (id: number) => api.get<AppointmentProgress>(`/api/appointments/${id}/progress`),
+  progress: (id: number) => api.get<unknown>(`/api/appointments/${id}/progress`),
   search: (
     params: {
       branchCode?: string
