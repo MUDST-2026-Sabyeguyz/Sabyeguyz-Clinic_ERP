@@ -63,6 +63,24 @@ describe('course extension request dialog', () => {
     view.unmount()
   })
 
+  it('allows an extension request without an optional reason', async () => {
+    const view = render()
+    await flushPromises()
+    await view.get('input[type="number"]').setValue('2')
+    await view.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.requestExtension).toHaveBeenCalledWith({
+      courseId: 43,
+      value: 2,
+      unit: 'Month',
+      reason: undefined,
+      requestedByPatientId: 9,
+    })
+    expect(view.get('textarea').attributes('required')).toBeUndefined()
+    view.unmount()
+  })
+
   it('does not allow a second request while the course has a pending request', async () => {
     api.extensions.mockResolvedValue([
       {
