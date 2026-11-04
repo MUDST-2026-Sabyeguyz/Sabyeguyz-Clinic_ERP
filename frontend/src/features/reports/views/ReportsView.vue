@@ -668,7 +668,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
         </div>
 
         <!-- กลุ่มตัวกรอง -->
-        <div class="filter-card-body">
+        <div class="filter-card-body" :class="{ 'filter-card-body--payment': report === 'payment' }">
           <div
             v-if="['salesTransaction', 'treatmentTransaction'].includes(report)"
             class="field-group"
