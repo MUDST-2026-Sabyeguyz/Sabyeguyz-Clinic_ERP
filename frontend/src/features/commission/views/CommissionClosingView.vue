@@ -281,7 +281,7 @@ async function payStaff(row: StaffPayment) {
   paymentError.value = ''
   try {
     // บันทึกวันจ่ายและเลขอ้างอิงเพื่อเปลี่ยนงวดจาก CLOSED เป็น PAID
-    await commissionApi.pay(row.id, form.paidDate, form.reference.trim())
+      await commissionApi.pay(row.id, form.paidDate, form.reference.trim())
     const branchCode = selectedManagerBranch()?.code
     if (branchCode) paymentRows.value = await commissionApi.payments(month.value, branchCode)
   } catch (error) {
@@ -467,21 +467,27 @@ function selectView(event: Event) {
           :clear-on-reselect="false"
         />
       </div>
-      <p v-if="branchClosing" role="status">สถานะรอบสาขา: {{ branchClosing.status }}</p>
-      <section v-if="branchClosing?.status === 'CLOSED' && rows.length === 0" class="commission-card" aria-label="เปิดรอบสาขาที่ไม่มีรายการรายบุคคล">
-        <label>เหตุผลที่เปิดรอบอีกครั้ง<textarea v-model="reopenReason" maxlength="255" rows="2" /></label>
-        <button type="button" :disabled="isSaving || !reopenReason.trim()" @click="reopenBranch">
+      <CommissionTabs active="closing" />
+      <section v-if="branchClosing?.status === 'CLOSED' && rows.length === 0" class="commission-card reopen-panel" aria-label="เปิดรอบสาขาที่ไม่มีรายการรายบุคคล">
+        <h2>เปิดรอบสาขาอีกครั้ง</h2>
+        <p>รอบนี้ปิดแล้วและไม่มีรายการรายบุคคล หากต้องการเปิดรอบอีกครั้ง กรุณาระบุเหตุผล</p>
+        <label for="branch-reopen-reason">เหตุผลที่เปิดรอบอีกครั้ง<textarea id="branch-reopen-reason" v-model="reopenReason" maxlength="255" rows="2" /></label>
+        <button class="commission-secondary" type="button" :disabled="isSaving || !reopenReason.trim()" @click="reopenBranch">
           เปิดรอบสาขาอีกครั้ง
         </button>
       </section>
-      <CommissionTabs active="closing" />
-      <section class="commission-card" aria-label="งวดจ่ายค่าตอบแทน">
+      <section class="commission-card payment-panel" aria-label="งวดจ่ายค่าตอบแทน">
+        <header class="payment-panel-heading">
         <h2>งวดจ่ายค่าตอบแทน · {{ fullMonthLabel }}</h2>
-        <p>สถานะรอบสาขา: {{ branchClosing?.status ?? 'กำลังโหลด' }}</p>
-        <button type="button" :disabled="paymentBusy || branchClosing?.status !== 'CLOSED'" @click="preparePayments">เตรียม/คำนวณงวดจ่าย</button>
-        <button type="button" :disabled="paymentBusy || branchClosing?.status !== 'CLOSED' || !canClosePaymentBatch(paymentRows)" @click="closePaymentMonth">ปิดงวดจ่ายทั้งสาขา</button>
+        <span class="payment-round-status" role="status">{{ branchClosing?.status === 'CLOSED' ? 'ปิดรอบแล้ว' : branchClosing?.status === 'OPEN' ? 'รอบยังเปิดอยู่' : branchClosing?.status ?? 'กำลังโหลด' }}</span>
+        </header>
+        <p class="payment-panel-description">คำนวณงวดจ่ายหลังปิดรอบ จากนั้นตรวจสอบยอดรายบุคคลก่อนปิดงวดจ่ายทั้งสาขา</p>
+        <div class="payment-panel-actions">
+        <button class="commission-secondary" type="button" :disabled="paymentBusy || branchClosing?.status !== 'CLOSED'" @click="preparePayments">{{ paymentBusy ? 'กำลังดำเนินการ…' : 'คำนวณงวดจ่าย' }}</button>
+        <button class="commission-primary" type="button" :disabled="paymentBusy || branchClosing?.status !== 'CLOSED' || !canClosePaymentBatch(paymentRows)" @click="closePaymentMonth">ปิดงวดจ่ายทั้งสาขา</button>
+        </div>
         <p v-if="paymentError" role="alert">{{ paymentError }}</p>
-        <p v-if="!paymentRows.length">ยังไม่มีรายการจ่ายในสาขา/เดือนนี้</p>
+        <p v-if="!paymentRows.length" class="payment-empty" role="status">ยังไม่มีงวดจ่ายสำหรับสาขาและเดือนนี้</p>
         <article v-for="row in paymentRows" :key="row.id" class="payment-row">
           <b>{{ row.staffName }}</b>
           <span>สถานะ {{ row.status }}</span>
@@ -490,8 +496,8 @@ function selectView(event: Event) {
           <template v-if="row.status === 'CLOSED'">
             <label>วันที่จ่าย<input v-model="paymentForms[row.id]!.paidDate" type="date" :max="clinicToday()" /></label>
             <label>เลขอ้างอิง<input v-model="paymentForms[row.id]!.reference" maxlength="120" /></label>
-            <button type="button" :disabled="paymentBusy || !paymentForms[row.id]?.paidDate || !paymentForms[row.id]?.reference.trim()" @click="payStaff(row)">บันทึกว่าจ่ายแล้ว</button>
-            <button type="button" :disabled="paymentBusy" @click="reopenPayment(row)">เปิดงวดรายบุคคล</button>
+            <button class="commission-primary" type="button" :disabled="paymentBusy || !paymentForms[row.id]?.paidDate || !paymentForms[row.id]?.reference.trim()" @click="payStaff(row)">บันทึกว่าจ่ายแล้ว</button>
+            <button class="commission-secondary" type="button" :disabled="paymentBusy" @click="reopenPayment(row)">เปิดงวดรายบุคคล</button>
           </template>
         </article>
       </section>
@@ -705,6 +711,46 @@ function selectView(event: Event) {
 <style scoped>
 @import '../../staff/styles/staff.css';
 @import '../styles/commission-manager.css';
+.payment-panel,
+.reopen-panel {
+  padding: 24px;
+  margin: 24px 0;
+}
+.payment-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.payment-panel h2,
+.reopen-panel h2 { margin: 0; }
+.payment-panel-description,
+.reopen-panel > p { color: #6c8589; margin: 10px 0 20px; }
+.payment-round-status {
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: #e8f4f1;
+  color: #167d79;
+  font-weight: 600;
+}
+.payment-panel-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.payment-panel button,
+.reopen-panel button { min-height: 42px; cursor: pointer; }
+.payment-panel button:disabled,
+.reopen-panel button:disabled { opacity: .45; cursor: not-allowed; }
+.payment-empty { margin: 20px 0 0; padding: 28px 16px; text-align: center; color: #6c8589; background: #f5f9f8; border-radius: 8px; }
+.payment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 20px 0; border-top: 1px solid #e1e9e8; margin-top: 20px; }
+.payment-row label,
+.reopen-panel label { display: flex; flex-direction: column; gap: 8px; color: #526b70; }
+.reopen-panel label { max-width: 640px; margin-bottom: 16px; }
+.payment-row input,
+.reopen-panel textarea { box-sizing: border-box; max-width: 100%; padding: 10px 12px; border: 1px solid #bfd2d1; border-radius: 8px; font: inherit; background: white; }
+.reopen-panel textarea { width: 100%; resize: vertical; }
+@media (max-width: 600px) {
+  .payment-panel, .reopen-panel { padding: 18px; }
+  .payment-panel-actions > button, .payment-row label { width: 100%; }
+}
 .closing-page {
   min-height: 100vh;
   background: #f9f4ee;

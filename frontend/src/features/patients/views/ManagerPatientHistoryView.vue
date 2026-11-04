@@ -86,13 +86,6 @@ const filteredSingleVisits = computed(() => {
     }).map((item) => ({ item, payment }))
   })
 })
-// ตัวอย่างสำหรับผู้ป่วยทดสอบในภาพ ใช้แสดงหน้าจอเท่านั้น
-const showDemoSingleVisit = computed(() => {
-  if (patient.value?.hn !== 'CDEMO-28' || typeFilter.value === 'COURSE') return false
-  const keyword = query.value.trim().toLowerCase()
-  return (!keyword || 'ตัวอย่างบริการรายครั้ง กายภาพบำบัดทั่วไป'.includes(keyword))
-    && (!dateFilter.value || dateFilter.value === '2026-10-19')
-})
 const courseOverview = computed(() => ({
   total: courses.value.length,
   active: courses.value.filter((item) => item.usable).length,
@@ -559,14 +552,7 @@ onMounted(async () => {
                 <td>{{ paymentStatus(payment.status) }}</td>
                 <td class="history-actions course-actions"><button type="button" class="outline" @click="openReceipt(payment)">ดูใบเสร็จ</button></td>
               </tr>
-              <tr v-if="showDemoSingleVisit">
-                <td><b>ตัวอย่างบริการรายครั้ง · กายภาพบำบัดทั่วไป</b><small class="course-purchase-date">ข้อมูลจำลอง · 19 ต.ค. 2569</small></td>
-                <td>1 ครั้ง</td>
-                <td>—</td>
-                <td>ข้อมูลจำลอง</td>
-                <td>—</td>
-              </tr>
-              <tr v-if="!filteredCourses.length && !filteredSingleVisits.length && !showDemoSingleVisit">
+              <tr v-if="!filteredCourses.length && !filteredSingleVisits.length">
                 <td colspan="5">
                   {{
                     query || dateFilter || typeFilter ? 'ไม่พบรายการตามตัวกรองที่เลือก' : 'ผู้ป่วยยังไม่มีรายการบริการหรือคอร์ส'

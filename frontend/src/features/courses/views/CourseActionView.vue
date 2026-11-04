@@ -709,22 +709,20 @@ function closePrintSuccess() {
         </section>
         <section v-if="usageSuccess" class="course-after-use-success-backdrop">
           <article
-            v-modal-focus="{ close: returnToCourseManager }"
             class="course-after-use-success-modal"
-            role="dialog"
-            aria-modal="true"
+            role="region"
             aria-labelledby="after-use-success-title"
           >
+            <span class="usage-success-check" aria-hidden="true">✓</span>
             <h1 id="after-use-success-title">ใช้สิทธิ์สำเร็จ</h1>
             <p>บันทึกการใช้สิทธิ์ {{ selectedCourse.name }} {{ usageCount }} ครั้งแล้ว</p>
-            <div>
-              <h2>{{ owner?.fullName }}　HN {{ owner?.hn }}</h2>
-              <h3>{{ selectedCourse.name }}</h3>
-              <strong>สิทธิ์คงเหลือหลังใช้ครั้งนี้</strong>
-              <b
-                >{{ usageSuccessBalance }} <small>/ {{ selectedCourse.total }} ครั้ง</small></b
-              >
-            </div>
+            <dl class="usage-success-details">
+              <div><dt>ผู้ป่วย</dt><dd>{{ owner?.fullName }}</dd></div>
+              <div><dt>เลขประจำตัวผู้ป่วย</dt><dd>{{ owner?.hn }}</dd></div>
+              <div><dt>คอร์ส</dt><dd>{{ selectedCourse.name }}</dd></div>
+              <div><dt>ใช้สิทธิ์ครั้งนี้</dt><dd>{{ usageCount }} ครั้ง</dd></div>
+              <div><dt>สิทธิ์คงเหลือ</dt><dd>{{ usageSuccessBalance }} ครั้ง</dd></div>
+            </dl>
             <footer>
               <button type="button" @click="returnToCourseManager">กลับไปจัดการคอร์ส</button>
               <button type="button" @click="start('history', selectedCourse)">
@@ -4283,9 +4281,13 @@ function closePrintSuccess() {
 /* Figma 140:3632 — share course form */
 .course-transfer-main {
   width: min(1200px, calc(100% - 48px));
-  padding: 15px 0 142px;
+  padding: 40px 0 142px;
 }
 .course-transfer-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 0;
   color: #667a72;
   font-size: 13px;
 }
@@ -5059,24 +5061,27 @@ function closePrintSuccess() {
   background: #1e807c;
 }
 .course-after-use-success-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  padding: 24px;
-  background: rgb(0 0 0 / 45%);
+  padding: 32px 0;
 }
 .course-after-use-success-modal {
   display: grid;
   box-sizing: border-box;
-  width: min(640px, 100%);
+  width: min(520px, 100%);
   gap: 0;
-  padding: 28px;
+  padding: 22px;
   border-radius: 20px;
   background: #fff;
+  border: 1px solid #dce6e4;
+  text-align: center;
 }
+.usage-success-check { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 12px; border-radius: 50%; background: #e6f4f1; color: #1e9691; font-size: 27px; }
+.usage-success-details { display: grid; gap: 6px; margin: 16px 0 8px; padding: 10px; background: #e6f4f1; border-radius: 12px; }
+.usage-success-details > div { display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: white; }
+.usage-success-details dt { color: #789094; font-size: 14px; }
+.usage-success-details dd { margin: 0; color: #233e42; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 .course-after-use-success-modal > h1 {
   margin: 0;
   font-size: 29px;
@@ -5123,10 +5128,10 @@ function closePrintSuccess() {
 }
 .course-after-use-success-modal button {
   min-height: 46px;
-  border: 0;
+  border: 1px solid #1e9691;
   border-radius: 10px;
-  color: #25372e;
-  background: #eff4ed;
+  color: #1e807c;
+  background: #fff;
   font: inherit;
   font-size: 16px;
   font-weight: 700;
