@@ -23,7 +23,6 @@ const page = ref(1)
 const loading = ref(false)
 const error = ref('')
 const updated = ref('')
-const sourceTierOpen = ref(false)
 const sales = ref<SaleDetail[]>([])
 const treatments = ref<Awaited<ReturnType<typeof commissionApi.treatmentReport>>>([])
 const branchNames = ref<Record<string, string>>({})
@@ -85,51 +84,6 @@ const metrics = computed(() =>
         ['ค่ามือรวม', money(courseRows.value.reduce((sum, row) => sum + Number(row.treatmentFee), 0))],
       ],
 )
-const tierBase = computed(() =>
-  type.value === 'single'
-    ? salesRows.value.reduce((total, row) => total + Number(row.total), 0)
-    : courseRows.value.reduce((total, row) => total + Number(row.gross), 0),
-)
-const sourceDetail = computed(() => {
-  if (type.value === 'single') {
-    const row = salesRows.value[0]
-    if (!row) return null
-    const course = row.items.find((item) => item.type === 'COURSE')
-    return {
-      receipt: row.receiptNo,
-      course: course?.description || row.items.map((item) => item.description).join(', ') || '—',
-      seller: row.salesperson?.fullName || '—',
-      branch: branchNames.value[row.branchCode] || row.branchCode,
-      soldAt: date(row.soldAt),
-      gross: row.items.reduce((total, item) => total + Number(item.lineTotal), 0),
-      net: Number(row.total),
-    }
-  }
-
-  const row = courseRows.value[0]
-  if (!row) return null
-  return {
-    receipt: row.courseCode,
-    course: row.courseCode || '—',
-    seller: row.treatingStaffName || '—',
-    branch: row.branchName || row.branchCode,
-    soldAt: date(row.visitDate),
-    gross: Number(row.gross),
-    net: Number(row.gross),
-  }
-})
-function openTierRoundDetails() {
-  sourceTierOpen.value = false
-  void router.push({
-    name: 'transaction-tier-round',
-    query: {
-      type: type.value,
-      base: String(tierBase.value),
-      from: from.value,
-      to: to.value,
-    },
-  })
-}
 async function load() {
   const id = ++requestId
   loading.value = true
@@ -243,10 +197,7 @@ watch(reportSelection, (report) => {
           <h2>{{ title }}</h2>
           <p>{{ type === 'single' ? 'รายการขายรายครั้ง' : 'รายการใช้สิทธิ์คอร์ส' }}</p>
         </div>
-        <button v-if="type === 'single'" class="action" type="button" @click="sourceTierOpen = true">
-          ดูต้นทางยอดขายและฐาน Tier
-        </button>
-        <RouterLink v-else class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
+        <RouterLink v-if="type !== 'single'" class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
       </div>
       <p v-if="error" class="report-error" role="alert">{{ error }}</p>
       <p v-else-if="loading" class="report-loading">กำลังโหลดรายงาน...</p>
@@ -330,81 +281,6 @@ watch(reportSelection, (report) => {
       </div>
     </section>
 
-    <div
-      v-if="sourceTierOpen"
-      class="transaction-modal-backdrop"
-      @click.self="sourceTierOpen = false"
-    >
-      <section
-        class="transaction-source-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="transaction-source-title"
-      >
-        <header>
-          <div>
-            <h2 id="transaction-source-title">รายละเอียดต้นทางยอดขายและฐาน Tier</h2>
-          </div>
-          <button
-            type="button"
-            class="modal-close"
-            aria-label="ปิด"
-            @click="sourceTierOpen = false"
-          >
-            ×
-          </button>
-        </header>
-
-        <dl v-if="sourceDetail" class="source-detail-list">
-          <div>
-            <dt>เลขที่ / ใบเสร็จ</dt>
-            <dd>{{ sourceDetail.receipt }}</dd>
-          </div>
-          <div>
-            <dt>คอร์ส</dt>
-            <dd>{{ sourceDetail.course }}</dd>
-          </div>
-          <div>
-            <dt>ผู้ขาย / สาขา / วันขาย</dt>
-            <dd>
-              {{ sourceDetail.seller }} · {{ sourceDetail.branch }} ·
-              {{ sourceDetail.soldAt }}
-            </dd>
-          </div>
-          <div>
-            <dt>ราคาก่อนลด / ส่วนลดรายการ</dt>
-            <dd>
-              {{ money(sourceDetail.gross) }} /
-              {{ money(Math.max(0, sourceDetail.gross - sourceDetail.net)) }}
-            </dd>
-            <small>ราคาหลังหักส่วนลด: {{ money(sourceDetail.net) }}</small>
-          </div>
-          <div>
-            <dt>มูลค่าสุทธิสำหรับ Tier</dt>
-            <dd>{{ money(sourceDetail.net) }} / {{ money(sourceDetail.net) }}</dd>
-            <small>มูลค่าหลังหักส่วนลดที่นำไปคิดฐาน Tier</small>
-          </div>
-          <div>
-            <dt>ยอดขายคอร์สรอบเดือน / Tier</dt>
-            <dd>{{ money(tierBase) }} / —</dd>
-            <small>Tier จะแสดงเมื่อมีข้อมูล Scheme ของรอบนั้น</small>
-          </div>
-          <p class="source-detail-note">
-            หมายเหตุ:
-            {{ type === 'single' ? 'CoursePurchase' : 'Course Transaction' }} ·
-            ยอดและค่าคอมมิชชั่นจะอิงจากรายการที่บันทึกในระบบ
-          </p>
-        </dl>
-        <p v-else class="source-detail-empty">ไม่พบรายการที่ใช้คำนวณฐาน Tier</p>
-
-        <footer>
-          <button type="button" class="modal-back" @click="sourceTierOpen = false">กลับ</button>
-          <button type="button" class="modal-done" @click="openTierRoundDetails">
-            ดูรายละเอียดรอบและฐาน Tier
-          </button>
-        </footer>
-      </section>
-    </div>
   </main>
 </template>
 <style scoped src="../styles/reports.css"></style>
