@@ -337,12 +337,6 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
-      path: '/staff/reports/transaction/tier-round',
-      name: 'transaction-tier-round',
-      component: () => import('@/features/reports/views/TransactionTierRoundDetailView.vue'),
-      meta: { roles: ['manager'] },
-    },
-    {
       path: '/staff/calendar',
       name: 'staff-calendar',
       redirect: '/staff/settings/calendar',
