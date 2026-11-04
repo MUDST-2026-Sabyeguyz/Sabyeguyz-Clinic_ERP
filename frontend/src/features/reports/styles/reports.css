@@ -160,6 +160,27 @@
   gap: 16px;
 }
 
+/* Keep payment filters in one aligned row without empty grid columns. */
+.filter-card-body--payment {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+.filter-card-body--payment .filter-grid-row1,
+.filter-card-body--payment .filter-grid-row2 {
+  display: contents;
+}
+.filter-card-body--payment .field-group {
+  min-width: 0;
+}
+@media (max-width: 1000px) {
+  .filter-card-body--payment { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .filter-card-body--payment { grid-template-columns: minmax(0, 1fr); }
+}
+
 .field-group {
   display: flex;
   flex-direction: column;
