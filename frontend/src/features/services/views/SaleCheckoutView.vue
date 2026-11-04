@@ -151,6 +151,23 @@ const itemOptions = (line: SaleLine) =>
   catalog.value
     .filter((item) => item.key.startsWith(`${line.category}:`))
     .map((item) => ({ value: item.key, label: `${item.name} · ${money(cents(item.price))}` }))
+let catalogRefresh: Promise<void> | null = null
+function refreshCatalog() {
+  if (stage.value !== 'edit' || loading.value) return
+  if (catalogRefresh) return catalogRefresh
+  catalogRefresh = Promise.all([catalogApi.services(), catalogApi.courses()])
+    .then(([serviceList, courseList]) => {
+      services.value = serviceList.filter(
+        (item) => !/assessment|ประเมิน/i.test(`${item.code} ${item.name}`),
+      )
+      courses.value = courseList
+    })
+    .catch((cause) => {
+      error.value = cause instanceof Error ? cause.message : 'โหลดรายการบริการและคอร์สล่าสุดไม่สำเร็จ'
+    })
+    .finally(() => { catalogRefresh = null })
+  return catalogRefresh
+}
 function paymentDisplay(code: string, name: string) {
   const value = `${code} ${name}`.toLowerCase()
   if (/prompt|qr|พร้อมเพย์/.test(value)) return { label: 'พร้อมเพย์', icon: paymentQrIcon }
@@ -402,14 +419,6 @@ watch(
       >
         สร้างนัดหมายก่อนรับบริการ
       </button>
-      <p v-if="uncertainSale" role="alert">
-        ยังยืนยันผลคำขอก่อนหน้าไม่ได้ กรุณาตรวจประวัติขายก่อนทำรายการใหม่
-        <RouterLink
-          v-if="patient"
-          :to="{ path: '/staff/patients/' + patient.id + '/history', query: { tab: 'payments' } }"
-          >ดูประวัติขาย</RouterLink
-        >
-      </p>
       <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         {{ processError
@@ -478,7 +487,7 @@ watch(
                 </button>
               </div>
               <div v-for="(line, index) in lines" :key="line.key" class="line-row">
-                <div class="item-picker">
+                <div class="item-picker" @focusin="refreshCatalog">
                   <label
                     >ประเภท<select
                       v-model="line.category"
