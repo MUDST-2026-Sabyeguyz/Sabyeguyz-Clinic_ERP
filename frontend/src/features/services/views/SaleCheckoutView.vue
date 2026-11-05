@@ -249,8 +249,6 @@ function resetLine(line: SaleLine) {
   line.discountValue = 0
 }
 function check() {
-  if (hasService.value && !appointmentId.value)
-    throw new Error('กรุณาสร้างนัดหมายก่อนบันทึกบริการรายครั้ง')
   if (!patient.value || !branchCode.value) throw new Error('ไม่พบผู้ป่วยหรือสาขาที่ทำรายการ')
   if (!sellerId.value) throw new Error('กรุณาเลือกผู้ขายหรือเจ้าของยอด')
   if (!methodCode.value || !methods.value.some((method) => method.code === methodCode.value))
@@ -293,7 +291,7 @@ function check() {
 }
 function saleRequest() {
   // รวมข้อมูลหน้าจอเป็น payload ตาม contract เดียวก่อนตรวจหรือส่งขาย
-  if (hasService.value && !staff.value.some((person) => person.id === treatingId.value))
+  if (hasService.value && appointmentId.value && !staff.value.some((person) => person.id === treatingId.value))
     throw new Error('กรุณาเลือกนักกายภาพ')
   return buildSaleRequest({
     patientId: patient.value!.id,
@@ -342,9 +340,9 @@ async function save() {
     // ตั้ง recovery marker ก่อนส่ง เพื่อให้กู้ผลได้เมื่อ request timeout
     sessionStorage.setItem(storageKey.value, 'pending')
     uncertainSale.value = true
-    beginAppointmentWrite()
+    if (appointmentId.value) beginAppointmentWrite()
     const result = await salesApi.create(request)
-    finishAppointmentWrite(hasService.value)
+    if (appointmentId.value) finishAppointmentWrite(hasService.value)
     if (appointmentId.value) await refreshAppointmentProcess()
     saved.value = { id: result.id, receiptNo: result.receiptNo, receiptId: result.receiptId }
     sessionStorage.removeItem(storageKey.value)
@@ -407,18 +405,6 @@ watch(
       >
         ← กลับหน้าบริการ
       </button>
-      <button
-        v-if="hasService && !appointmentId && patient"
-        type="button"
-        @click="
-          router.push({
-            name: 'staff-appointment-create',
-            query: { patientId: String(patient.id) },
-          })
-        "
-      >
-        สร้างนัดหมายก่อนรับบริการ
-      </button>
       <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         {{ processError
@@ -448,6 +434,7 @@ watch(
               }}
             </h1>
             <p>{{ patient.fullName }} · HN {{ patient.hn }}</p>
+            <p v-if="hasService && !appointmentId" class="helper">บริการรายครั้งที่ซื้อในหน้านี้จะเก็บเป็นสิทธิ์ไว้ใช้เมื่อนัดหมายครั้งถัดไป</p>
           </div>
         </header>
         <section v-if="stage === 'success' && saved" class="success-panel">
@@ -475,7 +462,8 @@ watch(
           >
             ดูคอร์สที่ซื้อ
           </button>
-          <p v-if="!hasService">ซื้อคอร์สสำเร็จ การซื้ออย่างเดียวยังไม่สร้างรายการรับบริการ</p>
+          <p v-if="hasService && !appointmentId">สิทธิ์บริการรายครั้งถูกบันทึกไว้ และเลือกใช้ได้เมื่อมารับบริการตามนัด</p>
+          <p v-else-if="!hasService">ซื้อคอร์สสำเร็จ การซื้ออย่างเดียวยังไม่สร้างรายการรับบริการ</p>
         </section>
         <div v-else class="checkout-layout">
           <div class="checkout-main">
@@ -550,7 +538,7 @@ watch(
                 </button>
               </div>
             </section>
-            <section v-if="hasService" class="panel">
+            <section v-if="hasService && appointmentId" class="panel">
               <h2>นักกายภาพ</h2>
               <FilterDropdown
                 :model-value="String(treatingId || '')"

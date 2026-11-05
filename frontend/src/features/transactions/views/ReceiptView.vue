@@ -113,6 +113,14 @@ function printReceipt() {
     printError.value = 'ส่งพิมพ์ไม่สำเร็จ กรุณาลองพิมพ์ใบเสร็จฉบับเดิมอีกครั้ง'
   }
 }
+function returnToPatientCourses() {
+  const patientId = receipt.value?.patient.id
+  if (patientId) {
+    void router.push({ name: 'patient-history', params: { id: patientId } })
+    return
+  }
+  router.back()
+}
 onMounted(load)
 </script>
 
@@ -121,7 +129,7 @@ onMounted(load)
     <div class="receipt-screen-only"><StaffHeader /></div>
     <main>
       <div class="receipt-toolbar receipt-screen-only">
-        <button type="button" @click="router.back()">← กลับ</button>
+        <button type="button" @click="returnToPatientCourses">← กลับ</button>
         <button v-if="receipt" type="button" @click="printReceipt">พิมพ์ใบเสร็จ</button>
       </div>
       <p v-if="loading" role="status">กำลังโหลดใบเสร็จ…</p>
@@ -625,8 +633,6 @@ td small {
   position: absolute;
   right: 0;
   bottom: 0;
-  border: 3px solid #d00;
-  padding: 1mm;
 }
 @media print {
   @page {

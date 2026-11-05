@@ -373,7 +373,7 @@ onMounted(loadProfile)
           <RouterLink
             v-if="showingHistory"
             class="patient-profile-edit profile-service-action"
-            :to="{ path: '/staff/services', query: { patientId: patient.id } }"
+            :to="{ path: '/staff/services/sale', query: { patientId: patient.id } }"
             >ซื้อบริการ / คอร์ส</RouterLink
           >
           <button

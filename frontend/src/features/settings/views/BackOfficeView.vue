@@ -40,7 +40,7 @@ const sections: Array<{ key: SectionKey; label: string; hint: string; icon: Sett
   [
     { key: 'branches', label: 'สาขา', hint: 'ข้อมูลและเวลาทำการ', icon: 'branch' },
     { key: 'users', label: 'ผู้ใช้และสิทธิ์', hint: 'บัญชีและการเข้าถึง', icon: 'users' },
-    { key: 'services', label: 'บริการและคอร์ส', hint: 'รายการและราคา', icon: 'services' },
+    { key: 'services', label: 'คอร์สและบริการ', hint: 'รายการและราคา', icon: 'services' },
     { key: 'payments', label: 'การชำระเงิน', hint: 'ช่องทางและสถานะ', icon: 'payments' },
     { key: 'rooms', label: 'Room / Resource', hint: 'ห้องและทรัพยากร', icon: 'rooms' },
     { key: 'commission', label: 'กฎค่ามือ', hint: 'ค่ามือการรักษา', icon: 'commission' },
@@ -347,7 +347,7 @@ const copy = computed(
     ({
       branches: ['จัดการสาขา', 'ข้อมูลสาขาทั้งหมดในระบบ'],
       users: ['ผู้ใช้งานและสิทธิ์', 'จัดการผู้ใช้งานและสิทธิ์การเข้าถึงระบบ'],
-      services: ['บริการและคอร์ส', 'จัดการรายการบริการและคอร์สทั้งหมดในระบบ'],
+      services: ['คอร์สและบริการ', 'จัดการรายการคอร์สและบริการทั้งหมดในระบบ'],
       payments: ['การชำระเงิน', 'เลือกช่องทางและสถานะการชำระเงินที่เปิดให้บริการในระบบ'],
       rooms: ['Room / Resource', 'จัดการห้องและทรัพยากรที่ใช้ในการให้บริการ'],
       commission: [
@@ -437,6 +437,11 @@ const filteredTableRows = computed(() => {
       )
     if (serviceTypeFilter.value !== 'ทั้งหมด')
       rows = rows.filter(({ row }) => String(row.type) === serviceTypeFilter.value)
+    // แสดงบริการที่ใช้งานอยู่ก่อน และคงลำดับเดิมไว้ภายในแต่ละสถานะ
+    rows = rows.sort(
+      (first, second) =>
+        Number(first.row.status !== 'ใช้งาน') - Number(second.row.status !== 'ใช้งาน'),
+    )
   }
   return rows
 })
@@ -933,6 +938,8 @@ const drawerTitle = computed(() => {
     return editingIndex.value === null
       ? 'แก้กฎค่ามือ (บันทึกเป็นเวอร์ชันใหม่)'
       : 'แก้ไขเวอร์ชันที่รอเริ่มใช้'
+  if (section.value === 'services')
+    return editingIndex.value === null ? 'เพิ่มคอร์สและบริการ' : 'แก้ไขคอร์สและบริการ'
   return `${editingIndex.value === null ? 'เพิ่ม' : 'แก้ไข'} ${labels[section.value]}`
 })
 </script>
@@ -1505,9 +1512,8 @@ const drawerTitle = computed(() => {
               </select></label
             ></template
           >
-          <p v-else class="hint">บริการรายครั้งคือ 1 ครั้งต่อรายการ และไม่มีวันหมดอายุ</p>
           <label
-            >ระยะเวลานัดเริ่มต้น (นาที)<input
+            >ระยะเวลา<input
               v-model="form.duration"
               inputmode="numeric"
               :class="{ invalid: fieldErrors.duration }"

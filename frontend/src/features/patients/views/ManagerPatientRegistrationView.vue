@@ -85,8 +85,7 @@ async function loadSourceAppointment() {
       throw new Error('นัดหมายนี้ยังไม่พร้อมลงทะเบียน กรุณากลับไปตรวจสอบสถานะ')
     sourceAppointment.value = item
     form.branchCode = item.branchCode
-    // ชื่อในนัดอาจเป็นชื่อเล่น จึงไม่เดาชื่อจริงหรือนามสกุล
-    if (!form.nickname) form.nickname = item.contactName || ''
+    if (!form.nickname) form.nickname = item.contactNickname || ''
     if (!form.phone) form.phone = limitPhoneDigits(item.contactPhone || '')
   } catch (error) {
     sourceError.value = error instanceof Error ? error.message : 'โหลดนัดหมายไม่สำเร็จ'
