@@ -127,7 +127,7 @@ describe('branch-only Manager dashboard', () => {
     const todayCards = view.findAll('.today-card')
     expect(todayCards[1]!.text()).toContain('100 บาท')
     expect(todayCards[2]!.text()).toContain('250 บาท')
-    expect(todayCards[3]!.text()).toContain('2 คอร์ส')
+    expect(todayCards).toHaveLength(3)
     expect(view.get('.summary-layout').text()).toContain('20 คน')
     expect(view.get('.summary-layout').text()).toContain('ยอดรับชำระ')
     expect(view.get('.summary-layout').text()).toContain('ยอดขายตามวันที่ขาย')
@@ -138,6 +138,30 @@ describe('branch-only Manager dashboard', () => {
     expect(report.dashboard).toHaveBeenCalledWith('2025-01-01', '2025-01-31', '01')
     expect(view.get('.today-section').text()).toContain('3 คน')
     expect(view.findAll('.today-card')[1]!.text()).toContain('100 บาท')
+    view.unmount()
+  })
+
+  it('refreshes today figures when returning to the dashboard', async () => {
+    const view = await mountSelectedDashboard()
+    report.dashboard.mockResolvedValue({
+      uniquePatients: 7,
+      visits: 0,
+      totalRevenue: 1200,
+      patientsByGender: [],
+      cashReceived: 1200,
+      salesTotal: 1500,
+      courseRenewals: 0,
+      newCustomers: 0,
+      returningCustomers: 0,
+      packageUpdates: 0,
+      packageUpdatesScope: 'CLINIC',
+    })
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    const cards = view.findAll('.today-card')
+    expect(cards[0]!.text()).toContain('7 คน')
+    expect(cards[1]!.text()).toContain('1,200 บาท')
+    expect(cards[2]!.text()).toContain('1,500 บาท')
     view.unmount()
   })
 
