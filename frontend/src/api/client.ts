@@ -276,6 +276,7 @@ export type Appointment = {
   patientType?: 'CURRENT' | 'NEW'
   contactName?: string | null
   contactPhone?: string | null
+  contactNickname?: string | null
 }
 // หลักฐานจากนัดใช้ตรวจรายการเดิมและกู้ผลหลังคำขอไม่ตอบกลับ
 export type AppointmentProgress = {
@@ -345,6 +346,19 @@ export type CoursePurchase = {
   expired: boolean
   usable: boolean
   status: string
+}
+export type SingleVisitEntitlement = {
+  id: number
+  saleTransactionId: number
+  patientId: number
+  branchCode: string
+  serviceId: number
+  serviceName: string
+  purchased: number
+  used: number
+  remaining: number
+  purchasedAt: string
+  receiptNo: string
 }
 export type SaleSummary = {
   id: number
@@ -687,6 +701,7 @@ export const appointmentApi = {
     patientType?: 'CURRENT' | 'NEW'
     contactName?: string
     contactPhone?: string
+    contactNickname?: string
     requestedServiceType?: 'SingleVisit' | 'Course'
   }) => api.post<Appointment>('/api/appointments', { ...body, status: 'UNCONFIRMED' }),
   confirm: (id: number) => api.post<Appointment>(`/api/appointments/${id}/confirm`, {}),
@@ -794,6 +809,16 @@ export const courseApi = {
   }) => api.post<TransferRecord>('/api/course-transfers', body),
   transferHistory: (patientId?: number) =>
     api.get<TransferRecord[]>(`/api/course-transfers${patientId ? `?patientId=${patientId}` : ''}`),
+}
+
+export const singleVisitEntitlementApi = {
+  list: (patientId: number) =>
+    api.get<SingleVisitEntitlement[]>(`/api/patients/${patientId}/single-visit-entitlements`),
+  use: (entitlementId: number, body: { appointmentId: number; treatingStaffId: number }) =>
+    api.post<{ id: number; entitlementId: number; appointmentId: number; visitId: number; usedAt: string }>(
+      `/api/single-visit-entitlements/${entitlementId}/uses`, body),
+  reverse: (usageId: number, reason: string) =>
+    api.post(`/api/single-visit-entitlement-uses/${usageId}/reverse`, { reason }),
 }
 
 export const salesApi = {

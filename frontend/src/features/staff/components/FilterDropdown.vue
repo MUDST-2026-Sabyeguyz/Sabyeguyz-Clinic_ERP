@@ -9,12 +9,15 @@ const props = withDefaults(
     defaultValue?: string
     defaultLabel: string
     label: string
+    triggerLabel?: string
     disabled?: boolean
     clearOnReselect?: boolean
     hideDefaultOption?: boolean
     hideChevron?: boolean
     searchable?: boolean
     emptySearchLabel?: string
+    invalid?: boolean
+    describedBy?: string
   }>(),
   { defaultValue: '', disabled: false, clearOnReselect: true, hideDefaultOption: false },
 )
@@ -134,6 +137,8 @@ onBeforeUnmount(() => {
       aria-autocomplete="list"
       :aria-label="label"
       :aria-expanded="open"
+      :aria-invalid="invalid || undefined"
+      :aria-describedby="describedBy"
       :disabled="disabled"
       :value="open ? search : selectedLabel"
       :placeholder="selectedLabel"
@@ -151,10 +156,12 @@ onBeforeUnmount(() => {
       type="button"
       :aria-label="label"
       :aria-expanded="open"
+      :aria-invalid="invalid || undefined"
+      :aria-describedby="describedBy"
       :disabled="disabled"
       @click="toggle"
     >
-      <span>{{ selectedLabel }}</span
+      <span>{{ triggerLabel ?? selectedLabel }}</span
       ><span v-if="!hideChevron" class="filter-dropdown__chevron" aria-hidden="true"></span>
     </button>
     <Teleport :to="root?.closest('[role=dialog]') || 'body'">

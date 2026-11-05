@@ -88,12 +88,8 @@ const listServiceMode = ref<'all' | 'single' | 'course'>(
 const calendarSyncOpen = ref(false)
 const selectedBranch = ref('ทั้งหมด')
 const selectedDate = ref('')
-const startDate = ref(
-  typeof route.query.startDate === 'string' ? route.query.startDate : '',
-)
-const endDate = ref(
-  typeof route.query.endDate === 'string' ? route.query.endDate : '',
-)
+const startDate = ref(typeof route.query.startDate === 'string' ? route.query.startDate : '')
+const endDate = ref(typeof route.query.endDate === 'string' ? route.query.endDate : '')
 const yesterday = new Date()
 yesterday.setDate(yesterday.getDate() - 1)
 const minimumAppointmentDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
@@ -265,8 +261,7 @@ const availablePatientCourses = computed(() =>
 const selectedPatientCourse = computed(
   () =>
     availablePatientCourses.value.find((course) => course.course.id === form.value.serviceId) as
-      | AppointmentCourse
-      | undefined,
+      AppointmentCourse | undefined,
 )
 const selectedService = computed(() =>
   services.value.find((service) => service.id === form.value.serviceId),
@@ -285,9 +280,7 @@ const drawerServiceLabel = computed(() => {
     selectedService.value?.name ||
     catalogCourses.value.find((course) => course.id === form.value.serviceId)?.name ||
     'บริการ'
-  return /นาที/.test(label)
-    ? label
-    : `${label} ${appointmentDurationMinutes.value} นาที`
+  return /นาที/.test(label) ? label : `${label} ${appointmentDurationMinutes.value} นาที`
 })
 const morningTimeOptions = computed(() =>
   availabilitySlots.value.filter((slot) => Number(slot.time.slice(0, 2)) < 12),
@@ -454,11 +447,7 @@ const normalizeHn = (value: string) =>
     .toLowerCase()
 const formatTimeRange = (time: string) => {
   if (!time) return 'ยังไม่ได้เลือกเวลา'
-  const end = appointmentEndFields(
-    form.value.date,
-    time,
-    appointmentDurationMinutes.value,
-  )
+  const end = appointmentEndFields(form.value.date, time, appointmentDurationMinutes.value)
   return `${time}–${end.time}`
 }
 const calendarDate = computed(() => selectedDate.value || new Date().toISOString().slice(0, 10))
@@ -822,7 +811,7 @@ async function requestSaveConfirmation() {
     errorMessage.value = 'ไม่สามารถเลื่อนนัดหมายไปวันย้อนหลังได้'
     return
   }
-if (savingAppointment.value || checkingAvailability.value) return
+  if (savingAppointment.value || checkingAvailability.value) return
   const original = originalEditingAppointment.value
   const scheduleChanged =
     !original ||
@@ -934,6 +923,7 @@ async function save() {
               patientType: 'NEW' as const,
               contactName,
               contactPhone: newPatientForm.value.phone,
+              contactNickname: newPatientForm.value.nickname,
               requestedServiceType: serviceMode.value === 'course' ? 'Course' : 'SingleVisit',
             }
           : {}),
@@ -1111,109 +1101,165 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           >
             {{ errorMessage }}
           </p>
-          <div v-if="isEditing" class="form-grid appointment-reschedule-grid">
-            <label class="reschedule-patient-field">
-              ผู้ป่วย
-              <input
-                :value="patientQuery"
-                :class="{ 'is-invalid': missingCurrentPatient }"
-                readonly
-                placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
-              />
-              <span class="reschedule-patient-meta">
-                HN
-                {{
-                  selectedFormPatient?.hn ||
-                  editingAppointment?.patient?.hn ||
-                  (appointmentPatientType === 'NEW' ? 'ผู้ป่วยไม่ประจำ' : '-')
-                }}
-                ·
-                {{ selectedFormPatient?.phone || editingPatientPhone }}
-              </span>
-            </label>
-            <label class="reschedule-service-field">
-              ประเภทบริการ
-              <FilterDropdown
-                v-model="formServiceModel"
-                searchable
-                empty-search-label="ไม่พบโปรแกรม"
-                class="appointment-form-filter"
-                label="เลือกประเภทบริการ"
-                default-label="เลือกประเภทบริการ"
-                :clear-on-reselect="false"
-                :options="
-                  services.map((service) => ({
-                    value: String(service.id),
-                    label: service.name,
-                  }))
-                "
-              />
-            </label>
-            <label class="reschedule-therapist-field">
-              นักกายภาพ
-              <FilterDropdown
-                v-model="formTherapistModel"
-                searchable
-                empty-search-label="ไม่พบนักกายภาพ"
-                class="appointment-form-filter"
-                :class="{ 'is-invalid': missingCurrentTherapist }"
-                label="เลือกนักกายภาพ"
-                default-label="เลือกนักกายภาพ"
-                :clear-on-reselect="false"
-                :options="
-                  therapists.map((therapist) => ({
-                    value: String(therapist.id),
-                    label: therapist.fullName,
-                  }))
-                "
-              />
-            </label>
-            <label class="reschedule-date-field">
-              วันที่
-              <ThaiDatePicker
-                :model-value="form.date"
-                :min-date="minimumAppointmentDate"
-                disable-sunday
-                :invalid="scheduleError || missingCurrentDate"
-                show-calendar-icon
-                numeric-month
-                hide-caret
-                @update:model-value="changeAppointmentDate"
-              />
-            </label>
-            <label class="reschedule-time-field">
-              เวลา
-              <button
-                class="reschedule-time-trigger"
-                :class="{ 'is-invalid': missingCurrentTime }"
-                :aria-invalid="missingCurrentTime"
-                type="button"
-                @click="openTimeDrawer"
-              >
-                <span>{{ formatTimeRange(form.time) }}</span>
-                <strong>ดูตารางเวลาว่าง</strong>
-              </button>
-            </label>
-            <label v-if="!isManager" class="reschedule-branch-field">
-              สาขา
-              <FilterDropdown
-                v-model="formBranchModel"
-                class="appointment-form-filter"
-                label="เลือกสาขา"
-                default-label="เลือกสาขา"
-                :clear-on-reselect="false"
-                :options="
-                  branchOptions.map((branch) => ({
-                    value: branch.code,
-                    label: branch.name,
-                  }))
-                "
-              />
-            </label>
-            <label class="reschedule-note-field">
-              หมายเหตุ
-              <textarea v-model.trim="form.note" maxlength="500" rows="2" />
-            </label>
+          <div v-if="isEditing" class="appointment-reschedule-grid">
+            <section
+              class="reschedule-section reschedule-appointment-info"
+              aria-labelledby="reschedule-info-title"
+            >
+              <h2 id="reschedule-info-title">ข้อมูลนัดหมาย</h2>
+              <div class="reschedule-section-fields">
+                <label class="reschedule-patient-field">
+                  ผู้ป่วย
+                  <input
+                    :value="patientQuery"
+                    class="reschedule-readonly-field"
+                    readonly
+                    placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
+                  />
+                  <span class="reschedule-patient-meta">
+                    HN
+                    {{
+                      selectedFormPatient?.hn ||
+                      editingAppointment?.patient?.hn ||
+                      (appointmentPatientType === 'NEW' ? 'ผู้ป่วยไม่ประจำ' : '-')
+                    }}
+                    ·
+                    {{ selectedFormPatient?.phone || editingPatientPhone }}
+                  </span>
+                </label>
+                <label class="reschedule-service-field">
+                  ประเภทบริการ
+                  <FilterDropdown
+                    v-model="formServiceModel"
+                    searchable
+                    empty-search-label="ไม่พบโปรแกรม"
+                    class="appointment-form-filter"
+                    label="เลือกประเภทบริการ"
+                    default-label="เลือกประเภทบริการ"
+                    :clear-on-reselect="false"
+                    :options="
+                      services.map((service) => ({
+                        value: String(service.id),
+                        label: service.name,
+                      }))
+                    "
+                  />
+                </label>
+              </div>
+            </section>
+            <section
+              class="reschedule-section reschedule-new-schedule"
+              aria-labelledby="reschedule-schedule-title"
+            >
+              <h2 id="reschedule-schedule-title">วันเวลาใหม่</h2>
+              <div class="reschedule-section-fields">
+                <label class="reschedule-therapist-field">
+                  <span>นักกายภาพ <em>*</em></span>
+                  <FilterDropdown
+                    v-model="formTherapistModel"
+                    searchable
+                    empty-search-label="ไม่พบนักกายภาพ"
+                    class="appointment-form-filter"
+                    :class="{ 'is-invalid': missingCurrentTherapist }"
+                    :invalid="missingCurrentTherapist"
+                    :described-by="
+                      missingCurrentTherapist ? 'reschedule-therapist-error' : undefined
+                    "
+                    label="เลือกนักกายภาพ"
+                    default-label="เลือกนักกายภาพ"
+                    :clear-on-reselect="false"
+                    :options="
+                      therapists.map((therapist) => ({
+                        value: String(therapist.id),
+                        label: therapist.fullName,
+                      }))
+                    "
+                  />
+                  <small
+                    v-if="missingCurrentTherapist"
+                    id="reschedule-therapist-error"
+                    class="appointment-input-error"
+                    role="alert"
+                    >กรุณาเลือกนักกายภาพ</small
+                  >
+                </label>
+                <label class="reschedule-date-field">
+                  <span>วันที่ <em>*</em></span>
+                  <ThaiDatePicker
+                    :model-value="form.date"
+                    :min-date="minimumAppointmentDate"
+                    disable-sunday
+                    :invalid="scheduleError || missingCurrentDate"
+                    :described-by="
+                      scheduleError
+                        ? 'reschedule-date-error'
+                        : missingCurrentDate
+                          ? 'reschedule-date-required-error'
+                          : undefined
+                    "
+                    show-calendar-icon
+                    numeric-month
+                    hide-caret
+                    @update:model-value="changeAppointmentDate"
+                  />
+                  <small
+                    v-if="scheduleError"
+                    id="reschedule-date-error"
+                    class="appointment-input-error"
+                    role="alert"
+                    >{{ errorMessage }}</small
+                  >
+                  <small
+                    v-else-if="missingCurrentDate"
+                    id="reschedule-date-required-error"
+                    class="appointment-input-error"
+                    role="alert"
+                    >กรุณาเลือกวันที่</small
+                  >
+                </label>
+                <label class="reschedule-time-field">
+                  <span>เวลา <em>*</em></span>
+                  <button
+                    class="reschedule-time-trigger"
+                    :class="{ 'is-invalid': missingCurrentTime }"
+                    :aria-invalid="missingCurrentTime"
+                    :aria-describedby="missingCurrentTime ? 'reschedule-time-error' : undefined"
+                    type="button"
+                    @click="openTimeDrawer"
+                  >
+                    <span>{{ formatTimeRange(form.time) }}</span>
+                    <strong>ดูตารางเวลาว่าง</strong>
+                  </button>
+                  <small
+                    v-if="missingCurrentTime"
+                    id="reschedule-time-error"
+                    class="appointment-input-error"
+                    role="alert"
+                    >กรุณาเลือกเวลา</small
+                  >
+                </label>
+                <label v-if="!isManager" class="reschedule-branch-field">
+                  สาขา
+                  <FilterDropdown
+                    v-model="formBranchModel"
+                    class="appointment-form-filter"
+                    label="เลือกสาขา"
+                    default-label="เลือกสาขา"
+                    :clear-on-reselect="false"
+                    :options="
+                      branchOptions.map((branch) => ({
+                        value: branch.code,
+                        label: branch.name,
+                      }))
+                    "
+                  />
+                </label>
+                <label class="reschedule-note-field">
+                  หมายเหตุ
+                  <textarea v-model.trim="form.note" maxlength="500" rows="2" />
+                </label>
+              </div>
+            </section>
           </div>
           <div
             v-else
@@ -1373,10 +1419,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 :clear-on-reselect="false"
                 :options="courseDropdownOptions"
               />
-              <span
-                v-if="!catalogCourses.length"
-                class="appointment-course-empty"
-              >
+              <span v-if="!catalogCourses.length" class="appointment-course-empty">
                 ยังไม่มีคอร์สที่เปิดใช้งานในหน้าการตั้งค่า
               </span>
             </label>
@@ -1562,7 +1605,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             <p v-else-if="availabilitySlots.length === 0" class="appointment-time-help">
               ไม่มีช่วงเวลาว่าง
             </p>
-            <p class="appointment-time-help">ช่วงสีเทา = มีนัดหมายแล้ว ไม่สามารถเลือกได้</p>
           </div>
           <footer>
             <button type="button" class="secondary" @click="timeDrawerOpen = false">ยกเลิก</button>
@@ -1579,34 +1621,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             ลองใหม่
           </button>
         </p>
-        <div v-show="scheduleView === 'list'" class="appointment-list-controls">
-          <div class="appointment-list-mode-toggle" role="group" aria-label="เลือกรูปแบบรายการ">
-            <button
-              type="button"
-              :class="{ active: listServiceMode === 'all' }"
-              :aria-pressed="listServiceMode === 'all'"
-              @click="listServiceMode = 'all'"
-            >
-              ทั้งหมด
-            </button>
-            <button
-              type="button"
-              :class="{ active: listServiceMode === 'single' }"
-              :aria-pressed="listServiceMode === 'single'"
-              @click="listServiceMode = 'single'"
-            >
-              รายครั้ง
-            </button>
-            <button
-              type="button"
-              :class="{ active: listServiceMode === 'course' }"
-              :aria-pressed="listServiceMode === 'course'"
-              @click="listServiceMode = 'course'"
-            >
-              รายคอร์ส
-            </button>
-          </div>
-        </div>
         <div v-if="scheduleView === 'list'" class="appointment-list-summary">
           <div class="appointment-summary-context">
             <p class="appointment-summary-date">{{ listDateCaption }}</p>
@@ -1770,7 +1784,21 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <th>เวลา</th>
                 <th>ผู้ป่วย</th>
                 <th>เบอร์โทรศัพท์</th>
-                <th>บริการ</th>
+                <th>
+                  <FilterDropdown
+                    v-model="listServiceMode"
+                    class="appointment-service-filter"
+                    :options="[
+                      { value: 'single', label: 'รายครั้ง' },
+                      { value: 'course', label: 'รายคอร์ส' },
+                    ]"
+                    default-value="all"
+                    default-label="ทั้งหมด"
+                    trigger-label="บริการ"
+                    label="กรองประเภทบริการ"
+                    :clear-on-reselect="false"
+                  />
+                </th>
                 <th>นักกายภาพ</th>
                 <th>สถานะ</th>
               </tr>
@@ -1842,9 +1870,8 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                       class="appointment-cancel-reason"
                       >เหตุผล: {{ item.cancelReason }}</span
                     >
-                    
-                  
-                                        <button
+
+                    <button
                       v-if="canManageOwnAppointment(item) && uiStatusFor(item.status) === 'PENDING'"
                       class="appointment-edit"
                       @click="goToEdit(item)"
