@@ -7,9 +7,11 @@ import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import {
   branchApi,
   courseApi,
+  singleVisitEntitlementApi,
   patientApi,
   salesApi,
   type CoursePurchase,
+  type SingleVisitEntitlement,
   type Branch,
   type PatientProfile,
   type SaleDetail,
@@ -26,6 +28,8 @@ const receiptBranch = ref<Branch | null>(null)
 const payments = ref<SaleSummary[]>([])
 const paymentDetails = ref<Record<number, SaleDetail>>({})
 const courses = ref<CoursePurchase[]>([])
+const singleVisitEntitlements = ref<SingleVisitEntitlement[]>([])
+const singleVisitEntitlementsAvailable = ref(true)
 const query = ref('')
 const dateFilter = ref('')
 const typeFilter = ref('')
@@ -94,6 +98,9 @@ const courseOverview = computed(() => ({
     .reduce((sum, item) => sum + item.remaining, 0),
   expired: courses.value.filter((item) => item.expired && item.status !== 'CANCELLED').length,
 }))
+const prepaidServiceBalance = computed(() =>
+  singleVisitEntitlements.value.reduce((sum, item) => sum + item.remaining, 0),
+)
 function clearHistoryFilters() {
   query.value = ''
   dateFilter.value = ''
@@ -218,6 +225,10 @@ onMounted(async () => {
       salesApi.list({ patientId: id, size: 100 }),
       courseApi.patientCourses(id),
     ])
+    const serviceEntitlements = await singleVisitEntitlementApi.list(id).catch(() => {
+      singleVisitEntitlementsAvailable.value = false
+      return []
+    })
     patient.value = profile
     try {
       receiptBranch.value = await branchApi.get(profile.branch.id)
@@ -231,6 +242,7 @@ onMounted(async () => {
     )
     payments.value = [paymentPage, ...remainingPages].flatMap((page) => page.items)
     courses.value = courseList
+    singleVisitEntitlements.value = serviceEntitlements
     const details = await Promise.allSettled(payments.value.map((item) => salesApi.get(item.id)))
     detailsIncomplete.value = details.some((result) => result.status === 'rejected')
     paymentDetails.value = Object.fromEntries(
@@ -385,7 +397,7 @@ onMounted(async () => {
       <section
         v-if="!loading && !errorMessage"
         class="course-overview"
-        aria-label="ภาพรวมคอร์สทั้งหมด"
+        aria-label="ภาพรวมบริการและคอร์ส"
       >
         <div>
           <span>คอร์สทั้งหมด</span><strong>{{ courseOverview.total }} คอร์ส</strong>
@@ -398,6 +410,9 @@ onMounted(async () => {
         </div>
         <div>
           <span>คอร์สหมดอายุ</span><strong>{{ courseOverview.expired }} คอร์ส</strong>
+        </div>
+        <div>
+          <span>บริการรายครั้งที่ซื้อไว้</span><strong>{{ singleVisitEntitlementsAvailable ? `${prepaidServiceBalance} ครั้ง` : 'ตรวจสอบไม่ได้' }}</strong>
         </div>
       </section>
       <nav class="history-tabs" aria-label="เลือกรายการบริการและคอร์ส">
@@ -513,7 +528,10 @@ onMounted(async () => {
                 </td>
                 <td>{{ thaiDate(item.expiresAt) }}</td>
                 <td>
-                  <span class="history-status course-status">{{
+                  <span
+                    class="history-status course-status"
+                    :class="{ 'is-cancelled': courseDisplayStatus(item) === 'CANCELLED' }"
+                    >{{
                     courseStatus(courseDisplayStatus(item))
                   }}</span>
                 </td>
@@ -542,12 +560,8 @@ onMounted(async () => {
             </tbody>
           </table>
         </div>
-        <p v-if="!loading && !errorMessage" class="history-result-count">
-          {{
-            activeTab === 'payments'
-              ? `แสดง ${filteredPayments.length} รายการล่าสุด`
-              : 'สิทธิ์คงเหลือเป็นข้อมูลล่าสุดหลังการใช้บริการและการแชร์คอร์ส'
-          }}
+        <p v-if="!loading && !errorMessage && activeTab === 'payments'" class="history-result-count">
+          แสดง {{ filteredPayments.length }} รายการล่าสุด
         </p>
       </section>
     </component>

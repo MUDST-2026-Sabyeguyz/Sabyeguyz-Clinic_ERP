@@ -581,18 +581,21 @@ function backToList(next: Tab = tab.value) {
           @click="backToList(step === 'history-detail' ? 'history' : tab)"
         >
           ←
-          {{ step === 'history-detail' ? 'กลับประวัติการยกเลิก' : 'กลับหน้ารายการ' }}
+          {{ step === 'history-detail' ? 'กลับ' : 'กลับหน้ารายการ' }}
         </button>
 
         <template v-if="step === 'history-detail'">
-          <RouterLink v-if="selected.kind === 'sale'" class="transaction-receipt-link" :to="{ name: 'staff-receipt', params: { id: selected.id } }">ดูใบเสร็จเดิม</RouterLink>
           <section class="transaction-history-detail">
             <header>
               <div>
-                <h1>รายละเอียดประวัติการยกเลิก</h1>
-                <p>ข้อมูลแบบอ่านอย่างเดียวสำหรับตรวจสอบย้อนหลัง</p>
+                <h1>ประวัติการยกเลิก</h1>
               </div>
-              <span>ยกเลิกแล้ว</span>
+              <RouterLink
+                v-if="selected.kind === 'sale'"
+                class="transaction-receipt-link"
+                :to="{ name: 'staff-receipt', params: { id: selected.id } }"
+                >ดูใบเสร็จเดิม</RouterLink
+              >
             </header>
             <div class="transaction-audit-card">
               <section>
@@ -746,8 +749,7 @@ function backToList(next: Tab = tab.value) {
               รายการนี้ไม่มีข้อมูลการตัดสิทธิ์อ้างอิง กรุณาให้ผู้ดูแลตรวจสอบก่อนยกเลิก
             </p>
             <header>
-              <h2 id="transaction-reason-title">ระบุเหตุผลการยกเลิก *</h2>
-              <p>เหตุผลเป็นข้อมูลบังคับและจะแสดงในประวัติการยกเลิก</p>
+              <h2 id="transaction-reason-title">ยกเลิกรายการ</h2>
             </header>
             <div class="transaction-reason-panel">
               <div

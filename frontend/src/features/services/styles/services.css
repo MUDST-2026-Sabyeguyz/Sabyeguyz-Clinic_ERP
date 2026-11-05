@@ -26,15 +26,7 @@
 }
 .service-search {
   margin-top: 0;
-  padding: 20px;
-  border: 1px solid #dce6e1;
-  border-radius: 13px;
-  background: #fff;
-}
-.service-search > h2 {
-  margin: 0 0 14px;
-  color: #25372e;
-  font-size: 20px;
+  padding: 0;
 }
 .search-wrap {
   display: flex;
@@ -626,10 +618,6 @@
   }
   .service-search {
     margin-top: 14px;
-  }
-  .service-search > h2 {
-    margin-bottom: 8px;
-    font-size: 17px;
   }
   .search-wrap {
     flex-direction: column;
