@@ -21,10 +21,12 @@ import {
   paymentMethodApi,
   paymentStatusApi,
   courseApi,
+  singleVisitEntitlementApi,
   salesApi,
   staffApi,
   type Course,
   type CoursePurchase,
+  type SingleVisitEntitlement,
   type Appointment,
   type Branch,
   type Patient,
@@ -61,6 +63,7 @@ const patientProfile = ref<PatientProfile | null>(null)
 const services = ref<ServiceOption[]>([])
 const courses = ref<Course[]>([])
 const patientCoursePurchases = ref<CoursePurchase[]>([])
+const patientSingleVisitEntitlements = ref<SingleVisitEntitlement[]>([])
 const patientCourseLoading = ref(false)
 const patientCourseError = ref(false)
 const paymentMethods = ref<PaymentMethod[]>([])
@@ -111,6 +114,11 @@ const patientCourseSummary = computed(() => {
   if (!usable.length) return 'ยังไม่มีสิทธิ์คอร์สที่ใช้งานได้'
   return `(คงเหลือ ${usable.length} คอร์ส · ${usable.reduce((sum, course) => sum + course.remaining, 0)} ครั้ง)`
 })
+const prepaidServiceBalance = computed(() =>
+  patientSingleVisitEntitlements.value
+    .filter((item) => !appointmentId.value || item.branchCode === sourceAppointment.value?.branchCode)
+    .reduce((sum, item) => sum + item.remaining, 0),
+)
 const receiptBranch = computed(() => {
   const code = patient.value?.branchCode?.toLocaleLowerCase('th')
   const name = patient.value?.branchName?.replace(/^สาขา/, '').toLocaleLowerCase('th')
@@ -217,17 +225,30 @@ async function loadPatientCourseSummary(patientId: number) {
   patientCourseLoading.value = true
   patientCourseError.value = false
   try {
-    const purchases = await courseApi.patientCourses(patientId)
+    const [purchases, entitlements] = await Promise.all([
+      courseApi.patientCourses(patientId),
+      singleVisitEntitlementApi.list(patientId),
+    ])
     if (requestId === patientCourseRequest && patient.value?.id === patientId)
       patientCoursePurchases.value = purchases
+    if (requestId === patientCourseRequest && patient.value?.id === patientId)
+      patientSingleVisitEntitlements.value = entitlements
   } catch {
     if (requestId === patientCourseRequest && patient.value?.id === patientId) {
       patientCoursePurchases.value = []
+      patientSingleVisitEntitlements.value = []
       patientCourseError.value = true
     }
   } finally {
     if (requestId === patientCourseRequest) patientCourseLoading.value = false
   }
+}
+function openPrepaidServiceUse() {
+  if (!patient.value || !appointmentId.value) return
+  void router.push({ name: 'staff-single-visit-use', query: {
+    patientId: String(patient.value.id),
+    appointmentId: String(appointmentId.value),
+  } })
 }
 onMounted(async () => {
   await Promise.all([
@@ -465,6 +486,10 @@ function openPatientCourses() {
 function clearPatient() {
   patient.value = null
   patientProfile.value = null
+  patientCoursePurchases.value = []
+  patientSingleVisitEntitlements.value = []
+  patientCourseLoading.value = false
+  patientCourseError.value = false
   query.value = ''
   searched.value = false
   reviewing.value = false
@@ -622,7 +647,6 @@ watch(appointmentAlreadyProcessed, (done) => {
         <h1>ชำระเงิน</h1>
         <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
         <section class="service-search">
-          <h2>ค้นหาผู้ป่วย</h2>
           <div class="search-wrap">
             <label class="search">
               <span class="search-icon" aria-hidden="true">
@@ -671,7 +695,8 @@ watch(appointmentAlreadyProcessed, (done) => {
         <button type="button" class="service-menu-back" @click="backFromPaymentMenu">
           ← กลับ
         </button>
-        <h1>กรุณาเลือกวิธีการชำระเงิน</h1>
+        <h1>เลือกวิธีดำเนินรายการ</h1>
+        <p v-if="appointmentId && !canStartAppointment" role="status">{{ processBlockReason }}</p>
         <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
           <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
           <div class="service-menu-patient-info">
@@ -687,12 +712,16 @@ watch(appointmentAlreadyProcessed, (done) => {
           }}</span>
         </section>
         <div class="service-menu-actions">
-          <button type="button" class="service-menu-action service-menu-action--sale" @click="startSale">
+          <button v-if="!appointmentId || canStartAppointment" type="button" class="service-menu-action service-menu-action--sale" @click="startSale">
             <span class="service-menu-action-title"><span class="service-menu-action-heading">ชำระเงิน</span></span>
             <span class="service-menu-action-next">ถัดไป →</span>
           </button>
-          <button type="button" class="service-menu-action service-menu-action--entitlement" @click="openPatientCourses">
+          <button v-if="appointmentId && canStartAppointment" type="button" class="service-menu-action service-menu-action--entitlement" @click="openPatientCourses">
             <span class="service-menu-action-title"><span class="service-menu-action-heading">ใช้สิทธิ์คอร์สที่มีอยู่</span><span class="service-menu-course-status" :class="{ 'is-loading': patientCourseLoading, 'is-unavailable': patientCourseError }" aria-live="polite">{{ patientCourseSummary }}</span></span>
+            <span class="service-menu-action-next">ถัดไป →</span>
+          </button>
+          <button v-if="appointmentId && canStartAppointment && prepaidServiceBalance > 0" type="button" class="service-menu-action service-menu-action--entitlement" @click="openPrepaidServiceUse">
+            <span class="service-menu-action-title"><span class="service-menu-action-heading">ใช้สิทธิ์บริการรายครั้ง</span><span class="service-menu-course-status">คงเหลือ {{ prepaidServiceBalance }} ครั้ง</span></span>
             <span class="service-menu-action-next">ถัดไป →</span>
           </button>
         </div>

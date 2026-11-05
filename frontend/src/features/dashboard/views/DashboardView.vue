@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { reportApi } from '@/api/client'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 
-const today = clinicToday()
-const now = new Date(`${today}T12:00:00`)
+const today = ref(clinicToday())
+const now = new Date(`${today.value}T12:00:00`)
 const from = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
 const to = ref(
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
@@ -55,10 +55,12 @@ const periodOptions = computed(() =>
 )
 const loading = ref(true)
 const hasLoaded = ref(false)
-const todaySummary = ref({ patients: 0, receipts: 0, sales: 0, renewals: 0 })
+const todaySummary = ref({ patients: 0, receipts: 0, sales: 0 })
 const rangeDialog = ref<HTMLElement | null>(null)
 let rangeTrigger: HTMLElement | null = null
 let dashboardRequest = 0
+let todayRequest = 0
+let refreshTimer: ReturnType<typeof setInterval> | undefined
 const errorMessage = ref('')
 const patients = ref(0)
 const visits = ref(0)
@@ -123,6 +125,7 @@ const statusClass = (status: string) => `status-${status.toLowerCase().replaceAl
 
 async function loadDashboard() {
   const requestId = ++dashboardRequest
+  ++todayRequest
   if (!branchCode.value) {
     loading.value = false
     errorMessage.value = 'กรุณาเลือกสาขาจาก Header'
@@ -137,7 +140,7 @@ async function loadDashboard() {
       reportApi.appointments(from.value, to.value, branchCode.value || undefined),
       reportApi.balances(from.value, to.value, branchCode.value || undefined),
       reportApi.revenue(from.value, to.value, branchCode.value || undefined),
-      reportApi.dashboard(today, today, branchCode.value),
+      reportApi.dashboard(today.value, today.value, branchCode.value),
     ])
     if (requestId !== dashboardRequest) return
     // แสดงยอดรายวันแยกจากช่วงวันที่ที่เลือกด้านบน
@@ -155,7 +158,6 @@ async function loadDashboard() {
       patients: dailySummary.uniquePatients,
       receipts: Number(dailySummary.cashReceived),
       sales: Number(dailySummary.salesTotal),
-      renewals: dailySummary.courseRenewals,
     }
     appointmentStatuses.value = appointments.byStatus.map((item) => ({
       status: normalizeStatus(item.status),
@@ -197,8 +199,39 @@ async function loadDashboard() {
   }
 }
 
+async function refreshToday() {
+  if (!branchCode.value || document.hidden || loading.value) return
+  const currentDay = clinicToday()
+  if (currentDay !== today.value) {
+    today.value = currentDay
+    await loadDashboard()
+    return
+  }
+  const requestId = ++todayRequest
+  const branch = branchCode.value
+  try {
+    const summary = await reportApi.dashboard(currentDay, currentDay, branch)
+    if (requestId !== todayRequest || branch !== branchCode.value) return
+    todaySummary.value = {
+      patients: summary.uniquePatients,
+      receipts: Number(summary.cashReceived),
+      sales: Number(summary.salesTotal),
+    }
+  } catch {
+    // Keep the last successful figures; the regular dashboard retry handles errors.
+  }
+}
+
 onMounted(async () => {
   await loadDashboard()
+  refreshTimer = setInterval(() => void refreshToday(), 60_000)
+  window.addEventListener('focus', refreshToday)
+  document.addEventListener('visibilitychange', refreshToday)
+})
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+  window.removeEventListener('focus', refreshToday)
+  document.removeEventListener('visibilitychange', refreshToday)
 })
 watch([from, to, branchCode], loadDashboard)
 function chooseDraftMonth(period: string) {
@@ -323,8 +356,8 @@ function applyCustomRange() {
       <section class="loading-section">
         <span class="skeleton skeleton-section-title"></span>
         <span class="skeleton skeleton-date"></span>
-        <div class="loading-card-grid">
-          <div v-for="card in 4" :key="card" class="loading-card">
+        <div class="loading-card-grid today-grid">
+          <div v-for="card in 3" :key="card" class="loading-card">
             <span class="skeleton skeleton-accent"></span>
             <span class="skeleton skeleton-label"></span>
             <span class="skeleton skeleton-number"></span>
@@ -376,7 +409,7 @@ function applyCustomRange() {
           <h2>ภาพรวมวันนี้</h2>
           <p class="section-caption">
             {{
-              new Date().toLocaleDateString('th-TH', {
+              new Date(`${today}T12:00:00`).toLocaleDateString('th-TH', {
                 day: 'numeric',
                 month: 'long',
                 year: 'numeric',
@@ -398,11 +431,6 @@ function applyCustomRange() {
               <i></i>
               <p>ยอดขายวันนี้</p>
               <b>{{ money(todaySummary.sales) }}</b>
-            </article>
-            <article class="today-card">
-              <i></i>
-              <p>ต่ออายุวันนี้</p>
-              <b>{{ todaySummary.renewals.toLocaleString() }} คอร์ส</b>
             </article>
           </div>
         </section>
@@ -860,7 +888,7 @@ function applyCustomRange() {
 }
 .today-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
   margin-top: 18px;
 }

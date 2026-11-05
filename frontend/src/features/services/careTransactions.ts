@@ -107,8 +107,8 @@ export function buildSaleRequest(input: SaleInput): SaleCreateRequest {
   if (!input.items.length)
     throw new Error('ต้องมีรายการขาย หากใช้คอร์สอย่างเดียวให้ไปหน้าใช้สิทธิ์')
   const hasService = input.items.some((item) => item.type === 'SERVICE')
-  if (hasService && (!positiveId(input.appointmentId) || !positiveId(input.treatingStaffId)))
-    throw new Error('บริการรายครั้งต้องระบุนัดและผู้รักษาจริง')
+  if (hasService && positiveId(input.appointmentId) && !positiveId(input.treatingStaffId))
+    throw new Error('บริการที่รับในนัดต้องระบุผู้รักษาจริง')
   let subtotal = 0,
     lineDiscount = 0
   const items: SaleCreateRequest['items'] = []
