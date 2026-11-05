@@ -130,6 +130,12 @@ const router = createRouter({
       meta: { permission: 'Treatment' },
     },
     {
+      path: '/staff/services/use-single-visit',
+      name: 'staff-single-visit-use',
+      component: () => import('@/features/services/views/SingleVisitEntitlementUseView.vue'),
+      meta: { permission: 'Treatment' },
+    },
+    {
       path: '/staff/billing',
       redirect: '/staff/services',
     },

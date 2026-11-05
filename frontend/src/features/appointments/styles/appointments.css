@@ -860,6 +860,23 @@
   font-size: 14px;
   font-weight: 600;
 }
+.appointment-service-filter :deep(.filter-dropdown__button) {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0b5f5b;
+  font: inherit;
+  font-weight: 600;
+}
+.appointment-service-filter {
+  display: flex;
+  justify-content: center;
+}
+.appointment-service-filter :deep(.filter-dropdown__chevron) {
+  margin-left: 8px;
+}
 .appointment-panel .staff-table th:first-child {
   border-radius: 9px 0 0;
 }
@@ -1553,13 +1570,50 @@
 .reschedule-note-field {
   grid-area: note;
 }
-.appointment-reschedule-grid > label {
+.appointment-reschedule-grid .reschedule-section-fields > label {
   display: grid;
   align-content: start;
   gap: 8px;
   color: #1f2937;
   font-size: 18px;
   font-weight: 600;
+}
+.appointment-reschedule-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: none;
+  gap: 20px;
+}
+.reschedule-section {
+  min-width: 0;
+}
+.reschedule-section > h2 {
+  margin: 0 0 14px;
+  color: #243832;
+  font-size: 20px;
+}
+.reschedule-section-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+}
+.appointment-reschedule-grid .reschedule-section-fields > label {
+  grid-area: auto;
+}
+.appointment-reschedule-grid .reschedule-readonly-field {
+  border-color: #d7e0dd !important;
+  color: #526762 !important;
+  background: #edf3f1 !important;
+  cursor: default;
+}
+.appointment-reschedule-grid em {
+  color: #c33f3f;
+  font-style: normal;
+}
+.appointment-reschedule-grid .appointment-input-error {
+  margin: -2px 0 0;
+  color: #b42318;
+  font-size: 13px;
+  font-weight: 500;
 }
 .appointment-reschedule-grid input,
 .appointment-reschedule-grid textarea,
@@ -1881,14 +1935,21 @@
   top: 0;
   right: 0;
   display: flex;
+  box-sizing: border-box;
   width: min(700px, 100%);
-  min-height: 100%;
+  height: 100dvh;
   flex-direction: column;
-  justify-content: space-between;
+  overflow: hidden;
   padding: 64px 72px 70px;
   background: #fff;
   box-shadow: -16px 0 40px rgb(36 56 50 / 12%);
   animation: appointment-drawer-in 180ms ease-out;
+}
+.appointment-time-drawer-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 @keyframes appointment-drawer-in {
   from {
@@ -1966,8 +2027,11 @@
 }
 .appointment-time-drawer footer {
   display: flex;
+  flex-shrink: 0;
   justify-content: flex-end;
   gap: 16px;
+  padding-top: 24px;
+  background: #fff;
 }
 .appointment-time-drawer footer button {
   min-width: 145px;
@@ -2019,7 +2083,11 @@
   }
   .appointment-reschedule-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: 'patient' 'service' 'therapist' 'date' 'time' 'end-date' 'end-time' 'branch' 'note';
+    grid-template-areas: none;
+    gap: 18px;
+  }
+  .reschedule-section-fields {
+    grid-template-columns: 1fr;
     gap: 18px;
   }
   .appointment-create-card.is-editing .appointment-save {
@@ -2039,6 +2107,16 @@
   }
   .appointment-create-card.is-editing {
     padding: 26px 18px;
+  }
+  .appointment-create-card.is-editing .appointment-save {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 22px -18px -26px;
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid #d7e0dd;
+    background: #fff;
+    box-shadow: 0 -8px 18px rgb(23 63 68 / 8%);
   }
   .appointment-create-card > h1 {
     font-size: 26px;
