@@ -8,7 +8,7 @@ import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 const menus = [
   { key: 'branches', label: 'สาขา', hint: 'ข้อมูลและเวลาทำการ', icon: 'branch' },
   { key: 'users', label: 'ผู้ใช้และสิทธิ์', hint: 'บัญชีและการเข้าถึง', icon: 'users' },
-  { key: 'services', label: 'บริการและคอร์ส', hint: 'รายการและราคา', icon: 'services' },
+  { key: 'services', label: 'คอร์สและบริการ', hint: 'รายการและราคา', icon: 'services' },
   { key: 'payments', label: 'การชำระเงิน', hint: 'ช่องทางและสถานะ', icon: 'payments' },
   { key: 'rooms', label: 'Room / Resource', hint: 'ห้องและทรัพยากร', icon: 'rooms' },
   { key: 'commission', label: 'กฎค่ามือ', hint: 'ค่ามือการรักษา', icon: 'commission' },

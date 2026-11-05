@@ -145,8 +145,7 @@ describe('AppointmentView', () => {
 
     expect(source).toContain('<span>ชื่อ <small>(ไม่บังคับ)</small></span>')
     expect(source).toContain('<span>นามสกุล <small>(ไม่บังคับ)</small></span>')
-    expect(source).toContain('<span>ชื่อเล่น</span>')
-    expect(source).not.toContain('<span>ชื่อเล่น <em>*</em></span>')
+    expect(source).toContain('<span>ชื่อเล่น <em>*</em></span>')
     expect(source).toContain('<span>เบอร์โทรศัพท์ <em>*</em></span>')
   })
 
@@ -173,4 +172,5 @@ describe('AppointmentView', () => {
     expect(table?.[1]).not.toContain('<th>สาขา</th>')
     expect(table?.[1]).not.toContain('{{ branchName(item.branchCode) }}')
   })
+
 })

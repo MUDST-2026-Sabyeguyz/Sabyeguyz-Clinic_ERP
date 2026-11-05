@@ -6,6 +6,7 @@ const props = withDefaults(
     modelValue: string
     disabled?: boolean
     invalid?: boolean
+    describedBy?: string
     minDate?: string
     maxDate?: string
     inclusiveMin?: boolean
@@ -187,6 +188,8 @@ function isSelected(day: number) {
       type="button"
       class="date-trigger"
       :class="{ invalid, placeholder: !modelValue }"
+      :aria-invalid="invalid || undefined"
+      :aria-describedby="describedBy"
       :disabled="disabled"
       @click="toggleOpen"
     >

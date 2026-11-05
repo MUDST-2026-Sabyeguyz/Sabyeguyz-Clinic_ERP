@@ -41,7 +41,7 @@ async function load() {
   if (!branch) return
   loading.value = true
   try {
-    // อ่านทุกหน้าของนัดวันนี้ แล้วคัดเฉพาะสถานะที่ยังดูหรือเริ่มบริการได้
+    // อ่านทุกหน้าของนัดวันนี้ แล้วแสดงเฉพาะผู้ป่วย CURRENT ที่รอชำระเงิน
     const items: Appointment[] = []
     let page = 0
     let pages = 1
@@ -58,7 +58,13 @@ async function load() {
       page++
     }
     appointments.value = items
-      .filter((item) => item.branchCode === branch && (item.status === 'UNCONFIRMED' || item.status === 'CONFIRMED'))
+      .filter(
+        (item) =>
+          item.branchCode === branch &&
+          item.status === 'UNCONFIRMED' &&
+          item.patientType === 'CURRENT' &&
+          Boolean(item.patient?.id),
+      )
       .sort((a, b) => a.startAt.localeCompare(b.startAt))
   } catch {
     if (current === request) error.value = 'โหลดรายการนัดวันนี้ไม่สำเร็จ'
@@ -73,9 +79,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="today-appointments" aria-label="ผู้ป่วยที่มีนัดวันนี้" :aria-busy="loading">
+  <section class="today-appointments" aria-label="ผู้ป่วยที่รอชำระเงิน" :aria-busy="loading">
     <header>
-      <h2>ผู้ป่วยที่มีนัดวันนี้</h2>
+      <h2>ผู้ป่วยที่รอชำระเงิน</h2>
       <span>{{ dateLabel }}</span>
     </header>
     <p v-if="!branchCode" role="status">กรุณาเลือกสาขาเพื่อดูรายการนัดหมาย</p>
@@ -85,7 +91,7 @@ onBeforeUnmount(() => {
       <button type="button" @click="load">ลองใหม่</button>
     </div>
     <p v-else-if="!visible.length" role="status">
-      {{ keyword?.trim() ? 'ไม่พบนัดหมายวันนี้ตามคำค้น' : 'ไม่มีนัดหมายในวันนี้' }}
+      {{ keyword?.trim() ? 'ไม่พบผู้ป่วยที่รอชำระเงินตามคำค้น' : 'ไม่มีผู้ป่วยที่รอชำระเงินในวันนี้' }}
     </p>
     <div v-else class="today-table-scroll">
       <table>
@@ -130,6 +136,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .today-appointments {
   margin-top: 28px;
+  padding: 20px;
+  border: 1px solid #d9e1dc;
+  border-radius: 12px;
+  background: #fff;
   color: #25372e;
 }
 header {
@@ -150,14 +160,38 @@ small {
 }
 .today-table-scroll {
   overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
   border: 1px solid #d9e1dc;
   border-radius: 12px;
   background: white;
 }
 table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
-  min-width: 720px;
+}
+th:nth-child(1),
+td:nth-child(1) {
+  width: 72px;
+}
+th:nth-child(2),
+td:nth-child(2) {
+  min-width: 220px;
+}
+th:nth-child(3),
+td:nth-child(3),
+th:nth-child(4),
+td:nth-child(4) {
+  min-width: 170px;
+}
+th:nth-child(5),
+td:nth-child(5) {
+  width: 130px;
+}
+th:nth-child(6),
+td:nth-child(6) {
+  width: 140px;
 }
 th {
   background: #1b7d78;
