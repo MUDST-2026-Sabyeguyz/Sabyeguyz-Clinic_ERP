@@ -1,7 +1,7 @@
 .service-page {
   min-height: 100vh;
   color: #1f2937;
-  background: #faf6f0;
+  background: var(--ui-workspace-background);
 }
 .service-header-shell {
   display: contents;
@@ -84,8 +84,12 @@
 }
 .service-search-button {
   width: 168px;
+  background: var(--ui-primary-gradient);
+  box-shadow: var(--ui-primary-shadow);
 }
-.service-search-button:hover,
+.service-search-button:hover {
+  background: var(--ui-primary-gradient-hover);
+}
 .order-summary button:hover {
   background: #176b68;
 }

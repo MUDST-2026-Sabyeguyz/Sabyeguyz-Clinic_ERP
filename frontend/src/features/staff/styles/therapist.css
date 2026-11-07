@@ -54,7 +54,6 @@ body.therapist-ui .staff-header nav .nav-pill.is-ready {
     opacity 160ms ease;
 }
 
-/* Keep the selected tab visible during the first frame while its pill is measured. */
 body.therapist-ui .staff-header nav .nav-pill:not(.is-ready) ~ a.router-link-active {
   color: #181818;
   background: #fff;
@@ -131,8 +130,6 @@ body.therapist-ui .profile-copy {
   }
 }
 
-/* Keep desktop proportions on tablets while preventing the shared stylesheet
-   from splitting the header into two rows. */
 @media (min-width: 901px) and (max-width: 1180px) {
   body.therapist-ui .staff-header {
     height: 92px;
@@ -171,7 +168,6 @@ body.therapist-ui .profile-copy {
     height: 52px;
   }
 
-  /* The enlarged desktop logo would overlap the navigation on small screens. */
   body.therapist-ui .staff-header .brand img {
     transform: none;
   }
@@ -212,7 +208,6 @@ body.therapist-ui .profile-copy {
   }
 }
 
-/* A full desktop header no longer fits below this width. */
 @media (max-width: 1400px) {
   body.therapist-ui .staff-header {
     height: 72px;
@@ -372,7 +367,6 @@ body.therapist-ui .profile-copy {
   }
 }
 
-/* Keep the shared drawer readable on narrow Manager and therapist screens. */
 @media (max-width: 1400px) {
   body.therapist-ui .staff-header nav .nav-pill,
   body.therapist-ui .staff-header.manager-header nav .nav-pill {
@@ -398,14 +392,13 @@ body.therapist-ui .profile-copy {
   }
 }
 
-/* Above the tablet breakpoint, Manager keeps the full navigation strip. */
 @media (min-width: 1401px) {
   body.therapist-ui .staff-header.manager-header nav {
     justify-content: flex-start;
     gap: 18px;
     min-height: 52px;
     align-items: center;
-    overflow-x: auto !important;
+    overflow: visible !important;
     padding-right: 24px;
     scroll-padding-inline: 16px;
     scrollbar-width: none;
