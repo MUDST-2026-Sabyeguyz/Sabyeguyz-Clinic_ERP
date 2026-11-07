@@ -17,15 +17,23 @@ const menus = [
 ] as const
 const authUser = computed(() => {
   try {
-    return JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string; branchCode?: string; branchName?: string } | null
+    return JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+      role?: string
+      branchCode?: string
+      branchName?: string
+    } | null
   } catch {
     return null
   }
 })
-// Manager จัดการได้เฉพาะสาขาที่เลือก ส่วน Therapist เห็นสาขาของบัญชีตน
+
 const isManager = computed(() => authUser.value?.role === 'MANAGER')
-const selectedCode = computed(() => selectedManagerBranch()?.code ?? authUser.value?.branchCode ?? '')
-const selectedBranchName = computed(() => selectedManagerBranch()?.name ?? authUser.value?.branchName ?? '')
+const selectedCode = computed(
+  () => selectedManagerBranch()?.code ?? authUser.value?.branchCode ?? '',
+)
+const selectedBranchName = computed(
+  () => selectedManagerBranch()?.name ?? authUser.value?.branchName ?? '',
+)
 const visibleBranches = computed(() => {
   const branches = status.value?.branches ?? []
   return isManager.value
@@ -76,7 +84,6 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    // โหลดสถานะจาก backend แล้วเติม Calendar ID ที่ยังไม่มีในฟอร์ม
     status.value = await calendarApi.status()
     for (const branch of status.value.branches)
       if (!(branch.branchCode in calendarIds))
@@ -100,7 +107,6 @@ async function save(branchCode: string) {
   error.value = ''
   message.value = ''
   try {
-    // บันทึก Calendar ID; การบันทึกไม่ได้ยืนยันสิทธิ์เชื่อมต่อ Google
     const saved = await calendarApi.setBranchCalendar(branchCode, calendarId)
     const current = status.value?.branches.find((item) => item.branchCode === branchCode)
     if (current) current.googleCalendarId = saved.googleCalendarId
@@ -121,7 +127,6 @@ async function syncNow() {
   error.value = ''
   message.value = ''
   try {
-    // สั่ง sync แล้วแสดงจำนวนรายการที่ส่ง เปลี่ยน และล้มเหลวจากผล API
     const result = await calendarApi.syncNow()
     message.value =
       `sync แล้ว ส่งไปยัง Google ${result.pushed}, ลบ ${result.removed}, ` +
@@ -178,9 +183,14 @@ onMounted(load)
     <main class="settings-main">
       <header class="settings-title">
         <div>
-          <span class="settings-eyebrow">ศูนย์ควบคุมระบบ</span>
           <h1>การตั้งค่า</h1>
-              <p>{{ isManager ? 'จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ' : 'ดูสถานะปฏิทินของสาขาที่คุณสังกัด' }}</p>
+          <p>
+            {{
+              isManager
+                ? 'จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ'
+                : 'ดูสถานะปฏิทินของสาขาที่คุณสังกัด'
+            }}
+          </p>
         </div>
       </header>
 
@@ -225,7 +235,13 @@ onMounted(load)
           <header class="settings-panel-head calendar-heading">
             <div>
               <h2>Google Calendar</h2>
-              <p>{{ isManager ? 'ตั้งค่าปฏิทินและตรวจสถานะ sync ของแต่ละสาขา' : 'สถานะปฏิทินของสาขาที่คุณสังกัด' }}</p>
+              <p>
+                {{
+                  isManager
+                    ? 'ตั้งค่าปฏิทินและตรวจสถานะ sync ของแต่ละสาขา'
+                    : 'สถานะปฏิทินของสาขาที่คุณสังกัด'
+                }}
+              </p>
             </div>
             <span class="branch-tag">{{
               selectedBranchName || branch?.branchName || 'ยังไม่ได้เลือกสาขา'
@@ -255,79 +271,97 @@ onMounted(load)
                     novalidate
                     @submit.prevent="save(branch.branchCode)"
                   >
-                <div class="form-title">
-                  <h3>ปฏิทินของ{{ branch.branchName }}</h3>
-                  <span class="connection-status">{{
-                    branch.googleCalendarId
-                      ? 'มี Calendar ID ที่บันทึกแล้ว'
-                      : 'ยังไม่ได้ตั้งค่าปฏิทิน'
-                  }}</span>
-                  <span v-if="changed" class="draft-status">ยังไม่บันทึก</span>
-                </div>
-                <label :for="`calendar-id-${branch.branchCode}`">Calendar ID</label>
-                <input
-                  :id="`calendar-id-${branch.branchCode}`"
-                  v-model="calendarIds[branch.branchCode]"
-                  :data-cy="`calendar-id-${branch.branchCode}`"
-                  :disabled="!!busy"
-                  :class="{ 'calendar-id-invalid': calendarIdFormatInvalid }"
-                  placeholder="เช่น xxxx@group.calendar.google.com"
-                  :aria-describedby="
-                    calendarIdFormatInvalid ? 'calendar-id-help calendar-id-error' : 'calendar-id-help'
-                  "
-                  :aria-invalid="calendarIdFormatInvalid"
-                  autocomplete="off"
-                  spellcheck="false"
-                  @blur="calendarIdTouched = true"
-                />
-                <p id="calendar-id-help" class="calendar-hint">
-                  กรอก Calendar ID ที่ต้องการเชื่อมต่อ
-                </p>
-                <p
-                  v-if="calendarIdFormatInvalid"
-                  id="calendar-id-error"
-                  class="calendar-field-error"
-                  role="alert"
-                >
-                  รูปแบบ Calendar ID ไม่ถูกต้อง
-                </p>
-                <div class="connection-actions">
-                  <button
-                    type="submit"
-                    class="calendar-save"
-                    :data-cy="`calendar-save-${branch.branchCode}`"
-                    :disabled="!!busy || !changed || !isCalendarIdValid"
-                  >
-                    {{ busy === branch.branchCode ? 'กำลังบันทึก…' : 'บันทึก' }}
-                  </button>
-                  <a
-                    v-if="openUrl"
-                    :href="openUrl"
-                    class="calendar-secondary"
-                    data-cy="calendar-open"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >เปิด Google Calendar ↗</a
-                  >
-                </div>
-                <button
-                  v-if="branch.googleCalendarId"
-                  type="button"
-                  class="disconnect-link"
-                  data-cy="calendar-disconnect"
-                  :disabled="!!busy"
-                  @click="askDisconnect"
-                >
-                  ยกเลิกการเชื่อมต่อ
-                </button>
+                    <div class="form-title">
+                      <h3>ปฏิทินของ{{ branch.branchName }}</h3>
+                      <span class="connection-status">{{
+                        branch.googleCalendarId
+                          ? 'มี Calendar ID ที่บันทึกแล้ว'
+                          : 'ยังไม่ได้ตั้งค่าปฏิทิน'
+                      }}</span>
+                      <span v-if="changed" class="draft-status">ยังไม่บันทึก</span>
+                    </div>
+                    <label :for="`calendar-id-${branch.branchCode}`">Calendar ID</label>
+                    <input
+                      :id="`calendar-id-${branch.branchCode}`"
+                      v-model="calendarIds[branch.branchCode]"
+                      :data-cy="`calendar-id-${branch.branchCode}`"
+                      :disabled="!!busy"
+                      :class="{ 'calendar-id-invalid': calendarIdFormatInvalid }"
+                      placeholder="เช่น xxxx@group.calendar.google.com"
+                      :aria-describedby="
+                        calendarIdFormatInvalid
+                          ? 'calendar-id-help calendar-id-error'
+                          : 'calendar-id-help'
+                      "
+                      :aria-invalid="calendarIdFormatInvalid"
+                      autocomplete="off"
+                      spellcheck="false"
+                      @blur="calendarIdTouched = true"
+                    />
+                    <p id="calendar-id-help" class="calendar-hint">
+                      กรอก Calendar ID ที่ต้องการเชื่อมต่อ
+                    </p>
+                    <p
+                      v-if="calendarIdFormatInvalid"
+                      id="calendar-id-error"
+                      class="calendar-field-error"
+                      role="alert"
+                    >
+                      รูปแบบ Calendar ID ไม่ถูกต้อง
+                    </p>
+                    <div class="connection-actions">
+                      <button
+                        type="submit"
+                        class="calendar-save"
+                        :data-cy="`calendar-save-${branch.branchCode}`"
+                        :disabled="!!busy || !changed || !isCalendarIdValid"
+                      >
+                        {{ busy === branch.branchCode ? 'กำลังบันทึก…' : 'บันทึก' }}
+                      </button>
+                      <a
+                        v-if="openUrl"
+                        :href="openUrl"
+                        class="calendar-secondary"
+                        data-cy="calendar-open"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >เปิด Google Calendar ↗</a
+                      >
+                    </div>
+                    <button
+                      v-if="branch.googleCalendarId"
+                      type="button"
+                      class="disconnect-link"
+                      data-cy="calendar-disconnect"
+                      :disabled="!!busy"
+                      @click="askDisconnect"
+                    >
+                      ยกเลิกการเชื่อมต่อ
+                    </button>
                   </form>
                   <section v-else-if="branch" class="calendar-form calendar-readonly">
                     <h3>ปฏิทินของ{{ branch.branchName }}</h3>
-                    <p>{{ branch.googleCalendarId ? 'เชื่อม Calendar ID แล้ว' : 'ยังไม่ได้ตั้งค่าปฏิทิน' }}</p>
-                    <a v-if="openUrl" :href="openUrl" class="calendar-secondary" data-cy="calendar-open" target="_blank" rel="noopener noreferrer">เปิด Google Calendar ↗</a>
+                    <p>
+                      {{
+                        branch.googleCalendarId
+                          ? 'เชื่อม Calendar ID แล้ว'
+                          : 'ยังไม่ได้ตั้งค่าปฏิทิน'
+                      }}
+                    </p>
+                    <a
+                      v-if="openUrl"
+                      :href="openUrl"
+                      class="calendar-secondary"
+                      data-cy="calendar-open"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >เปิด Google Calendar ↗</a
+                    >
                     <p v-else class="calendar-hint">ยังไม่มี Calendar ID สำหรับสาขานี้</p>
                   </section>
-                  <p v-else-if="isManager" class="calendar-hint">เลือกสาขาจาก Header เพื่อเริ่มตั้งค่า</p>
+                  <p v-else-if="isManager" class="calendar-hint">
+                    เลือกสาขาจาก Header เพื่อเริ่มตั้งค่า
+                  </p>
                   <details v-if="isManager" class="calendar-help">
                     <summary>วิธีตั้งค่าและเชิญนักกายภาพ</summary>
                     <ol>
@@ -338,40 +372,40 @@ onMounted(load)
                         ไม่ต้องนำไฟล์คีย์หรือรหัสลับมากรอก
                       </li>
                       <li>
-                        หากต้องการเชิญนักกายภาพรายนัด ให้เปิดกิจกรรมนั้นใน Google Calendar เพิ่ม Gmail
-                        ในผู้เข้าร่วม และตรวจสิทธิ์ก่อนส่งคำเชิญ
+                        หากต้องการเชิญนักกายภาพรายนัด ให้เปิดกิจกรรมนั้นใน Google Calendar เพิ่ม
+                        Gmail ในผู้เข้าร่วม และตรวจสิทธิ์ก่อนส่งคำเชิญ
                       </li>
                     </ol>
                     <p>
-                      การเชิญเข้ากิจกรรมต่างจากการแชร์ปฏิทินทั้งสาขา หน้านี้ไม่ได้จัดการสิทธิ์ Google
-                      รายบุคคล
+                      การเชิญเข้ากิจกรรมต่างจากการแชร์ปฏิทินทั้งสาขา หน้านี้ไม่ได้จัดการสิทธิ์
+                      Google รายบุคคล
                     </p>
                   </details>
                 </div>
                 <section class="sync-section" aria-label="สถานะการ sync">
-                <h3>สถานะการ sync</h3>
-                <dl v-if="branch" class="sync-stats">
-                  <div>
-                    <dt>รอ sync</dt>
-                    <dd>{{ branch.waiting }}</dd>
-                  </div>
-                  <div>
-                    <dt>ล้มเหลว</dt>
-                    <dd :class="{ 'calendar-failed': branch.failed > 0 }">{{ branch.failed }}</dd>
-                  </div>
-                </dl>
-                <p class="calendar-hint">sync ล่าสุด : {{ formatTime(status.lastRunAt) }}</p>
-                <p v-if="!status.enabled" class="calendar-hint"></p>
-                <button
-                  v-if="isManager"
-                  type="button"
-                  class="calendar-sync"
-                  data-cy="calendar-sync"
-                  :disabled="!!busy || !status.enabled"
-                  @click="syncNow"
-                >
-                  {{ busy === 'sync' ? 'กำลัง sync …' : 'sync ↻' }}
-                </button>
+                  <h3>สถานะการ sync</h3>
+                  <dl v-if="branch" class="sync-stats">
+                    <div>
+                      <dt>รอ sync</dt>
+                      <dd>{{ branch.waiting }}</dd>
+                    </div>
+                    <div>
+                      <dt>ล้มเหลว</dt>
+                      <dd :class="{ 'calendar-failed': branch.failed > 0 }">{{ branch.failed }}</dd>
+                    </div>
+                  </dl>
+                  <p class="calendar-hint">sync ล่าสุด : {{ formatTime(status.lastRunAt) }}</p>
+                  <p v-if="!status.enabled" class="calendar-hint"></p>
+                  <button
+                    v-if="isManager"
+                    type="button"
+                    class="calendar-sync"
+                    data-cy="calendar-sync"
+                    :disabled="!!busy || !status.enabled"
+                    @click="syncNow"
+                  >
+                    {{ busy === 'sync' ? 'กำลัง sync …' : 'sync ↻' }}
+                  </button>
                 </section>
               </div>
             </template>

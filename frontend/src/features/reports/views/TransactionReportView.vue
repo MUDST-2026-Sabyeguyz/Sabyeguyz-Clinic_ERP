@@ -28,7 +28,9 @@ const treatments = ref<Awaited<ReturnType<typeof commissionApi.treatmentReport>>
 const branchNames = ref<Record<string, string>>({})
 const selectedHeaderBranchCode = computed(
   () =>
-    selectedManagerBranch()?.code ?? JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ?? '',
+    selectedManagerBranch()?.code ??
+    JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ??
+    '',
 )
 let requestId = 0
 const money = (n: number) => `฿${Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
@@ -57,9 +59,10 @@ const salesRows = computed(() =>
   }),
 )
 const courseRows = computed(() =>
-  treatments.value.filter((row) =>
-    (!selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value) &&
-    `${row.patientName} ${row.patientHn}`.toLowerCase().includes(keyword.value),
+  treatments.value.filter(
+    (row) =>
+      (!selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value) &&
+      `${row.patientName} ${row.patientHn}`.toLowerCase().includes(keyword.value),
   ),
 )
 const count = computed(() =>
@@ -67,22 +70,13 @@ const count = computed(() =>
 )
 const pageCount = computed(() => Math.max(1, Math.ceil(count.value / 10)))
 const start = computed(() => (page.value - 1) * 10)
-const metrics = computed(() =>
+const totalLabel = computed(() =>
+  type.value === 'single' ? 'ยอดรวมใบเสร็จที่แสดง' : 'มูลค่าการรักษารวม',
+)
+const totalAmount = computed(() =>
   type.value === 'single'
-    ? [
-        ['รายการที่แสดง', `${count.value} รายการ`],
-        ['ค่ามือคอมมิชชันรวม', '—'],
-        ['ค่าคอมมิชชันรวม', '—'],
-        [
-          'พนักงานขายที่ขายได้',
-          `${new Set(salesRows.value.map((row) => row.salesperson?.id).filter(Boolean)).size} คน`,
-        ],
-      ]
-    : [
-        ['รายการที่แสดง', `${count.value} รายการ`],
-        ['มูลค่าการรักษารวม', money(courseRows.value.reduce((sum, row) => sum + Number(row.gross), 0))],
-        ['ค่ามือรวม', money(courseRows.value.reduce((sum, row) => sum + Number(row.treatmentFee), 0))],
-      ],
+    ? salesRows.value.reduce((sum, row) => sum + Number(row.total), 0)
+    : courseRows.value.reduce((sum, row) => sum + Number(row.gross), 0),
 )
 async function load() {
   const id = ++requestId
@@ -133,33 +127,25 @@ watch(reportSelection, (report) => {
 <template>
   <main class="reports-page-container transaction-report-container">
     <section class="page-title-section">
-      <h1>รายงาน</h1>
-      <p>ตรวจสอบรายการขายและรายการใช้สิทธิ์คอร์ส</p>
-    </section>
-
-    <section class="transaction-metrics" aria-label="สรุป Transaction">
-      <article v-for="metric in metrics" :key="metric[0]">
-        <p>{{ metric[0] }}</p>
-        <strong>{{ loading ? '…' : metric[1] }}</strong>
-      </article>
+      <div class="report-title-copy">
+        <h1>Transaction</h1>
+        <p>ตรวจสอบรายการขายและรายการใช้สิทธิ์คอร์ส</p>
+      </div>
+      <div class="report-select-group">
+        <label>เลือกรายงาน</label>
+        <FilterDropdown
+          v-model="reportSelection"
+          :options="reportOptions"
+          default-value="salesTransaction"
+          default-label="Transaction"
+          label="เลือกรายงาน"
+          hide-default-option
+          :clear-on-reselect="false"
+        />
+      </div>
     </section>
 
     <section class="filter-card">
-      <div class="filter-card-header">
-        <h2>Transaction</h2>
-        <div class="report-select-group">
-          <label>เลือกรายงาน</label>
-          <FilterDropdown
-            v-model="reportSelection"
-            :options="reportOptions"
-            default-value="salesTransaction"
-            default-label="Transaction"
-            label="เลือกรายงาน"
-            hide-default-option
-            :clear-on-reselect="false"
-          />
-        </div>
-      </div>
       <div class="filter-grid-row1 transaction-filter-grid">
         <div class="field-group">
           <label>ประเภทธุรกรรม</label>
@@ -182,7 +168,12 @@ watch(reportSelection, (report) => {
         </div>
         <div class="field-group">
           <label>ตั้งแต่วันที่</label>
-          <ThaiDatePicker v-model="from" placeholder="ตั้งแต่วันที่" numeric-month show-calendar-icon />
+          <ThaiDatePicker
+            v-model="from"
+            placeholder="ตั้งแต่วันที่"
+            numeric-month
+            show-calendar-icon
+          />
         </div>
         <div class="field-group">
           <label>ถึงวันที่</label>
@@ -196,8 +187,24 @@ watch(reportSelection, (report) => {
         <div>
           <h2>{{ title }}</h2>
           <p>{{ type === 'single' ? 'รายการขายรายครั้ง' : 'รายการใช้สิทธิ์คอร์ส' }}</p>
+          <div class="transaction-summary" aria-live="polite">
+            <span>{{ loading ? 'กำลังโหลด…' : `ทั้งหมด ${count} รายการ` }}</span>
+            <template v-if="!loading && !error">
+              <span
+                >{{ totalLabel }} <strong>{{ money(totalAmount) }}</strong></span
+              >
+              <span v-if="type === 'course'"
+                >ค่ามือรวม
+                <strong>{{
+                  money(courseRows.reduce((sum, row) => sum + Number(row.treatmentFee), 0))
+                }}</strong></span
+              >
+            </template>
+          </div>
         </div>
-        <RouterLink v-if="type !== 'single'" class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
+        <RouterLink v-if="type !== 'single'" class="action" to="/staff/transactions"
+          >ดูรายการซื้อคอร์ส</RouterLink
+        >
       </div>
       <p v-if="error" class="report-error" role="alert">{{ error }}</p>
       <p v-else-if="loading" class="report-loading">กำลังโหลดรายงาน...</p>
@@ -271,22 +278,55 @@ watch(reportSelection, (report) => {
         </table>
       </div>
       <div class="table-card-footer">
-        <span>แสดง {{ Math.min(10, Math.max(0, count - start)) }} จาก {{ count }} รายการ</span>
         <nav class="report-pagination" aria-label="เปลี่ยนหน้าธุรกรรม">
-          <button type="button" class="btn-prev" :disabled="page === 1" @click="page--">← ก่อนหน้า</button>
-          <span class="pagination-info">หน้า {{ page }} จาก {{ pageCount }}</span>
-          <button type="button" class="btn-next" :disabled="page >= pageCount" @click="page++">ถัดไป →</button>
+          <button type="button" class="btn-prev" :disabled="page === 1" @click="page--">
+            ← ก่อนหน้า
+          </button>
+          <div class="pagination-center">
+            <span class="pagination-info">หน้า {{ page }} จาก {{ pageCount }}</span>
+            <div class="pagination-numbers">
+              <button
+                v-for="number in Array.from(
+                  { length: Math.min(5, pageCount) },
+                  (_, index) => Math.max(1, Math.min(page - 2, pageCount - 4)) + index,
+                )"
+                :key="number"
+                type="button"
+                class="pagination-number"
+                :class="{ active: page === number }"
+                :aria-current="page === number ? 'page' : undefined"
+                :aria-label="`หน้า ${number}`"
+                @click="page = number"
+              >
+                {{ number }}
+              </button>
+            </div>
+          </div>
+          <button type="button" class="btn-next" :disabled="page >= pageCount" @click="page++">
+            ถัดไป →
+          </button>
         </nav>
         <span v-if="updated" class="last-updated-tag">อัปเดตล่าสุด {{ updated }}</span>
       </div>
     </section>
-
   </main>
 </template>
 <style scoped src="../styles/reports.css"></style>
 <style scoped>
 .transaction-report-container {
   min-width: 0;
+}
+.transaction-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 14px;
+  color: #607b7d;
+  font-size: 14px;
+}
+.transaction-summary strong {
+  margin-left: 6px;
+  color: #176f6b;
 }
 .transaction-filter-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));

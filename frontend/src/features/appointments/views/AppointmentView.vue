@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { clinicToday } from '@/utils/clinicDate'
+import { displayAvailability } from '../availabilityDisplay'
 import { readAppointmentRange } from '../appointmentList'
 import { vModalFocus } from '../modalFocus'
 import { loadAppointmentTherapists } from '../therapists'
@@ -40,7 +41,7 @@ const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   branchCode?: string
 } | null
 const isManager = authUser?.role === 'MANAGER'
-// The server remains responsible for authorizing each appointment change.
+
 const canChangeAppointments = isManager || authUser?.role === 'THERAPIST'
 
 const ownStaffId = ref<number | null>(null)
@@ -74,7 +75,7 @@ const viewMode = ref<'list' | 'create' | 'edit'>('list')
 const createSource = ref<'standard' | 'calendar'>('standard')
 const appointmentPatientType = ref<'CURRENT' | 'NEW'>('CURRENT')
 const serviceMode = ref<'single' | 'course'>('course')
-// คอร์สที่ตั้งไว้ในหน้าการตั้งค่า (บริการและคอร์ส) ใช้เป็นตัวเลือกของผู้ป่วย NEW
+
 const catalogCourses = ref<Awaited<ReturnType<typeof catalogApi.courses>>>([])
 const patientCourses = ref<CoursePurchase[]>([])
 const selectedCourseId = ref(0)
@@ -139,8 +140,6 @@ async function ensureFormData() {
       )
       if (!form.value.branchCode)
         form.value.branchCode = scope || branchOptions.value[0]?.code || ''
-      // Leave the therapist unselected until explicitly chosen.
-      // Loading options must preserve an empty selection until the user chooses a program.
     } catch {
       if (scope !== managerBranchCode.value) return
       formDataError.value = 'โหลดข้อมูลสำหรับนัดหมายไม่สำเร็จ'
@@ -259,7 +258,7 @@ type AppointmentCourse = CoursePurchase & {
 const availablePatientCourses = computed(() =>
   patientCourses.value.filter((course) => course.usable && !course.expired && course.remaining > 0),
 )
-// แสดงสิทธิ์คอร์สของผู้ป่วยเฉพาะเมื่อเขามีคอร์สที่เลือกอยู่
+
 const selectedPatientCourse = computed(
   () =>
     availablePatientCourses.value.find((course) => course.course.id === form.value.serviceId) as
@@ -405,7 +404,7 @@ const formBranchModel = computed({
     form.value.branchCode = value
   },
 })
-// รายชื่อคอร์สมาจากหน้าการตั้งค่า (คอร์สคือบริการประเภท Course) และบันทึกเป็นบริการของนัด
+
 const courseDropdownOptions = computed(() =>
   catalogCourses.value.map((course) => ({ value: String(course.id), label: course.name })),
 )
@@ -613,7 +612,6 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
 function openCalendarSlot(therapist: Therapist, time: string) {
   const item = calendarAppointment(therapist.id, time)
   if (item) {
-    // a therapist only looks at a booked slot; the Manager opens it to change it
     if (canChangeAppointments) openEdit(item)
     return
   }
@@ -701,7 +699,7 @@ function changePatientQuery() {
 function hidePatientResults() {
   window.setTimeout(() => (showPatientResults.value = false), 160)
 }
-// เปลี่ยนประเภทบริการแล้วล้างบริการ/คอร์สที่เลือกไว้ เพราะรายการตัวเลือกต่างกัน
+
 function changeServiceMode(mode: 'single' | 'course') {
   if (serviceMode.value === mode) return
   serviceMode.value = mode
@@ -751,8 +749,12 @@ async function loadTimeAvailability() {
       excludeAppointmentId: editingId.value ?? undefined,
     })
     if (requestId === availabilityRequest) {
-      availabilitySlots.value = result.slots
-      // ความยาวนัดตามที่ backend ใช้สร้างช่องเวลา (ระยะเวลาของบริการ/คอร์ส หรือค่าสาขา)
+      const display = displayAvailability(result, appointmentDurationMinutes.value)
+      availabilitySlots.value = display.slots
+      availabilityError.value = display.message
+      if (!display.slots.some((slot) => slot.time === form.value.time && slot.available))
+        form.value.time = ''
+
       if (form.value.serviceId && result.durationMinutes) {
         appointmentDurationMinutes.value = result.durationMinutes
       }
@@ -1065,7 +1067,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
       >
         <div class="appointment-back-row">
           <button class="appointment-back" type="button" @click="goToAppointmentList">
-            {{ isCalendarCreate ? '← กลับไปหน้าปฏิทิน' : '← กลับไปหน้านัดหมาย' }}
+            ← กลับ
           </button>
         </div>
         <section
@@ -1613,7 +1615,15 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           </div>
           <footer>
             <button type="button" class="secondary" @click="timeDrawerOpen = false">ยกเลิก</button>
-            <button type="button" class="primary" @click="confirmAppointmentTime">
+            <button
+              type="button"
+              class="primary"
+              :disabled="
+                availabilityLoading ||
+                !availabilitySlots.some((slot) => slot.time === form.time && slot.available)
+              "
+              @click="confirmAppointmentTime"
+            >
               ยืนยันเวลา
             </button>
           </footer>
