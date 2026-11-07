@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { clinicToday } from '@/utils/clinicDate'
 import { vModalFocus } from '../modalFocus'
 const props = defineProps<{ from: string; to: string }>()
@@ -34,9 +35,16 @@ const years = computed(() =>
   ].sort((a, b) => b - a),
 )
 const todaySelected = computed(() => props.from === clinicToday() && props.to === clinicToday())
-const customSelected = computed(
-  () => Boolean(props.from || props.to) && !todaySelected.value,
+const yearSelection = computed({
+  get: () => String(year.value),
+  set: (value: string) => {
+    year.value = Number(value)
+  },
+})
+const yearOptions = computed(() =>
+  years.value.map((value) => ({ value: String(value), label: String(value + 543) })),
 )
+const customSelected = computed(() => Boolean(props.from || props.to) && !todaySelected.value)
 function show() {
   draftFrom.value = props.from
   draftTo.value = props.to
@@ -111,8 +119,21 @@ function resetDateRange() {
       @click="applyToday"
     >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="3.5" y="5" width="17" height="16" rx="2" stroke="currentColor" stroke-width="1.8" />
-        <path d="M7.5 3v4M16.5 3v4M3.5 9.5h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        <rect
+          x="3.5"
+          y="5"
+          width="17"
+          height="16"
+          rx="2"
+          stroke="currentColor"
+          stroke-width="1.8"
+        />
+        <path
+          d="M7.5 3v4M16.5 3v4M3.5 9.5h17"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+        />
       </svg>
       วันนี้
     </button>
@@ -165,12 +186,14 @@ function resetDateRange() {
               <h3>เลือกเดือน</h3>
               <label
                 >ปี
-                <select v-model.number="year">
-                  <option v-for="value in years" :key="value" :value="value">
-                    {{ value + 543 }}
-                  </option>
-                </select></label
-              >
+                <FilterDropdown
+                  v-model="yearSelection"
+                  :options="yearOptions"
+                  :default-label="String(year + 543)"
+                  label="เลือกปี"
+                  hide-default-option
+                  :clear-on-reselect="false"
+              /></label>
             </div>
             <div class="range-month-grid">
               <button
@@ -188,6 +211,7 @@ function resetDateRange() {
             <h3>กำหนดช่วงวันที่</h3>
             <label
               >วันที่เริ่มต้น<ThaiDatePicker
+                escape-clipping
                 v-model="draftFrom"
                 show-calendar-icon
                 numeric-month
@@ -195,6 +219,7 @@ function resetDateRange() {
                 placeholder="เลือกวันที่" /></label
             ><label
               >วันที่สิ้นสุด<ThaiDatePicker
+                escape-clipping
                 v-model="draftTo"
                 :min-date="draftFrom"
                 inclusive-min
@@ -349,6 +374,9 @@ h3 {
   align-items: center;
   gap: 8px;
   font-size: 14px;
+}
+.range-month-heading :deep(.filter-dropdown) {
+  width: 108px;
 }
 .range-month-grid {
   display: grid;
