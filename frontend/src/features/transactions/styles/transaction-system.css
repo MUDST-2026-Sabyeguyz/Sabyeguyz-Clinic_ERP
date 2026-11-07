@@ -1,6 +1,5 @@
-/* Align the transaction workflow with the staff dashboard and directory surfaces. */
 .transaction-page {
-  background: #faf6f0;
+  background: var(--ui-workspace-background);
   color: #25372e;
 }
 .transaction-page .transaction-main {
@@ -55,7 +54,7 @@
 }
 .transaction-workspace .transaction-tabs button.active {
   color: #fff;
-  background: #145c59;
+  background: var(--ui-primary-gradient);
   font-weight: 600;
 }
 .transaction-workspace .transaction-tabs button:not(.active):hover {
@@ -285,7 +284,6 @@
   }
 }
 
-/* Six columns after removing the redundant branch column. */
 .transaction-workspace .transaction-table th:nth-child(4),
 .transaction-workspace .transaction-table td:nth-child(4) {
   text-align: right;
@@ -317,7 +315,6 @@
   overflow-wrap: anywhere;
 }
 
-/* Confirmation uses full rows so long patient names and reasons stay readable. */
 .transaction-page .transaction-reason-shortcut {
   display: inline-flex;
   align-items: center;
@@ -743,3 +740,21 @@
 }
 .transaction-receipt-link:hover { background: #eaf5f1; }
 .transaction-receipt-link:focus-visible { outline: 2px solid #126b68; outline-offset: 2px; }
+
+.transaction-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.transaction-detail-actions .transaction-receipt-link {
+  margin: 0;
+  border-color: #16756e;
+  background: var(--ui-primary-gradient);
+  box-shadow: var(--ui-primary-shadow);
+  color: #fff;
+}
+.transaction-detail-actions .transaction-receipt-link:hover {
+  background: var(--ui-primary-gradient-hover);
+}
