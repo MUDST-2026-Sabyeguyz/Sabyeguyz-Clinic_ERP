@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { previewEnabled } from '@/api/previewData'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import logo from '@/assets/sabyeguyz-logo.png'
@@ -41,7 +40,6 @@ const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   role?: string
   branchName?: string
 } | null
-// แยกเมนูและสาขาที่แสดงตาม role ของบัญชี
 const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
 const activeManagerBranch = computed(() => selectedManagerBranch())
@@ -124,7 +122,6 @@ onMounted(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
   })
   document.fonts?.ready.then(positionPillWithoutAnimation)
-  // วัดตำแหน่งเมนูหลัง layout เสร็จ เพื่อให้แถบเลือกตรงกับรายการจริง
   if (typeof ResizeObserver !== 'undefined' && navRef.value) {
     navResizeObserver = new ResizeObserver(positionPillWithoutAnimation)
     navResizeObserver.observe(navRef.value)
@@ -158,14 +155,11 @@ function signOut() {
   clearSession()
   localStorage.removeItem('staffRole')
   localStorage.removeItem('staffUsername')
-  localStorage.removeItem('mockStaffRole')
-  localStorage.removeItem('mockStaffEmail')
   localStorage.removeItem('managerSelectedBranch')
   document.body.classList.remove('therapist-ui')
 }
 async function loadManagerBranches() {
   try {
-    // โหลดสาขาที่เปิดใช้งานให้ Manager เลือกดูข้อมูล
     const branches = (await branchApi.list())
       .filter((branch) => branch.active)
       .map((branch) => ({
@@ -178,7 +172,6 @@ async function loadManagerBranches() {
   } catch {}
 }
 function switchManagerBranch(code: string) {
-  // แจ้งหน้าอื่นให้โหลดข้อมูลใหม่หลังเปลี่ยนสาขา
   const branch = managerBranches.value.find((item) => item.code === code)
   if (!branch) return
   setSelectedManagerBranch(branch)
@@ -190,19 +183,6 @@ function branchLabel(name: string) {
 </script>
 
 <template>
-  <div
-    v-if="previewEnabled"
-    role="status"
-    style="
-      padding: 6px 16px;
-      background: #fff3ce;
-      color: #765b18;
-      text-align: center;
-      font-size: 13px;
-    "
-  >
-    ข้อมูลจำลองชั่วคราว · ไม่บันทึกลงฐานข้อมูลจริง
-  </div>
   <header
     class="staff-header"
     :class="{

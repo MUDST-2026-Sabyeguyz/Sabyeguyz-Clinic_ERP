@@ -1,6 +1,6 @@
 .reports-page-wrapper {
   min-height: 100vh;
-  background-color: #f7f5f0;
+  background: var(--ui-workspace-background);
   color: #1f2937;
 }
 
@@ -528,9 +528,9 @@
   cursor: pointer;
 }
 .pagination-number.active {
-  background: #145c59;
+  background: var(--ui-primary-gradient);
   color: white;
-  border-color: #145c59;
+  border-color: #16756e;
   box-shadow: 0 2px 4px #145c5920;
 }
 .pagination-number:focus-visible {
@@ -581,7 +581,7 @@
   padding: 8px 18px;
   border: 1px solid #187a74;
   border-radius: 8px;
-  background: #187a74;
+  background: var(--ui-primary-gradient);
   color: #ffffff;
   font: inherit;
   font-size: 14px;
@@ -591,7 +591,7 @@
 }
 
 .report-pagination .btn-next:hover:not(:disabled) {
-  background: #13635e;
+  background: var(--ui-primary-gradient-hover);
   border-color: #13635e;
 }
 

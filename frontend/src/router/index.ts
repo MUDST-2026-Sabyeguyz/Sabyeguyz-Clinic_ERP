@@ -64,6 +64,12 @@ const router = createRouter({
       meta: { permission: 'Patient' },
     },
     {
+      path: '/staff/patients/:patientId/receipts/:id',
+      name: 'patient-receipt',
+      component: () => import('@/features/transactions/views/ReceiptView.vue'),
+      meta: { permission: 'Patient' },
+    },
+    {
       path: '/staff/patients/:patientId/courses/:courseId',
       name: 'patient-course-history',
       component: () => import('@/features/courses/views/CourseActionView.vue'),
@@ -149,7 +155,6 @@ const router = createRouter({
       path: '/staff/courses/extensions',
       name: 'staff-course-extensions',
       component: () => import('@/features/courses/views/CourseExtensionRequestsView.vue'),
-      // คิวอนุมัติคำขอต่ออายุเป็นงานของ Manager เท่านั้น
       meta: { roles: ['manager'] },
     },
     {

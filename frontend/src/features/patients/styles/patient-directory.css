@@ -1,6 +1,5 @@
-/* Directory-only rules keep profile/registration screens independent. */
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page {
-  background: #faf6f0;
+  background: var(--ui-workspace-background);
   color: #25372e;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page::before {
@@ -49,8 +48,8 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .page-headin
   padding: 10px 20px;
   font-size: 16px;
   border-radius: 8px;
-  background: #1e807c;
-  box-shadow: none;
+  background: var(--ui-primary-gradient);
+  box-shadow: var(--ui-primary-shadow);
   box-sizing: border-box;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .directory {
@@ -245,13 +244,12 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-toast .patient-sa
   }
 }
 
-/* Polish: predictable controls, readable secondary states and pointer feedback. */
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .search input::placeholder {
   color: #61746e;
   opacity: 1;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .page-heading .primary:hover {
-  background: #176d68;
+  background: var(--ui-primary-gradient-hover);
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .patient-directory-page
@@ -275,7 +273,6 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page table td:nth
   font-variant-numeric: tabular-nums;
 }
 
-/* Layout: separate search choices from the result heading and keep column proportions stable. */
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .directory-results {
   display: flex;
   align-items: center;
@@ -339,7 +336,6 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page table td.emp
   }
 }
 
-/* Define the complete row action palette so legacy filled-button rules cannot clash. */
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .directory table .row-action {
   display: inline-flex;
   align-items: center;
