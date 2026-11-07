@@ -599,7 +599,6 @@ a.edit {
   text-decoration: none;
 }
 
-/* the status dropdown looks like the status pill, and still opens to change it */
 .fee-status {
   display: inline-block;
   width: auto;
@@ -767,11 +766,8 @@ a.edit {
   color: #b42318;
 }
 
-/* Settings workspace refresh: visual hierarchy only; existing actions and routes remain unchanged. */
 .settings-page {
-  background:
-    radial-gradient(circle at 8% 7%, #dff1eb 0, transparent 22rem),
-    linear-gradient(180deg, #f7f5ef 0, #f8f4ed 38rem);
+  background: var(--ui-workspace-background);
 }
 .settings-main {
   padding-top: 40px;
@@ -993,8 +989,8 @@ a.edit {
   box-shadow: none;
 }
 .settings-add {
-  background: linear-gradient(135deg, #1c8d82, #16756e);
-  box-shadow: 0 8px 16px #16756e26;
+  background: var(--ui-primary-gradient);
+  box-shadow: var(--ui-primary-shadow);
 }
 .settings-add:hover,
 .confirm-ok:hover,
@@ -1028,7 +1024,7 @@ td {
 }
 .edit {
   border: 1px solid #16756e;
-  background: linear-gradient(135deg, #1c8d82, #16756e);
+  background: var(--ui-primary-gradient);
   color: #fff;
 }
 .payment-list {
