@@ -1,4 +1,7 @@
-/* Shared patient profile polish; edit and detail data flow are preserved. */
+body .patient-workspace.patient-profile-page {
+  background: var(--ui-workspace-background);
+}
+
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main {
   width: min(1160px, calc(100% - 48px));
   padding-top: 28px;
@@ -145,7 +148,6 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page :is(button, a)
   }
 }
 
-/* Profile layout: stable identity alignment and balanced use of the available width. */
 body:is(.therapist-ui, :not(.therapist-ui))
   .patient-profile-page:not(.is-editing)
   .patient-profile-summary {
@@ -217,7 +219,6 @@ body:is(.therapist-ui, :not(.therapist-ui))
   }
 }
 
-/* Lightweight back navigation with press feedback; reduced motion keeps it still. */
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > a.back-link {
   min-height: 44px;
   padding: 8px 0;
@@ -250,7 +251,6 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > a.bac
   }
 }
 
-/* History shares the profile frame instead of introducing a second page shell. */
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-history-embedded {
   min-height: 0;
   background: transparent;
@@ -342,7 +342,6 @@ body:is(.therapist-ui, :not(.therapist-ui))
   }
 }
 
-/* Patient service workspace: one navigation level, course overview and contextual actions. */
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

@@ -1,6 +1,6 @@
 .appointment-calendar-workspace {
   min-height: 100vh;
-  background: #faf6ef;
+  background: var(--ui-workspace-background);
   color: #243832;
 }
 .workspace-main {
@@ -77,6 +77,13 @@ h1 {
 .control[aria-pressed='true']:hover:not(:disabled),
 .control.calendar-primary:hover:not(:disabled) {
   background: #176965;
+}
+.control.calendar-primary:not(:disabled) {
+  background: var(--ui-primary-gradient);
+  box-shadow: var(--ui-primary-shadow);
+}
+.control.calendar-primary:hover:not(:disabled) {
+  background: var(--ui-primary-gradient-hover);
 }
 .control.calendar-sync {
   border-color: #1e807c;
