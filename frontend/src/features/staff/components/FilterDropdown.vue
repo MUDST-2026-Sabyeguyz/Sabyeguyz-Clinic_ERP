@@ -85,20 +85,18 @@ async function positionMenu() {
   if (!triggerElement || !menuElement) return
 
   const rect = triggerElement.getBoundingClientRect()
+  const width = Math.min(rect.width, window.innerWidth - 16)
+  menuElement.style.width = `${width}px`
   const menuHeight = menuElement.offsetHeight
   const gap = 5
   const spaceBelow = window.innerHeight - rect.bottom - gap
   const spaceAbove = rect.top - gap
-  // Prefer opening downward so the first row never pushes the menu beyond the top edge.
-  // Flip upward only when the menu cannot fit below and there is more room above.
+
   const openAbove = spaceBelow < menuHeight && spaceAbove > spaceBelow
-  const left = Math.min(
-    Math.max(8, rect.left),
-    Math.max(8, window.innerWidth - menuElement.scrollWidth - 8),
-  )
+  const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
   menuStyle.value = {
     left: `${left}px`,
-    minWidth: `${Math.max(rect.width, menuElement.scrollWidth)}px`,
+    width: `${width}px`,
     top: openAbove ? 'auto' : `${rect.bottom + gap}px`,
     bottom: openAbove ? `${window.innerHeight - rect.top + gap}px` : 'auto',
   }
@@ -255,6 +253,7 @@ onBeforeUnmount(() => {
   transform: translateY(2px) rotate(225deg);
 }
 .filter-dropdown__menu {
+  box-sizing: border-box;
   position: fixed;
   z-index: 1000;
   width: max-content;
@@ -274,6 +273,7 @@ onBeforeUnmount(() => {
   color: #153738;
 }
 .filter-dropdown__option {
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: 20px 1fr;
   align-items: center;
@@ -286,7 +286,8 @@ onBeforeUnmount(() => {
   color: inherit;
   font: inherit;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 .filter-dropdown__option:hover,

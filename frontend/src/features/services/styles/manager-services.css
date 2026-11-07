@@ -7,15 +7,15 @@
   display: contents;
 }
 .service-page > main {
-  width: min(1296px, calc(100% - 48px));
+  width: min(1420px, calc(100% - 64px));
   margin: auto;
-  padding: 32px 0 48px;
+  padding: 40px 0 48px;
 }
 .service-page > main > h1,
 .sale-page > h1 {
   margin: 0;
   color: #145c59;
-  font-size: clamp(30px, 2.4vw, 36px);
+  font-size: clamp(28px, 2.4vw, 36px);
   font-weight: 800;
   line-height: 1.4;
 }
@@ -23,6 +23,7 @@
   margin: 8px 0 28px;
   color: #56665d;
   font-size: 16px;
+  line-height: 1.5;
 }
 .service-search {
   margin-top: 0;
@@ -611,9 +612,9 @@
   }
 }
 @media (max-width: 700px) {
-  main {
-    width: min(100% - 32px, 1200px);
-    padding-top: 32px;
+  .service-page > main {
+    width: calc(100% - 32px);
+    padding-top: 28px;
   }
   .search-wrap {
     gap: 12px;
@@ -646,18 +647,18 @@
   }
 }
 @media (max-width: 480px) {
-  main {
-    width: calc(100% - 28px);
-    padding-top: 22px;
+  .service-page > main {
+    width: calc(100% - 32px);
+    padding-top: 28px;
   }
   main > h1,
   .sale-page > h1 {
     font-size: 28px;
-    line-height: 1.25;
+    line-height: 1.4;
   }
   .service-page-intro {
     margin-top: 8px;
-    font-size: 15px;
+    font-size: 16px;
   }
   .service-search {
     margin-top: 14px;

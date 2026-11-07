@@ -1,5 +1,3 @@
-/* Create uses the same desktop rhythm for both patient types; edit keeps its modal layout. */
-/* Both role views share the explicit start/end controls. */
 body
   .appointment-page
   .appointment-create-card
@@ -20,7 +18,6 @@ body
   min-width: 0;
 }
 
-/* Native radios must not inherit the text-input height/border from the older form theme. */
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-create-card:not(.is-editing)
@@ -227,7 +224,6 @@ body:is(.therapist-ui, :not(.therapist-ui))
   }
 }
 
-/* Keep required markers on the label line and both patient columns on one rhythm. */
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-create-card:not(.is-editing)
@@ -258,7 +254,6 @@ body:is(.therapist-ui, :not(.therapist-ui))
   }
 }
 
-/* Larger reading and navigation targets for the desktop appointment form. */
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-form-page:not(.appointment-reschedule-modal)
@@ -266,10 +261,11 @@ body:is(.therapist-ui, :not(.therapist-ui))
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 10px 16px;
-  border: 1px solid #b7cecc;
-  border-radius: 8px;
-  background: #fff;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: #145c59;
   font-size: 16px;
   font-weight: 600;
@@ -279,8 +275,8 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-form-page:not(.appointment-reschedule-modal)
   .appointment-back:hover {
-  background: #edf5f1;
-  border-color: #145c59;
+  background: transparent;
+  text-decoration: underline;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page

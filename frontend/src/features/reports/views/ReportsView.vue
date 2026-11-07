@@ -232,9 +232,11 @@ function updateTimestamp() {
     month: 'short',
     year: 'numeric',
   }).format(now)
-  const timeStr = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }).format(
-    now,
-  )
+  const timeStr = new Intl.DateTimeFormat('th-TH', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Bangkok',
+  }).format(now)
   lastUpdatedText.value = `${dateStr}, ${timeStr}`
 }
 
@@ -362,7 +364,6 @@ const filteredCommissionRows = computed<CommissionReportRow[]>(() => {
   })
 })
 
-// สร้างแถวตามชนิดรายงาน เพื่อใช้วันที่และยอดจาก contract ของรายงานนั้น
 const tableRows = computed<string[][]>(() => {
   if (report.value === 'revenue') {
     const list = filteredRevenueCategories.value
@@ -618,21 +619,34 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
 
     <TransactionReportView v-if="isTransactionReport" />
     <main v-else class="reports-page-container">
-      <!-- ส่วนหัวรายงาน -->
       <section class="page-title-section">
-        <h1>{{ ['payment', 'revenue'].includes(report) ? 'รายงานยอดรับชำระ' : 'รายงาน' }}</h1>
-        <p>
-          {{
-            report === 'payment'
-              ? 'ตรวจสอบเงินที่รับจริงตามวันที่รับชำระและประเภทบริการ'
-              : ['revenue', 'payment'].includes(report)
-                ? 'ยอดรับชำระและประเภทบริการตามวันที่รับเงินจริง'
-                : 'ตรวจสอบรายงานคอร์ส ยอดขาย และค่าคอมมิชชั่น'
-          }}
-        </p>
+        <div class="report-title-copy">
+          <h1>{{ currentReportTitle }}</h1>
+          <p>
+            {{
+              report === 'payment'
+                ? 'ตรวจสอบเงินที่รับจริงตามวันที่รับชำระและประเภทบริการ'
+                : ['revenue', 'payment'].includes(report)
+                  ? 'ยอดรับชำระและประเภทบริการตามวันที่รับเงินจริง'
+                  : 'ตรวจสอบรายงานคอร์ส ยอดขาย และค่าคอมมิชชั่น'
+            }}
+          </p>
+        </div>
+        <div class="report-select-group">
+          <label for="report-select">เลือกรายงาน</label>
+          <FilterDropdown
+            id="report-select"
+            v-model="reportSelection"
+            :options="reportOptions"
+            default-value="revenue"
+            default-label="รายรับตามวันที่รับชำระ"
+            label="เลือกรายงาน"
+            hide-default-option
+            :clear-on-reselect="false"
+          />
+        </div>
       </section>
 
-      <!-- สรุป KPI ของรายงานรายรับ -->
       <section
         v-if="['revenue', 'payment'].includes(report) && activeKpis.length"
         class="kpi-summary-box"
@@ -647,28 +661,14 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
         </div>
       </section>
 
-      <!-- ส่วนตัวกรองรายงาน -->
       <section class="filter-card">
-        <!-- ชื่อรายงานและตัวเลือกประเภท -->
-        <div class="filter-card-header">
-          <h2>{{ currentReportTitle }}</h2>
-          <div class="report-select-group">
-            <label for="report-select">เลือกรายงาน</label>
-            <FilterDropdown
-              id="report-select"
-              v-model="reportSelection"
-              :options="reportOptions"
-              default-value="revenue"
-              default-label="รายรับตามวันที่รับชำระ"
-              label="เลือกรายงาน"
-              hide-default-option
-              :clear-on-reselect="false"
-            />
-          </div>
-        </div>
-
-        <!-- กลุ่มตัวกรอง -->
-        <div class="filter-card-body" :class="{ 'filter-card-body--payment': report === 'payment' }">
+        <div
+          class="filter-card-body"
+          :class="{
+            'filter-card-body--payment': report === 'payment',
+            'filter-card-body--commission': report === 'commission',
+          }"
+        >
           <div
             v-if="['salesTransaction', 'treatmentTransaction'].includes(report)"
             class="field-group"
@@ -687,9 +687,8 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               :clear-on-reselect="false"
             />
           </div>
-          <!-- ตัวกรองหลัก -->
+
           <div class="filter-grid-row1">
-            <!-- ตัวกรองยอดคงเหลือและการโอน -->
             <template v-if="['balance', 'transfer'].includes(report)">
               <div class="field-group">
                 <label>ผู้ป่วย</label>
@@ -709,7 +708,6 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               </div>
             </template>
 
-            <!-- ตัวกรองการรับชำระ -->
             <template v-else-if="report === 'payment'">
               <div class="field-group">
                 <label>การรักษา</label>
@@ -741,7 +739,6 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               </div>
             </template>
 
-            <!-- ตัวกรองรายรับ -->
             <template v-else-if="report === 'revenue'">
               <div class="field-group">
                 <label>การรักษา</label>
@@ -785,7 +782,6 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               </div>
             </template>
 
-            <!-- ตัวกรองคอมมิชชันและธุรกรรม -->
             <template
               v-else-if="
                 ['commission', 'salesTransaction', 'treatmentTransaction'].includes(report)
@@ -816,9 +812,7 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
             </template>
           </div>
 
-          <!-- ตัวกรองเพิ่มเติม -->
           <div class="filter-grid-row2">
-            <!-- ประเภทคอมมิชชัน -->
             <div v-if="report === 'commission'" class="field-group field-group--short">
               <label>ประเภทค่าคอมมิชชั่น</label>
               <FilterDropdown
@@ -834,7 +828,6 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
               />
             </div>
 
-            <!-- ช่วงวันที่รับชำระ -->
             <template v-if="report === 'payment'">
               <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
@@ -850,7 +843,6 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
         </div>
       </section>
 
-      <!-- ตารางรายงาน -->
       <section class="table-card">
         <p v-if="errorMessage" class="report-error" role="alert">{{ errorMessage }}</p>
         <p v-else-if="loading" class="report-loading">กำลังโหลดรายงาน...</p>
@@ -878,7 +870,6 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
                 </td>
               </tr>
 
-              <!-- แถวสรุปยอดรวม -->
               <tr v-if="totalRow" class="total-row">
                 <td
                   v-for="(cell, cIdx) in totalRow"
@@ -898,13 +889,31 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
           </table>
         </div>
 
-        <!-- แบ่งหน้าและเวลาอัปเดต -->
         <div class="table-card-footer">
           <nav v-if="tableRows.length > 0" class="report-pagination" aria-label="เปลี่ยนหน้ารายการ">
             <button type="button" class="btn-prev" :disabled="page === 1" @click="page -= 1">
               ← ก่อนหน้า
             </button>
-            <span class="pagination-info">หน้า {{ page }} จาก {{ totalPages }}</span>
+            <div class="pagination-center">
+              <span class="pagination-info">หน้า {{ page }} จาก {{ totalPages }}</span>
+              <div class="pagination-numbers">
+                <button
+                  v-for="number in Array.from(
+                    { length: Math.min(5, totalPages) },
+                    (_, index) => Math.max(1, Math.min(page - 2, totalPages - 4)) + index,
+                  )"
+                  :key="number"
+                  type="button"
+                  class="pagination-number"
+                  :class="{ active: page === number }"
+                  :aria-current="page === number ? 'page' : undefined"
+                  :aria-label="`หน้า ${number}`"
+                  @click="page = number"
+                >
+                  {{ number }}
+                </button>
+              </div>
+            </div>
             <button
               type="button"
               class="btn-next"
