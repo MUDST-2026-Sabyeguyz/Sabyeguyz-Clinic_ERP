@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { previewEnabled } from '@/api/previewData'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import logo from '@/assets/sabyeguyz-logo.png'
@@ -78,9 +79,11 @@ function movePill(target: HTMLElement | null) {
   target.classList.add('pill-target')
   const targetBox = target.getBoundingClientRect()
   const navBox = navRef.value.getBoundingClientRect()
+  const pillPadding = 6
+  const pillLeft = targetBox.left - navBox.left + navRef.value.scrollLeft - navRef.value.clientLeft
   pillStyle.value = {
-    width: `${targetBox.width}px`,
-    transform: `translateX(${targetBox.left - navBox.left + navRef.value.scrollLeft - navRef.value.clientLeft}px)`,
+    width: `${targetBox.width + pillPadding * 2}px`,
+    transform: `translateX(${pillLeft - pillPadding}px)`,
     opacity: '1',
   }
 }
@@ -187,6 +190,19 @@ function branchLabel(name: string) {
 </script>
 
 <template>
+  <div
+    v-if="previewEnabled"
+    role="status"
+    style="
+      padding: 6px 16px;
+      background: #fff3ce;
+      color: #765b18;
+      text-align: center;
+      font-size: 13px;
+    "
+  >
+    ข้อมูลจำลองชั่วคราว · ไม่บันทึกลงฐานข้อมูลจริง
+  </div>
   <header
     class="staff-header"
     :class="{

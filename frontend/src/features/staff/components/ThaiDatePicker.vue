@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -15,6 +15,7 @@ const props = withDefaults(
     numericMonth?: boolean
     hideCaret?: boolean
     placeholder?: string
+    escapeClipping?: boolean
   }>(),
   {
     disabled: false,
@@ -35,7 +36,43 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const containerRef = ref<HTMLElement | null>(null)
 const instanceId = ref(`tdp-${Math.random().toString(36).substring(2, 9)}`)
 const open = ref(false)
+const calendarRef = ref<HTMLElement | null>(null)
+const calendarStyle = ref<Record<string, string>>({})
+async function positionCalendar() {
+  if (!props.escapeClipping || !open.value) return
+  await nextTick()
+  const calendar = calendarRef.value
+  const trigger = containerRef.value?.querySelector('button')
+  if (!calendar || !trigger) return
+  if (calendar.showPopover && !calendar.matches(':popover-open')) calendar.showPopover()
+  const rect = trigger.getBoundingClientRect()
+  const width = Math.min(330, window.innerWidth - 24)
+  calendar.style.width = `${width}px`
+  const height = calendar.getBoundingClientRect().height
+  const below = window.innerHeight - rect.bottom - 12
+  const above = rect.top - 12
+  const flip = below < height && above > below
+  const space = Math.max(0, flip ? above : below)
+  calendarStyle.value = {
+    position: 'fixed',
+    inset: 'auto',
+    margin: '0',
+    transform: 'none',
+    width: `${width}px`,
+    maxHeight: `${space}px`,
+    zIndex: '1100',
+    left: `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`,
+    top: flip ? 'auto' : `${rect.bottom + 6}px`,
+    bottom: flip ? `${window.innerHeight - rect.top + 6}px` : 'auto',
+  }
+}
+watch(open, () => {
+  if (open.value) void positionCalendar()
+})
 const viewDate = ref(props.modelValue ? new Date(`${props.modelValue}T00:00:00`) : new Date())
+watch(viewDate, () => {
+  void positionCalendar()
+})
 
 const months = [
   'มกราคม',
@@ -126,11 +163,15 @@ function handleClickOutside(e: MouseEvent) {
 onMounted(() => {
   window.addEventListener('thai-date-picker-open', handleOtherOpen)
   document.addEventListener('pointerdown', handleClickOutside, true)
+  window.addEventListener('resize', positionCalendar)
+  window.addEventListener('scroll', positionCalendar, true)
 })
 
 onUnmounted(() => {
   window.removeEventListener('thai-date-picker-open', handleOtherOpen)
   document.removeEventListener('pointerdown', handleClickOutside, true)
+  window.removeEventListener('resize', positionCalendar)
+  window.removeEventListener('scroll', positionCalendar, true)
 })
 
 function choose(day: number) {
@@ -191,6 +232,7 @@ function isSelected(day: number) {
       :aria-invalid="invalid || undefined"
       :aria-describedby="describedBy"
       :disabled="disabled"
+      :aria-expanded="open"
       @click="toggleOpen"
     >
       <span>{{ displayValue }}</span>
@@ -202,7 +244,15 @@ function isSelected(day: number) {
         <span v-if="!hideCaret" aria-hidden="true">▾</span>
       </span>
     </button>
-    <div v-if="open" class="calendar" role="dialog" aria-label="เลือกวันที่">
+    <div
+      v-if="open"
+      ref="calendarRef"
+      class="calendar"
+      :popover="escapeClipping ? 'manual' : undefined"
+      :style="escapeClipping ? calendarStyle : undefined"
+      role="dialog"
+      aria-label="เลือกวันที่"
+    >
       <div class="calendar-head">
         <button type="button" aria-label="เดือนก่อน" @click="changeMonth(-1)">‹</button>
         <div class="period-select">
