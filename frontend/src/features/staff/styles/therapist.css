@@ -213,7 +213,7 @@ body.therapist-ui .profile-copy {
 }
 
 /* A full desktop header no longer fits below this width. */
-@media (max-width: 1280px) {
+@media (max-width: 1400px) {
   body.therapist-ui .staff-header {
     height: 72px;
     min-height: 72px;
@@ -373,7 +373,7 @@ body.therapist-ui .profile-copy {
 }
 
 /* Keep the shared drawer readable on narrow Manager and therapist screens. */
-@media (max-width: 1280px) {
+@media (max-width: 1400px) {
   body.therapist-ui .staff-header nav .nav-pill,
   body.therapist-ui .staff-header.manager-header nav .nav-pill {
     display: none !important;
@@ -399,7 +399,7 @@ body.therapist-ui .profile-copy {
 }
 
 /* Above the tablet breakpoint, Manager keeps the full navigation strip. */
-@media (min-width: 1281px) {
+@media (min-width: 1401px) {
   body.therapist-ui .staff-header.manager-header nav {
     justify-content: flex-start;
     gap: 18px;
