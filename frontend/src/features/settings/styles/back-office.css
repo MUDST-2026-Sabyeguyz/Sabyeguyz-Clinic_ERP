@@ -5,14 +5,16 @@
   background: #f8f4ed;
 }
 .settings-main {
-  width: min(1480px, calc(100% - 64px));
+  width: min(1420px, calc(100% - 64px));
   margin: auto;
-  padding: 50px 0 80px;
+  padding: 40px 0 80px;
 }
 .settings-title h1 {
   margin: 0;
-  font-size: clamp(2.2rem, 4vw, 3.7rem);
-  line-height: 1.1;
+  font-size: clamp(28px, 2.4vw, 36px);
+  font-weight: 800;
+  line-height: 1.4;
+  color: #145c59;
 }
 .settings-title p,
 .panel-head p {
@@ -368,10 +370,6 @@ tbody tr:nth-child(even) {
   box-shadow: 0 8px 24px #0002;
 }
 @media (max-width: 900px) {
-  .settings-main {
-    width: calc(100% - 32px);
-    padding-top: 30px;
-  }
   .settings-layout {
     grid-template-columns: 1fr;
     margin-top: 30px;
@@ -390,7 +388,7 @@ tbody tr:nth-child(even) {
 }
 @media (max-width: 580px) {
   .settings-main {
-    width: calc(100% - 24px);
+    width: calc(100% - 32px);
   }
   .settings-nav {
     grid-template-columns: 1fr;
@@ -776,7 +774,7 @@ a.edit {
     linear-gradient(180deg, #f7f5ef 0, #f8f4ed 38rem);
 }
 .settings-main {
-  padding-top: 38px;
+  padding-top: 40px;
 }
 .settings-title {
   display: flex;
@@ -795,12 +793,15 @@ a.edit {
   text-transform: uppercase;
 }
 .settings-title h1 {
-  font-size: clamp(2rem, 3.2vw, 3rem);
-  letter-spacing: -0.055em;
+  font-size: clamp(28px, 2.4vw, 36px);
+  letter-spacing: normal;
 }
 .settings-title p {
   max-width: 610px;
   font-size: 1rem;
+  margin: 8px 0 0;
+  line-height: 1.5;
+  color: #56665d;
 }
 .settings-title-note {
   display: flex;
@@ -1143,10 +1144,13 @@ td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 580px) {
+@media (max-width: 700px) {
   .settings-main {
-    padding-top: 24px;
+    width: calc(100% - 32px);
+    padding-top: 28px;
   }
+}
+@media (max-width: 580px) {
   .settings-title-note {
     width: 100%;
     box-sizing: border-box;

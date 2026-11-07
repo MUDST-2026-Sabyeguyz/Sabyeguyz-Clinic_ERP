@@ -33,8 +33,7 @@ type SettingsNavIconName = Exclude<
   InstanceType<typeof SettingsNavIcon>['$props']['name'],
   'calendar' | 'settings'
 >
-// ฟอร์มหลายประเภทใช้แถวข้อมูลร่วมกัน จึงตรวจชนิดค่าก่อนบันทึก
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type Row = Record<string, any>
 const sections: Array<{ key: SectionKey; label: string; hint: string; icon: SettingsNavIconName }> =
   [
@@ -47,7 +46,7 @@ const sections: Array<{ key: SectionKey; label: string; hint: string; icon: Sett
     { key: 'tiers', label: 'กฎค่าคอมมิชชัน', hint: 'อัตราตามยอดขาย', icon: 'tiers' },
     { key: 'master', label: 'Master Data', hint: 'ข้อมูลพื้นฐานระบบ', icon: 'master' },
   ]
-// เปิดหมวดที่ส่งมาจาก URL เช่นหน้าประวัติ Scheme
+
 function initialSection(): SectionKey {
   const wanted = new URLSearchParams(window.location.search).get('section')
   return sections.find((item) => item.key === wanted)?.key ?? 'branches'
@@ -118,7 +117,7 @@ const paymentMethods = reactive<Array<{ id: number; name: string; note: string; 
 const paymentStatuses = reactive<
   Array<{ code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID' | 'FULL'; label: string; enabled: boolean }>
 >([])
-// ไม่แสดงสาขาที่ปิดใช้งานให้เลือกกับผู้ใช้ ห้อง หรือทรัพยากร
+
 const openBranches = computed(() => data.branches.filter((branch) => branch.status === 'ใช้งาน'))
 const branchOptions = computed(() =>
   openBranches.value.map((branch) => option(String(branch.name))),
@@ -154,7 +153,7 @@ const userRow = (item: Awaited<ReturnType<typeof userManagementApi.create>>) => 
 const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>>) => ({
   ...item,
   type: 'Single Visit',
-  // บริการรายครั้งมีจำนวน 1 ครั้ง ส่วน duration คือระยะเวลานัดที่เลือกได้
+
   sessions: '1',
   duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
   status: status(item.active),
@@ -162,7 +161,7 @@ const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>
 const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
   ...item,
   type: 'Course',
-  // จำนวนครั้งรวมรวมโบนัสเดิมไว้แล้ว จึงไม่บวกโบนัสแยกอีก
+
   sessions: String(item.sessions),
   duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
   validityValue: item.validityValue ?? item.validityDays,
@@ -201,7 +200,7 @@ const feeRow = (rule: TreatmentFeeRule) => ({
   effectiveTo: rule.effectiveTo ?? '',
   used: rule.used,
 })
-// ส่วนนี้แสดงกฎค่ามือและ Scheme Version ที่มีผลในปัจจุบัน
+
 type LatestVersion = {
   id: number
   version: number
@@ -216,7 +215,6 @@ async function loadCommissionRows() {
     const rules = (await commissionApi.treatmentFees()) as TreatmentFeeRule[]
     const rows: Row[] = rules.map(feeRow)
     try {
-      // เลือก Scheme ที่มีผลตามวันที่ปัจจุบัน
       const today = clinicToday()
       const inForce =
         ((await commissionApi.schemes()) as LatestVersion[]).find(
@@ -228,16 +226,14 @@ async function loadCommissionRows() {
             .map(({ order, minimum, maximum, rate }) => ({ order, minimum, maximum, rate }))
             .sort((a, b) => a.order - b.order)
         : []
-    } catch {
-      // ถ้าโหลดรายละเอียด Scheme ไม่ได้ ยังแสดงกฎค่ามือได้
-    }
+    } catch {}
     data.commission.splice(0, data.commission.length, ...rows)
     return true
   } catch {
     return false
   }
 }
-// เรียงกฎค่ามือตามวันเริ่มใช้เพื่อแสดงกฎปัจจุบันและกฎที่รอเริ่ม
+
 const feeVersions = computed(() =>
   data.commission
     .slice()
@@ -261,7 +257,7 @@ const shownFeeVersions = computed(() =>
     (item): item is NonNullable<typeof item> => item !== null,
   ),
 )
-/** คืนเดือนเริ่มใช้รอบถัดไปในรูปแบบ YYYY-MM */
+
 function nextCycleMonth() {
   const [year, month] = clinicToday().split('-').map(Number)
   return new Date(Date.UTC(year!, month!, 1)).toISOString().slice(0, 7)
@@ -316,7 +312,7 @@ async function loadBackendSettings() {
     paymentMethods.splice(
       0,
       paymentMethods.length,
-      // ระบบไม่รองรับเงินสด จึงไม่นำมาเป็นตัวเลือก
+
       ...payments.value
         .filter((item) => item.name !== 'Cash')
         .map((item) => ({ ...item, note: 'ช่องทางรับชำระเงิน' })),
@@ -331,7 +327,7 @@ async function loadBackendSettings() {
   loadError.value = failures.length ? `ยังโหลดข้อมูลไม่ได้: ${failures.join(', ')}` : ''
   fillDefaultBranch()
 }
-// เติมสาขาเริ่มต้นให้ฟอร์มที่เปิดก่อนข้อมูลสาขาโหลดเสร็จ
+
 function fillDefaultBranch() {
   if (
     drawerOpen.value &&
@@ -437,7 +433,7 @@ const filteredTableRows = computed(() => {
       )
     if (serviceTypeFilter.value !== 'ทั้งหมด')
       rows = rows.filter(({ row }) => String(row.type) === serviceTypeFilter.value)
-    // แสดงบริการที่ใช้งานอยู่ก่อน และคงลำดับเดิมไว้ภายในแต่ละสถานะ
+
     rows = rows.sort(
       (first, second) =>
         Number(first.row.status !== 'ใช้งาน') - Number(second.row.status !== 'ใช้งาน'),
@@ -479,19 +475,23 @@ async function loadPermissionOverrides(userId: number) {
   permissionOverridesLoading.value = true
   permissionOverridesError.value = ''
   try {
-    // โหลด override ของผู้ใช้พร้อม catalog ที่มี permission ID จริงจาก backend
     const [overrides, catalog] = await Promise.all([
       userManagementApi.permissionOverrides(userId),
       userManagementApi.permissionCatalog(),
     ])
     permissionOverrides.value = overrides
     permissionCatalog.value = catalog
-    if (!availablePermissions.value.some((permission) => String(permission.id) === selectedPermissionId.value))
+    if (
+      !availablePermissions.value.some(
+        (permission) => String(permission.id) === selectedPermissionId.value,
+      )
+    )
       selectedPermissionId.value = String(availablePermissions.value[0]?.id ?? '')
   } catch (error) {
     permissionOverrides.value = []
     permissionCatalog.value = []
-    permissionOverridesError.value = error instanceof Error ? error.message : 'โหลดสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
+    permissionOverridesError.value =
+      error instanceof Error ? error.message : 'โหลดสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
   } finally {
     permissionOverridesLoading.value = false
   }
@@ -499,14 +499,20 @@ async function loadPermissionOverrides(userId: number) {
 async function addPermissionOverride() {
   const userId = Number(form.id)
   const permissionId = Number(selectedPermissionId.value)
-  if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(permissionId) || permissionId <= 0) return
+  if (
+    !Number.isSafeInteger(userId) ||
+    userId <= 0 ||
+    !Number.isSafeInteger(permissionId) ||
+    permissionId <= 0
+  )
+    return
   permissionOverridesError.value = ''
   try {
-    // เพิ่ม override ด้วย ID จาก catalog แล้วโหลดผลล่าสุดกลับมา
     await userManagementApi.setPermissionOverride(userId, permissionId, newOverrideAllowed.value)
     await loadPermissionOverrides(userId)
   } catch (error) {
-    permissionOverridesError.value = error instanceof Error ? error.message : 'เพิ่มสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
+    permissionOverridesError.value =
+      error instanceof Error ? error.message : 'เพิ่มสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
   }
 }
 async function updatePermissionOverride(override: UserPermissionOverride, allowed: boolean) {
@@ -514,11 +520,11 @@ async function updatePermissionOverride(override: UserPermissionOverride, allowe
   if (!Number.isSafeInteger(userId) || userId <= 0) return
   permissionOverridesError.value = ''
   try {
-    // เปลี่ยนเฉพาะค่า allow/deny ของ permission ที่เลือก
     await userManagementApi.setPermissionOverride(userId, override.permissionId, allowed)
     await loadPermissionOverrides(userId)
   } catch (error) {
-    permissionOverridesError.value = error instanceof Error ? error.message : 'บันทึกสิทธิ์ไม่สำเร็จ'
+    permissionOverridesError.value =
+      error instanceof Error ? error.message : 'บันทึกสิทธิ์ไม่สำเร็จ'
   }
 }
 async function resetPermissionOverride(override: UserPermissionOverride) {
@@ -529,7 +535,8 @@ async function resetPermissionOverride(override: UserPermissionOverride) {
     await userManagementApi.resetPermissionOverride(userId, override.permissionId)
     await loadPermissionOverrides(userId)
   } catch (error) {
-    permissionOverridesError.value = error instanceof Error ? error.message : 'คืนค่าสิทธิ์ตามบทบาทไม่สำเร็จ'
+    permissionOverridesError.value =
+      error instanceof Error ? error.message : 'คืนค่าสิทธิ์ตามบทบาทไม่สำเร็จ'
   }
 }
 const masterItems = computed(() =>
@@ -600,7 +607,7 @@ function defaults() {
   if (section.value === 'master')
     Object.assign(form, { category: 'Customer Group', count: 1, examples: '', status: 'ใช้งาน' })
 }
-// ปิด drawer เมื่อกดและปล่อยบนพื้นหลังทั้งคู่ กันกรณีลากเลือกข้อความในช่องแล้วปล่อยเมาส์นอกกรอบ
+
 const drawerBackdropPressed = ref(false)
 function closeDrawerFromBackdrop() {
   if (drawerBackdropPressed.value) drawerOpen.value = false
@@ -631,7 +638,7 @@ const numberOrUndefined = (value: unknown) => {
   const text = String(value ?? '').trim()
   return text === '' ? undefined : Number(text)
 }
-// ระยะเวลานัดไม่บังคับและรับเฉพาะจำนวนเต็ม 5–480 นาที
+
 function invalidMinutes(value: unknown) {
   const text = String(value ?? '').trim()
   if (text === '') return false
@@ -662,7 +669,6 @@ async function save() {
     fieldErrors.phone = !isOptionalPhoneValid(String(form.phone).trim())
   }
   if (section.value === 'users') {
-    // บัญชีผู้ใช้ต้องมีอีเมลรูปแบบถูกต้องและยาวไม่เกิน 254 ตัวอักษร
     const email = String(form.email ?? '').trim()
     fieldErrors.email = email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   }
@@ -672,7 +678,7 @@ async function save() {
     fieldErrors.email = email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     const open = String(form.openTime ?? '').trim()
     const close = String(form.closeTime ?? '').trim()
-    // เวลาทำการต้องกรอกต้นและปลายคู่กัน และเวลาเปิดต้องมาก่อนเวลาปิด
+
     fieldErrors.openTime = (open === '') !== (close === '') || (open !== '' && open >= close)
     fieldErrors.closeTime = fieldErrors.openTime
     fieldErrors.appointmentMinutes = invalidMinutes(form.appointmentMinutes)
@@ -690,18 +696,17 @@ async function save() {
     }
   }
   if (Object.values(fieldErrors).some(Boolean)) {
-    validationMessage.value =
-      fieldErrors.contact
-          ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
-          : fieldErrors.phone
-            ? 'เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก'
-            : fieldErrors.openTime
-              ? 'ช่วงเปิดรับนัดต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด'
-              : fieldErrors.email
-                ? 'รูปแบบอีเมลสาขาไม่ถูกต้อง'
-                : fieldErrors.appointmentMinutes || fieldErrors.duration
-                  ? 'ระยะเวลานัดต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (เว้นว่างได้)'
-                  : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
+    validationMessage.value = fieldErrors.contact
+      ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
+      : fieldErrors.phone
+        ? 'เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก'
+        : fieldErrors.openTime
+          ? 'ช่วงเปิดรับนัดต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด'
+          : fieldErrors.email
+            ? 'รูปแบบอีเมลสาขาไม่ถูกต้อง'
+            : fieldErrors.appointmentMinutes || fieldErrors.duration
+              ? 'ระยะเวลานัดต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (เว้นว่างได้)'
+              : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }
   if (section.value === 'users') {
@@ -710,7 +715,7 @@ async function save() {
       validationMessage.value = 'ผู้ใช้ใหม่ต้องมีรหัสผ่านอย่างน้อย 8 ตัวอักษร'
       return
     }
-    // แก้ไขผู้ใช้: เว้นว่างได้ แต่ถ้ากรอกต้องไม่ต่ำกว่า 8 ตัว (backend ปฏิเสธรหัสที่สั้นกว่านี้)
+
     if (editingIndex.value !== null && password !== '' && password.length < 8) {
       fieldErrors.password = true
       validationMessage.value = 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร (เว้นว่างไว้ถ้าไม่เปลี่ยน)'
@@ -736,7 +741,7 @@ async function save() {
       record = branchRow(
         existing?.id ? await branchApi.update(existing.id, body) : await branchApi.create(body),
       )
-      // ใช้สถานะจากฟอร์ม; สาขาใหม่เริ่มต้นเป็นใช้งาน
+
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await branchApi.activate(record.id as number)
         else await branchApi.deactivate(record.id as number)
@@ -760,7 +765,7 @@ async function save() {
           ? await userManagementApi.update(existing.id, body)
           : await userManagementApi.create({ ...body, password: form.password }),
       )
-      // ใช้สถานะจากฟอร์ม; ผู้ใช้ใหม่เริ่มต้นเป็นใช้งาน
+
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await userManagementApi.activate(existing.id)
         else await userManagementApi.deactivate(existing.id)
@@ -768,7 +773,7 @@ async function save() {
       }
     } else if (section.value === 'services') {
       const code = existing?.code || form.code || `SV-${Date.now()}`
-      // ส่งประเภทที่เลือกก่อน; backend ปฏิเสธการเปลี่ยนเมื่อมีการใช้งานแล้ว
+
       if (existing?.id && existing.type && form.type !== existing.type) {
         await serviceManagementApi.changeType(
           existing.id,
@@ -803,7 +808,7 @@ async function save() {
             : await serviceManagementApi.create(body),
         )
       }
-      // ใช้สถานะจากฟอร์มกับรายการที่กำลังแก้ไข
+
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await serviceManagementApi.activate(existing.id)
         else await serviceManagementApi.deactivate(existing.id)
@@ -815,7 +820,7 @@ async function save() {
         code: existing?.code || form.code || `RES-${Date.now()}`,
         name: form.name,
         type: form.type === 'Treatment Room' ? 'ROOM' : 'EQUIPMENT',
-        // แสดงสีตามสถานะเปิดหรือปิดใช้งาน
+
         status: form.status === 'ปิดใช้งาน' ? 'INACTIVE' : 'ACTIVE',
       }
       record = resourceRow(
@@ -832,7 +837,7 @@ async function save() {
           ? await masterDataApi.update(existing.id, body)
           : await masterDataApi.create(body),
       )
-      // ใช้สถานะจากฟอร์ม; รายการใหม่เริ่มต้นเป็นใช้งาน
+
       if (existing?.id && form.status && form.status !== existing.status) {
         if (form.status === 'ใช้งาน') await masterDataApi.activate(existing.id)
         else await masterDataApi.deactivate(existing.id)
@@ -849,7 +854,6 @@ async function save() {
       saveModalOpen.value = false
     }, 1800)
   } catch (error) {
-    // ถ้า backend ระบุช่องที่ไม่ผ่าน ให้แสดงรายละเอียดต่อท้ายข้อความกว้างๆ
     const details =
       error instanceof ApiError && error.body?.fields
         ? Object.entries(error.body.fields)
@@ -870,7 +874,7 @@ function notify(message: string) {
     savedMessage.value = ''
   }, 2200)
 }
-// ยืนยันก่อนเปลี่ยนสถานะของช่องทางชำระแต่ละรายการ
+
 const paymentLabels: Record<string, string> = {
   BankTransfer: 'โอนเงินผ่านธนาคาร',
   PromptPay: 'พร้อมเพย์',
@@ -950,7 +954,6 @@ const drawerTitle = computed(() => {
     <main class="settings-main">
       <header class="settings-title">
         <div>
-          <span class="settings-eyebrow">ศูนย์ควบคุมระบบ</span>
           <h1>การตั้งค่า</h1>
           <p>จัดการข้อมูลสาขา ผู้ใช้งาน สิทธิ์การเข้าถึง และการตั้งค่าระบบ</p>
         </div>
@@ -1421,8 +1424,11 @@ const drawerTitle = computed(() => {
               type="email"
               required
               maxlength="254"
-              :class="{ invalid: fieldErrors.email }" />
-            <small v-if="fieldErrors.email" role="alert">กรอกอีเมลบัญชีที่ถูกต้อง ไม่เกิน 254 ตัวอักษร</small></label
+              :class="{ invalid: fieldErrors.email }"
+            />
+            <small v-if="fieldErrors.email" role="alert"
+              >กรอกอีเมลบัญชีที่ถูกต้อง ไม่เกิน 254 ตัวอักษร</small
+            ></label
           ><label
             >รหัสผ่าน<input
               v-model="form.password"
