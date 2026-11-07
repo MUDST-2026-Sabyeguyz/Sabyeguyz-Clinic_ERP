@@ -303,10 +303,10 @@
 }
 .transaction-primary {
   color: #fff;
-  background: #1e807c;
+  background: var(--ui-primary-gradient);
 }
 .transaction-primary:hover:not(:disabled) {
-  background: #176c69;
+  background: var(--ui-primary-gradient-hover);
 }
 .transaction-secondary {
   color: #25372e;
@@ -808,7 +808,6 @@
   }
 }
 
-/* Phase 4A — node 147:1966 */
 .transaction-main {
   width: min(1200px, calc(100% - 48px));
   padding-top: 16px;
@@ -1565,7 +1564,6 @@
   box-shadow: 0 2px 7px rgb(30 80 70 / 8%);
 }
 
-/* Keep transaction reading sizes consistent with appointment lists. */
 .transaction-page .transaction-table td {
   font-size: 16px;
 }

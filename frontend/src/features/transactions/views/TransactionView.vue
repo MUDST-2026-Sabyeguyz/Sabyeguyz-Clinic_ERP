@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { salesApi, courseApi } from '@/api/client'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { vModalFocus } from '@/features/appointments/modalFocus'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
@@ -88,7 +89,6 @@ const transactionRepository: TransactionRepository = {
       if (row.movementId == null)
         throw new Error('รายการนี้ไม่มี ledger อ้างอิง กรุณาให้ผู้ดูแลตรวจสอบ')
       await courseApi.reverse(row.movementId, command.reason)
-      // Re-read the persisted reversal rather than inventing its time or reason locally.
       const saved = (await courseApi.usageTransactions()).find((item) => item.id === row.movementId)
       if (!saved?.voidedAt)
         throw new Error('ส่งคำขอยกเลิกแล้ว แต่ยังยืนยันผลไม่ได้ กรุณาโหลดรายการใหม่ก่อนทำซ้ำ')
@@ -109,6 +109,8 @@ const transactionRepository: TransactionRepository = {
   },
 }
 const tab = ref<Tab>('sales')
+const route = useRoute()
+const router = useRouter()
 const step = ref<Step>('list')
 const rows = ref<Transaction[]>([])
 const selected = ref<Transaction | null>(null)
@@ -181,7 +183,6 @@ function formatShortDateTime(value?: string) {
 }
 
 async function loadTransactions() {
-  // โหลดรายการธุรกรรม แล้วรักษารายการที่กำลังเปิดอยู่เมื่อรีเฟรชข้อมูล
   loading.value = true
   loadError.value = ''
   errorMessage.value = ''
@@ -189,6 +190,19 @@ async function loadTransactions() {
     rows.value = await transactionRepository.list()
     if (selected.value) {
       selected.value = rows.value.find((row) => row.key === selected.value?.key) ?? selected.value
+    } else {
+      const { usage, sale, ...query } = route.query
+      const key = typeof usage === 'string' ? usage : sale
+      if (typeof key === 'string') {
+        const kind = typeof usage === 'string' ? 'usage' : 'sale'
+        tab.value = kind === 'usage' ? 'usage' : 'sales'
+        const row = rows.value.find(
+          (item) =>
+            item.kind === kind && item.key === key && item.branchCode === headerBranch.value,
+        )
+        if (row) await openDetail(row)
+        await router.replace({ query })
+      }
     }
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : 'โหลดรายการธุรกรรมไม่สำเร็จ'
@@ -218,7 +232,6 @@ watch(headerBranch, () => {
   page.value = 1
 })
 const visibleRows = computed(() => {
-  // กรองตามสาขา ประเภทรายการ สถานะ และวันที่ตามเวลาไทย
   const term = search.value.trim().toLocaleLowerCase()
   return rows.value
     .filter((row) => Boolean(headerBranch.value) && row.branchCode === headerBranch.value)
@@ -665,13 +678,34 @@ function backToList(next: Tab = tab.value) {
         </template>
 
         <template v-else-if="step === 'detail'">
-          <RouterLink v-if="selected.kind === 'usage' && selected.courseId" class="transaction-receipt-link" :to="{ name: 'staff-course-prints', params: { courseId: selected.courseId } }">ดูใบตัดคอร์สและประวัติการพิมพ์</RouterLink>
-          <RouterLink v-if="selected.kind === 'sale'" class="transaction-receipt-link" :to="{ name: 'staff-receipt', params: { id: selected.id } }">ดูและพิมพ์ใบเสร็จ</RouterLink>
           <header class="transaction-detail-heading">
             <div>
               <h1>รายละเอียดรายการ</h1>
               <p>ตรวจสอบข้อมูลให้ถูกต้องก่อนระบุเหตุผล</p>
             </div>
+            <div class="transaction-detail-actions">
+              <RouterLink
+                v-if="selected.kind === 'sale'"
+                class="transaction-receipt-link"
+                :to="{
+                  name: 'staff-receipt',
+                  params: { id: selected.id },
+                  query: { from: 'transactions' },
+                }"
+              >
+                พิมพ์ใบเสร็จ
+              </RouterLink>
+              <RouterLink
+                v-if="selected.kind === 'usage' && selected.courseId"
+                class="transaction-receipt-link"
+                :to="{
+                  name: 'staff-course-prints',
+                  params: { courseId: selected.courseId },
+                  query: { usage: selected.key },
+                }"
+              >
+                ประวัติการพิมพ์
+              </RouterLink>
             <span
               class="transaction-status"
               :class="{
@@ -686,6 +720,7 @@ function backToList(next: Tab = tab.value) {
                   : 'ยกเลิกแล้ว'
               }}</span
             >
+            </div>
           </header>
           <div class="transaction-review-layout">
             <section class="transaction-review-card">

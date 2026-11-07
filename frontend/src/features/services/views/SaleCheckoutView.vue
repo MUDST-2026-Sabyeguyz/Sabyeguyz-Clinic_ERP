@@ -183,7 +183,6 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    // โหลดผู้ป่วย รายการขาย และช่องทางชำระสำหรับ checkout
     const patientId = Number(route.query.patientId)
     if (!Number.isInteger(patientId) || patientId < 1) throw new Error('กรุณาเลือกผู้ป่วยก่อนขาย')
     const [person, serviceList, courseList, staffList, methodList, labelList] =
@@ -290,7 +289,6 @@ function check() {
   if (netCents.value <= 0) throw new Error('ยอดสุทธิต้องมากกว่า 0 เพื่อรับชำระและออกใบเสร็จ')
 }
 function saleRequest() {
-  // รวมข้อมูลหน้าจอเป็น payload ตาม contract เดียวก่อนตรวจหรือส่งขาย
   if (hasService.value && appointmentId.value && !staff.value.some((person) => person.id === treatingId.value))
     throw new Error('กรุณาเลือกนักกายภาพ')
   return buildSaleRequest({
@@ -326,7 +324,6 @@ async function save() {
   try {
     saving.value = true
     if (route.query.appointmentId) {
-      // อ่าน progress ล่าสุดก่อน POST เพื่อกันการสร้างธุรกรรมซ้ำกับนัดเดิม
       await refreshAppointmentProcess()
       if (!canStartAppointment.value) throw new Error(processBlockReason.value)
       if (patient.value.id !== Number(route.query.patientId))
@@ -337,7 +334,6 @@ async function save() {
     const requestKey = sessionStorage.getItem(requestKeyStorageKey.value) || crypto.randomUUID()
     sessionStorage.setItem(requestKeyStorageKey.value, requestKey)
     request.requestKey = requestKey
-    // ตั้ง recovery marker ก่อนส่ง เพื่อให้กู้ผลได้เมื่อ request timeout
     sessionStorage.setItem(storageKey.value, 'pending')
     uncertainSale.value = true
     if (appointmentId.value) beginAppointmentWrite()
@@ -872,8 +868,14 @@ textarea {
   flex: 1;
 }
 .summary > .primary {
-  background: #1c8580;
   border-color: #1c8580;
+}
+.summary .primary:not(:disabled) {
+  background: var(--ui-primary-gradient);
+  box-shadow: var(--ui-primary-shadow);
+}
+.summary .primary:hover:not(:disabled) {
+  background: var(--ui-primary-gradient-hover);
 }
 .error {
   color: #9c302a;

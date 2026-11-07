@@ -2,6 +2,7 @@
 import { clinicToday } from '@/utils/clinicDate'
 import { buildCourseUsages, type UsageSelection } from '@/features/services/careTransactions'
 import CourseUsagePicker from '../components/CourseUsagePicker.vue'
+import CourseCutDocument from '../components/CourseCutDocument.vue'
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -443,7 +444,7 @@ function cancelTransfer() {
   })
 }
 function cancelPatientCourseDetail() {
-  if (openedFromPatientProfile.value) {
+  if (openedFromPatientProfile.value && route.query.print === '1') {
     void router.push(patientCoursesLocation.value)
     return
   }
@@ -488,7 +489,6 @@ async function confirm() {
     const usedCourseId = selectedCourse.value.id
     let usedCourses: CoursePurchase[] = []
     if (isCourseUsage) {
-      // ใช้สิทธิ์ได้เมื่อมีนัด ผู้รับบริการ ผู้รักษา และสาขาที่ตรงกัน
       if (!appointmentId.value) throw new Error('กรุณาสร้างนัดหมายก่อนใช้สิทธิ์คอร์ส')
       if (route.query.appointmentId) {
         await refreshAppointmentProcess()
@@ -509,7 +509,6 @@ async function confirm() {
       if (!treatingOptions.value.some((person) => person.id === treatingStaffId.value))
         throw new Error('กรุณาเลือกผู้รักษาของสาขานัดหมาย')
       usageConfirmDialog.value = false
-      // ใช้ endpoint เดี่ยวหรือ batch ตามจำนวนสิทธิ์ แต่บันทึกใน Visit เดียว
       beginAppointmentWrite()
       usedCourses =
         usages.length === 1
@@ -1217,48 +1216,22 @@ function closePrintSuccess() {
           <button class="course-cut-back-link" type="button" @click="cancelPatientCourseDetail">
             ← กลับไปประวัติการรักษา
           </button>
-          <article class="course-cut-document">
-            <header>
-              <h1>ใบตัดคอร์สการรักษา</h1>
-              <p>ที่อยู่: {{ documentClinicAddress }}</p>
-              <p>โทรศัพท์: {{ documentClinicPhone }}</p>
-            </header>
-            <p class="course-cut-issued">ออก ณ วันที่ : 29/06/2569</p>
-            <section class="course-cut-summary">
-              <p>
-                วันที่ซื้อคอร์ส
-                {{ new Date(selectedCourse.purchasedAt).toLocaleDateString('th-TH') }}
-              </p>
-              <p>จำนวน: {{ selectedCourse.total }} ครั้ง</p>
-              <p>ใช้ไปแล้ว: {{ usedSessions }} ครั้ง</p>
-              <p>คงเหลือ: {{ selectedCourse.total - usedSessions }} ครั้ง</p>
-              <strong>ชื่อคอร์ส : {{ selectedCourse.name }}</strong>
-              <strong
-                >วันหมดอายุ:
-                {{ new Date(selectedCourse.expiresAt).toLocaleDateString('th-TH') }}</strong
-              >
-            </section>
-            <div class="course-cut-table" role="table" aria-label="รายการใช้สิทธิ์คอร์ส">
-              <div class="course-cut-table-head" role="row">
-                <b>วันที่รับบริการ</b><b>นักกายภาพผู้ให้บริการ</b><b>สาขา</b><b>จำนวน</b>
-              </div>
-              <div v-for="(entry, index) in [...usageEntries].reverse()" :key="entry.id" role="row">
-                <span>{{
-                  new Date(entry.createdAt).toLocaleDateString('th-TH', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })
-                }}</span>
-                <span>{{ index === 0 ? 'กภ. วีระพงษ์' : 'กภ. ศิริพร' }}</span>
-                <span>{{ index === 0 ? 'พระราม 9' : 'แบริ่ง' }}</span>
-                <span>{{ Math.abs(entry.quantity) }}</span>
-              </div>
-              <div class="course-cut-total" role="row">
-                <b>รวมจำนวนที่ใช้</b><b>{{ usedSessions }}</b>
-              </div>
-            </div>
-          </article>
+          <CourseCutDocument
+            class="course-history-document"
+            :course-name="selectedCourse.name"
+            :address="documentClinicAddress"
+            :phone="documentClinicPhone"
+            :issued-at="clinicToday()"
+            :purchased-at="selectedCourse.purchasedAt"
+            :expires-at="selectedCourse.expiresAt"
+            :total="selectedCourse.total"
+            :used="usedSessions"
+            :remaining="selectedCourse.balance"
+            :entries="usageEntries.map((entry) => ({
+              date: entry.createdAt,
+              quantity: Math.abs(entry.quantity),
+            })).reverse()"
+          />
           <footer class="course-cut-actions">
             <button type="button" @click="cancelPatientCourseDetail">ยกเลิก</button>
             <button type="button" @click="printDialog = 'confirm'">พิมพ์เอกสาร</button>
@@ -1386,14 +1359,9 @@ function closePrintSuccess() {
                   v-if="!transferReceiptId && !historyFromInactive"
                   class="course-history-print"
                   type="button"
-                  @click="
-                    router.push({
-                      name: 'staff-course-prints',
-                      params: { courseId: selectedCourse.id },
-                    })
-                  "
+                  @click="coursePrintPreview = true"
                 >
-                  ดูใบตัดคอร์สและประวัติพิมพ์
+                  ดูใบตัดคอร์ส
                 </button>
               </div>
               <article
@@ -2865,77 +2833,8 @@ function closePrintSuccess() {
   font-size: 12px;
   cursor: pointer;
 }
-.course-cut-document {
-  box-sizing: border-box;
-  width: min(1020px, 100%);
-  min-height: 920px;
-  margin: 76px auto 0;
-  padding: 26px 33px;
-  border: 1px solid #d8e1de;
-  border-radius: 2px;
-  color: #25372f;
-  background: #fff;
-}
-.course-cut-document > header {
-  padding-bottom: 10px;
-  border-bottom: 2px solid #25372f;
-  text-align: center;
-}
-.course-cut-document > header h1 {
-  margin: 0 0 10px;
-  font-size: 22px;
-}
-.course-cut-document > header p {
-  margin: 0;
-  color: #52635c;
-  font-size: 14px;
-}
-.course-cut-issued {
-  margin: 12px 0 8px;
-  color: #66766f;
-  font-size: 14px;
-  text-align: right;
-}
-.course-cut-summary {
-  display: grid;
-  grid-template-columns: 1.3fr 0.7fr 0.8fr 0.8fr;
-  gap: 14px 20px;
-  margin-top: 8px;
-  font-size: 14px;
-}
-.course-cut-summary p {
-  margin: 0;
-}
-.course-cut-summary strong:first-of-type {
-  grid-column: 1 / 4;
-}
-.course-cut-table {
-  margin-top: 18px;
-  font-size: 12px;
-}
-.course-cut-table > div {
-  display: grid;
-  grid-template-columns: 1.1fr 1.65fr 1fr 80px;
-  align-items: center;
-  min-height: 52px;
-  border: 1px solid #25372f;
-  border-bottom: 0;
-}
-.course-cut-table > div:last-child {
-  border-bottom: 1px solid #25372f;
-}
-.course-cut-table > div > * {
-  padding: 0 16px;
-}
-.course-cut-table-head {
-  min-height: 48px !important;
-  background: #e8f5f0;
-}
-.course-cut-total {
-  grid-template-columns: 1fr 80px !important;
-}
-.course-cut-total b:first-child {
-  text-align: right;
+.course-history-document {
+  margin-top: 76px;
 }
 .course-cut-actions {
   display: flex;
@@ -2957,9 +2856,9 @@ function closePrintSuccess() {
 }
 .course-cut-actions button:last-child {
   min-width: 202px;
-  border-color: #5f9855;
+  border-color: #1f8883;
   color: #fff;
-  background: #5f9855;
+  background: #1f8883;
 }
 .course-print-modal-backdrop {
   position: fixed;
@@ -3014,20 +2913,8 @@ function closePrintSuccess() {
   background: #1e807c;
 }
 @media (max-width: 760px) {
-  .course-cut-document {
-    min-height: auto;
+  .course-history-document {
     margin-top: 28px;
-    padding: 22px 16px;
-    overflow-x: auto;
-  }
-  .course-cut-summary {
-    grid-template-columns: 1fr;
-  }
-  .course-cut-summary strong:first-of-type {
-    grid-column: auto;
-  }
-  .course-cut-table {
-    min-width: 680px;
   }
   .course-cut-actions {
     display: grid;
@@ -4278,7 +4165,6 @@ function closePrintSuccess() {
   }
 }
 
-/* Figma 140:3632 — share course form */
 .course-transfer-main {
   width: min(1200px, calc(100% - 48px));
   padding: 40px 0 142px;
@@ -4755,7 +4641,6 @@ function closePrintSuccess() {
   }
 }
 
-/* Figma 861:4967 — transfer success */
 .course-transfer-main.is-success {
   width: min(560px, calc(100% - 32px));
   padding: 22px 0 56px;
@@ -4822,7 +4707,6 @@ function closePrintSuccess() {
   box-shadow: 0 5px 12px rgb(31 143 137 / 20%);
 }
 
-/* Figma 140:3876 — course after transfer */
 .course-manager-main.after-transfer {
   width: min(1200px, calc(100% - 48px));
   padding-bottom: 60px;
@@ -4978,7 +4862,6 @@ function closePrintSuccess() {
   margin-top: 0;
 }
 
-/* Figma 177:1915 — use a transferred course */
 .course-use-main.after-transfer {
   display: grid;
   place-items: center;
@@ -5142,7 +5025,6 @@ function closePrintSuccess() {
   background: #1e807c;
 }
 
-/* Figma 177:1968 — history after transfer */
 .course-history-main.inactive-history {
   width: min(1000px, calc(100% - 48px));
   padding-top: 22px;
@@ -5522,21 +5404,8 @@ function closePrintSuccess() {
   :deep(.staff-header) {
     box-shadow: none !important;
   }
-  .course-cut-document {
-    display: block;
-    width: 100%;
-    min-height: 0;
-    height: 265mm;
-    max-height: 265mm;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 8mm 12mm 7mm;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    overflow: hidden;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+  .course-history-document {
+    margin-top: 0;
   }
 }
 </style>
