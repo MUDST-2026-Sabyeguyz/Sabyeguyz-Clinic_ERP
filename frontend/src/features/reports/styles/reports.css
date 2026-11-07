@@ -1,4 +1,3 @@
-/* Page Base Layout */
 .reports-page-wrapper {
   min-height: 100vh;
   background-color: #f7f5f0;
@@ -6,32 +5,43 @@
 }
 
 .reports-page-container {
-  width: min(1200px, calc(100% - 48px));
+  width: min(1420px, calc(100% - 64px));
   margin: 0 auto;
-  padding: 36px 0 64px;
+  padding: 40px 0 64px;
 }
 
-/* ── Header Section ───────────────────────────────────────────────────────── */
-
 .page-title-section {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
   margin-bottom: 28px;
+}
+.report-title-copy {
+  min-width: 0;
+}
+.page-title-section .report-select-group {
+  flex: 0 0 240px;
+}
+.page-title-section .report-select-group :deep(.filter-dropdown) {
+  width: 100%;
 }
 
 .page-title-section h1 {
-  margin: 0 0 6px;
-  font-size: 32px;
-  font-weight: 700;
-  color: #1a2e2b;
-  letter-spacing: -0.02em;
+  margin: 0;
+  font-size: clamp(28px, 2.4vw, 36px);
+  font-weight: 800;
+  line-height: 1.4;
+  color: #145c59;
+  letter-spacing: normal;
 }
 
 .page-title-section p {
-  margin: 0;
-  font-size: 15px;
-  color: #6b7280;
+  margin: 8px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #56665d;
 }
-
-/* ── KPI Summary Box ──────────────────────────────────────────────────────── */
 
 .kpi-summary-box {
   display: flex;
@@ -97,16 +107,14 @@
   color: #6b7280;
 }
 
-/* ── Filter Card ─────────────────────────────────────────────────────────── */
-
 .filter-card {
-  padding: 28px 32px;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.02);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   margin-bottom: 24px;
+  padding-block: 8px 24px;
+  border-bottom: 1px solid #dfe7e4;
 }
 
 .filter-card-header {
@@ -122,6 +130,9 @@
   font-size: 18px;
   font-weight: 700;
   color: #111827;
+}
+.report-filter-heading {
+  justify-content: flex-end;
 }
 
 .report-select-group {
@@ -143,6 +154,17 @@
   flex-direction: column;
   gap: 16px;
 }
+.filter-card .field-group {
+  min-width: 0;
+}
+.filter-card .field-group > label {
+  color: #526b70;
+  font-weight: 500;
+}
+.filter-card :is(input, select) {
+  box-sizing: border-box;
+  max-width: 100%;
+}
 
 .filter-grid-row1 {
   display: grid;
@@ -160,25 +182,33 @@
   gap: 16px;
 }
 
-/* Keep payment filters in one aligned row without empty grid columns. */
-.filter-card-body--payment {
+.filter-card-body--payment,
+.filter-card-body--commission {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-items: end;
 }
 .filter-card-body--payment .filter-grid-row1,
-.filter-card-body--payment .filter-grid-row2 {
+.filter-card-body--payment .filter-grid-row2,
+.filter-card-body--commission .filter-grid-row1,
+.filter-card-body--commission .filter-grid-row2 {
   display: contents;
 }
 .filter-card-body--payment .field-group {
   min-width: 0;
 }
 @media (max-width: 1000px) {
-  .filter-card-body--payment { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-card-body--payment,
+  .filter-card-body--commission {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 600px) {
-  .filter-card-body--payment { grid-template-columns: minmax(0, 1fr); }
+  .filter-card-body--payment,
+  .filter-card-body--commission {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .field-group {
@@ -224,7 +254,6 @@
   box-shadow: 0 0 0 3px rgba(24, 122, 116, 0.15);
 }
 
-/* ThaiDatePicker Style Integration */
 .field-group :deep(.thai-date-picker) {
   margin-top: 0;
   width: 100%;
@@ -249,7 +278,6 @@
   box-shadow: 0 0 0 3px rgba(24, 122, 116, 0.15);
 }
 
-/* Custom Select Arrow */
 .select-wrapper {
   position: relative;
   width: 100%;
@@ -272,14 +300,11 @@
   pointer-events: none;
 }
 
-/* ── Table Card ──────────────────────────────────────────────────────────── */
-
 .table-card {
-  border-radius: 12px;
+  border: 1px solid #dfe6e3;
+  border-radius: 10px;
   background: #ffffff;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -332,30 +357,37 @@
 }
 
 .report-figma-table thead tr {
-  background: #187a74;
+  background: #f0f6f3;
 }
 
 .report-figma-table th {
-  padding: 16px 24px;
-  color: #ffffff;
+  padding: 12px 18px;
+  color: #3a6b6d;
   font-size: 14px;
   font-weight: 600;
   text-align: left;
   border: none;
+  border-bottom: 1px solid #dfe9e5;
   white-space: nowrap;
 }
 
 .report-figma-table td {
-  padding: 18px 24px;
-  color: #374151;
+  padding: 18px;
+  color: #29494e;
   font-size: 14px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #e9efec;
   text-align: left;
   white-space: nowrap;
 }
 
 .report-figma-table tbody tr:last-child td {
   border-bottom: none;
+}
+.report-figma-table tbody tr:not(.total-row):hover td {
+  background: #f8fbf9;
+}
+.report-figma-table tbody td:first-child {
+  font-weight: 600;
 }
 
 .report-figma-table .total-row td {
@@ -369,8 +401,6 @@
   text-align: right;
 }
 
-/* Keep the sales report readable at desktop width: monetary values stay compact,
-   while treatment and period get the room needed for their longer labels. */
 .report-figma-table--revenue {
   table-layout: fixed;
 }
@@ -446,8 +476,6 @@
   font-size: 14px;
 }
 
-/* ── Table Card Footer & Last Updated ────────────────────────────────────── */
-
 .table-card-footer {
   display: flex;
   flex-direction: column;
@@ -461,16 +489,53 @@
   color: #9ca3af;
 }
 
-/* ── Pagination Bar ───────────────────────────────────────────────────────── */
-
 .report-pagination {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px;
+  padding: 20px 24px 24px;
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
+}
+.report-pagination .btn-prev {
+  justify-self: start;
+}
+.report-pagination .btn-next {
+  justify-self: end;
+}
+.pagination-center {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+.pagination-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.pagination-number {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px;
+  border: 1px solid #dfe9e5;
+  border-radius: 8px;
+  background: white;
+  color: #145c59;
+  font: inherit;
+  cursor: pointer;
+}
+.pagination-number.active {
+  background: #145c59;
+  color: white;
+  border-color: #145c59;
+  box-shadow: 0 2px 4px #145c5920;
+}
+.pagination-number:focus-visible {
+  outline: 2px solid #1e807c;
+  outline-offset: 2px;
 }
 
 .pagination-info {
@@ -486,7 +551,7 @@
   padding: 8px 18px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: #f9fafb;
+  background: #ffffff;
   color: #374151;
   font: inherit;
   font-size: 14px;
@@ -502,8 +567,8 @@
 }
 
 .report-pagination .btn-prev:disabled {
-  color: #9ca3af;
-  background: #f3f4f6;
+  color: #91a7aa;
+  background: #ffffff;
   border-color: #e5e7eb;
   cursor: not-allowed;
   opacity: 0.7;
@@ -531,21 +596,14 @@
 }
 
 .report-pagination .btn-next:disabled {
-  color: #9ca3af;
-  background: #f3f4f6;
-  border-color: #e5e7eb;
+  color: #ffffff;
+  background: #8fbfbd;
+  border-color: #8fbfbd;
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 1;
 }
 
-/* ── Responsive Breakdown ─────────────────────────────────────────────────── */
-
 @media (max-width: 992px) {
-  .reports-page-container {
-    width: calc(100% - 32px);
-    padding: 24px 0 48px;
-  }
-
   .kpi-summary-box {
     padding: 20px 24px;
   }
@@ -559,7 +617,7 @@
   }
 
   .filter-card {
-    padding: 24px;
+    padding: 0;
   }
 
   .filter-grid-row1,
@@ -573,8 +631,13 @@
 }
 
 @media (max-width: 768px) {
-  .page-title-section h1 {
-    font-size: 26px;
+  .page-title-section {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .page-title-section .report-select-group {
+    flex: none;
   }
 
   .kpi-summary-box {
@@ -629,18 +692,20 @@
 }
 
 @media (max-width: 480px) {
-  .reports-page-container {
-    width: calc(100% - 24px);
-    padding: 18px 0 36px;
-  }
-
   .filter-card {
-    padding: 18px;
+    padding: 0;
   }
 
   .report-figma-table th,
   .report-figma-table td {
     padding: 14px 16px;
     font-size: 13px;
+  }
+}
+
+@media (max-width: 700px) {
+  .reports-page-container {
+    width: calc(100% - 32px);
+    padding-top: 28px;
   }
 }
