@@ -84,7 +84,11 @@ async function load() {
   try {
     const id = Number(route.params.id)
     if (!Number.isInteger(id) || id < 1) throw new Error('เลขอ้างอิงใบเสร็จไม่ถูกต้อง')
-    receipt.value = await salesApi.get(id)
+    const detail = await salesApi.get(id)
+    if (route.name === 'patient-receipt' && detail.patient.id !== Number(route.params.patientId)) {
+      throw new Error('ไม่พบใบเสร็จของผู้ป่วยรายนี้')
+    }
+    receipt.value = detail
     receiptPatient.value = null
     try {
       const [branches, patient] = await Promise.allSettled([
@@ -114,6 +118,19 @@ function printReceipt() {
   }
 }
 function returnToPatientCourses() {
+  if (route.name === 'patient-receipt') {
+    void router.replace({
+      name: 'patient-history',
+      params: { id: route.params.patientId },
+      query: { tab: route.query.tab === 'payments' ? 'payments' : 'courses' },
+    })
+    return
+  }
+  const receiptId = Number(route.params.id)
+  if (route.query.from === 'transactions' && Number.isSafeInteger(receiptId) && receiptId > 0) {
+    void router.replace({ name: 'staff-transactions', query: { sale: `sale-${receiptId}` } })
+    return
+  }
   const patientId = receipt.value?.patient.id
   if (patientId) {
     void router.push({ name: 'patient-history', params: { id: patientId } })
@@ -129,7 +146,7 @@ onMounted(load)
     <div class="receipt-screen-only"><StaffHeader /></div>
     <main>
       <div class="receipt-toolbar receipt-screen-only">
-        <button type="button" @click="returnToPatientCourses">← กลับ</button>
+        <button class="receipt-back" type="button" @click="returnToPatientCourses">← กลับ</button>
         <button v-if="receipt" type="button" @click="printReceipt">พิมพ์ใบเสร็จ</button>
       </div>
       <p v-if="loading" role="status">กำลังโหลดใบเสร็จ…</p>
@@ -319,6 +336,12 @@ button {
 button:last-child {
   background: #1c8681;
   color: #fff;
+}
+.receipt-toolbar .receipt-back {
+  border-color: transparent;
+  padding-inline: 0;
+  background: transparent;
+  color: #126b68;
 }
 button:focus-visible {
   outline: 2px solid #126b68;
@@ -650,6 +673,8 @@ td small {
     width: 210mm;
     min-height: 296mm;
     padding: 8mm 7mm 5mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .receipt-table-wrap {
     overflow: visible;
