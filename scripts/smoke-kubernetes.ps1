@@ -8,20 +8,27 @@ $outLog = Join-Path ([IO.Path]::GetTempPath()) ('clinic-forward-' + [guid]::NewG
 $errLog = $outLog + '.err'
 $forward = $null
 try {
-    $arguments = @('--context',$KubeContext,'-n',$Namespace,'port-forward','service/frontend','0:80','--address','127.0.0.1')
+    $portReservation = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
+    $portReservation.Start()
+    $port = $portReservation.LocalEndpoint.Port
+    $portReservation.Stop()
+    $arguments = @('--context',$KubeContext,'-n',$Namespace,'port-forward','service/frontend',"${port}:80",'--address','127.0.0.1')
     $arguments = @($arguments | ForEach-Object { '"' + $_.Replace('"','\"') + '"' })
-    $forward = Start-Process -FilePath (Get-Command kubectl).Source -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    $kubectlCommand = Get-Command kubectl -All | Where-Object { $_.Source -notmatch '(?i)\\chocolatey\\bin\\kubectl\.exe$' } | Select-Object -First 1
+    if (-not $kubectlCommand) { $kubectlCommand = Get-Command kubectl -ErrorAction Stop }
+    $forward = Start-Process -FilePath $kubectlCommand.Source -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
     $deadline = (Get-Date).AddSeconds(45)
-    $port = $null
+    $baseUrl = "http://127.0.0.1:$port"
+    $page = $null
     do {
         if ($forward.HasExited) { throw ('Port-forward failed: ' + [IO.File]::ReadAllText($errLog)) }
-        $output = [IO.File]::ReadAllText($outLog)
-        if ($output -match 'Forwarding from 127\.0\.0\.1:(\d+)') { $port = [int]$Matches[1]; break }
+        try {
+            $page = Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/staff/settings" -TimeoutSec 2
+            if ($page.StatusCode -eq 200) { break }
+        } catch { }
         Start-Sleep -Milliseconds 500
     } while ((Get-Date) -lt $deadline)
-    if (-not $port) { throw 'Port-forward did not become ready.' }
-    $baseUrl = "http://127.0.0.1:$port"
-    $page = Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/staff/settings" -TimeoutSec 20
+    if (-not $page -or $page.StatusCode -ne 200) { throw 'Port-forward did not become ready.' }
     if ($page.StatusCode -ne 200 -or [string]$page.Content -notmatch '(?i)html|115\s+99') { throw 'Frontend page did not respond successfully.' }
     $protectedStatus = 0
     try { $protectedStatus = [int](Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/api/patients?size=1" -TimeoutSec 20).StatusCode }
