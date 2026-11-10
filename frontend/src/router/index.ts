@@ -360,6 +360,12 @@ const router = createRouter({
       meta: { roles: ['manager', 'therapist'] },
     },
     {
+      path: '/staff/settings/card-readers',
+      name: 'staff-card-readers',
+      component: () => import('@/features/idcard/CardReadersView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/settings',
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
