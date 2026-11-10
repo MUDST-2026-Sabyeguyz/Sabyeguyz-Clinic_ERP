@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { branchApi, commissionApi, salesApi, type SaleDetail } from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 const type = ref<'single' | 'course'>('single')
 const router = useRouter()
 const reportSelection = ref('salesTransaction')
@@ -22,10 +23,15 @@ const page = ref(1)
 const loading = ref(false)
 const error = ref('')
 const updated = ref('')
-const sourceTierOpen = ref(false)
 const sales = ref<SaleDetail[]>([])
 const treatments = ref<Awaited<ReturnType<typeof commissionApi.treatmentReport>>>([])
 const branchNames = ref<Record<string, string>>({})
+const selectedHeaderBranchCode = computed(
+  () =>
+    selectedManagerBranch()?.code ??
+    JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ??
+    '',
+)
 let requestId = 0
 const money = (n: number) => `฿${Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
 const date = (v: string) =>
@@ -41,8 +47,11 @@ const keyword = computed(() => search.value.trim().toLowerCase())
 const salesRows = computed(() =>
   sales.value.filter((row) => {
     const matchesType = row.items.some((item) => item.type === 'SINGLE_VISIT')
+    const matchesBranch =
+      !selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value
     return (
       matchesType &&
+      matchesBranch &&
       (!from.value || row.soldAt.slice(0, 10) >= from.value) &&
       (!to.value || row.soldAt.slice(0, 10) <= to.value) &&
       `${row.patient.fullName} ${row.patient.hn}`.toLowerCase().includes(keyword.value)
@@ -50,8 +59,10 @@ const salesRows = computed(() =>
   }),
 )
 const courseRows = computed(() =>
-  treatments.value.filter((row) =>
-    `${row.patientName} ${row.patientHn}`.toLowerCase().includes(keyword.value),
+  treatments.value.filter(
+    (row) =>
+      (!selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value) &&
+      `${row.patientName} ${row.patientHn}`.toLowerCase().includes(keyword.value),
   ),
 )
 const count = computed(() =>
@@ -59,78 +70,25 @@ const count = computed(() =>
 )
 const pageCount = computed(() => Math.max(1, Math.ceil(count.value / 10)))
 const start = computed(() => (page.value - 1) * 10)
-const metrics = computed(() =>
-  type.value === 'single'
-    ? [
-        ['รายการที่แสดง', `${count.value} รายการ`],
-        ['ค่ามือคอมมิชชันรวม', '—'],
-        ['ค่าคอมมิชชันรวม', '—'],
-        [
-          'พนักงานขายที่ขายได้',
-          `${new Set(salesRows.value.map((r) => r.salesperson?.id).filter(Boolean)).size} คน`,
-        ],
-      ]
-    : [
-        ['รายการที่แสดง', `${count.value} รายการ`],
-        ['มูลค่าการรักษารวม', money(courseRows.value.reduce((n, r) => n + Number(r.gross), 0))],
-        ['ค่ามือรวม', money(courseRows.value.reduce((n, r) => n + Number(r.treatmentFee), 0))],
-      ],
+const totalLabel = computed(() =>
+  type.value === 'single' ? 'ยอดรวมใบเสร็จที่แสดง' : 'มูลค่าการรักษารวม',
 )
-const tierBase = computed(() =>
+const totalAmount = computed(() =>
   type.value === 'single'
-    ? salesRows.value.reduce((total, row) => total + Number(row.total), 0)
-    : courseRows.value.reduce((total, row) => total + Number(row.gross), 0),
+    ? salesRows.value.reduce((sum, row) => sum + Number(row.total), 0)
+    : courseRows.value.reduce((sum, row) => sum + Number(row.gross), 0),
 )
-const sourceDetail = computed(() => {
-  if (type.value === 'single') {
-    const row = salesRows.value[0]
-    if (!row) return null
-    const course = row.items.find((item) => item.type === 'COURSE')
-    return {
-      receipt: row.receiptNo,
-      course: course?.description || row.items.map((item) => item.description).join(', ') || '—',
-      seller: row.salesperson?.fullName || '—',
-      branch: branchNames.value[row.branchCode] || row.branchCode,
-      soldAt: date(row.soldAt),
-      gross: row.items.reduce((total, item) => total + Number(item.lineTotal), 0),
-      net: Number(row.total),
-    }
-  }
-
-  const row = courseRows.value[0]
-  if (!row) return null
-  return {
-    receipt: row.courseCode,
-    course: row.courseCode || '—',
-    seller: row.treatingStaffName || '—',
-    branch: row.branchName || row.branchCode,
-    soldAt: date(row.visitDate),
-    gross: Number(row.gross),
-    net: Number(row.gross),
-  }
-})
-function openTierRoundDetails() {
-  sourceTierOpen.value = false
-  void router.push({
-    name: 'transaction-tier-round',
-    query: {
-      type: type.value,
-      base: String(tierBase.value),
-      from: from.value,
-      to: to.value,
-    },
-  })
-}
 async function load() {
   const id = ++requestId
   loading.value = true
   error.value = ''
   try {
+    const branchCode = selectedHeaderBranchCode.value || undefined
     if (type.value === 'single') {
-      const result = await salesApi.list({ page: 0, size: 100 })
+      const result = await salesApi.list({ branchCode, page: 0, size: 100 })
       const all = [...result.items]
       for (let index = 1; index < result.totalPages; index++)
-        all.push(...(await salesApi.list({ page: index, size: 100 })).items)
+        all.push(...(await salesApi.list({ branchCode, page: index, size: 100 })).items)
       const details = await Promise.all(
         all.filter((row) => row.status !== 'VOIDED').map((row) => salesApi.get(row.id)),
       )
@@ -156,8 +114,8 @@ void branchApi
     branchNames.value = Object.fromEntries(rows.map((r) => [r.code, r.name]))
   })
   .catch(() => {})
-watch([type, from, to], load, { immediate: true })
-watch([type, search, from, to], () => {
+watch([type, from, to, selectedHeaderBranchCode], load, { immediate: true })
+watch([type, search, from, to, selectedHeaderBranchCode], () => {
   page.value = 1
 })
 watch(reportSelection, (report) => {
@@ -167,14 +125,14 @@ watch(reportSelection, (report) => {
 })
 </script>
 <template>
-  <main class="transaction-workspace">
-    <header>
-      <div>
+  <main class="reports-page-container transaction-report-container">
+    <section class="page-title-section">
+      <div class="report-title-copy">
         <h1>Transaction</h1>
-        <p>ดูรายการขายและรายการใช้สิทธิ์คอร์ส โดยเลือกประเภทธุรกรรมที่ต้องการ</p>
+        <p>ตรวจสอบรายการขายและรายการใช้สิทธิ์คอร์ส</p>
       </div>
-      <label class="transaction-report-select">
-        <span>เลือกรายงาน</span>
+      <div class="report-select-group">
+        <label>เลือกรายงาน</label>
         <FilterDropdown
           v-model="reportSelection"
           :options="reportOptions"
@@ -184,66 +142,74 @@ watch(reportSelection, (report) => {
           hide-default-option
           :clear-on-reselect="false"
         />
-      </label>
-    </header>
-    <section class="transaction-filters">
-      <div>
-        <b>เลือกประเภท</b>
-        <div class="type-choices">
-          <button
-            v-for="option in ['single', 'course'] as const"
-            :key="option"
-            :class="{ active: type === option }"
-            :aria-pressed="type === option"
-            @click="type = option"
-          >
-            {{ type === option ? '✓ ' : ''
-            }}{{ option === 'single' ? 'Single Visit Transaction' : 'Course Transaction' }}
-          </button>
-        </div>
       </div>
-      <label
-        >ค้นหาผู้ป่วย<input v-model="search" placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
-      /></label>
-      <div>
-        <label>ช่วงวันที่</label>
-        <div class="transaction-dates">
-          <ThaiDatePicker v-model="from" placeholder="ตั้งแต่วันที่" numeric-month /><ThaiDatePicker
-            v-model="to"
-            placeholder="ถึงวันที่"
-            numeric-month
+    </section>
+
+    <section class="filter-card">
+      <div class="filter-grid-row1 transaction-filter-grid">
+        <div class="field-group">
+          <label>ประเภทธุรกรรม</label>
+          <FilterDropdown
+            v-model="type"
+            :options="[
+              { value: 'single', label: 'รายการขาย' },
+              { value: 'course', label: 'การใช้สิทธิ์คอร์ส' },
+            ]"
+            default-value="single"
+            default-label="รายการขาย"
+            label="ประเภทธุรกรรม"
+            hide-default-option
+            :clear-on-reselect="false"
           />
         </div>
+        <div class="field-group">
+          <label>ค้นหาผู้ป่วย</label>
+          <input v-model="search" type="text" placeholder="ค้นหาชื่อหรือหมายเลข HN" />
+        </div>
+        <div class="field-group">
+          <label>ตั้งแต่วันที่</label>
+          <ThaiDatePicker
+            v-model="from"
+            placeholder="ตั้งแต่วันที่"
+            numeric-month
+            show-calendar-icon
+          />
+        </div>
+        <div class="field-group">
+          <label>ถึงวันที่</label>
+          <ThaiDatePicker v-model="to" placeholder="ถึงวันที่" numeric-month show-calendar-icon />
+        </div>
       </div>
     </section>
-    <section class="transaction-metrics">
-      <article v-for="metric in metrics" :key="metric[0]">
-        <p>{{ metric[0] }}</p>
-        <strong>{{ loading ? '…' : metric[1] }}</strong>
-      </article>
-    </section>
-    <section>
-      <header class="results-heading">
+
+    <section class="table-card">
+      <div class="transaction-table-header">
         <div>
           <h2>{{ title }}</h2>
-          <p>
-            {{
-              type === 'single'
-                ? 'รายการขาย · Single Visit'
-                : 'รายการใช้สิทธิ์คอร์ส · ไม่ใช่ยอดขายใหม่'
-            }}
-          </p>
+          <p>{{ type === 'single' ? 'รายการขายรายครั้ง' : 'รายการใช้สิทธิ์คอร์ส' }}</p>
+          <div class="transaction-summary" aria-live="polite">
+            <span>{{ loading ? 'กำลังโหลด…' : `ทั้งหมด ${count} รายการ` }}</span>
+            <template v-if="!loading && !error">
+              <span
+                >{{ totalLabel }} <strong>{{ money(totalAmount) }}</strong></span
+              >
+              <span v-if="type === 'course'"
+                >ค่ามือรวม
+                <strong>{{
+                  money(courseRows.reduce((sum, row) => sum + Number(row.treatmentFee), 0))
+                }}</strong></span
+              >
+            </template>
+          </div>
         </div>
-        <div class="results-actions">
-          <button v-if="type === 'single'" class="action" type="button" @click="sourceTierOpen = true">
-            ดูต้นทางยอดขายและฐาน Tier
-          </button>
-          <RouterLink v-else class="action" to="/staff/transactions">ดูรายการซื้อคอร์ส</RouterLink>
-        </div>
-      </header>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <div class="transaction-table">
-        <table>
+        <RouterLink v-if="type !== 'single'" class="action" to="/staff/transactions"
+          >ดูรายการซื้อคอร์ส</RouterLink
+        >
+      </div>
+      <p v-if="error" class="report-error" role="alert">{{ error }}</p>
+      <p v-else-if="loading" class="report-loading">กำลังโหลดรายงาน...</p>
+      <div class="table-scroll-wrapper">
+        <table class="report-figma-table transaction-report-table">
           <thead>
             <tr>
               <th
@@ -311,95 +277,103 @@ watch(reportSelection, (report) => {
           </tbody>
         </table>
       </div>
-      <nav class="transaction-pagination" aria-label="เปลี่ยนหน้าธุรกรรม">
-        <button :disabled="page === 1" @click="page--">← ก่อนหน้า</button
-        ><span>หน้า {{ page }} จาก {{ pageCount }}</span
-        ><button :disabled="page >= pageCount" @click="page++">ถัดไป →</button>
-      </nav>
-      <footer>
-        <span>แสดง {{ Math.min(10, Math.max(0, count - start)) }} จาก {{ count }} รายการ</span
-        ><span v-if="updated">อัปเดตล่าสุด {{ updated }}</span>
-      </footer>
+      <div class="table-card-footer">
+        <nav class="report-pagination" aria-label="เปลี่ยนหน้าธุรกรรม">
+          <button type="button" class="btn-prev" :disabled="page === 1" @click="page--">
+            ← ก่อนหน้า
+          </button>
+          <div class="pagination-center">
+            <span class="pagination-info">หน้า {{ page }} จาก {{ pageCount }}</span>
+            <div class="pagination-numbers">
+              <button
+                v-for="number in Array.from(
+                  { length: Math.min(5, pageCount) },
+                  (_, index) => Math.max(1, Math.min(page - 2, pageCount - 4)) + index,
+                )"
+                :key="number"
+                type="button"
+                class="pagination-number"
+                :class="{ active: page === number }"
+                :aria-current="page === number ? 'page' : undefined"
+                :aria-label="`หน้า ${number}`"
+                @click="page = number"
+              >
+                {{ number }}
+              </button>
+            </div>
+          </div>
+          <button type="button" class="btn-next" :disabled="page >= pageCount" @click="page++">
+            ถัดไป →
+          </button>
+        </nav>
+        <span v-if="updated" class="last-updated-tag">อัปเดตล่าสุด {{ updated }}</span>
+      </div>
     </section>
-
-    <div
-      v-if="sourceTierOpen"
-      class="transaction-modal-backdrop"
-      @click.self="sourceTierOpen = false"
-    >
-      <section
-        class="transaction-source-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="transaction-source-title"
-      >
-        <header>
-          <div>
-            <h2 id="transaction-source-title">รายละเอียดต้นทางยอดขายและฐาน Tier</h2>
-          </div>
-          <button
-            type="button"
-            class="modal-close"
-            aria-label="ปิด"
-            @click="sourceTierOpen = false"
-          >
-            ×
-          </button>
-        </header>
-
-        <dl v-if="sourceDetail" class="source-detail-list">
-          <div>
-            <dt>เลขที่ / ใบเสร็จ</dt>
-            <dd>{{ sourceDetail.receipt }}</dd>
-          </div>
-          <div>
-            <dt>คอร์ส</dt>
-            <dd>{{ sourceDetail.course }}</dd>
-          </div>
-          <div>
-            <dt>ผู้ขาย / สาขา / วันขาย</dt>
-            <dd>
-              {{ sourceDetail.seller }} · {{ sourceDetail.branch }} ·
-              {{ sourceDetail.soldAt }}
-            </dd>
-          </div>
-          <div>
-            <dt>ราคาก่อนลด / ส่วนลดรายการ</dt>
-            <dd>
-              {{ money(sourceDetail.gross) }} /
-              {{ money(Math.max(0, sourceDetail.gross - sourceDetail.net)) }}
-            </dd>
-            <small>ราคาหลังหักส่วนลด: {{ money(sourceDetail.net) }}</small>
-          </div>
-          <div>
-            <dt>มูลค่าสุทธิสำหรับ Tier</dt>
-            <dd>{{ money(sourceDetail.net) }} / {{ money(sourceDetail.net) }}</dd>
-            <small>มูลค่าหลังหักส่วนลดที่นำไปคิดฐาน Tier</small>
-          </div>
-          <div>
-            <dt>ยอดขายคอร์สรอบเดือน / Tier</dt>
-            <dd>{{ money(tierBase) }} / —</dd>
-            <small>Tier จะแสดงเมื่อมีข้อมูล Scheme ของรอบนั้น</small>
-          </div>
-          <p class="source-detail-note">
-            หมายเหตุ:
-            {{ type === 'single' ? 'CoursePurchase' : 'Course Transaction' }} ·
-            ยอดและค่าคอมมิชชั่นจะอิงจากรายการที่บันทึกในระบบ
-          </p>
-        </dl>
-        <p v-else class="source-detail-empty">ไม่พบรายการที่ใช้คำนวณฐาน Tier</p>
-
-        <footer>
-          <button type="button" class="modal-back" @click="sourceTierOpen = false">กลับ</button>
-          <button type="button" class="modal-done" @click="openTierRoundDetails">
-            ดูรายละเอียดรอบและฐาน Tier
-          </button>
-        </footer>
-      </section>
-    </div>
   </main>
 </template>
+<style scoped src="../styles/reports.css"></style>
 <style scoped>
+.transaction-report-container {
+  min-width: 0;
+}
+.transaction-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 14px;
+  color: #607b7d;
+  font-size: 14px;
+}
+.transaction-summary strong {
+  margin-left: 6px;
+  color: #176f6b;
+}
+.transaction-filter-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.transaction-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 24px 18px;
+}
+.transaction-table-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #111827;
+}
+.transaction-table-header p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+.transaction-report-table {
+  min-width: 960px;
+}
+.transaction-report-table .empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: #9ca3af;
+}
+@media (max-width: 992px) {
+  .transaction-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .transaction-filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .transaction-table-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .transaction-table-header .action {
+    width: 100%;
+    text-align: center;
+  }
+}
 .transaction-workspace > * {
   min-width: 0;
 }
@@ -511,6 +485,7 @@ watch(reportSelection, (report) => {
 .transaction-metrics {
   display: flex;
   gap: 16px;
+  margin-bottom: 24px;
 }
 .transaction-metrics article {
   flex: 1;

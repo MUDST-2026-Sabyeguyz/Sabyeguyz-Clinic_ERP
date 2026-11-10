@@ -32,7 +32,8 @@ public class AuthController {
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
     public record RegisterRequest(@NotBlank String username,@NotBlank @Size(max = 254) String email, @NotBlank String password) {}
-    public record AuthResponse(Long id, String username, String email, String role, String token, String branchCode, String branchName) {}
+    public record AuthResponse(Long id, String username, String email, String role, String token,
+                               String branchCode, String branchName, Long staffId) {}
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request) {
@@ -57,6 +58,7 @@ public class AuthController {
         String primaryRole = roleNames.isEmpty() ? null : roleNames.get(0);
         var branch = user.getStaff() == null ? null : user.getStaff().getBranch();
         return new AuthResponse(user.getId(), user.getUsername(), user.getEmail(), primaryRole, token,
-                branch == null ? null : branch.getBranchCode(), branch == null ? null : branch.getBranchName());
+                branch == null ? null : branch.getBranchCode(), branch == null ? null : branch.getBranchName(),
+                user.getStaff() == null ? null : user.getStaff().getId());
     }
 }

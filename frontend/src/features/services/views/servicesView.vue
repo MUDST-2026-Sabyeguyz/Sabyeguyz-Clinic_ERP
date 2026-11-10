@@ -1,21 +1,33 @@
 <script setup lang="ts">
+import { buildSaleRequest, allowedPaymentMethod } from '../careTransactions'
+import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
+import TodayAppointments from '../components/TodayAppointments.vue'
+import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
+import { useCourseCommissionPreview } from '@/features/commission/useCourseCommissionPreview'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import PhoneIcon from '@/components/PhoneIcon.vue'
 import paymentBankIcon from '@/assets/payment-bank.svg'
 import paymentQrIcon from '@/assets/payment-qr.svg'
 import paymentCardIcon from '@/assets/payment-card.svg'
 import saleSuccessCheck from '@/assets/sale-success-check.svg'
 import {
+  ApiError,
   branchApi,
   catalogApi,
   patientApi,
   paymentMethodApi,
   paymentStatusApi,
+  courseApi,
+  singleVisitEntitlementApi,
   salesApi,
   staffApi,
   type Course,
+  type CoursePurchase,
+  type SingleVisitEntitlement,
+  type Appointment,
   type Branch,
   type Patient,
   type PatientProfile,
@@ -28,10 +40,19 @@ import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data
 type Mode = 'assessment' | 'single' | 'course'
 const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const route = useRoute()
+const {
+  appointmentId, sourceAppointment,
+  appointmentProgress,
+  processLoading,
+  processError,
+  refreshAppointmentProcess,
+  canStartAppointment, processBlockReason, recoveryRequired,
+  beginAppointmentWrite, finishAppointmentWrite, recoverAppointmentWrite,
+} = useAppointmentProcess()
 const router = useRouter()
 const query = ref(''),
   patient = ref<Patient | null>(null),
-  mode = ref<Mode>('assessment'),
+  mode = ref<Mode>('single'),
   confirmed = ref(false),
   reviewing = ref(false),
   loading = ref(false),
@@ -41,19 +62,39 @@ const allPatients = ref<Patient[]>([])
 const patientProfile = ref<PatientProfile | null>(null)
 const services = ref<ServiceOption[]>([])
 const courses = ref<Course[]>([])
+const patientCoursePurchases = ref<CoursePurchase[]>([])
+const patientSingleVisitEntitlements = ref<SingleVisitEntitlement[]>([])
+const patientCourseLoading = ref(false)
+const patientCourseError = ref(false)
 const paymentMethods = ref<PaymentMethod[]>([])
 const paymentStatuses = ref<PaymentStatusOption[]>([])
 const staff = ref<Staff[]>([])
 const branches = ref<Branch[]>([])
 const selectedServiceId = ref(0),
   selectedCourseId = ref(0),
-  selectedStaffId = ref<number | undefined>()
+  selectedTreatingStaffId = ref<number | undefined>(),
+  selectedSalespersonStaffId = ref<number | undefined>()
 const paymentCode = ref(''),
   note = ref('')
-const paymentStatus = ref<'INSTALLMENT' | 'DEPOSIT' | 'PAID'>('PAID')
-const paymentAmount = ref(0)
+const paymentStatus = ref<PaymentStatusOption['code'] | ''>('')
+const discountMode = ref<'NONE' | 'ITEM_FIXED' | 'ITEM_PERCENT' | 'BILL_FIXED' | 'BILL_PERCENT'>('NONE')
+const discountValue = ref(0)
 const searched = ref(false)
 const receiptNo = ref('')
+const receiptTransactionId = ref<number | null>(null)
+const saleRequestKey = ref('')
+const saleRequestStorageKey = () =>
+  `sale-request:${patient.value?.id ?? 'none'}:${appointmentId.value ?? 'walk-in'}`
+function ensureSaleRequestKey() {
+  if (saleRequestKey.value) return saleRequestKey.value
+  const stored = sessionStorage.getItem(saleRequestStorageKey())
+  saleRequestKey.value = stored || crypto.randomUUID()
+  sessionStorage.setItem(saleRequestStorageKey(), saleRequestKey.value)
+  return saleRequestKey.value
+}
+const patientLoading = ref(Boolean(route.query.patientId))
+const patientLoadError = ref('')
+const masterLoadError = ref('')
 const paymentDialogOpen = ref(false)
 const receiptPrintModal = ref<'confirm' | 'success' | 'error' | null>(null)
 const screen = ref<'search' | 'menu' | 'sale' | 'receipt'>(
@@ -65,6 +106,18 @@ const assessmentService = computed(
       (service) =>
         service.code.includes('ASSESS') || service.name.toLowerCase().includes('assessment'),
     ) ?? services.value[0],
+)
+const patientCourseSummary = computed(() => {
+  if (patientCourseLoading.value) return 'กำลังตรวจสอบสิทธิ์คอร์ส'
+  if (patientCourseError.value) return 'ตรวจสอบสิทธิ์คอร์สไม่ได้'
+  const usable = patientCoursePurchases.value.filter((course) => course.usable && course.remaining > 0)
+  if (!usable.length) return 'ยังไม่มีสิทธิ์คอร์สที่ใช้งานได้'
+  return `(คงเหลือ ${usable.length} คอร์ส · ${usable.reduce((sum, course) => sum + course.remaining, 0)} ครั้ง)`
+})
+const prepaidServiceBalance = computed(() =>
+  patientSingleVisitEntitlements.value
+    .filter((item) => !appointmentId.value || item.branchCode === sourceAppointment.value?.branchCode)
+    .reduce((sum, item) => sum + item.remaining, 0),
 )
 const receiptBranch = computed(() => {
   const code = patient.value?.branchCode?.toLocaleLowerCase('th')
@@ -84,6 +137,37 @@ const receiptBranchLabel = computed(() => {
   return name ? (name.startsWith('สาขา') ? name : `สาขา ${name}`) : 'ไม่ระบุสาขา'
 })
 const managerBranchCode = computed(() => (isManager ? (selectedManagerBranch()?.code ?? '') : ''))
+const appointmentBranchCode = computed(() =>
+  isManager
+    ? managerBranchCode.value
+    : (JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ?? ''),
+)
+async function chooseAppointment(item: Appointment) {
+  // ตรวจสาขาและสถานะก่อนเปิดนัด; NEW ต้องลงทะเบียนก่อน
+  if (item.branchCode !== appointmentBranchCode.value || !['UNCONFIRMED', 'CONFIRMED'].includes(item.status)) return
+  if (item.status === 'UNCONFIRMED' && item.patientType === 'NEW') {
+    if (!isManager) {
+      const user = JSON.parse(localStorage.getItem('authUser') ?? 'null')
+      const staff = await staffApi.list()
+      if (!staff.some(person => person.id === user?.staffId && person.id === item.therapist.id)) {
+        errorMessage.value = 'ลงทะเบียนจากนัดหมายของตัวเองเท่านั้น'
+        return
+      }
+    }
+    await router.push({ name: 'patient-registration', query: { appointmentId: String(item.id) } })
+    return
+  }
+  const selectedPatientId = item.patient?.id
+  if (item.status === 'UNCONFIRMED' && !selectedPatientId) return
+  await router.replace({
+    path: '/staff/services',
+    query: { ...(selectedPatientId ? { patientId: String(selectedPatientId) } : {}), appointmentId: String(item.id), from: 'services' },
+  })
+  await Promise.all([loadSelectedPatient(), refreshAppointmentProcess()])
+}
+const saleBranchCode = computed(
+  () => sourceAppointment.value?.branchCode || managerBranchCode.value || patient.value?.branchCode || branches.value[0]?.code || '',
+)
 async function loadMaster() {
   const [s, c, p, methods, statuses, staffList] = await Promise.all([
     catalogApi.services(),
@@ -101,45 +185,97 @@ async function loadMaster() {
   paymentStatuses.value = statuses
   const enabledStatuses = statuses.filter((status) => status.enabled)
   if (!enabledStatuses.some((status) => status.code === paymentStatus.value))
-    paymentStatus.value = enabledStatuses[0]?.code ?? statuses[0]?.code ?? 'PAID'
-  paymentAmount.value = 0
-  staff.value = staffList
+    paymentStatus.value = ''
+  staff.value = staffList.filter((person) => (person.position ?? person.role ?? '').toLowerCase() === 'therapist' && person.active)
   selectedServiceId.value = s[0]?.id ?? 0
   selectedCourseId.value = c[0]?.id ?? 0
-  paymentCode.value = methods.find((method) => method.active !== false)?.code ?? ''
-  selectedStaffId.value = staffList[0]?.id
+  paymentCode.value =
+    methods.find((method) => method.active !== false && method.name !== 'Cash')?.code ?? ''
+  selectedTreatingStaffId.value = staff.value[0]?.id
+  selectedSalespersonStaffId.value = staff.value[0]?.id
   try {
     branches.value = await branchApi.list()
     if (isManager) setManagerBranches(branches.value.filter((branch) => branch.active))
   } catch {
     branches.value = []
   }
+}
+async function loadSelectedPatient() {
   const patientId = Number(route.query.patientId)
   if (Number.isInteger(patientId) && patientId > 0) {
-    const profile = await patientApi.get(patientId)
-    patient.value = profile
-    patientProfile.value = profile
-    screen.value = 'menu'
+    try {
+      const profile = await patientApi.get(patientId)
+      patient.value = profile
+      patientProfile.value = profile
+      screen.value = 'menu'
+      void loadPatientCourseSummary(profile.id)
+    } catch {
+      patientLoadError.value = 'ไม่สามารถโหลดข้อมูลผู้ป่วยได้ กรุณากลับไปหน้านัดหมายแล้วลองอีกครั้ง'
+    } finally {
+      patientLoading.value = false
+    }
+  } else if (route.query.patientId) {
+    patientLoadError.value = 'ไม่พบข้อมูลผู้ป่วยที่ระบุ กรุณากลับไปหน้านัดหมายแล้วลองอีกครั้ง'
+    patientLoading.value = false
   }
 }
-onMounted(async () => {
+let patientCourseRequest = 0
+async function loadPatientCourseSummary(patientId: number) {
+  const requestId = ++patientCourseRequest
+  patientCourseLoading.value = true
+  patientCourseError.value = false
   try {
-    await loadMaster()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลบริการไม่สำเร็จ'
+    const [purchases, entitlements] = await Promise.all([
+      courseApi.patientCourses(patientId),
+      singleVisitEntitlementApi.list(patientId),
+    ])
+    if (requestId === patientCourseRequest && patient.value?.id === patientId)
+      patientCoursePurchases.value = purchases
+    if (requestId === patientCourseRequest && patient.value?.id === patientId)
+      patientSingleVisitEntitlements.value = entitlements
+  } catch {
+    if (requestId === patientCourseRequest && patient.value?.id === patientId) {
+      patientCoursePurchases.value = []
+      patientSingleVisitEntitlements.value = []
+      patientCourseError.value = true
+    }
+  } finally {
+    if (requestId === patientCourseRequest) patientCourseLoading.value = false
   }
+}
+function openPrepaidServiceUse() {
+  if (!patient.value || !appointmentId.value) return
+  void router.push({ name: 'staff-single-visit-use', query: {
+    patientId: String(patient.value.id),
+    appointmentId: String(appointmentId.value),
+  } })
+}
+onMounted(async () => {
+  await Promise.all([
+    loadSelectedPatient(),
+    refreshAppointmentProcess(),
+    loadMaster().catch(() => {
+      masterLoadError.value = 'โหลดข้อมูลบริการบางส่วนไม่สำเร็จ กรุณาลองใหม่ก่อนทำรายการ'
+    }),
+  ])
   window.addEventListener('manager-branch-changed', applyManagerBranch)
 })
 onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
 function applyManagerBranch() {
   if (!isManager) return
   clearPatient()
-  void loadMaster()
+  void loadMaster().catch(() => {
+    masterLoadError.value = 'โหลดข้อมูลบริการบางส่วนไม่สำเร็จ กรุณาลองใหม่ก่อนทำรายการ'
+  })
 }
 let searchTimer: number | undefined
 let patientSearchRequest = 0
 function normalizePatientSearch(value: string) {
-  return value.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '').toLowerCase()
+  return value
+    .trim()
+    .replace(/^hn[\s:#-]*/i, '')
+    .replace(/[\s-]/g, '')
+    .toLowerCase()
 }
 async function searchPatientsByKeyword(keyword: string) {
   const requestId = ++patientSearchRequest
@@ -156,7 +292,9 @@ async function searchPatientsByKeyword(keyword: string) {
   try {
     const page = await patientApi.search(keyword, 0, 100, managerBranchCode.value)
     if (requestId !== patientSearchRequest || query.value.trim() !== keyword) return
-    results.value = [...new Map([...page.items, ...localMatches].map((item) => [item.id, item])).values()]
+    results.value = [
+      ...new Map([...page.items, ...localMatches].map((item) => [item.id, item])).values(),
+    ]
   } catch (error) {
     if (requestId !== patientSearchRequest || query.value.trim() !== keyword) return
     results.value = localMatches
@@ -190,18 +328,38 @@ const rawPrice = computed(() =>
       ? (assessmentService.value?.price ?? 0)
       : (services.value.find((service) => service.id === selectedServiceId.value)?.price ?? 0),
 )
-const itemDiscount = computed(() => 0)
+const discountAmount = computed(() => {
+  const value = Number(discountValue.value)
+  if (!Number.isFinite(value) || value <= 0) return 0
+  const priceCents = Math.round(rawPrice.value * 100)
+  return discountMode.value.endsWith('PERCENT')
+    ? Math.round(priceCents * Math.round(value * 100) / 10000) / 100
+    : Math.round(value * 100) / 100
+})
+const itemDiscount = computed(() => discountMode.value.startsWith('ITEM_') ? discountAmount.value : 0)
 const afterItemDiscount = computed(() => Math.max(rawPrice.value - itemDiscount.value, 0))
-const billDiscount = computed(() => 0)
+const billDiscount = computed(() => discountMode.value.startsWith('BILL_') ? discountAmount.value : 0)
 const netAmount = computed(() => Math.max(afterItemDiscount.value - billDiscount.value, 0))
-const receivedAmount = computed(() => paymentStatus.value === 'PAID'
-  ? netAmount.value
-  : paymentStatus.value === 'INSTALLMENT' ? Math.min(paymentAmount.value, netAmount.value) : 0)
-const remainingAmount = computed(() => Math.max(netAmount.value - receivedAmount.value, 0))
-const commissionAmount = computed(() => afterItemDiscount.value * 0.1)
+const {
+  preview: courseCommissionPreview,
+  loading: commissionPreviewLoading,
+  error: commissionPreviewError,
+} = useCourseCommissionPreview(() => {
+  if (mode.value !== 'course' || !selectedCourseId.value || !saleBranchCode.value) return null
+  return {
+    courseId: selectedCourseId.value,
+    branchCode: saleBranchCode.value,
+    sellerStaffId: selectedSalespersonStaffId.value,
+    price: netAmount.value,
+  }
+})
+const receivedAmount = computed(() => netAmount.value)
+const remainingAmount = computed(() => 0)
 const receiptPayable = computed(() => netAmount.value)
 const money = (value: number) =>
   new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(value)
+const percentage = (rate: number) =>
+  new Intl.NumberFormat('th-TH', { style: 'percent', maximumFractionDigits: 2 }).format(rate)
 const printReceipt = () => {
   receiptPrintModal.value = 'confirm'
 }
@@ -244,7 +402,8 @@ const printedAt = computed(() =>
   }).format(new Date()),
 )
 const selectedStaffName = computed(
-  () => staff.value.find((person) => person.id === selectedStaffId.value)?.fullName || '-',
+  () =>
+    staff.value.find((person) => person.id === selectedSalespersonStaffId.value)?.fullName || '-',
 )
 const staffFilterOptions = computed(() =>
   staff.value.map((person) => ({ value: String(person.id), label: `กภ. ${person.fullName}` })),
@@ -257,7 +416,9 @@ function paymentMethodCategory(code: string, name = '') {
   if (value.includes('card') || value.includes('บัตร')) return 'card'
   return 'other'
 }
-const salePaymentMethods = computed(() => paymentMethods.value)
+const salePaymentMethods = computed(() =>
+  paymentMethods.value.filter(allowedPaymentMethod),
+)
 function paymentMethodIcon(code: string, name = '') {
   const category = paymentMethodCategory(code, name)
   if (category === 'bank') return paymentBankIcon
@@ -273,17 +434,19 @@ function paymentMethodLabel(code: string, name = '') {
   return name
 }
 const selectedPaymentLabel = computed(() => {
-  const method = salePaymentMethods.value.find((item) => item.code === paymentCode.value && item.active !== false)
+  const method = salePaymentMethods.value.find(
+    (item) => item.code === paymentCode.value && item.active !== false,
+  )
   return method ? paymentMethodLabel(method.code, method.name) : '-'
 })
 const paymentStatusLabel = computed(() => {
   return paymentStatuses.value.find((status) => status.code === paymentStatus.value)?.label ?? '-'
 })
-const enabledPaymentStatuses = computed(() => paymentStatuses.value)
+const enabledPaymentStatuses = computed(() =>
+  paymentStatuses.value.filter((status) => status.enabled),
+)
 function selectPaymentStatus(status: PaymentStatusOption['code']) {
   paymentStatus.value = status
-  if (status === 'INSTALLMENT' && (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value))
-    paymentAmount.value = Math.max(0.01, Math.round(netAmount.value / 2 * 100) / 100)
 }
 const receiptIssuedAt = computed(() =>
   new Intl.DateTimeFormat('th-TH', {
@@ -318,16 +481,33 @@ function searchPatients() {
   void searchPatientsByKeyword(keyword)
 }
 function openPatientCourses() {
-  if (patient.value) router.push({ path: '/staff/courses', query: { patientId: patient.value.id } })
+  if (patient.value) router.push({ path: '/staff/courses', query: { patientId: patient.value.id, ...(appointmentId.value ? { appointmentId: String(appointmentId.value) } : {}) } })
 }
 function clearPatient() {
   patient.value = null
   patientProfile.value = null
+  patientCoursePurchases.value = []
+  patientSingleVisitEntitlements.value = []
+  patientCourseLoading.value = false
+  patientCourseError.value = false
   query.value = ''
   searched.value = false
   reviewing.value = false
   confirmed.value = false
   screen.value = 'search'
+}
+function backFromPaymentMenu() {
+  if (appointmentId.value) {
+    void router.push({ name: 'staff-appointments' })
+    return
+  }
+  clearPatient()
+}
+async function backToPatientSelection() {
+  clearPatient()
+  appointmentProgress.value = null
+  await router.replace({ name: 'staff-services' })
+  await refreshAppointmentProcess()
 }
 function backToServiceMenu() {
   reviewing.value = false
@@ -336,6 +516,14 @@ function backToServiceMenu() {
   screen.value = 'menu'
 }
 function startSale() {
+  if (patient.value) {
+    void router.push({ name: 'staff-sale-checkout', query: {
+      patientId: String(patient.value.id),
+      appointmentId: appointmentId.value ? String(appointmentId.value) : undefined,
+    } })
+    return
+  }
+  ensureSaleRequestKey()
   screen.value = 'sale'
   mode.value = 'single'
   selectedServiceId.value =
@@ -345,69 +533,120 @@ function startSale() {
   paymentDialogOpen.value = false
 }
 async function submit() {
-  if (!patient.value) return
+  if (!patient.value || loading.value) return
+  const pendingKey = `sale-pending:${saleBranchCode.value}:${patient.value.id}:${appointmentId.value ?? 'no-appointment'}`
+  if (sessionStorage.getItem(pendingKey)) { errorMessage.value = 'ยังยืนยันผลคำขอก่อนหน้าไม่ได้ กรุณาตรวจประวัติขายก่อนทำรายการใหม่'; return }
   loading.value = true
   errorMessage.value = ''
   confirmed.value = false
   try {
-    if (!enabledPaymentStatuses.value.some((status) => status.code === paymentStatus.value && status.enabled))
+    if (route.query.appointmentId) {
+      // อ่าน progress ล่าสุดก่อนสร้างรายการขายจากนัดหมาย
+      await refreshAppointmentProcess()
+      if (!canStartAppointment.value) throw new Error(processBlockReason.value)
+      if (patient.value.id !== Number(route.query.patientId)) throw new Error('ผู้ป่วยในหน้าจอไม่ตรงกับนัดหมาย กรุณาเปิดหน้าใหม่')
+    }
+    if (
+      !enabledPaymentStatuses.value.some(
+        (status) => status.code === paymentStatus.value && status.enabled,
+      )
+    )
       throw new Error('สถานะการชำระเงินนี้ถูกปิดใช้งาน กรุณาเลือกสถานะอื่น')
-    const availablePaymentMethod = paymentStatus.value === 'DEPOSIT'
-      ? undefined
-      : salePaymentMethods.value.find((method) => method.code === paymentCode.value && method.active !== false) ?? salePaymentMethods.value.find((method) => method.active !== false)
-    if (paymentStatus.value !== 'DEPOSIT' && !availablePaymentMethod)
+    const availablePaymentMethod = salePaymentMethods.value.find(
+      (method) => method.code === paymentCode.value && method.active !== false,
+    ) ?? salePaymentMethods.value.find((method) => method.active !== false)
+    if (!availablePaymentMethod)
       throw new Error('ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager')
     if (availablePaymentMethod) paymentCode.value = availablePaymentMethod.code
-    const type =
-      mode.value === 'assessment'
-        ? 'ASSESSMENT'
-        : mode.value === 'single'
-          ? 'SINGLE_VISIT'
-          : 'COURSE'
-    const referenceId =
-      mode.value === 'course'
-        ? selectedCourseId.value
-        : mode.value === 'assessment'
-          ? assessmentService.value?.id
-          : selectedServiceId.value
+    if (mode.value === 'assessment') throw new Error('ไม่เปิดขายบริการประเมินใหม่')
+    const referenceId = mode.value === 'course' ? selectedCourseId.value : selectedServiceId.value
     if (!referenceId) throw new Error('ไม่พบรายการบริการที่เลือก')
-    const price =
-      mode.value === 'course'
-        ? (courses.value.find((c) => c.id === referenceId)?.price ?? 0)
-        : (services.value.find((s) => s.id === referenceId)?.price ?? 0)
-    if (paymentStatus.value === 'INSTALLMENT' && (paymentAmount.value <= 0 || paymentAmount.value >= netAmount.value))
-      throw new Error('ยอดผ่อนชำระต้องมากกว่า 0 และน้อยกว่ายอดสุทธิ')
-    const sale = await salesApi.create({
-      patientId: patient.value.id,
-      branchCode:
-        managerBranchCode.value || patient.value.branchCode || branches.value[0]?.code || '',
-      salespersonStaffId: selectedStaffId.value,
-      note: note.value,
-      items: [{ type, referenceId, quantity: 1 }],
-      payments: paymentStatus.value === 'DEPOSIT' ? [] : [
-        { paymentMethodCode: paymentCode.value, amount: paymentStatus.value === 'INSTALLMENT' ? paymentAmount.value : Math.min(price, netAmount.value) },
-      ],
+    if (!Number.isFinite(discountValue.value) || discountValue.value < 0)
+      throw new Error('ส่วนลดต้องเป็นจำนวนไม่ติดลบ')
+    if (Math.abs(discountValue.value * 100 - Math.round(discountValue.value * 100)) > 0.000001)
+      throw new Error('ส่วนลดระบุได้ไม่เกิน 2 ตำแหน่งทศนิยม')
+    if (discountMode.value.endsWith('PERCENT') && discountValue.value > 100)
+      throw new Error('ส่วนลดเปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100')
+    if (discountMode.value.endsWith('FIXED') && discountAmount.value > rawPrice.value)
+      throw new Error('ส่วนลดต้องไม่เกินราคา')
+    if (netAmount.value <= 0) throw new Error('ยอดสุทธิต้องมากกว่า 0 จึงรับชำระและออกใบเสร็จได้')
+    if (!selectedSalespersonStaffId.value) throw new Error('กรุณาเลือกผู้ขายก่อนบันทึกการขาย')
+    // ใช้ helper เดียวสร้าง payload เพื่อคุมยอด ส่วนลด และรูปแบบ payments
+    const request = buildSaleRequest({ patientId: patient.value.id, branchCode: saleBranchCode.value,
+      appointmentId: appointmentId.value ?? undefined, salespersonStaffId: selectedSalespersonStaffId.value,
+      treatingStaffId: selectedTreatingStaffId.value, note: note.value, paymentLabelCode: paymentStatus.value,
+      paymentMethodCode: paymentCode.value, labels: paymentStatuses.value, methods: paymentMethods.value,
+      items: [{ type: mode.value === 'course' ? 'COURSE' : 'SERVICE', referenceId, quantity: 1, price: rawPrice.value,
+        discountType: discountMode.value.startsWith('ITEM_') ? (discountMode.value.endsWith('PERCENT') ? 'PERCENT' : 'FIXED') : undefined,
+        discountValue: discountMode.value.startsWith('ITEM_') ? discountValue.value : undefined }],
+      billDiscountType: discountMode.value.startsWith('BILL_') ? (discountMode.value.endsWith('PERCENT') ? 'PERCENT' : 'FIXED') : undefined,
+      billDiscountValue: discountMode.value.startsWith('BILL_') ? discountValue.value : undefined,
     })
+    sessionStorage.setItem(pendingKey, 'pending')
+    // ตั้ง marker ก่อน POST เพื่อไม่ให้ส่งขายซ้ำเมื่อยังยืนยันผลไม่ได้
+    beginAppointmentWrite()
+    const sale = await salesApi.create(request)
+    sessionStorage.removeItem(pendingKey)
+    finishAppointmentWrite(mode.value !== 'course')
+    if (appointmentId.value) await refreshAppointmentProcess()
     receiptNo.value = sale.receiptNo
+    receiptTransactionId.value = sale.id
+    sessionStorage.removeItem(saleRequestStorageKey())
+    saleRequestKey.value = ''
     confirmed.value = true
     reviewing.value = false
     paymentDialogOpen.value = false
   } catch (error) {
+    if (error instanceof ApiError && [400, 401, 403, 422].includes(error.status)) sessionStorage.removeItem(pendingKey)
+    await recoverAppointmentWrite(error)
     errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการไม่สำเร็จ'
   } finally {
     loading.value = false
   }
 }
+// นัดที่ยืนยันและมีรายการแล้ว (เช่น กดกลับจากใบเสร็จ) ไม่ต้องแสดงแผงรายการ ให้กลับหน้านัดหมายเลย
+const appointmentAlreadyProcessed = computed(
+  () =>
+    appointmentProgress.value?.state === 'FOUND' &&
+    appointmentProgress.value.appointmentStatus === 'CONFIRMED',
+)
+watch(appointmentAlreadyProcessed, (done) => {
+  if (done) void router.replace({ name: 'staff-appointments' })
+})
 </script>
 <template>
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <template v-if="screen === 'search'">
-        <h1>บริการและคอร์ส</h1>
+      <p v-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
+      <div v-else-if="processError" role="alert">
+        <p>{{ processError }}</p>
+        <button type="button" @click="refreshAppointmentProcess">ลองใหม่</button
+        ><button type="button" @click="router.push({ name: 'staff-appointments' })">
+          กลับหน้านัดหมาย
+        </button>
+      </div>
+      <AppointmentProcessPanel
+        v-else-if="
+          appointmentProgress && !canStartAppointment && !appointmentAlreadyProcessed
+        "
+        :progress="appointmentProgress"
+        :block-reason="processBlockReason" :recovery-required="recoveryRequired"
+        :from-services="route.query.from === 'services'"
+        @back-to-patients="backToPatientSelection"
+        @refresh="refreshAppointmentProcess"
+      />
+      <p v-else-if="patientLoading" role="status">กำลังโหลดข้อมูลผู้ป่วย...</p>
+      <div v-else-if="patientLoadError" role="alert">
+        <p class="error">{{ patientLoadError }}</p>
+        <button type="button" @click="router.push({ name: 'staff-appointments' })">
+          กลับหน้านัดหมาย
+        </button>
+      </div>
+      <template v-else-if="screen === 'search'">
+        <h1>ชำระเงิน</h1>
         <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
         <section class="service-search">
-          <h2>ค้นหาผู้ป่วย</h2>
           <div class="search-wrap">
             <label class="search">
               <span class="search-icon" aria-hidden="true">
@@ -445,40 +684,46 @@ async function submit() {
             </button>
             <p v-if="!results.length" class="service-empty-result">ไม่พบผู้ป่วยที่ตรงกับคำค้น</p>
           </section>
-          <section v-else class="service-search-hint">
-            <p>
-              ค้นหาผู้ป่วยจากช่องด้านบน แล้วเลือกคนที่ต้องการทำรายการ<br />ข้อมูลผู้ป่วยและสิทธิ์คอร์สจะแสดงหลังเลือกผู้ป่วย
-            </p>
-          </section>
+          <TodayAppointments
+            :branch-code="appointmentBranchCode"
+            :keyword="query"
+            @select="chooseAppointment"
+          />
         </section>
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
-        <h1>บริการและคอร์ส</h1>
+        <button type="button" class="service-menu-back" @click="backFromPaymentMenu">
+          ← กลับ
+        </button>
+        <h1>เลือกวิธีดำเนินรายการ</h1>
+        <p v-if="appointmentId && !canStartAppointment" role="status">{{ processBlockReason }}</p>
         <section class="service-menu-patient" aria-label="ผู้ป่วยที่เลือก">
           <span class="service-menu-avatar" aria-hidden="true">{{ initials }}</span>
           <div class="service-menu-patient-info">
             <strong>{{ patientProfile?.title }}{{ patient.fullName }}</strong>
             <p>
               <span>HN {{ patient.hn }}</span
-              ><span>{{ patient.phone || '—' }}</span>
+              ><span v-if="patient.phone" class="service-menu-phone"><PhoneIcon aria-hidden="true" />{{ patient.phone }}</span
+              ><span v-else>—</span>
             </p>
           </div>
           <span class="service-menu-branch">{{
             patientProfile?.branch?.name || patient.branchName || '—'
           }}</span>
-          <button type="button" @click="clearPatient">↻ เปลี่ยนผู้ป่วย</button>
         </section>
         <div class="service-menu-actions">
-          <article>
-            <h2>ขายบริการและคอร์ส</h2>
-            <p>บันทึกบริการรายครั้ง หรือขายคอร์สใหม่<br />พร้อมตรวจสอบยอดก่อนชำระเงิน</p>
-            <button type="button" @click="startSale">เริ่มขายบริการ</button>
-          </article>
-          <article>
-            <h2>ใช้สิทธิ์และจัดการคอร์ส</h2>
-            <p>ตรวจสอบสิทธิ์คงเหลือ ประวัติการใช้<br />และบันทึกการใช้สิทธิ์คอร์ส</p>
-            <button type="button" @click="openPatientCourses">ดูคอร์สผู้ป่วย</button>
-          </article>
+          <button v-if="!appointmentId || canStartAppointment" type="button" class="service-menu-action service-menu-action--sale" @click="startSale">
+            <span class="service-menu-action-title"><span class="service-menu-action-heading">ชำระเงิน</span></span>
+            <span class="service-menu-action-next">ถัดไป →</span>
+          </button>
+          <button v-if="appointmentId && canStartAppointment" type="button" class="service-menu-action service-menu-action--entitlement" @click="openPatientCourses">
+            <span class="service-menu-action-title"><span class="service-menu-action-heading">ใช้สิทธิ์คอร์สที่มีอยู่</span><span class="service-menu-course-status" :class="{ 'is-loading': patientCourseLoading, 'is-unavailable': patientCourseError }" aria-live="polite">{{ patientCourseSummary }}</span></span>
+            <span class="service-menu-action-next">ถัดไป →</span>
+          </button>
+          <button v-if="appointmentId && canStartAppointment && prepaidServiceBalance > 0" type="button" class="service-menu-action service-menu-action--entitlement" @click="openPrepaidServiceUse">
+            <span class="service-menu-action-title"><span class="service-menu-action-heading">ใช้สิทธิ์บริการรายครั้ง</span><span class="service-menu-course-status">คงเหลือ {{ prepaidServiceBalance }} ครั้ง</span></span>
+            <span class="service-menu-action-next">ถัดไป →</span>
+          </button>
         </div>
       </section>
       <section v-else-if="screen === 'receipt' && patient" class="service-receipt-page">
@@ -532,7 +777,8 @@ async function submit() {
             </div>
             <div>
               <span>สถานะการชำระเงิน</span><b>{{ paymentStatusLabel }}</b
-              ><span>ช่องทางการชำระ</span><b>{{ paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel }}</b
+              ><span>ช่องทางการชำระ</span
+              ><b>{{ selectedPaymentLabel }}</b
               ><span>รับชำระครั้งนี้</span><b>{{ money(receivedAmount) }}</b
               ><strong>ยอดคงเหลือ</strong><strong>{{ money(remainingAmount) }}</strong>
             </div>
@@ -628,7 +874,10 @@ async function submit() {
             <i>{{ initials }}</i>
             <div>
               <strong>{{ patient.fullName }}</strong
-              ><span>HN {{ patient.hn }}　☎ {{ patient.phone }}</span>
+              ><span class="patient-contact-inline"
+                >HN {{ patient.hn }} <PhoneIcon v-if="patient.phone" />
+                {{ patient.phone || '-' }}</span
+              >
             </div>
             <b>{{ patientProfile?.branch?.name || patient.branchName || '—' }}</b>
           </section>
@@ -651,45 +900,61 @@ async function submit() {
                 ><span>1</span><span>− {{ money(itemDiscount) }}</span
                 ><b>{{ money(afterItemDiscount) }}</b>
               </div>
+              <div class="sale-discount-controls" v-if="!reviewing">
+                <label>ส่วนลด
+                  <select v-model="discountMode" @change="discountValue = 0">
+                    <option value="NONE">ไม่มีส่วนลด</option>
+                    <option value="ITEM_FIXED">ส่วนลดรายการ (บาท)</option>
+                    <option value="ITEM_PERCENT">ส่วนลดรายการ (%)</option>
+                    <option value="BILL_FIXED">ส่วนลดท้ายบิล (บาท)</option>
+                    <option value="BILL_PERCENT">ส่วนลดท้ายบิล (%)</option>
+                  </select>
+                </label>
+                <label v-if="discountMode !== 'NONE'">จำนวนส่วนลด
+                  <input v-model.number="discountValue" type="number" min="0" :max="discountMode.endsWith('PERCENT') ? 100 : rawPrice" step="0.01" />
+                </label>
+              </div>
               <div class="sale-people">
-                <label
+                <label v-if="mode !== 'course'"
                   >นักกายภาพผู้ให้บริการ<FilterDropdown
-                    :model-value="String(selectedStaffId)"
+                    :model-value="String(selectedTreatingStaffId ?? '')"
                     :options="staffFilterOptions"
                     default-label="เลือกนักกายภาพ"
                     label="นักกายภาพผู้ให้บริการ"
                     :clear-on-reselect="false"
-                    @update:model-value="selectedStaffId = Number($event)" /></label
+                    @update:model-value="selectedTreatingStaffId = Number($event)" /></label
                 ><label
-                  >ผู้ขาย/เจ้าของยอด<FilterDropdown
-                    :model-value="String(selectedStaffId)"
+                  >{{ mode === 'course' ? 'นักกายภาพเจ้าของยอด' : 'ผู้ขาย/เจ้าของยอด'
+                  }}<FilterDropdown
+                    :model-value="String(selectedSalespersonStaffId ?? '')"
                     :options="staffFilterOptions"
-                    default-label="เลือกผู้ขาย/เจ้าของยอด"
-                    label="ผู้ขายหรือเจ้าของยอด"
+                    :default-label="
+                      mode === 'course' ? 'เลือกนักกายภาพเจ้าของยอด' : 'เลือกผู้ขาย/เจ้าของยอด'
+                    "
+                    :label="mode === 'course' ? 'นักกายภาพเจ้าของยอด' : 'ผู้ขายหรือเจ้าของยอด'"
                     :clear-on-reselect="false"
-                    @update:model-value="selectedStaffId = Number($event)"
+                    @update:model-value="selectedSalespersonStaffId = Number($event)"
                 /></label>
               </div>
               <fieldset class="payment-status-group">
                 <legend>สถานะการชำระเงิน</legend>
                 <div>
                   <button
-                    v-for="status in paymentStatuses"
+                    v-for="status in enabledPaymentStatuses"
                     :key="status.code"
                     type="button"
-                    :class="{ active: paymentStatus === status.code, disabled: !status.enabled }"
-                    :disabled="!status.enabled"
+                    :class="{ active: paymentStatus === status.code }"
                     @click="selectPaymentStatus(status.code)"
                   >
                     {{ status.label }}
                   </button>
                 </div>
-                <label v-if="paymentStatus === 'INSTALLMENT'" class="payment-installment-amount">
-                  ยอดที่รับชำระครั้งนี้
-                  <input v-model.number="paymentAmount" type="number" min="0.01" :max="netAmount - 0.01" step="0.01" />
-                </label>
-                <small v-else-if="paymentStatus === 'DEPOSIT'">ยังไม่รับชำระเงิน ระบบจะบันทึกยอดค้างชำระ</small>
-                <small v-if="!enabledPaymentStatuses.some((status) => status.enabled)" class="service-error">ไม่มีสถานะการชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager</small>
+                <small>ป้ายกำกับนี้ใช้อธิบายการขาย รับชำระเต็มยอดสุทธิในครั้งเดียว</small>
+                <small
+                  v-if="!enabledPaymentStatuses.some((status) => status.enabled)"
+                  class="service-error"
+                  >ไม่มีสถานะการชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager</small
+                >
               </fieldset>
               <div class="payment-group">
                 <span>ช่องทางชำระเงิน</span>
@@ -698,8 +963,9 @@ async function submit() {
                     v-for="method in salePaymentMethods"
                     :key="method.code"
                     type="button"
-                    :class="{ active: paymentCode === method.code, disabled: method.active === false }"
-                    :disabled="method.active === false"
+                    :class="{
+                      active: paymentCode === method.code,
+                    }"
                     @click="paymentCode = method.code"
                   >
                     <img
@@ -710,9 +976,9 @@ async function submit() {
                     <span>{{ paymentMethodLabel(method.code, method.name) }}</span>
                   </button>
                 </div>
-                  <small v-if="!salePaymentMethods.some((method) => method.active !== false)" class="service-error">
-                    ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager
-                  </small>
+                <small v-if="!salePaymentMethods.length" class="service-error">
+                  ไม่มีช่องทางชำระเงินที่เปิดใช้งาน กรุณาติดต่อ Manager
+                </small>
               </div>
               <label class="sale-note"
                 >หมายเหตุ (ไม่บังคับ)<textarea
@@ -741,13 +1007,35 @@ async function submit() {
               <p class="net-total">
                 <strong>ยอดสุทธิที่ลูกค้าชำระ</strong><strong>{{ money(netAmount) }}</strong>
               </p>
-              <div class="commission">
-                <p>
-                  <span>ค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b>
-                </p>
-                <p>
-                  <span>10%</span><b>{{ money(commissionAmount) }}</b>
-                </p>
+              <div v-if="mode === 'course'" class="commission">
+                <template v-if="commissionPreviewLoading">
+                  <p><span>ค่าคอมมิชชันโดยประมาณ</span><b>กำลังคำนวณ…</b></p>
+                </template>
+                <template v-else-if="commissionPreviewError">
+                  <p><span>ค่าคอมมิชชันโดยประมาณ</span><b>ยังคำนวณไม่ได้</b></p>
+                  <small class="service-error">{{ commissionPreviewError }}</small>
+                </template>
+                <template v-else-if="courseCommissionPreview">
+                  <p>
+                    <span>ฐานค่าคอมมิชชัน</span><b>{{ money(courseCommissionPreview.netPrice) }}</b>
+                  </p>
+                  <p>
+                    <span>{{ percentage(courseCommissionPreview.commissionRate) }}</span>
+                    <b>{{ money(courseCommissionPreview.commissionPool) }}</b>
+                  </p>
+                  <p>
+                    <span>ประมาณการต่อครั้ง</span>
+                    <b>{{ money(courseCommissionPreview.commissionPerVisit) }}</b>
+                  </p>
+                  <small
+                    >อัตราสุดท้ายจะล็อกตาม Tier
+                    สูงสุดจากยอดคอร์สสะสมของนักกายภาพเมื่อปิดยอดเดือน</small
+                  >
+                </template>
+              </div>
+              <div v-else class="commission">
+                <p><span>ฐานค่ามือบริการ</span><b>{{ money(netAmount) }}</b></p>
+                <small>ค่ามือจริงคำนวณตามกฎที่มีผลในวันรักษา</small>
               </div>
               <button
                 type="button"
@@ -769,9 +1057,9 @@ async function submit() {
               <b>{{ patient.fullName }}　HN {{ patient.hn }}</b
               ><span
                 >{{ item }} {{ patientProfile?.branch?.name || patient.branchName || '—' }}</span
-              ><small>ฐานค่าคอมมิชชัน　{{ money(afterItemDiscount) }}</small
+              ><small>{{ mode === 'course' ? 'ฐานค่าคอมมิชชัน' : 'ฐานค่ามือบริการ' }}　{{ money(netAmount) }}</small
               ><small
-                >ผู้ได้รับค่าคอมมิชชัน　<b>{{ selectedStaffName }}</b></small
+                >{{ mode === 'course' ? 'เจ้าของยอดคอร์ส' : 'ผู้ให้บริการ' }}　<b>{{ selectedStaffName }}</b></small
               >
             </section>
             <section>
@@ -780,7 +1068,7 @@ async function submit() {
             </section>
           </div>
           <footer>
-            <button type="button" @click="screen = 'receipt'">ดูและพิมพ์ใบเสร็จ</button
+            <button type="button" @click="receiptTransactionId && router.push({ name: 'staff-receipt', params: { id: receiptTransactionId } })">ดูและพิมพ์ใบเสร็จ</button
             ><button type="button" @click="backToServiceMenu">กลับหน้าบริการ</button>
           </footer>
         </section>
@@ -797,11 +1085,37 @@ async function submit() {
               <section>
                 <span>ยอดที่รับชำระครั้งนี้</span><strong>{{ money(receivedAmount) }}</strong
                 ><small v-if="remainingAmount > 0">ยอดคงเหลือ {{ money(remainingAmount) }}</small
-                ><small>ช่องทางการชำระเงิน　{{ paymentStatus === 'DEPOSIT' ? 'ยังไม่รับชำระ' : selectedPaymentLabel }}</small>
+                ><small
+                  >ช่องทางการชำระเงิน　{{
+                    selectedPaymentLabel
+                  }}</small
+                >
               </section>
-              <section>
-                <span>ฐานค่าคอมมิชชัน</span><b>{{ money(afterItemDiscount) }}</b
-                ><small>ค่าคอมมิชชัน 10%　{{ money(commissionAmount) }}</small>
+              <section v-if="mode === 'course'">
+                <template v-if="commissionPreviewLoading">
+                  <span>ฐานค่าคอมมิชชัน</span><b>กำลังคำนวณ…</b>
+                </template>
+                <template v-else-if="commissionPreviewError">
+                  <span>ค่าคอมมิชชันโดยประมาณ</span><b>ยังคำนวณไม่ได้</b>
+                  <small class="service-error">{{ commissionPreviewError }}</small>
+                </template>
+                <template v-else-if="courseCommissionPreview">
+                  <span>ฐานค่าคอมมิชชัน</span><b>{{ money(courseCommissionPreview.netPrice) }}</b>
+                  <small>
+                    ค่าคอมมิชชัน {{ percentage(courseCommissionPreview.commissionRate) }}
+                    {{ money(courseCommissionPreview.commissionPool) }}
+                  </small>
+                  <small>
+                    ประมาณการ {{ money(courseCommissionPreview.commissionPerVisit) }} ต่อครั้ง ({{
+                      courseCommissionPreview.totalVisits
+                    }}
+                    ครั้ง)
+                  </small>
+                </template>
+              </section>
+              <section v-else>
+                <span>ฐานค่ามือบริการ</span><b>{{ money(netAmount) }}</b
+                ><small>ค่ามือจริงคำนวณตามกฎที่มีผลในวันรักษา</small>
               </section>
             </div>
             <footer>
@@ -818,3 +1132,24 @@ async function submit() {
   </div>
 </template>
 <style scoped src="../styles/services.css"></style>
+<style scoped>
+.service-menu-phone { display: inline-flex; align-items: center; gap: 6px; }
+.service-menu-phone :deep(.phone-icon) { width: 14px; height: 14px; }
+.service-menu .service-menu-actions .service-menu-action {
+  display: flex; flex-direction: column; align-items: stretch; gap: 16px;
+  min-height: 236px; padding: 28px; border-radius: 16px;
+  color: #25372f; text-align: left; font: inherit; cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.service-menu .service-menu-actions .service-menu-action--sale,
+.service-menu .service-menu-actions .service-menu-action--entitlement { border: 1px solid #d7e4df; background: #fff; }
+.service-menu .service-menu-actions .service-menu-action:hover { transform: translateY(-3px); box-shadow: 0 14px 28px rgb(33 67 59 / 10%); }
+.service-menu-action-title { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.service-menu-action-heading { color: #25372e; font-size: 26px; font-weight: 700; }
+.service-menu-action-next { color: #176c68; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.service-menu-action-description { color: #56665d; font-size: 16px; line-height: 1.55; }
+.service-menu-course-status { margin-top: auto; min-height: 24px; color: #176c68; font-size: 14px; font-weight: 700; }
+.service-menu-action-title .service-menu-course-status { margin-top: 0; min-height: 0; }
+.service-menu-course-status.is-loading, .service-menu-course-status.is-unavailable { color: #667a72; }
+@media (prefers-reduced-motion: reduce) { .service-menu .service-menu-actions .service-menu-action { transition: none; } }
+</style>
