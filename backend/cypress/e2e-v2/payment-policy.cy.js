@@ -141,7 +141,10 @@ describe('v2 payment policy', () => {
           counts().should('deep.equal', before)
           courseRefund(paymentId, courseId, 1500, 4).then(({ status, body: pending }) => {
             expect(status).to.equal(201)
-            expect(pending.items).to.deep.equal([{ courseId, refundAmount: 1500, cancelledVisits: 4 }])
+            expect(pending.items).to.have.length(1)
+            expect(pending.items[0]).to.include({ courseId, refundAmount: 1500, cancelledVisits: 4,
+              rightsCancellationItemId: null })
+            expect(pending.items[0].courseRefundItemId).to.be.a('number').and.be.greaterThan(0)
             // asking for the rights does not cut them yet
             cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 4)
             cy.api('POST', `/api/refunds/${pending.id}/complete`).its('status').should('equal', 200)
@@ -194,7 +197,10 @@ describe('v2 payment policy', () => {
         expect(status).to.equal(201)
         cy.useCourseSession(courseId).its('status').should('equal', 200)
         counts().then(before => {
-          cy.api('POST', `/api/refunds/${pending.id}/complete`).its('status').should('equal', 409)
+          cy.api('POST', `/api/refunds/${pending.id}/complete`).then(({ status, body }) => {
+            expect(status).to.equal(400)
+            expect(body.message).to.include('สิทธิ์คงเหลือ')
+          })
           counts().should('deep.equal', before)
           cy.api('GET', `/api/payments/${paymentId}/refunds`).its('body.0.status').should('equal', 'Pending')
           cy.api('GET', `/api/course-purchases/${courseId}`).its('body.purchase.remaining').should('equal', 4)
@@ -236,7 +242,8 @@ describe('v2 payment policy', () => {
                           'refund waited on production course row lock'
                       ).to.equal(true)
                       expect(result.usage.status).to.equal(200)
-                      expect(result.refund.status).to.equal(complete ? 409 : 400)
+                      expect(result.refund.status).to.equal(400)
+                      expect(result.refund.body.message).to.include(complete ? 'สิทธิ์คงเหลือ' : 'สิทธิ์ที่ยังไม่ใช้')
 
                       return counts().then(after => {
                         expect(after.refunds).to.equal(before.refunds)
