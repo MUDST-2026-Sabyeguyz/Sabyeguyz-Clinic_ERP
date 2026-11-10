@@ -30,7 +30,7 @@ class AgentLoopTest {
     void startFakeBackend() throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/id-card/agent/next", exchange -> {
-            lastAuth.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            lastAuth.set(exchange.getRequestHeaders().getFirst("X-Agent-Token"));
             String body = nextResponse.getAndSet(null);
             if (body == null) {
                 exchange.sendResponseHeaders(204, -1);
@@ -80,7 +80,7 @@ class AgentLoopTest {
     void doesNothingWhenThereIsNoCommand() throws Exception {
         var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"), (wait, cardPresent) -> { throw new AssertionError("no read expected"); }, Duration.ofSeconds(1));
         assertFalse(loop.runOnce());
-        assertEquals("Bearer tok-1", lastAuth.get());
+        assertEquals("tok-1", lastAuth.get());
         assertTrue(results.isEmpty());
     }
 
