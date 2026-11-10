@@ -13,11 +13,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoPath = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $repoPath
+. (Join-Path $PSScriptRoot 'clinic-kubernetes-parameters.ps1')
 if ($Namespace -notmatch '^clinic-[a-z0-9-]+$' -or $Namespace.Length -gt 63) { throw 'Use a dedicated clinic-* namespace, up to 63 characters.' }
-if ($DatabaseName -notmatch '^[a-z][a-z0-9_]{0,62}$') { throw 'DatabaseName must be a lowercase PostgreSQL identifier.' }
-if ($SeedMode -ne 'none') {
-    if ($DatabaseKind -ne 'local-demo') { throw 'Demo seed requires -DatabaseKind local-demo.' }
-}
+Assert-ClinicDeploymentParameters -DatabaseName $DatabaseName -DatabaseKind $DatabaseKind -SeedMode $SeedMode
 foreach ($tool in @('git','docker','kubectl')) {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is required on the agent." }
 }
@@ -43,7 +41,9 @@ if ($LASTEXITCODE -ne 0 -or -not $clusterServer) { throw 'Cannot identify the se
 $clusterUri=[Uri]$clusterServer
 $clusterHost=$clusterUri.Host.ToLowerInvariant()
 $isLocalCluster=$clusterHost -in @('localhost','127.0.0.1','::1','kubernetes.docker.internal')
-$isDockerDesktop=$clusterHost -eq 'kubernetes.docker.internal'
+$clusterName=(& kubectl config view --minify --context $KubeContext -o 'jsonpath={.contexts[0].context.cluster}').Trim()
+if ($LASTEXITCODE -ne 0 -or -not $clusterName) { throw 'Cannot identify the selected Kubernetes cluster.' }
+$isDockerDesktop=$isLocalCluster -and $clusterName -match '(?i)docker[-_]desktop'
 if (-not $isLocalCluster) { throw 'This local deployment script refuses non-local Kubernetes API servers.' }
 if ($SeedMode -ne 'none' -and -not $isLocalCluster) { throw 'Demo seed is allowed only on a verified local Kubernetes context.' }
 $nodes=Run-Kube get nodes -o json | ConvertFrom-Json
