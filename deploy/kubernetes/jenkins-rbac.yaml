@@ -53,7 +53,10 @@ metadata:
   name: clinic-deployer-node-reader
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "namespaces", "storageclasses"]
+    resources: ["nodes", "namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
     verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
