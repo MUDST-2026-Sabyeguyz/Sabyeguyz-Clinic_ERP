@@ -137,7 +137,26 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
     beforeEach(() => {
       cy.configureBookingWindows()
     })
-    function checkedInVisit(fx, patient) {
+    function completeService(fx, patient, appointment) {
+      return cy.api('GET', '/api/catalog/services').then(({ status, body }) => {
+        expect(status).to.equal(200)
+        const service = body.find((item) => item.id === fx.serviceId)
+        expect(service, 'service used by the appointment').to.exist
+        return cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: fx.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{ type: 'SERVICE', referenceId: fx.serviceId, quantity: 1 }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: Number(service.price) }],
+        })
+      }).then(({ status, body }) => {
+        expect(status, JSON.stringify(body)).to.equal(201)
+      })
+    }
+
+    function completedServiceVisit(fx, patient) {
       return cy.api('POST', '/api/appointments', {
         branchCode: '01',
         patientId: patient.id,
@@ -148,18 +167,13 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
       }).then(({ status, body }) => {
         expect(status, JSON.stringify(body)).to.equal(201)
 
-        return cy.api(
-            'POST', `/api/appointments/${body.id}/check-in`
-        ).then((checkedIn) => {
-          expect(checkedIn.status).to.equal(200)
-          return body
-        })
+        return completeService(fx, patient, body).then(() => body)
       })
     }
 
-    it('records a treatment note for a checked-in appointment and lists it for the patient', function () {
+    it('records a treatment note after completed service and lists it for the patient', function () {
       cy.registerPatient().then((patient) => {
-        checkedInVisit(this.fixtures, patient).then((appointment) => {
+        completedServiceVisit(this.fixtures, patient).then((appointment) => {
           cy.api('POST', '/api/treatments', {
             patientId: patient.id, appointmentId: appointment.id, staffId: this.fixtures.therapistId,
             serviceId: this.fixtures.serviceId, note: 'ปวดหลังดีขึ้น',
@@ -175,7 +189,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
       })
     })
 
-    it('refuses a treatment before check-in, without an appointment, or for the wrong patient', function () {
+    it('refuses a treatment before service, without an appointment, or for the wrong patient', function () {
       cy.registerPatient().then((patient) => {
         cy.registerPatient({ firstName: 'คนอื่น', phone: '0822222222', identityNumber: '1100000000102' }).then((other) => {
           cy.api('POST', '/api/appointments', {
@@ -193,9 +207,11 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
             })
             treatment({}).its('status').should('equal', 400)
             treatment({ appointmentId: null }).its('status').should('equal', 400)
-            cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)
-            treatment({ patientId: other.id }).its('status').should('equal', 400)
-            treatment({}).its('status').should('equal', 201)
+            cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 409)
+            completeService(this.fixtures, patient, appointment).then(() => {
+              treatment({ patientId: other.id }).its('status').should('equal', 400)
+              treatment({}).its('status').should('equal', 201)
+            })
           })
         })
       })
