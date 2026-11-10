@@ -37,8 +37,8 @@ export function useIdCardReader(options: { api?: Api; intervalMs?: number; timeo
     const online = workstations.value.filter((w) => w.online)
     const remembered = stored()
     if (remembered && workstations.value.some((w) => w.id === remembered)) selectedId.value = remembered
-    else if (online.length === 1) selectedId.value = online[0].id
-    else if (workstations.value.length === 1) selectedId.value = workstations.value[0].id
+    else if (online.length === 1) selectedId.value = online[0]!.id
+    else if (workstations.value.length === 1) selectedId.value = workstations.value[0]!.id
     else selectedId.value = null
   }
 

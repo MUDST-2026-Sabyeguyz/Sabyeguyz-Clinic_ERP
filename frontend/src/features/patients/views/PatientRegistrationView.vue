@@ -19,6 +19,8 @@ import { type PatientRegistrationForm } from '../data/patientRegistration'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
 import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 import { clinicToday, clinicYesterday } from '@/utils/clinicDate'
+import { takePendingCard } from '@/features/idcard/pendingCard'
+import { cardExpired, mapCardToRegistration } from '@/features/idcard/cardToForm'
 import {
   patientTitleOptions,
   titleForNationality,
@@ -104,6 +106,8 @@ onBeforeRouteLeave(() => {
   return true
 })
 const submitted = ref(false)
+const cardFilled = ref(false)
+const cardExpiredWarning = ref('')
 const emailFocused = ref(false)
 const identityFocused = ref(false)
 const errorMessage = ref('')
@@ -276,6 +280,15 @@ onMounted(async () => {
   }
   if (route.query.appointmentId) await loadSourceAppointment()
   initialForm.value = JSON.stringify(form)
+  // a card read from the registration dialog: fill the form (after the snapshot above, so leaving it still asks)
+  const card = takePendingCard()
+  if (card) {
+    Object.assign(form, mapCardToRegistration(card))
+    cardFilled.value = true
+    cardExpiredWarning.value = cardExpired(card, clinicToday())
+      ? 'บัตรประชาชนใบนี้หมดอายุแล้ว ตรวจสอบกับผู้ป่วยก่อนบันทึก'
+      : ''
+  }
   if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
     duplicatePatient.value = {
       id: 10,
@@ -647,6 +660,10 @@ async function submit() {
                   isForeign ? 'รูปแบบเลขพาสปอร์ตไม่ถูกต้อง' : 'กรุณากรอกตัวเลข 13 หลัก'
                 }}</small>
               </label>
+              <p v-if="cardFilled" class="card-filled-note" role="status" style="grid-column: 1 / -1">
+                กรอกข้อมูลจากบัตรประชาชนให้แล้ว ตรวจสอบและแก้ไขได้ก่อนบันทึก
+                <small v-if="cardExpiredWarning" class="required-error">{{ cardExpiredWarning }}</small>
+              </p>
             </div>
           </section>
           <section class="registration-section">
