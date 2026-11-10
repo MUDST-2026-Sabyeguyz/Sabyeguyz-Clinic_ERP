@@ -43,9 +43,13 @@ import com.sabyeguyz.clinicv2.auth.UserRoleRepository;
 public class SecurityConfig {
     private final SecretKeySpec signingKey;
 
-    public SecurityConfig(@Value("${app.jwt.secret:clinic-erp-local-secret-change-me-32chars}") String secret) {
+    public SecurityConfig(@Value("${app.jwt.secret}") String secret) {
         if (secret.length() < 32) {
             throw new IllegalArgumentException("JWT secret must be at least 32 characters");
+        }
+        String lower = secret.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("change-me") || lower.contains("replace-with") || lower.contains("local-secret")) {
+            throw new IllegalArgumentException("JWT secret is a placeholder; set JWT_SECRET to a random value");
         }
         signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     }

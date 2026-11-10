@@ -312,10 +312,10 @@ function setPage(category: string, page: number) {
 }
 .edit {
   min-height: 40px;
-  border: 1px solid #16756e;
+  border: 1px solid var(--ui-primary);
   border-radius: 8px;
   color: #fff;
-  background: linear-gradient(135deg, #1c8d82, #16756e);
+  background: var(--ui-primary);
   font: inherit;
   font-size: 14px;
   font-weight: 600;

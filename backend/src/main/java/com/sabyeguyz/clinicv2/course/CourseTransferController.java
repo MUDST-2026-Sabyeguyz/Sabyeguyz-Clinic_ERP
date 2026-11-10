@@ -71,6 +71,7 @@ public class CourseTransferController {
     public Response create(@RequestBody Request request) {
         Course course = courses.findById(request.sourcePurchaseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        branchAccess.requireAccess(course.getBranch(), "โอนสิทธิ์ได้เฉพาะคอร์สของสาขาตัวเอง");
         Patient from = course.getPurchaserPatient();
         Patient to = patients.findById(request.destinationPatientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วยปลายทาง"));

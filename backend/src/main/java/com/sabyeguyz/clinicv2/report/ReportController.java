@@ -42,6 +42,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Transactional
 @RestController
+@org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
 public class ReportController {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
 

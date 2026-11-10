@@ -31,7 +31,7 @@ public class BranchController {
     }
 
     public record Request(
-            @NotBlank @Pattern(regexp = "\\d{2}", message = "branchCode ต้องเป็นตัวเลข 2 หลัก") String branchCode,
+            @Pattern(regexp = "\\d{2}", message = "branchCode ต้องเป็นตัวเลข 2 หลัก") String branchCode, // optional on create: auto-generated
             @NotBlank @Size(max = 100) String name,
             @NotBlank @Size(max = 255) String address,
             @NotBlank @Size(max = 20) String phone,
@@ -68,7 +68,9 @@ public class BranchController {
     @ResponseStatus(HttpStatus.CREATED)
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
-        Branch branch = service.create(request.branchCode(), request.name(), request.address(), request.phone(),
+        String code = request.branchCode() == null || request.branchCode().isBlank()
+                ? service.nextBranchCode() : request.branchCode();
+        Branch branch = service.create(code, request.name(), request.address(), request.phone(),
                 actor.currentId());
         return toResponse(service.applySettings(branch.getId(), request.settings(), actor.currentId()));
     }
@@ -77,7 +79,7 @@ public class BranchController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Branch existing = service.get(id);
-        if (!existing.getBranchCode().equals(request.branchCode().trim())) {
+        if (request.branchCode() != null && !existing.getBranchCode().equals(request.branchCode().trim())) {
             throw new IllegalArgumentException("ไม่อนุญาตให้แก้ branchCode เพื่อรักษา HN เดิม");
         }
         service.update(id, request.name(), request.address(), request.phone(), actor.currentId());
