@@ -22,7 +22,8 @@
 - UI text is Thai. Staff may always type the data by hand (the reader is optional).
 - Commit messages carry **no AI attribution lines** (project rule). Do not push; pushing is the user's decision.
 - Backend tests run through Docker (host JVM cannot open a NIO selector): use the existing Testcontainers-based HTTP tests; run them as described in each task's "Run" line.
-- Branches: backend + agent on `feat/id-card-reader-backend` created from `origin/feat/database`; frontend on `feat/id-card-reader-frontend` created from the cleaned `fix-frontend` (`8cd06e5` at the time of writing, i.e. local `fix-frontend-clean`).
+- **One branch, `feat/id-card-reader`**, created from the cleaned `fix-frontend` (`8cd06e5`). It holds the docs, the backend module, the agent and the frontend, and touches no existing file beyond `SecurityConfig.java`, `client.ts`, the two patient views and the router, so it can be merged into other branches later. `fix-frontend` and `feat/database` already carry *different* `V1022` migrations; the new migration is `V1023`, which is free on both today: renumber it at merge time if another `V1023` appears.
+- The HTTP tests use their own harness `IdCardHttpTestSupport` (Task 2), because the older `CoursePaymentHttpTestSupport` exists only on `feat/database`.
 
 ## File Structure
 
@@ -43,7 +44,7 @@ Backend (`backend/src/main/java/com/sabyeguyz/clinicv2/idcard/`):
 | `IdCardReadController.java` | staff start/poll |
 | `IdCardAgentController.java` | agent pair/next/result |
 
-Backend resources/tests: `db/migration/V1023__id_card_reader.sql`; tests under `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/` (plain JUnit) and `backend/src/test/java/com/sabyeguyz/schemacheck/` (HTTP tests extending `CoursePaymentHttpTestSupport`, which is package-private in that package).
+Backend resources/tests: `db/migration/V1023__id_card_reader.sql`; tests under `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/` (plain JUnit, plus HTTP tests that extend `IdCardHttpTestSupport`).
 
 Agent (`id-card-agent/`, Maven, package `com.sabyeguyz.idcard.agent`): `CardData`, `ThaiIdCardParser`, `ApduChannel`, `ThaiIdCardReader`, `CardSource`/`PcscCardSource`, `AgentConfig`, `BackendClient`, `AgentLoop`, `Autostart`, `StatusTray`, `AgentMain`, `packaging/`.
 
@@ -133,26 +134,139 @@ git commit -m "feat(idcard): check digit of a Thai national ID number"
 ### Task 2: Schema, entities and repositories
 
 **Files:**
-- Create: `backend/src/main/resources/db/migration/V1023__id_card_reader.sql` (first confirm no newer `V10xx` exists on the base branch; use the next free number)
+- Create: `backend/src/main/resources/db/migration/V1023__id_card_reader.sql` (first confirm `V1023` is still free on the base branch; if not, use the next free number)
+- Create: `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardHttpTestSupport.java` (Step 0)
 - Create: `.../idcard/CardReaderWorkstation.java`, `CardReaderWorkstationRepository.java`, `IdCardReadAudit.java`, `IdCardReadAuditRepository.java`
-- Test: `backend/src/test/java/com/sabyeguyz/schemacheck/IdCardSchemaHttpTest.java`
+- Test: `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardSchemaHttpTest.java`
 
 **Interfaces:**
 - Produces: `CardReaderWorkstation` with getters/setters `getId, getName/setName, getBranch/setBranch, getTokenHash/setTokenHash, getPairingCodeHash/setPairingCodeHash, getPairingExpiresAt/setPairingExpiresAt, getStatus/setStatus, getLastSeenAt/setLastSeenAt, getCreatedAt, getCreatedBy/setCreatedBy`; repository methods `findByTokenHash(String)`, `findByPairingCodeHash(String)`, `findByBranchIdOrderByNameAsc(Long)`, `findAllByOrderByNameAsc()`; `IdCardReadAudit(Long workstationId, Long userId, Long branchId, String purpose, String outcome)` + `IdCardReadAuditRepository` (plain `JpaRepository<IdCardReadAudit, Long>`).
 
+- [ ] **Step 0: Add the HTTP test support used by every HTTP test in Tasks 2, 3 and 5**
+
+Create `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardHttpTestSupport.java` (a copy of the existing Testcontainers harness without the course fixture; the v2 demo seed provides the `manager`, `therapist` and `therapist2` users and branches 01 and 02):
+
+```java
+package com.sabyeguyz.clinicv2.idcard;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sabyeguyz.clinicv2.ClinicV2Application;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.junit.jupiter.api.*;
+import org.springframework.boot.SpringApplication;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+/** Real JWT/HTTP calls against the application on a disposable PostgreSQL with the v2 demo seed. */
+@Testcontainers
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Timeout(90)
+public abstract class IdCardHttpTestSupport {
+    @Container
+    protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    protected ConfigurableApplicationContext context;
+    protected JdbcTemplate db;
+    protected ObjectMapper json;
+    protected String token;
+    protected Long patientId, branchId, actorId;
+    private String baseUrl;
+    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+
+    protected record HttpResult(int status, JsonNode body) {}
+
+    @BeforeAll
+    void startApplication() {
+        context = SpringApplication.run(ClinicV2Application.class,
+                "--spring.profiles.active=v2", "--server.port=0", "--server.address=127.0.0.1",
+                "--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
+                "--spring.datasource.username=" + POSTGRES.getUsername(),
+                "--spring.datasource.password=" + POSTGRES.getPassword(),
+                "--spring.flyway.locations=classpath:db/migration,classpath:db/seed_v2",
+                "--spring.jpa.hibernate.ddl-auto=validate", "--spring.jpa.open-in-view=false",
+                "--app.jwt.secret=id-card-http-tests-only-secret-at-least-32-characters",
+                "--app.calendar.enabled=false", "--logging.level.root=WARN");
+        db = context.getBean(JdbcTemplate.class);
+        json = context.getBean(ObjectMapper.class);
+        baseUrl = "http://127.0.0.1:" + context.getEnvironment().getProperty("local.server.port");
+        db.update("update branch set branch_status=true where branch_code in ('01','02')");
+        branchId = db.queryForObject("select branch_id from branch where branch_code='01'", Long.class);
+        actorId = db.queryForObject("select user_id from app_user where username='manager'", Long.class);
+        token = login("manager", "manager123");
+        patientId = registerPatient();
+    }
+
+    @AfterAll
+    void stopApplication() {
+        if (context != null) context.close();
+    }
+
+    /** One registered patient for the whole class (the demo seed has none); same payload as the Cypress support. */
+    private Long registerPatient() {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branchCode", "01");
+        body.put("customerType", "Thai");
+        body.put("title", "นาย");
+        body.put("firstName", "สมชาย");
+        body.put("lastName", "ใจดี");
+        body.put("gender", "Male");
+        body.put("phone", "0811111111");
+        body.put("identityDocumentType", "NATIONAL_ID");
+        body.put("identityNumber", "1100000000001");
+        body.put("birthDate", "1990-01-01");
+        body.put("address", "กรุงเทพฯ");
+        HttpResult created = reply("POST", "/api/patients", body);
+        Assertions.assertEquals(201, created.status(), created.body().toString());
+        return created.body().path("id").asLong();
+    }
+
+    protected String login(String username, String password) {
+        HttpResult result = replyAs(null, "POST", "/api/auth/login", Map.of("username", username, "password", password));
+        Assertions.assertEquals(200, result.status(), result.body().toString());
+        return result.body().path("token").asText();
+    }
+
+    protected HttpResult reply(String method, String path, Object payload) {
+        return replyAs(token, method, path, payload);
+    }
+
+    protected HttpResult replyAs(String jwt, String method, String path, Object payload) {
+        try {
+            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(baseUrl + path)).timeout(Duration.ofSeconds(40));
+            if (jwt != null) request.header("Authorization", "Bearer " + jwt);
+            request.header("Content-Type", "application/json");
+            request.method(method, payload == null ? HttpRequest.BodyPublishers.noBody()
+                    : HttpRequest.BodyPublishers.ofString(json.writeValueAsString(payload)));
+            HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+            return new HttpResult(response.statusCode(), response.body().isBlank() ? json.nullNode() : json.readTree(response.body()));
+        } catch (Exception exception) {
+            throw new AssertionError("HTTP request failed: " + method + " " + path, exception);
+        }
+    }
+}
+```
+
 - [ ] **Step 1: Write the failing test**
 
 ```java
-package com.sabyeguyz.schemacheck;
+package com.sabyeguyz.clinicv2.idcard;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
-import com.sabyeguyz.clinicv2.idcard.CardReaderWorkstation;
-import com.sabyeguyz.clinicv2.idcard.CardReaderWorkstationRepository;
 import org.junit.jupiter.api.Test;
 
-class IdCardSchemaHttpTest extends CoursePaymentHttpTestSupport {
+class IdCardSchemaHttpTest extends IdCardHttpTestSupport {
     @Test
     void tablesExistAndAWorkstationCanBeSaved() {
         assertEquals(0L, db.queryForObject("select count(*) from card_reader_workstation", Long.class));
@@ -368,7 +482,7 @@ Run: same command as Step 2. Expected: 2 tests PASS (application boots with `ddl
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/src/main/resources/db/migration/V1023__id_card_reader.sql backend/src/main/java/com/sabyeguyz/clinicv2/idcard backend/src/test/java/com/sabyeguyz/schemacheck/IdCardSchemaHttpTest.java
+git add backend/src/main/resources/db/migration/V1023__id_card_reader.sql backend/src/main/java/com/sabyeguyz/clinicv2/idcard backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardSchemaHttpTest.java
 git commit -m "feat(idcard): workstation and read-audit tables"
 ```
 
@@ -379,7 +493,7 @@ git commit -m "feat(idcard): workstation and read-audit tables"
 **Files:**
 - Create: `.../idcard/TokenHasher.java`, `WorkstationService.java`, `WorkstationController.java`, `IdCardAgentController.java` (pair endpoint only for now)
 - Modify: `backend/src/main/java/com/sabyeguyz/clinicv2/config/SecurityConfig.java` (permit `/api/id-card/agent/**`)
-- Test: `backend/src/test/java/com/sabyeguyz/schemacheck/IdCardWorkstationHttpTest.java`
+- Test: `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardWorkstationHttpTest.java`
 
 **Interfaces:**
 - Consumes: Task 2 entity/repository.
@@ -391,14 +505,14 @@ git commit -m "feat(idcard): workstation and read-audit tables"
 - [ ] **Step 1: Write the failing tests**
 
 ```java
-package com.sabyeguyz.schemacheck;
+package com.sabyeguyz.clinicv2.idcard;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class IdCardWorkstationHttpTest extends CoursePaymentHttpTestSupport {
+class IdCardWorkstationHttpTest extends IdCardHttpTestSupport {
     private HttpResult createWorkstation(String name, String branchCode) {
         return reply("POST", "/api/id-card/workstations", Map.of("name", name, "branchCode", branchCode));
     }
@@ -734,7 +848,7 @@ Run: same command as Step 2. Expected: 6 tests PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add backend/src/main backend/src/test/java/com/sabyeguyz/schemacheck/IdCardWorkstationHttpTest.java
+git add backend/src/main backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardWorkstationHttpTest.java
 git commit -m "feat(idcard): manager pairs counter card readers with a one-time code"
 ```
 
@@ -1082,7 +1196,7 @@ git commit -m "feat(idcard): in-memory card reads, delivered once, with a per-us
 **Files:**
 - Create: `.../idcard/IdCardService.java`, `IdCardReadController.java`
 - Modify: `.../idcard/IdCardAgentController.java` (add `next`, `result`)
-- Test: `backend/src/test/java/com/sabyeguyz/schemacheck/IdCardReadHttpTest.java`
+- Test: `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardReadHttpTest.java`
 
 **Interfaces:**
 - Consumes: Tasks 1–4 (`ThaiNationalId`, `WorkstationService`, `ReadRequestStore`, `ReadRateLimiter`, `CardData`, audit repo, `PatientRepository.findByNationalId`, `BranchAccessPolicy.scope(null)`, `CurrentActor.requireId()`).
@@ -1096,7 +1210,7 @@ git commit -m "feat(idcard): in-memory card reads, delivered once, with a per-us
 - [ ] **Step 1: Write the failing tests**
 
 ```java
-package com.sabyeguyz.schemacheck;
+package com.sabyeguyz.clinicv2.idcard;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -1105,7 +1219,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class IdCardReadHttpTest extends CoursePaymentHttpTestSupport {
+class IdCardReadHttpTest extends IdCardHttpTestSupport {
     static final String VALID_ID = "1101700005119";
     String agentToken;
     long workstationId;
@@ -1113,6 +1227,7 @@ class IdCardReadHttpTest extends CoursePaymentHttpTestSupport {
     @BeforeEach
     void pairAWorkstation() {
         db.execute("TRUNCATE TABLE id_card_read_audit, card_reader_workstation RESTART IDENTITY CASCADE");
+        db.update("update patient set national_id = null"); // each test decides which number belongs to the patient
         var created = reply("POST", "/api/id-card/workstations", Map.of("name", "เคาน์เตอร์ 1", "branchCode", "01")).body();
         workstationId = created.path("id").asLong();
         agentToken = replyAs(null, "POST", "/api/id-card/agent/pair", Map.of("code", created.path("pairingCode").asText()))
@@ -1536,13 +1651,13 @@ Expected: all PASS. If `lookupFindsAnExistingPatient...` fails because `Patient`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/src/main backend/src/test/java/com/sabyeguyz/schemacheck/IdCardReadHttpTest.java
+git add backend/src/main backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardReadHttpTest.java
 git commit -m "feat(idcard): start a card read, hand it to the agent, deliver the result once"
 ```
 
 ---
 
-## Part B — Agent (`id-card-agent/`, same branch as Part A)
+## Part B — Agent (`id-card-agent/`, same branch)
 
 ### Task 6: Project skeleton and the chip-data parser
 
@@ -2864,7 +2979,7 @@ git commit -m "feat(agent): installer scripts for Windows, macOS and Linux"
 
 ---
 
-## Part C — Frontend (`feat/id-card-reader-frontend`)
+## Part C — Frontend (same branch)
 
 ### Task 12: Map card data onto the registration form
 
@@ -3967,7 +4082,7 @@ git commit -m "docs(idcard): device check for the card reader on each system"
 - 9 Installers/autostart → Tasks 10, 11; 10 Tests → each task + Tasks 16, 17; 11 Risks → Task 17 and Task 7 note
 - Spec scope narrowing applied: checksum only on card reads (Task 5); long-poll/polling (Tasks 4, 5, 9, 13).
 
-**Known gaps and decisions to confirm before executing:** the migration number `V1023` must be re-checked against the base branch at execution time; the manager page is reachable by the link in the reader button and by URL (no entry in the back-office navigation yet, which touches `BackOfficeView.vue` and `CalendarSettingsView.vue` menus); signing/notarization of installers is not included; auto-update is out of scope.
+**Known gaps and decisions to confirm before executing:** the migration number `V1023` must be re-checked at execution time (and at merge: `fix-frontend` and `feat/database` already have different `V1022` files); the manager page is reachable by the link in the reader button and by URL (no entry in the back-office navigation yet, which touches `BackOfficeView.vue` and `CalendarSettingsView.vue` menus); signing/notarization of installers is not included; auto-update is out of scope.
 
 **Placeholder scan:** none of "TBD/TODO/similar to Task N"; every code step has code; commands have expected outcomes.
 
