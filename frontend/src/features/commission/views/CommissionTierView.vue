@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
-import CommissionTabs from './CommissionTabs.vue'
 import { commissionApi } from '@/api/client'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
+import { clinicToday } from '@/utils/clinicDate'
+import { nextSchemeEffectiveFrom } from '@/features/settings/commissionVersion'
 
 type Tier = { order: number; min: number; max: number | null; rate: number; active: boolean }
 const tiers = reactive<Tier[]>([])
-const router = useRouter()
 const editingIndex = ref(-1)
 const editorOpen = ref(false)
 const editorType = ref<'tier' | 'scheme'>('tier')
@@ -17,25 +17,24 @@ const error = ref('')
 const scheme = reactive({
   id: 0,
   name: '',
-  version: '',
+  version: '' as number | '',
   effectiveFrom: '',
   active: true,
+  locked: false,
   effectiveTo: null as string | null,
 })
 const form = reactive({ min: 0, max: '' as number | '', rate: 5, active: true })
 const schemeForm = reactive({
   name: 'Commission Scheme',
-  version: '2',
   effectiveFrom: '2027-01-01',
-  effectiveTo: '',
   basis: 'net',
 })
 const schemeTiers = reactive<Tier[]>([])
-const compensationType = ref('course')
-const serviceAmount = ref(0)
+const moneyStep = 0.01
 const loading = ref(false)
+// Scheme ที่เริ่มมีผลแล้วห้ามแก้ย้อนหลัง ให้สร้าง Version ใหม่แทน
 const schemeLocked = computed(
-  () => Boolean(scheme.effectiveFrom) && new Date(`${scheme.effectiveFrom}T00:00:00`) <= new Date(),
+  () => scheme.locked || (Boolean(scheme.effectiveFrom) && scheme.effectiveFrom <= clinicToday()),
 )
 const dateLabel = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
@@ -48,11 +47,11 @@ const effectivePeriod = computed(() => {
   end.setDate(end.getDate() - 1)
   return `${dateLabel(scheme.effectiveFrom)}–${end.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
 })
-function editInSettings(index: number) {
-  void router.push({
-    path: '/staff/settings',
-    query: { section: 'commission', schemeId: scheme.id, tier: tiers[index]?.order },
-  })
+function rateLabel(rate: number) {
+  return new Intl.NumberFormat('th-TH', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number(rate.toFixed(2)))
 }
 const formStatus = computed({
   get: () => (form.active ? 'active' : 'inactive'),
@@ -76,42 +75,82 @@ function openEditor(index = -1) {
   editorOpen.value = true
 }
 function openSchemeEditor() {
-  compensationType.value = 'course'
-  serviceAmount.value = 0
+  // คัดลอก Tier ปัจจุบันไปตั้งต้นสำหรับ Version ใหม่
   editorType.value = 'scheme'
   error.value = ''
   Object.assign(schemeForm, {
     name: scheme.name,
-    version: String(Number(scheme.version || 0) + 1),
-    effectiveFrom: scheme.effectiveTo || `${new Date().getFullYear() + 1}-01-01`,
-    effectiveTo: '',
+    effectiveFrom: nextSchemeEffectiveFrom(scheme.effectiveTo),
   })
   schemeTiers.splice(0, schemeTiers.length, ...tiers.map((tier) => ({ ...tier })))
   editorOpen.value = true
 }
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+function normalizeSchemeTiers() {
+  schemeTiers.forEach((tier, index) => {
+    tier.order = index + 1
+    if (index === 0) tier.min = 0
+    else {
+      const previousMaximum = schemeTiers[index - 1]?.max
+      if (previousMaximum !== null && previousMaximum !== undefined)
+        tier.min = roundMoney(previousMaximum + moneyStep)
+    }
+  })
+}
+function updateSchemeTierMaximum(index: number, value: string) {
+  const maximum = Number(value)
+  schemeTiers[index]!.max = value === '' || !Number.isFinite(maximum) ? null : maximum
+  normalizeSchemeTiers()
+}
+function updateSchemeTierMinimum(index: number, value: string) {
+  const minimum = Number(value)
+  if (!Number.isFinite(minimum)) return
+  schemeTiers[index]!.min = minimum
+  if (index > 0) schemeTiers[index - 1]!.max = roundMoney(minimum - moneyStep)
+  normalizeSchemeTiers()
+}
+function addSchemeTier() {
+  const previous = schemeTiers[schemeTiers.length - 1]
+  if (!previous) {
+    schemeTiers.push({ order: 1, min: 0, max: null, rate: 1, active: true })
+    return
+  }
+  const previousInterval = schemeTiers[schemeTiers.length - 2]
+  const interval =
+    previousInterval?.max !== null && previousInterval?.max !== undefined
+      ? previousInterval.max - previousInterval.min + moneyStep
+      : 10000
+  if (previous.max === null)
+    previous.max = roundMoney(previous.min + Math.max(interval, moneyStep) - moneyStep)
+  schemeTiers.push({
+    order: schemeTiers.length + 1,
+    min: roundMoney(previous.max + moneyStep),
+    max: null,
+    rate: 1,
+    active: true,
+  })
+  normalizeSchemeTiers()
+}
+function removeSchemeTier(index: number) {
+  schemeTiers.splice(index, 1)
+  const lastTier = schemeTiers[schemeTiers.length - 1]
+  if (lastTier) lastTier.max = null
+  normalizeSchemeTiers()
+}
 async function saveSchemeVersion() {
   error.value = ''
-  if (!schemeForm.name.trim() || !schemeForm.version.trim() || !schemeForm.effectiveFrom) {
-    error.value = 'กรุณากรอกชื่อ Version และวันที่เริ่มมีผล'
+  if (!schemeForm.name.trim() || !schemeForm.effectiveFrom) {
+    error.value = 'กรุณากรอกชื่อ Scheme และวันที่เริ่มมีผล'
     return
   }
   try {
-    if (scheme.effectiveTo && schemeForm.effectiveFrom < scheme.effectiveTo) {
+    if (scheme.effectiveTo && schemeForm.effectiveFrom <= scheme.effectiveTo) {
       error.value = 'วันที่เริ่มมีผลต้องไม่ทับ Version เดิม'
       return
     }
-    if (schemeForm.effectiveTo && schemeForm.effectiveTo < schemeForm.effectiveFrom) {
-      error.value = 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มมีผล'
-      return
-    }
-    if (compensationType.value === 'service') {
-      if (!Number.isFinite(serviceAmount.value) || serviceAmount.value <= 0) {
-        error.value = 'กรุณาระบุค่าตอบแทนต่อครั้งมากกว่า 0'
-        return
-      }
-      error.value = 'ระบบยังไม่รองรับการบันทึกบริการรายครั้งบนเซิร์ฟเวอร์'
-      return
-    }
+    // ตรวจช่วงยอดขายให้ต่อเนื่องก่อนส่งสร้าง Version ใหม่
     const activeTiers = schemeTiers.filter((t) => t.active).sort((a, b) => a.min - b.min)
     const invalidTier = activeTiers.some(
       (tier, index) =>
@@ -131,29 +170,26 @@ async function saveSchemeVersion() {
       error.value = 'ตรวจช่วงยอดขายและอัตราของ Tier ให้ต่อเนื่องกัน'
       return
     }
-    // The API stores an exclusive end date; the date picker shows the last active day.
-    const endDate = schemeForm.effectiveTo ? new Date(`${schemeForm.effectiveTo}T12:00:00`) : null
-    if (endDate) endDate.setDate(endDate.getDate() + 1)
-    const effectiveTo = endDate
-      ? `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
-      : null
-    const created = (await commissionApi.createScheme({
+    const branchCode = selectedManagerBranch()?.code
+    if (!branchCode) throw new Error('กรุณาเลือกสาขาก่อนบันทึกกฎ')
+    const created = (await commissionApi.createSchemeVersion(scheme.id, {
       name: schemeForm.name,
-      version: schemeForm.version,
       effectiveFrom: schemeForm.effectiveFrom,
-      effectiveTo,
+      branchCode,
       tiers: activeTiers.map((t, index) => ({
         minimum: t.min,
         maximum: t.max,
+        // หน้าจอรับเปอร์เซ็นต์ เช่น 5 แต่ API เก็บอัตราเป็น 0.05
         rate: t.rate / 100,
         order: index + 1,
       })),
     })) as {
       id: number
       name: string
-      version: string
+      version: number
       effectiveFrom: string
       effectiveTo: string | null
+      locked?: boolean
     }
     Object.assign(scheme, created)
     tiers.splice(
@@ -168,6 +204,11 @@ async function saveSchemeVersion() {
 }
 async function saveTier() {
   error.value = ''
+  const branchCode = selectedManagerBranch()?.code
+  if (!branchCode) {
+    error.value = 'กรุณาเลือกสาขาก่อนบันทึกกฎค่าคอมมิชชัน'
+    return
+  }
   const maximum = form.max === '' ? null : Number(form.max)
   if (form.min < 0 || form.rate < 0 || (maximum !== null && form.min > maximum)) {
     error.value = 'ตรวจสอบยอดขายขั้นต่ำ ยอดขายสูงสุด และอัตราคอมมิชชันอีกครั้ง'
@@ -198,6 +239,7 @@ async function saveTier() {
       version: scheme.version,
       effectiveFrom: scheme.effectiveFrom,
       effectiveTo: scheme.effectiveTo,
+      branchCode,
       tiers: tiers
         .filter((t) => t.active)
         .sort((a, b) => a.min - b.min)
@@ -219,7 +261,7 @@ onMounted(async () => {
     const schemes = (await commissionApi.schemes()) as Array<{
       id: number
       name: string
-      version: string
+      version: number
       effectiveFrom: string
       effectiveTo: string | null
     }>
@@ -258,18 +300,27 @@ onMounted(async () => {
   <div class="commission-manager-page">
     <StaffHeader />
     <main class="commission-manager-main">
+      <RouterLink class="commission-settings-back" to="/staff/settings?section=tiers"
+        >← กลับไปตั้งค่า</RouterLink
+      >
       <section class="commission-title">
-        <h1>ตั้งค่า Commission Tier</h1>
+        <h1>กฎค่าคอมมิชชัน</h1>
         <p>กำหนดช่วงยอดขาย อัตราค่าคอมมิชชัน และวันที่เริ่มมีผล</p>
       </section>
-      <CommissionTabs active="tiers" />
       <section class="commission-card commission-page-panel">
-        <header>
+        <header class="commission-scheme-header">
           <div>
+            <span class="commission-eyebrow">Scheme ที่ใช้งาน</span>
             <h2 id="tier-editor-title">{{ scheme.name || 'Commission Scheme' }}</h2>
             <p class="muted-copy">
               มีผล {{ effectivePeriod }} · สถานะ {{ scheme.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน' }}
             </p>
+          </div>
+          <div class="commission-scheme-state">
+            <span>เวอร์ชัน {{ scheme.version || '-' }}</span>
+            <b :class="{ inactive: !scheme.active }">
+              <i aria-hidden="true" />{{ scheme.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน' }}
+            </b>
           </div>
         </header>
         <p v-if="error" class="validation-error">{{ error }}</p>
@@ -299,10 +350,12 @@ onMounted(async () => {
                 <td>
                   <b>Tier {{ tier.order }}</b>
                 </td>
-                <td>฿{{ tier.min.toLocaleString() }}</td>
-                <td>{{ tier.max === null ? 'ไม่จำกัด' : `฿${tier.max.toLocaleString()}` }}</td>
-                <td>
-                  <b>{{ tier.rate }}%</b>
+                <td class="tier-currency">฿{{ tier.min.toLocaleString() }}</td>
+                <td class="tier-currency">
+                  {{ tier.max === null ? 'ไม่จำกัด' : `฿${tier.max.toLocaleString()}` }}
+                </td>
+                <td class="tier-rate">
+                  <b>{{ rateLabel(tier.rate) }}%</b>
                 </td>
                 <td>
                   <span class="tier-status" :class="{ void: !tier.active }">{{
@@ -310,22 +363,17 @@ onMounted(async () => {
                   }}</span>
                 </td>
                 <td>
-                  <button class="commission-secondary" @click="editInSettings(index)">แก้ไข</button>
+                  <button class="commission-secondary" :disabled="schemeLocked" @click="openEditor(index)">
+                    {{ schemeLocked ? 'อ่านอย่างเดียว' : 'แก้ไขเวอร์ชันที่ยังไม่เริ่ม' }}
+                  </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <aside class="tier-note">
-          <b>ระบบตรวจสอบก่อนบันทึก</b
-          ><span
-            >ห้ามช่วงซ้อนทับ · ห้ามมีช่องว่างระหว่าง Tier · อัตราต้องเป็นค่าบวก ·
-            วันเริ่มมีผลต้องไม่ทับ Version เดิม</span
-          >
-        </aside>
         <footer class="scheme-actions">
           <button class="commission-primary" :disabled="loading" @click="openSchemeEditor">
-            + เพิ่ม Scheme Version
+            + เพิ่มเวอร์ชันใหม่
           </button>
         </footer>
       </section>
@@ -367,62 +415,8 @@ onMounted(async () => {
                   show-calendar-icon
                   hide-caret
               /></label>
-              <label
-                >วันที่สิ้นสุด<ThaiDatePicker
-                  v-model="schemeForm.effectiveTo"
-                  placeholder="ไม่กำหนด"
-                  numeric-month
-                  show-calendar-icon
-                  hide-caret
-              /></label>
             </div>
-            <section class="scheme-compensation">
-              <b>ประเภทค่าตอบแทน</b>
-              <div class="compensation-options">
-                <label
-                  ><input
-                    v-model="compensationType"
-                    type="radio"
-                    name="scheme-compensation"
-                    value="course"
-                  />Course Commission</label
-                >
-                <label
-                  ><input
-                    v-model="compensationType"
-                    type="radio"
-                    name="scheme-compensation"
-                    value="service"
-                  />บริการรายครั้ง</label
-                >
-              </div>
-              <div v-if="compensationType === 'course'" class="scheme-rate-details">
-                <label
-                  >ฐานคำนวณ<FilterDropdown
-                    v-model="schemeForm.basis"
-                    label="ฐานคำนวณ"
-                    default-value="net"
-                    default-label="ยอดขายหลังส่วนลดรายการ"
-                    hide-default-option
-                    :clear-on-reselect="false"
-                    :options="[{ value: 'net', label: 'ยอดขายหลังส่วนลดรายการ' }]"
-                /></label>
-                <label>รูปแบบอัตรา<input value="เปอร์เซ็นต์ (%)" readonly /></label>
-                <small>คิดจากยอดขายรายเดือนของคอร์ส</small>
-              </div>
-            </section>
-            <section v-if="compensationType === 'service'" class="scheme-rate-details">
-              <label
-                >ค่าตอบแทนต่อครั้ง (บาท) *<input
-                  v-model.number="serviceAmount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-              /></label>
-              <label>รูปแบบอัตรา<input value="บาท / ครั้ง" readonly /></label>
-              <small>คิดตามจำนวนครั้งที่ให้บริการ</small>
-            </section>
-            <section v-if="compensationType === 'course'" class="scheme-tier-editor">
+            <section class="scheme-tier-editor">
               <header>
                 <b>กำหนด Tier</b
                 ><small>ช่วงยอดขายต้องต่อเนื่อง ไม่ซ้อนทับ และ Tier สูงสุดสามารถไม่จำกัดได้</small>
@@ -435,10 +429,13 @@ onMounted(async () => {
                 <label
                   ><span class="mobile-field-label">ยอดขายขั้นต่ำ (บาท)</span
                   ><input
-                    v-model.number="tier.min"
+                    :value="tier.min"
                     type="number"
                     min="0"
                     :aria-label="`ยอดขายขั้นต่ำ Tier ${index + 1}`"
+                    @input="
+                      updateSchemeTierMinimum(index, ($event.target as HTMLInputElement).value)
+                    "
                 /></label>
                 <label
                   ><span class="mobile-field-label">ยอดขายสูงสุด (บาท)</span
@@ -449,10 +446,7 @@ onMounted(async () => {
                     placeholder="ไม่จำกัด"
                     :aria-label="`ยอดขายสูงสุด Tier ${index + 1}`"
                     @input="
-                      tier.max =
-                        ($event.target as HTMLInputElement).value === ''
-                          ? null
-                          : Number(($event.target as HTMLInputElement).value)
+                      updateSchemeTierMaximum(index, ($event.target as HTMLInputElement).value)
                     "
                 /></label>
                 <label class="scheme-percent"
@@ -472,30 +466,14 @@ onMounted(async () => {
                 <button
                   class="scheme-remove-tier"
                   :aria-label="`ลบ Tier ${index + 1}`"
-                  @click="schemeTiers.splice(index, 1)"
+                  @click="removeSchemeTier(index)"
                 >
                   ×
                 </button>
               </article>
-              <button
-                class="scheme-add-tier"
-                @click="
-                  schemeTiers.push({
-                    order: Math.max(0, ...schemeTiers.map((t) => t.order)) + 1,
-                    min:
-                      (schemeTiers[schemeTiers.length - 1]?.max ??
-                        schemeTiers[schemeTiers.length - 1]?.min ??
-                        0) + 0.01,
-                    max: null,
-                    rate: 1,
-                    active: true,
-                  })
-                "
-              >
-                + เพิ่ม Tier
-              </button>
+              <button class="scheme-add-tier" @click="addSchemeTier">+ เพิ่ม Tier</button>
             </section>
-            <aside v-if="compensationType === 'course'" class="scheme-calculation-rules">
+            <aside class="scheme-calculation-rules">
               <b>กติกาการคำนวณ</b>
               <p>
                 ส่วนลดรายการลดฐานค่าคอมมิชชัน
@@ -552,27 +530,92 @@ onMounted(async () => {
 @import '../styles/commission-workspace.css';
 @import '../styles/commission-manager.css';
 .commission-page-panel {
-  padding: 0 24px 34px;
+  padding: 0 28px 28px;
+  box-shadow: 0 12px 30px rgba(37, 55, 47, 0.04);
 }
-.commission-page-panel > header {
-  padding-left: 0;
-  padding-right: 0;
+.commission-settings-back {
+  display: inline-flex;
+  margin-bottom: 20px;
+  color: #176c68;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.commission-settings-back:hover {
+  color: #176c68;
+  transform: translateX(-2px);
+}
+.commission-page-panel > .commission-scheme-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 0 22px;
+  border-bottom: 1px solid #e1ebe7;
+}
+.commission-scheme-header h2 {
+  margin: 5px 0 6px;
+  color: #173d47;
+  font-size: clamp(22px, 2.2vw, 28px);
+}
+.commission-scheme-header .muted-copy {
+  margin: 0;
+}
+.commission-eyebrow {
+  color: #176c68;
+  font-size: 13px;
+  font-weight: 700;
+}
+.commission-scheme-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #667a72;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.commission-scheme-state b {
+  display: inline-flex;
+  min-height: 34px;
+  padding: 0 13px;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  color: #17663a;
+  background: #ddf3e6;
+  font-size: 13px;
+}
+.commission-scheme-state b.inactive {
+  color: #a13b32;
+  background: #f2e4e1;
+}
+.commission-scheme-state b i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .scheme-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 24px;
+  margin-top: 20px;
 }
 .commission-table tbody tr:nth-child(even) {
-  background: #f8f4ee;
+  background: #fbfcfb;
+}
+.commission-table tbody tr {
+  transition: background 0.18s ease;
+}
+.commission-table tbody tr:hover {
+  background: #f0f8f6;
 }
 .commission-table .tier-status {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 120px;
-  min-height: 34px;
-  padding: 5px 10px;
+  min-width: 92px;
+  min-height: 32px;
+  padding: 5px 12px;
   box-sizing: border-box;
   font-size: 14px;
   font-weight: 600;
@@ -586,8 +629,22 @@ onMounted(async () => {
   color: #a13b32;
 }
 .commission-table td:nth-child(4) {
+  color: inherit;
+  font-size: inherit;
+}
+.commission-table .tier-currency {
+  color: #34514c;
+  font-variant-numeric: tabular-nums;
+}
+.commission-table .tier-rate b {
+  display: inline-flex;
+  min-height: 34px;
+  padding: 0 12px;
+  align-items: center;
+  border-radius: 8px;
   color: #176c68;
-  font-size: 18px;
+  background: #e7f4f1;
+  font-size: 15px;
 }
 .sr-only {
   position: absolute;
@@ -595,18 +652,6 @@ onMounted(async () => {
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
-}
-.tier-note {
-  display: grid;
-  gap: 8px;
-  margin-top: 24px;
-  padding: 18px;
-  border-radius: 10px;
-  background: #e6f0ff;
-  color: #24558c;
-}
-.tier-note span {
-  font-size: 0.9rem;
 }
 .tier-drawer-backdrop {
   position: fixed;
@@ -693,6 +738,17 @@ onMounted(async () => {
   }
 }
 @media (max-width: 520px) {
+  .commission-page-panel {
+    padding: 0 16px 20px;
+  }
+  .commission-page-panel > .commission-scheme-header {
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px 0 18px;
+  }
+  .commission-scheme-state {
+    flex-wrap: wrap;
+  }
   .tier-drawer {
     padding: 22px;
   }

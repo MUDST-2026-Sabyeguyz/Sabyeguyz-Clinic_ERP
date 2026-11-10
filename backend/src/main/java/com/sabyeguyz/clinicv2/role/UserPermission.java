@@ -4,6 +4,7 @@ import com.sabyeguyz.clinicv2.auth.AppUser;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/** สิทธิ์เฉพาะผู้ใช้ที่เพิ่มหรือยกเว้นจากสิทธิ์ตาม role */
 @Entity
 @Table(name = "user_permission")
 @IdClass(UserPermissionId.class)
@@ -30,8 +31,7 @@ public class UserPermission {
 
     public UserPermission() {}
 
-    public UserPermission(AppUser user, Permission permission,
-                          boolean allowed, AppUser updatedBy,
+    public UserPermission(AppUser user, Permission permission, boolean allowed, AppUser updatedBy,
                           LocalDateTime updatedAt) {
         this.user = user;
         this.permission = permission;
@@ -45,16 +45,7 @@ public class UserPermission {
     public boolean isAllowed() { return allowed; }
     public AppUser getUpdatedBy() { return updatedBy; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
-
-    public void setAllowed(boolean allowed) {
-        this.allowed = allowed;
-    }
-
-    public void setUpdatedBy(AppUser updatedBy) {
-        this.updatedBy = updatedBy;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+    public void setAllowed(boolean allowed) { this.allowed = allowed; }
+    public void setUpdatedBy(AppUser updatedBy) { this.updatedBy = updatedBy; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
