@@ -76,7 +76,7 @@ public class AppointmentController {
             String branchCode, Long patientId, Long therapistId, Long serviceId,
             OffsetDateTime startAt, String note, String status, String patientType,
             String contactName, String contactPhone, String requestedServiceType,
-            String contactMiddleName, OffsetDateTime endAt) {}
+            String contactMiddleName, OffsetDateTime endAt, String contactNickname) {}
 
     public record LinkPatientRequest(Long patientId) {}
 
@@ -94,7 +94,8 @@ public class AppointmentController {
 
     public record Response(Long id, String branchCode, PatientSummary patient, TherapistSummary therapist,
                             ServiceSummary service, Instant startAt, Instant endAt, String status, String note,
-                            String cancelReason, String patientType, String contactName, String contactPhone, String contactMiddleName) {}
+                            String cancelReason, String patientType, String contactName, String contactPhone, String contactMiddleName,
+                            String contactNickname) {}
 
     public record PageResponse(java.util.List<Response> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -201,6 +202,11 @@ public class AppointmentController {
 
             appointment.setContactMiddleName(
                     middleName == null || middleName.isBlank() ? null : middleName);
+            String nickname = request.contactNickname() == null ? null : request.contactNickname().trim();
+            if (nickname != null && nickname.length() > 50) {
+                throw new IllegalArgumentException("ชื่อเล่นต้องไม่เกิน 50 ตัวอักษร");
+            }
+            appointment.setContactNickname(nickname == null || nickname.isBlank() ? null : nickname);
             return createdResponse(appointment, request.note());
         }
         Patient patient = patients.findById(request.patientId())
@@ -375,6 +381,7 @@ public class AppointmentController {
                 history.findFirstByAppointmentIdAndToStatusOrderByChangedAtDescIdDesc(appointment.getId(), AppointmentStatus.Cancelled)
                         .map(AppointmentStatusHistory::getReason).orElse(null),
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),
-                appointment.getContactPhone(), appointment.getContactMiddleName());
+                appointment.getContactPhone(), appointment.getContactMiddleName(),
+                appointment.getContactNickname());
     }
 }

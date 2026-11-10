@@ -161,7 +161,7 @@ export type Branch = {
   active: boolean
 }
 export type BranchRequest = {
-  branchCode: string
+  branchCode?: string
   name: string
   address?: string
   phone?: string
@@ -579,7 +579,7 @@ export const branchApi = {
     api
       .post<BackendBranch>('/api/branches', {
         ...body,
-        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
+        branchCode: 'code' in body ? body.code || body.numericCode : body.branchCode,
         name: body.name,
       })
       .then(normalizeBranch),
@@ -587,7 +587,7 @@ export const branchApi = {
     api
       .put<BackendBranch>(`/api/branches/${id}`, {
         ...body,
-        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
+        branchCode: 'code' in body ? body.code || body.numericCode : body.branchCode,
         name: body.name,
       })
       .then(normalizeBranch),
@@ -1371,6 +1371,9 @@ export type CalendarStatus = {
   lastRunAt: string | null
   lastResult: CalendarSyncResult | null
   branches: CalendarBranchStatus[]
+  /** Where the Google key comes from: saved in the web UI, a key file / OAuth values on the server, or none yet. */
+  keySource?: 'ui' | 'file' | 'env' | 'none'
+  serviceAccountEmail?: string | null
 }
 export const calendarApi = {
   status: () => api.get<CalendarStatus>('/api/calendar/status'),
@@ -1379,4 +1382,8 @@ export const calendarApi = {
       googleCalendarId,
     }),
   syncNow: () => api.post<CalendarSyncResult>('/api/calendar/sync', {}),
+  saveCredentials: (keyJson: string) =>
+    api.put<CalendarStatus>('/api/calendar/credentials', { keyJson }),
+  removeCredentials: () =>
+    request<CalendarStatus>('/api/calendar/credentials', { method: 'DELETE' }),
 }

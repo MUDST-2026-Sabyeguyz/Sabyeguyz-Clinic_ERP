@@ -527,6 +527,23 @@ tbody tr:nth-child(even) {
   border-radius: 8px;
   background: #fff7f6;
 }
+.drawer .req {
+  margin-left: 3px;
+  color: #d94b45;
+  font-weight: 700;
+}
+.drawer .field-hint {
+  display: block;
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 0.82rem;
+}
+.drawer .field-help {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
 .validation-message {
   margin: 12px 0 0;
   padding: 10px 12px;
@@ -687,8 +704,8 @@ a.edit {
   cursor: pointer;
 }
 .payment-status button.enable.on {
-  border-color: #16875b;
-  background: #16875b;
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
   color: #fff;
 }
 .payment-status button.disable.on {
@@ -934,7 +951,7 @@ a.edit {
   background: #eef8f5;
 }
 .settings-nav button.active {
-  background: linear-gradient(135deg, #1c8d82, #16756e);
+  background: var(--ui-primary);
   box-shadow: 0 7px 14px #16756e33;
 }
 .settings-nav button.active b,
@@ -989,7 +1006,7 @@ a.edit {
   box-shadow: none;
 }
 .settings-add {
-  background: var(--ui-primary-gradient);
+  background: var(--ui-primary);
   box-shadow: var(--ui-primary-shadow);
 }
 .settings-add:hover,
@@ -1023,8 +1040,8 @@ td {
   padding-bottom: 17px;
 }
 .edit {
-  border: 1px solid #16756e;
-  background: var(--ui-primary-gradient);
+  border: 1px solid var(--ui-primary);
+  background: var(--ui-primary);
   color: #fff;
 }
 .payment-list {

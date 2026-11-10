@@ -99,6 +99,7 @@ async function save(branchCode: string) {
   if (busy.value) return
   const calendarId = (calendarIds[branchCode] ?? '').trim()
   if (!calendarId) {
+    calendarIdTouched.value = true
     error.value = 'กรุณากรอก Calendar ID หากต้องการยกเลิกกรุณากดปุ่มยกเลิกการเชื่อมต่อ'
     return
   }
@@ -128,9 +129,7 @@ async function syncNow() {
   message.value = ''
   try {
     const result = await calendarApi.syncNow()
-    message.value =
-      `sync แล้ว ส่งไปยัง Google ${result.pushed}, ลบ ${result.removed}, ` +
-      `เลื่อนจาก Google ${result.movedFromGoogle}, ยกเลิกจาก Google ${result.cancelledFromGoogle}, ล้มเหลว ${result.failed}`
+    if (result.failed > 0) message.value = `sync ไม่สำเร็จ ${result.failed} รายการ`
     await load()
   } catch (caught) {
     error.value = messageOf(caught)
@@ -161,6 +160,84 @@ async function disconnect() {
     error.value = messageOf(caught)
   } finally {
     busy.value = ''
+  }
+}
+
+const keyText = ref('')
+const keyFileName = ref('')
+const keyTouched = ref(false)
+const keyDialog = ref<HTMLDialogElement | null>(null)
+const keyLooksValid = computed(() => {
+  try {
+    const key = JSON.parse(keyText.value) as { client_email?: string; private_key?: string }
+    return !!key.client_email && !!key.private_key
+  } catch {
+    return false
+  }
+})
+const keyInvalid = computed(
+  () => keyTouched.value && keyText.value.trim().length > 0 && !keyLooksValid.value,
+)
+const canManageKey = computed(() => isManager.value && status.value?.keySource !== 'file')
+
+async function onKeyFile(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (file.size > 20_000) {
+    error.value = 'ไฟล์ใหญ่เกินไป ไม่ใช่ไฟล์ key ของ Google'
+    return
+  }
+  keyText.value = await file.text()
+  keyFileName.value = file.name
+  keyTouched.value = true
+  error.value = ''
+}
+
+async function saveKey() {
+  if (busy.value) return
+  keyTouched.value = true
+  if (!keyLooksValid.value) {
+    error.value = 'ต้องเป็นเนื้อหาไฟล์ JSON ของ service account (มี client_email และ private_key)'
+    return
+  }
+  busy.value = 'key'
+  error.value = ''
+  message.value = ''
+  try {
+    status.value = await calendarApi.saveCredentials(keyText.value.trim())
+    keyText.value = ''
+    keyFileName.value = ''
+    keyTouched.value = false
+    message.value = 'เชื่อมต่อ Google แล้ว ขั้นต่อไป: แชร์ปฏิทินให้อีเมลด้านล่าง แล้วกรอก Calendar ID ของสาขา'
+  } catch (caught) {
+    error.value = messageOf(caught)
+  } finally {
+    busy.value = ''
+  }
+}
+
+async function removeKey() {
+  if (busy.value) return
+  busy.value = 'key'
+  error.value = ''
+  message.value = ''
+  try {
+    status.value = await calendarApi.removeCredentials()
+    keyDialog.value?.close()
+    message.value = 'ตัดการเชื่อมต่อ Google แล้ว'
+  } catch (caught) {
+    error.value = messageOf(caught)
+  } finally {
+    busy.value = ''
+  }
+}
+
+async function copyEmail() {
+  try {
+    await navigator.clipboard.writeText(status.value?.serviceAccountEmail ?? '')
+    message.value = 'คัดลอกอีเมลแล้ว'
+  } catch {
+    message.value = 'คัดลอกไม่ได้ กรุณาเลือกข้อความแล้วคัดลอกเอง'
   }
 }
 
@@ -250,18 +327,74 @@ onMounted(load)
           <div class="calendar-body">
             <p v-if="loading" data-cy="calendar-loading" role="status">กำลังโหลดการตั้งค่า…</p>
             <template v-else-if="status">
-              <div
-                class="calendar-state"
-                :class="{ 'is-enabled': status.enabled }"
-                data-cy="calendar-state"
-              >
-                <strong>{{
-                  status.enabled ? 'ระบบ sync เปิดใช้งาน' : 'ระบบ sync ยังไม่พร้อมใช้งาน'
-                }}</strong>
-                <p v-if="!status.enabled">กรุณาลองใหม่</p>
-                <p v-else-if="isManager">บันทึกปฏิทินของสาขา แล้วใช้ปุ่ม sync เพื่ออัปเดตนัดหมาย</p>
-                <p v-else>ดูปฏิทินได้โดยไม่สามารถแก้ Calendar ID หรือสั่ง sync</p>
+              <div v-if="!status.enabled" class="calendar-state" data-cy="calendar-state">
+                <strong>ระบบ sync ยังไม่พร้อมใช้งาน</strong>
+                <p v-if="isManager">
+                  ยังไม่ได้เชื่อมต่อ Google วาง key ของ Google ในกล่องด้านล่างเพื่อเริ่มใช้งาน
+                </p>
+                <p v-else>ยังไม่ได้เชื่อมต่อ Google กรุณาแจ้งผู้จัดการให้ตั้งค่าการเชื่อมต่อ</p>
               </div>
+              <section v-if="canManageKey" class="google-key" data-cy="google-key">
+                <template v-if="status.keySource === 'ui'">
+                  <h3>เชื่อมต่อ Google แล้ว</h3>
+                  <p>
+                    แชร์ปฏิทินของสาขาให้อีเมลนี้ โดยให้สิทธิ์ “Make changes to events”:
+                  </p>
+                  <div class="google-key-email">
+                    <code data-cy="service-account-email">{{ status.serviceAccountEmail }}</code>
+                    <button type="button" class="calendar-secondary" @click="copyEmail">
+                      คัดลอก
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    class="calendar-secondary"
+                    :disabled="!!busy"
+                    @click="keyDialog?.showModal()"
+                  >
+                    ตัดการเชื่อมต่อ Google
+                  </button>
+                </template>
+                <template v-else>
+                  <h3>เชื่อมต่อ Google</h3>
+                  <ol>
+                    <li>
+                      ใน Google Cloud Console สร้าง Service Account และดาวน์โหลด key แบบ JSON
+                      (เปิดใช้ Google Calendar API ด้วย)
+                    </li>
+                    <li>เลือกไฟล์ หรือวางเนื้อหาไฟล์ JSON ในช่องนี้ แล้วกดเชื่อมต่อ</li>
+                  </ol>
+                  <label class="google-key-file"
+                    >เลือกไฟล์ key (.json)
+                    <input type="file" accept=".json,application/json" @change="onKeyFile" />
+                  </label>
+                  <p v-if="keyFileName" class="google-key-name">ไฟล์: {{ keyFileName }}</p>
+                  <textarea
+                    v-model="keyText"
+                    rows="5"
+                    spellcheck="false"
+                    autocomplete="off"
+                    :class="{ invalid: keyInvalid }"
+                    placeholder='หรือวางเนื้อหาไฟล์ที่ขึ้นต้นด้วย { "type": "service_account", ...'
+                    @blur="keyTouched = true"
+                  ></textarea>
+                  <small v-if="keyInvalid" class="field-hint" role="alert">
+                    ต้องเป็นเนื้อหาไฟล์ JSON ของ service account (มี client_email และ private_key)
+                  </small>
+                  <small class="google-key-note"
+                    >key ถูกเก็บแบบเข้ารหัสบนเซิร์ฟเวอร์ และจะไม่แสดงกลับมาอีก</small
+                  >
+                  <button
+                    type="button"
+                    class="calendar-save"
+                    :disabled="!!busy || !keyText.trim()"
+                    data-cy="save-google-key"
+                    @click="saveKey"
+                  >
+                    {{ busy === 'key' ? 'กำลังตรวจสอบ…' : 'เชื่อมต่อ' }}
+                  </button>
+                </template>
+              </section>
               <div class="calendar-workspace">
                 <div class="calendar-connection">
                   <form
@@ -280,7 +413,9 @@ onMounted(load)
                       }}</span>
                       <span v-if="changed" class="draft-status">ยังไม่บันทึก</span>
                     </div>
-                    <label :for="`calendar-id-${branch.branchCode}`">Calendar ID</label>
+                    <label :for="`calendar-id-${branch.branchCode}`"
+                      >Calendar ID<span class="calendar-required" aria-hidden="true">*</span></label
+                    >
                     <input
                       :id="`calendar-id-${branch.branchCode}`"
                       v-model="calendarIds[branch.branchCode]"
@@ -423,6 +558,20 @@ onMounted(load)
             >
               ลองโหลดอีกครั้ง
             </button>
+            <dialog ref="keyDialog" class="disconnect-dialog">
+              <p>
+                ต้องการตัดการเชื่อมต่อ Google หรือไม่ การ sync นัดหมายกับ Google Calendar
+                จะหยุดจนกว่าจะเชื่อมต่อใหม่
+              </p>
+              <div class="connection-actions">
+                <button type="button" class="calendar-secondary" @click="keyDialog?.close()">
+                  ยกเลิก
+                </button>
+                <button type="button" class="calendar-danger" :disabled="!!busy" @click="removeKey">
+                  ตัดการเชื่อมต่อ
+                </button>
+              </div>
+            </dialog>
             <dialog
               ref="disconnectDialog"
               class="disconnect-dialog"
@@ -528,6 +677,10 @@ onMounted(load)
 .calendar-form input.calendar-id-invalid {
   border-color: #d34d47;
   box-shadow: 0 0 0 3px #d34d471c;
+}
+.calendar-required {
+  margin-left: 2px;
+  color: #c0392b;
 }
 .calendar-field-error {
   margin: -10px 0 0;
@@ -716,6 +869,78 @@ button:disabled {
   font-size: 13px;
   line-height: 1.5;
 }
+.google-key {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding: 20px 22px;
+  border: 1px solid #d5e5df;
+  border-radius: 12px;
+  background: #f7fbf9;
+}
+.google-key h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.google-key p,
+.google-key ol {
+  margin: 0;
+  color: #4d5f57;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.google-key ol {
+  padding-left: 20px;
+}
+.google-key textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #b5ccc4;
+  border-radius: 10px;
+  background: #fff;
+  font: 0.82rem/1.5 ui-monospace, Consolas, monospace;
+  resize: vertical;
+}
+.google-key textarea.invalid {
+  border-color: #d94b45;
+  background: #fff7f6;
+}
+.google-key .calendar-save {
+  justify-self: start;
+}
+.google-key .calendar-secondary {
+  justify-self: start;
+}
+.google-key-email {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.google-key-email code {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #d5e5df;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+.google-key-file {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.google-key-name,
+.google-key-note {
+  color: #68776f;
+  font-size: 0.82rem;
+}
+.google-key .field-hint {
+  color: #b42318;
+  font-size: 0.82rem;
+}
 .calendar-section-heading {
   margin-bottom: 16px;
 }
@@ -741,7 +966,7 @@ button:disabled {
   margin: 0;
 }
 .settings-nav .settings-nav-item.active {
-  background: linear-gradient(135deg, #1c8d82, #16756e);
+  background: var(--ui-primary);
   box-shadow: 0 7px 14px #16756e33;
 }
 .settings-nav .settings-nav-item.active b,
