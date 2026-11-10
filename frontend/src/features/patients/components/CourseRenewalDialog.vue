@@ -1,38 +1,100 @@
 <script setup lang="ts">
-// ส่งคำขอต่ออายุและแสดงประวัติ โดยให้ Manager อนุมัติก่อนเปลี่ยนวันหมดอายุ
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import {
   courseApi,
+  type CourseExtensionPreview,
+  type DirectCourseExtension,
   type CourseExtensionRequest,
   type CoursePurchase,
 } from '@/api/client'
 import { vModalFocus } from '@/features/appointments/modalFocus'
-const props = defineProps<{ course: CoursePurchase; patientId: number }>()
-const emit = defineEmits<{ close: []; requested: [] }>()
-const value = ref(1),
+import { estimateCourseExpiry } from '@/features/courses/courseExtensionDate'
+const props = defineProps<{ course: CoursePurchase; patientId: number; manager?: boolean }>()
+const emit = defineEmits<{ close: []; requested: []; extended: [newExpiry: string] }>()
+const direct = computed(() => props.manager)
+const preview = ref<CourseExtensionPreview>()
+const previewLoading = ref(false)
+const previewError = ref('')
+const previewRevision = ref(0)
+const value = ref<number | ''>(1),
   unit = ref<CourseExtensionRequest['unit']>('Month'),
   reason = ref(''),
   busy = ref(false),
   error = ref('')
 const requests = ref<CourseExtensionRequest[]>([]),
-  historyLoading = ref(true),
+  historyLoading = ref(!direct.value),
   historyError = ref('')
 const submitted = ref(false)
 const canRequest = computed(() => props.course.status === 'ACTIVE')
 const pending = computed(() => requests.value.some((request) => request.status === 'Pending'))
+const durationLimits = { Day: 99, Month: 12, Year: 1 }
+const maxDuration = computed(() => durationLimits[unit.value])
+const validDuration = computed(() =>
+  typeof value.value === 'number' && Number.isInteger(value.value) && value.value >= 1 && value.value <= maxDuration.value,
+)
+const estimatedExpiry = computed(() =>
+  !direct.value && validDuration.value && typeof value.value === 'number'
+    ? estimateCourseExpiry(props.course.expiresAt, value.value, unit.value)
+    : undefined,
+)
+const displayedExpiry = computed(() => direct.value ? preview.value?.newExpiry : estimatedExpiry.value)
+watch(
+  () => [direct.value, canRequest.value, props.course.id, props.patientId, value.value, unit.value, previewRevision.value] as const,
+  async ([manager, eligible, courseId, patientId, duration, durationUnit], _, onCleanup) => {
+    let current = true
+    onCleanup(() => { current = false })
+    preview.value = undefined
+    previewError.value = ''
+    previewLoading.value = false
+    if (!manager || !eligible || typeof duration !== 'number' || !validDuration.value) return
+
+    const body: DirectCourseExtension = {
+      courseId, requestedByPatientId: patientId, value: duration, unit: durationUnit,
+      reason: '', ownerRequestConfirmed: false,
+    }
+    previewLoading.value = true
+    try {
+      const dates = await courseApi.previewDirectExtension(body)
+      if (current) preview.value = dates
+    } catch (err) {
+      if (current) previewError.value = err instanceof Error ? err.message : 'ตรวจวันหมดอายุใหม่ไม่สำเร็จ'
+    } finally {
+      if (current) previewLoading.value = false
+    }
+  },
+  { immediate: true, flush: 'sync' },
+)
 const dateLabel = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeZone: 'Asia/Bangkok' }).format(
     new Date(value.length === 10 ? value + 'T12:00:00+07:00' : value),
   )
 const unitLabel = (value: CourseExtensionRequest['unit']) =>
   ({ Day: 'วัน', Month: 'เดือน', Year: 'ปี' })[value]
-const statusLabel = (status: CourseExtensionRequest['status']) =>
-  ({ Pending: 'รอ Manager พิจารณา', Approved: 'อนุมัติแล้ว', Rejected: 'ไม่อนุมัติ' })[status]
+const units = ['Day', 'Month', 'Year'] as const
+const unitOptions = units.map((value) => ({ value, label: unitLabel(value) }))
+function selectUnit(value: string) {
+  const selected = units.find((option) => option === value)
+  if (selected) unit.value = selected
+}
+function updateDuration(event: Event) {
+  const input = event.target as HTMLInputElement
+  const number = input.valueAsNumber
+  if (unit.value === 'Day' && input.value !== '' && (!/^\d{1,2}$/.test(input.value) || number > maxDuration.value)) {
+    input.value = String(value.value)
+    return
+  }
+  const next = Number.isFinite(number) ? Math.min(maxDuration.value, Math.trunc(number)) : ''
+  input.value = String(next)
+  value.value = next
+}
+watch(maxDuration, (limit) => {
+  if (typeof value.value === 'number' && value.value > limit) value.value = limit
+}, { flush: 'sync' })
 async function loadRequests() {
   historyLoading.value = true
   historyError.value = ''
   try {
-    // โหลดคำขอและผลพิจารณาของคอร์สนี้
     requests.value = await courseApi.extensions({ courseId: props.course.id })
   } catch (err) {
     historyError.value = err instanceof Error ? err.message : 'โหลดคำขอต่ออายุไม่สำเร็จ'
@@ -40,29 +102,43 @@ async function loadRequests() {
     historyLoading.value = false
   }
 }
-onMounted(loadRequests)
+onMounted(() => {
+  if (!direct.value) void loadRequests()
+})
 async function submit() {
-  if (busy.value || submitted.value || pending.value || !canRequest.value) return
-  if (!Number.isInteger(value.value) || value.value < 1 || !reason.value.trim() || reason.value.trim().length > 255) {
-    error.value = 'ระบุระยะเวลาต่ออายุอย่างน้อย 1 หน่วย และเหตุผลไม่เกิน 255 ตัวอักษร'
+  if (busy.value || historyLoading.value || historyError.value || submitted.value || pending.value || !canRequest.value) return
+  const dates = preview.value
+  if (direct.value && (!dates || previewLoading.value)) return
+  if (typeof value.value !== 'number' || !validDuration.value) return
+  if (reason.value.trim().length > 255) {
+    error.value = 'เหตุผลต้องไม่เกิน 255 ตัวอักษร'
     return
   }
   busy.value = true
   error.value = ''
   try {
-    // ส่งคำขอเท่านั้น ไม่แก้วันหมดอายุจากหน้าเว็บ
-    await courseApi.requestExtension({
+    const body = {
       courseId: props.course.id,
       value: value.value,
       unit: unit.value,
       reason: reason.value.trim(),
       requestedByPatientId: props.patientId,
-    })
+    }
+    if (direct.value && dates) {
+      const extension = { ...body, ...dates, ownerRequestConfirmed: true }
+      const result = await courseApi.extendDirect(extension)
+      submitted.value = true
+      emit('extended', result.newExpiry)
+      return
+    }
+    await courseApi.requestExtension(body)
     submitted.value = true
     emit('requested')
-    await loadRequests()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'ส่งคำขอต่ออายุไม่สำเร็จ กรุณาลองใหม่'
+    if (direct.value) previewRevision.value++
+    error.value = err instanceof Error
+      ? err.message
+      : direct.value ? 'ต่ออายุคอร์สไม่สำเร็จ กรุณาลองใหม่' : 'ส่งคำขอต่ออายุไม่สำเร็จ กรุณาลองใหม่'
   } finally {
     busy.value = false
   }
@@ -74,12 +150,13 @@ async function submit() {
       <section
         v-modal-focus="{ close: () => emit('close'), busy }"
         class="course-renewal-dialog"
+        :class="{ 'is-pending': pending }"
         role="dialog"
         aria-modal="true"
         aria-labelledby="course-renewal-title"
       >
         <header>
-          <h2 id="course-renewal-title">ขอต่ออายุคอร์ส</h2>
+          <h2 id="course-renewal-title">{{ direct ? 'ต่ออายุคอร์ส' : 'ขอต่ออายุคอร์ส' }}</h2>
           <button
             type="button"
             :disabled="busy"
@@ -89,68 +166,88 @@ async function submit() {
             ✕
           </button>
         </header>
-        <p>
+        <div v-if="!pending && !historyLoading" class="course-renewal-overview">
           <strong>{{ course.course.name }}</strong>
-        </p>
-        <p>วันหมดอายุปัจจุบัน {{ dateLabel(course.expiresAt) }}</p>
-        <p class="course-renewal-note">
-          คำขอนี้ยังไม่เปลี่ยนวันหมดอายุ Manager ต้องอนุมัติก่อน ระบบจึงบันทึกวันใหม่และประวัติ
-        </p>
-        <form v-if="canRequest && !pending && !submitted" @submit.prevent="submit">
-          <label
-            >ระยะเวลาที่ขอเพิ่ม <span aria-hidden="true">*</span>
-            <input v-model.number="value" type="number" min="1" step="1" required :disabled="busy" />
-          </label>
-          <label
-            >หน่วยเวลา <span aria-hidden="true">*</span>
-            <select v-model="unit" required :disabled="busy">
-              <option value="Day">วัน</option>
-              <option value="Month">เดือน</option>
-              <option value="Year">ปี</option>
-            </select>
-          </label>
-          <label
-            >เหตุผล <span aria-hidden="true">*</span
-            ><textarea v-model="reason" rows="3" maxlength="255" required :disabled="busy" />
+          <p>วันหมดอายุปัจจุบัน <b>{{ dateLabel(preview?.oldExpiry ?? course.expiresAt) }}</b></p>
+        </div>
+        <p v-if="historyLoading" role="status">กำลังตรวจสอบคำขอเดิม…</p>
+        <div v-else-if="historyError" role="alert">
+          {{ historyError }} <button type="button" @click="loadRequests">ลองใหม่</button>
+        </div>
+        <form v-else-if="canRequest && !pending && !submitted" @submit.prevent="submit">
+          <div class="course-renewal-duration">
+            <label>
+              <span>ระยะเวลาที่ขอเพิ่ม <b aria-hidden="true">*</b></span>
+              <input
+                :value="value"
+                @input="updateDuration"
+                type="number"
+                min="1"
+                :max="maxDuration"
+                step="1"
+                required
+                :aria-invalid="!validDuration"
+                :disabled="busy"
+              />
+            </label>
+            <div class="course-renewal-field">
+              <span>หน่วยเวลา</span>
+              <FilterDropdown
+                :model-value="unit"
+                :options="unitOptions"
+                default-label="เลือกหน่วยเวลา"
+                label="หน่วยเวลา"
+                hide-default-option
+                :clear-on-reselect="false"
+                :disabled="busy"
+                @update:model-value="selectUnit"
+              />
+            </div>
+          </div>
+          <div v-if="direct || displayedExpiry" class="course-renewal-preview" aria-live="polite">
+            <p v-if="previewLoading">กำลังคำนวณวันหมดอายุใหม่…</p>
+            <div v-else-if="previewError">
+              <p class="course-renewal-error">{{ previewError }}</p>
+              <button type="button" @click="previewRevision++">ลองใหม่</button>
+            </div>
+            <template v-else-if="displayedExpiry">
+              <p>คอร์สจะหมดอายุวันที่ <b>{{ dateLabel(displayedExpiry) }}</b></p>
+              <p v-if="direct">กดยืนยันต่ออายุเมื่อเจ้าของคอร์สเดิมแจ้งขอแล้วเท่านั้น</p>
+            </template>
+          </div>
+          <label>
+            <span>เหตุผล <small>(ไม่บังคับ)</small></span>
+            <textarea v-model="reason" rows="2" maxlength="255" placeholder="ระบุเหตุผลเพิ่มเติม" :disabled="busy" />
           </label>
           <p v-if="error" class="course-renewal-error" role="alert">{{ error }}</p>
           <footer>
-            <button type="button" :disabled="busy" @click="emit('close')">ยกเลิก</button
-            ><button type="submit" class="course-renewal-primary" :disabled="busy">
-              {{ busy ? 'กำลังส่งคำขอ…' : 'ส่งคำขอให้ Manager' }}
+            <button type="button" :disabled="busy" @click="emit('close')">ยกเลิก</button>
+            <button type="submit" class="course-renewal-primary" :disabled="busy || !validDuration || (direct && !preview)">
+              {{ busy ? 'กำลังดำเนินการ…' : direct ? 'ยืนยันต่ออายุ' : 'ส่งคำขอให้ Manager' }}
             </button>
           </footer>
         </form>
-        <p v-else-if="submitted" class="course-renewal-success" role="status">
-          ส่งคำขอแล้ว รอ Manager อนุมัติก่อนวันหมดอายุจะเปลี่ยน
+        <p v-else-if="!submitted && pending" class="course-renewal-success" role="status">
+          รอการพิจารณา
         </p>
-        <p v-else-if="pending" class="course-renewal-success" role="status">
-          คอร์สนี้มีคำขอต่ออายุที่รอ Manager พิจารณาอยู่แล้ว
-        </p>
-        <p v-else>คอร์สนี้ไม่อยู่ในสถานะที่ขอต่ออายุได้</p>
-        <section class="course-renewal-history">
-          <h3>คำขอและประวัติการต่ออายุ</h3>
-          <p v-if="historyLoading" role="status">กำลังโหลดประวัติ…</p>
-          <div v-else-if="historyError" role="alert">
-            {{ historyError }} <button type="button" @click="loadRequests">ลองใหม่</button>
-          </div>
-          <p v-else-if="!requests.length">ยังไม่มีคำขอต่ออายุ</p>
-          <ol v-else>
-            <li v-for="item in requests" :key="item.id">
-              <strong>{{ statusLabel(item.status) }} · เพิ่ม {{ item.value }} {{ unitLabel(item.unit) }}</strong>
-              <p v-if="item.reason">เหตุผล: {{ item.reason }}</p>
-              <p v-if="item.oldExpiry && item.newExpiry">
-                วันหมดอายุ {{ dateLabel(item.oldExpiry) }} → {{ dateLabel(item.newExpiry) }}
-              </p>
-              <small v-if="item.decisionNote">หมายเหตุ Manager: {{ item.decisionNote }}</small>
-            </li>
-          </ol>
-        </section>
+        <p v-else-if="!submitted">คอร์สนี้ไม่อยู่ในสถานะที่ขอต่ออายุได้</p>
       </section>
     </div>
   </Teleport>
 </template>
 <style scoped>
+.course-renewal-preview:not(:empty) {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #edf5f1;
+}
+.course-renewal-preview p {
+  margin: 0;
+}
+.course-renewal-preview p + p {
+  margin-top: 4px;
+  font-size: 14px;
+}
 .course-renewal-backdrop {
   position: fixed;
   inset: 0;
@@ -162,12 +259,14 @@ async function submit() {
 }
 .course-renewal-dialog {
   box-sizing: border-box;
-  width: min(600px, 100%);
+  width: min(520px, 100%);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 28px;
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
+  box-shadow: 0 18px 48px #173f4433;
   color: #25372f;
   font-size: 16px;
   line-height: 1.5;
@@ -184,9 +283,6 @@ h2 {
   font-size: 24px;
   color: #145c59;
 }
-h3 {
-  font-size: 18px;
-}
 button {
   min-height: 44px;
   padding: 8px 14px;
@@ -202,20 +298,35 @@ button:disabled {
   cursor: not-allowed;
 }
 .course-renewal-primary {
-  background: #145c59;
+  background: #187d78;
+  border-color: #187d78;
   color: white;
 }
-.course-renewal-note {
-  padding: 12px;
+.course-renewal-overview {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
   background: #edf5f1;
+  overflow-wrap: anywhere;
+}
+.course-renewal-overview p {
+  margin: 3px 0 0;
   color: #52665e;
   font-size: 14px;
 }
 form {
   display: grid;
   gap: 16px;
+  margin-top: 16px;
 }
-label {
+.course-renewal-duration {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+label,
+.course-renewal-field {
   display: grid;
   gap: 8px;
 }
@@ -228,35 +339,18 @@ textarea {
   resize: vertical;
   font: inherit;
 }
-input,
-select {
+input {
   box-sizing: border-box;
   width: 100%;
-  min-height: 44px;
+  height: 46px;
   padding: 10px 12px;
   border: 1px solid #b7cecc;
-  border-radius: 8px;
+  border-radius: 10px;
   font: inherit;
 }
 footer {
   justify-content: flex-end;
-  margin-top: 8px;
-  padding-bottom: 16px;
-}
-.course-renewal-history {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #dbe3df;
-}
-ol {
-  padding-left: 24px;
-}
-li {
-  margin-bottom: 16px;
-  overflow-wrap: anywhere;
-}
-li p {
-  margin: 4px 0;
+  flex-wrap: wrap;
 }
 small {
   color: #56665d;
@@ -265,12 +359,32 @@ small {
   color: #b42318;
 }
 .course-renewal-success {
-  color: #145c59;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fff5da;
+  color: #76500a;
   font-weight: 600;
+  text-align: center;
 }
-:is(button, textarea):focus-visible {
+.course-renewal-dialog.is-pending {
+  width: min(390px, 100%);
+}
+.is-pending h2 {
+  font-size: 21px;
+}
+.is-pending header button {
+  flex: 0 0 44px;
+  padding: 0;
+}
+:is(button, input, textarea):focus-visible {
   outline: 3px solid #145c59;
   outline-offset: 3px;
+}
+@media (max-width: 380px) {
+  .course-renewal-duration {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @media (max-width: 600px) {
   .course-renewal-backdrop {
