@@ -29,7 +29,7 @@ describe('v2 auth and roles', () => {
       cy.apiAs(body.token, 'POST', '/api/auth/register', {
         username: 'x',
         email: 'x@example.com',
-        password: 'password123',
+        password: 'password12345',
       }).its('status').should('equal', 403)
     })
   })
@@ -42,11 +42,11 @@ describe('v2 auth and roles', () => {
     cy.api('POST', '/api/auth/register', {
       username: 'newuser01',
       email: 'newuser01@example.com',
-      password: 'password123',
+      password: 'password12345',
     }).then((response) => {
       expect(response.status, `register: ${describe(response)}`).to.equal(201)
     })
-    cy.login('newuser01', 'password123').then((response) => {
+    cy.login('newuser01', 'password12345').then((response) => {
       expect(response.status, `login of the new user: ${describe(response)}`).to.equal(200)
     })
   })

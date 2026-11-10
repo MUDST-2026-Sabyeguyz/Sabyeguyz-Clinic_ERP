@@ -61,7 +61,7 @@ describe('v2 audit log', () => {
 
   it('records a user created by a manager', () => {
     cy.api('POST', '/api/users', {
-      username: 'audituser', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-950',
+      username: 'audituser', password: 'password12345', role: 'THERAPIST', employeeCode: 'THP-950',
       email: 'audituser@example.com', fullName: 'ผู้ใช้ ตรวจสอบ', branchCode: '01',
     }).its('status').should('equal', 201)
     entries().then((items) => {

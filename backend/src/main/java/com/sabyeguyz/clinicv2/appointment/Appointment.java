@@ -89,6 +89,9 @@ public class Appointment {
     @Column(name = "contact_middle_name", length = 100)
     private String contactMiddleName;
 
+    @Column(name = "contact_nickname", length = 50)
+    private String contactNickname;
+
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
 
@@ -150,6 +153,9 @@ public class Appointment {
     public void setAppointmentPatientType(AppointmentPatientType appointmentPatientType) { this.appointmentPatientType = appointmentPatientType; }
     public String getContactName() { return contactName; }
     public void setContactName(String contactName) { this.contactName = contactName; }
+
+    public String getContactNickname() { return contactNickname; }
+    public void setContactNickname(String contactNickname) { this.contactNickname = contactNickname; }
 
     public String getContactMiddleName() {
         return contactMiddleName;

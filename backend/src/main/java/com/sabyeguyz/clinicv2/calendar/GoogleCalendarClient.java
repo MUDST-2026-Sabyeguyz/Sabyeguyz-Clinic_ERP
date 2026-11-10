@@ -18,6 +18,9 @@ public interface GoogleCalendarClient {
     /** A stretch of the calendar that is taken (Busy) by an event the clinic did not write; clinic-local times. */
     record BusyBlock(LocalDateTime start, LocalDateTime end) {}
 
+    /** Checks that Google accepts a service account key (signs in once). Throws CalendarApiException when it does not. */
+    default void verifyCredentials(ServiceAccountCredentials credentials) {}
+
     EventRef insert(String calendarId, EventData data);
 
     EventRef update(String calendarId, String eventId, EventData data);

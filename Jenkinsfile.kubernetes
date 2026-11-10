@@ -43,7 +43,7 @@ pipeline {
                     powershell '''
                         $sha = (& git rev-parse --short=12 HEAD).Trim()
                         if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the deployment revision.' }
-                        & ./scripts/deploy-kubernetes.ps1 -ImageTag "$sha-b$env:BUILD_NUMBER"
+                        & ./scripts/deploy-kubernetes.ps1 -ImageTag "$sha-b$env:BUILD_NUMBER" -WithDemoData
                     '''
                 }
             }
