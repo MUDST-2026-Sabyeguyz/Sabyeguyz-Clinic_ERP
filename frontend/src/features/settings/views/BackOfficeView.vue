@@ -23,7 +23,7 @@ import {
   userManagementApi,
 } from '@/api/client'
 import { clinicToday } from '@/utils/clinicDate'
-import { isBranchPhoneValid, isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
+import { isBranchPhoneValid, limitPhoneDigits } from '@/utils/phone'
 import { baht2, recordedAt, versionCycles, versionStatus } from '../commissionVersion'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 
@@ -57,6 +57,7 @@ const section = ref<SectionKey>(initialSection()),
   savedMessage = ref(''),
   saveModalOpen = ref(false)
 const fieldErrors = reactive<Record<string, boolean>>({})
+const fieldHints = reactive<Record<string, string>>({})
 const validationMessage = ref('')
 const loadError = ref('')
 const permissionOverrides = ref<UserPermissionOverride[]>([])
@@ -156,6 +157,7 @@ const serviceRow = (item: Awaited<ReturnType<typeof serviceManagementApi.create>
 
   sessions: '1',
   duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
+  durationLabel: item.defaultDurationMinutes ? `${item.defaultDurationMinutes} นาที` : '-',
   status: status(item.active),
 })
 const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
@@ -164,6 +166,7 @@ const courseRow = (item: Awaited<ReturnType<typeof courseApi.create>>) => ({
 
   sessions: String(item.sessions),
   duration: item.defaultDurationMinutes ? String(item.defaultDurationMinutes) : '',
+  durationLabel: item.defaultDurationMinutes ? `${item.defaultDurationMinutes} นาที` : '-',
   validityValue: item.validityValue ?? item.validityDays,
   validityUnit: item.validityUnit ?? 'Day',
   status: status(Boolean(item.active)),
@@ -370,8 +373,8 @@ const actionLabel = computed(() => {
 const headers = computed(() => {
   const values: Record<SectionKey, string[]> = {
     branches: ['รหัสสาขา', 'ชื่อสาขา', 'ข้อมูลติดต่อ', 'สถานะ'],
-    users: ['ผู้ใช้งาน', 'บทบาท', 'สาขา', 'สิทธิ์', 'สถานะ'],
-    services: ['รายการ', 'ประเภท', 'ราคา', 'จำนวน/ครั้ง', 'สถานะ'],
+    users: ['รหัสพนักงาน', 'ชื่อ-นามสกุล', 'บทบาท', 'สาขา', 'สถานะ'],
+    services: ['รายการ', 'ประเภท', 'ราคา', 'จำนวน/ครั้ง', 'ระยะเวลา', 'สถานะ'],
     payments: [],
     rooms: ['ห้องรักษา', 'สาขา', 'สถานะ'],
     commission: [
@@ -390,8 +393,8 @@ const headers = computed(() => {
 const keys = computed(() => {
   const values: Record<SectionKey, string[]> = {
     branches: ['code', 'name', 'contact', 'status'],
-    users: ['name', 'role', 'branch', 'permission', 'status'],
-    services: ['name', 'type', 'price', 'sessions', 'status'],
+    users: ['code', 'name', 'role', 'branch', 'status'],
+    services: ['name', 'type', 'price', 'sessions', 'durationLabel', 'status'],
     payments: [],
     rooms: ['name', 'branch', 'status'],
     commission: ['name', 'recipient', 'calculation', 'status', 'lastEditedBy', 'lastEditedAt'],
@@ -573,7 +576,6 @@ function defaults() {
       email: '',
       password: '',
       code: '',
-      phone: '',
       branch: selectedBranchName.value || openBranches.value[0]?.name || '',
       status: 'ใช้งาน',
     })
@@ -628,7 +630,6 @@ function openDrawer(index: number | null) {
   if (row) Object.assign(form, row)
   else defaults()
   if (section.value === 'branches') form.contact = limitPhoneDigits(String(form.contact ?? ''))
-  if (section.value === 'users') form.phone = limitPhoneDigits(String(form.phone ?? ''))
   drawerOpen.value = true
   if (section.value === 'users' && index !== null && Number.isSafeInteger(Number(form.id)))
     void loadPermissionOverrides(Number(form.id))
@@ -648,10 +649,11 @@ function invalidMinutes(value: unknown) {
 async function save() {
   fillDefaultBranch()
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
+  Object.keys(fieldHints).forEach((key) => delete fieldHints[key])
   validationMessage.value = ''
   const required: Record<Exclude<SectionKey, 'payments'>, string[]> = {
-    branches: ['code', 'name', 'address', 'contact'],
-    users: ['name', 'role', 'branch', 'username', 'code', 'email'],
+    branches: ['name', 'address', 'contact'],
+    users: ['name', 'role', 'branch', 'username', 'email'],
     services: ['name', 'type', 'price'],
     rooms: ['name', 'branch', 'type'],
     commission: [],
@@ -665,38 +667,93 @@ async function save() {
     const phone = String(form.contact).trim()
     fieldErrors.contact = !isBranchPhoneValid(phone)
   }
-  if (section.value === 'users' && String(form.phone ?? '').trim()) {
-    fieldErrors.phone = !isOptionalPhoneValid(String(form.phone).trim())
-  }
   if (section.value === 'users') {
-    const email = String(form.email ?? '').trim()
-    fieldErrors.email = email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    const text = (key: string) => String(form[key] ?? '').trim()
+    const password = String(form.password ?? '')
+    const isNew = editingIndex.value === null
+    if (!text('name')) fieldHints.name = 'กรุณากรอกชื่อ-นามสกุล'
+    else if (text('name').length > 160) fieldHints.name = 'ชื่อ-นามสกุลต้องไม่เกิน 160 ตัวอักษร'
+    if (!text('username')) fieldHints.username = 'กรุณากรอก Username'
+    else if (!/^\S{3,50}$/.test(text('username')))
+      fieldHints.username = 'Username ต้องยาว 3–50 ตัวอักษร และห้ามมีช่องว่าง'
+    if (!text('email')) fieldHints.email = 'กรุณากรอกอีเมล'
+    else if (text('email').length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text('email')))
+      fieldHints.email = 'รูปแบบอีเมลไม่ถูกต้อง (เช่น name@example.com) และต้องไม่เกิน 254 ตัวอักษร'
+    if (isNew && !password) fieldHints.password = 'กรุณากรอกรหัสผ่าน'
+    else if (password && password.length < 12)
+      fieldHints.password = 'รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร'
+    if (!text('role')) fieldHints.role = 'กรุณาเลือกบทบาท'
+    if (!text('branch')) fieldHints.branch = 'กรุณาเลือกสาขา'
+    Object.keys(fieldHints).forEach((key) => (fieldErrors[key] = true))
   }
   if (section.value === 'branches') {
-    fieldErrors.code = !/^\d{2}$/.test(String(form.code))
-    const email = String(form.email ?? '').trim()
+    const text = (key: string) => String(form[key] ?? '').trim()
+    if (editingIndex.value !== null) fieldErrors.code = !/^\d{2}$/.test(String(form.code))
+    if (!text('name')) fieldHints.name = 'กรุณากรอกชื่อสาขา'
+    else if (text('name').length > 100) fieldHints.name = 'ชื่อสาขาต้องไม่เกิน 100 ตัวอักษร'
+    if (!text('address')) fieldHints.address = 'กรุณากรอกที่อยู่สาขา'
+    else if (text('address').length > 255) fieldHints.address = 'ที่อยู่ต้องไม่เกิน 255 ตัวอักษร'
+    if (!text('contact')) fieldHints.contact = 'กรุณากรอกเบอร์โทรศัพท์สาขา'
+    else if (!isBranchPhoneValid(text('contact')))
+      fieldHints.contact = 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 9 หรือ 10 หลัก'
+    const email = text('email')
     fieldErrors.email = email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    if (fieldErrors.email) fieldHints.email = 'รูปแบบอีเมลไม่ถูกต้อง (เช่น branch@example.com)'
     const open = String(form.openTime ?? '').trim()
     const close = String(form.closeTime ?? '').trim()
 
     fieldErrors.openTime = (open === '') !== (close === '') || (open !== '' && open >= close)
     fieldErrors.closeTime = fieldErrors.openTime
     fieldErrors.appointmentMinutes = invalidMinutes(form.appointmentMinutes)
+    if (fieldErrors.openTime)
+      fieldHints.openTime =
+        'ต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด (หรือเว้นว่างทั้งคู่)'
+    if (fieldErrors.appointmentMinutes)
+      fieldHints.appointmentMinutes = 'ต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (หรือเว้นว่าง)'
+    if (text('licenseNo').length > 50) fieldHints.licenseNo = 'เลขใบอนุญาตต้องไม่เกิน 50 ตัวอักษร'
+    Object.keys(fieldHints).forEach((key) => (fieldErrors[key] = true))
   }
   if (section.value === 'services') {
-    fieldErrors.price =
-      String(form.price ?? '').trim() === '' ||
-      !Number.isFinite(Number(form.price)) ||
-      Number(form.price) < 0
-    fieldErrors.duration = invalidMinutes(form.duration)
+    const text = (key: string) => String(form[key] ?? '').trim()
+    if (!text('name')) fieldHints.name = 'กรุณากรอกชื่อบริการ/คอร์ส'
+    else if (text('name').length > 160) fieldHints.name = 'ชื่อต้องไม่เกิน 160 ตัวอักษร'
+    if (!text('type')) fieldHints.type = 'กรุณาเลือกประเภท'
+    if (!text('price')) fieldHints.price = 'กรุณากรอกราคา'
+    else if (!Number.isFinite(Number(form.price)) || Number(form.price) < 0)
+      fieldHints.price = 'ราคาต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป'
+    if (!text('duration')) fieldHints.duration = 'กรุณากรอกระยะเวลา (นาที)'
+    else if (invalidMinutes(form.duration))
+      fieldHints.duration = 'ต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที'
     if (form.type === 'Course') {
-      fieldErrors.sessions = !Number.isInteger(Number(form.sessions)) || Number(form.sessions) < 1
-      fieldErrors.validityValue =
-        !Number.isInteger(Number(form.validityValue)) || Number(form.validityValue) < 1
+      if (!text('sessions')) fieldHints.sessions = 'กรุณากรอกจำนวนครั้งรวม'
+      else if (!Number.isInteger(Number(form.sessions)) || Number(form.sessions) < 1)
+        fieldHints.sessions = 'จำนวนครั้งต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป'
+      if (!text('validityValue')) fieldHints.validityValue = 'กรุณากรอกอายุคอร์ส'
+      else if (!Number.isInteger(Number(form.validityValue)) || Number(form.validityValue) < 1)
+        fieldHints.validityValue = 'อายุคอร์สต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป'
     }
+    Object.keys(fieldHints).forEach((key) => (fieldErrors[key] = true))
+  }
+  if (section.value === 'rooms') {
+    const name = String(form.name ?? '').trim()
+    if (!name) fieldHints.name = 'กรุณากรอกชื่อห้อง/ทรัพยากร'
+    else if (name.length > 120) fieldHints.name = 'ชื่อต้องไม่เกิน 120 ตัวอักษร'
+    if (!String(form.branch ?? '').trim()) fieldHints.branch = 'กรุณาเลือกสาขา'
+    Object.keys(fieldHints).forEach((key) => (fieldErrors[key] = true))
+  }
+  if (section.value === 'master') {
+    const name = String(form.examples ?? '').trim()
+    if (!String(form.category ?? '').trim()) fieldHints.category = 'กรุณาเลือกประเภทข้อมูล'
+    if (!name) fieldHints.examples = 'กรุณากรอกชื่อรายการ'
+    else if (name.length > 160) fieldHints.examples = 'ชื่อรายการต้องไม่เกิน 160 ตัวอักษร'
+    Object.keys(fieldHints).forEach((key) => (fieldErrors[key] = true))
   }
   if (Object.values(fieldErrors).some(Boolean)) {
-    validationMessage.value = fieldErrors.contact
+    validationMessage.value = ['users', 'branches', 'services', 'rooms', 'master'].includes(
+      section.value,
+    )
+      ? 'กรุณาตรวจสอบข้อมูลในช่องที่มีข้อความสีแดง'
+      : fieldErrors.contact
       ? 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 9 หรือ 10 หลัก'
       : fieldErrors.phone
         ? 'เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก'
@@ -709,26 +766,13 @@ async function save() {
               : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }
-  if (section.value === 'users') {
-    const password = String(form.password ?? '')
-    if (editingIndex.value === null && password.length < 8) {
-      validationMessage.value = 'ผู้ใช้ใหม่ต้องมีรหัสผ่านอย่างน้อย 8 ตัวอักษร'
-      return
-    }
-
-    if (editingIndex.value !== null && password !== '' && password.length < 8) {
-      fieldErrors.password = true
-      validationMessage.value = 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร (เว้นว่างไว้ถ้าไม่เปลี่ยน)'
-      return
-    }
-  }
   const rows = data[section.value as Exclude<SectionKey, 'payments'>]
   const existing = editingIndex.value === null ? undefined : rows[editingIndex.value]
   try {
     let record: Row
     if (section.value === 'branches') {
       const body = {
-        branchCode: existing?.code ?? form.code,
+        branchCode: existing?.code,
         name: form.name,
         address: form.address,
         phone: form.contact,
@@ -755,7 +799,6 @@ async function save() {
         role: form.role === 'Manager' ? ('MANAGER' as const) : ('THERAPIST' as const),
         employeeCode: form.code,
         fullName: form.name,
-        phone: form.phone || undefined,
         branchCode:
           data.branches.find((branch) => branch.name === form.branch)?.code ??
           openBranches.value[0]?.code,
@@ -1341,25 +1384,28 @@ const drawerTitle = computed(() => {
           <button aria-label="ปิด" @click="drawerOpen = false">×</button>
         </header>
         <template v-if="section === 'branches'"
+          ><label v-if="editingIndex !== null"
+            >รหัสสาขา<input v-model="form.code" disabled /></label
           ><label
-            >รหัสสาขา<input
-              v-model="form.code"
-              :class="{ invalid: fieldErrors.code }"
-              :disabled="editingIndex !== null"
-              maxlength="2"
-              placeholder="เช่น 01" /></label
-          ><label
-            >ชื่อสาขา<input
+            >ชื่อสาขา<span class="req">*</span><input
               v-model="form.name"
+              maxlength="100"
               :class="{ invalid: fieldErrors.name }"
-              placeholder="ระบุชื่อสาขา" /></label
+              placeholder="ระบุชื่อสาขา" />
+            <small v-if="fieldHints.name" class="field-hint" role="alert">{{
+              fieldHints.name
+            }}</small></label
           ><label
-            >ที่อยู่<input
+            >ที่อยู่<span class="req">*</span><input
               v-model="form.address"
+              maxlength="255"
               :class="{ invalid: fieldErrors.address }"
-              placeholder="ที่อยู่สาขา" /></label
+              placeholder="ที่อยู่สาขา" />
+            <small v-if="fieldHints.address" class="field-hint" role="alert">{{
+              fieldHints.address
+            }}</small></label
           ><label
-            >ข้อมูลติดต่อ<input
+            >เบอร์โทรศัพท์<span class="req">*</span><input
               v-model="form.contact"
               type="tel"
               inputmode="numeric"
@@ -1367,18 +1413,27 @@ const drawerTitle = computed(() => {
               :class="{ invalid: fieldErrors.contact }"
               placeholder="เบอร์โทรศัพท์สาขา"
               pattern="[0-9]*"
-              @input="form.contact = limitPhoneDigits(form.contact)" /></label
+              @input="form.contact = limitPhoneDigits(form.contact)" />
+            <small v-if="fieldHints.contact" class="field-hint" role="alert">{{
+              fieldHints.contact
+            }}</small></label
           ><label
             >อีเมลสาขา<input
               v-model="form.email"
               type="email"
               :class="{ invalid: fieldErrors.email }"
-              placeholder="ไม่บังคับ" /></label
+              placeholder="ไม่บังคับ" />
+            <small v-if="fieldHints.email" class="field-hint" role="alert">{{
+              fieldHints.email
+            }}</small></label
           ><label
             >เลขใบอนุญาต<input
               v-model="form.licenseNo"
               maxlength="50"
-              placeholder="ไม่บังคับ" /></label
+              placeholder="ไม่บังคับ" />
+            <small v-if="fieldHints.licenseNo" class="field-hint" role="alert">{{
+              fieldHints.licenseNo
+            }}</small></label
           ><label
             >เปิดรับนัดตั้งแต่<TimeFilterPicker
               v-model="form.openTime"
@@ -1388,13 +1443,19 @@ const drawerTitle = computed(() => {
             >ถึงเวลา<TimeFilterPicker
               v-model="form.closeTime"
               label="ถึงเวลา"
-              :class="{ invalid: fieldErrors.closeTime }" /></label
+              :class="{ invalid: fieldErrors.closeTime }" />
+            <small v-if="fieldHints.openTime" class="field-hint" role="alert">{{
+              fieldHints.openTime
+            }}</small></label
           ><label
             >ระยะเวลานัดเริ่มต้น (นาที)<input
               v-model="form.appointmentMinutes"
               inputmode="numeric"
               :class="{ invalid: fieldErrors.appointmentMinutes }"
-              placeholder="ไม่บังคับ เช่น 60" /></label
+              placeholder="ไม่บังคับ เช่น 60" />
+            <small v-if="fieldHints.appointmentMinutes" class="field-hint" role="alert">{{
+              fieldHints.appointmentMinutes
+            }}</small></label
           ><label
             v-if="editingIndex !== null"
             class="status-field"
@@ -1410,53 +1471,58 @@ const drawerTitle = computed(() => {
         ></template>
         <template v-else-if="section === 'users'"
           ><label
-            >ชื่อผู้ใช้งาน<input
+            >ชื่อ-นามสกุล<span class="req">*</span><input
               v-model="form.name"
               :class="{ invalid: fieldErrors.name }"
-              placeholder="ระบุชื่อผู้ใช้งาน" /></label
+              maxlength="160"
+              placeholder="ระบุชื่อ-นามสกุล" />
+            <small v-if="fieldHints.name" class="field-hint" role="alert">{{
+              fieldHints.name
+            }}</small></label
           ><label
-            >Username<input
+            >Username<span class="req">*</span><input
               v-model="form.username"
-              :class="{ invalid: fieldErrors.username }" /></label
+              maxlength="50"
+              autocomplete="off"
+              :class="{ invalid: fieldErrors.username }" />
+            <small v-if="fieldHints.username" class="field-hint" role="alert">{{
+              fieldHints.username
+            }}</small></label
           ><label
-            >อีเมล<input
+            >อีเมล<span class="req">*</span><input
               v-model="form.email"
               type="email"
-              required
               maxlength="254"
               :class="{ invalid: fieldErrors.email }"
             />
-            <small v-if="fieldErrors.email" role="alert"
-              >กรอกอีเมลบัญชีที่ถูกต้อง ไม่เกิน 254 ตัวอักษร</small
-            ></label
+            <small v-if="fieldHints.email" class="field-hint" role="alert">{{
+              fieldHints.email
+            }}</small></label
           ><label
-            >รหัสผ่าน<input
+            >รหัสผ่าน<span v-if="editingIndex === null" class="req">*</span><input
               v-model="form.password"
               :class="{ invalid: fieldErrors.password }"
               type="password"
-              autocomplete="new-password"
-              placeholder="เว้นว่างได้เมื่อแก้ไข" /></label
-          ><label
-            >รหัสพนักงาน<input v-model="form.code" :class="{ invalid: fieldErrors.code }" /></label
-          ><label
-            >โทรศัพท์<input
-              v-model="form.phone"
-              type="tel"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              maxlength="10"
-              @input="form.phone = limitPhoneDigits(form.phone)" /></label
+              autocomplete="new-password" />
+            <small v-if="fieldHints.password" class="field-hint" role="alert">{{
+              fieldHints.password
+            }}</small>
+            <small v-else-if="editingIndex !== null" class="field-help"
+              >เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน</small
+            ></label
+          ><label v-if="editingIndex !== null"
+            >รหัสพนักงาน<input v-model="form.code" disabled /></label
           ><label :class="{ 'invalid-field': fieldErrors.role }"
-            >Role<FilterDropdown
+            >บทบาท<span class="req">*</span><FilterDropdown
               v-model="form.role"
-              :options="[option('Manager'), option('Therapist')]"
+              :options="[userRoleOptions[1]!, userRoleOptions[0]!]"
               default-value="Therapist"
-              default-label="Therapist"
-              label="Role"
+              default-label="นักกายภาพ"
+              label="บทบาท"
               hide-default-option
               :clear-on-reselect="false" /></label
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
-            >สาขาที่เข้า<FilterDropdown
+            >สาขาที่เข้า<span class="req">*</span><FilterDropdown
               v-model="form.branch"
               :options="branchOptions"
               :default-value="openBranches[0]?.name ?? ''"
@@ -1480,12 +1546,16 @@ const drawerTitle = computed(() => {
         ></template>
         <template v-else-if="section === 'services'"
           ><label
-            >ชื่อบริการ/คอร์ส<input
+            >ชื่อบริการ/คอร์ส<span class="req">*</span><input
               v-model="form.name"
+              maxlength="160"
               :class="{ invalid: fieldErrors.name }"
-              placeholder="ระบุชื่อคอร์สหรือบริการ" /></label
+              placeholder="ระบุชื่อคอร์สหรือบริการ" />
+            <small v-if="fieldHints.name" class="field-hint" role="alert">{{
+              fieldHints.name
+            }}</small></label
           ><label :class="{ 'invalid-field': fieldErrors.type }"
-            >ประเภท<FilterDropdown
+            >ประเภท<span class="req">*</span><FilterDropdown
               v-model="form.type"
               :options="serviceTypeOptions"
               default-value="Single Visit"
@@ -1494,22 +1564,33 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false" /></label
           ><label
-            >ราคา (บาท)<input
+            >ราคา (บาท)<span class="req">*</span><input
               v-model="form.price"
+              inputmode="decimal"
               :class="{ invalid: fieldErrors.price }"
-              placeholder="ระบุราคา" /></label
+              placeholder="ระบุราคา" />
+            <small v-if="fieldHints.price" class="field-hint" role="alert">{{
+              fieldHints.price
+            }}</small></label
           ><template v-if="form.type === 'Course'"
             ><label
-              >จำนวนครั้งรวม<input
+              >จำนวนครั้งรวม<span class="req">*</span><input
                 v-model="form.sessions"
+                inputmode="numeric"
                 :class="{ invalid: fieldErrors.sessions }"
-                placeholder="ระบุจำนวนครั้งรวม" /></label
+                placeholder="ระบุจำนวนครั้งรวม" />
+              <small v-if="fieldHints.sessions" class="field-hint" role="alert">{{
+                fieldHints.sessions
+              }}</small></label
             ><label
-              >อายุคอร์ส<input
+              >อายุคอร์ส<span class="req">*</span><input
                 v-model="form.validityValue"
                 type="number"
                 min="1"
-                :class="{ invalid: fieldErrors.validityValue }" /></label
+                :class="{ invalid: fieldErrors.validityValue }" />
+              <small v-if="fieldHints.validityValue" class="field-hint" role="alert">{{
+                fieldHints.validityValue
+              }}</small></label
             ><label
               >หน่วย<select v-model="form.validityUnit" aria-label="หน่วยอายุคอร์ส">
                 <option value="Day">วัน</option>
@@ -1519,11 +1600,14 @@ const drawerTitle = computed(() => {
             ></template
           >
           <label
-            >ระยะเวลา<input
+            >ระยะเวลา (นาที)<span class="req">*</span><input
               v-model="form.duration"
               inputmode="numeric"
               :class="{ invalid: fieldErrors.duration }"
-              placeholder="ไม่บังคับ เช่น 60" /></label
+              placeholder="ระบุระยะเวลาเป็นนาที เช่น 60" />
+            <small v-if="fieldHints.duration" class="field-hint" role="alert">{{
+              fieldHints.duration
+            }}</small></label
           ><label
             v-if="editingIndex !== null"
             class="status-field"
@@ -1539,12 +1623,16 @@ const drawerTitle = computed(() => {
         ></template>
         <template v-else-if="section === 'rooms'"
           ><label
-            >ชื่อห้อง/ทรัพยากร<input
+            >ชื่อห้อง/ทรัพยากร<span class="req">*</span><input
               v-model="form.name"
+              maxlength="120"
               :class="{ invalid: fieldErrors.name }"
-              placeholder="ระบุชื่อห้อง เช่น ห้องรักษา 3" /></label
+              placeholder="ระบุชื่อห้อง เช่น ห้องรักษา 3" />
+            <small v-if="fieldHints.name" class="field-hint" role="alert">{{
+              fieldHints.name
+            }}</small></label
           ><label :class="{ 'invalid-field': fieldErrors.branch }"
-            >สาขา<FilterDropdown
+            >สาขา<span class="req">*</span><FilterDropdown
               v-model="form.branch"
               :options="branchOptions"
               :default-value="openBranches[0]?.name ?? ''"
@@ -1558,7 +1646,7 @@ const drawerTitle = computed(() => {
         </template>
         <template v-else-if="section === 'master'"
           ><label :class="{ 'invalid-field': fieldErrors.category }"
-            >ประเภทข้อมูล<FilterDropdown
+            >ประเภทข้อมูล<span class="req">*</span><FilterDropdown
               v-model="form.category"
               :options="[
                 { value: 'Customer Group', label: 'กลุ่มลูกค้า' },
@@ -1571,10 +1659,14 @@ const drawerTitle = computed(() => {
               hide-default-option
               :clear-on-reselect="false" /></label
           ><label
-            >ชื่อรายการ<input
+            >ชื่อรายการ<span class="req">*</span><input
               v-model="form.examples"
+              maxlength="160"
               :class="{ invalid: fieldErrors.examples }"
-              placeholder="ระบุชื่อรายการ" /></label
+              placeholder="ระบุชื่อรายการ" />
+            <small v-if="fieldHints.examples" class="field-hint" role="alert">{{
+              fieldHints.examples
+            }}</small></label
           ><label
             v-if="editingIndex !== null"
             class="status-field"

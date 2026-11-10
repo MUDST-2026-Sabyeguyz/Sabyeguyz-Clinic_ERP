@@ -30,6 +30,17 @@ public class BranchService {
         return find(id);
     }
 
+    /** Next free 2-digit branch code (01..99), one above the current highest. */
+    @Transactional(readOnly = true)
+    public String nextBranchCode() {
+        String max = repository.findMaxBranchCode();
+        int next = max == null ? 1 : Integer.parseInt(max.trim()) + 1;
+        if (next > 99) {
+            throw new IllegalArgumentException("รหัสสาขาเต็มแล้ว (สูงสุด 99 สาขา)");
+        }
+        return String.format("%02d", next);
+    }
+
     @Transactional
     public Branch create(String branchCode, String name, String address, String phone, Long actorId) {
         String code = normalizeCode(branchCode);
