@@ -108,7 +108,7 @@ const source = computed(() => ({
     <RouterLink
       class="therapist-back-action"
       :to="{ name: 'therapist-compensation', query: { tab: kind, month } }"
-      >←&nbsp;&nbsp; กลับภาพรวม</RouterLink
+      >←&nbsp;&nbsp; กลับ</RouterLink
     >
     <RouterLink v-if="line" class="therapist-primary-action" :to="source">
       {{ kind === 'commission' ? 'ดูรายการขายต้นทาง' : 'ดูรายการรักษาต้นทาง' }}

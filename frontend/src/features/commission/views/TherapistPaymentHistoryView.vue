@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// แสดงประวัติการจ่ายค่าตอบแทนของ Therapist ตามเดือน
 import TherapistCompensationPaymentHistory from '../components/TherapistCompensationPaymentHistory.vue'
 import TherapistCompensationShell from '../components/TherapistCompensationShell.vue'
 import { useTherapistPay } from '../lib/therapistPay'
