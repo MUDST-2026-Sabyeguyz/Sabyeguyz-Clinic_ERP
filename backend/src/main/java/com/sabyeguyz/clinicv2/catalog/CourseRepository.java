@@ -41,6 +41,27 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("select c.id from Course c where c.receipt.id = :receiptId order by c.id")
     List<Long> findIdsByReceiptId(@Param("receiptId") Long receiptId);
 
+    /**
+     * Returns courses linked through their original purchase receipt
+     * or a subsequent existing-course collection item.
+     * This identifies relationships only, not refund eligibility.
+     */
+    @Query("""
+    select c.id
+    from Course c
+    where c.receipt.id = :receiptId
+       or exists (
+           select p.course.id
+           from ReceiptCoursePayment p
+           where p.course.id = c.id
+             and p.receipt.id = :receiptId
+       )
+    order by c.id asc
+    """)
+    List<Long> findLinkedCourseIdsByReceiptId(
+            @Param("receiptId") Long receiptId
+    );
+
     long countByReceiptId(Long receiptId);
 
     Optional<Course> findBySaleTransactionId(Long saleTransactionId);
