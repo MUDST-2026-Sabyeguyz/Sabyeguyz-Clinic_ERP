@@ -26,9 +26,12 @@ public class PatientController {
     private final BranchRepository branches;
     private final MasterDataValueRepository masterDataValues;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
     public PatientController(PatientService service, PatientRepository repository, BranchRepository branches,
-                              MasterDataValueRepository masterDataValues, CurrentActor actor) {
+                              MasterDataValueRepository masterDataValues, CurrentActor actor,
+                              com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+        this.branchAccess = branchAccess;
         this.service = service;
         this.repository = repository;
         this.branches = branches;
@@ -109,6 +112,7 @@ public class PatientController {
     public PatientSummary register(@RequestBody RegisterRequest request) {
         Branch branch = branches.findByBranchCode(requireText(request.branchCode(), "branchCode"))
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
+        branchAccess.requireAccess(branch, "ลงทะเบียนผู้ป่วยได้เฉพาะสาขาตัวเอง");
         String middleName = middleNameOf(request);
         if (middleName != null && !middleName.isBlank()
                 && (request.firstName() == null || request.firstName().isBlank()

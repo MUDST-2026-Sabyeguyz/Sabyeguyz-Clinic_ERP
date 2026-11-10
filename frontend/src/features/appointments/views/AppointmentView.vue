@@ -646,6 +646,13 @@ function openEdit(item: Appointment) {
   originalEditingAppointment.value = item
   createSource.value = 'standard'
   appointmentPatientType.value = item.patientType === 'NEW' || !item.patient ? 'NEW' : 'CURRENT'
+  serviceMode.value = 'single'
+  newPatientForm.value = {
+    firstName: (item.contactName ?? '').trim().split(/\s+/)[0] ?? '',
+    lastName: (item.contactName ?? '').trim().split(/\s+/).slice(1).join(' '),
+    nickname: item.contactNickname ?? '',
+    phone: item.contactPhone ?? '',
+  }
   showRequiredValidation.value = false
   patientQuery.value = item.patient?.fullName ?? item.contactName ?? ''
   showPatientResults.value = false
@@ -988,7 +995,7 @@ async function save() {
       ...appointments.value.filter((item) => item.id !== savedAppointment.id),
     ]
     if (wasEditing) {
-      appointmentSuccessMessage.value = 'เลื่อนนัดหมายสำเร็จ'
+      appointmentSuccessMessage.value = 'แก้ไขนัดหมายสำเร็จ'
     } else {
       appointmentSuccessMessage.value = 'สร้างนัดหมายสำเร็จ'
     }
@@ -1066,11 +1073,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
 <template>
   <div
     class="staff-page appointment-page"
-    :class="{ 'appointment-form-open': viewMode !== 'list' && !isEditing }"
+    :class="{ 'appointment-form-open': viewMode !== 'list' }"
   >
     <StaffHeader />
     <main class="staff-main">
-      <section v-if="viewMode === 'list' || isEditing" class="staff-hero">
+      <section v-if="viewMode === 'list'" class="staff-hero">
         <h1>นัดหมาย</h1>
         <p>ตรวจตารางและจัดการนัดหมาย</p>
         <div class="appointment-hero-actions">
@@ -1100,11 +1107,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
       <div
         v-if="viewMode !== 'list'"
         class="appointment-form-page"
-        :class="{ 'appointment-reschedule-modal': isEditing }"
-        :role="isEditing ? 'dialog' : undefined"
-        :aria-modal="isEditing ? true : undefined"
-        :aria-label="isEditing ? 'เลื่อนนัดหมาย' : undefined"
-        v-modal-focus="isEditing ? { close: goToAppointmentList, busy: savingAppointment } : null"
       >
         <div class="appointment-back-row">
           <button class="appointment-back" type="button" @click="goToAppointmentList">
@@ -1113,7 +1115,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
         </div>
         <section
           class="staff-panel create-card appointment-create-card"
-          :class="{ 'is-editing': isEditing }"
         >
           <p v-if="formDataLoading" role="status">กำลังโหลดข้อมูลนัดหมาย…</p>
           <p v-if="formDataError" role="alert">
@@ -1122,13 +1123,13 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           <h1>
             {{
               isEditing
-                ? 'เลื่อนนัดหมาย'
+                ? 'แก้ไขนัดหมาย'
                 : isCalendarCreate
                   ? 'สร้างนัดหมายจากปฏิทิน'
                   : 'สร้างนัดหมายใหม่'
             }}
           </h1>
-          <p v-if="!isEditing" class="appointment-form-context">
+          <p class="appointment-form-context">
             <template v-if="appointmentPatientType === 'NEW'">
               {{ currentBranchLabel }} • เลือกนักกายภาพและช่วงเวลาที่เหมาะสม
             </template>
@@ -1146,172 +1147,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           >
             {{ errorMessage }}
           </p>
-          <div v-if="isEditing" class="appointment-reschedule-grid">
-            <section
-              class="reschedule-section reschedule-appointment-info"
-              aria-labelledby="reschedule-info-title"
-            >
-              <h2 id="reschedule-info-title">ข้อมูลนัดหมาย</h2>
-              <div class="reschedule-section-fields">
-                <label class="reschedule-patient-field">
-                  ผู้ป่วย
-                  <input
-                    :value="patientQuery"
-                    class="reschedule-readonly-field"
-                    readonly
-                    placeholder="กรอกชื่อผู้ป่วยหรือรหัส HN"
-                  />
-                  <span class="reschedule-patient-meta">
-                    HN
-                    {{
-                      selectedFormPatient?.hn ||
-                      editingAppointment?.patient?.hn ||
-                      (appointmentPatientType === 'NEW' ? 'ผู้ป่วยไม่ประจำ' : '-')
-                    }}
-                    ·
-                    {{ selectedFormPatient?.phone || editingPatientPhone }}
-                  </span>
-                </label>
-                <label class="reschedule-service-field">
-                  ประเภทบริการ
-                  <FilterDropdown
-                    v-model="formServiceModel"
-                    searchable
-                    empty-search-label="ไม่พบโปรแกรมที่ค้นหา"
-                    class="appointment-form-filter"
-                    label="เลือกประเภทบริการ"
-                    default-label="เลือกประเภทบริการ"
-                    :clear-on-reselect="false"
-                    :options="
-                      services.map((service) => ({
-                        value: String(service.id),
-                        label: service.name,
-                      }))
-                    "
-                  />
-                </label>
-              </div>
-            </section>
-            <section
-              class="reschedule-section reschedule-new-schedule"
-              aria-labelledby="reschedule-schedule-title"
-            >
-              <h2 id="reschedule-schedule-title">วันเวลาใหม่</h2>
-              <div class="reschedule-section-fields">
-                <label class="reschedule-therapist-field">
-                  <span>นักกายภาพ <em>*</em></span>
-                  <FilterDropdown
-                    v-model="formTherapistModel"
-                    searchable
-                    empty-search-label="ไม่พบนักกายภาพที่ค้นหา"
-                    class="appointment-form-filter"
-                    :class="{ 'is-invalid': missingCurrentTherapist }"
-                    :invalid="missingCurrentTherapist"
-                    :described-by="
-                      missingCurrentTherapist ? 'reschedule-therapist-error' : undefined
-                    "
-                    label="เลือกนักกายภาพ"
-                    default-label="เลือกนักกายภาพ"
-                    :clear-on-reselect="false"
-                    :options="
-                      therapists.map((therapist) => ({
-                        value: String(therapist.id),
-                        label: therapist.fullName,
-                      }))
-                    "
-                  />
-                  <small
-                    v-if="missingCurrentTherapist"
-                    id="reschedule-therapist-error"
-                    class="appointment-input-error"
-                    role="alert"
-                    >กรุณาเลือกนักกายภาพ</small
-                  >
-                </label>
-                <label class="reschedule-date-field">
-                  <span>วันที่ <em>*</em></span>
-                  <ThaiDatePicker
-                    :model-value="form.date"
-                    :min-date="minimumAppointmentDate"
-                    disable-sunday
-                    :invalid="scheduleError || missingCurrentDate"
-                    :described-by="
-                      scheduleError
-                        ? 'reschedule-date-error'
-                        : missingCurrentDate
-                          ? 'reschedule-date-required-error'
-                          : undefined
-                    "
-                    show-calendar-icon
-                    numeric-month
-                    hide-caret
-                    @update:model-value="changeAppointmentDate"
-                  />
-                  <small
-                    v-if="scheduleError"
-                    id="reschedule-date-error"
-                    class="appointment-input-error"
-                    role="alert"
-                    >{{ errorMessage }}</small
-                  >
-                  <small
-                    v-else-if="missingCurrentDate"
-                    id="reschedule-date-required-error"
-                    class="appointment-input-error"
-                    role="alert"
-                    >กรุณาเลือกวันที่</small
-                  >
-                </label>
-                <label class="reschedule-time-field">
-                  <span>เวลา <em>*</em></span>
-                  <button
-                    class="reschedule-time-trigger"
-                    :class="{ 'is-invalid': missingCurrentTime }"
-                    :aria-invalid="missingCurrentTime"
-                    :aria-describedby="missingCurrentTime ? 'reschedule-time-error' : undefined"
-                    type="button"
-                    @click="openTimeDrawer"
-                  >
-                    <span>{{ formatTimeRange(form.time) }}</span>
-                    <strong>ดูตารางเวลาว่าง</strong>
-                  </button>
-                  <small
-                    v-if="missingCurrentTime"
-                    id="reschedule-time-error"
-                    class="appointment-input-error"
-                    role="alert"
-                    >กรุณาเลือกเวลา</small
-                  >
-                </label>
-                <label v-if="!isManager" class="reschedule-branch-field">
-                  สาขา
-                  <FilterDropdown
-                    v-model="formBranchModel"
-                    class="appointment-form-filter"
-                    label="เลือกสาขา"
-                    default-label="เลือกสาขา"
-                    :clear-on-reselect="false"
-                    :options="
-                      branchOptions.map((branch) => ({
-                        value: branch.code,
-                        label: branch.name,
-                      }))
-                    "
-                  />
-                </label>
-                <label class="reschedule-note-field">
-                  หมายเหตุ
-                  <textarea v-model.trim="form.note" maxlength="500" rows="2" />
-                </label>
-              </div>
-            </section>
-          </div>
           <div
-            v-else
             class="form-grid appointment-create-grid"
             :class="{ 'is-new-patient': appointmentPatientType === 'NEW' }"
           >
-            <fieldset v-if="!isEditing" class="appointment-patient-type-field">
+            <fieldset class="appointment-patient-type-field" :disabled="isEditing">
               <legend>ประเภทผู้ป่วย</legend>
               <div class="appointment-patient-type-options">
                 <label>
@@ -1375,7 +1215,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-phone-field">
               เบอร์โทรศัพท์
               <input
-                :value="selectedFormPatient?.phone || ''"
+                :value="selectedFormPatient?.phone || (isEditing ? editingPatientPhone : '')"
                 readonly
                 placeholder="เบอร์โทรศัพท์"
               />
@@ -1385,6 +1225,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <span>ชื่อ <small>(ไม่บังคับ)</small></span>
                 <input
                   v-model.trim="newPatientForm.firstName"
+                  :readonly="isEditing"
                   autocomplete="given-name"
                   placeholder="กรอกชื่อ"
                 />
@@ -1393,18 +1234,21 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 <span>นามสกุล <small>(ไม่บังคับ)</small></span>
                 <input
                   v-model.trim="newPatientForm.lastName"
+                  :readonly="isEditing"
                   autocomplete="family-name"
                   placeholder="กรอกนามสกุล"
                 />
               </label>
               <label>
                 <span>ชื่อเล่น <em>*</em></span>
-                <input v-model.trim="newPatientForm.nickname" placeholder="กรอกชื่อเล่น" />
+                <input v-model.trim="newPatientForm.nickname"
+                  :readonly="isEditing" placeholder="กรอกชื่อเล่น" />
               </label>
               <label>
                 <span>เบอร์โทรศัพท์ <em>*</em></span>
                 <input
                   v-model.trim="newPatientForm.phone"
+                  :readonly="isEditing"
                   type="tel"
                   inputmode="numeric"
                   autocomplete="tel"
@@ -1421,6 +1265,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               <div class="appointment-service-mode-options">
                 <button
                   type="button"
+                  :disabled="isEditing"
                   :class="{ active: serviceMode === 'single' }"
                   @click="changeServiceMode('single')"
                 >
@@ -1428,6 +1273,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 </button>
                 <button
                   type="button"
+                  :disabled="isEditing"
                   :class="{ active: serviceMode === 'course' }"
                   @click="changeServiceMode('course')"
                 >
@@ -1672,7 +1518,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
           </footer>
         </aside>
       </div>
-      <section v-if="viewMode === 'list' || isEditing" class="staff-panel appointment-panel">
+      <section v-if="viewMode === 'list'" class="staff-panel appointment-panel">
         <p v-if="errorMessage" class="error" role="alert">
           {{ errorMessage }}
           <button class="appointment-retry" type="button" @click="load" :disabled="listLoading">
@@ -2053,7 +1899,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
         }"
       >
         <h2 id="appointment-confirmation-title">
-          {{ isEditing ? 'ยืนยันการเลื่อนนัดหมายหรือไม่?' : 'ยืนยันการสร้างนัดหมายหรือไม่?' }}
+          {{ isEditing ? 'ยืนยันการแก้ไขนัดหมายหรือไม่?' : 'ยืนยันการสร้างนัดหมายหรือไม่?' }}
         </h2>
         <div>
           <button

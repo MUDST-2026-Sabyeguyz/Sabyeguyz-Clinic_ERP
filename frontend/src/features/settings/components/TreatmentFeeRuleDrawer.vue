@@ -8,6 +8,7 @@ const emit = defineEmits<{ saved: [] }>()
 const drawerOpen = ref(false)
 const saving = ref(false)
 const error = ref('')
+const errors = reactive<Record<string, string>>({})
 const message = ref('')
 const branchCode = computed(() => selectedManagerBranch()?.code ?? '')
 const branchName = computed(() => {
@@ -28,6 +29,7 @@ const form = reactive({
 
 function open() {
   error.value = ''
+  Object.keys(errors).forEach((key) => delete errors[key])
   message.value = ''
   Object.assign(form, { name: '', feeType: 'Fixed', feeValue: '', effectiveMonth: nextMonth() })
   drawerOpen.value = true
@@ -35,19 +37,27 @@ function open() {
 
 async function save() {
   error.value = ''
-  const value = Number(form.feeValue)
+  Object.keys(errors).forEach((key) => delete errors[key])
+  const text = form.feeValue.trim()
+  const value = Number(text)
   if (!branchCode.value) {
     error.value = 'กรุณาเลือกสาขาก่อนบันทึกกฎค่ามือ'
     return
   }
-  if (!form.name.trim() || !/^\d{4}-(0[1-9]|1[0-2])$/.test(form.effectiveMonth)) {
-    error.value = 'กรอกชื่อกฎและเดือนที่เริ่มใช้งาน'
-    return
-  }
-  if (!Number.isFinite(value) || value < 0 || (form.feeType === 'Percentage' && value > 100)) {
-    error.value = form.feeType === 'Percentage'
-      ? 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
-      : 'จำนวนเงินต้องเป็นตัวเลขไม่ติดลบ'
+  if (!form.name.trim()) errors.name = 'กรุณากรอกชื่อกฎ'
+  else if (form.name.trim().length > 100) errors.name = 'ชื่อกฎต้องไม่เกิน 100 ตัวอักษร'
+  if (!text) errors.feeValue = 'กรุณากรอก' + (form.feeType === 'Percentage' ? 'อัตรา (%)' : 'จำนวนเงิน')
+  else if (!Number.isFinite(value) || value < 0)
+    errors.feeValue = 'ต้องเป็นตัวเลขไม่ติดลบ'
+  else if (form.feeType === 'Percentage' && value > 100)
+    errors.feeValue = 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
+  if (!form.effectiveMonth) errors.effectiveMonth = 'กรุณาเลือกเดือนที่เริ่มใช้งาน'
+  else if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(form.effectiveMonth))
+    errors.effectiveMonth = 'รูปแบบเดือนไม่ถูกต้อง'
+  else if (form.effectiveMonth < nextMonth())
+    errors.effectiveMonth = 'ต้องเริ่มใช้งานตั้งแต่เดือนถัดไปเป็นต้นไป'
+  if (Object.keys(errors).length) {
+    error.value = 'กรุณาตรวจสอบข้อมูลในช่องที่มีข้อความสีแดง'
     return
   }
 
@@ -96,29 +106,45 @@ async function save() {
           </header>
           <div class="treatment-fee-form">
             <label>
-              ชื่อกฎ
-              <input v-model="form.name" maxlength="100" />
+              <span>ชื่อกฎ<span class="req">*</span></span>
+              <input v-model="form.name" maxlength="100" :class="{ invalid: errors.name }" />
+              <small v-if="errors.name" class="field-hint" role="alert">{{ errors.name }}</small>
             </label>
             <label>
-              วิธีคำนวณ
+              <span>วิธีคำนวณ<span class="req">*</span></span>
               <select v-model="form.feeType">
                 <option value="Fixed">จำนวนเงินต่อครั้ง</option>
                 <option value="Percentage">เปอร์เซ็นต์</option>
               </select>
             </label>
             <label>
-              {{ form.feeType === 'Percentage' ? 'อัตรา (%)' : 'จำนวนเงิน (บาท / ครั้ง)' }}
+              <span
+                >{{ form.feeType === 'Percentage' ? 'อัตรา (%)' : 'จำนวนเงิน (บาท / ครั้ง)'
+                }}<span class="req">*</span></span
+              >
               <input
+                :class="{ invalid: errors.feeValue }"
                 v-model="form.feeValue"
                 type="number"
                 min="0"
                 step="0.01"
                 :max="form.feeType === 'Percentage' ? 100 : undefined"
               />
+              <small v-if="errors.feeValue" class="field-hint" role="alert">{{
+                errors.feeValue
+              }}</small>
             </label>
             <label>
-              เดือนที่เริ่มใช้งาน
-              <input v-model="form.effectiveMonth" type="month" :min="nextMonth()" />
+              <span>เดือนที่เริ่มใช้งาน<span class="req">*</span></span>
+              <input
+                v-model="form.effectiveMonth"
+                type="month"
+                :min="nextMonth()"
+                :class="{ invalid: errors.effectiveMonth }"
+              />
+              <small v-if="errors.effectiveMonth" class="field-hint" role="alert">{{
+                errors.effectiveMonth
+              }}</small>
             </label>
             <p class="treatment-fee-branch">สาขา: {{ branchName }}</p>
           </div>
@@ -229,6 +255,17 @@ async function save() {
   background: #f8faf9;
   color: #25372f;
   font: inherit;
+}
+.req {
+  margin-left: 2px;
+  color: #c0392b;
+}
+.treatment-fee-form input.invalid {
+  border-color: #c0392b;
+}
+.field-hint {
+  color: #c0392b;
+  font-size: 13px;
 }
 .treatment-fee-branch {
   margin: 0;

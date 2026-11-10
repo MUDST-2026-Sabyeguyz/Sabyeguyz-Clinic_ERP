@@ -42,25 +42,25 @@ describe('v2 service and user management', () => {
 
   it('creates a user with staff, role and branch access, who can then log in', () => {
     cy.api('POST', '/api/users', {
-      username: 'newpt01', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-900',
+      username: 'newpt01', password: 'password12345', role: 'THERAPIST', employeeCode: 'THP-900',
       email: 'newpt01@example.test', fullName: 'พีที ใหม่', branchCode: '01',
     }).then(({ status, body }) => {
       expect(status).to.equal(201)
       expect(body.role).to.equal('THERAPIST')
       expect(body.branchCode).to.equal('01')
       expect(body.email).to.equal('newpt01@example.test')
-      cy.login('newpt01', 'password123').then((login) => {
+      cy.login('newpt01', 'password12345').then((login) => {
         expect(login.status).to.equal(200)
         expect(login.body.role).to.equal('THERAPIST')
       })
       cy.api('DELETE', `/api/users/${body.id}`).its('status').should('be.oneOf', [200, 204])
-      cy.login('newpt01', 'password123').its('status').should('be.within', 400, 403)
+      cy.login('newpt01', 'password12345').its('status').should('be.within', 400, 403)
     })
   })
 
   it('rejects a user with a short password or a duplicate username', () => {
     const user = {
-      username: 'newpt02', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-901',
+      username: 'newpt02', password: 'password12345', role: 'THERAPIST', employeeCode: 'THP-901',
       email: 'newpt02@example.test', fullName: 'พีที สอง', branchCode: '01',
     }
     cy.api('POST', '/api/users', { ...user, password: 'short' }).its('status').should('equal', 400)
