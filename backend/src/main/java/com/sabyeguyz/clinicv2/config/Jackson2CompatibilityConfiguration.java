@@ -1,4 +1,4 @@
-package com.sabyeguyz.clinic.config;
+package com.sabyeguyz.clinicv2.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
