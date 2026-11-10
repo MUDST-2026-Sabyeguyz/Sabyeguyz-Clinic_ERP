@@ -100,7 +100,6 @@ body.therapist-ui .registration-page .actions .primary {
   background: #1e807c;
 }
 
-/* Registration layout follows the 1440px Figma frame while remaining fluid. */
 body.therapist-ui .registration-page .registration-content {
   width: 100%;
   max-width: none;
@@ -264,8 +263,6 @@ body.therapist-ui .registration-page .actions .primary {
 
 @media (max-width: 680px) {
   body.therapist-ui .registration-page {
-    /* Keep the original rounded green artwork rather than turning the whole
-       screen green.  It is raised and enlarged to sit behind the intro/card. */
     background: var(--therapist-cream);
   }
 
@@ -343,6 +340,9 @@ body.therapist-ui .patient-workspace:not(.patient-profile-page) {
   position: relative;
   display: flow-root;
   min-height: 100vh;
+}
+
+body.therapist-ui .patient-workspace:not(.patient-profile-page, .patient-directory-page) {
   background: var(--therapist-cream);
 }
 
@@ -447,16 +447,14 @@ body.therapist-ui .patient-workspace .directory {
   }
 }
 
-/* On compact headers, anchor the artwork to the page instead of using the desktop offset. */
 @media (max-width: 1180px) {
-  body.therapist-ui .patient-workspace:not(.patient-profile-page) {
+  body.therapist-ui .patient-workspace:not(.patient-profile-page, .patient-directory-page) {
     background-position: top center;
   }
 }
 
 @media (max-width: 1180px) {
-  body.therapist-ui .patient-workspace:not(.patient-profile-page) {
-    /* Keep the decorative layer as tall as the compact hero instead of scaling only by width. */
+  body.therapist-ui .patient-workspace:not(.patient-profile-page, .patient-directory-page) {
     background-size: 100% 100%;
   }
 }

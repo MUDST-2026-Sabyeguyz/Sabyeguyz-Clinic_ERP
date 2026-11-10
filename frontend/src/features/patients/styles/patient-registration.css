@@ -747,6 +747,38 @@ fieldset {
   }
 }
 
+/* Final alignment for the registration success state. */
+.registration-content .back-row {
+  width: min(850px, calc(100% - 48px));
+  margin: 26px auto 0;
+}
+.registration-content .back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #176c68;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+.registration-content .back-link:hover {
+  background: transparent;
+  transform: none;
+  text-decoration: underline;
+}
+.success-actions .secondary,
+.success-actions .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.25;
+  text-align: center;
+}
+
 /* Patient registration form, aligned with the Thai and foreign Figma variants. */
 .registration-page {
   background: #faf7f2;
@@ -771,6 +803,61 @@ fieldset {
   background: transparent;
   transform: none;
   text-decoration: underline;
+}
+
+/* Keep registration confirmation and success states aligned with appointment feedback. */
+.confirmation-modal .confirmation-patient-name {
+  min-height: 24px;
+  margin: 0 0 20px;
+  color: #667a72;
+  font-size: 15px;
+  text-align: center;
+}
+.success-card {
+  width: min(520px, calc(100% - 32px));
+  margin: 88px auto;
+  padding: 40px 44px;
+  border-color: #d8e4df;
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgb(31 91 86 / 12%);
+}
+.success-icon {
+  width: 56px;
+  height: 56px;
+  color: #176c68;
+  background: #e1f0ec;
+  font-size: 30px;
+}
+.success-card h1 {
+  margin: 16px 0 4px;
+  color: #25372f;
+  font-size: 28px;
+}
+.success-card > p {
+  margin: 0;
+  color: #667a72;
+}
+.success-card strong {
+  margin-top: 4px;
+  color: #176c68;
+  font-size: 30px;
+}
+.success-actions .secondary,
+.success-actions .primary {
+  min-height: 46px;
+  padding: 0 20px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.success-actions .secondary {
+  border-color: #1e807c;
+  color: #176c68;
+  background: #fff;
+}
+.success-actions .primary {
+  border-color: #1e807c;
+  background: #1e807c;
+  color: #fff;
 }
 
 .registration-shell {
@@ -880,5 +967,32 @@ fieldset {
   .personal-details-grid,
   .patient-name-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.registration-redirect {
+  margin: 12px 0 0;
+  color: #1f6f68;
+  font-size: 16px;
+  font-weight: 700;
+}
+.redirect-dots {
+  display: inline-block;
+  width: 1.4em;
+  text-align: left;
+}
+.redirect-dots::after {
+  content: '.';
+  animation: redirect-dots 1s steps(1, end) infinite;
+}
+@keyframes redirect-dots {
+  0% {
+    content: '.';
+  }
+  33% {
+    content: '..';
+  }
+  66% {
+    content: '...';
   }
 }

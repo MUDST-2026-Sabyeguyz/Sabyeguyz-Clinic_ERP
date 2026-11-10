@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { clinicToday } from '@/utils/clinicDate'
+import { buildCourseUsages, type UsageSelection } from '@/features/services/careTransactions'
+import CourseUsagePicker from '../components/CourseUsagePicker.vue'
+import CourseCutDocument from '../components/CourseCutDocument.vue'
+import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
+import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
-import courseUsageSuccessIcon from '@/assets/course-usage-success.svg'
+import { vModalFocus } from '@/features/appointments/modalFocus'
+import CourseRenewalDialog from '@/features/patients/components/CourseRenewalDialog.vue'
+import PhoneIcon from '@/components/PhoneIcon.vue'
 import {
   branchApi,
   courseApi,
@@ -17,7 +25,26 @@ import {
 
 type CourseAction = 'manage' | 'transfer' | 'history' | 'use'
 const route = useRoute()
+const {
+  appointmentId,
+  sourceAppointment,
+  appointmentProgress,
+  processLoading,
+  processError,
+  refreshAppointmentProcess,
+  canStartAppointment,
+  processBlockReason,
+  recoveryRequired,
+  beginAppointmentWrite,
+  finishAppointmentWrite,
+  recoverAppointmentWrite,
+} = useAppointmentProcess()
+const usageSubmitting = ref(false)
+const appointmentNeedsReview = computed(() =>
+  Boolean(appointmentProgress.value && action.value !== 'history' && !canStartAppointment.value),
+)
 const router = useRouter()
+const canReviewCourseExtensions = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const action = ref<CourseAction>('manage')
 const recipientSearch = ref('')
 const recipientSearchOpen = ref(false)
@@ -31,7 +58,12 @@ const primaryShare = ref(50)
 const secondaryShare = ref(50)
 const substituteNote = ref('')
 const transferReceiptId = ref<number | null>(null)
-type UiCourse = CoursePurchase & { name: string; expiry: string; balance: number; total: number }
+type UiCourse = CoursePurchase & {
+  name: string
+  expiry: string
+  balance: number
+  total: number
+}
 type CourseMovement = {
   id: number
   type: string
@@ -42,6 +74,16 @@ type CourseMovement = {
   createdAt: string
 }
 const owner = ref<Patient | null>(null)
+const openedFromPatientProfile = computed(() => route.path.startsWith('/staff/patients/'))
+const patientCoursesLocation = computed(() => ({
+  path: `/staff/patients/${owner.value?.id ?? route.params.patientId}/history`,
+  query: { tab: 'courses' },
+}))
+const sourceLocation = computed(() =>
+  openedFromPatientProfile.value
+    ? patientCoursesLocation.value
+    : { path: '/staff/services', query: { patientId: owner.value?.id } },
+)
 const owners = ref<Patient[]>([])
 const patientCourses = ref<UiCourse[]>([])
 const recipientResults = ref<Patient[]>([])
@@ -50,12 +92,42 @@ const branches = ref<Branch[]>([])
 const courseUsageHistory = ref<CourseMovement[]>([])
 const errorMessage = ref('')
 const selectedCourse = ref<UiCourse>({} as UiCourse)
+const renewingCourse = ref<CoursePurchase | null>(null)
 const selectedCourseId = ref(0)
 const usageNote = ref('')
-const usageDate = ref('2026-09-17')
+const usageDate = ref(clinicToday())
+const treatingStaffId = ref(0)
+const usageSelections = ref<UsageSelection[]>([])
+const usageCount = computed(() =>
+  usageSelections.value.reduce((total, row) => total + row.quantity, 0),
+)
+const selectedUsageQuantity = computed(() =>
+  usageSelections.value
+    .filter((row) => row.coursePurchaseId === selectedCourse.value.id)
+    .reduce((total, row) => total + row.quantity, 0),
+)
+const treatingOptions = computed(() =>
+  therapists.value.filter((person) => person.branchCode === sourceAppointment.value?.branchCode),
+)
+const selectedTreatingStaff = computed(() =>
+  treatingOptions.value.find((person) => person.id === treatingStaffId.value),
+)
+const usageBranchName = computed(
+  () =>
+    branches.value.find((branch) => branch.code === sourceAppointment.value?.branchCode)?.name ??
+    sourceAppointment.value?.branchCode ??
+    '—',
+)
+watch(
+  () => selectedCourse.value.id,
+  (id) => {
+    if (id) usageSelections.value = [{ coursePurchaseId: id, quantity: 1 }]
+  },
+)
 const usageReview = ref(false)
 const usageSuccess = ref(false)
 const usageConfirmDialog = ref(false)
+const transferConfirmDialog = ref(false)
 const usageSuccessBalance = computed(() => selectedCourse.value.balance)
 const printDialog = ref<'confirm' | 'success' | 'error' | null>(null)
 const coursePrintPreview = ref(false)
@@ -67,9 +139,11 @@ const shareIsValid = computed(
     primaryShare.value + secondaryShare.value === 100,
 )
 const formattedUsageDate = computed(() =>
-  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
-    new Date(`${usageDate.value}T00:00:00`),
-  ),
+  new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${usageDate.value}T00:00:00`)),
 )
 const usedSessions = computed(() =>
   courseUsageHistory.value
@@ -105,6 +179,10 @@ const activeCourses = computed(() =>
 const inactiveCourses = computed(() =>
   patientCourses.value.filter((course) => !course.usable || course.balance <= 0),
 )
+const courseStatusTab = ref<'active' | 'inactive'>('active')
+const displayedCourses = computed(() =>
+  courseStatusTab.value === 'active' ? activeCourses.value : inactiveCourses.value,
+)
 const historyFromInactive = ref(false)
 function branchLabel(patient: Patient | null) {
   const name = patient?.branchName || patient?.branchCode
@@ -112,10 +190,29 @@ function branchLabel(patient: Patient | null) {
 }
 function courseUsagePercent(course: UiCourse) {
   if (!course.total) return 0
-  return Math.min(
-    100,
-    Math.max(0, Math.round(((course.total - course.balance) / course.total) * 100)),
-  )
+  return Math.min(100, Math.max(0, Math.round((course.used / course.total) * 100)))
+}
+function courseUsageProgressWidth(course: Pick<UiCourse, 'balance' | 'total'>) {
+  if (!course.total || course.total < 0) return '0%'
+  return `${Math.min(100, Math.max(0, (Math.max(0, course.balance - selectedUsageQuantity.value) / course.total) * 100))}%`
+}
+function courseInactiveReason(course: UiCourse) {
+  return course.balance <= 0 ? 'ใช้สิทธิ์ครบ' : 'หมดอายุ'
+}
+function selectCourseStatusTab(status: 'active' | 'inactive') {
+  courseStatusTab.value = status
+}
+function handleCourseStatusTabKeydown(event: KeyboardEvent) {
+  const nextStatus =
+    event.key === 'ArrowRight' || event.key === 'End'
+      ? 'inactive'
+      : event.key === 'ArrowLeft' || event.key === 'Home'
+        ? 'active'
+        : null
+  if (!nextStatus) return
+  event.preventDefault()
+  selectCourseStatusTab(nextStatus)
+  void nextTick(() => document.getElementById(`course-status-tab-${nextStatus}`)?.focus())
 }
 function isSharedCourse(course: UiCourse) {
   return Boolean(owner.value && course.purchaser && course.purchaser.id !== owner.value.id)
@@ -130,92 +227,48 @@ function purchaseDate(course: UiCourse) {
 async function loadOwner() {
   const [patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
   owners.value = patientList
-  therapists.value = staffList.filter((person) => person.role === 'THERAPIST' && person.active)
+  therapists.value = staffList.filter(
+    (person) =>
+      (person.position ?? person.role ?? '').toLowerCase() === 'therapist' && person.active,
+  )
+  const appointmentTherapistId = sourceAppointment.value?.therapist.id
+  if (
+    appointmentTherapistId &&
+    therapists.value.some(
+      (person) =>
+        person.id === appointmentTherapistId &&
+        person.branchCode === sourceAppointment.value?.branchCode,
+    )
+  )
+    treatingStaffId.value = appointmentTherapistId
   try {
     branches.value = await branchApi.list()
   } catch {
     branches.value = []
   }
   const patientId = Number(route.query.patientId)
-  owner.value = owners.value.find((patient) => patient.id === patientId) ?? owners.value[0] ?? null
+  owner.value = owners.value.find((patient) => patient.id === patientId) ?? null
+  if (!owner.value && route.query.patientId) throw new Error('ไม่พบผู้รับบริการที่ระบุ')
   if (owner.value) await loadCourses(owner.value.id)
 }
 async function loadCourses(patientId: number) {
   const purchases: CoursePurchase[] = await courseApi.patientCourses(patientId)
-  patientCourses.value = purchases.map((course) => ({
+  const courses = purchases.map((course) => ({
     ...course,
     name: course.course.name,
     expiry: new Date(course.expiresAt).toLocaleDateString('th-TH'),
     balance: course.remaining,
     total: course.purchased,
   }))
+  patientCourses.value = courses
   const requestedCourseId = Number(route.query.courseId)
-  const requestedCourse = patientCourses.value.find((course) => course.id === requestedCourseId)
+  const purchasedWithReceipt = patientCourses.value.filter(
+    (course) => course.receiptId && course.receiptId === Number(route.query.receiptId),
+  )
+  const requestedCourse =
+    patientCourses.value.find((course) => course.id === requestedCourseId) ??
+    (purchasedWithReceipt.length === 1 ? purchasedWithReceipt[0] : undefined)
   selectedCourseId.value = requestedCourse?.id ?? patientCourses.value[0]?.id ?? 0
-  if (route.query.view === 'after-transfer') {
-    transferReceiptId.value = 1
-    const persistedCourseId = Number(route.query.courseId)
-    selectedCourse.value =
-      patientCourses.value.find((course) => course.id === persistedCourseId) ??
-      patientCourses.value[0] ??
-      ({} as UiCourse)
-    const persistedBalance = Number(route.query.balance)
-    const afterTransferBalance =
-      Number.isFinite(persistedBalance) && route.query.balance !== undefined
-        ? persistedBalance
-        : Math.max(0, selectedCourse.value.balance - transferAmount.value)
-    selectedCourse.value = {
-      ...selectedCourse.value,
-      balance: afterTransferBalance,
-      remaining: afterTransferBalance,
-    }
-    patientCourses.value = patientCourses.value.map((course) =>
-      course.id === selectedCourse.value.id ? selectedCourse.value : course,
-    )
-    selectedCourseId.value = selectedCourse.value.id ?? 0
-    if (route.query.action === 'inactive-history') {
-      historyFromInactive.value = true
-      action.value = 'history'
-      try {
-        const ledger = await courseApi.ledger(selectedCourse.value.id)
-        courseUsageHistory.value = ledger.movements as CourseMovement[]
-      } catch {
-        courseUsageHistory.value = []
-      }
-      return
-    }
-    if (route.query.action === 'use-success') {
-      action.value = 'use'
-      usageReview.value = false
-      usageSuccess.value = true
-      return
-    }
-    if (route.query.action === 'use') {
-      action.value = 'use'
-      usageReview.value = true
-      usageSuccess.value = false
-      return
-    }
-    if (route.query.action === 'history') {
-      action.value = 'history'
-      try {
-        const ledger = await courseApi.ledger(selectedCourse.value.id)
-        courseUsageHistory.value = ledger.movements as CourseMovement[]
-      } catch {
-        courseUsageHistory.value = []
-      }
-      return
-    }
-    if (route.query.action === 'transfer-success') {
-      action.value = 'transfer'
-      transferStep.value = 'success'
-      selectedRecipient.value =
-        owners.value.find((patient) => patient.id !== owner.value?.id) ?? null
-      return
-    }
-    action.value = 'manage'
-    return
-  }
   selectedCourse.value = requestedCourse ?? patientCourses.value[0] ?? ({} as UiCourse)
   if (route.query.action === 'history') {
     action.value = 'history'
@@ -230,9 +283,21 @@ async function loadCourses(patientId: number) {
     action.value = 'use'
     usageReview.value = false
     usageSuccess.value = false
+  } else if (route.query.action === 'transfer') {
+    action.value = 'transfer'
+    transferStep.value = 'form'
   } else action.value = 'manage'
 }
+async function refreshCoursesAfterExtensionRequest() {
+  if (!owner.value) return
+  try {
+    await loadCourses(owner.value.id)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลคอร์สใหม่ไม่สำเร็จ'
+  }
+}
 onMounted(async () => {
+  await refreshAppointmentProcess()
   try {
     await loadOwner()
   } catch (error) {
@@ -252,6 +317,13 @@ async function searchRecipients() {
   }
 }
 async function start(nextAction: CourseAction, course: UiCourse) {
+  if (nextAction === 'use' && !appointmentId.value) {
+    await router.push({
+      name: 'staff-appointment-create',
+      query: { patientId: String(owner.value?.id ?? '') },
+    })
+    return
+  }
   if (nextAction === 'use' && (!course.usable || course.balance <= 0)) {
     errorMessage.value = 'คอร์สนี้ใช้สิทธิ์ครบแล้ว'
     return
@@ -265,7 +337,8 @@ async function start(nextAction: CourseAction, course: UiCourse) {
   selectedRecipient.value = null
   recipientConfirmed.value = false
   transferAmount.value = 2
-  transferReason.value = ''
+  transferReason.value = 'แชร์สิทธิ์ตามคำขอผู้ป่วย'
+  transferConfirmDialog.value = false
   showReasonError.value = false
   coTherapistId.value = ''
   primaryShare.value = 50
@@ -332,11 +405,8 @@ function selectCourse() {
   if (course) selectedCourse.value = course
 }
 function goBack() {
-  if (route.path.startsWith('/staff/patients/') && owner.value) {
-    void router.push({
-      path: `/staff/patients/${owner.value.id}/history`,
-      query: { tab: 'courses' },
-    })
+  if (openedFromPatientProfile.value) {
+    void router.push(patientCoursesLocation.value)
     return
   }
   action.value = 'manage'
@@ -360,17 +430,31 @@ function goBack() {
     })
   }
 }
+function cancelTransfer() {
+  action.value = 'manage'
+  recipientSearch.value = ''
+  recipientSearchOpen.value = false
+  selectedRecipient.value = null
+  recipientConfirmed.value = false
+  transferConfirmDialog.value = false
+  transferStep.value = 'form'
+  void router.replace({
+    path: route.path,
+    query: { ...route.query, action: 'manage' },
+  })
+}
 function cancelPatientCourseDetail() {
-  if (route.path.startsWith('/staff/patients/') && owner.value) {
-    void router.push({
-      path: `/staff/patients/${owner.value.id}/history`,
-      query: { tab: 'courses' },
-    })
+  if (openedFromPatientProfile.value && route.query.print === '1') {
+    void router.push(patientCoursesLocation.value)
     return
   }
   coursePrintPreview.value = false
 }
 function returnToCourseManager() {
+  if (openedFromPatientProfile.value) {
+    void router.push(patientCoursesLocation.value)
+    return
+  }
   action.value = 'manage'
   usageReview.value = false
   usageSuccess.value = false
@@ -388,18 +472,57 @@ function returnToCourseManager() {
     })
   }
 }
+watch(
+  () => [route.query.action, route.query.courseId],
+  async () => {
+    if (route.query.action !== 'history') return
+    const course = patientCourses.value.find((item) => item.id === Number(route.query.courseId))
+    if (course) await start('history', course)
+  },
+)
 async function confirm() {
-  if (!owner.value || !selectedCourse.value.id) return
+  if (!owner.value || !selectedCourse.value.id || usageSubmitting.value) return
+  errorMessage.value = ''
+  usageSubmitting.value = true
   try {
     const isCourseUsage = action.value === 'use'
     const usedCourseId = selectedCourse.value.id
-    const balanceBeforeUse = selectedCourse.value.balance
+    let usedCourses: CoursePurchase[] = []
     if (isCourseUsage) {
+      if (!appointmentId.value) throw new Error('กรุณาสร้างนัดหมายก่อนใช้สิทธิ์คอร์ส')
+      if (route.query.appointmentId) {
+        await refreshAppointmentProcess()
+        if (!canStartAppointment.value) throw new Error(processBlockReason.value)
+        if (owner.value.id !== Number(route.query.patientId))
+          throw new Error('ผู้ป่วยในหน้าจอไม่ตรงกับนัดหมาย กรุณาเปิดหน้าใหม่')
+      }
+      const usages = buildCourseUsages(
+        {
+          appointmentId: appointmentId.value ?? undefined,
+          patientId: owner.value.id,
+          treatingStaffId: treatingStaffId.value || undefined,
+          branchCode: sourceAppointment.value?.branchCode ?? '',
+        },
+        usageSelections.value.map((row) => ({ ...row, note: usageNote.value })),
+        patientCourses.value,
+      )
+      if (!treatingOptions.value.some((person) => person.id === treatingStaffId.value))
+        throw new Error('กรุณาเลือกผู้รักษาของสาขานัดหมาย')
       usageConfirmDialog.value = false
-      await courseApi.use({
-        coursePurchaseId: selectedCourse.value.id,
-        note: usageNote.value || 'ใช้สิทธิ์ผ่านหน้าจัดการคอร์ส',
-      })
+      beginAppointmentWrite()
+      usedCourses =
+        usages.length === 1
+          ? [await courseApi.use(usages[0]!)]
+          : await courseApi.useBatch({ usages })
+      if (
+        !usedCourses.length ||
+        usedCourses.some(
+          (course) => !Number.isFinite(course.remaining) || !Number.isFinite(course.used),
+        )
+      )
+        throw new Error('ยังยืนยันสิทธิ์คงเหลือไม่ได้ กรุณาตรวจรายการเดิม')
+      finishAppointmentWrite()
+      if (appointmentId.value) await refreshAppointmentProcess()
     } else {
       if (!selectedRecipient.value) return
       const transfer = await courseApi.transfer({
@@ -410,15 +533,17 @@ async function confirm() {
       })
       transferReceiptId.value = transfer.id
     }
-    await loadCourses(owner.value.id)
     if (isCourseUsage) {
-      selectedCourse.value =
-        patientCourses.value.find((course) => course.id === usedCourseId) ?? selectedCourse.value
-      const newBalance = Math.max(0, balanceBeforeUse - 1)
-      selectedCourse.value = { ...selectedCourse.value, balance: newBalance, remaining: newBalance }
-      patientCourses.value = patientCourses.value.map((course) =>
-        course.id === usedCourseId ? selectedCourse.value : course,
-      )
+      const updated = usedCourses.find((course) => course.id === usedCourseId)
+      if (!updated) throw new Error('ไม่พบผลของคอร์สที่เลือก กรุณาตรวจรายการเดิม')
+      const newBalance = updated.remaining
+      patientCourses.value = patientCourses.value.map((course) => {
+        const result = usedCourses.find((item) => item.id === course.id)
+        return result
+          ? { ...course, ...result, balance: result.remaining, total: result.purchased }
+          : course
+      })
+      selectedCourse.value = patientCourses.value.find((course) => course.id === usedCourseId)!
       action.value = 'use'
       usageReview.value = false
       usageSuccess.value = true
@@ -435,13 +560,25 @@ async function confirm() {
         })
       }
     } else {
+      await loadCourses(owner.value.id)
       selectedCourse.value =
         patientCourses.value.find((course) => course.id === usedCourseId) ?? selectedCourse.value
+      patientCourses.value = patientCourses.value.map((course) =>
+        course.id === usedCourseId ? selectedCourse.value : course,
+      )
       action.value = 'transfer'
       transferStep.value = 'success'
     }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'แชร์คอร์สไม่สำเร็จ'
+    await recoverAppointmentWrite(error)
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : action.value === 'use'
+          ? 'ใช้สิทธิ์คอร์สไม่สำเร็จ'
+          : 'แชร์คอร์สไม่สำเร็จ'
+  } finally {
+    usageSubmitting.value = false
   }
 }
 function selectRecipient(patient: Patient) {
@@ -450,37 +587,37 @@ function selectRecipient(patient: Patient) {
   recipientSearchOpen.value = false
   recipientSearch.value = `${patient.fullName} HN ${patient.hn}`
 }
-function handleRecipientInput() {
+async function handleRecipientInput() {
   selectedRecipient.value = null
   recipientConfirmed.value = false
-  recipientSearchOpen.value = false
   recipientResults.value = []
+  if (!recipientSearch.value.trim()) {
+    recipientSearchOpen.value = false
+    return
+  }
+  await searchRecipients()
 }
-async function handleTransferPrimaryAction() {
-  if (!selectedRecipient.value) {
-    await searchRecipients()
+function openTransferConfirmation() {
+  if (
+    !selectedRecipient.value ||
+    transferAmount.value < 1 ||
+    transferAmount.value > selectedCourse.value.balance
+  ) {
     return
   }
-  if (!recipientConfirmed.value) {
-    recipientConfirmed.value = true
-    const suggestedTherapist =
-      therapists.value.find((person) => person.fullName.includes('วีระพงษ์')) ?? therapists.value[0]
-    coTherapistId.value = suggestedTherapist?.id ?? ''
-    primaryShare.value = 70
-    secondaryShare.value = 30
-    return
-  }
-  if (!transferReason.value.trim()) {
-    showReasonError.value = true
-    return
-  }
-  transferStep.value = 'review'
+  transferConfirmDialog.value = true
+}
+async function confirmTransfer() {
+  transferConfirmDialog.value = false
+  transferReason.value ||= 'แชร์สิทธิ์ตามคำขอผู้ป่วย'
+  await confirm()
 }
 function clearRecipient() {
   recipientSearch.value = ''
   selectedRecipient.value = null
   recipientConfirmed.value = false
   recipientSearchOpen.value = false
+  transferConfirmDialog.value = false
 }
 function startAnotherTransfer() {
   recipientSearch.value = ''
@@ -531,883 +668,1036 @@ function closePrintSuccess() {
 <template>
   <div class="staff-page course-page">
     <StaffHeader />
-    <main
-      v-if="action === 'use'"
-      class="course-use-main"
-      :class="{ 'after-transfer': transferReceiptId }"
-    >
-      <section v-if="usageSuccess && transferReceiptId" class="course-after-use-success-backdrop">
-        <article class="course-after-use-success-modal">
-          <h1>ใช้สิทธิ์สำเร็จ</h1>
-          <p>บันทึกการใช้สิทธิ์ {{ selectedCourse.name }} 1 ครั้งแล้ว</p>
-          <div>
-            <h2>{{ owner?.fullName }}　HN {{ owner?.hn }}</h2>
-            <h3>{{ selectedCourse.name }}</h3>
-            <strong>สิทธิ์คงเหลือหลังใช้ครั้งนี้</strong>
-            <b
-              >{{ usageSuccessBalance }} <small>/ {{ selectedCourse.total }} ครั้ง</small></b
+    <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
+    <div v-else-if="processError" role="alert">
+      <p>{{ processError }}</p>
+      <button type="button" @click="refreshAppointmentProcess">ลองใหม่</button>
+    </div>
+    <AppointmentProcessPanel
+      v-else-if="appointmentProgress && appointmentNeedsReview"
+      :progress="appointmentProgress"
+      :block-reason="processBlockReason"
+      :recovery-required="recoveryRequired"
+      @refresh="refreshAppointmentProcess"
+    />
+    <template v-else>
+      <main
+        v-if="action === 'use'"
+        class="course-use-main"
+        :class="{ 'after-transfer': transferReceiptId }"
+      >
+        <section v-if="!usageSuccess && !usageReview" class="course-use-form">
+          <label>ผู้รับบริการจริง<input :value="owner?.fullName" readonly /></label>
+          <label
+            >ผู้รักษา<select
+              v-model.number="treatingStaffId"
+              :disabled="usageSubmitting || usageReview"
             >
-          </div>
-          <footer>
-            <button type="button" @click="returnToCourseManager">กลับไปจัดการคอร์ส</button>
-            <button type="button" @click="start('history', selectedCourse)">
-              ดูประวัติการใช้คอร์ส
-            </button>
-          </footer>
-        </article>
-      </section>
-      <section v-else-if="usageSuccess" class="course-use-success">
-        <div class="course-use-success-icon" aria-hidden="true">
-          <img :src="courseUsageSuccessIcon" alt="" />
-          <span>✓</span>
-        </div>
-        <h1>ใช้สิทธิ์สำเร็จ</h1>
-        <p>บันทึก {{ selectedCourse.name }} จำนวน 1 ครั้งเรียบร้อยแล้ว</p>
-        <div class="course-use-success-details">
-          <p><span>เลขอ้างอิง</span><strong>USE-2569-0031</strong></p>
-          <p>
-            <span>สิทธิ์คงเหลือ</span><strong>{{ usageSuccessBalance }} ครั้ง</strong>
-          </p>
-        </div>
-        <footer>
-          <button type="button" @click="start('history', selectedCourse)">ดูประวัติการใช้</button>
-          <button type="button" @click="returnToCourseManager">กลับหน้าคอร์ส</button>
-        </footer>
-      </section>
-      <section v-else-if="usageReview && transferReceiptId" class="course-after-use-confirm">
-        <h1>ตรวจสอบการใช้สิทธิ์คอร์ส</h1>
-        <div class="course-after-use-details">
-          <h2>{{ owner?.fullName }}　HN {{ owner?.hn }}</h2>
-          <h3>{{ selectedCourse.name }}</h3>
-          <p>วันที่รับบริการ　{{ formattedUsageDate }}</p>
-          <p>นักกายภาพ　กภ. ศิริพร</p>
-          <p>สาขา　แบริ่ง</p>
-          <strong>สิทธิ์คงเหลือ</strong>
-          <b
-            >{{ selectedCourse.balance }} <small>/ {{ selectedCourse.total }} ครั้ง</small></b
+              <option :value="0" disabled>เลือกผู้รักษาจริง</option>
+              <option v-for="person in treatingOptions" :key="person.id" :value="person.id">
+                {{ person.fullName }}
+              </option>
+            </select></label
           >
-          <span>หมดอายุ {{ selectedCourse.expiry }}</span>
-        </div>
-        <footer>
-          <button type="button" @click="returnToCourseManager">ยกเลิกการใช้สิทธิ์</button>
-          <button
-            type="button"
-            :disabled="!selectedCourse.usable"
-            @click="usageConfirmDialog = true"
-          >
-            ใช้สิทธิ์คอร์ส
-          </button>
-        </footer>
-      </section>
-      <section v-else-if="usageReview" class="course-use-review">
-        <button class="course-review-back" type="button" @click="returnToCourseManager">
-          ← กลับไปหน้าบริการ
-        </button>
-        <h1>ตรวจสอบการใช้สิทธิ์</h1>
-        <p class="course-use-review-intro">ตรวจข้อมูลผู้ป่วยและรายละเอียดบริการก่อนยืนยัน</p>
-        <section class="course-review-patient">
-          <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) }}</i>
-          <div>
-            <strong>{{ owner?.fullName }}</strong
-            ><span>HN {{ owner?.hn }}　☎ {{ owner?.phone }}</span>
-          </div>
-          <b>{{ branchLabel(owner) }}</b>
+          <CourseUsagePicker
+            v-model="usageSelections"
+            :courses="patientCourses"
+            :branch-code="sourceAppointment?.branchCode ?? ''"
+            :disabled="usageSubmitting || usageReview"
+          />
         </section>
-        <div class="course-review-columns">
-          <section class="course-review-details">
-            <h2>ข้อมูลการรับบริการ</h2>
-            <dl>
-              <div>
-                <dt>ผู้ป่วย</dt>
-                <dd>{{ owner?.fullName }} · HN {{ owner?.hn }}</dd>
-              </div>
-              <div>
-                <dt>คอร์ส</dt>
-                <dd>{{ selectedCourse.name }}</dd>
-              </div>
-              <div>
-                <dt>Course ID</dt>
-                <dd>{{ selectedCourse.course?.code }}</dd>
-              </div>
-              <div>
-                <dt>วันที่รับบริการ</dt>
-                <dd>{{ formattedUsageDate }}</dd>
-              </div>
-              <div>
-                <dt>นักกายภาพ</dt>
-                <dd>กภ. ศิริพร</dd>
-              </div>
-              <div>
-                <dt>สาขา</dt>
-                <dd>แบริ่ง</dd>
-              </div>
-              <div>
-                <dt>จำนวนที่ใช้ครั้งนี้</dt>
-                <dd>1 ครั้ง</dd>
-              </div>
+        <section v-if="usageSuccess" class="course-after-use-success-backdrop">
+          <article
+            class="course-after-use-success-modal"
+            role="region"
+            aria-labelledby="after-use-success-title"
+          >
+            <span class="usage-success-check" aria-hidden="true">✓</span>
+            <h1 id="after-use-success-title">ใช้สิทธิ์สำเร็จ</h1>
+            <p>บันทึกการใช้สิทธิ์ {{ selectedCourse.name }} {{ usageCount }} ครั้งแล้ว</p>
+            <dl class="usage-success-details">
+              <div><dt>ผู้ป่วย</dt><dd>{{ owner?.fullName }}</dd></div>
+              <div><dt>เลขประจำตัวผู้ป่วย</dt><dd>{{ owner?.hn }}</dd></div>
+              <div><dt>คอร์ส</dt><dd>{{ selectedCourse.name }}</dd></div>
+              <div><dt>ใช้สิทธิ์ครั้งนี้</dt><dd>{{ usageCount }} ครั้ง</dd></div>
+              <div><dt>สิทธิ์คงเหลือ</dt><dd>{{ usageSuccessBalance }} ครั้ง</dd></div>
             </dl>
-          </section>
-          <aside class="course-review-summary">
-            <h2>สรุปสิทธิ์</h2>
-            <div>
-              <span>สิทธิ์คงเหลือหลังทำรายการ</span>
-              <strong>{{ Math.max(0, selectedCourse.balance - 1) }} ครั้ง</strong>
-              <small>ใช้สิทธิ์ครั้งนี้ 1 ครั้ง</small>
-            </div>
             <footer>
-              <button type="button" @click="returnToCourseManager">กลับไปแก้ไข</button>
-              <button
-                type="button"
-                :disabled="!selectedCourse.usable"
-                @click="usageConfirmDialog = true"
-              >
-                ยืนยันใช้สิทธิ์
+              <button type="button" @click="returnToCourseManager">กลับไปจัดการคอร์ส</button>
+              <button type="button" @click="start('history', selectedCourse)">
+                ดูประวัติการใช้คอร์ส
               </button>
             </footer>
-          </aside>
-        </div>
-      </section>
-      <template v-else>
-        <RouterLink
-          class="course-use-back"
-          :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
-          >← กลับไปหน้าบริการ</RouterLink
-        >
-        <h1>ใช้สิทธิ์คอร์ส</h1>
-        <section class="course-use-patient">
-          <strong>{{ owner?.fullName }}</strong
-          ><span>HN {{ owner?.hn }} · {{ branchLabel(owner) }}</span>
+          </article>
         </section>
-        <section v-if="!patientCourses.length" class="course-use-empty">
-          <h2>ยังไม่มีคอร์สที่ใช้สิทธิ์ได้</h2>
-          <p>ผู้ป่วยรายนี้ยังไม่มีคอร์สคงเหลือสำหรับใช้บริการ</p>
-          <button type="button" @click="returnToCourseManager">กลับหน้าจัดการคอร์ส</button>
-        </section>
-        <div v-else class="course-use-columns">
-          <section class="course-use-form">
-            <h2>รายละเอียดการใช้สิทธิ์</h2>
-            <label
-              >คอร์สที่เลือก<select v-model="selectedCourseId" @change="selectCourse">
-                <option v-for="course in patientCourses" :key="course.id" :value="course.id">
-                  {{ course.name }} จำนวนสิทธิ์ {{ course.balance }} / {{ course.total }} ครั้ง
-                </option>
-              </select></label
+        <section v-else-if="usageReview && transferReceiptId" class="course-after-use-confirm">
+          <h1>ตรวจสอบการใช้สิทธิ์คอร์ส</h1>
+          <div class="course-after-use-details">
+            <h2>{{ owner?.fullName }}　HN {{ owner?.hn }}</h2>
+            <h3>{{ selectedCourse.name }}</h3>
+            <p>วันที่รับบริการ　{{ formattedUsageDate }}</p>
+            <p>นักกายภาพ　{{ selectedTreatingStaff?.fullName || '—' }}</p>
+            <p>สาขา　{{ usageBranchName }}</p>
+            <strong>สิทธิ์คงเหลือ</strong>
+            <b
+              >{{ selectedCourse.balance }} <small>/ {{ selectedCourse.total }} ครั้ง</small></b
             >
-            <label>บริการที่ใช้สิทธิ์ได้<input :value="selectedCourse.name" readonly /></label>
-            <label>นักกายภาพ<input value="ผู้ให้บริการตามตาราง" readonly /></label>
-            <label
-              >วันที่ใช้บริการ<ThaiDatePicker
-                v-model="usageDate"
-                show-calendar-icon
-                numeric-month
-                hide-caret
-            /></label>
-            <label>จำนวนสิทธิ์ที่ใช้ครั้งนี้<input value="1 ครั้ง" readonly /></label>
-            <label
-              >หมายเหตุ (ไม่บังคับ)<textarea
-                v-model.trim="usageNote"
-                placeholder="ระบุรายละเอียดการใช้บริการ"
-              />
-            </label>
-          </section>
-          <aside class="course-use-summary">
-            <h2>สรุปการใช้สิทธิ์</h2>
-            <button type="button" :disabled="!selectedCourse.usable" @click="usageReview = true">
-              ตรวจสอบและใช้สิทธิ์
+            <span>หมดอายุ {{ selectedCourse.expiry }}</span>
+          </div>
+          <footer>
+            <button type="button" @click="returnToCourseManager">ยกเลิกการใช้สิทธิ์</button>
+            <button
+              type="button"
+              :disabled="!selectedCourse.usable"
+              @click="usageConfirmDialog = true"
+            >
+              ใช้สิทธิ์คอร์ส
             </button>
-            <b>{{ selectedCourse.name }}</b>
-            <p>ก่อนใช้ {{ selectedCourse.balance }} ครั้ง</p>
-            <p>ใช้ครั้งนี้ 1 ครั้ง</p>
-            <strong>จำนวนคงเหลือ {{ Math.max(0, selectedCourse.balance - 1) }} ครั้ง</strong>
-            <div class="course-progress">
-              <i
-                :style="{
-                  width: `${(Math.max(0, selectedCourse.balance - 1) / selectedCourse.total) * 100}%`,
-                }"
-              />
-            </div>
-            <small>หมดอายุ {{ selectedCourse.expiry }}</small>
-          </aside>
-        </div>
-      </template>
-      <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-      <div
-        v-if="usageConfirmDialog"
-        class="course-confirm-backdrop"
-        @click.self="usageConfirmDialog = false"
-      >
-        <section
-          class="course-confirm-dialog course-usage-confirm"
-          :class="{ 'after-transfer': transferReceiptId }"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="course-confirm-title"
-        >
-          <h2 id="course-confirm-title">
-            {{ transferReceiptId ? 'ยืนยันการใช้สิทธิ์ 1 ครั้ง ?' : 'ยืนยันการใช้สิทธิ์?' }}
-          </h2>
-          <p>
-            {{
-              transferReceiptId
-                ? 'ตรวจสอบยอดคงเหลือหลังใช้สิทธิ์ก่อนยืนยัน'
-                : 'โปรดตรวจสอบจำนวนสิทธิ์ก่อนทำรายการ'
-            }}
-          </p>
-          <div v-if="transferReceiptId" class="course-confirm-details course-after-confirm-details">
-            <strong>{{ owner?.fullName }}　HN {{ owner?.hn }}</strong>
-            <b>{{ selectedCourse.name }}</b>
-            <p>จำนวนคงเหลือ {{ selectedCourse.balance }}/{{ selectedCourse.total }} ครั้ง</p>
-          </div>
-          <div v-else class="course-confirm-details">
-            <strong>{{ selectedCourse.name }} · ใช้ 1 ครั้ง</strong>
-            <p>
-              <span>ผู้ป่วย</span><b>{{ owner?.fullName }}</b>
-            </p>
-            <p>
-              <span>คงเหลือก่อนใช้</span><b>{{ selectedCourse.balance }} ครั้ง</b>
-            </p>
-            <p>
-              <span>คงเหลือหลังใช้</span><b>{{ Math.max(0, selectedCourse.balance - 1) }} ครั้ง</b>
-            </p>
-          </div>
-          <div class="course-confirm-actions">
-            <button type="button" @click="usageConfirmDialog = false">
-              {{ transferReceiptId ? 'กลับไปตรวจสอบ' : 'ยังไม่ยืนยัน' }}</button
-            ><button type="button" @click="confirm">
-              {{ transferReceiptId ? 'ยืนยันใช้ 1 ครั้ง' : 'ยืนยันใช้สิทธิ์' }}
-            </button>
-          </div>
+          </footer>
         </section>
-      </div>
-    </main>
-    <main
-      v-else-if="action === 'transfer'"
-      class="course-transfer-main"
-      :class="{ 'is-review': transferStep === 'review', 'is-success': transferStep === 'success' }"
-    >
-      <button class="course-transfer-back" type="button" @click="goBack">
-        ← กลับไปหน้าจัดการคอร์ส
-      </button>
-      <h1>{{ transferStep === 'review' ? 'ตรวจสอบการแชร์คอร์ส' : 'แชร์คอร์ส' }}</h1>
-      <p class="course-transfer-intro">
-        {{
-          transferStep === 'review'
-            ? 'ตรวจสอบผู้ให้ ผู้รับ และจำนวนสิทธิ์ก่อนยืนยัน'
-            : 'ระบุผู้รับ จำนวนสิทธิ์ เหตุผล และสัดส่วนยอดขาย'
-        }}
-      </p>
-      <ol class="course-transfer-steps" aria-label="ขั้นตอนการแชร์คอร์ส">
-        <li :class="{ active: transferStep === 'form', completed: transferStep !== 'form' }">
-          <span>1</span><b>ระบุข้อมูล</b>
-        </li>
-        <li :class="{ active: transferStep === 'review', completed: transferStep === 'success' }">
-          <span>2</span><b>ตรวจสอบและยืนยัน</b>
-        </li>
-        <li :class="{ active: transferStep === 'success' }"><span>3</span><b>สำเร็จ</b></li>
-      </ol>
-      <template v-if="transferStep === 'form'">
-        <section class="course-transfer-owner-summary">
-          <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) }}</i>
-          <div>
-            <strong>{{ owner?.fullName }}</strong
-            ><span>HN {{ owner?.hn }}　☎ {{ owner?.phone }}</span>
-          </div>
-          <b>{{ branchLabel(owner) }}</b>
-        </section>
-        <div class="course-transfer-columns">
-          <section class="course-transfer-source">
-            <h2>คอร์สที่ต้องการแชร์</h2>
-            <div class="course-transfer-course-card">
-              <h3>{{ selectedCourse.name }}</h3>
-              <span>{{ selectedCourse.course?.code }} · ใช้งานได้</span>
-              <p>
-                ทั้งหมด {{ selectedCourse.total }}　 ใช้แล้ว
-                {{ Math.max(0, selectedCourse.total - selectedCourse.balance) }}　 คงเหลือ
-                {{ selectedCourse.balance }} ครั้ง
-              </p>
-            </div>
-            <label
-              >จำนวนสิทธิ์ที่ต้องการแชร์<span class="course-transfer-stepper"
-                ><button type="button" :disabled="transferAmount <= 1" @click="transferAmount--">
-                  −</button
-                ><input
-                  v-model.number="transferAmount"
-                  type="number"
-                  min="1"
-                  :max="selectedCourse.balance"
-                /><button
-                  type="button"
-                  :disabled="transferAmount >= selectedCourse.balance"
-                  @click="transferAmount++"
-                >
-                  +</button
-                ><em
-                  >ผู้ให้จะเหลือ
-                  {{ Math.max(0, selectedCourse.balance - (Number(transferAmount) || 0)) }}
-                  ครั้ง</em
-                ></span
-              ></label
-            >
-          </section>
-          <section class="course-transfer-recipient">
-            <h2>ผู้รับและผู้ดูแลร่วม</h2>
-            <label
-              >ค้นหาผู้รับสิทธิ์ *<input
-                v-model.trim="recipientSearch"
-                placeholder="ค้นหาชื่อ เบอร์โทรศัพท์ หรือ HN"
-                @input="handleRecipientInput"
-              /><small>แสดงเฉพาะผู้ป่วยที่ลงทะเบียนแล้ว</small></label
-            >
-            <div
-              v-if="recipientSearchOpen && recipientSearch.trim() && !selectedRecipient"
-              class="course-transfer-results"
-            >
-              <button
-                v-for="patientResult in recipientResults.filter((item) => item.id !== owner?.id)"
-                :key="patientResult.id"
-                type="button"
-                @click="selectRecipient(patientResult)"
-              >
-                <i>{{ patientResult.fullName.slice(0, 1) }}</i
-                ><span
-                  ><strong>{{ patientResult.fullName }}</strong
-                  ><small>HN {{ patientResult.hn }} · {{ patientResult.phone || '-' }}</small></span
-                >
-              </button>
-              <p v-if="!recipientResults.filter((item) => item.id !== owner?.id).length">
-                ไม่พบผู้ป่วยที่ตรงกับข้อมูลค้นหา
-              </p>
-            </div>
-            <div v-if="selectedRecipient" class="course-transfer-selected">
-              <i>{{ selectedRecipient.fullName.slice(0, 1) }}</i>
-              <div>
-                <strong>{{ selectedRecipient.fullName }}</strong
-                ><span>HN {{ selectedRecipient.hn }} · {{ selectedRecipient.phone || '-' }}</span>
-              </div>
-              <button type="button" aria-label="เปลี่ยนผู้รับ" @click="clearRecipient">×</button>
-            </div>
-          </section>
-        </div>
-        <footer class="course-transfer-footer">
-          <button type="button" @click="goBack">ยกเลิก</button
-          ><button
-            type="button"
-            :disabled="
-              selectedRecipient && recipientConfirmed
-                ? transferAmount < 1 ||
-                  transferAmount > selectedCourse.balance
-                : selectedRecipient
-                  ? false
-                  : !recipientSearch.trim()
-            "
-            @click="handleTransferPrimaryAction"
-          >
-            {{
-              selectedRecipient
-                ? recipientConfirmed
-                  ? 'ตรวจสอบข้อมูล'
-                  : 'เลือกผู้รับนี้'
-                : 'ค้นหาผู้รับ'
-            }}
+        <section v-else-if="usageReview" class="course-use-review">
+          <button class="course-review-back" type="button" @click="returnToCourseManager">
+            ← กลับไปหน้าบริการ
           </button>
-        </footer>
-      </template>
-      <section v-else-if="transferStep === 'review'" class="course-transfer-review">
-        <div class="course-transfer-review-people">
-          <article>
-            <span>ผู้ให้สิทธิ์</span><strong>{{ owner?.fullName }}</strong
-            ><small>HN {{ owner?.hn }} · {{ branchLabel(owner) }}</small>
-          </article>
-          <b class="course-transfer-direction" aria-hidden="true">→</b>
-          <article>
-            <span>ผู้รับสิทธิ์</span><strong>{{ selectedRecipient?.fullName }}</strong
-            ><small>HN {{ selectedRecipient?.hn }} · {{ branchLabel(selectedRecipient) }}</small>
-          </article>
-        </div>
-        <div class="course-transfer-review-summary">
-          <p>
-            <span>คอร์ส</span><b>{{ selectedCourse.name }} · {{ selectedCourse.course?.code }}</b>
-          </p>
-          <p>
-            <span>จำนวนที่แชร์</span><b>{{ transferAmount }} ครั้ง</b>
-          </p>
-          <p>
-            <span>ผู้ให้คงเหลือหลังแชร์</span
-            ><b>{{ selectedCourse.balance - transferAmount }} ครั้ง</b>
-          </p>
-          <p>
-            <span>ผู้รับได้รับสิทธิ์</span><b>{{ transferAmount }} ครั้ง</b>
-          </p>
-          <p>
-            <span>สิทธิ์ที่ผู้รับใช้ได้หลังแชร์</span><b>{{ transferAmount }} ครั้ง</b>
-          </p>
-          <p>
-            <span>เหตุผลการแชร์</span><b>{{ transferReason }}</b>
-          </p>
-        </div>
-        <p class="course-transfer-review-note">
-          ยืนยันว่าข้อมูลตรงตามความประสงค์ของเจ้าของคอร์สที่แจ้งกับคลินิก
-        </p>
-        <footer>
-          <button type="button" @click="transferStep = 'form'">กลับไปแก้ไข</button
-          ><button type="button" @click="confirm">ยืนยันแชร์คอร์ส</button>
-        </footer>
-      </section>
-      <section v-else class="course-transfer-success">
-        <div class="course-transfer-success-icon">✓</div>
-        <h2>แชร์คอร์สสำเร็จ</h2>
-        <p>
-          เพิ่ม {{ selectedRecipient?.fullName }} เป็นผู้ใช้สิทธิ์ในคอร์ส
-          {{ selectedCourse.name }} แล้ว
-        </p>
-        <div class="course-transfer-success-details">
-          <p><span>เลขอ้างอิง</span><b>SHR-2569-0001</b></p>
-          <p>
-            <span>จำนวนที่แชร์</span><b>{{ transferAmount }} ครั้ง</b>
-          </p>
-          <p>
-            <span>ผู้ให้คงเหลือ</span><b>{{ selectedCourse.balance }} ครั้ง</b>
-          </p>
-          <p>
-            <span>ผู้รับได้รับสิทธิ์</span><b>{{ transferAmount }} ครั้ง</b>
-          </p>
-          <p>
-            <span>สิทธิ์ที่ผู้รับใช้ได้</span><b>{{ transferAmount }} ครั้ง</b>
-          </p>
-        </div>
-        <div class="course-transfer-success-actions">
-          <button type="button" @click="startAnotherTransfer">แชร์คอร์สอีกครั้ง</button
-          ><button type="button" @click="returnToCourseManager">ดูคอร์สหลังแชร์</button>
-        </div>
-      </section>
-      <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-    </main>
-    <main
-      v-else-if="action === 'history'"
-      class="course-history-main"
-      :class="{
-        'after-transfer': transferReceiptId && !historyFromInactive,
-        'inactive-history': historyFromInactive,
-      }"
-    >
-      <section v-if="coursePrintPreview" class="course-cut-preview">
-        <button class="course-cut-back-link" type="button" @click="cancelPatientCourseDetail">
-          ← กลับไปประวัติการรักษา
-        </button>
-        <article class="course-cut-document">
-          <header>
-            <h1>ใบตัดคอร์สการรักษา</h1>
-            <p>ที่อยู่: {{ documentClinicAddress }}</p>
-            <p>โทรศัพท์: {{ documentClinicPhone }}</p>
-          </header>
-          <p class="course-cut-issued">ออก ณ วันที่ : 29/06/2569</p>
-          <section class="course-cut-summary">
-            <p>
-              วันที่ซื้อคอร์ส {{ new Date(selectedCourse.purchasedAt).toLocaleDateString('th-TH') }}
-            </p>
-            <p>จำนวน: {{ selectedCourse.total }} ครั้ง</p>
-            <p>ใช้ไปแล้ว: {{ usedSessions }} ครั้ง</p>
-            <p>คงเหลือ: {{ selectedCourse.total - usedSessions }} ครั้ง</p>
-            <strong>ชื่อคอร์ส : {{ selectedCourse.name }}</strong>
-            <strong
-              >วันหมดอายุ:
-              {{ new Date(selectedCourse.expiresAt).toLocaleDateString('th-TH') }}</strong
-            >
+          <h1>ตรวจสอบการใช้สิทธิ์</h1>
+          <p class="course-use-review-intro">ตรวจข้อมูลผู้ป่วยและรายละเอียดบริการก่อนยืนยัน</p>
+          <section class="course-review-patient">
+            <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) }}</i>
+            <div>
+              <strong>{{ owner?.fullName }}</strong
+              ><span class="patient-contact-inline"
+                >HN {{ owner?.hn }} <PhoneIcon v-if="owner?.phone" />
+                {{ owner?.phone || '-' }}</span
+              >
+            </div>
+            <b>{{ branchLabel(owner) }}</b>
           </section>
-          <div class="course-cut-table" role="table" aria-label="รายการใช้สิทธิ์คอร์ส">
-            <div class="course-cut-table-head" role="row">
-              <b>วันที่รับบริการ</b><b>นักกายภาพผู้ให้บริการ</b><b>สาขา</b><b>จำนวน</b>
-            </div>
-            <div v-for="(entry, index) in [...usageEntries].reverse()" :key="entry.id" role="row">
-              <span>{{
-                new Date(entry.createdAt).toLocaleDateString('th-TH', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })
-              }}</span>
-              <span>{{ index === 0 ? 'กภ. วีระพงษ์' : 'กภ. ศิริพร' }}</span>
-              <span>{{ index === 0 ? 'พระราม 9' : 'แบริ่ง' }}</span>
-              <span>{{ Math.abs(entry.quantity) }}</span>
-            </div>
-            <div class="course-cut-total" role="row">
-              <b>รวมจำนวนที่ใช้</b><b>{{ usedSessions }}</b>
-            </div>
+          <div class="course-review-columns">
+            <section class="course-review-details">
+              <h2>ข้อมูลการรับบริการ</h2>
+              <dl>
+                <div>
+                  <dt>ผู้ป่วย</dt>
+                  <dd>{{ owner?.fullName }} · HN {{ owner?.hn }}</dd>
+                </div>
+                <div>
+                  <dt>คอร์ส</dt>
+                  <dd>{{ selectedCourse.name }}</dd>
+                </div>
+                <div>
+                  <dt>Course ID</dt>
+                  <dd>{{ selectedCourse.course?.code }}</dd>
+                </div>
+                <div>
+                  <dt>วันที่รับบริการ</dt>
+                  <dd>{{ formattedUsageDate }}</dd>
+                </div>
+                <div>
+                  <dt>นักกายภาพ</dt>
+                  <dd>{{ selectedTreatingStaff?.fullName || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>สาขา</dt>
+                  <dd>{{ usageBranchName }}</dd>
+                </div>
+                <div>
+                  <dt>จำนวนที่ใช้ครั้งนี้</dt>
+                  <dd>1 ครั้ง</dd>
+                </div>
+              </dl>
+            </section>
+            <aside class="course-review-summary">
+              <h2>สรุปสิทธิ์</h2>
+              <div>
+                <span>สิทธิ์คงเหลือหลังทำรายการ</span>
+                <strong
+                  >{{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</strong
+                >
+                <small>ใช้สิทธิ์ครั้งนี้ {{ usageCount }} ครั้ง</small>
+              </div>
+              <footer>
+                <button
+                  type="button"
+                  :disabled="!selectedCourse.usable"
+                  @click="usageConfirmDialog = true"
+                >
+                  ยืนยันใช้สิทธิ์
+                </button>
+              </footer>
+            </aside>
           </div>
-        </article>
-        <footer class="course-cut-actions">
-          <button type="button" @click="cancelPatientCourseDetail">ยกเลิก</button>
-          <button type="button" @click="printDialog = 'confirm'">พิมพ์เอกสาร</button>
-        </footer>
-      </section>
-      <template v-else>
-        <button class="course-history-back" type="button" @click="goBack">
+        </section>
+        <template v-else>
+          <RouterLink
+            class="course-use-back"
+            :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
+            >← กลับไปหน้าบริการ</RouterLink
+          >
+          <h1>ใช้สิทธิ์คอร์ส</h1>
+          <section class="course-use-patient">
+            <strong>{{ owner?.fullName }}</strong
+            ><span>HN {{ owner?.hn }} · {{ branchLabel(owner) }}</span>
+          </section>
+          <section v-if="!patientCourses.length" class="course-use-empty">
+            <h2>ยังไม่มีคอร์สที่ใช้สิทธิ์ได้</h2>
+            <p>ผู้ป่วยรายนี้ยังไม่มีคอร์สคงเหลือสำหรับใช้บริการ</p>
+            <button type="button" @click="returnToCourseManager">กลับหน้าจัดการคอร์ส</button>
+          </section>
+          <div v-else class="course-use-columns">
+            <section class="course-use-form">
+              <h2>รายละเอียดการใช้สิทธิ์</h2>
+              <label
+                >คอร์สที่เลือก<select v-model="selectedCourseId" @change="selectCourse">
+                  <option v-for="course in patientCourses" :key="course.id" :value="course.id">
+                    {{ course.name }} จำนวนสิทธิ์ {{ course.balance }} / {{ course.total }} ครั้ง
+                  </option>
+                </select></label
+              >
+              <label>บริการที่ใช้สิทธิ์ได้<input :value="selectedCourse.name" readonly /></label>
+              <label
+                >นักกายภาพ<input
+                  :value="
+                    treatingOptions.find((person) => person.id === treatingStaffId)?.fullName ||
+                    'กรุณาเลือกผู้รักษาด้านบน'
+                  "
+                  readonly
+              /></label>
+              <label>วันที่ใช้บริการ<input :value="formattedUsageDate" readonly /></label>
+              <label
+                >จำนวนสิทธิ์ที่ใช้ครั้งนี้<input :value="usageCount + ' ครั้ง'" readonly
+              /></label>
+              <label
+                >หมายเหตุ (ไม่บังคับ)<textarea
+                  v-model.trim="usageNote"
+                  placeholder="ระบุรายละเอียดการใช้บริการ"
+                />
+              </label>
+            </section>
+            <aside class="course-use-summary">
+              <h2>สรุปการใช้สิทธิ์</h2>
+              <button type="button" :disabled="!selectedCourse.usable" @click="usageReview = true">
+                ตรวจสอบและใช้สิทธิ์
+              </button>
+              <b>{{ selectedCourse.name }}</b>
+              <p>ก่อนใช้ {{ selectedCourse.balance }} ครั้ง</p>
+              <p>ใช้ครั้งนี้ {{ usageCount }} ครั้ง</p>
+              <strong
+                >จำนวนคงเหลือ
+                {{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</strong
+              >
+              <div class="course-progress">
+                <i :style="{ width: courseUsageProgressWidth(selectedCourse) }" />
+              </div>
+              <small>หมดอายุ {{ selectedCourse.expiry }}</small>
+            </aside>
+          </div>
+        </template>
+        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+        <div
+          v-if="usageConfirmDialog"
+          class="course-confirm-backdrop"
+          @click.self="usageConfirmDialog = false"
+        >
+          <section
+            v-modal-focus="{ close: () => (usageConfirmDialog = false), busy: usageSubmitting }"
+            class="course-confirm-dialog course-usage-confirm"
+            :class="{ 'after-transfer': transferReceiptId }"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="course-confirm-title"
+          >
+            <h2 id="course-confirm-title">
+              {{ transferReceiptId ? 'ยืนยันการใช้สิทธิ์ 1 ครั้ง' : 'ยืนยันการใช้สิทธิ์' }}
+            </h2>
+            <p>
+              {{
+                transferReceiptId
+                  ? 'ตรวจสอบยอดคงเหลือหลังใช้สิทธิ์ก่อนยืนยัน'
+                  : 'โปรดตรวจสอบจำนวนสิทธิ์ก่อนทำรายการ'
+              }}
+            </p>
+            <div
+              v-if="transferReceiptId"
+              class="course-confirm-details course-after-confirm-details"
+            >
+              <strong>{{ owner?.fullName }}　HN {{ owner?.hn }}</strong>
+              <b>{{ selectedCourse.name }}</b>
+              <p>
+                จำนวนคงเหลือ {{ selectedCourse.balance }}/{{ selectedCourse.total }}
+                ครั้ง
+              </p>
+            </div>
+            <div v-else class="course-confirm-details">
+              <strong>{{ selectedCourse.name }} · ใช้ 1 ครั้ง</strong>
+              <p>
+                <span>ผู้ป่วย</span><b>{{ owner?.fullName }}</b>
+              </p>
+              <p>
+                <span>คงเหลือก่อนใช้</span><b>{{ selectedCourse.balance }} ครั้ง</b>
+              </p>
+              <p>
+                <span>คงเหลือหลังใช้</span
+                ><b>{{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</b>
+              </p>
+            </div>
+            <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+            <div class="course-confirm-actions">
+              <button type="button" @click="usageConfirmDialog = false">ยกเลิก</button
+              ><button type="button" :disabled="usageSubmitting" @click="confirm">
+                {{ usageSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน' }}
+              </button>
+            </div>
+          </section>
+        </div>
+      </main>
+      <main
+        v-else-if="action === 'transfer'"
+        class="course-transfer-main"
+        :class="{
+          'is-review': transferStep === 'review',
+          'is-success': transferStep === 'success',
+        }"
+      >
+        <button class="course-transfer-back" type="button" @click="goBack">
           ← กลับไปหน้าจัดการคอร์ส
         </button>
         <h1>
-          {{ transferReceiptId && !historyFromInactive ? 'ประวัติคอร์ส' : 'ประวัติการใช้คอร์ส' }}
+          {{ transferStep === 'review' ? 'ตรวจสอบการแชร์คอร์ส' : 'แชร์คอร์ส' }}
         </h1>
-        <p class="course-history-intro">
+        <p class="course-transfer-intro">
           {{
-            transferReceiptId || historyFromInactive
-              ? ''
-              : 'ตรวจสอบรายการใช้สิทธิ์และพิมพ์ใบตัดคอร์ส'
+            transferStep === 'review'
+              ? 'ตรวจสอบผู้ให้ ผู้รับ และจำนวนสิทธิ์ก่อนยืนยัน'
+              : 'ระบุผู้รับ จำนวนสิทธิ์ เหตุผล และสัดส่วนยอดขาย'
           }}
         </p>
-        <section class="course-history-patient">
+        <ol class="course-transfer-steps" aria-label="ขั้นตอนการแชร์คอร์ส">
+          <li
+            :class="{
+              active: transferStep === 'form',
+              completed: transferStep !== 'form',
+            }"
+          >
+            <span>1</span><b>ระบุข้อมูล</b>
+          </li>
+          <li
+            :class="{
+              active: transferStep === 'review',
+              completed: transferStep === 'success',
+            }"
+          >
+            <span>2</span><b>ตรวจสอบและยืนยัน</b>
+          </li>
+          <li :class="{ active: transferStep === 'success' }"><span>3</span><b>สำเร็จ</b></li>
+        </ol>
+        <template v-if="transferStep === 'form'">
+          <section class="course-transfer-owner-summary">
+            <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) }}</i>
+            <div>
+              <strong>{{ owner?.fullName }}</strong
+              ><span class="patient-contact-inline"
+                >HN {{ owner?.hn }} <PhoneIcon v-if="owner?.phone" />
+                {{ owner?.phone || '-' }}</span
+              >
+            </div>
+            <b>{{ branchLabel(owner) }}</b>
+          </section>
+          <div class="course-transfer-columns">
+            <section class="course-transfer-source">
+              <h2>คอร์สที่ต้องการแชร์</h2>
+              <div class="course-transfer-course-card">
+                <h3>{{ selectedCourse.name }}</h3>
+                <span>{{ selectedCourse.course?.code }} · ใช้งานได้</span>
+                <p>
+                  ทั้งหมด {{ selectedCourse.total }}　 ใช้แล้ว {{ selectedCourse.used }}　 คงเหลือ
+                  {{ selectedCourse.balance }} ครั้ง
+                </p>
+              </div>
+              <label
+                >จำนวนสิทธิ์ที่ต้องการแชร์<span class="course-transfer-stepper"
+                  ><button type="button" :disabled="transferAmount <= 1" @click="transferAmount--">
+                    −</button
+                  ><input
+                    v-model.number="transferAmount"
+                    type="number"
+                    min="1"
+                    :max="selectedCourse.balance"
+                  /><button
+                    type="button"
+                    :disabled="transferAmount >= selectedCourse.balance"
+                    @click="transferAmount++"
+                  >
+                    +</button
+                  ><em
+                    >ผู้ให้จะเหลือ
+                    {{ Math.max(0, selectedCourse.balance - (Number(transferAmount) || 0)) }}
+                    ครั้ง</em
+                  ></span
+                ></label
+              >
+            </section>
+            <section class="course-transfer-recipient">
+              <h2>ผู้รับสิทธิ์</h2>
+              <label
+                >ค้นหาผู้รับสิทธิ์ *<input
+                  v-model.trim="recipientSearch"
+                  placeholder="ค้นหาชื่อ เบอร์โทรศัพท์ หรือ HN"
+                  @input="handleRecipientInput"
+                /><small>แสดงเฉพาะผู้ป่วยที่ลงทะเบียนแล้ว</small></label
+              >
+              <div
+                v-if="recipientSearchOpen && recipientSearch.trim() && !selectedRecipient"
+                class="course-transfer-results"
+              >
+                <button
+                  v-for="patientResult in recipientResults.filter((item) => item.id !== owner?.id)"
+                  :key="patientResult.id"
+                  type="button"
+                  @click="selectRecipient(patientResult)"
+                >
+                  <i>{{ patientResult.fullName.slice(0, 1) }}</i
+                  ><span
+                    ><strong>{{ patientResult.fullName }}</strong
+                    ><small
+                      >HN {{ patientResult.hn }} · {{ patientResult.phone || '-' }}</small
+                    ></span
+                  >
+                </button>
+                <p v-if="!recipientResults.filter((item) => item.id !== owner?.id).length">
+                  ไม่พบผู้ป่วยที่ตรงกับข้อมูลค้นหา
+                </p>
+              </div>
+              <div v-if="selectedRecipient" class="course-transfer-selected">
+                <i>{{ selectedRecipient.fullName.slice(0, 1) }}</i>
+                <div>
+                  <strong>{{ selectedRecipient.fullName }}</strong
+                  ><span>HN {{ selectedRecipient.hn }} · {{ selectedRecipient.phone || '-' }}</span>
+                </div>
+                <button type="button" aria-label="เปลี่ยนผู้รับ" @click="clearRecipient">×</button>
+              </div>
+            </section>
+          </div>
+          <footer class="course-transfer-footer">
+            <button type="button" @click="cancelTransfer">ยกเลิก</button
+            ><button
+              type="button"
+              :disabled="
+                !selectedRecipient || transferAmount < 1 || transferAmount > selectedCourse.balance
+              "
+              @click="openTransferConfirmation"
+            >
+              ยืนยัน
+            </button>
+          </footer>
+          <div
+            v-if="transferConfirmDialog"
+            class="course-confirm-backdrop"
+            @click.self="transferConfirmDialog = false"
+          >
+            <section
+              v-modal-focus="{
+                close: () => (transferConfirmDialog = false),
+                busy: usageSubmitting,
+              }"
+              class="course-confirm-dialog course-transfer-confirm"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="transfer-confirm-title"
+            >
+              <h2 id="transfer-confirm-title">ยืนยันการแชร์คอร์ส</h2>
+              <p>โปรดตรวจสอบข้อมูลก่อนยืนยันการแชร์สิทธิ์</p>
+              <div class="course-confirm-details">
+                <strong>{{ selectedCourse.name }} · แชร์ {{ transferAmount }} ครั้ง</strong>
+                <p>
+                  <span>ผู้ให้สิทธิ์</span><b>{{ owner?.fullName }}</b>
+                </p>
+                <p>
+                  <span>ผู้รับสิทธิ์</span><b>{{ selectedRecipient?.fullName }}</b>
+                </p>
+                <p>
+                  <span>ผู้ให้คงเหลือหลังแชร์</span
+                  ><b>{{ Math.max(0, selectedCourse.balance - transferAmount) }} ครั้ง</b>
+                </p>
+              </div>
+              <footer>
+                <button
+                  type="button"
+                  :disabled="usageSubmitting"
+                  @click="transferConfirmDialog = false"
+                >
+                  ยกเลิก
+                </button>
+                <button type="button" :disabled="usageSubmitting" @click="confirmTransfer">
+                  {{ usageSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน' }}
+                </button>
+              </footer>
+            </section>
+          </div>
+        </template>
+        <section v-else-if="transferStep === 'review'" class="course-transfer-review">
+          <div class="course-transfer-review-people">
+            <article>
+              <span>ผู้ให้สิทธิ์</span><strong>{{ owner?.fullName }}</strong
+              ><small>HN {{ owner?.hn }} · {{ branchLabel(owner) }}</small>
+            </article>
+            <b class="course-transfer-direction" aria-hidden="true">→</b>
+            <article>
+              <span>ผู้รับสิทธิ์</span><strong>{{ selectedRecipient?.fullName }}</strong
+              ><small>HN {{ selectedRecipient?.hn }} · {{ branchLabel(selectedRecipient) }}</small>
+            </article>
+          </div>
+          <div class="course-transfer-review-summary">
+            <p>
+              <span>คอร์ส</span><b>{{ selectedCourse.name }} · {{ selectedCourse.course?.code }}</b>
+            </p>
+            <p>
+              <span>จำนวนที่แชร์</span><b>{{ transferAmount }} ครั้ง</b>
+            </p>
+            <p>
+              <span>ผู้ให้คงเหลือหลังแชร์</span
+              ><b>{{ selectedCourse.balance - transferAmount }} ครั้ง</b>
+            </p>
+            <p>
+              <span>ผู้รับได้รับสิทธิ์</span><b>{{ transferAmount }} ครั้ง</b>
+            </p>
+            <p>
+              <span>สิทธิ์ที่ผู้รับใช้ได้หลังแชร์</span><b>{{ transferAmount }} ครั้ง</b>
+            </p>
+            <p>
+              <span>เหตุผลการแชร์</span><b>{{ transferReason }}</b>
+            </p>
+          </div>
+          <p class="course-transfer-review-note">
+            ยืนยันว่าข้อมูลตรงตามความประสงค์ของเจ้าของคอร์สที่แจ้งกับคลินิก
+          </p>
+          <footer>
+            <button type="button" @click="transferStep = 'form'">กลับไปแก้ไข</button
+            ><button type="button" @click="confirm">ยืนยันแชร์คอร์ส</button>
+          </footer>
+        </section>
+        <section v-else class="course-transfer-success">
+          <div class="course-transfer-success-icon">✓</div>
+          <h2>แชร์คอร์สสำเร็จ</h2>
+          <p>
+            เพิ่ม {{ selectedRecipient?.fullName }} เป็นผู้ใช้สิทธิ์ในคอร์ส
+            {{ selectedCourse.name }} แล้ว
+          </p>
+          <div class="course-transfer-success-details">
+            <p><span>เลขอ้างอิง</span><b>SHR-2569-0001</b></p>
+            <p>
+              <span>จำนวนที่แชร์</span><b>{{ transferAmount }} ครั้ง</b>
+            </p>
+            <p>
+              <span>ผู้ให้คงเหลือ</span><b>{{ selectedCourse.balance }} ครั้ง</b>
+            </p>
+            <p>
+              <span>ผู้รับได้รับสิทธิ์</span><b>{{ transferAmount }} ครั้ง</b>
+            </p>
+            <p>
+              <span>สิทธิ์ที่ผู้รับใช้ได้</span><b>{{ transferAmount }} ครั้ง</b>
+            </p>
+          </div>
+          <div class="course-transfer-success-actions">
+            <button type="button" @click="startAnotherTransfer">แชร์คอร์สอีกครั้ง</button
+            ><button type="button" @click="returnToCourseManager">ดูคอร์สหลังแชร์</button>
+          </div>
+        </section>
+        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+      </main>
+      <main
+        v-else-if="action === 'history'"
+        class="course-history-main"
+        :class="{
+          'after-transfer': transferReceiptId && !historyFromInactive,
+          'inactive-history': historyFromInactive,
+        }"
+      >
+        <section v-if="coursePrintPreview" class="course-cut-preview">
+          <button class="course-cut-back-link" type="button" @click="cancelPatientCourseDetail">
+            ← กลับไปประวัติการรักษา
+          </button>
+          <CourseCutDocument
+            class="course-history-document"
+            :course-name="selectedCourse.name"
+            :address="documentClinicAddress"
+            :phone="documentClinicPhone"
+            :issued-at="clinicToday()"
+            :purchased-at="selectedCourse.purchasedAt"
+            :expires-at="selectedCourse.expiresAt"
+            :total="selectedCourse.total"
+            :used="usedSessions"
+            :remaining="selectedCourse.balance"
+            :entries="usageEntries.map((entry) => ({
+              date: entry.createdAt,
+              quantity: Math.abs(entry.quantity),
+            })).reverse()"
+          />
+          <footer class="course-cut-actions">
+            <button type="button" @click="cancelPatientCourseDetail">ยกเลิก</button>
+            <button type="button" @click="printDialog = 'confirm'">พิมพ์เอกสาร</button>
+          </footer>
+        </section>
+        <template v-else>
+          <button class="course-history-back" type="button" @click="goBack">
+            ← กลับไปหน้าจัดการคอร์ส
+          </button>
+          <h1>
+            {{ transferReceiptId && !historyFromInactive ? 'ประวัติคอร์ส' : 'ประวัติการใช้คอร์ส' }}
+          </h1>
+          <p class="course-history-intro">
+            {{
+              transferReceiptId || historyFromInactive
+                ? ''
+                : 'ตรวจสอบรายการใช้สิทธิ์และพิมพ์ใบตัดคอร์ส'
+            }}
+          </p>
+          <section class="course-history-patient">
+            <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) || '--' }}</i>
+            <div>
+              <strong>{{ owner?.fullName }}</strong>
+              <span
+                >HN {{ owner?.hn
+                }}<template v-if="!transferReceiptId || historyFromInactive"
+                  ><PhoneIcon v-if="owner?.phone" /> {{ owner?.phone || '-' }}</template
+                ></span
+              >
+            </div>
+            <em>{{ branchLabel(owner) }}</em>
+          </section>
+          <label
+            v-if="historyFromInactive && inactiveCourses.length > 1"
+            class="course-history-selector"
+            >คอร์สที่หมดอายุ / ใช้สิทธิ์ครบ<select
+              v-model="selectedCourseId"
+              @change="changeInactiveHistoryCourse"
+            >
+              <option v-for="course in inactiveCourses" :key="course.id" :value="course.id">
+                {{ course.name }} ({{ course.course.code }})
+              </option>
+            </select></label
+          >
+          <template v-if="selectedCourse.id">
+            <section
+              v-if="historyFromInactive"
+              class="course-after-history-totals course-inactive-history-totals"
+              aria-label="สรุปคอร์สหมดอายุหรือใช้สิทธิ์ครบ"
+            >
+              <h2>{{ selectedCourse.name }} ({{ selectedCourse.course?.code }})</h2>
+              <div>
+                <article>
+                  <span>ทั้งหมด</span><strong>{{ selectedCourse.total }} ครั้ง</strong>
+                </article>
+                <article>
+                  <span>ใช้แล้ว</span
+                  ><strong>{{ selectedCourse.total - selectedCourse.balance }} ครั้ง</strong>
+                </article>
+                <article><span>โอนออก</span><strong>0 ครั้ง</strong></article>
+                <article>
+                  <span>คงเหลือ</span><strong>{{ historyRemaining }} ครั้ง</strong>
+                </article>
+              </div>
+            </section>
+            <section
+              v-if="transferReceiptId && !historyFromInactive"
+              class="course-after-history-totals"
+              aria-label="สรุปประวัติคอร์ส"
+            >
+              <h2>{{ selectedCourse.name }} · {{ selectedCourse.course?.code }}</h2>
+              <div>
+                <article>
+                  <span>ทั้งหมด</span><strong>{{ selectedCourse.total }} ครั้ง</strong>
+                </article>
+                <article>
+                  <span>ใช้แล้ว</span><strong>{{ usedSessions }} ครั้ง</strong>
+                </article>
+                <article>
+                  <span>โอนออก</span><strong>{{ transferAmount }}</strong>
+                </article>
+                <article>
+                  <span>คงเหลือ</span><strong>{{ selectedCourse.balance }}</strong>
+                </article>
+              </div>
+            </section>
+            <section
+              v-if="!historyFromInactive"
+              class="course-history-summary"
+              aria-label="สรุปสิทธิ์คอร์ส"
+            >
+              <div>
+                <h2>{{ selectedCourse.name }}</h2>
+                <p>
+                  {{ selectedCourse.course?.code }} · ซื้อเมื่อ
+                  {{
+                    new Date(selectedCourse.purchasedAt).toLocaleDateString('th-TH', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  }}
+                </p>
+              </div>
+              <div>
+                <strong>คงเหลือ {{ historyRemaining }} ครั้ง</strong
+                ><span
+                  >ทั้งหมด {{ selectedCourse.total }} · ใช้แล้ว {{ usedSessions }} · แชร์
+                  {{ transferredOut }}</span
+                >
+              </div>
+            </section>
+            <section class="course-history-entries">
+              <div class="course-history-entries-header">
+                <h2>
+                  {{
+                    historyFromInactive
+                      ? 'รายการใช้บริการ'
+                      : transferReceiptId
+                        ? 'รายการใช้บริการและการโอน'
+                        : `รายการใช้สิทธิ์ ${usageEntries.length} รายการ`
+                  }}
+                </h2>
+                <button
+                  v-if="!transferReceiptId && !historyFromInactive"
+                  class="course-history-print"
+                  type="button"
+                  @click="coursePrintPreview = true"
+                >
+                  ดูใบตัดคอร์ส
+                </button>
+              </div>
+              <article
+                v-if="transferReceiptId && !historyFromInactive"
+                class="course-after-transfer-entry"
+              >
+                <strong>โอนสิทธิ์ · รายการ #{{ transferReceiptId }}</strong>
+                <span
+                  >{{ owner?.fullName }} → {{ selectedRecipient?.fullName || 'ผู้รับสิทธิ์' }}</span
+                >
+                <span
+                  >โอน {{ transferAmount }} ครั้ง · ผู้โอนคงเหลือ {{ selectedCourse.balance }} ครั้ง
+                  · ผู้รับได้รับ {{ transferAmount }} ครั้ง</span
+                >
+              </article>
+              <article v-for="entry in usageEntries" :key="entry.id" class="course-history-entry">
+                <strong>{{
+                  new Date(entry.createdAt).toLocaleDateString('th-TH', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })
+                }}</strong>
+                <div>
+                  <b>{{ selectedCourse.name }}</b>
+                  <span>รายการใช้สิทธิ์ #{{ entry.id }}</span>
+                </div>
+                <aside>
+                  <b>ใช้ {{ Math.abs(entry.quantity) }} ครั้ง</b
+                  ><span>คงเหลือหลังใช้ {{ entry.balanceAfter }} ครั้ง</span>
+                </aside>
+              </article>
+              <p v-if="!usageEntries.length" class="course-history-empty">
+                ยังไม่มีประวัติการใช้บริการในคอร์สนี้
+              </p>
+            </section>
+          </template>
+          <p v-else class="course-history-empty">ยังไม่มีคอร์สที่หมดอายุหรือใช้สิทธิ์ครบ</p>
+          <p v-if="errorMessage" class="error" role="alert">
+            {{ errorMessage }}
+          </p>
+        </template>
+        <div
+          v-if="printDialog"
+          class="course-print-modal-backdrop"
+          @click.self="printDialog = null"
+        >
+          <section
+            v-modal-focus="{ close: () => (printDialog = null) }"
+            class="course-print-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="course-print-title"
+          >
+            <template v-if="printDialog === 'confirm'">
+              <h2 id="course-print-title">ยืนยันการพิมพ์เอกสาร</h2>
+              <p>ตรวจสอบชื่อผู้รับบริการ ข้อมูลคอร์ส และรายการใช้สิทธิ์ให้ครบถ้วนก่อนส่งพิมพ์</p>
+              <footer>
+                <button type="button" @click="printDialog = null">ยกเลิก</button>
+                <button type="button" @click="confirmPrintHistory">ยืนยันและพิมพ์</button>
+              </footer>
+            </template>
+            <template v-else-if="printDialog === 'success'">
+              <h2 id="course-print-title">ส่งเอกสารไปยังเครื่องพิมพ์แล้ว</h2>
+              <p>สถานะใบตัดคอร์สถูกบันทึกเป็น “พิมพ์แล้ว” สามารถกลับไปดูประวัติการใช้คอร์สได้</p>
+              <footer>
+                <button type="button" @click="printDialog = null">ยกเลิก</button>
+                <button type="button" @click="closePrintSuccess">กลับหน้าประวัติ</button>
+              </footer>
+            </template>
+            <template v-else>
+              <h2 id="course-print-title">ไม่สามารถพิมพ์เอกสารได้</h2>
+              <p>กรุณาตรวจสอบเครื่องพิมพ์แล้วลองใหม่อีกครั้ง</p>
+              <footer>
+                <button type="button" @click="printDialog = null">ยกเลิก</button>
+                <button type="button" @click="printDialog = 'confirm'">ลองอีกครั้ง</button>
+              </footer>
+            </template>
+          </section>
+        </div>
+      </main>
+      <main
+        v-else-if="action === 'manage'"
+        class="course-manager-main"
+        :class="{ 'after-transfer': transferReceiptId }"
+      >
+        <RouterLink class="course-use-back" :to="sourceLocation">{{
+          openedFromPatientProfile ? '← กลับไปคอร์สของผู้ป่วย' : '← กลับไปหน้าบริการ'
+        }}</RouterLink>
+        <h1>คอร์สของผู้ป่วย</h1>
+        <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
+        <RouterLink
+          v-if="canReviewCourseExtensions"
+          class="course-use-back"
+          :to="{ name: 'staff-course-extensions' }"
+        >
+          ตรวจคำขอต่ออายุคอร์ส
+        </RouterLink>
+        <CourseRenewalDialog
+          v-if="renewingCourse && owner"
+          :key="renewingCourse.id"
+          :course="renewingCourse"
+          :patient-id="owner.id"
+          @close="renewingCourse = null"
+          @requested="refreshCoursesAfterExtensionRequest"
+        />
+        <section v-if="transferReceiptId" class="course-after-patient">
+          <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
+          <span>HN {{ owner?.hn || '-' }}</span>
+        </section>
+        <section v-else class="course-use-patient">
           <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) || '--' }}</i>
           <div>
-            <strong>{{ owner?.fullName }}</strong>
-            <span
-              >HN {{ owner?.hn
-              }}<template v-if="!transferReceiptId || historyFromInactive"
-                >　☎ {{ owner?.phone }}</template
-              ></span
-            >
+            <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong
+            ><span class="patient-contact-inline"
+              >HN {{ owner?.hn || '-' }}
+              <template v-if="owner?.phone && owner.phone !== '-'"
+                ><PhoneIcon /> {{ owner.phone }}</template
+              >
+              <template v-else>-</template>
+            </span>
           </div>
           <em>{{ branchLabel(owner) }}</em>
         </section>
-        <label
-          v-if="historyFromInactive && inactiveCourses.length > 1"
-          class="course-history-selector"
-          >คอร์สที่หมดอายุ / ใช้สิทธิ์ครบ<select
-            v-model="selectedCourseId"
-            @change="changeInactiveHistoryCourse"
+        <div class="course-status-tabs" role="tablist" aria-label="สถานะสิทธิ์คอร์ส">
+          <button
+            id="course-status-tab-active"
+            role="tab"
+            :aria-selected="courseStatusTab === 'active'"
+            aria-controls="course-status-panel"
+            :class="{ active: courseStatusTab === 'active' }"
+            type="button"
+            @click="selectCourseStatusTab('active')"
+            @keydown="handleCourseStatusTabKeydown"
           >
-            <option v-for="course in inactiveCourses" :key="course.id" :value="course.id">
-              {{ course.name }} ({{ course.course.code }})
-            </option>
-          </select></label
-        >
-        <template v-if="selectedCourse.id">
-          <section
-            v-if="historyFromInactive"
-            class="course-after-history-totals course-inactive-history-totals"
-            aria-label="สรุปคอร์สหมดอายุหรือใช้สิทธิ์ครบ"
+            ใช้งานได้ ({{ activeCourses.length }})
+          </button>
+          <button
+            id="course-status-tab-inactive"
+            role="tab"
+            :aria-selected="courseStatusTab === 'inactive'"
+            aria-controls="course-status-panel"
+            :class="{ active: courseStatusTab === 'inactive' }"
+            type="button"
+            @click="selectCourseStatusTab('inactive')"
+            @keydown="handleCourseStatusTabKeydown"
           >
-            <h2>{{ selectedCourse.name }} ({{ selectedCourse.course?.code }})</h2>
-            <div>
-              <article>
-                <span>ทั้งหมด</span><strong>{{ selectedCourse.total }} ครั้ง</strong>
-              </article>
-              <article>
-                <span>ใช้แล้ว</span
-                ><strong>{{ selectedCourse.total - selectedCourse.balance }} ครั้ง</strong>
-              </article>
-              <article><span>โอนออก</span><strong>0 ครั้ง</strong></article>
-              <article>
-                <span>คงเหลือ</span><strong>{{ historyRemaining }} ครั้ง</strong>
-              </article>
-            </div>
-          </section>
-          <section
-            v-if="transferReceiptId && !historyFromInactive"
-            class="course-after-history-totals"
-            aria-label="สรุปประวัติคอร์ส"
-          >
-            <h2>{{ selectedCourse.name }} · {{ selectedCourse.course?.code }}</h2>
-            <div>
-              <article>
-                <span>ทั้งหมด</span><strong>{{ selectedCourse.total }} ครั้ง</strong>
-              </article>
-              <article>
-                <span>ใช้แล้ว</span><strong>{{ usedSessions }} ครั้ง</strong>
-              </article>
-              <article>
-                <span>โอนออก</span><strong>{{ transferAmount }}</strong>
-              </article>
-              <article>
-                <span>คงเหลือ</span><strong>{{ selectedCourse.balance }}</strong>
-              </article>
-            </div>
-          </section>
-          <section
-            v-if="!historyFromInactive"
-            class="course-history-summary"
-            aria-label="สรุปสิทธิ์คอร์ส"
-          >
-            <div>
-              <h2>{{ selectedCourse.name }}</h2>
-              <p>
-                {{ selectedCourse.course?.code }} · ซื้อเมื่อ
-                {{
-                  new Date(selectedCourse.purchasedAt).toLocaleDateString('th-TH', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })
-                }}
-              </p>
-            </div>
-            <div>
-              <strong>คงเหลือ {{ historyRemaining }} ครั้ง</strong
-              ><span
-                >ทั้งหมด {{ selectedCourse.total }} · ใช้แล้ว {{ usedSessions }} · แชร์
-                {{ transferredOut }}</span
-              >
-            </div>
-          </section>
-          <section class="course-history-entries">
-            <div class="course-history-entries-header">
-              <h2>
-                {{
-                  historyFromInactive
-                    ? 'รายการใช้บริการ'
-                    : transferReceiptId
-                      ? 'รายการใช้บริการและการโอน'
-                      : `รายการใช้สิทธิ์ ${usageEntries.length} รายการ`
-                }}
-              </h2>
-              <button
-                v-if="!transferReceiptId && !historyFromInactive"
-                class="course-history-print"
-                type="button"
-                @click="coursePrintPreview = true"
-              >
-                พิมพ์ใบตัดคอร์ส
-              </button>
-            </div>
-            <article
-              v-if="transferReceiptId && !historyFromInactive"
-              class="course-after-transfer-entry"
-            >
-              <strong>โอนสิทธิ์ · TRF-DEMO-0001</strong>
-              <span
-                >{{ owner?.fullName }} → {{ selectedRecipient?.fullName || 'นางวรรณา มั่นคง' }} ·
-                สาขาพระราม 9</span
-              >
-              <span
-                >โอน {{ transferAmount }} ครั้ง · ผู้โอนคงเหลือ {{ selectedCourse.balance }} ครั้ง ·
-                ผู้รับได้รับ {{ transferAmount }} ครั้ง</span
-              >
-            </article>
-            <article
-              v-for="(entry, index) in usageEntries"
-              :key="entry.id"
-              class="course-history-entry"
-            >
-              <strong>{{
-                new Date(entry.createdAt).toLocaleDateString('th-TH', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })
-              }}</strong>
-              <div>
-                <b>{{ selectedCourse.name }}</b>
-                <span
-                  >{{
-                    index === 0
-                      ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                      : index === 1
-                        ? 'กภ. ศิริพร · สาขาแบริ่ง'
-                        : 'กภ. วีระพงษ์ · สาขาพระราม 9'
-                  }}
-                  · USE-DEMO-000{{ 3 - index }}</span
-                >
-              </div>
-              <aside>
-                <b>ใช้ {{ Math.abs(entry.quantity) }} ครั้ง</b
-                ><span>คงเหลือหลังใช้ {{ entry.balanceAfter }} ครั้ง</span>
-              </aside>
-            </article>
-            <p v-if="!usageEntries.length" class="course-history-empty">
-              ยังไม่มีประวัติการใช้บริการในคอร์สนี้
-            </p>
-          </section>
-        </template>
-        <p v-else class="course-history-empty">ยังไม่มีคอร์สที่หมดอายุหรือใช้สิทธิ์ครบ</p>
-        <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
-      </template>
-      <div v-if="printDialog" class="course-print-modal-backdrop" @click.self="printDialog = null">
-        <section
-          class="course-print-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="course-print-title"
-        >
-          <template v-if="printDialog === 'confirm'">
-            <h2 id="course-print-title">ยืนยันการพิมพ์เอกสาร</h2>
-            <p>ตรวจสอบชื่อผู้รับบริการ ข้อมูลคอร์ส และรายการใช้สิทธิ์ให้ครบถ้วนก่อนส่งพิมพ์</p>
-            <footer>
-              <button type="button" @click="printDialog = null">ยกเลิก</button>
-              <button type="button" @click="confirmPrintHistory">ยืนยันและพิมพ์</button>
-            </footer>
-          </template>
-          <template v-else-if="printDialog === 'success'">
-            <h2 id="course-print-title">ส่งเอกสารไปยังเครื่องพิมพ์แล้ว</h2>
-            <p>สถานะใบตัดคอร์สถูกบันทึกเป็น “พิมพ์แล้ว” สามารถกลับไปดูประวัติการใช้คอร์สได้</p>
-            <footer>
-              <button type="button" @click="printDialog = null">ยกเลิก</button>
-              <button type="button" @click="closePrintSuccess">กลับหน้าประวัติ</button>
-            </footer>
-          </template>
-          <template v-else>
-            <h2 id="course-print-title">ไม่สามารถพิมพ์เอกสารได้</h2>
-            <p>กรุณาตรวจสอบเครื่องพิมพ์แล้วลองใหม่อีกครั้ง</p>
-            <footer>
-              <button type="button" @click="printDialog = null">ยกเลิก</button>
-              <button type="button" @click="printDialog = 'confirm'">ลองอีกครั้ง</button>
-            </footer>
-          </template>
-        </section>
-      </div>
-    </main>
-    <main
-      v-else-if="action === 'manage'"
-      class="course-manager-main"
-      :class="{ 'after-transfer': transferReceiptId }"
-    >
-      <RouterLink
-        class="course-use-back"
-        :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
-        >← กลับไปหน้าบริการ</RouterLink
-      >
-      <h1>คอร์สของผู้ป่วย</h1>
-      <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
-      <section v-if="transferReceiptId" class="course-after-patient">
-        <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
-        <span>HN {{ owner?.hn || '-' }}</span>
-      </section>
-      <section v-else class="course-use-patient">
-        <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) || '--' }}</i>
-        <div>
-          <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong
-          ><span>HN {{ owner?.hn || '-' }} <b>⌕</b> {{ owner?.phone || '-' }}</span>
+            หมดอายุ / ใช้สิทธิ์ครบ ({{ inactiveCourses.length }})
+          </button>
         </div>
-        <em>{{ branchLabel(owner) }}</em>
-      </section>
-      <div class="course-status-tabs">
-        <button class="active" type="button">ใช้งานได้</button
-        ><button type="button" @click="openInactiveHistory">หมดอายุ / ใช้สิทธิ์ครบ</button>
-      </div>
-      <section v-if="!activeCourses.length" class="course-use-empty">
-        <h2>ยังไม่มีคอร์สที่ใช้งานได้</h2>
-        <p>ผู้ป่วยรายนี้ยังไม่มีคอร์สคงเหลือสำหรับใช้บริการ</p>
-      </section>
-      <template v-for="course in activeCourses" :key="course.id">
-        <section v-if="transferReceiptId" class="course-after-share-card">
-          <header>
-            <div>
-              <h2>{{ course.name }}</h2>
-              <p>{{ course.course.code }}</p>
-            </div>
-            <span>✓　ใช้งานได้</span>
-          </header>
-          <div class="course-after-remaining">
-            <span>สิทธิ์คงเหลือ</span>
+        <section
+          id="course-status-panel"
+          role="tabpanel"
+          :aria-labelledby="`course-status-tab-${courseStatusTab}`"
+        >
+          <section v-if="!displayedCourses.length" class="course-use-empty">
+            <h2>
+              {{
+                courseStatusTab === 'active'
+                  ? 'ยังไม่มีคอร์สที่ใช้งานได้'
+                  : 'ยังไม่มีคอร์สที่หมดอายุหรือใช้สิทธิ์ครบ'
+              }}
+            </h2>
             <p>
-              <strong>{{ course.balance }}</strong> ครั้ง
+              {{
+                courseStatusTab === 'active'
+                  ? 'ผู้ป่วยรายนี้ยังไม่มีคอร์สคงเหลือสำหรับใช้บริการ'
+                  : 'ผู้ป่วยรายนี้ยังไม่มีคอร์สในสถานะดังกล่าว'
+              }}
             </p>
-            <small>จากทั้งหมด {{ course.total }} ครั้ง</small>
-          </div>
-          <div class="course-after-counts">
-            <article>
-              <span>ใช้แล้ว</span
-              ><strong>{{ course.total - course.balance - transferAmount }} ครั้ง</strong>
-            </article>
-            <article>
-              <span>แชร์ออก</span><strong>{{ transferAmount }} ครั้ง</strong>
-            </article>
-            <article>
-              <span>สิทธิ์เพิ่มเติม</span><strong>{{ course.bonusSessions }} ครั้ง</strong>
-            </article>
-          </div>
-          <div class="course-after-dates">
-            <p>
-              <span
-                >วันที่ซื้อ<br /><b>{{
-                  new Date(course.purchasedAt).toLocaleDateString('th-TH', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })
-                }}</b></span
+          </section>
+          <template v-for="course in displayedCourses" :key="course.id">
+            <section
+              v-if="transferReceiptId && courseStatusTab === 'active'"
+              class="course-after-share-card"
+            >
+              <header>
+                <div>
+                  <h2>{{ course.name }}</h2>
+                  <p>{{ course.course.code }}</p>
+                </div>
+                <span>✓　ใช้งานได้</span>
+              </header>
+              <div class="course-after-remaining">
+                <span>สิทธิ์คงเหลือ</span>
+                <p>
+                  <strong>{{ course.balance }}</strong> ครั้ง
+                </p>
+                <small>จากทั้งหมด {{ course.total }} ครั้ง</small>
+              </div>
+              <div class="course-after-counts">
+                <article>
+                  <span>ใช้แล้ว</span><strong>{{ course.used }} ครั้ง</strong>
+                </article>
+                <article>
+                  <span>แชร์ออก</span><strong>{{ transferAmount }} ครั้ง</strong>
+                </article>
+                <article>
+                  <span>สิทธิ์เพิ่มเติม</span><strong>{{ course.bonusSessions }} ครั้ง</strong>
+                </article>
+              </div>
+              <div class="course-after-dates">
+                <p>
+                  <span
+                    >วันที่ซื้อ<br /><b>{{
+                      new Date(course.purchasedAt).toLocaleDateString('th-TH', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })
+                    }}</b></span
+                  >
+                </p>
+                <p>
+                  <span
+                    >วันหมดอายุ<br /><b>{{ course.expiry }}</b></span
+                  >
+                </p>
+              </div>
+              <div class="course-after-actions">
+                <button type="button" @click="start('history', course)">ดูประวัติคอร์ส</button>
+                <button
+                  type="button"
+                  :disabled="!course.usable || course.balance <= 0"
+                  @click="start('use', course)"
+                >
+                  ใช้สิทธิ์คอร์ส
+                </button>
+                <button
+                  v-if="course.status === 'ACTIVE' && !isSharedCourse(course)"
+                  type="button"
+                  @click="renewingCourse = course"
+                >
+                  ขอต่ออายุคอร์ส
+                </button>
+              </div>
+              <button
+                class="course-manager-latest-transfer"
+                type="button"
+                @click="openLatestTransfer(course)"
               >
-            </p>
-            <p>
-              <span
-                >วันหมดอายุ<br /><b>{{ course.expiry }}</b></span
+                ← ดูรายการแชร์ล่าสุด
+              </button>
+            </section>
+            <section
+              v-else
+              class="course-manager-card"
+              :class="{ 'is-shared': isSharedCourse(course) }"
+            >
+              <header class="course-manager-card-header">
+                <div>
+                  <span
+                    >{{
+                      isSharedCourse(course)
+                        ? 'ได้รับจากการแชร์'
+                        : courseStatusTab === 'inactive'
+                          ? `คอร์สของฉัน · ${courseInactiveReason(course)}`
+                          : 'คอร์สของฉัน'
+                    }}
+                    · {{ course.course.code }}</span
+                  >
+                  <h2>{{ course.name }} (คอร์ส {{ course.total }} ครั้ง)</h2>
+                  <p v-if="isSharedCourse(course)">
+                    ได้รับสิทธิ์จาก {{ course.purchaser?.fullName }} ·
+                    {{ course.branchCode }}
+                  </p>
+                  <p v-else>
+                    ซื้อเมื่อ {{ purchaseDate(course) }} ·
+                    {{ branchLabel(owner) }}
+                  </p>
+                </div>
+              </header>
+              <div class="course-manager-metrics">
+                <article>
+                  <small>ทั้งหมด</small><strong>{{ course.total }} ครั้ง</strong>
+                </article>
+                <article>
+                  <small>ใช้แล้วทั้งหมด</small><strong>{{ course.used }} ครั้ง</strong>
+                </article>
+                <article>
+                  <small>คงเหลือ</small><strong>{{ course.balance }} ครั้ง</strong>
+                </article>
+                <article class="course-expiry-metric">
+                  <small>{{
+                    isSharedCourse(course) ? 'วันหมดอายุสิทธิ์ของผู้รับ' : 'วันหมดอายุคอร์ส'
+                  }}</small>
+                  <strong>{{ course.expiry }}</strong>
+                </article>
+              </div>
+              <div
+                class="course-progress"
+                role="progressbar"
+                aria-label="เปอร์เซ็นต์การใช้คอร์ส"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-valuenow="courseUsagePercent(course)"
               >
-            </p>
-          </div>
-          <div class="course-after-actions">
-            <button type="button" @click="start('history', course)">ดูประวัติคอร์ส</button>
-            <button type="button" :disabled="!course.usable || course.balance <= 0" @click="start('use', course)">
-              ใช้สิทธิ์คอร์ส
-            </button>
-          </div>
-          <button
-            class="course-manager-latest-transfer"
-            type="button"
-            @click="openLatestTransfer(course)"
-          >
-            ← ดูรายการแชร์ล่าสุด
-          </button>
-        </section>
-        <section v-else class="course-manager-card" :class="{ 'is-shared': isSharedCourse(course) }">
-          <header class="course-manager-card-header">
-            <div>
-              <span>{{ isSharedCourse(course) ? 'แชร์คอร์ส' : 'ใช้งานได้' }} · {{ course.course.code }}</span>
-              <h2>{{ course.name }} (คอร์ส {{ course.total }} ครั้ง)</h2>
-              <p v-if="isSharedCourse(course)">
-                ได้รับสิทธิ์จาก {{ course.purchaser?.fullName }} · {{ course.branchCode }}
+                <i :style="{ width: `${courseUsagePercent(course)}%` }" />
+              </div>
+              <p class="course-manager-used">
+                ใช้แล้วทั้งหมด {{ course.used }} จาก {{ course.total }} ครั้ง
               </p>
-              <p v-else>ซื้อเมื่อ {{ purchaseDate(course) }} · {{ branchLabel(owner) }}</p>
-            </div>
-            <button
-              v-if="!isSharedCourse(course)"
-              class="course-share-button"
-              type="button"
-              @click="start('transfer', course)"
-            >แชร์คอร์ส</button>
-          </header>
-          <div class="course-manager-metrics">
-            <article>
-              <small>ทั้งหมด</small><strong>{{ course.total }} ครั้ง</strong>
-            </article>
-            <article>
-              <small>ใช้แล้ว</small><strong>{{ course.total - course.balance }} ครั้ง</strong>
-            </article>
-            <article>
-              <small>คงเหลือ</small><strong>{{ course.balance }} ครั้ง</strong>
-            </article>
-            <article class="course-expiry-metric">
-              <small>{{ isSharedCourse(course) ? 'วันหมดอายุสิทธิ์ของผู้รับ' : 'วันหมดอายุคอร์ส' }}</small>
-              <strong>{{ course.expiry }}</strong>
-            </article>
-          </div>
-          <div
-            class="course-progress"
-            role="progressbar"
-            aria-label="เปอร์เซ็นต์การใช้คอร์ส"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            :aria-valuenow="courseUsagePercent(course)"
+              <p v-if="isSharedCourse(course)" class="course-shared-note">
+                ทุกผู้ถือสิทธิ์ใช้วันหมดอายุร่วมกัน · การต่ออายุต้องดำเนินการโดยเจ้าของคอร์ส
+              </p>
+              <div class="course-manager-actions">
+                <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
+                <button
+                  v-if="!isSharedCourse(course)"
+                  class="course-share-button"
+                  type="button"
+                  @click="start('transfer', course)"
+                >
+                  แชร์คอร์ส
+                </button>
+                <button
+                  type="button"
+                  :disabled="!course.usable || course.balance <= 0"
+                  @click="start('use', course)"
+                >
+                  ใช้สิทธิ์คอร์ส
+                </button>
+              </div>
+              <button
+                v-if="transferReceiptId"
+                class="course-manager-latest-transfer"
+                type="button"
+                @click="openLatestTransfer(course)"
+              >
+                ← ดูรายการแชร์ล่าสุด
+              </button>
+            </section></template
           >
-            <i :style="{ width: `${courseUsagePercent(course)}%` }" />
-          </div>
-          <p class="course-manager-used">ใช้แล้ว {{ course.total - course.balance }} จาก {{ course.total }} ครั้ง</p>
-          <p v-if="isSharedCourse(course)" class="course-shared-note">
-            ทุกผู้ถือสิทธิ์ใช้วันหมดอายุร่วมกัน · การต่ออายุต้องดำเนินการโดยเจ้าของคอร์ส
-          </p>
-          <div class="course-manager-actions">
-            <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
-            <button type="button" :disabled="!course.usable || course.balance <= 0" @click="start('use', course)">
-              ใช้สิทธิ์คอร์ส
-            </button>
-          </div>
-          <button
-            v-if="transferReceiptId"
-            class="course-manager-latest-transfer"
-            type="button"
-            @click="openLatestTransfer(course)"
-          >
-            ← ดูรายการแชร์ล่าสุด
-          </button>
-        </section></template
-      >
-    </main>
+        </section>
+      </main>
+    </template>
   </div>
 </template>
 
@@ -1430,14 +1720,14 @@ function closePrintSuccess() {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: min(560px, 100%);
-  min-height: 560px;
+  width: min(520px, 100%);
+  min-height: 0;
   gap: 0;
-  padding: 25px 27px;
-  border: 1px solid #dde6e1;
-  border-radius: 12px;
+  padding: 26px;
+  border: 1px solid #dbe8e4;
+  border-radius: 16px;
   background: #fff;
-  box-shadow: none;
+  box-shadow: 0 18px 45px rgb(23 63 68 / 18%);
 }
 .course-confirm-dialog.course-usage-confirm h2 {
   margin: 0;
@@ -1446,17 +1736,17 @@ function closePrintSuccess() {
   line-height: 1.4;
 }
 .course-confirm-dialog.course-usage-confirm > p {
-  margin: 4px 0 22px;
+  margin: 5px 0 20px;
   color: #667a72;
   font-size: 14px;
 }
 .course-confirm-dialog.course-usage-confirm .course-confirm-details {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
-  padding: 16px 18px 20px;
-  border-radius: 10px;
-  background: #eef6f0;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 12px;
+  background: #e9f5f2;
 }
 .course-confirm-dialog.course-usage-confirm .course-confirm-details > strong {
   margin-bottom: 2px;
@@ -1468,10 +1758,10 @@ function closePrintSuccess() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
-  min-height: 52px;
+  min-height: 50px;
   margin: 0;
   padding: 0 17px;
-  border-radius: 12px;
+  border-radius: 9px;
   background: #fff;
 }
 .course-confirm-dialog.course-usage-confirm .course-confirm-details p span {
@@ -1484,12 +1774,12 @@ function closePrintSuccess() {
 }
 .course-confirm-dialog.course-usage-confirm .course-confirm-actions {
   display: grid;
-  grid-template-columns: 230px 1fr;
-  gap: 24px;
-  margin-top: auto;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 12px;
+  margin-top: 22px;
 }
 .course-confirm-dialog.course-usage-confirm .course-confirm-actions button {
-  min-height: 48px;
+  min-height: 46px;
   border: 1px solid #dde6e1;
   border-radius: 9px;
   color: #25372f;
@@ -1501,9 +1791,15 @@ function closePrintSuccess() {
   background: #fff;
 }
 .course-confirm-dialog.course-usage-confirm .course-confirm-actions button:last-child {
-  border-color: #5f9155;
+  border-color: #1f8f89;
   color: #fff;
-  background: #5f9155;
+  background: #1f8f89;
+  box-shadow: 0 5px 12px rgb(31 143 137 / 20%);
+}
+.course-confirm-dialog.course-usage-confirm
+  .course-confirm-actions
+  button:last-child:hover:not(:disabled) {
+  background: #187b76;
 }
 .course-confirm-dialog.course-usage-confirm.after-transfer {
   width: min(640px, 100%);
@@ -1675,9 +1971,17 @@ function closePrintSuccess() {
 }
 .course-use-back {
   display: inline-block;
+  padding: 0;
+  border: 0;
   color: #173d47;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
   text-decoration: none;
   transition: transform 0.18s ease;
+}
+.course-manager-back {
+  margin-bottom: 10px;
 }
 .course-use-back:hover {
   transform: translateX(-3px);
@@ -2529,77 +2833,8 @@ function closePrintSuccess() {
   font-size: 12px;
   cursor: pointer;
 }
-.course-cut-document {
-  box-sizing: border-box;
-  width: min(1020px, 100%);
-  min-height: 920px;
-  margin: 76px auto 0;
-  padding: 26px 33px;
-  border: 1px solid #d8e1de;
-  border-radius: 2px;
-  color: #25372f;
-  background: #fff;
-}
-.course-cut-document > header {
-  padding-bottom: 10px;
-  border-bottom: 2px solid #25372f;
-  text-align: center;
-}
-.course-cut-document > header h1 {
-  margin: 0 0 10px;
-  font-size: 22px;
-}
-.course-cut-document > header p {
-  margin: 0;
-  color: #52635c;
-  font-size: 14px;
-}
-.course-cut-issued {
-  margin: 12px 0 8px;
-  color: #66766f;
-  font-size: 14px;
-  text-align: right;
-}
-.course-cut-summary {
-  display: grid;
-  grid-template-columns: 1.3fr 0.7fr 0.8fr 0.8fr;
-  gap: 14px 20px;
-  margin-top: 8px;
-  font-size: 14px;
-}
-.course-cut-summary p {
-  margin: 0;
-}
-.course-cut-summary strong:first-of-type {
-  grid-column: 1 / 4;
-}
-.course-cut-table {
-  margin-top: 18px;
-  font-size: 12px;
-}
-.course-cut-table > div {
-  display: grid;
-  grid-template-columns: 1.1fr 1.65fr 1fr 80px;
-  align-items: center;
-  min-height: 52px;
-  border: 1px solid #25372f;
-  border-bottom: 0;
-}
-.course-cut-table > div:last-child {
-  border-bottom: 1px solid #25372f;
-}
-.course-cut-table > div > * {
-  padding: 0 16px;
-}
-.course-cut-table-head {
-  min-height: 48px !important;
-  background: #e8f5f0;
-}
-.course-cut-total {
-  grid-template-columns: 1fr 80px !important;
-}
-.course-cut-total b:first-child {
-  text-align: right;
+.course-history-document {
+  margin-top: 76px;
 }
 .course-cut-actions {
   display: flex;
@@ -2621,9 +2856,9 @@ function closePrintSuccess() {
 }
 .course-cut-actions button:last-child {
   min-width: 202px;
-  border-color: #5f9855;
+  border-color: #1f8883;
   color: #fff;
-  background: #5f9855;
+  background: #1f8883;
 }
 .course-print-modal-backdrop {
   position: fixed;
@@ -2678,20 +2913,8 @@ function closePrintSuccess() {
   background: #1e807c;
 }
 @media (max-width: 760px) {
-  .course-cut-document {
-    min-height: auto;
+  .course-history-document {
     margin-top: 28px;
-    padding: 22px 16px;
-    overflow-x: auto;
-  }
-  .course-cut-summary {
-    grid-template-columns: 1fr;
-  }
-  .course-cut-summary strong:first-of-type {
-    grid-column: auto;
-  }
-  .course-cut-table {
-    min-width: 680px;
   }
   .course-cut-actions {
     display: grid;
@@ -3082,6 +3305,40 @@ function closePrintSuccess() {
 }
 </style>
 <style scoped>
+.course-page .course-transfer-back,
+.course-page .course-history-back {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #176c68;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
+}
+.course-page .course-transfer-back:hover,
+.course-page .course-history-back:hover,
+.course-page .course-transfer-back:focus-visible,
+.course-page .course-history-back:focus-visible {
+  color: #0b5652;
+  text-decoration: underline;
+}
+.course-page .course-transfer-back:hover,
+.course-page .course-history-back:hover {
+  transform: translateX(-4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .course-transfer-back,
+  .course-history-back {
+    transition: none;
+  }
+}
+</style>
+<style scoped>
 .course-manager-main {
   width: min(1200px, calc(100% - 48px));
   padding: 15px 0 80px;
@@ -3319,16 +3576,16 @@ function closePrintSuccess() {
   color: #25372f;
 }
 .course-review-back {
-  margin: 0 0 14px;
-  padding: 8px 0;
+  margin: 0 0 10px;
+  padding: 6px 0;
   border: 0;
-  color: #173d47;
+  color: #1f8883;
   background: transparent;
   font: inherit;
   cursor: pointer;
 }
 .course-use-review > h1 {
-  margin: 0 0 3px;
+  margin: 0 0 4px;
   font-size: 30px;
 }
 .course-use-review-intro {
@@ -3379,17 +3636,17 @@ function closePrintSuccess() {
 }
 .course-review-columns {
   display: grid !important;
-  grid-template-columns: minmax(0, 740px) minmax(320px, 430px);
-  gap: 30px !important;
-  margin-top: 18px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
+  gap: 20px !important;
+  margin-top: 20px;
   padding: 0 !important;
   background: transparent !important;
 }
 .course-review-details,
 .course-review-summary {
-  min-height: 440px;
+  min-height: 0;
   box-sizing: border-box;
-  padding: 20px 22px;
+  padding: 22px;
   border: 1px solid #dde6e1;
   border-radius: 12px;
   background: #fff;
@@ -3407,9 +3664,13 @@ function closePrintSuccess() {
 .course-review-details dl > div {
   display: grid;
   grid-template-columns: 172px 1fr;
-  min-height: 52px;
+  min-height: 50px;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 12px;
+  border-bottom: 1px solid #edf1ef;
+}
+.course-review-details dl > div:last-child {
+  border-bottom: 0;
 }
 .course-review-details dt {
   color: #667a72;
@@ -3427,9 +3688,9 @@ function closePrintSuccess() {
 .course-review-summary > div {
   display: grid;
   gap: 9px;
-  padding: 18px 20px;
+  padding: 20px;
   border-radius: 12px;
-  background: #eef6f0;
+  background: #e7f4f1;
 }
 .course-review-summary span,
 .course-review-summary small {
@@ -3442,12 +3703,12 @@ function closePrintSuccess() {
 }
 .course-review-summary footer {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 24px;
 }
 .course-review-summary footer button {
-  min-height: 48px;
+  min-height: 46px;
   border: 1px solid #dde6e1;
   border-radius: 9px;
   color: #25372f;
@@ -3457,9 +3718,13 @@ function closePrintSuccess() {
   cursor: pointer;
 }
 .course-review-summary footer button:last-child {
-  border-color: #5f9155;
+  border-color: #1f8f89;
   color: #fff;
-  background: #5f9155;
+  background: #1f8f89;
+  box-shadow: 0 5px 12px rgb(31 143 137 / 20%);
+}
+.course-review-summary footer button:last-child:hover:not(:disabled) {
+  background: #187b76;
 }
 @media (max-width: 1000px) {
   .course-use-review {
@@ -3551,20 +3816,23 @@ function closePrintSuccess() {
 }
 .course-history-main {
   position: relative;
-  width: min(1200px, calc(100% - 48px));
-  padding: 28px 0 80px;
+  width: min(1120px, calc(100% - 48px));
+  padding: 32px 0 80px;
 }
 .course-history-back {
   margin-top: 0;
-  color: #66766f;
-  font-size: 12px;
+  color: #176c68;
+  font-size: 14px;
+  font-weight: 600;
 }
 .course-history-main > h1 {
-  margin: 14px 0 1px;
-  font-size: 30px;
+  margin: 16px 0 4px;
+  color: #173d47;
+  font-size: clamp(30px, 3vw, 36px);
+  letter-spacing: -0.02em;
 }
 .course-history-intro {
-  margin: 0 0 20px;
+  margin: 0 0 24px;
   color: #70817a;
   font-size: 14px;
 }
@@ -3575,11 +3843,15 @@ function closePrintSuccess() {
   gap: 16px;
   min-height: 104px;
   box-sizing: border-box;
-  padding: 18px 20px 18px 15px;
+  padding: 20px 24px 20px 15px;
+  border-top: 1px solid #e1ebe7;
+  border-right: 1px solid #e1ebe7;
+  border-bottom: 1px solid #e1ebe7;
   border-left: 5px solid #1f8883;
   border-radius: 12px;
   color: #25372f;
   background: #fff;
+  box-shadow: 0 8px 22px rgba(37, 55, 47, 0.04);
 }
 .course-history-patient > i {
   display: grid;
@@ -3614,19 +3886,21 @@ function closePrintSuccess() {
 }
 .course-history-summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
-  min-height: 126px;
-  margin-top: 18px;
-  padding: 16px 18px;
-  border: 1px solid #d8e1de;
-  border-radius: 10px;
+  min-height: 112px;
+  margin-top: 16px;
+  padding: 20px 22px;
+  border: 1px solid #dbe7e2;
+  border-radius: 12px;
   background: #fff;
+  box-shadow: 0 6px 18px rgba(37, 55, 47, 0.025);
 }
 .course-history-summary h2 {
-  margin: 0 0 5px;
-  font-size: 20px;
+  margin: 0 0 6px;
+  color: #173d47;
+  font-size: 21px;
 }
 .course-history-summary p,
 .course-history-summary span {
@@ -3637,24 +3911,27 @@ function closePrintSuccess() {
 .course-history-summary > div:last-child {
   display: grid;
   gap: 6px;
+  padding-left: 28px;
+  border-left: 1px solid #dbe7e2;
   text-align: right;
 }
 .course-history-summary strong {
-  color: #2e7548;
-  font-size: 22px;
+  color: #176c68;
+  font-size: 24px;
 }
 .course-history-print {
   position: static;
   min-width: 212px;
   min-height: 46px;
-  border-color: #5f9855;
+  border-color: #1f8883;
   border-radius: 8px;
   color: #fff;
-  background: #5f9855;
+  background: #1f8883;
+  box-shadow: 0 6px 14px rgba(31, 136, 131, 0.18);
 }
 .course-history-entries {
-  gap: 12px;
-  margin-top: 22px;
+  gap: 10px;
+  margin-top: 26px;
 }
 .course-history-entries-header {
   display: flex;
@@ -3665,19 +3942,31 @@ function closePrintSuccess() {
 }
 .course-history-entries h2 {
   margin: 0;
-  font-size: 16px;
+  color: #25372f;
+  font-size: 18px;
 }
 .course-history-entry {
   display: grid;
   grid-template-columns: 140px 1fr 170px;
   align-items: start;
-  min-height: 96px;
+  min-height: 92px;
   box-sizing: border-box;
-  padding: 16px 17px;
-  border-color: #d8e1de;
-  border-radius: 10px;
+  padding: 17px 20px;
+  border-color: #dbe7e2;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(37, 55, 47, 0.02);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+.course-history-entry:hover {
+  border-color: #b8d9d4;
+  box-shadow: 0 8px 18px rgba(31, 136, 131, 0.07);
+  transform: translateY(-1px);
 }
 .course-history-entry > strong {
+  color: #34514c;
   font-size: 14px;
 }
 .course-history-entry > div {
@@ -3693,6 +3982,8 @@ function closePrintSuccess() {
 .course-history-entry aside {
   gap: 8px;
   color: #2e7548;
+  padding-left: 18px;
+  border-left: 1px solid #e1ebe7;
   text-align: left;
 }
 .course-history-entry aside b {
@@ -3721,6 +4012,10 @@ function closePrintSuccess() {
     gap: 18px;
   }
   .course-history-summary > div:last-child {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid #dbe7e2;
+    border-left: 0;
     text-align: left;
   }
   .course-history-entries-header {
@@ -3739,6 +4034,10 @@ function closePrintSuccess() {
     gap: 10px;
   }
   .course-history-entry aside {
+    padding-top: 10px;
+    padding-left: 0;
+    border-top: 1px solid #e1ebe7;
+    border-left: 0;
     text-align: left;
   }
 }
@@ -3747,14 +4046,15 @@ function closePrintSuccess() {
   flex-direction: column;
   align-items: center;
   box-sizing: border-box;
-  width: min(660px, 100%);
+  width: min(640px, 100%);
   min-height: 520px;
   gap: 0;
   margin: 26px auto 56px;
-  padding: 35px 27px 43px;
-  border: 1px solid #dde6e1;
-  border-radius: 12px;
+  padding: 32px 28px;
+  border: 1px solid #dbe8e4;
+  border-radius: 16px;
   background: #fff;
+  box-shadow: 0 12px 28px rgb(25 74 72 / 8%);
 }
 .course-use-success-icon {
   position: relative;
@@ -3770,14 +4070,14 @@ function closePrintSuccess() {
   position: absolute;
   inset: 0;
   display: grid;
-  color: #17663a;
+  color: #1f8f89;
   font-size: 30px;
   font-weight: 600;
   line-height: 1;
   place-items: center;
 }
 .course-use-main .course-use-success > h1 {
-  margin: 12px 0 4px;
+  margin: 14px 0 4px;
   color: #25372f;
   font-size: 27px;
   line-height: 1.4;
@@ -3792,22 +4092,22 @@ function closePrintSuccess() {
 .course-use-main .course-use-success-details {
   display: grid;
   width: 100%;
-  gap: 14px;
+  gap: 10px;
   box-sizing: border-box;
-  margin-top: 21px;
-  padding: 18px;
-  border-radius: 10px;
-  background: #eef6f0;
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #e7f4f1;
 }
 .course-use-main .course-use-success-details p {
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
   box-sizing: border-box;
-  min-height: 52px;
+  min-height: 50px;
   margin: 0;
   padding: 0 17px;
-  border-radius: 12px;
+  border-radius: 9px;
   color: #25372f;
   background: #fff;
   font-size: 15px;
@@ -3819,28 +4119,33 @@ function closePrintSuccess() {
 .course-use-main .course-use-success-details strong {
   padding: 0;
   background: transparent;
-  font-size: 15px;
+  color: #176c68;
+  font-size: 16px;
 }
 .course-use-main .course-use-success footer {
   display: grid;
-  grid-template-columns: 260px 300px;
-  gap: 44px;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   width: 100%;
-  margin-top: 40px;
+  margin-top: 28px;
 }
 .course-use-main .course-use-success footer button {
   width: 100%;
   min-height: 48px;
-  border: 1px solid #dde6e1;
+  border: 1px solid #1f8f89;
   border-radius: 9px;
-  color: #25372f;
+  color: #1f8f89;
   background: #fff;
   font-size: 15px;
 }
 .course-use-main .course-use-success footer button:last-child {
-  border-color: #5f9155;
+  border-color: #1f8f89;
   color: #fff;
-  background: #5f9155;
+  background: #1f8f89;
+  box-shadow: 0 5px 12px rgb(31 143 137 / 20%);
+}
+.course-use-main .course-use-success footer button:last-child:hover {
+  background: #187b76;
 }
 @media (max-width: 700px) {
   .course-use-main .course-use-success {
@@ -3860,12 +4165,15 @@ function closePrintSuccess() {
   }
 }
 
-/* Figma 140:3632 — share course form */
 .course-transfer-main {
   width: min(1200px, calc(100% - 48px));
-  padding: 15px 0 142px;
+  padding: 40px 0 142px;
 }
 .course-transfer-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 0;
   color: #667a72;
   font-size: 13px;
 }
@@ -3955,7 +4263,7 @@ function closePrintSuccess() {
 }
 .course-transfer-source,
 .course-transfer-recipient {
-  min-height: 590px;
+  min-height: 420px;
   box-sizing: border-box;
   align-content: start;
   gap: 0;
@@ -4117,8 +4425,31 @@ function closePrintSuccess() {
 }
 .course-transfer-footer button:last-child {
   width: 175px;
-  border-color: #5f9155;
-  background: #5f9155;
+  border-color: #1f8f89;
+  background: #1f8f89;
+  box-shadow: 0 5px 12px rgb(31 143 137 / 18%);
+}
+.course-transfer-footer button:last-child:hover:not(:disabled) {
+  background: #187b76;
+}
+.course-transfer-confirm footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 6px;
+}
+.course-transfer-confirm footer button {
+  min-height: 46px;
+}
+.course-transfer-confirm footer button:first-child {
+  color: #25372e;
+  background: #eff4ed;
+  border-color: #eff4ed;
+}
+.course-transfer-confirm footer button:last-child {
+  border-color: #1f8f89;
+  background: #1f8f89;
+  box-shadow: 0 5px 12px rgb(31 143 137 / 20%);
 }
 .course-transfer-review {
   width: 100%;
@@ -4310,10 +4641,9 @@ function closePrintSuccess() {
   }
 }
 
-/* Figma 861:4967 — transfer success */
 .course-transfer-main.is-success {
-  width: min(620px, calc(100% - 32px));
-  padding: 28px 0 70px;
+  width: min(560px, calc(100% - 32px));
+  padding: 22px 0 56px;
 }
 .course-transfer-main.is-success > .course-transfer-back,
 .course-transfer-main.is-success > h1,
@@ -4327,54 +4657,56 @@ function closePrintSuccess() {
   box-sizing: border-box;
   width: 100%;
   gap: 0;
-  padding: 27px;
+  padding: 22px;
   border: 1px solid #dde6e1;
   border-radius: 12px;
   background: #fff;
 }
 .course-transfer-main.is-success .course-transfer-success-icon {
-  width: 68px;
-  height: 68px;
-  color: #17663a;
-  background: #d9f2e4;
-  font-size: 30px;
-}
-.course-transfer-main.is-success .course-transfer-success h2 {
-  margin-top: 20px;
+  width: 56px;
+  height: 56px;
+  color: #1f8f89;
+  background: #e7f4f1;
   font-size: 26px;
 }
+.course-transfer-main.is-success .course-transfer-success h2 {
+  margin-top: 14px;
+  font-size: 23px;
+}
 .course-transfer-main.is-success .course-transfer-success > p {
-  margin-top: 8px;
-  font-size: 14px;
+  margin-top: 6px;
+  font-size: 13px;
 }
 .course-transfer-main.is-success .course-transfer-success-details {
-  gap: 10px;
-  margin-top: 22px;
-  padding: 14px 18px;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #e7f4f1;
 }
 .course-transfer-main.is-success .course-transfer-success-details p {
-  min-height: 54px;
-  border-radius: 0;
+  min-height: 46px;
+  border-radius: 8px;
 }
 .course-transfer-main.is-success .course-transfer-success-actions {
   display: grid;
-  grid-template-columns: 250px 1fr;
-  gap: 28px;
-  margin-top: 46px;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 28px;
 }
 .course-transfer-main.is-success .course-transfer-success-actions button {
-  min-height: 48px;
-  border: 1px solid #dde6e1;
+  min-height: 44px;
+  border: 1px solid #1f8f89;
   border-radius: 9px;
+  color: #1f8f89;
   background: #fff;
 }
 .course-transfer-main.is-success .course-transfer-success-actions button:last-child {
-  border-color: #5f9155;
+  border-color: #1f8f89;
   color: #fff;
-  background: #5f9155;
+  background: #1f8f89;
+  box-shadow: 0 5px 12px rgb(31 143 137 / 20%);
 }
 
-/* Figma 140:3876 — course after transfer */
 .course-manager-main.after-transfer {
   width: min(1200px, calc(100% - 48px));
   padding-bottom: 60px;
@@ -4530,7 +4862,6 @@ function closePrintSuccess() {
   margin-top: 0;
 }
 
-/* Figma 177:1915 — use a transferred course */
 .course-use-main.after-transfer {
   display: grid;
   place-items: center;
@@ -4613,24 +4944,27 @@ function closePrintSuccess() {
   background: #1e807c;
 }
 .course-after-use-success-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  padding: 24px;
-  background: rgb(0 0 0 / 45%);
+  padding: 32px 0;
 }
 .course-after-use-success-modal {
   display: grid;
   box-sizing: border-box;
-  width: min(640px, 100%);
+  width: min(520px, 100%);
   gap: 0;
-  padding: 28px;
+  padding: 22px;
   border-radius: 20px;
   background: #fff;
+  border: 1px solid #dce6e4;
+  text-align: center;
 }
+.usage-success-check { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 12px; border-radius: 50%; background: #e6f4f1; color: #1e9691; font-size: 27px; }
+.usage-success-details { display: grid; gap: 6px; margin: 16px 0 8px; padding: 10px; background: #e6f4f1; border-radius: 12px; }
+.usage-success-details > div { display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: white; }
+.usage-success-details dt { color: #789094; font-size: 14px; }
+.usage-success-details dd { margin: 0; color: #233e42; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 .course-after-use-success-modal > h1 {
   margin: 0;
   font-size: 29px;
@@ -4677,10 +5011,10 @@ function closePrintSuccess() {
 }
 .course-after-use-success-modal button {
   min-height: 46px;
-  border: 0;
+  border: 1px solid #1e9691;
   border-radius: 10px;
-  color: #25372e;
-  background: #eff4ed;
+  color: #1e807c;
+  background: #fff;
   font: inherit;
   font-size: 16px;
   font-weight: 700;
@@ -4691,7 +5025,6 @@ function closePrintSuccess() {
   background: #1e807c;
 }
 
-/* Figma 177:1968 — history after transfer */
 .course-history-main.inactive-history {
   width: min(1000px, calc(100% - 48px));
   padding-top: 22px;
@@ -4932,17 +5265,21 @@ function closePrintSuccess() {
   font-size: 14px;
 }
 .course-share-button {
-  min-width: 116px;
-  min-height: 34px;
-  padding: 0 14px;
+  min-width: 132px;
+  min-height: 44px;
+  padding: 0 20px;
   border: 0;
   border-radius: 10px;
-  color: #344f55;
-  background: #dceaff;
+  color: #fff;
+  background: #1f8f89;
+  box-shadow: 0 5px 12px rgb(31 143 137 / 22%);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+}
+.course-share-button:hover {
+  background: #1f8f89;
 }
 .course-manager-metrics {
   grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(230px, 1.45fr);
@@ -5003,6 +5340,15 @@ function closePrintSuccess() {
   color: #fff;
   background: #1f8f89;
 }
+.course-manager-actions .course-share-button {
+  border-color: #d8e1de;
+  color: #25372f;
+  background: #fff;
+  box-shadow: none;
+}
+.course-manager-actions .course-share-button:hover {
+  background: #f7faf8;
+}
 @media (max-width: 820px) {
   .course-manager-main {
     width: min(100% - 28px, 1280px);
@@ -5058,21 +5404,8 @@ function closePrintSuccess() {
   :deep(.staff-header) {
     box-shadow: none !important;
   }
-  .course-cut-document {
-    display: block;
-    width: 100%;
-    min-height: 0;
-    height: 265mm;
-    max-height: 265mm;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 8mm 12mm 7mm;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    overflow: hidden;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+  .course-history-document {
+    margin-top: 0;
   }
 }
 </style>

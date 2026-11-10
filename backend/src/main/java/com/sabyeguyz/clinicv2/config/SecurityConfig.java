@@ -91,14 +91,17 @@ public class SecurityConfig {
 
     @Bean
     JwtAuthenticationConverter jwtAuthenticationConverter(
-            UserRoleRepository userRoles) {
+            UserRoleRepository userRoles,
+            com.sabyeguyz.clinicv2.auth.JwtAccountStateValidator accountState) {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt ->
-                userRoles.findRoleNamesByUserId(Long.valueOf(jwt.getSubject()))
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            accountState.requireCurrent(jwt);
+            return userRoles.findRoleNamesByUserId(Long.valueOf(jwt.getSubject()))
                         .stream()
                         .<GrantedAuthority>map(role ->
                                 new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT)))
-                        .toList());
+                        .toList();
+        });
 
         return converter;
     }

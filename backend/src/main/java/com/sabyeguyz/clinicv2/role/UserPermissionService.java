@@ -1,15 +1,16 @@
 package com.sabyeguyz.clinicv2.role;
 
-import java.util.List;
 import com.sabyeguyz.clinicv2.auth.AppUser;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.auth.UserRoleRepository;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
+import java.util.List;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** ตรวจสิทธิ์ Manager และจัดการ override ของผู้ใช้ */
 @Service
 public class UserPermissionService {
     private final UserPermissionRepository overrides;
@@ -30,6 +31,7 @@ public class UserPermissionService {
     @Transactional
     public UserPermission setAllowed(
             Long userId, Long permissionId, boolean allowed) {
+        // สร้างหรือปรับ override พร้อมบันทึกผู้แก้และเวลา
         AppUser manager = requireManager();
         AppUser user = users.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
@@ -41,7 +43,6 @@ public class UserPermissionService {
         override.setAllowed(allowed);
         override.setUpdatedBy(manager);
         override.setUpdatedAt(ClinicTime.now());
-
         return overrides.save(override);
     }
 
@@ -69,6 +70,7 @@ public class UserPermissionService {
     }
 
     private AppUser requireManager() {
+        // ตรวจ role จากฐานข้อมูล ไม่เชื่อข้อมูล role ที่ส่งจาก frontend
         Long actorId = actor.requireId();
         boolean manager = roles.findByUserId(actorId).stream()
                 .anyMatch(link -> "Manager".equalsIgnoreCase(link.getRole().getRoleName()));

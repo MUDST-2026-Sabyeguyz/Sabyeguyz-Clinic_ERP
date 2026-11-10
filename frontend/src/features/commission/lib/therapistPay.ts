@@ -8,10 +8,14 @@ import {
   type TherapistLines,
 } from '@/api/client'
 
+// ค่า null หรือไม่ใช่ตัวเลขต้องแสดงว่าไม่ทราบ ไม่แปลงเป็นศูนย์
 export const baht = (value: number | null | undefined) =>
-  `฿${Number(value ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  value == null || !Number.isFinite(Number(value))
+    ? '—'
+    : `฿${Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export const signedBaht = (value: number | null | undefined) => {
+  if (value == null || !Number.isFinite(Number(value))) return '—'
   const amount = Number(value ?? 0)
   return amount < 0 ? `−${baht(Math.abs(amount))}` : baht(amount === 0 ? 0 : amount)
 }
@@ -87,9 +91,9 @@ export function useTherapistPay() {
 
   const month = computed(
     () =>
-      (typeof route.query.month === 'string' ? route.query.month : '') ||
-      payments.value[0]?.month ||
-      currentMonth(),
+      typeof route.query.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.month)
+        ? route.query.month
+        : currentMonth(),
   )
   const months = computed(() => {
     const list = payments.value.map((payment) => payment.month)
@@ -98,32 +102,37 @@ export function useTherapistPay() {
   const payment = computed(() => payments.value.find((row) => row.month === month.value) ?? null)
   const lines = computed(() => data.value?.lines ?? [])
 
-  async function loadLines() {
+  let monthRequest = 0
+  async function loadMonth() {
+    // โหลดงวดและรายละเอียดเดือนเดียวกัน พร้อมทิ้งผลตอบกลับเก่า
+    const requestId = ++monthRequest
+    errorMessage.value = ''
+    loading.value = true
     try {
-      data.value = await commissionApi.myLines(month.value)
+      const [monthPayments, monthLines] = await Promise.all([
+        commissionApi.myPayments(month.value),
+        commissionApi.myLines(month.value),
+      ])
+      if (requestId !== monthRequest) return
+      payments.value = monthPayments
+      data.value = monthLines
     } catch (caught) {
+      if (requestId !== monthRequest) return
       errorMessage.value = caught instanceof Error ? caught.message : 'โหลดค่าตอบแทนไม่สำเร็จ'
+    } finally {
+      if (requestId === monthRequest) loading.value = false
     }
   }
 
   onMounted(async () => {
     try {
-      const [paid, changes] = await Promise.all([
-        commissionApi.myPayments(),
-        commissionApi.myAdjustments(),
-      ])
-      payments.value = paid
-      adjustments.value = changes
-      await loadLines()
+      adjustments.value = await commissionApi.myAdjustments()
     } catch (caught) {
       errorMessage.value = caught instanceof Error ? caught.message : 'โหลดค่าตอบแทนไม่สำเร็จ'
-    } finally {
-      loading.value = false
     }
+    await loadMonth()
   })
-  watch(month, () => {
-    if (!loading.value) void loadLines()
-  })
+  watch(month, () => void loadMonth())
 
   return {
     payments,

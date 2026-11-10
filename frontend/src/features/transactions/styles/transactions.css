@@ -303,10 +303,10 @@
 }
 .transaction-primary {
   color: #fff;
-  background: #1e807c;
+  background: var(--ui-primary-gradient);
 }
 .transaction-primary:hover:not(:disabled) {
-  background: #176c69;
+  background: var(--ui-primary-gradient-hover);
 }
 .transaction-secondary {
   color: #25372e;
@@ -808,7 +808,6 @@
   }
 }
 
-/* Phase 4A — node 147:1966 */
 .transaction-main {
   width: min(1200px, calc(100% - 48px));
   padding-top: 16px;
@@ -1236,16 +1235,9 @@
   color: #6b7d76;
   font-size: 14px;
 }
-.transaction-history-detail > header > span {
-  min-width: 126px;
-  margin-top: 4px;
-  padding: 7px 16px;
-  border-radius: 16px;
-  color: #111;
-  background: #fee2e2;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
+.transaction-history-detail > header .transaction-receipt-link {
+  flex: none;
+  margin: 4px 0 0;
 }
 .transaction-audit-card {
   box-sizing: border-box;
@@ -1346,9 +1338,6 @@
   }
   .transaction-history-detail > header h1 {
     font-size: 25px;
-  }
-  .transaction-history-detail > header > span {
-    min-width: auto;
   }
   .transaction-audit-source,
   .transaction-audit-patient,
@@ -1573,4 +1562,33 @@
   color: #218b85;
   background: #fff;
   box-shadow: 0 2px 7px rgb(30 80 70 / 8%);
+}
+
+.transaction-page .transaction-table td {
+  font-size: 16px;
+}
+.transaction-page .transaction-table th,
+.transaction-page .transaction-table td small {
+  font-size: 14px;
+}
+.transaction-date-filter {
+  display: grid;
+  gap: 8px;
+  margin-left: auto;
+}
+.transaction-date-filter > span {
+  font-size: 14px;
+  font-weight: 600;
+}
+.transaction-page .transaction-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+}
+@media (max-width: 700px) {
+  .transaction-date-filter {
+    margin-left: 0;
+    width: 100%;
+  }
 }
