@@ -34,9 +34,6 @@ const schemeTiers = reactive<Tier[]>([])
 const compensationType = ref('course')
 const serviceAmount = ref(0)
 const loading = ref(false)
-const schemeLocked = computed(
-  () => Boolean(scheme.effectiveFrom) && new Date(`${scheme.effectiveFrom}T00:00:00`) <= new Date(),
-)
 const dateLabel = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
     new Date(`${value}T12:00:00`),
@@ -61,20 +58,6 @@ const formStatus = computed({
   },
 })
 
-function openEditor(index = -1) {
-  if (schemeLocked.value) return
-  editorType.value = 'tier'
-  editingIndex.value = index
-  error.value = ''
-  const tier = tiers[index]
-  Object.assign(
-    form,
-    tier
-      ? { min: tier.min, max: tier.max ?? '', rate: tier.rate, active: tier.active }
-      : { min: 0, max: '', rate: 5, active: true },
-  )
-  editorOpen.value = true
-}
 function openSchemeEditor() {
   compensationType.value = 'course'
   serviceAmount.value = 0

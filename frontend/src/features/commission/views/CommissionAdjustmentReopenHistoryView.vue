@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-
-const route = useRoute()
 </script>
 
 <template>

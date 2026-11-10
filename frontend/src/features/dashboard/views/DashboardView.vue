@@ -73,9 +73,6 @@ const dashboardSubtitle = computed(() =>
     ? `สรุปการดำเนินงาน · สาขา${managerBranch.value.name} · ข้อมูลตัวอย่าง`
     : 'สรุปการดำเนินงาน · ทุกสาขา · ข้อมูลตัวอย่าง',
 )
-const genderLabel = (gender: string) =>
-  ({ MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่น ๆ', UNKNOWN: 'ไม่ระบุ' })[gender.toUpperCase()] ??
-  gender
 const money = (value: number) =>
   `${value.toLocaleString('th-TH', { maximumFractionDigits: 0 })} บาท`
 const statusLabel = (status: string) =>

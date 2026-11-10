@@ -17,8 +17,6 @@ type ClosingRow = {
 const selectedMonth = ref(`${new Date().toISOString().slice(0, 7)}-01`)
 const month = computed(() => selectedMonth.value.slice(0, 7))
 const router = useRouter()
-const branch = ref('ทุกสาขา')
-const search = ref('')
 const rows = ref<ClosingRow[]>([])
 const errorMessage = ref('')
 const isConfirming = ref(false)
@@ -172,19 +170,7 @@ async function confirmClosing() {
 onMounted(load)
 watch(month, load)
 
-const visible = computed(() => {
-  const keyword = search.value.trim().toLowerCase()
-  return rows.value.filter((row) => !keyword || row.staff.toLowerCase().includes(keyword))
-})
 const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)
-const totalSales = computed(() => rows.value.reduce((sum, row) => sum + row.sales, 0))
-const monthLabel = computed(() => {
-  const [year, number] = month.value.split('-').map(Number)
-  if (!year || !number) return month.value
-  return new Intl.DateTimeFormat('th-TH', { month: 'short', year: 'numeric' }).format(
-    new Date(year, number - 1, 1),
-  )
-})
 const fullMonthLabel = computed(() => {
   const [year, number] = month.value.split('-').map(Number)
   if (!year || !number) return month.value
@@ -220,11 +206,6 @@ const closeChecks = computed(() =>
 const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result !== true))
 const passedChecks = computed(() => closeChecks.value.filter((item) => item.result === true).length)
 
-function selectView(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
-  if (value === 'Sales') void router.push('/staff/commission')
-  if (value === 'Treatment') void router.push('/staff/commission?type=Treatment')
-}
 </script>
 
 <template>

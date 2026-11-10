@@ -60,12 +60,6 @@ const usageSuccessBalance = computed(() => selectedCourse.value.balance)
 const printDialog = ref<'confirm' | 'success' | 'error' | null>(null)
 const coursePrintPreview = ref(false)
 const transferStep = ref<'form' | 'review' | 'success'>('form')
-const shareIsValid = computed(
-  () =>
-    primaryShare.value >= 0 &&
-    secondaryShare.value >= 0 &&
-    primaryShare.value + secondaryShare.value === 100,
-)
 const formattedUsageDate = computed(() =>
   new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
     new Date(`${usageDate.value}T00:00:00`),
