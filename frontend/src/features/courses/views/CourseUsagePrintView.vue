@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { courseApi, type CourseUsagePrintDocument } from '@/api/client'
+import { ApiError, courseApi, type CourseUsagePrintDocument } from '@/api/client'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import CourseCutDocument from '../components/CourseCutDocument.vue'
 
@@ -18,6 +18,17 @@ const loading = ref(true)
 const working = ref(false)
 const error = ref('')
 const notice = ref('')
+const temporaryPreview = ref(false)
+const printHistory = computed(() => {
+  let reprintCount = 0
+  const events = selected.value?.events ?? []
+  return [...events]
+    .sort((a, b) => Date.parse(a.printedAt) - Date.parse(b.printedAt) || a.id - b.id)
+    .map((event) => ({
+      ...event,
+      label: event.type === 'Issued' ? 'ออกเอกสาร' : `พิมพ์ซ้ำครั้งที่ ${++reprintCount}`,
+    }))
+})
 const snapshot = computed<Snapshot>(() => {
   try { return JSON.parse(selected.value?.documentSnapshot || '{}') as Snapshot }
   catch { return {} }
@@ -39,7 +50,35 @@ async function load() {
   try {
     const courseId = Number(route.params.courseId)
     if (!Number.isInteger(courseId) || courseId < 1) throw new Error('รหัสคอร์สไม่ถูกต้อง')
-    const documents = await courseApi.usagePrints(courseId)
+    temporaryPreview.value = false
+    let documents: CourseUsagePrintDocument[]
+    try {
+      documents = await courseApi.usagePrints(courseId)
+    } catch (cause) {
+      if (!(cause instanceof ApiError) || cause.status !== 404) throw cause
+      const [ledger, usages] = await Promise.all([
+        courseApi.ledger(courseId), courseApi.usageTransactions(),
+      ])
+      const history = usages.filter((item) => item.coursePurchaseId === courseId && !item.voidedAt)
+        .sort((a, b) => Date.parse(a.usedAt) - Date.parse(b.usedAt))
+      const purchase = ledger.purchase
+      documents = history.length ? [{
+        id: 0, courseId, usageId: 0, version: 0,
+        issuedAt: history[history.length - 1]!.usedAt, issuedBy: '', events: [],
+        documentSnapshot: JSON.stringify({
+          courseName: purchase.course.name, branchCode: purchase.branchCode,
+          buyerName: (purchase.purchaser ?? purchase.patient).fullName,
+          buyerHn: (purchase.purchaser ?? purchase.patient).hn,
+          purchaseDate: purchase.purchasedAt, expiryDate: purchase.expiresAt,
+          totalVisits: purchase.purchased, visitsUsed: purchase.used, remainingVisits: purchase.remaining,
+          history: history.map((item, index) => ({
+            sequence: index + 1, visitDate: item.usedAt, patientName: item.patientName,
+            therapistName: item.therapistName, branchCode: item.branchCode, quantity: 1,
+          })),
+        }),
+      }] : []
+      temporaryPreview.value = true
+    }
     selected.value = [...documents].sort(
       (a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt) || b.id - a.id,
     )[0]
@@ -55,6 +94,10 @@ async function printCopy() {
   notice.value = ''
   try {
     window.print()
+    if (temporaryPreview.value) {
+      notice.value = 'พิมพ์สำเนาข้อมูลปัจจุบันแล้ว ยังไม่ได้บันทึกประวัติการพิมพ์'
+      return
+    }
     selected.value = await courseApi.reprintUsage(selected.value.id)
     notice.value = 'บันทึกคำสั่งพิมพ์ในประวัติแล้ว'
   } catch (cause) {
@@ -75,7 +118,7 @@ onMounted(() => void load())
         <div>
           <button class="back-link" type="button" @click="goBack">← กลับ</button>
           <h1>ใบตัดคอร์ส</h1>
-          <p v-if="selected && !loading" class="document-note">ข้อมูล ณ วันที่ออกเอกสาร</p>
+          <p v-if="selected && !loading" class="document-note">{{ temporaryPreview ? 'สำเนาข้อมูลปัจจุบัน (เชื่อมต่อชั่วคราว)' : 'ข้อมูล ณ วันที่ออกเอกสาร' }}</p>
         </div>
         <button
           v-if="selected && !loading"
@@ -111,15 +154,13 @@ onMounted(() => void load())
               branch: entry.branchName || entry.branchCode,
               quantity: entry.quantity,
             }))"
-            show-patient
           />
           <section class="print-history screen-only" aria-labelledby="print-history-title">
             <h2 id="print-history-title">ประวัติการพิมพ์</h2>
-            <ul v-if="selected.events.length">
-              <li v-for="event in selected.events" :key="event.id">
+            <ul v-if="printHistory.length">
+              <li v-for="event in printHistory" :key="event.id">
                 <div>
-                  <strong>{{ event.type === 'Issued' ? 'ออกเอกสาร' : 'พิมพ์ซ้ำ' }}</strong>
-                  <span>{{ event.printedBy }}</span>
+                  <strong>{{ event.label }}</strong>
                 </div>
                 <time :datetime="event.printedAt">{{ dateTime(event.printedAt) }}</time>
               </li>
@@ -168,7 +209,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border-top: 1px solid #e1ebe7;
 }
 .print-history li div { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-.print-history span, .print-history time { color: #526f6c; }
+.print-history time { color: #526f6c; }
 @media print {
   @page course-usage-sheet {
     size: A4 portrait;

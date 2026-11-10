@@ -503,7 +503,7 @@ function backToList(next: Tab = tab.value) {
               </button>
             </div>
             <div v-else-if="!visibleRows.length" class="transaction-empty">
-              {{ tab === 'history' ? 'ยังไม่มีประวัติการยกเลิก' : 'ไม่พบรายการที่ตรงกับเงื่อนไข' }}
+              {{ tab === 'history' ? 'ยังไม่มีประวัติการยกเลิก' : 'ไม่พบรายการ' }}
             </div>
             <div v-else class="transaction-table-wrap">
               <table class="transaction-table">
