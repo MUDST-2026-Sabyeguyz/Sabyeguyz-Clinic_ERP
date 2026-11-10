@@ -6,6 +6,7 @@ import { vModalFocus } from '../modalFocus'
 import { loadAppointmentTherapists } from '../therapists'
 import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { slotLockLabel } from '@/features/appointments/slotLock'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -554,7 +555,10 @@ onMounted(async () => {
     if (therapistId) form.value.therapistId = therapistId
   }
 })
-onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
+onBeforeUnmount(() => {
+  window.removeEventListener('manager-branch-changed', applyManagerBranch)
+  stopAvailabilityRefresh()
+})
 watch([startDate, endDate], () => {
   page.value = 0
   void load()
@@ -746,6 +750,7 @@ async function loadTimeAvailability() {
       date: form.value.date,
       serviceId: form.value.serviceId || undefined,
       excludeAppointmentId: editingId.value ?? undefined,
+      patientId: form.value.patientId || undefined,
     })
     if (requestId === availabilityRequest) {
       const display = displayAvailability(result, appointmentDurationMinutes.value)
@@ -766,12 +771,46 @@ async function loadTimeAvailability() {
     if (requestId === availabilityRequest) availabilityLoading.value = false
   }
 }
+let availabilityTimer: ReturnType<typeof setInterval> | undefined
+function stopAvailabilityRefresh() {
+  if (availabilityTimer) clearInterval(availabilityTimer)
+  availabilityTimer = undefined
+}
 function openTimeDrawer() {
   timeDrawerOpen.value = true
   void loadTimeAvailability()
+  stopAvailabilityRefresh()
+  availabilityTimer = setInterval(() => {
+    if (!timeDrawerOpen.value) stopAvailabilityRefresh()
+    else if (!availabilityLoading.value) void refreshAvailabilityQuietly()
+  }, 15000)
+}
+// reload the times without blanking the list, and drop the chosen time if it has just been taken
+async function refreshAvailabilityQuietly() {
+  if (!timeDrawerOpen.value || !form.value.branchCode || !form.value.therapistId || !form.value.date) return
+  const requestId = ++availabilityRequest
+  try {
+    const result = await appointmentApi.availability({
+      branchCode: form.value.branchCode,
+      therapistId: form.value.therapistId,
+      date: form.value.date,
+      serviceId: form.value.serviceId || undefined,
+      excludeAppointmentId: editingId.value ?? undefined,
+      patientId: form.value.patientId || undefined,
+    })
+    if (requestId !== availabilityRequest || !timeDrawerOpen.value) return
+    const display = displayAvailability(result, appointmentDurationMinutes.value)
+    availabilitySlots.value = display.slots
+    availabilityError.value = display.message
+    const chosen = display.slots.find((item) => item.time === form.value.time)
+    if (form.value.time && !chosen?.available) form.value.time = ''
+  } catch {
+    // keep the times already shown
+  }
 }
 function confirmAppointmentTime() {
   timeDrawerOpen.value = false
+  stopAvailabilityRefresh()
 }
 watch(
   [
@@ -779,6 +818,7 @@ watch(
     () => form.value.therapistId,
     () => form.value.serviceId,
     () => form.value.branchCode,
+    () => form.value.patientId,
   ],
   () => {
     if (timeDrawerOpen.value) void loadTimeAvailability()
@@ -839,6 +879,7 @@ async function requestSaveConfirmation() {
       date: form.value.date,
       serviceId: form.value.serviceId || undefined,
       excludeAppointmentId: editingId.value ?? undefined,
+      patientId: form.value.patientId || undefined,
     })
     if (form.value.serviceId && availability.durationMinutes) {
       appointmentDurationMinutes.value = availability.durationMinutes
@@ -1580,6 +1621,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   @click="selectAppointmentTime(slot.time)"
                 >
                   {{ formatTimeRange(slot.time) }}
+                  <small v-if="!slot.available && !availabilityLoading" class="slot-lock">{{ slotLockLabel(slot.reason) }}</small>
                 </button>
               </div>
             </section>
@@ -1596,6 +1638,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   @click="selectAppointmentTime(slot.time)"
                 >
                   {{ formatTimeRange(slot.time) }}
+                  <small v-if="!slot.available && !availabilityLoading" class="slot-lock">{{ slotLockLabel(slot.reason) }}</small>
                 </button>
               </div>
             </section>
