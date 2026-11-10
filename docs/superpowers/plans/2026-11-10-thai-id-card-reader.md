@@ -25,7 +25,7 @@
 - Only the `REGISTER` purpose exists. The separate card button on the patient search page is dropped; foreign patients (passport) always use `กรอกข้อมูลเอง`.
 - Commit messages carry **no AI attribution lines** (project rule). Do not push; pushing is the user's decision.
 - Backend tests run through Docker (host JVM cannot open a NIO selector): use the existing Testcontainers-based HTTP tests; run them as described in each task's "Run" line.
-- **One branch, `feat/id-card-reader`**, created from the cleaned `fix-frontend` (`8cd06e5`). It holds the docs, the backend module, the agent and the frontend, and touches no existing file beyond `SecurityConfig.java`, `client.ts`, the two patient views and the router, so it can be merged into other branches later. `fix-frontend` and `feat/database` already carry *different* `V1022` migrations; the new migration is `V1023`, which is free on both today: renumber it at merge time if another `V1023` appears.
+- **Work happens on `test-merge`** (the combined branch that has both the frontend of `fix-frontend` and the backend of `feat/database`). The feature touches no existing file beyond `SecurityConfig.java`, `client.ts`, the two patient views and the router. Its migration is **`V1028`** (`test-merge` already has `V1022` to `V1027`); if another `V1028` appears, renumber ours.
 - The HTTP tests use their own harness `IdCardHttpTestSupport` (Task 2), because the older `CoursePaymentHttpTestSupport` exists only on `feat/database`.
 
 ## File Structure
@@ -47,7 +47,7 @@ Backend (`backend/src/main/java/com/sabyeguyz/clinicv2/idcard/`):
 | `IdCardReadController.java` | staff start/poll |
 | `IdCardAgentController.java` | agent pair/next/result |
 
-Backend resources/tests: `db/migration/V1023__id_card_reader.sql`; tests under `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/` (plain JUnit, plus HTTP tests that extend `IdCardHttpTestSupport`).
+Backend resources/tests: `db/migration/V1028__id_card_reader.sql`; tests under `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/` (plain JUnit, plus HTTP tests that extend `IdCardHttpTestSupport`).
 
 Agent (`id-card-agent/`, Maven, package `com.sabyeguyz.idcard.agent`): `CardData`, `ThaiIdCardParser`, `ApduChannel`, `ThaiIdCardReader`, `CardSource`/`PcscCardSource`, `AgentConfig`, `BackendClient`, `AgentLoop`, `Autostart`, `StatusTray`, `AgentMain`, `packaging/`.
 
@@ -137,7 +137,7 @@ git commit -m "feat(idcard): check digit of a Thai national ID number"
 ### Task 2: Schema, entities and repositories
 
 **Files:**
-- Create: `backend/src/main/resources/db/migration/V1023__id_card_reader.sql` (first confirm `V1023` is still free on the base branch; if not, use the next free number)
+- Create: `backend/src/main/resources/db/migration/V1028__id_card_reader.sql` (first confirm `V1028` is still the next free number on `test-merge`)
 - Create: `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardHttpTestSupport.java` (Step 0)
 - Create: `.../idcard/CardReaderWorkstation.java`, `CardReaderWorkstationRepository.java`, `IdCardReadAudit.java`, `IdCardReadAuditRepository.java`
 - Test: `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardSchemaHttpTest.java`
@@ -485,7 +485,7 @@ Run: same command as Step 2. Expected: 2 tests PASS (application boots with `ddl
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/src/main/resources/db/migration/V1023__id_card_reader.sql backend/src/main/java/com/sabyeguyz/clinicv2/idcard backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardSchemaHttpTest.java
+git add backend/src/main/resources/db/migration/V1028__id_card_reader.sql backend/src/main/java/com/sabyeguyz/clinicv2/idcard backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardSchemaHttpTest.java
 git commit -m "feat(idcard): workstation and read-audit tables"
 ```
 
@@ -4664,7 +4664,7 @@ git commit -m "docs(idcard): device check for the card reader on each system"
 - 9 Installers/autostart → Tasks 10, 11; 10 Tests → each task + Tasks 16, 17; 11 Risks → Task 17 and Task 7 note
 - Spec scope narrowing applied: checksum only on card reads (Task 5); long-poll/polling (Tasks 4, 5, 9, 13).
 
-**Known gaps and decisions to confirm before executing:** the migration number `V1023` must be re-checked at execution time (and at merge: `fix-frontend` and `feat/database` already have different `V1022` files); the manager page is reachable by the link in the registration dialog and by URL (no entry in the back-office navigation yet, which touches `BackOfficeView.vue` and `CalendarSettingsView.vue` menus); signing/notarization of installers is not included; auto-update is out of scope.
+**Known gaps and decisions to confirm before executing:** the migration number `V1028` must be re-checked at execution time (and at merge: `fix-frontend` and `feat/database` already have different `V1022` files); the manager page is reachable by the link in the registration dialog and by URL (no entry in the back-office navigation yet, which touches `BackOfficeView.vue` and `CalendarSettingsView.vue` menus); signing/notarization of installers is not included; auto-update is out of scope.
 
 **Placeholder scan:** none of "TBD/TODO/similar to Task N"; every code step has code; commands have expected outcomes.
 
