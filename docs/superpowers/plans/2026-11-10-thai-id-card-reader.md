@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Backend and agent target **Java 17** (`java.version` 17 in `backend/pom.xml`). **No new Spring dependency** in the backend (no WebSocket starter).
-- Agent ↔ backend is **HTTPS long-poll** (`GET /api/id-card/agent/next`, held at most 25 s); browser ↔ backend is **polling** (`GET /api/id-card/reads/{id}`, every 700 ms). No WebSocket, no SSE.
+- The agent authenticates with the **`X-Agent-Token` header**, never `Authorization: Bearer` (the JWT resource server would try to decode it as a user token and answer 401). Agent ↔ backend is **HTTPS long-poll** (`GET /api/id-card/agent/next`, held at most 25 s); browser ↔ backend is **polling** (`GET /api/id-card/reads/{id}`, every 700 ms). No WebSocket, no SSE.
 - A read result lives **60 s in memory**, is delivered **once** to the user who started it, then deleted. Card data is **never** written to a log, the database or the agent's disk during a read.
 - The audit table `id_card_read_audit` has **no card-data column**.
 - **No photo** is read or stored. Identity verification at check-in/payment is out of scope.
@@ -244,10 +244,15 @@ public abstract class IdCardHttpTestSupport {
     }
 
     protected HttpResult replyAs(String jwt, String method, String path, Object payload) {
+        return replyWithHeaders(jwt, method, path, payload, Map.of());
+    }
+
+    protected HttpResult replyWithHeaders(String jwt, String method, String path, Object payload, Map<String, String> headers) {
         try {
             HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(baseUrl + path)).timeout(Duration.ofSeconds(40));
             if (jwt != null) request.header("Authorization", "Bearer " + jwt);
             request.header("Content-Type", "application/json");
+            headers.forEach(request::header);
             request.method(method, payload == null ? HttpRequest.BodyPublishers.noBody()
                     : HttpRequest.BodyPublishers.ofString(json.writeValueAsString(payload)));
             HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
@@ -306,8 +311,8 @@ CREATE TABLE card_reader_workstation (
     workstation_id      BIGSERIAL PRIMARY KEY,
     workstation_name    VARCHAR(100) NOT NULL,
     branch_id           BIGINT NOT NULL REFERENCES branch (branch_id),
-    token_hash          CHAR(64),
-    pairing_code_hash   CHAR(64),
+    token_hash          VARCHAR(64),
+    pairing_code_hash   VARCHAR(64),
     pairing_expires_at  TIMESTAMPTZ,
     workstation_status  VARCHAR(10) NOT NULL DEFAULT 'Active',
     last_seen_at        TIMESTAMPTZ,
@@ -702,10 +707,13 @@ public class WorkstationService {
         return new Paired(token, workstation.getName(), workstation.getBranch().getBranchCode());
     }
 
-    /** The workstation behind an {@code Authorization: Bearer <token>} header, or 401. */
+    /**
+     * The workstation behind the {@code X-Agent-Token} header, or 401. The agent does not use {@code Authorization: Bearer}
+     * because the JWT resource server would try to decode it as a user token and refuse it before it reaches us.
+     */
     @Transactional(readOnly = true)
-    public CardReaderWorkstation authenticate(String bearerHeader) {
-        String token = bearerHeader != null && bearerHeader.startsWith("Bearer ") ? bearerHeader.substring(7).trim() : "";
+    public CardReaderWorkstation authenticate(String agentToken) {
+        String token = agentToken == null ? "" : agentToken.trim();
         return workstations.findByTokenHash(TokenHasher.sha256Hex(token))
                 .filter(w -> "Active".equals(w.getStatus()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "โทเคนเครื่องอ่านบัตรไม่ถูกต้อง"));
@@ -1225,9 +1233,9 @@ git commit -m "feat(idcard): in-memory card reads, delivered once, with a per-us
   - `POST /api/id-card/reads` `{workstationId, purpose: "REGISTER"}` → 202 `{id, expiresAt}`; 400 any other purpose; 404 unknown/revoked workstation; 403 other branch; 409 workstation offline; 429 too many
   - `GET /api/id-card/reads/{id}` → `{status: PENDING|READING|DONE|FAILED, outcome?, message?, card?, lookup?}`; 404 once delivered/unknown/another user's.
     `READING` means the card is in the reader. `DONE` always carries `lookup` = `{exists, patient: {id, hn, fullName} | null}`; `card` is present **only when the patient does not exist yet**.
-  - `GET /api/id-card/agent/next?waitSeconds=` (Bearer token) → 200 `{requestId, purpose}` or 204
-  - `POST /api/id-card/agent/progress` (Bearer token) `{requestId, stage: "CARD_PRESENT"}` → 204 (the read moves to `READING`)
-  - `POST /api/id-card/agent/result` (Bearer token) `{requestId, status: OK|NO_CARD|NO_READER|ERROR, message?, card?}` → 204
+  - `GET /api/id-card/agent/next?waitSeconds=` (`X-Agent-Token` header) → 200 `{requestId, purpose}` or 204
+  - `POST /api/id-card/agent/progress` (`X-Agent-Token` header) `{requestId, stage: "CARD_PRESENT"}` → 204 (the read moves to `READING`)
+  - `POST /api/id-card/agent/result` (`X-Agent-Token` header) `{requestId, status: OK|NO_CARD|NO_READER|ERROR, message?, card?}` → 204
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1249,14 +1257,16 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
 
     @BeforeEach
     void pairAWorkstation() {
-        db.execute("TRUNCATE TABLE id_card_read_audit, card_reader_workstation RESTART IDENTITY CASCADE");
-        db.update("update patient set national_id = null"); // each test decides which number belongs to the patient
+        // no RESTART IDENTITY: workstation ids must not repeat, because the app keeps unclaimed reads in memory per workstation id
+        db.execute("TRUNCATE TABLE id_card_read_audit, card_reader_workstation CASCADE");
+        // Thai patients must have a national ID, so go back to the registered one (it is not the number on the test card)
+        db.update("update patient set national_id = '1100000000001' where patient_id = ?", patientId);
         var created = reply("POST", "/api/id-card/workstations", Map.of("name", "เคาน์เตอร์ 1", "branchCode", "01")).body();
         workstationId = created.path("id").asLong();
         agentToken = replyAs(null, "POST", "/api/id-card/agent/pair", Map.of("code", created.path("pairingCode").asText()))
                 .body().path("token").asText();
         // the agent has polled once, so the workstation is online
-        assertEquals(204, replyAs(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
+        assertEquals(204, agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
     }
 
     Map<String, Object> card(String nationalId) {
@@ -1276,6 +1286,11 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         return card;
     }
 
+    /** A call made by the counter agent: its own token in X-Agent-Token, no user JWT. */
+    HttpResult agent(String agentToken, String method, String path, Object payload) {
+        return replyWithHeaders(null, method, path, payload, agentToken == null ? Map.of() : Map.of("X-Agent-Token", agentToken));
+    }
+
     String start(String jwt) {
         HttpResult started = replyAs(jwt, "POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER"));
         assertEquals(202, started.status(), started.body().toString());
@@ -1283,13 +1298,13 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     }
 
     String agentTakes() {
-        HttpResult next = replyAs(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null);
+        HttpResult next = agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null);
         assertEquals(200, next.status(), next.body().toString());
         return next.body().path("requestId").asText();
     }
 
     void agentSaysCardIsInTheReader(String requestId) {
-        assertEquals(204, replyAs(agentToken, "POST", "/api/id-card/agent/progress",
+        assertEquals(204, agent(agentToken, "POST", "/api/id-card/agent/progress",
                 Map.of("requestId", requestId, "stage", "CARD_PRESENT")).status());
     }
 
@@ -1298,13 +1313,13 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         body.put("requestId", requestId);
         body.put("status", status);
         body.put("card", card);
-        assertEquals(204, replyAs(agentToken, "POST", "/api/id-card/agent/result", body).status());
+        assertEquals(204, agent(agentToken, "POST", "/api/id-card/agent/result", body).status());
     }
 
     @Test
     void aCardOfSomeoneNewIsDeliveredOnceTogetherWithTheNotFoundLookup() {
         String id = start(token);
-        assertEquals("REGISTER", replyAs(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null).body().path("purpose").asText());
+        assertEquals("REGISTER", agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null).body().path("purpose").asText());
         assertEquals("PENDING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
 
         agentAnswers(id, "OK", card(VALID_ID));
@@ -1352,7 +1367,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
 
     @Test
     void progressForAnUnknownReadIsRefused() {
-        assertEquals(404, replyAs(agentToken, "POST", "/api/id-card/agent/progress",
+        assertEquals(404, agent(agentToken, "POST", "/api/id-card/agent/progress",
                 Map.of("requestId", UUID.randomUUID().toString(), "stage", "CARD_PRESENT")).status());
     }
 
@@ -1411,18 +1426,19 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     @Test
     void aRevokedWorkstationsTokenStopsWorking() {
         assertEquals(204, reply("POST", "/api/id-card/workstations/" + workstationId + "/revoke", null).status());
-        assertEquals(401, replyAs(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
-        assertEquals(401, replyAs(agentToken, "POST", "/api/id-card/agent/progress", Map.of("requestId", "x", "stage", "CARD_PRESENT")).status());
-        assertEquals(401, replyAs("not-a-token", "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
-        assertEquals(401, replyAs(null, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
+        assertEquals(401, agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
+        assertEquals(401, agent(agentToken, "POST", "/api/id-card/agent/progress", Map.of("requestId", "x", "stage", "CARD_PRESENT")).status());
+        assertEquals(401, agent("not-a-token", "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
+        assertEquals(401, agent(null, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
     }
 
     @Test
     void tooManyStartsInAMinuteAreRefused() {
+        String therapist = login("therapist", "therapist123"); // a user whose allowance no other test has used
         int accepted = 0;
         int refused = 0;
         for (int i = 0; i < 22; i++) {
-            int status = reply("POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER")).status();
+            int status = replyAs(therapist, "POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER")).status();
             if (status == 202) accepted++;
             if (status == 429) refused++;
         }
@@ -1687,9 +1703,9 @@ public class IdCardAgentController {
 
     @GetMapping("/next")
     public ResponseEntity<IdCardService.AgentCommand> next(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Agent-Token", required = false) String agentToken,
             @RequestParam(defaultValue = "25") int waitSeconds) {
-        CardReaderWorkstation workstation = workstations.authenticate(authorization);
+        CardReaderWorkstation workstation = workstations.authenticate(agentToken);
         return service.next(workstation, waitSeconds)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
@@ -1697,16 +1713,16 @@ public class IdCardAgentController {
 
     @PostMapping("/progress")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void progress(@RequestHeader(value = "Authorization", required = false) String authorization,
+    public void progress(@RequestHeader(value = "X-Agent-Token", required = false) String agentToken,
                          @RequestBody ProgressRequest request) {
-        service.progress(workstations.authenticate(authorization), request.requestId(), request.stage());
+        service.progress(workstations.authenticate(agentToken), request.requestId(), request.stage());
     }
 
     @PostMapping("/result")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void result(@RequestHeader(value = "Authorization", required = false) String authorization,
+    public void result(@RequestHeader(value = "X-Agent-Token", required = false) String agentToken,
                        @RequestBody IdCardService.AgentResult result) {
-        service.agentResult(workstations.authenticate(authorization), result);
+        service.agentResult(workstations.authenticate(agentToken), result);
     }
 }
 ```
@@ -2412,7 +2428,7 @@ class AgentLoopTest {
     void startFakeBackend() throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/id-card/agent/next", exchange -> {
-            lastAuth.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            lastAuth.set(exchange.getRequestHeaders().getFirst("X-Agent-Token"));
             String body = nextResponse.getAndSet(null);
             if (body == null) {
                 exchange.sendResponseHeaders(204, -1);
@@ -2462,7 +2478,7 @@ class AgentLoopTest {
     void doesNothingWhenThereIsNoCommand() throws Exception {
         var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"), (wait, cardPresent) -> { throw new AssertionError("no read expected"); }, Duration.ofSeconds(1));
         assertFalse(loop.runOnce());
-        assertEquals("Bearer tok-1", lastAuth.get());
+        assertEquals("tok-1", lastAuth.get());
         assertTrue(results.isEmpty());
     }
 
@@ -2649,7 +2665,7 @@ final class BackendClient {
     }
 
     private HttpRequest.Builder authorized(String path, Duration timeout) {
-        return HttpRequest.newBuilder(URI.create(backendUrl + path)).timeout(timeout).header("Authorization", "Bearer " + token);
+        return HttpRequest.newBuilder(URI.create(backendUrl + path)).timeout(timeout).header("X-Agent-Token", token);
     }
 
     private static HttpResponse<String> send(HttpRequest request) throws IOException {
