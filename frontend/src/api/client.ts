@@ -314,6 +314,17 @@ export type AppointmentAvailability = {
   googleCalendar: 'NOT_CONNECTED' | 'CHECKED' | 'UNAVAILABLE'
 }
 // คำขอต่ออายุใช้ workflow แยกจากการแก้วันหมดอายุโดยตรง
+export type CourseExtensionPreview = { oldExpiry: string; newExpiry: string }
+
+export type DirectCourseExtension = {
+  courseId: number
+  requestedByPatientId: number
+  value: number
+  unit: CourseExtensionRequest['unit']
+  reason: string
+  ownerRequestConfirmed: boolean
+}
+
 export type CourseExtensionRequest = {
   id: number
   courseId: number
@@ -764,6 +775,10 @@ export const courseApi = {
     reason?: string
     requestedByPatientId: number
   }) => api.post<CourseExtensionRequest>('/api/course-extensions', body),
+  previewDirectExtension: (body: DirectCourseExtension) =>
+    api.post<CourseExtensionPreview>('/api/course-extensions/direct/preview', body),
+  extendDirect: (body: DirectCourseExtension & CourseExtensionPreview) =>
+    api.post<CourseExtensionPreview>('/api/course-extensions/direct', body),
   approveExtension: (id: number, note?: string) =>
     api.post<CourseExtensionRequest>(`/api/course-extensions/${id}/approve`, { note }),
   rejectExtension: (id: number, note?: string) =>

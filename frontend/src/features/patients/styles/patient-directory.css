@@ -92,7 +92,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   width: 180px;
   min-width: 0;
 }
-body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .filter-dropdown__button {
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .directory .filter-dropdown__button {
   min-height: 48px;
   font-size: 16px;
   border-radius: 8px;
@@ -363,4 +363,21 @@ body:is(.therapist-ui, :not(.therapist-ui))
   background: #edf5f1;
   border-color: #145c59;
   color: #145c59;
+}
+body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .patient-heading-actions {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+@media (max-width: 1000px) {
+  body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .patient-heading-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-content: flex-start;
+    margin-top: 16px;
+  }
 }
