@@ -174,7 +174,7 @@ try {
     $pods=Run-Kube get pods -o json | ConvertFrom-Json
     $evidence=[ordered]@{sourceSha=$sourceSha;sourceDirty=$sourceDirty;context=$KubeContext;namespace=$Namespace;database=$DatabaseName;seedMode=$SeedMode;imageTag=$ImageTag;migrationJob=$jobName;migrationCompleted=$true;patientCount=[int]$patientCount;smoke=$smoke;completedAtUtc=[DateTime]::UtcNow.ToString('o');imageIDs=@($pods.items.status.containerStatuses | ForEach-Object {$_.imageID})}
     Write-Utf8 (Join-Path $repoPath 'deployment-evidence.json') ($evidence | ConvertTo-Json -Depth 5)
-    Run-Kube get pods,services,pvc -o wide
+    Run-Kube get 'pods,services,pvc' -o wide
     Write-Host "DEPLOYED source=$sourceSha dirty=$sourceDirty database=$DatabaseName patients=$patientCount"
     Write-Host "Open: kubectl --context $KubeContext -n $Namespace port-forward service/frontend 38001:80"
 } catch {
