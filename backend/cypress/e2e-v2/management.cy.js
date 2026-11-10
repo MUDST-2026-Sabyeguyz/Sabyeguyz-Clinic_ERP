@@ -43,11 +43,12 @@ describe('v2 service and user management', () => {
   it('creates a user with staff, role and branch access, who can then log in', () => {
     cy.api('POST', '/api/users', {
       username: 'newpt01', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-900',
-      fullName: 'พีที ใหม่', branchCode: '01',
+      email: 'newpt01@example.test', fullName: 'พีที ใหม่', branchCode: '01',
     }).then(({ status, body }) => {
       expect(status).to.equal(201)
       expect(body.role).to.equal('THERAPIST')
       expect(body.branchCode).to.equal('01')
+      expect(body.email).to.equal('newpt01@example.test')
       cy.login('newpt01', 'password123').then((login) => {
         expect(login.status).to.equal(200)
         expect(login.body.role).to.equal('THERAPIST')
@@ -60,10 +61,11 @@ describe('v2 service and user management', () => {
   it('rejects a user with a short password or a duplicate username', () => {
     const user = {
       username: 'newpt02', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-901',
-      fullName: 'พีที สอง', branchCode: '01',
+      email: 'newpt02@example.test', fullName: 'พีที สอง', branchCode: '01',
     }
     cy.api('POST', '/api/users', { ...user, password: 'short' }).its('status').should('equal', 400)
     cy.api('POST', '/api/users', user).its('status').should('equal', 201)
-    cy.api('POST', '/api/users', { ...user, employeeCode: 'THP-902' }).its('status').should('be.within', 400, 409)
+    cy.api('POST', '/api/users', { ...user, email: 'anotherpt@example.test', employeeCode: 'THP-902' })
+      .its('status').should('be.within', 400, 409)
   })
 })
