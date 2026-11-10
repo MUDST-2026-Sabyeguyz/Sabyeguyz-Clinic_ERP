@@ -787,7 +787,8 @@ function openTimeDrawer() {
 }
 // reload the times without blanking the list, and drop the chosen time if it has just been taken
 async function refreshAvailabilityQuietly() {
-  if (!form.value.branchCode || !form.value.therapistId || !form.value.date) return
+  if (!timeDrawerOpen.value || !form.value.branchCode || !form.value.therapistId || !form.value.date) return
+  const requestId = ++availabilityRequest
   try {
     const result = await appointmentApi.availability({
       branchCode: form.value.branchCode,
@@ -797,8 +798,11 @@ async function refreshAvailabilityQuietly() {
       excludeAppointmentId: editingId.value ?? undefined,
       patientId: form.value.patientId || undefined,
     })
-    availabilitySlots.value = result.slots
-    const chosen = result.slots.find((item) => item.time === form.value.time)
+    if (requestId !== availabilityRequest || !timeDrawerOpen.value) return
+    const display = displayAvailability(result, appointmentDurationMinutes.value)
+    availabilitySlots.value = display.slots
+    availabilityError.value = display.message
+    const chosen = display.slots.find((item) => item.time === form.value.time)
     if (form.value.time && !chosen?.available) form.value.time = ''
   } catch {
     // keep the times already shown
