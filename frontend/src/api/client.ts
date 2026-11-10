@@ -678,12 +678,14 @@ export const appointmentApi = {
     date: string
     serviceId?: number
     excludeAppointmentId?: number
+    patientId?: number
   }) => {
     const query = new URLSearchParams({
       branchCode: params.branchCode,
       therapistId: String(params.therapistId),
       date: params.date,
       ...(params.serviceId ? { serviceId: String(params.serviceId) } : {}),
+      ...(params.patientId ? { patientId: String(params.patientId) } : {}),
       ...(params.excludeAppointmentId
         ? { excludeAppointmentId: String(params.excludeAppointmentId) }
         : {}),
