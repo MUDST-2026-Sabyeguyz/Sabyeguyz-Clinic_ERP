@@ -52,6 +52,7 @@ public class CalendarSyncService {
     }
 
     private final CalendarProperties properties;
+    private final CalendarCredentialStore credentials;
     private final ObjectProvider<GoogleCalendarClient> clientProvider;
     private final AppointmentCalendarRepository appointments;
     private final BranchRepository branches;
@@ -61,10 +62,12 @@ public class CalendarSyncService {
     private volatile Instant lastRunAt;
     private volatile Result lastResult = Result.empty();
 
-    public CalendarSyncService(CalendarProperties properties, ObjectProvider<GoogleCalendarClient> clientProvider,
+    public CalendarSyncService(CalendarProperties properties, CalendarCredentialStore credentials,
+                               ObjectProvider<GoogleCalendarClient> clientProvider,
                                AppointmentCalendarRepository appointments, BranchRepository branches,
                                AppointmentService appointmentService, PlatformTransactionManager transactionManager) {
         this.properties = properties;
+        this.credentials = credentials;
         this.clientProvider = clientProvider;
         this.appointments = appointments;
         this.branches = branches;
@@ -72,7 +75,9 @@ public class CalendarSyncService {
         this.tx = new TransactionTemplate(transactionManager);
     }
 
-    public boolean isEnabled() { return properties.isEnabled() && clientProvider.getIfAvailable() != null; }
+    public boolean isEnabled() {
+        return (properties.isEnabled() || credentials.isConfigured()) && clientProvider.getIfAvailable() != null;
+    }
     public Instant lastRunAt() { return lastRunAt; }
     public Result lastResult() { return lastResult; }
 
@@ -90,7 +95,7 @@ public class CalendarSyncService {
 
     public synchronized Result push() {
         GoogleCalendarClient client = clientProvider.getIfAvailable();
-        if (!properties.isEnabled() || client == null) return Result.empty();
+        if (!isEnabled() || client == null) return Result.empty();
         LocalDate since = LocalDate.now(zone()).minusDays(1);
         List<Long> ids = tx.execute(status -> appointments.findDirtyIds(since, PageRequest.of(0, BATCH)));
         Result result = Result.empty();
@@ -171,7 +176,7 @@ public class CalendarSyncService {
 
     public synchronized Result pull() {
         GoogleCalendarClient client = clientProvider.getIfAvailable();
-        if (!properties.isEnabled() || client == null) return Result.empty();
+        if (!isEnabled() || client == null) return Result.empty();
         Result result = Result.empty();
         for (Branch branch : branches.findAll()) {
             String calendarId = branch.getGoogleCalendarId();

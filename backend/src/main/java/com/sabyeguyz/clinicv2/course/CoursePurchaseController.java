@@ -168,6 +168,7 @@ public class CoursePurchaseController {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         Branch branch = branches.findByBranchCode(request.branchCode().trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
+        branchAccess.requireAccess(branch, "ขายคอร์สได้เฉพาะสาขาตัวเอง");
         Service courseTemplate = services.findById(request.courseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         if (request.shares() != null && !request.shares().isEmpty()) {

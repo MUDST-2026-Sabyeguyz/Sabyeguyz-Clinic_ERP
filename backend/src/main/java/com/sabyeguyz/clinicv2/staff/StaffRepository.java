@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 public interface StaffRepository extends JpaRepository<Staff, Long> {
     Optional<Staff> findByStaffCode(String staffCode);
 
+    long countByStaffCodeStartingWith(String prefix);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Staff s where s.id = :id")
     Optional<Staff> findByIdForUpdate(@Param("id") Long id);
