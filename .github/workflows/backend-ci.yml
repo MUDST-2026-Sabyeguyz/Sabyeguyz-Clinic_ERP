@@ -74,6 +74,11 @@ jobs:
       - name: Package backend and run all Cypress tests
         run: npm test
 
+      - name: Verify database and HTTP tests in Asia Bangkok timezone
+        run: |
+          cp -r target/surefire-reports target/surefire-reports-default
+          mvn --batch-mode --no-transfer-progress '-DargLine=-Duser.timezone=Asia/Bangkok' test
+
       - name: Resolve PostgreSQL runtime test classpath
         run: >-
           mvn --batch-mode --no-transfer-progress dependency:build-classpath
@@ -95,6 +100,8 @@ jobs:
         with:
           name: backend-test-results
           path: |
+            backend/target/surefire-reports/
+            backend/target/surefire-reports-default/
             backend/cypress/results/
             backend/cypress/screenshots/
             backend/target/runtime-check.log

@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinicv2.course;
 
+import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
+
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -23,6 +25,16 @@ public interface CourseLedgerRepository extends JpaRepository<CourseLedger, Long
     List<CourseLedger> findByTransferId(Long transferId);
 
     boolean existsByCourseRefundItemId(Long courseRefundItemId);
+
+    /** Checks whether the main cancellation event has a ledger entry of this type. */
+    boolean existsByCourseRefundItemIdAndEntryType(
+            Long courseRefundItemId,
+            CourseLedgerEntryType entryType);
+
+    List<CourseLedger> findByCourseRefundItemIdAndEntryTypeOrderByIdAsc(
+            Long courseRefundItemId, CourseLedgerEntryType entryType);
+
+    boolean existsByReversesLedgerId(Long ledgerId);
 
     boolean existsByCancellationIdAndCourseId(Long cancellationId, Long courseId);
 }
