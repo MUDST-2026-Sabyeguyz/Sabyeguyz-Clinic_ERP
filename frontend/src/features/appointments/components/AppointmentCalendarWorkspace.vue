@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hiddenFromGoogle } from '../googleCancel'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -262,7 +263,7 @@ async function loadPeriod() {
     const allSelected =
       selectedIds.value.length > 0 &&
       branchTherapists.value.every((person) => selectedIds.value.includes(String(person.id)))
-    appointments.value = all
+    appointments.value = hiddenFromGoogle(all)
     if (allSelected) selectedIds.value = branchTherapists.value.map((person) => String(person.id))
     const next: Record<string, AppointmentAvailability> = {}
     const requests = days.flatMap((day) =>

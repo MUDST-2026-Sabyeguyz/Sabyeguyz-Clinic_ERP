@@ -2167,3 +2167,20 @@
     min-width: 0;
   }
 }
+
+/* a time that is taken stays locked and says why */
+.appointment-time-slots button:disabled {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: line-through;
+}
+.appointment-time-slots button .slot-lock {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #a4503f;
+  text-decoration: none;
+}
