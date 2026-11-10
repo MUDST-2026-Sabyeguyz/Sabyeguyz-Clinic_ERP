@@ -68,7 +68,6 @@ const revenue = ref(0)
 const courses = ref(0)
 const sales = ref(0)
 const newCustomers = ref(0)
-const returningCustomers = ref(0)
 const packageUpdates = ref(0)
 const packageUpdatesScope = ref('CLINIC')
 const appointmentStatuses = ref<Array<{ status: string; appointments: number }>>([])
@@ -92,12 +91,14 @@ const chartMaximum = computed(() => {
 const chartTicks = computed(() =>
   Array.from({ length: 6 }, (_, index) => Math.round(chartMaximum.value * (1 - index / 5))),
 )
+// the dashboard always shows the three appointment statuses (a missing one counts as 0); any other status is listed after them
+const shownStatuses = ['UNCONFIRMED', 'CONFIRMED', 'CANCELLED']
 const dashboardStatuses = computed(() => [
-  appointmentStatuses.value.find((item) => item.status === 'UNCONFIRMED') ?? {
-    status: 'UNCONFIRMED',
-    appointments: 0,
-  },
-  ...appointmentStatuses.value.filter((item) => item.status !== 'UNCONFIRMED'),
+  ...shownStatuses.map(
+    (status) =>
+      appointmentStatuses.value.find((item) => item.status === status) ?? { status, appointments: 0 },
+  ),
+  ...appointmentStatuses.value.filter((item) => !shownStatuses.includes(item.status)),
 ])
 const maxAppointments = computed(() =>
   Math.max(...dashboardStatuses.value.map((item) => item.appointments), 1),
@@ -147,10 +148,9 @@ async function loadDashboard() {
     patients.value = summary.uniquePatients
     visits.value = summary.visits
     appointmentTotal.value = appointments.appointments
-    revenue.value = Number(summary.totalRevenue)
+    revenue.value = Number(summary.cashReceived)
     sales.value = Number(summary.salesTotal)
     newCustomers.value = summary.newCustomers
-    returningCustomers.value = summary.returningCustomers
     packageUpdates.value = summary.packageUpdates
     packageUpdatesScope.value = summary.packageUpdatesScope
     courses.value = balances.purchases
@@ -495,8 +495,8 @@ function applyCustomRange() {
                 <b>{{ courses.toLocaleString() }} คอร์ส</b>
               </article>
               <article class="summary-card">
-                <p>ลูกค้าใหม่ · กลับมาใช้บริการ</p>
-                <b>{{ Number(newCustomers || 0).toLocaleString() }} · {{ Number(returningCustomers || 0).toLocaleString() }} คน</b>
+                <p>ลูกค้าใหม่</p>
+                <b>{{ Number(newCustomers || 0).toLocaleString() }} คน</b>
               </article>
               <article class="summary-card">
                 <p>ปรับสิทธิ์คอร์ส ({{ packageUpdatesScope === 'CLINIC' ? 'ทั้งคลินิก' : packageUpdatesScope }})</p>

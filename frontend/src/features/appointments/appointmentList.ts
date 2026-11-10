@@ -1,4 +1,5 @@
 import { appointmentApi, getToken, type Appointment, type AppointmentPage } from '@/api/client'
+import { hiddenFromGoogle } from './googleCancel'
 
 type AppointmentFilters = Omit<
   NonNullable<Parameters<typeof appointmentApi.search>[0]>,
@@ -36,5 +37,5 @@ export async function readAppointmentRange(
     if (!isCurrent()) return null
     pages.forEach((result) => items.push(...result.items))
   }
-  return items
+  return hiddenFromGoogle(items)
 }

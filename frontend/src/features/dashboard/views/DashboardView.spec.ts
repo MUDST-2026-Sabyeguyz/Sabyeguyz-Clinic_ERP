@@ -131,7 +131,12 @@ describe('branch-only Manager dashboard', () => {
     expect(view.get('.summary-layout').text()).toContain('20 คน')
     expect(view.get('.summary-layout').text()).toContain('ยอดรับชำระ')
     expect(view.get('.summary-layout').text()).toContain('ยอดขายตามวันที่ขาย')
+    // the period card shows the net cash received (after refunds), not the gross revenue total
+    expect(view.get('.summary-layout').text()).toContain('100 บาท')
+    expect(view.get('.summary-layout').text()).not.toContain('9,000 บาท')
     expect(view.get('.summary-layout').text()).toContain('ลูกค้าใหม่')
+    // only the number of new customers is shown, not returning customers
+    expect(view.get('.summary-layout').text()).not.toContain('กลับมาใช้บริการ')
     expect(view.get('.summary-layout').text()).toContain('ปรับสิทธิ์คอร์ส (ทั้งคลินิก)')
     expect(view.get('.summary-layout').text()).toContain('คอร์สที่ซื้อ')
     await applyDateRange(view, '2025-01-01', '2025-01-31')
@@ -215,9 +220,9 @@ describe('branch-only Manager dashboard', () => {
     expect(view.findAll('.today-card')[1]!.text()).toContain('0 บาท')
     expect(view.findAll('.today-card')[1]!.text()).not.toContain('ยังไม่มีข้อมูล')
     expect(view.get('.revenue-card .empty-state').text()).toBe('ยังไม่มียอดรับชำระในช่วงนี้')
-    expect(view.findAll('.status-row')).toHaveLength(1)
-    expect(view.get('.status-row span').text()).toBe('ยังไม่ยืนยัน')
-    expect(view.get('.status-row b').text()).toBe('0')
+    const rows = view.findAll('.status-row')
+    expect(rows.map((row) => row.get('span').text())).toEqual(['ยังไม่ยืนยัน', 'ยืนยันแล้ว', 'ยกเลิก'])
+    expect(rows.map((row) => row.get('b').text())).toEqual(['0', '0', '0'])
     expect(view.get('.status-card .empty-state').text()).toBe('ยังไม่มีนัดหมายในช่วงนี้')
     view.unmount()
   })
@@ -242,15 +247,16 @@ describe('branch-only Manager dashboard', () => {
     view.unmount()
   })
 
-  it('preserves the actual unconfirmed count without adding a duplicate row', async () => {
+  it('keeps the actual unconfirmed count and still shows confirmed and cancelled at zero', async () => {
     report.appointments.mockResolvedValueOnce({
       appointments: 2,
       byStatus: [{ status: 'Unconfirmed', appointments: 2 }],
     })
     const view = await mountSelectedDashboard()
-    expect(view.findAll('.status-row')).toHaveLength(1)
-    expect(view.get('.status-row span').text()).toBe('ยังไม่ยืนยัน')
-    expect(view.get('.status-row b').text()).toBe('2')
+    const rows = view.findAll('.status-row')
+    expect(rows).toHaveLength(3)
+    expect(rows.map((row) => row.get('span').text())).toEqual(['ยังไม่ยืนยัน', 'ยืนยันแล้ว', 'ยกเลิก'])
+    expect(rows.map((row) => row.get('b').text())).toEqual(['2', '0', '0'])
     view.unmount()
   })
 
