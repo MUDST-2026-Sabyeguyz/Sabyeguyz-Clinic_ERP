@@ -1,267 +1,186 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { commissionApi } from '@/api/client'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
+import { commissionApi, type TreatmentFeeRule } from '@/api/client'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
+import { clinicToday } from '@/utils/clinicDate'
 
-type Rule = { title: string; detail: string; amount: string }
-const rules = ref<Rule[]>([])
+const rules = ref<TreatmentFeeRule[]>([])
 const loading = ref(true)
-onMounted(async () => {
+const saving = ref(false)
+const error = ref('')
+const message = ref('')
+const drawerOpen = ref(false)
+const branchCode = computed(() => selectedManagerBranch()?.code ?? '')
+const nextMonth = () => {
+  const today = clinicToday()
+  const [year, month] = today.slice(0, 7).split('-').map(Number)
+  const firstNext = new Date(Date.UTC(year!, month!, 1))
+  return `${firstNext.getUTCFullYear()}-${String(firstNext.getUTCMonth() + 1).padStart(2, '0')}`
+}
+const form = reactive({
+  name: '',
+  feeType: 'Fixed' as 'Fixed' | 'Percentage',
+  feeValue: '',
+  effectiveMonth: nextMonth(),
+})
+const sortedRules = computed(() =>
+  [...rules.value].sort((left, right) => right.effectiveFrom.localeCompare(left.effectiveFrom)),
+)
+const money = (value: number) =>
+  `฿${Number(value).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  if (!branchCode.value) {
+    rules.value = []
+    error.value = 'กรุณาเลือกสาขาและจัดการกฎค่ามือ'
+    loading.value = false
+    return
+  }
   try {
-    const rows = (await commissionApi.treatmentFees()) as Array<{
-      id: number
-      employeeId: number
-      feeType: string
-      feeValue: number
-      active: boolean
-    }>
-    rules.value = rows
-      .filter((row) => row.active)
-      .map((row) => ({
-        title: `พนักงาน #${row.employeeId} · ${row.feeType === 'PERCENTAGE' ? 'Percentage' : 'Fixed'}`,
-        detail: 'ค่าตอบแทนผู้รักษาแทน',
-        amount:
-          row.feeType === 'PERCENTAGE'
-            ? `${row.feeValue}%`
-            : `฿${Number(row.feeValue).toLocaleString('th-TH')} / ครั้ง`,
-      }))
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : 'โหลดกฎค่ามือไม่สำเร็จ'
+    // โหลดกฎค่ามือตามสาขาที่เลือก
+    rules.value = await commissionApi.treatmentFees() as TreatmentFeeRule[]
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : 'โหลดกฎค่ามือไม่สำเร็จ'
   } finally {
     loading.value = false
   }
-})
-const drawerOpen = ref(false)
-const error = ref('')
-const form = reactive({
-  name: '',
-  recipient: 'GENERAL',
-  service: 'ALL',
-  calculation: 'FIXED',
-  value: 0,
-  overflow: 'CAP_AT_COMMISSION',
-  effectiveFrom: new Date().toLocaleDateString('en-CA'),
-  effectiveTo: '',
-})
+}
+
 function openDrawer() {
   error.value = ''
-  Object.assign(form, {
-    name: '',
-    recipient: 'GENERAL',
-    service: 'ALL',
-    calculation: 'FIXED',
-    value: 0,
-    overflow: 'CAP_AT_COMMISSION',
-    effectiveFrom: new Date().toLocaleDateString('en-CA'),
-    effectiveTo: '',
-  })
+  message.value = ''
+  Object.assign(form, { name: '', feeType: 'Fixed', feeValue: '', effectiveMonth: nextMonth() })
   drawerOpen.value = true
 }
-function saveRule() {
+
+async function saveRule() {
   error.value = ''
-  if (!form.name.trim() || form.value <= 0 || !form.effectiveFrom) {
-    error.value = 'กรุณากรอกชื่อ อัตรา และวันที่เริ่มใช้งาน'
+  const value = Number(form.feeValue)
+  if (!branchCode.value) {
+    error.value = 'กรุณาเลือกสาขาก่อนบันทึกกฎค่ามือ'
     return
   }
-  error.value = 'ยังไม่ได้เชื่อมการบันทึกกฎกับข้อมูลพนักงานจริง'
+  if (!form.name.trim() || !/^\d{4}-(0[1-9]|1[0-2])$/.test(form.effectiveMonth)) {
+    error.value = 'กรอกชื่อกฎและเดือนที่เริ่มใช้งาน'
+    return
+  }
+  if (!Number.isFinite(value) || value < 0 || (form.feeType === 'Percentage' && value > 100)) {
+    error.value = form.feeType === 'Percentage'
+      ? 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
+      : 'จำนวนเงินต้องเป็นตัวเลขไม่ติดลบ'
+    return
+  }
+  saving.value = true
+  try {
+    // สร้างกฎพร้อมวันเริ่มใช้; backend จัดการวันสิ้นสุดของกฎเดิม
+    await commissionApi.createTreatmentFee({
+      name: form.name.trim(),
+      feeType: form.feeType,
+      feeValue: value,
+      effectiveFrom: `${form.effectiveMonth}-01`,
+      branchCode: branchCode.value,
+    })
+    await load()
+    drawerOpen.value = false
+    message.value = 'บันทึกกฎค่ามือแล้ว ระบบจัดการวันสิ้นสุดของกฎเดิมให้อัตโนมัติ'
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : 'บันทึกกฎค่ามือไม่สำเร็จ'
+  } finally {
+    saving.value = false
+  }
 }
+
+onMounted(load)
+watch(branchCode, () => void load())
 </script>
 
 <template>
   <div class="commission-manager-page">
     <StaffHeader />
-    <main class="commission-manager-main">
+    <main class="commission-manager-main compensation-main">
       <header class="commission-title">
         <h1>ตั้งค่าค่ามือ</h1>
-        <p>กำหนดค่าตอบแทนนักกายภาพผู้รักษาแทนแบบจำนวนเงินหรือเปอร์เซ็นต์</p>
+        <p>กฎค่ามือใช้ตามวันที่มีผล ระบบกำหนดวันสิ้นสุดของกฎเดิมเมื่อสร้างกฎใหม่</p>
       </header>
       <CommissionTabs active="compensation" />
       <section class="commission-card compensation-panel">
         <header class="rules-head">
-          <h2>กฎค่ามือ</h2>
-          <p>
-            ใช้เมื่อผู้รักษาไม่ใช่ Case Owner และต้องไม่เกิน Gross Commission Allocation ต่อครั้ง
-          </p>
+          <h2>กฎค่ามือของสาขาที่เลือก</h2>
+          <p>เปอร์เซ็นต์กรอกเป็นจำนวนเต็ม เช่น 10 หมายถึง 10% โดยกฎที่ถูกใช้แล้วจะไม่แก้ทับย้อนหลัง</p>
         </header>
-        <p v-if="loading">กำลังโหลดข้อมูล…</p>
-        <p v-else-if="error" class="drawer-error">{{ error }}</p>
-        <p v-else-if="!rules.length">ยังไม่มีกฎค่ามือ</p>
-        <section class="rules">
-          <article v-for="rule in rules" :key="rule.title" class="commission-card">
+        <p v-if="loading" role="status">กำลังโหลดข้อมูล…</p>
+        <p v-else-if="error" class="drawer-error" role="alert">{{ error }}</p>
+        <p v-if="message" role="status">{{ message }}</p>
+        <p v-if="!loading && !error && !sortedRules.length">ยังไม่มีกฎค่ามือ</p>
+        <section v-if="!loading && !error" class="rules" aria-label="รายการกฎค่ามือ">
+          <article v-for="rule in sortedRules" :key="rule.id" class="commission-card">
             <div>
-              <b>{{ rule.title }}</b
-              ><small>{{ rule.detail }}</small>
+              <b>{{ rule.name?.trim() || `กฎค่ามือ #${rule.id}` }}</b>
+              <small>มีผล {{ rule.effectiveFrom }} ถึง {{ rule.effectiveTo || 'ไม่กำหนดวันสิ้นสุด' }}</small>
+              <small>{{ rule.used ? 'มีรายการใช้กฎนี้แล้ว กรุณาสร้างกฎใหม่เพื่อเปลี่ยนอัตรา' : 'ยังไม่มีรายการอ้างอิงกฎนี้' }}</small>
             </div>
-            <strong>{{ rule.amount }}</strong>
+            <strong>{{ rule.feeType === 'Percentage' ? `${rule.feeValue}% ของยอดที่เกี่ยวข้อง` : `${money(rule.feeValue)} / ครั้ง` }}</strong>
           </article>
         </section>
-        <button class="commission-primary add-rule" @click="openDrawer">+ เพิ่มกฎค่ามือ</button>
+        <button class="commission-primary add-rule" type="button" :disabled="!branchCode || loading" @click="openDrawer">
+          + เพิ่มกฎค่ามือ
+        </button>
       </section>
     </main>
-    <Teleport to="body"
-      ><div v-if="drawerOpen" class="rule-drawer-backdrop" @click.self="drawerOpen = false">
-        <aside class="rule-drawer" role="dialog" aria-modal="true">
+    <Teleport to="body">
+      <div v-if="drawerOpen" class="rule-drawer-backdrop" @click.self="drawerOpen = false">
+        <aside class="rule-drawer" role="dialog" aria-modal="true" aria-labelledby="fee-rule-title">
           <header>
             <div>
-              <h2>เพิ่มกฎค่ามือ</h2>
-              <p>กำหนดผู้รับ บริการ และวิธีคำนวณ</p>
+              <h2 id="fee-rule-title">เพิ่มกฎค่ามือ</h2>
             </div>
-            <button class="drawer-close" @click="drawerOpen = false">×</button>
+            <button class="drawer-close" type="button" aria-label="ปิด" @click="drawerOpen = false">×</button>
           </header>
           <div class="rule-form">
-            <label>ชื่อกฎ<input v-model="form.name" placeholder="เช่น นักกายภาพทั่วไป" /></label
-            ><label
-              >ผู้ได้รับค่ารักษาแทน<FilterDropdown
-                v-model="form.recipient"
-                label="ผู้ได้รับค่ารักษาแทน"
-                default-value="GENERAL"
-                default-label="นักกายภาพทั่วไป"
-                hide-default-option
-                :clear-on-reselect="false"
-                :options="[
-                  { value: 'GENERAL', label: 'นักกายภาพทั่วไป' },
-                  { value: 'SENIOR', label: 'Senior Therapist' },
-                ]" /></label
-            ><label
-              >บริการ<FilterDropdown
-                v-model="form.service"
-                label="บริการ"
-                default-value="ALL"
-                default-label="ทุกบริการ"
-                hide-default-option
-                :clear-on-reselect="false"
-                :options="[
-                  { value: 'ALL', label: 'ทุกบริการ' },
-                  { value: 'Manual Therapy', label: 'Manual Therapy' },
-                  { value: 'Exercise Therapy', label: 'Exercise Therapy' },
-                ]" /></label
-            ><label
-              >วิธีคำนวณ<FilterDropdown
-                v-model="form.calculation"
-                label="วิธีคำนวณ"
-                default-value="FIXED"
-                default-label="จำนวนเงินคงที่ต่อครั้ง"
-                hide-default-option
-                :clear-on-reselect="false"
-                :options="[
-                  { value: 'FIXED', label: 'จำนวนเงินคงที่ต่อครั้ง' },
-                  { value: 'PERCENTAGE', label: 'เปอร์เซ็นต์จากมูลค่าคอร์ส' },
-                ]" /></label
-            ><label
-              >{{ form.calculation === 'FIXED' ? 'จำนวนเงินต่อครั้ง (บาท)' : 'อัตรา (%)'
-              }}<input v-model.number="form.value" type="number" min="0.01" step="0.01" /></label
-            ><label
-              >เมื่อเกินเพดาน<FilterDropdown
-                v-model="form.overflow"
-                label="เมื่อเกินเพดาน"
-                default-value="CAP_AT_COMMISSION"
-                default-label="จำกัดไม่ให้เกินคอมมิชชัน"
-                hide-default-option
-                :clear-on-reselect="false"
-                :options="[
-                  { value: 'CAP_AT_COMMISSION', label: 'จำกัดไม่ให้เกินคอมมิชชัน' },
-                  { value: 'BLOCK_AND_REQUIRE_APPROVAL', label: 'ระงับและรออนุมัติ' },
-                ]" /></label
-            ><label
-              >วันที่เริ่มใช้งาน<ThaiDatePicker
-                v-model="form.effectiveFrom"
-                numeric-month
-                show-calendar-icon
-                hide-caret /></label
-            ><label
-              >วันสิ้นสุด (ไม่บังคับ)<ThaiDatePicker
-                v-model="form.effectiveTo"
-                numeric-month
-                show-calendar-icon
-                hide-caret
-            /></label>
+            <label>ชื่อกฎ<input v-model="form.name" maxlength="100" /></label>
+            <label>วิธีคำนวณ
+              <select v-model="form.feeType">
+                <option value="Fixed">จำนวนเงินต่อครั้ง</option>
+                <option value="Percentage">เปอร์เซ็นต์</option>
+              </select>
+            </label>
+            <label>{{ form.feeType === 'Percentage' ? 'อัตรา (%)' : 'จำนวนเงิน (บาท / ครั้ง)' }}
+              <input v-model="form.feeValue" type="number" min="0" step="0.01" :max="form.feeType === 'Percentage' ? 100 : undefined" />
+            </label>
+            <label>เดือนที่เริ่มใช้งาน<input v-model="form.effectiveMonth" type="month" :min="nextMonth()" /></label>
+            <p>{{ selectedManagerBranch()?.name ?? branchCode }}</p>
           </div>
-          <p v-if="error" class="drawer-error">{{ error }}</p>
+          <p v-if="error" class="drawer-error" role="alert">{{ error }}</p>
           <footer>
-            <button class="commission-secondary" @click="drawerOpen = false">ยกเลิก</button
-            ><button class="commission-primary" @click="saveRule">บันทึกกฎ</button>
+            <button class="commission-secondary" type="button" :disabled="saving" @click="drawerOpen = false">ยกเลิก</button>
+            <button class="commission-primary" type="button" :disabled="saving" @click="saveRule">{{ saving ? 'กำลังบันทึก…' : 'บันทึกกฎ' }}</button>
           </footer>
         </aside>
-      </div></Teleport
-    >
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
 @import '../styles/commission-manager.css';
-.compensation-panel {
-  padding: 28px;
-  min-height: 800px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  border-color: #dde6e1;
-  border-radius: 14px;
-  gap: 0;
-}
-.rules-head h2 {
-  font-size: 23px;
-  margin: 0;
-}
-.rules-head p {
-  margin: 4px 0 28px;
-  color: #667a72;
-}
-.rules {
-  display: grid;
-  gap: 24px;
-}
-.rules article {
-  min-height: 88px;
-  box-sizing: border-box;
-  padding: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.rules article div {
-  display: grid;
-  gap: 8px;
-}
-.rules small {
-  color: #667a72;
-}
-.rules strong {
-  min-width: 180px;
-  margin-right: 19%;
-  color: #176c68;
-  text-align: left;
-}
-.add-rule {
-  display: block;
-  margin: auto 0 0 auto;
-  min-height: 48px;
-  min-width: 240px;
-  background: #1f8883;
-}
-@media (max-width: 700px) {
-  .compensation-panel {
-    min-height: 0;
-    padding: 20px;
-  }
-  .rules strong {
-    margin-right: 0;
-  }
-  .rules article {
-    align-items: start;
-    flex-direction: column;
-  }
-  .rules strong {
-    min-width: 0;
-    text-align: left;
-  }
-  .add-rule {
-    width: 100%;
-    margin-top: 40px;
-  }
-}
+.compensation-panel { padding: 28px; min-height: 520px; display: flex; flex-direction: column; gap: 20px; }
+.rules-head h2 { margin: 0; font-size: 23px; }
+.rules-head p, .rules small { color: #667a72; }
+.rules { display: grid; gap: 16px; }
+.rules article { padding: 18px; display: flex; justify-content: space-between; gap: 20px; }
+.rules article div { display: grid; gap: 8px; }
+.rules strong { color: #176c68; }
+.add-rule { align-self: end; min-height: 48px; min-width: 240px; }
+.rule-drawer-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; justify-items: end; background: #14251f66; }
+.rule-drawer { width: min(520px, 100%); height: 100%; overflow: auto; box-sizing: border-box; padding: 28px; background: white; }
+.rule-drawer header, .rule-drawer footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rule-form { display: grid; gap: 18px; margin: 28px 0; }
+.rule-form label { display: grid; gap: 6px; }
+.rule-form input, .rule-form select { min-height: 42px; padding: 8px; }
+.drawer-error { color: #a02f2f; }
+@media (max-width: 700px) { .compensation-panel { min-height: 0; padding: 20px; } .rules article { flex-direction: column; } .add-rule { width: 100%; } }
 </style>
