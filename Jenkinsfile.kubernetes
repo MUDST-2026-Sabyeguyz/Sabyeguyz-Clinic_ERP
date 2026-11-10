@@ -13,6 +13,7 @@ pipeline {
         booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Retry this branch revision even if the same SHA was already attempted.')
         choice(name: 'CLINIC_SEED_MODE', choices: ['none', 'minimal', 'full'], description: 'Optional seed for an isolated local demo database only.')
         choice(name: 'CLINIC_DATABASE_KIND', choices: ['unspecified', 'local-demo'], description: 'Must be local-demo when a demo seed mode is selected.')
+        string(name: 'CLINIC_DATABASE_NAME', defaultValue: 'clinic_demo', description: 'Lowercase PostgreSQL database identifier. Use a new disposable name for demo seeding.')
     }
     stages {
         stage('Capture local branch revision') {
@@ -20,6 +21,12 @@ pipeline {
                 dir('source') {
                     deleteDir()
                     script {
+                        env.CLINIC_DATABASE_KIND = (params.CLINIC_DATABASE_KIND ?: 'unspecified').trim()
+                        env.CLINIC_SEED_MODE = (params.CLINIC_SEED_MODE ?: 'none').trim()
+                        env.CLINIC_DATABASE_NAME = (params.CLINIC_DATABASE_NAME ?: 'clinic_demo').trim()
+                        if (!(env.CLINIC_DATABASE_NAME ==~ /[a-z][a-z0-9_]{0,62}/)) {
+                            error('CLINIC_DATABASE_NAME must be a lowercase PostgreSQL identifier (1-63 characters).')
+                        }
                         def output = powershell(returnStdout: true, script: '''
 $ErrorActionPreference = 'Stop'
 if (-not $env:CLINIC_SOURCE_REPO -or -not $env:CLINIC_SOURCE_BRANCH) { throw 'Run scripts/start-jenkins-kubernetes.ps1 with the intended local branch.' }
@@ -119,7 +126,7 @@ $credentialPath = Join-Path $env:TEMP ("clinic-kubeconfig-" + [guid]::NewGuid().
 try {
     [IO.File]::WriteAllText($credentialPath, $env:CLINIC_KUBECONFIG_JSON, (New-Object Text.UTF8Encoding($false)))
     $env:KUBECONFIG = $credentialPath
-    & ./scripts/deploy-kubernetes.ps1 -Context clinic-deployer -ImageTag $env:IMAGE_TAG -DatabaseKind $env:CLINIC_DATABASE_KIND -SeedMode $env:CLINIC_SEED_MODE -SkipBuild -SkipScan
+    & ./scripts/deploy-kubernetes.ps1 -Context clinic-deployer -ImageTag $env:IMAGE_TAG -DatabaseName $env:CLINIC_DATABASE_NAME -DatabaseKind $env:CLINIC_DATABASE_KIND -SeedMode $env:CLINIC_SEED_MODE -SkipBuild -SkipScan
     if ($LASTEXITCODE -ne 0) { throw 'Kubernetes deployment or rollout verification failed.' }
     $recorder = Join-Path $env:CLINIC_SOURCE_REPO 'scripts/jenkins-record-deployment.ps1'
     & $recorder -SourceSha $env:SOURCE_SHA
