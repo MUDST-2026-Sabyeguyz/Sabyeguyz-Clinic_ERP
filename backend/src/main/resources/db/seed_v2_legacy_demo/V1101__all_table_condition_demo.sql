@@ -85,15 +85,10 @@ BEGIN
         FROM course c WHERE NOT EXISTS (SELECT 1 FROM course_sale_staff_share x WHERE x.course_id=c.course_id)
           AND (SELECT count(*) FROM course_sale_staff_share x WHERE x.course_id=c.course_id)=0;
 
-    -- V1002 removes the old staff/service/group scopes and percentage-base column; current rules are global.
-    INSERT INTO treatment_fee_rule (permission_id, fee_type, fee_value, effective_from, effective_to,
-        treatment_fee_rule_status, treatment_fee_rule_create_by, rule_name)
-        VALUES (v_permission, 'Percentage', 7.5000, DATE '2026-01-01', NULL, TRUE, v_manager, 'DEMO: ค่ามือ 7.5%');
-    INSERT INTO treatment_fee_rule (permission_id, fee_type, fee_value, effective_from, effective_to,
-        treatment_fee_rule_status, treatment_fee_rule_create_by, rule_name)
-        VALUES (v_permission, 'Fixed', 60.0000, DATE '2026-01-01', DATE '2026-12-31', FALSE, v_manager, 'DEMO: กฎปิดใช้งาน');
+    -- V1012 removes the status column; V1100 already supplies the global date-based fee rule.
+    -- Do not insert overlapping or unversioned fee rules into the current schema.
 
-    -- Every appointment lifecycle and calendar sync outcome; all event IDs are synthetic.
+    -- Current V1020 statuses and calendar sync outcomes; all event IDs are synthetic.
     INSERT INTO appointment (patient_id, branch_id, staff_id, service_id, appointment_status, appointment_date,
         appointment_time, appointment_create_by, appointment_patient_type, contact_name, contact_phone,
         requested_service_type, calendar_sync_status, notes, room_id, appointment_end_at)
@@ -103,12 +98,7 @@ BEGIN
         (DATE '2026-10-16' + TIME '09:00' + (s.n * INTERVAL '30 minutes') + INTERVAL '30 minutes')
     FROM (VALUES (0,'Unconfirmed'::appointment_status_enum,'Pending'::calendar_sync_status_enum),
                  (1,'Confirmed'::appointment_status_enum,'Synced'::calendar_sync_status_enum),
-                 (2,'Arrived'::appointment_status_enum,'Failed'::calendar_sync_status_enum),
-                 (3,'InService'::appointment_status_enum,'Deleted'::calendar_sync_status_enum),
-                 (4,'Completed'::appointment_status_enum,NULL::calendar_sync_status_enum),
-                 (5,'Cancelled'::appointment_status_enum,NULL::calendar_sync_status_enum),
-                 (6,'Rescheduled'::appointment_status_enum,NULL::calendar_sync_status_enum),
-                 (7,'NoShow'::appointment_status_enum,NULL::calendar_sync_status_enum)) s(n,status,sync_status);
+                 (2,'Cancelled'::appointment_status_enum,'Deleted'::calendar_sync_status_enum)) s(n,status,sync_status);
 
     INSERT INTO appointment_status_history (appointment_id, from_status, to_status, changed_by, changed_at, reason)
         SELECT a.appointment_id, NULL, a.appointment_status, v_manager, CURRENT_TIMESTAMP, 'DEMO: status coverage'

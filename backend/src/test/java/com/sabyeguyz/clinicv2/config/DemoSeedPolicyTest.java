@@ -63,7 +63,12 @@ class DemoSeedPolicyTest {
         assertTrue(seed.contains("JOIN room r"));
         assertTrue(DemoSeedPolicy.locations("full", false)[1].endsWith("db/seed_v2_legacy_demo"));
         assertTrue(readResource("db/seed_v2_legacy_demo/V1100__legacy_demo_data.sql").contains("INSERT INTO appointment"));
-        assertTrue(readResource("db/seed_v2_legacy_demo/V1101__all_table_condition_demo.sql").contains("INSERT INTO"));
+        String conditionSeed = readResource("db/seed_v2_legacy_demo/V1101__all_table_condition_demo.sql");
+        assertTrue(conditionSeed.contains("INSERT INTO"));
+        assertFalse(conditionSeed.contains("treatment_fee_rule_status"),
+                "V1012 removes the status column before demo seeds run");
+        assertTrue(readResource("db/seed_v2_legacy_demo/V1100__legacy_demo_data.sql")
+                .contains("rule_name, rule_version"));
         assertTrue(readResource("db/seed_v2_legacy_demo/V1103__bearing_demo_seed_variant.sql").contains("SELECT 1"));
     }
 
