@@ -78,7 +78,7 @@ Database data remains in the Compose volume after `down`. See [deployment instru
 
 ## Jenkins deployment to local Kubernetes
 
-For the Windows presentation machine with Docker Desktop Kubernetes and Jenkins on port 8085, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-jenkins-kubernetes.ps1`. It connects a Windows agent, creates the `Clinic-Kubernetes` Pipeline and queues the build/deployment. See [Kubernetes presentation instructions](deploy/kubernetes/README.md).
+For local auto-deploy, enable Docker Desktop Kubernetes, then run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-jenkins-kubernetes.ps1 -SourceBranch <local-branch>`. The localhost-only Jenkins controller monitors that committed local branch and deploys new commits to namespace `clinic-present` after backend/frontend tests and the Trivy HIGH/CRITICAL scan gate. Jenkins is served on `http://127.0.0.1:8086`; its generated admin password is stored under the configured local agent directory. See [local Kubernetes deployment instructions](deploy/kubernetes/README.md).
 
 ## Development workflow
 

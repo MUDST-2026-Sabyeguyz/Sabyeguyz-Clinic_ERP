@@ -7,3 +7,4 @@
 calendar-sync-key*.json
 /secrets/
 /deployment-evidence.json
+/reports/

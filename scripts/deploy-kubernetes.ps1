@@ -1,5 +1,5 @@
 param(
-    [string]$KubeContext = 'docker-desktop',
+    [Alias('Context')][string]$KubeContext = 'docker-desktop',
     [string]$Namespace = 'clinic-present',
     [string]$DatabaseName = 'clinic_demo',
     [ValidateSet('none','minimal','full')][string]$SeedMode = 'none',
@@ -7,6 +7,7 @@ param(
     [ValidateSet('Auto','Kind','Desktop')][string]$ImageTransport = 'Auto',
     [string]$ImageTag,
     [switch]$SkipBuild,
+    [switch]$SkipScan,
     [switch]$PreflightOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -16,9 +17,6 @@ if ($Namespace -notmatch '^clinic-[a-z0-9-]+$' -or $Namespace.Length -gt 63) { t
 if ($DatabaseName -notmatch '^[a-z][a-z0-9_]{0,62}$') { throw 'DatabaseName must be a lowercase PostgreSQL identifier.' }
 if ($SeedMode -ne 'none') {
     if ($DatabaseKind -ne 'local-demo') { throw 'Demo seed requires -DatabaseKind local-demo.' }
-    if ($KubeContext -ne 'docker-desktop' -and $KubeContext -notmatch '^kind-[a-z0-9-]+$') {
-        throw 'Demo seed is allowed only on docker-desktop or a kind-* local context.'
-    }
 }
 foreach ($tool in @('git','docker','kubectl')) {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is required on the agent." }
@@ -40,6 +38,14 @@ function New-DemoSecret {
     try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
     return [Convert]::ToBase64String($bytes)
 }
+$clusterServer=(& kubectl config view --minify --context $KubeContext -o 'jsonpath={.clusters[0].cluster.server}').Trim()
+if ($LASTEXITCODE -ne 0 -or -not $clusterServer) { throw 'Cannot identify the selected Kubernetes API server.' }
+$clusterUri=[Uri]$clusterServer
+$clusterHost=$clusterUri.Host.ToLowerInvariant()
+$isLocalCluster=$clusterHost -in @('localhost','127.0.0.1','::1','kubernetes.docker.internal')
+$isDockerDesktop=$clusterHost -eq 'kubernetes.docker.internal'
+if (-not $isLocalCluster) { throw 'This local deployment script refuses non-local Kubernetes API servers.' }
+if ($SeedMode -ne 'none' -and -not $isLocalCluster) { throw 'Demo seed is allowed only on a verified local Kubernetes context.' }
 $nodes=Run-Kube get nodes -o json | ConvertFrom-Json
 if (@($nodes.items).Count -eq 0) { throw 'The selected cluster has no nodes.' }
 foreach ($node in $nodes.items) {
@@ -51,11 +57,11 @@ $nodeNames=@($nodes.items | ForEach-Object {$_.metadata.name})
 $targetNodes=@($visibleNodes | Where-Object {$_ -in $nodeNames})
 if ($ImageTransport -eq 'Auto') {
     if ($targetNodes.Count -eq $nodeNames.Count) { $ImageTransport='Kind' }
-    elseif ($KubeContext -eq 'docker-desktop') { $ImageTransport='Desktop' }
+    elseif ($isDockerDesktop) { $ImageTransport='Desktop' }
     else { throw 'No image loader found. Use visible kind nodes or the docker-desktop context.' }
 }
 if ($ImageTransport -eq 'Kind' -and $targetNodes.Count -ne $nodeNames.Count) { throw 'All kind node containers must be visible to Docker.' }
-if ($ImageTransport -eq 'Desktop' -and $KubeContext -ne 'docker-desktop') { throw 'Desktop image transport requires docker-desktop.' }
+if ($ImageTransport -eq 'Desktop' -and -not $isDockerDesktop) { throw 'Desktop image transport requires a Docker Desktop Kubernetes API server.' }
 $storage=Run-Kube get storageclass -o json | ConvertFrom-Json
 if (-not @($storage.items | Where-Object {$_.metadata.annotations.'storageclass.kubernetes.io/is-default-class' -eq 'true' -or $_.metadata.annotations.'storageclass.beta.kubernetes.io/is-default-class' -eq 'true'}).Count) { throw 'No default StorageClass is available for PostgreSQL.' }
 Write-Host "PREFLIGHT_OK context=$KubeContext namespace=$Namespace database=$DatabaseName databaseKind=$DatabaseKind seed=$SeedMode imageTransport=$ImageTransport"
@@ -72,6 +78,10 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }
     & docker build -t $frontendImage ./frontend
     if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
+}
+if (-not $SkipScan) {
+    & (Join-Path $PSScriptRoot 'scan-kubernetes-images.ps1') -ImageTag $ImageTag
+    if ($LASTEXITCODE -ne 0) { throw 'Image security scan failed; deployment stopped.' }
 }
 foreach ($image in @($backendImage,$frontendImage)) {
     & docker image inspect $image --format '{{.Id}}'
@@ -98,7 +108,11 @@ if ($ImageTransport -eq 'Kind') {
 }
 $existingNamespace=& kubectl --context $KubeContext get namespace $Namespace --ignore-not-found -o name
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the namespace.' }
-if (-not $existingNamespace) { Run-Kube create namespace $Namespace }
+if (-not $existingNamespace) {
+    $canCreateNamespace=(& kubectl --context $KubeContext auth can-i create namespaces).Trim()
+    if ($LASTEXITCODE -ne 0 -or $canCreateNamespace -ne 'yes') { throw "Namespace $Namespace does not exist; create it with an administrator before deploying." }
+    Run-Kube create namespace $Namespace
+}
 $secret=Run-Kube get secret clinic-secrets --ignore-not-found -o json
 if (-not $secret) {
     $password=New-DemoSecret

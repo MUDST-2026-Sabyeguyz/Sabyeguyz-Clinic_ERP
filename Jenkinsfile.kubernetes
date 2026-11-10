@@ -1,60 +1,156 @@
 pipeline {
     agent { label 'clinic-present' }
+    triggers {
+        cron('H/1 * * * *')
+    }
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
-        timeout(time: 40, unit: 'MINUTES')
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 60, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+    parameters {
+        booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Retry this branch revision even if the same SHA was already attempted.')
+        choice(name: 'CLINIC_SEED_MODE', choices: ['none', 'minimal', 'full'], description: 'Optional seed for an isolated local demo database only.')
+        choice(name: 'CLINIC_DATABASE_KIND', choices: ['unspecified', 'local-demo'], description: 'Must be local-demo when a demo seed mode is selected.')
     }
     stages {
-        stage('Checkout local main snapshot') {
+        stage('Capture local branch revision') {
             steps {
                 dir('source') {
                     deleteDir()
+                    script {
+                        def output = powershell(returnStdout: true, script: '''
+$ErrorActionPreference = 'Stop'
+if (-not $env:CLINIC_SOURCE_REPO -or -not $env:CLINIC_SOURCE_BRANCH) { throw 'Run scripts/start-jenkins-kubernetes.ps1 with the intended local branch.' }
+$helper = Join-Path $env:CLINIC_SOURCE_REPO 'scripts/jenkins-capture-source.ps1'
+$last = Join-Path $env:LOCALAPPDATA 'ClinicJenkinsAgent/last-attempted-sha.txt'
+if ($env:FORCE_DEPLOY -eq 'true') {
+    & $helper -SourceRepo $env:CLINIC_SOURCE_REPO -Branch $env:CLINIC_SOURCE_BRANCH -LastAttemptedShaPath $last -Force
+} else {
+    & $helper -SourceRepo $env:CLINIC_SOURCE_REPO -Branch $env:CLINIC_SOURCE_BRANCH -LastAttemptedShaPath $last
+}
+''').trim()
+                        def values = output.readLines().findAll { it.startsWith('SOURCE_SHA=') || it.startsWith('SOURCE_CHANGED=') }
+                        def sourceSha = values.find { it.startsWith('SOURCE_SHA=') }?.substring('SOURCE_SHA='.length())
+                        def changed = values.find { it.startsWith('SOURCE_CHANGED=') }?.substring('SOURCE_CHANGED='.length())
+                        if (!sourceSha || !(changed in ['true', 'false'])) { error("Could not read source revision from local capture output: ${output}") }
+                        env.SOURCE_SHA = sourceSha
+                        env.SOURCE_CHANGED = changed
+                        env.IMAGE_TAG = "${sourceSha.take(12)}-b${env.BUILD_NUMBER}"
+                        currentBuild.displayName = "#${env.BUILD_NUMBER} ${sourceSha.take(12)}"
+                        currentBuild.description = changed == 'true' ? "Deploying ${env.CLINIC_SOURCE_BRANCH} at ${sourceSha}" : "No new commit on ${env.CLINIC_SOURCE_BRANCH}"
+                        if (changed == 'false') {
+                            echo "No new commit on ${env.CLINIC_SOURCE_BRANCH}; skipping tests, build, scan and deployment."
+                        } else {
+                            echo "SOURCE_BRANCH=${env.CLINIC_SOURCE_BRANCH} SOURCE_SHA=${sourceSha} IMAGE_TAG=${env.IMAGE_TAG}"
+                        }
+                    }
+                }
+            }
+        }
+        stage('Backend tests') {
+            when { expression { env.SOURCE_CHANGED == 'true' } }
+            steps {
+                dir('source/backend') {
                     powershell '''
-                        $ErrorActionPreference = 'Stop'
-                        if (-not $env:CLINIC_SOURCE_REPO) { throw 'Run scripts/start-jenkins-kubernetes.ps1 on the presentation machine first.' }
-                        $revision = (& git -C $env:CLINIC_SOURCE_REPO rev-parse refs/heads/main).Trim()
-                        if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve local main.' }
-                        & git clone --no-hardlinks --no-checkout -- $env:CLINIC_SOURCE_REPO .
-                        if ($LASTEXITCODE -ne 0) { throw 'Source checkout failed.' }
-                        & git checkout --detach $revision
-                        if ($LASTEXITCODE -ne 0) { throw 'Cannot checkout the captured revision.' }
-                        Write-Host "SOURCE_SHA=$revision"
-                    '''
+$ErrorActionPreference = 'Stop'
+$source = (Get-Location).Path
+& docker run --rm --mount "type=bind,source=$source,target=/workspace" --mount 'type=volume,source=clinic-maven-cache,target=/root/.m2' -w /workspace maven:3.9-eclipse-temurin-21 mvn --batch-mode --no-transfer-progress verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend Maven verification failed; deployment stopped.' }
+$reports = @(Get-ChildItem -LiteralPath (Join-Path $source 'target/surefire-reports') -Filter 'TEST-*.xml' -File -ErrorAction SilentlyContinue)
+$testCount = 0
+foreach ($report in $reports) { $xml = [xml][IO.File]::ReadAllText($report.FullName); $testCount += [int]$xml.testsuite.tests }
+if ($testCount -lt 1) { throw 'Maven verification reported zero Surefire tests; deployment stopped.' }
+Write-Host "SUREFIRE_TESTS=$testCount"
+'''
                 }
             }
         }
         stage('Frontend unit tests') {
+            when { expression { env.SOURCE_CHANGED == 'true' } }
             steps {
-                dir('source') {
+                dir('source/frontend') {
                     powershell '''
-                        $ErrorActionPreference = 'Stop'
-                        $frontend = Join-Path (Get-Location).Path 'frontend'
-                        & docker run --rm --mount "type=bind,source=$frontend,target=/app" --mount type=volume,target=/app/node_modules -w /app node:24-alpine sh -c 'npm ci && npm run test:unit -- --run'
-                        if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed; deployment stopped.' }
-                    '''
+$ErrorActionPreference = 'Stop'
+$source = (Get-Location).Path
+& docker run --rm --mount "type=bind,source=$source,target=/app" --mount 'type=volume,source=clinic-frontend-node-modules,target=/app/node_modules' -w /app node:24-alpine sh -c 'npm ci && npm run test:unit -- --run'
+if ($LASTEXITCODE -ne 0) { throw 'Frontend unit tests failed; deployment stopped.' }
+'''
                 }
             }
         }
-        stage('Build and deploy Kubernetes') {
+        stage('Build commit-tagged images') {
+            when { expression { env.SOURCE_CHANGED == 'true' } }
             steps {
                 dir('source') {
                     powershell '''
-                        $sha = (& git rev-parse --short=12 HEAD).Trim()
-                        if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the deployment revision.' }
-                        & ./scripts/deploy-kubernetes.ps1 -ImageTag "$sha-b$env:BUILD_NUMBER"
-                    '''
+$ErrorActionPreference = 'Stop'
+& docker build -t "docker.io/library/clinic-backend:$env:IMAGE_TAG" ./backend
+if ($LASTEXITCODE -ne 0) { throw 'Backend image build failed.' }
+& docker build -t "docker.io/library/clinic-frontend:$env:IMAGE_TAG" ./frontend
+if ($LASTEXITCODE -ne 0) { throw 'Frontend image build failed.' }
+'''
+                }
+            }
+        }
+        stage('Scan for HIGH and CRITICAL vulnerabilities') {
+            when { expression { env.SOURCE_CHANGED == 'true' } }
+            steps {
+                dir('source') {
+                    powershell '''
+$ErrorActionPreference = 'Stop'
+$scanner = Join-Path $env:CLINIC_SOURCE_REPO 'scripts/scan-kubernetes-images.ps1'
+$reports = Join-Path (Get-Location).Path 'reports'
+& $scanner -ImageTag $env:IMAGE_TAG -ReportDirectory $reports
+if ($LASTEXITCODE -ne 0) { throw 'HIGH/CRITICAL vulnerability gate failed; deployment stopped.' }
+'''
+                }
+            }
+        }
+        stage('Deploy and verify rollout') {
+            when { expression { env.SOURCE_CHANGED == 'true' } }
+            steps {
+                dir('source') {
+                    withCredentials([string(credentialsId: 'clinic-local-kubeconfig', variable: 'CLINIC_KUBECONFIG_JSON')]) {
+                        powershell '''
+$ErrorActionPreference = 'Stop'
+$credentialPath = Join-Path $env:TEMP ("clinic-kubeconfig-" + [guid]::NewGuid().ToString('N') + '.json')
+try {
+    [IO.File]::WriteAllText($credentialPath, $env:CLINIC_KUBECONFIG_JSON, (New-Object Text.UTF8Encoding($false)))
+    $env:KUBECONFIG = $credentialPath
+    & ./scripts/deploy-kubernetes.ps1 -Context clinic-deployer -ImageTag $env:IMAGE_TAG -DatabaseKind $env:CLINIC_DATABASE_KIND -SeedMode $env:CLINIC_SEED_MODE -SkipBuild -SkipScan
+    if ($LASTEXITCODE -ne 0) { throw 'Kubernetes deployment or rollout verification failed.' }
+    $recorder = Join-Path $env:CLINIC_SOURCE_REPO 'scripts/jenkins-record-deployment.ps1'
+    & $recorder -SourceSha $env:SOURCE_SHA
+} finally {
+    Remove-Item -LiteralPath $credentialPath -Force -ErrorAction SilentlyContinue
+}
+'''
+                    }
                 }
             }
         }
     }
     post {
+        always {
+            script {
+                if (env.SOURCE_SHA ==~ /(?i)^[0-9a-f]{40}$/) {
+                    powershell '''
+$ErrorActionPreference = 'Stop'
+$recorder = Join-Path $env:CLINIC_SOURCE_REPO 'scripts/jenkins-record-deployment.ps1'
+$state = Join-Path $env:LOCALAPPDATA 'ClinicJenkinsAgent/last-attempted-sha.txt'
+& $recorder -SourceSha $env:SOURCE_SHA -StatePath $state
+'''
+                }
+            }
+            archiveArtifacts artifacts: 'source/reports/trivy-*.json,source/backend/target/surefire-reports/TEST-*.xml', allowEmptyArchive: true
+        }
         success {
-            echo 'Kubernetes rollout is Ready. Open localhost:38001 after starting the documented port-forward command.'
+            echo "Kubernetes rollout is Ready for ${env.SOURCE_SHA}. Open localhost:38001 after starting the documented port-forward command."
         }
         failure {
-            echo 'Build or Kubernetes rollout failed. See the failing stage and Kubernetes events in this build.'
+            echo 'Build, vulnerability gate or Kubernetes rollout failed; the last deployed SHA was retained.'
         }
     }
 }
