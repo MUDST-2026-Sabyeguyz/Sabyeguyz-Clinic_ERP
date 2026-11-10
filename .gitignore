@@ -6,3 +6,4 @@
 # Google service account keys must never be committed
 calendar-sync-key*.json
 /secrets/
+/deployment-evidence.json

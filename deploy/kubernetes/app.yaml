@@ -1,57 +1,4 @@
 apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-data
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-spec:
-  selector: {app: postgres}
-  ports: [{port: 5432, targetPort: 5432}]
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgres
-spec:
-  serviceName: postgres
-  replicas: 1
-  selector:
-    matchLabels: {app: postgres}
-  template:
-    metadata:
-      labels: {app: postgres}
-    spec:
-      automountServiceAccountToken: false
-      containers:
-        - name: postgres
-          image: postgres:16-alpine
-          env:
-            - {name: POSTGRES_DB, value: clinic_demo}
-            - {name: POSTGRES_USER, value: clinic}
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef: {name: clinic-secrets, key: POSTGRES_PASSWORD}
-          ports: [{containerPort: 5432}]
-          volumeMounts:
-            - {name: data, mountPath: /var/lib/postgresql/data, subPath: postgres}
-          readinessProbe:
-            exec:
-              command: [pg_isready, -U, clinic, -d, clinic_demo]
-            initialDelaySeconds: 5
-            periodSeconds: 5
-      volumes:
-        - name: data
-          persistentVolumeClaim: {claimName: postgres-data}
----
-apiVersion: v1
 kind: Service
 metadata:
   name: backend
@@ -78,10 +25,12 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: SPRING_PROFILES_ACTIVE, value: 'docker,v2'}
+            - {name: CLINIC_DATABASE_KIND, value: '__DATABASE_KIND__'}
+            - {name: CLINIC_SEED_MODE, value: '__SEED_MODE__'}
             - {name: SERVER_FORWARD_HEADERS_STRATEGY, value: framework}
-            - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/clinic_demo'}
+            - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/__DATABASE_NAME__'}
             - {name: SPRING_DATASOURCE_USERNAME, value: clinic}
-            - {name: APP_V2_FLYWAY_EXTRA_LOCATIONS, value: ',classpath:db/seed_v2'}
+            - {name: SPRING_FLYWAY_ENABLED, value: 'true'}
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef: {name: clinic-secrets, key: SPRING_DATASOURCE_PASSWORD}

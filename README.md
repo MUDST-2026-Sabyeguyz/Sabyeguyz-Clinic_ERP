@@ -24,6 +24,8 @@ Services:
 
 The first startup runs Flyway migrations automatically. PostgreSQL data is stored in the project's `postgres-v2-data` Docker volume and survives `docker compose down` followed by `docker compose up -d`. Use `docker compose down -v` only when you intentionally want to remove the database volume.
 
+Demo seed data is disabled by default, including when `CLINIC_SEED_MODE` is omitted. To load the full synthetic dataset, use a disposable local database and explicitly set `CLINIC_DATABASE_KIND=local-demo` and `CLINIC_SEED_MODE=full` in `.env` before startup. `minimal` selects the smaller legacy demo; `none` runs schema migrations and reference data only. Demo modes are rejected for `prod`/`production` Spring profiles and when the database kind is not explicitly `local-demo`. A database with an existing seed history must continue using that same mode; use a separate empty database to change modes. Flyway never removes demo rows already present in an existing database.
+
 The Compose project is named `sabyeguyz`. Data from an older Compose project stays in its previous volume and is not moved into the new project automatically.
 
 Copy `.env.example` to `.env` and set unique database and JWT secrets before starting Compose. Ports can also be changed there.
