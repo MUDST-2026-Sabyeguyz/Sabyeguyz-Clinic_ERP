@@ -14,7 +14,9 @@ $reportsPath = if ($ReportDirectory) { [IO.Path]::GetFullPath($ReportDirectory) 
 
 foreach ($imageName in @('clinic-backend', 'clinic-frontend')) {
     $image = "docker.io/library/${imageName}:$ImageTag"
-    $archive = Join-Path ([IO.Path]::GetTempPath()) ("clinic-scan-$imageName-" + [guid]::NewGuid().ToString('N') + '.tar')
+    # Keep the archive beneath the already-mounted reports directory. Docker Desktop
+    # otherwise prompts to share each randomly named file under the system temp path.
+    $archive = Join-Path $reportsPath (".clinic-scan-$imageName-" + [guid]::NewGuid().ToString('N') + '.tar')
     $report = "trivy-$imageName.json"
     try {
         & docker image inspect $image *> $null
