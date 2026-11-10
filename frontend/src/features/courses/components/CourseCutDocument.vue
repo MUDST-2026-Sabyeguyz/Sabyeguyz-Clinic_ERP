@@ -13,15 +13,16 @@ defineProps<{
   total?: number
   used?: number
   remaining?: number
-  entries: Array<{ date?: string; therapist?: string; branch?: string; patient?: string; quantity?: number }>
-  showPatient?: boolean
+  entries: Array<{ date?: string; therapist?: string; patient?: string; quantity?: number }>
 }>()
 
-function formatDate(value?: string, long = false) {
+function formatDate(value?: string) {
   const date = value ? new Date(value) : null
   if (!date || Number.isNaN(date.getTime())) return '—'
   return date.toLocaleDateString('th-TH', {
-    dateStyle: long ? 'long' : 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
     timeZone: 'Asia/Bangkok',
   })
 }
@@ -31,7 +32,6 @@ function formatDate(value?: string, long = false) {
   <article class="course-cut-document">
     <header>
       <h1>ใบตัดคอร์สการรักษา</h1>
-      <p v-if="branchName">{{ branchName }}</p>
       <p v-if="address">ที่อยู่: {{ address }}</p>
       <p v-if="phone">โทรศัพท์: {{ phone }}</p>
     </header>
@@ -39,9 +39,8 @@ function formatDate(value?: string, long = false) {
       <template v-if="version != null">ฉบับ {{ version }} · </template>
       ออก ณ วันที่: {{ formatDate(issuedAt) }}
     </p>
-    <div v-if="courseNo || buyer" class="references">
+    <div v-if="courseNo" class="references">
       <span v-if="courseNo">เลขคอร์ส: {{ courseNo }}</span>
-      <span v-if="buyer">ผู้ซื้อ / HN: {{ buyer }}</span>
     </div>
     <section class="summary">
       <p>วันที่ซื้อคอร์ส {{ formatDate(purchasedAt) }}</p>
@@ -55,25 +54,23 @@ function formatDate(value?: string, long = false) {
       <table aria-label="ประวัติการใช้สิทธิ์คอร์ส">
         <thead>
           <tr>
-            <th scope="col">วันที่รับบริการ</th>
-            <th v-if="showPatient" scope="col">ผู้ใช้สิทธิ์</th>
-            <th scope="col">นักกายภาพผู้ให้บริการ</th>
-            <th scope="col">สาขา</th>
+            <th scope="col">วันที่เข้ารักษา</th>
+            <th scope="col">นักกายภาพที่ทำการรักษา</th>
+            <th scope="col">ผู้ใช้งานแพ็กเกจ</th>
             <th scope="col">จำนวน</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(entry, index) in entries" :key="index">
-            <td>{{ formatDate(entry.date, true) }}</td>
-            <td v-if="showPatient">{{ entry.patient || '—' }}</td>
+            <td>{{ formatDate(entry.date) }}</td>
             <td>{{ entry.therapist || '—' }}</td>
-            <td>{{ entry.branch || '—' }}</td>
+            <td>{{ entry.patient || '—' }}</td>
             <td>{{ entry.quantity ?? '—' }}</td>
           </tr>
         </tbody>
         <tfoot>
           <tr>
-            <th :colspan="showPatient ? 4 : 3" scope="row">รวมจำนวนที่ใช้</th>
+            <th colspan="3" scope="row">รวมจำนวนที่ใช้</th>
             <td>{{ used ?? '—' }}</td>
           </tr>
         </tfoot>
