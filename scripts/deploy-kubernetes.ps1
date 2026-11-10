@@ -24,7 +24,7 @@ function Run-Kube {
     if ($LASTEXITCODE -ne 0) { throw "kubectl failed: $($args -join ' ')" }
 }
 function Sql-Value([string]$Database, [string]$Sql) {
-    $lines = Run-Kube exec postgres-0 -- psql -X -v ON_ERROR_STOP=1 -U clinic -d $Database -tAc $Sql
+    $lines = Run-Kube exec postgres-0 '--' psql -X -v ON_ERROR_STOP=1 -U clinic -d $Database -tAc $Sql
     return ([string]($lines -join [Environment]::NewLine)).Trim()
 }
 function Write-Utf8([string]$Path, [string]$Value) {
@@ -135,7 +135,7 @@ $jobName='clinic-migrate-'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss')+'-'+[gu
 try {
     Run-Kube apply -f (Join-Path $repoPath 'deploy/kubernetes/postgres.yaml')
     Run-Kube rollout status statefulset/postgres --timeout=180s
-    if (-not (Sql-Value postgres "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName'")) { Run-Kube exec postgres-0 -- createdb -U clinic $DatabaseName }
+    if (-not (Sql-Value postgres "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName'")) { Run-Kube exec postgres-0 '--' createdb -U clinic $DatabaseName }
     $values=@{'__BACKEND_IMAGE__'=$backendImage;'__FRONTEND_IMAGE__'=$frontendImage;'__DATABASE_NAME__'=$DatabaseName;'__DATABASE_KIND__'=$DatabaseKind;'__SPRING_PROFILES__'='docker,v2';'__SEED_MODE__'=$SeedMode;'__MIGRATION_JOB__'=$jobName}
     $jobYaml=[IO.File]::ReadAllText((Join-Path $repoPath 'deploy/kubernetes/migration-job.yaml'))
     $appYaml=[IO.File]::ReadAllText((Join-Path $repoPath 'deploy/kubernetes/app.yaml'))
@@ -180,7 +180,8 @@ try {
 } catch {
     & kubectl --context $KubeContext -n $Namespace get pods -o wide
     & kubectl --context $KubeContext -n $Namespace get events --sort-by=.metadata.creationTimestamp
-    & kubectl --context $KubeContext -n $Namespace logs "job/$jobName" --tail=80
+    $jobExists=& kubectl --context $KubeContext -n $Namespace get job $jobName --ignore-not-found -o name 2>$null
+    if ($LASTEXITCODE -eq 0 -and $jobExists) { & kubectl --context $KubeContext -n $Namespace logs "job/$jobName" --tail=80 }
     throw
 } finally {
     foreach ($path in @($manifest,$jobManifest)) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path } }
