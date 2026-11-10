@@ -20,6 +20,9 @@
 - Checksum validation applies **only to card-read results**. Do not change `PatientService` national-ID validation (existing demo data and tests use IDs that are not checksum-valid).
 - A manager creates workstations; pairing codes are single use and expire after 10 minutes; tokens are stored only as SHA-256 hex.
 - UI text is Thai. Staff may always type the data by hand (the reader is optional).
+- **Flow:** on the patient page, "+ ลงทะเบียนผู้ป่วยใหม่" opens a dialog with two ways: `กรอกข้อมูลเอง` (the plain form, unchanged) or `อ่านข้อมูลจากบัตรประชาชน`. Reading shows the insert-the-card animation and `กรุณาเสียบบัตรประชาชน`, then `ระบบกำลังอ่านข้อมูล` once the card is in the reader. **There is no cancel button while waiting**: the dialog cannot be dismissed, and the wait ends by itself (agent 30 s, screen 50 s) in a failure step with `ลองอีกครั้ง` / `กรอกข้อมูลเอง`.
+- **One read does both jobs:** the server looks the card's number up. Found → popup `พบผู้ป่วยในระบบแล้ว` (HN + name only, green `ดูรายละเอียด` button to the patient page) and **no card data leaves the server**. Not found → the card data is returned and handed to the registration form through an in-memory, read-once hand-off (never the URL or browser storage); the form is filled, editable, and still needs the consent tick.
+- Only the `REGISTER` purpose exists. The separate card button on the patient search page is dropped; foreign patients (passport) always use `กรอกข้อมูลเอง`.
 - Commit messages carry **no AI attribution lines** (project rule). Do not push; pushing is the user's decision.
 - Backend tests run through Docker (host JVM cannot open a NIO selector): use the existing Testcontainers-based HTTP tests; run them as described in each task's "Run" line.
 - **One branch, `feat/id-card-reader`**, created from the cleaned `fix-frontend` (`8cd06e5`). It holds the docs, the backend module, the agent and the frontend, and touches no existing file beyond `SecurityConfig.java`, `client.ts`, the two patient views and the router, so it can be merged into other branches later. `fix-frontend` and `feat/database` already carry *different* `V1022` migrations; the new migration is `V1023`, which is free on both today: renumber it at merge time if another `V1023` appears.
@@ -48,7 +51,7 @@ Backend resources/tests: `db/migration/V1023__id_card_reader.sql`; tests under `
 
 Agent (`id-card-agent/`, Maven, package `com.sabyeguyz.idcard.agent`): `CardData`, `ThaiIdCardParser`, `ApduChannel`, `ThaiIdCardReader`, `CardSource`/`PcscCardSource`, `AgentConfig`, `BackendClient`, `AgentLoop`, `Autostart`, `StatusTray`, `AgentMain`, `packaging/`.
 
-Frontend (`frontend/src/`): `api/client.ts` (modify), `features/idcard/{cardToForm.ts,useIdCardReader.ts,IdCardReadButton.vue,CardReadersView.vue}` + specs, `features/patients/views/PatientRegistrationView.vue` (modify), `features/patients/views/PatientSearchView.vue` (modify), `router/index.ts` (modify).
+Frontend (`frontend/src/`): `api/client.ts` (modify), `features/idcard/{cardToForm.ts,useIdCardReader.ts,pendingCard.ts,IdCardInsertAnimation.vue,RegisterMethodDialog.vue,CardReadersView.vue}` + specs, `features/patients/views/PatientRegistrationView.vue` (modify), `features/patients/views/PatientSearchView.vue` (modify), `router/index.ts` (modify).
 
 ---
 
@@ -324,7 +327,7 @@ CREATE TABLE id_card_read_audit (
     purpose         VARCHAR(10) NOT NULL,
     outcome         VARCHAR(20) NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_id_card_read_purpose CHECK (purpose IN ('REGISTER', 'LOOKUP')),
+    CONSTRAINT chk_id_card_read_purpose CHECK (purpose IN ('REGISTER')),
     CONSTRAINT chk_id_card_read_outcome CHECK (outcome IN
         ('SUCCESS', 'NO_CARD', 'NO_READER', 'ERROR', 'INVALID_CARD', 'TIMEOUT'))
 );
@@ -863,12 +866,13 @@ git commit -m "feat(idcard): manager pairs counter card readers with a one-time 
 **Interfaces:**
 - Produces:
   - `record CardData(String nationalId, String titleTh, String firstNameTh, String middleNameTh, String lastNameTh, String fullNameEn, LocalDate birthDate, String gender, String address, LocalDate issueDate, LocalDate expiryDate, boolean lifetime)`
-  - `ReadRequestStore.Purpose {REGISTER, LOOKUP}`; `ReadRequestStore.ReadRequest` with `id()`, `workstationId()`, `userId()`, `branchId()`, `purpose()`
-  - `ReadRequestStore.Claim(Status status, ReadRequest request, Object payload, String outcome, String message)`; `Status {PENDING, DONE, FAILED}`
+  - `ReadRequestStore.Purpose {REGISTER}`; `ReadRequestStore.ReadRequest` with `id()`, `workstationId()`, `userId()`, `branchId()`, `purpose()`
+  - `ReadRequestStore.Claim(Status status, ReadRequest request, Object payload, String outcome, String message)`; `Status {PENDING, READING, DONE, FAILED}`
   - `ReadRequestStore(Clock, Duration ttl)`; no-arg constructor (UTC, 60 s)
   - `ReadRequest create(Long workstationId, Long userId, Long branchId, Purpose purpose)`
   - `Optional<ReadRequest> next(Long workstationId, Duration wait) throws InterruptedException`
   - `Optional<ReadRequest> find(String id)`
+  - `void markReading(String id, Long workstationId)` — the card is in the reader: a `PENDING` read becomes `READING`; `claim` reports `READING` without consuming it
   - `void complete(String id, Long workstationId, Object payload)`; `void fail(String id, Long workstationId, String outcome, String message)` (both throw `NoSuchElementException` if the request does not belong to that workstation)
   - `Optional<Claim> claim(String id, Long userId)` — empty when unknown, expired-and-already-claimed or owned by another user; `DONE`/`FAILED` claims delete the request; a `PENDING` request past its expiry is deleted and returned as `FAILED`/`TIMEOUT`
   - `ReadRateLimiter(Clock, int maxPerMinute)`; `boolean tryAcquire(Long userId)`
@@ -922,7 +926,7 @@ class ReadRequestStoreTest {
 
     @Test
     void aFailureIsDeliveredOnceWithItsOutcome() {
-        var request = store.create(7L, 1L, 10L, ReadRequestStore.Purpose.LOOKUP);
+        var request = store.create(7L, 1L, 10L, ReadRequestStore.Purpose.REGISTER);
         store.fail(request.id(), 7L, "NO_CARD", "ไม่พบบัตร");
         var claim = store.claim(request.id(), 1L).orElseThrow();
         assertEquals(ReadRequestStore.Status.FAILED, claim.status());
@@ -945,6 +949,16 @@ class ReadRequestStoreTest {
         store.create(7L, 1L, 10L, ReadRequestStore.Purpose.REGISTER);
         clock.advance(Duration.ofSeconds(61));
         assertTrue(store.next(7L, Duration.ZERO).isEmpty());
+    }
+
+    @Test
+    void theUserSeesReadingOnceTheCardIsInTheReader() {
+        var request = store.create(7L, 1L, 10L, ReadRequestStore.Purpose.REGISTER);
+        store.markReading(request.id(), 7L);
+        assertEquals(ReadRequestStore.Status.READING, store.claim(request.id(), 1L).orElseThrow().status());
+        assertEquals(ReadRequestStore.Status.READING, store.claim(request.id(), 1L).orElseThrow().status(), "reading is not consumed");
+        store.complete(request.id(), 7L, "card");
+        assertEquals(ReadRequestStore.Status.DONE, store.claim(request.id(), 1L).orElseThrow().status());
     }
 
     @Test
@@ -1030,9 +1044,9 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ReadRequestStore {
-    public enum Purpose { REGISTER, LOOKUP }
+    public enum Purpose { REGISTER }
 
-    public enum Status { PENDING, DONE, FAILED }
+    public enum Status { PENDING, READING, DONE, FAILED }
 
     public record ReadRequest(String id, Long workstationId, Long userId, Long branchId, Purpose purpose, Instant expiresAt) {}
 
@@ -1104,13 +1118,19 @@ public class ReadRequestStore {
         entry.status = Status.FAILED;
     }
 
+    /** The card is in the reader: the screen can say it is being read. Does nothing once the read has finished. */
+    public void markReading(String id, Long workstationId) {
+        Entry entry = owned(id, workstationId);
+        if (entry.status == Status.PENDING) entry.status = Status.READING;
+    }
+
     /** The state of a read for the user who started it; a finished state is delivered once and removed. */
     public Optional<Claim> claim(String id, Long userId) {
         Entry entry = entries.get(id);
         if (entry == null || !entry.request.userId().equals(userId)) return Optional.empty();
-        if (entry.status == Status.PENDING) {
+        if (entry.status == Status.PENDING || entry.status == Status.READING) {
             if (entry.request.expiresAt().isAfter(clock.instant())) {
-                return Optional.of(new Claim(Status.PENDING, entry.request, null, null, null));
+                return Optional.of(new Claim(entry.status, entry.request, null, null, null));
             }
             entries.remove(id);
             return Optional.of(new Claim(Status.FAILED, entry.request, null, "TIMEOUT", "หมดเวลา ไม่ได้รับข้อมูลจากเครื่องอ่านบัตร"));
@@ -1180,7 +1200,7 @@ public class ReadRateLimiter {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: same command as Step 2. Expected: 7 tests PASS.
+Run: same command as Step 2. Expected: 8 tests PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -1195,17 +1215,19 @@ git commit -m "feat(idcard): in-memory card reads, delivered once, with a per-us
 
 **Files:**
 - Create: `.../idcard/IdCardService.java`, `IdCardReadController.java`
-- Modify: `.../idcard/IdCardAgentController.java` (add `next`, `result`)
+- Modify: `.../idcard/IdCardAgentController.java` (add `next`, `progress`, `result`)
 - Test: `backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardReadHttpTest.java`
 
 **Interfaces:**
 - Consumes: Tasks 1–4 (`ThaiNationalId`, `WorkstationService`, `ReadRequestStore`, `ReadRateLimiter`, `CardData`, audit repo, `PatientRepository.findByNationalId`, `BranchAccessPolicy.scope(null)`, `CurrentActor.requireId()`).
+- One read does both jobs (the "register or find" flow): the server looks the card's number up first.
 - Produces (REST):
-  - `POST /api/id-card/reads` `{workstationId, purpose}` → 202 `{id, expiresAt}`; 404 unknown/revoked workstation; 403 other branch; 409 workstation offline; 429 too many
-  - `GET /api/id-card/reads/{id}` → `{status: PENDING|DONE|FAILED, outcome?, message?, card?, lookup?}`; 404 once delivered/unknown/another user's
+  - `POST /api/id-card/reads` `{workstationId, purpose: "REGISTER"}` → 202 `{id, expiresAt}`; 400 any other purpose; 404 unknown/revoked workstation; 403 other branch; 409 workstation offline; 429 too many
+  - `GET /api/id-card/reads/{id}` → `{status: PENDING|READING|DONE|FAILED, outcome?, message?, card?, lookup?}`; 404 once delivered/unknown/another user's.
+    `READING` means the card is in the reader. `DONE` always carries `lookup` = `{exists, patient: {id, hn, fullName} | null}`; `card` is present **only when the patient does not exist yet**.
   - `GET /api/id-card/agent/next?waitSeconds=` (Bearer token) → 200 `{requestId, purpose}` or 204
+  - `POST /api/id-card/agent/progress` (Bearer token) `{requestId, stage: "CARD_PRESENT"}` → 204 (the read moves to `READING`)
   - `POST /api/id-card/agent/result` (Bearer token) `{requestId, status: OK|NO_CARD|NO_READER|ERROR, message?, card?}` → 204
-- `lookup` = `{exists: boolean, patient: {id, hn, fullName} | null}`; a LOOKUP never returns `card`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1216,6 +1238,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -1253,8 +1276,8 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         return card;
     }
 
-    String start(String token, String purpose) {
-        HttpResult started = replyAs(token, "POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", purpose));
+    String start(String jwt) {
+        HttpResult started = replyAs(jwt, "POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER"));
         assertEquals(202, started.status(), started.body().toString());
         return started.body().path("id").asText();
     }
@@ -1263,6 +1286,11 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         HttpResult next = replyAs(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null);
         assertEquals(200, next.status(), next.body().toString());
         return next.body().path("requestId").asText();
+    }
+
+    void agentSaysCardIsInTheReader(String requestId) {
+        assertEquals(204, replyAs(agentToken, "POST", "/api/id-card/agent/progress",
+                Map.of("requestId", requestId, "stage", "CARD_PRESENT")).status());
     }
 
     void agentAnswers(String requestId, String status, Map<String, Object> card) {
@@ -1274,14 +1302,16 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     }
 
     @Test
-    void registerReadDeliversTheCardOnceToTheUserWhoStartedIt() {
-        String id = start(token, "REGISTER");
+    void aCardOfSomeoneNewIsDeliveredOnceTogetherWithTheNotFoundLookup() {
+        String id = start(token);
         assertEquals("REGISTER", replyAs(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null).body().path("purpose").asText());
         assertEquals("PENDING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
 
         agentAnswers(id, "OK", card(VALID_ID));
         HttpResult done = reply("GET", "/api/id-card/reads/" + id, null);
         assertEquals("DONE", done.body().path("status").asText());
+        assertFalse(done.body().path("lookup").path("exists").asBoolean());
+        assertTrue(done.body().path("lookup").path("patient").isNull());
         assertEquals(VALID_ID, done.body().path("card").path("nationalId").asText());
         assertEquals("1997-01-31", done.body().path("card").path("birthDate").asText());
 
@@ -1290,34 +1320,45 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     }
 
     @Test
-    void lookupFindsAnExistingPatientAndNeverReturnsTheCard() {
+    void aPatientWhoIsAlreadyRegisteredIsFoundAndNoCardDataLeavesTheServer() {
         db.update("update patient set national_id=? where patient_id=?", VALID_ID, patientId);
-        String id = start(token, "LOOKUP");
+        String id = start(token);
         agentTakes();
         agentAnswers(id, "OK", card(VALID_ID));
 
         HttpResult done = reply("GET", "/api/id-card/reads/" + id, null);
         assertEquals("DONE", done.body().path("status").asText());
         assertTrue(done.body().path("lookup").path("exists").asBoolean());
-        assertNotNull(done.body().path("lookup").path("patient").path("hn").asText(null));
+        assertFalse(done.body().path("lookup").path("patient").path("hn").asText("").isBlank());
+        assertFalse(done.body().path("lookup").path("patient").path("fullName").asText("").isBlank());
         String text = done.body().toString();
         assertFalse(done.body().has("card"));
         assertFalse(text.contains("1997-01-31") || text.contains(VALID_ID) || text.contains("ลาดพร้าว"), text);
     }
 
     @Test
-    void lookupOfAnUnknownNumberSaysSo() {
-        String id = start(token, "LOOKUP");
+    void theScreenSeesReadingOnceTheCardIsInTheReader() {
+        String id = start(token);
         agentTakes();
+        assertEquals("PENDING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
+
+        agentSaysCardIsInTheReader(id);
+        assertEquals("READING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
+        assertEquals("READING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText(), "reading is not consumed");
+
         agentAnswers(id, "OK", card(VALID_ID));
-        HttpResult done = reply("GET", "/api/id-card/reads/" + id, null);
-        assertFalse(done.body().path("lookup").path("exists").asBoolean());
-        assertTrue(done.body().path("lookup").path("patient").isNull());
+        assertEquals("DONE", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
+    }
+
+    @Test
+    void progressForAnUnknownReadIsRefused() {
+        assertEquals(404, replyAs(agentToken, "POST", "/api/id-card/agent/progress",
+                Map.of("requestId", UUID.randomUUID().toString(), "stage", "CARD_PRESENT")).status());
     }
 
     @Test
     void aNumberWithAWrongCheckDigitIsRefused() {
-        String id = start(token, "REGISTER");
+        String id = start(token);
         agentTakes();
         agentAnswers(id, "OK", card("1101700005110"));
         HttpResult failed = reply("GET", "/api/id-card/reads/" + id, null);
@@ -1330,7 +1371,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     @Test
     void theAgentCanReportNoCardNoReaderAndErrors() {
         for (String outcome : new String[] {"NO_CARD", "NO_READER", "ERROR"}) {
-            String id = start(token, "REGISTER");
+            String id = start(token);
             agentTakes();
             agentAnswers(id, outcome, null);
             HttpResult failed = reply("GET", "/api/id-card/reads/" + id, null);
@@ -1338,6 +1379,12 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
             assertEquals(outcome, failed.body().path("outcome").asText());
         }
         assertEquals(3L, db.queryForObject("select count(*) from id_card_read_audit", Long.class));
+    }
+
+    @Test
+    void onlyTheRegisterPurposeExists() {
+        HttpResult started = reply("POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "LOOKUP"));
+        assertEquals(400, started.status());
     }
 
     @Test
@@ -1349,7 +1396,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
 
     @Test
     void anotherUsersReadIsInvisible() {
-        String id = start(token, "REGISTER");
+        String id = start(token);
         String therapist = login("therapist", "therapist123");
         assertEquals(404, replyAs(therapist, "GET", "/api/id-card/reads/" + id, null).status());
     }
@@ -1365,6 +1412,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     void aRevokedWorkstationsTokenStopsWorking() {
         assertEquals(204, reply("POST", "/api/id-card/workstations/" + workstationId + "/revoke", null).status());
         assertEquals(401, replyAs(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
+        assertEquals(401, replyAs(agentToken, "POST", "/api/id-card/agent/progress", Map.of("requestId", "x", "stage", "CARD_PRESENT")).status());
         assertEquals(401, replyAs("not-a-token", "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
         assertEquals(401, replyAs(null, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
     }
@@ -1374,7 +1422,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         int accepted = 0;
         int refused = 0;
         for (int i = 0; i < 22; i++) {
-            int status = reply("POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "LOOKUP")).status();
+            int status = reply("POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER")).status();
             if (status == 202) accepted++;
             if (status == 429) refused++;
         }
@@ -1384,7 +1432,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
 
     @Test
     void auditRecordsTheReadWithoutAnyCardData() {
-        String id = start(token, "REGISTER");
+        String id = start(token);
         agentTakes();
         agentAnswers(id, "OK", card(VALID_ID));
         var row = db.queryForMap("select workstation_id, user_id, branch_id, purpose, outcome from id_card_read_audit");
@@ -1433,6 +1481,9 @@ public class IdCardService {
     public record PatientBrief(Long id, String hn, String fullName) {}
 
     public record LookupResult(boolean exists, PatientBrief patient) {}
+
+    /** What a finished read holds: who the number belongs to, and the card itself only when nobody does yet. */
+    public record ReadResult(LookupResult lookup, CardData card) {}
 
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     public record ReadView(String status, String outcome, String message, CardData card, LookupResult lookup) {}
@@ -1492,15 +1543,19 @@ public class IdCardService {
         }
     }
 
+    /** The agent saw a card in the reader and is about to read it: the screen can say "reading". */
+    public void progress(CardReaderWorkstation workstation, String requestId, String stage) {
+        ReadRequestStore.ReadRequest request = requestOf(workstation, requestId);
+        if ("CARD_PRESENT".equals(stage)) store.markReading(request.id(), workstation.getId());
+    }
+
     @Transactional
     public void agentResult(CardReaderWorkstation workstation, AgentResult result) {
-        ReadRequestStore.ReadRequest request = store.find(result.requestId())
-                .filter(found -> found.workstationId().equals(workstation.getId()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ไม่พบคำขออ่านบัตร"));
+        ReadRequestStore.ReadRequest request = requestOf(workstation, result.requestId());
         String status = result.status() == null ? "" : result.status();
         switch (status) {
             case "OK" -> finishCard(workstation, request, result.card());
-            case "NO_CARD" -> failAndAudit(workstation, request, "NO_CARD", "ไม่พบบัตร ใส่บัตรแล้วกดอ่านใหม่");
+            case "NO_CARD" -> failAndAudit(workstation, request, "NO_CARD", "ไม่พบบัตร ใส่บัตรแล้วลองใหม่");
             case "NO_READER" -> failAndAudit(workstation, request, "NO_READER", "ไม่พบเครื่องอ่านบัตร ตรวจสายและเสียบเครื่องอ่านใหม่");
             default -> failAndAudit(workstation, request, "ERROR",
                     result.message() == null || result.message().isBlank() ? "อ่านบัตรไม่สำเร็จ ลองใหม่อีกครั้ง" : result.message());
@@ -1513,14 +1568,22 @@ public class IdCardService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ไม่พบคำขออ่านบัตร"));
         return switch (claim.status()) {
             case PENDING -> new ReadView("PENDING", null, null, null, null);
+            case READING -> new ReadView("READING", null, null, null, null);
             case FAILED -> {
                 if ("TIMEOUT".equals(claim.outcome())) audit(claim.request(), "TIMEOUT");
                 yield new ReadView("FAILED", claim.outcome(), claim.message(), null, null);
             }
-            case DONE -> claim.payload() instanceof LookupResult lookup
-                    ? new ReadView("DONE", null, null, null, lookup)
-                    : new ReadView("DONE", null, null, (CardData) claim.payload(), null);
+            case DONE -> {
+                ReadResult result = (ReadResult) claim.payload();
+                yield new ReadView("DONE", null, null, result.card(), result.lookup());
+            }
         };
+    }
+
+    private ReadRequestStore.ReadRequest requestOf(CardReaderWorkstation workstation, String requestId) {
+        return store.find(requestId == null ? "" : requestId)
+                .filter(found -> found.workstationId().equals(workstation.getId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ไม่พบคำขออ่านบัตร"));
     }
 
     private void finishCard(CardReaderWorkstation workstation, ReadRequestStore.ReadRequest request, CardData card) {
@@ -1528,15 +1591,11 @@ public class IdCardService {
             failAndAudit(workstation, request, "INVALID_CARD", "เลขบัตรไม่ผ่านการตรวจหลักตรวจสอบ อ่านบัตรใหม่หรือกรอกเอง");
             return;
         }
-        if (request.purpose() == ReadRequestStore.Purpose.LOOKUP) {
-            // the card's personal data stays here: the browser only learns whether the patient exists
-            LookupResult lookup = patients.findByNationalId(card.nationalId())
-                    .map(patient -> new LookupResult(true, new PatientBrief(patient.getId(), patient.getPatientHn(), fullName(patient))))
-                    .orElseGet(() -> new LookupResult(false, null));
-            store.complete(request.id(), workstation.getId(), lookup);
-        } else {
-            store.complete(request.id(), workstation.getId(), card);
-        }
+        LookupResult lookup = patients.findByNationalId(card.nationalId())
+                .map(patient -> new LookupResult(true, new PatientBrief(patient.getId(), patient.getPatientHn(), fullName(patient))))
+                .orElseGet(() -> new LookupResult(false, null));
+        // a patient already in the system: the browser learns only who it is, never what the card says
+        store.complete(request.id(), workstation.getId(), new ReadResult(lookup, lookup.exists() ? null : card));
         audit(request, "SUCCESS");
     }
 
@@ -1553,7 +1612,7 @@ public class IdCardService {
         try {
             return ReadRequestStore.Purpose.valueOf(value == null ? "" : value.trim());
         } catch (IllegalArgumentException invalid) {
-            throw new IllegalArgumentException("วัตถุประสงค์ต้องเป็น REGISTER หรือ LOOKUP");
+            throw new IllegalArgumentException("วัตถุประสงค์ต้องเป็น REGISTER");
         }
     }
 
@@ -1611,6 +1670,8 @@ import org.springframework.web.bind.annotation.*;
 public class IdCardAgentController {
     public record PairRequest(String code) {}
 
+    public record ProgressRequest(String requestId, String stage) {}
+
     private final WorkstationService workstations;
     private final IdCardService service;
 
@@ -1634,6 +1695,13 @@ public class IdCardAgentController {
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
+    @PostMapping("/progress")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void progress(@RequestHeader(value = "Authorization", required = false) String authorization,
+                         @RequestBody ProgressRequest request) {
+        service.progress(workstations.authenticate(authorization), request.requestId(), request.stage());
+    }
+
     @PostMapping("/result")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void result(@RequestHeader(value = "Authorization", required = false) String authorization,
@@ -1646,13 +1714,13 @@ public class IdCardAgentController {
 - [ ] **Step 5: Run to verify it passes**
 
 Run: same command as Step 2, then the whole idcard group: `... mvn -q -Dtest='IdCard*HttpTest,ReadRequestStoreTest,ReadRateLimiterTest,ThaiNationalIdTest' test`
-Expected: all PASS. If `lookupFindsAnExistingPatient...` fails because `Patient` has no `getPatientFname()/getPatientLname()/getPatientHn()`, use the getters that `PatientController.fullName(...)` uses (see `PatientController.java`), keeping the output `"<first> <last>"`.
+Expected: all PASS. If `aPatientWhoIsAlreadyRegistered...` fails because `Patient` has no `getPatientFname()/getPatientLname()/getPatientHn()`, use the getters that `PatientController.fullName(...)` uses (see `PatientController.java`), keeping the output `"<first> <last>"`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add backend/src/main backend/src/test/java/com/sabyeguyz/clinicv2/idcard/IdCardReadHttpTest.java
-git commit -m "feat(idcard): start a card read, hand it to the agent, deliver the result once"
+git commit -m "feat(idcard): one card read finds the patient or returns the card, with a reading stage"
 ```
 
 ---
@@ -2190,7 +2258,7 @@ git commit -m "feat(agent): read the Thai ID card applet with GET RESPONSE handl
 
 **Interfaces:**
 - Consumes: `ThaiIdCardReader`, `ApduChannel`.
-- Produces: `interface CardSource { ReadOutcome readWhenPresent(java.time.Duration wait); }`; `record ReadOutcome(Status status, CardData card, String message)`; `enum Status {OK, NO_CARD, NO_READER, ERROR}` (nested in `CardSource`)
+- Produces: `interface CardSource { ReadOutcome readWhenPresent(java.time.Duration wait, Runnable onCardPresent); }` (`onCardPresent` runs as soon as a card is detected, before it is read); `record ReadOutcome(Status status, CardData card, String message)`; `enum Status {OK, NO_CARD, NO_READER, ERROR}` (nested in `CardSource`)
 
 - [ ] **Step 1: Implement**
 
@@ -2199,7 +2267,7 @@ package com.sabyeguyz.idcard.agent;
 
 import java.time.Duration;
 
-/** Waits for a card at the reader and reads it. */
+/** Waits for a card at the reader and reads it; tells the caller the moment a card is detected. */
 interface CardSource {
     enum Status { OK, NO_CARD, NO_READER, ERROR }
 
@@ -2208,7 +2276,7 @@ interface CardSource {
         static ReadOutcome of(Status status, String message) { return new ReadOutcome(status, null, message); }
     }
 
-    ReadOutcome readWhenPresent(Duration wait);
+    ReadOutcome readWhenPresent(Duration wait, Runnable onCardPresent);
 }
 ```
 
@@ -2231,7 +2299,7 @@ final class PcscCardSource implements CardSource {
     private final ThaiIdCardReader reader = new ThaiIdCardReader();
 
     @Override
-    public ReadOutcome readWhenPresent(Duration wait) {
+    public ReadOutcome readWhenPresent(Duration wait, Runnable onCardPresent) {
         List<CardTerminal> terminals;
         try {
             terminals = TerminalFactory.getDefault().terminals().list();
@@ -2243,7 +2311,10 @@ final class PcscCardSource implements CardSource {
         try {
             while (System.nanoTime() < deadline) {
                 for (CardTerminal terminal : terminals) {
-                    if (terminal.isCardPresent()) return readFrom(terminal);
+                    if (terminal.isCardPresent()) {
+                        onCardPresent.run();
+                        return readFrom(terminal);
+                    }
                 }
                 Thread.sleep(300);
             }
@@ -2303,7 +2374,7 @@ git commit -m "feat(agent): read the card through the system PC/SC service"
 - Consumes: Tasks 6–8.
 - Produces:
   - `record AgentConfig(String backendUrl, String token)`; `static AgentConfig load(java.nio.file.Path)`, `void save(java.nio.file.Path)`; `static Path defaultPath()` = `~/.clinic-id-card-agent/config.json`
-  - `BackendClient(String backendUrl, String token)`: `Pairing pair(String code)` (static factory `BackendClient.pair(String backendUrl, String code)` returning `AgentConfig`), `Optional<Command> next(int waitSeconds)`, `void sendResult(String requestId, CardSource.ReadOutcome outcome)`; `record Command(String requestId, String purpose)`; throws `IOException` / `UnauthorizedException` (on 401)
+  - `BackendClient(String backendUrl, String token)`: `Pairing pair(String code)` (static factory `BackendClient.pair(String backendUrl, String code)` returning `AgentConfig`), `Optional<Command> next(int waitSeconds)`, `void sendResult(String requestId, CardSource.ReadOutcome outcome)`, `void sendProgress(String requestId)` (best effort: tells the backend a card is in the reader); `record Command(String requestId, String purpose)`; throws `IOException` / `UnauthorizedException` (on 401)
   - `AgentLoop(BackendClient client, CardSource source, Duration cardWait)`: `boolean runOnce()` returns `true` when a command was handled; `void run()` loops until `stop()`; `void stop()`; status callback `Consumer<String> onStatus`
 
 - [ ] **Step 1: Write the failing test (a fake backend on the JDK's built-in HTTP server)**
@@ -2334,6 +2405,7 @@ class AgentLoopTest {
     final AtomicReference<String> nextResponse = new AtomicReference<>();
     final BlockingQueue<JsonNode> results = new LinkedBlockingQueue<>();
     final AtomicReference<String> lastAuth = new AtomicReference<>();
+    final BlockingQueue<JsonNode> progressCalls = new LinkedBlockingQueue<>();
     final ObjectMapper json = new ObjectMapper();
 
     @BeforeEach
@@ -2354,6 +2426,11 @@ class AgentLoopTest {
         });
         server.createContext("/api/id-card/agent/result", exchange -> {
             results.add(json.readTree(exchange.getRequestBody().readAllBytes()));
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+        });
+        server.createContext("/api/id-card/agent/progress", exchange -> {
+            progressCalls.add(json.readTree(exchange.getRequestBody().readAllBytes()));
             exchange.sendResponseHeaders(204, -1);
             exchange.close();
         });
@@ -2383,7 +2460,7 @@ class AgentLoopTest {
 
     @Test
     void doesNothingWhenThereIsNoCommand() throws Exception {
-        var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"), wait -> { throw new AssertionError("no read expected"); }, Duration.ofSeconds(1));
+        var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"), (wait, cardPresent) -> { throw new AssertionError("no read expected"); }, Duration.ofSeconds(1));
         assertFalse(loop.runOnce());
         assertEquals("Bearer tok-1", lastAuth.get());
         assertTrue(results.isEmpty());
@@ -2392,7 +2469,7 @@ class AgentLoopTest {
     @Test
     void readsTheCardAndSendsTheResultForACommand() throws Exception {
         nextResponse.set("{\"requestId\":\"r-1\",\"purpose\":\"REGISTER\"}");
-        var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"), wait -> CardSource.ReadOutcome.ok(card()), Duration.ofSeconds(1));
+        var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"), (wait, cardPresent) -> CardSource.ReadOutcome.ok(card()), Duration.ofSeconds(1));
         assertTrue(loop.runOnce());
         JsonNode sent = results.poll(2, TimeUnit.SECONDS);
         assertEquals("r-1", sent.path("requestId").asText());
@@ -2403,13 +2480,27 @@ class AgentLoopTest {
 
     @Test
     void reportsWhyTheCardCouldNotBeRead() throws Exception {
-        nextResponse.set("{\"requestId\":\"r-2\",\"purpose\":\"LOOKUP\"}");
+        nextResponse.set("{\"requestId\":\"r-2\",\"purpose\":\"REGISTER\"}");
         var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"),
-                wait -> CardSource.ReadOutcome.of(CardSource.Status.NO_CARD, "ไม่พบบัตร"), Duration.ofSeconds(1));
+                (wait, cardPresent) -> CardSource.ReadOutcome.of(CardSource.Status.NO_CARD, "ไม่พบบัตร"), Duration.ofSeconds(1));
         loop.runOnce();
         JsonNode sent = results.poll(2, TimeUnit.SECONDS);
         assertEquals("NO_CARD", sent.path("status").asText());
         assertTrue(sent.path("card").isMissingNode() || sent.path("card").isNull());
+    }
+
+    @Test
+    void tellsTheBackendThatAReadStartedBeforeSendingTheResult() throws Exception {
+        nextResponse.set("{\"requestId\":\"r-3\",\"purpose\":\"REGISTER\"}");
+        var loop = new AgentLoop(new BackendClient(baseUrl, "tok-1"), (wait, cardPresent) -> {
+            cardPresent.run();
+            return CardSource.ReadOutcome.ok(card());
+        }, Duration.ofSeconds(1));
+        loop.runOnce();
+        JsonNode progress = progressCalls.poll(2, TimeUnit.SECONDS);
+        assertEquals("r-3", progress.path("requestId").asText());
+        assertEquals("CARD_PRESENT", progress.path("stage").asText());
+        assertNotNull(results.poll(2, TimeUnit.SECONDS));
     }
 
     @Test
@@ -2544,6 +2635,19 @@ final class BackendClient {
         if (response.statusCode() >= 300) throw new IOException("ส่งผลไม่สำเร็จ: " + response.statusCode());
     }
 
+    /** Best effort: tells the backend a card is in the reader so the screen can say it is reading. */
+    void sendProgress(String requestId) {
+        try {
+            send(authorized("/api/id-card/agent/progress", Duration.ofSeconds(10))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            JSON.writeValueAsString(Map.of("requestId", requestId, "stage", "CARD_PRESENT"))))
+                    .build());
+        } catch (IOException ignored) {
+            // the result still arrives; only the "reading" message on the screen is lost
+        }
+    }
+
     private HttpRequest.Builder authorized(String path, Duration timeout) {
         return HttpRequest.newBuilder(URI.create(backendUrl + path)).timeout(timeout).header("Authorization", "Bearer " + token);
     }
@@ -2597,7 +2701,8 @@ final class AgentLoop {
         onStatus.accept("เชื่อมต่อแล้ว");
         if (command.isEmpty()) return false;
         onStatus.accept("กำลังอ่านบัตร");
-        client.sendResult(command.get().requestId(), source.readWhenPresent(cardWait));
+        String requestId = command.get().requestId();
+        client.sendResult(requestId, source.readWhenPresent(cardWait, () -> client.sendProgress(requestId)));
         onStatus.accept("เชื่อมต่อแล้ว");
         return true;
     }
@@ -2631,7 +2736,7 @@ final class AgentLoop {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: same command as Step 2. Expected: 5 tests PASS.
+Run: same command as Step 2. Expected: 6 tests PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -2858,7 +2963,7 @@ public final class AgentMain {
                 loop.run();
             }
             case "read-once" -> {
-                CardSource.ReadOutcome outcome = new PcscCardSource().readWhenPresent(Duration.ofSeconds(30));
+                CardSource.ReadOutcome outcome = new PcscCardSource().readWhenPresent(Duration.ofSeconds(30), () -> System.out.println("พบบัตรในเครื่องอ่าน กำลังอ่าน…"));
                 System.out.println("status=" + outcome.status() + (outcome.message() == null ? "" : " message=" + outcome.message()));
                 if (outcome.card() != null) {
                     CardData card = outcome.card();
@@ -2894,7 +2999,7 @@ public final class AgentMain {
 - [ ] **Step 5: Run to verify it passes, then build the jar**
 
 Run: `docker run --rm -v "$PWD/id-card-agent":/w -w /w maven:3.9-eclipse-temurin-17 mvn -q package`
-Expected: all agent tests PASS (7 + 4 + 5 + 3 = 19) and `target/id-card-agent.jar` is produced.
+Expected: all agent tests PASS (7 + 4 + 6 + 3 = 20) and `target/id-card-agent.jar` is produced.
 
 - [ ] **Step 6: Commit**
 
@@ -3162,9 +3267,9 @@ git commit -m "feat(idcard): map the card's data onto the registration form"
 **Interfaces:**
 - Consumes: Task 12 `IdCardData`; `api.get/post` from `client.ts`.
 - Produces:
-  - Types: `IdCardWorkstation {id, name, branchCode, online, status}`, `IdCardReadPurpose`, `IdCardReadView`, `IdCardLookup`
+  - Types: `IdCardWorkstation {id, name, branchCode, online, status}`, `IdCardReadPurpose` (`'REGISTER'` only), `IdCardReadView`, `IdCardLookup`
   - `idCardApi.workstations(branchCode?)`, `.start(workstationId, purpose)`, `.result(id)`, `.createWorkstation(name, branchCode)`, `.newPairingCode(id)`, `.revokeWorkstation(id)`
-  - `useIdCardReader(options?)` returning `{ workstations, selectedId, state, message, load(branchCode?), select(id), read(purpose), cancel() }` where `state` is `'idle' | 'waiting' | 'done' | 'failed'`; `read` resolves with `IdCardReadView` (status `DONE`) or `null` on failure/cancel
+  - `useIdCardReader(options?)` returning `{ workstations, selectedId, state, message, load(branchCode?), select(id), read(), cancel() }` where `state` is `'idle' | 'waiting' | 'reading' | 'done' | 'failed'`; `waiting` = no card yet, `reading` = the card is in the reader; `read()` resolves with the `DONE` `IdCardReadView` (which has `lookup`, and `card` when the patient is new) or `null` on failure/cancel
   - options: `{ api?, intervalMs? (700), timeoutMs? (50000) }` for tests
 
 - [ ] **Step 1: Append to `client.ts`**
@@ -3177,13 +3282,14 @@ export type IdCardWorkstation = {
   online: boolean
   status: 'Active' | 'Revoked'
 }
-export type IdCardReadPurpose = 'REGISTER' | 'LOOKUP'
+export type IdCardReadPurpose = 'REGISTER'
 export type IdCardLookup = {
   exists: boolean
   patient: { id: number; hn: string; fullName: string } | null
 }
+// DONE always has `lookup`; `card` is present only when the patient is not in the system yet.
 export type IdCardReadView = {
-  status: 'PENDING' | 'DONE' | 'FAILED'
+  status: 'PENDING' | 'READING' | 'DONE' | 'FAILED'
   outcome?: string
   message?: string
   card?: IdCardData
@@ -3251,28 +3357,48 @@ describe('useIdCardReader', () => {
     expect(reader.selectedId.value).toBe(1)
   })
 
-  it('polls until the card arrives and resolves with it', async () => {
-    const api = fakeApi([{ status: 'PENDING' }, { status: 'DONE', card: { nationalId: '1101700005119' } as never }])
+  it('waits for the card, then says it is reading, then resolves with the result', async () => {
+    const api = fakeApi([
+      { status: 'PENDING' },
+      { status: 'READING' },
+      { status: 'DONE', lookup: { exists: false, patient: null }, card: { nationalId: '1101700005119' } as never },
+    ])
     const reader = useIdCardReader({ api: api as never, intervalMs: 700 })
     await reader.load('01')
-    const done = reader.read('REGISTER')
+    const done = reader.read()
     expect(reader.state.value).toBe('waiting')
-    await vi.advanceTimersByTimeAsync(1500)
+    await vi.advanceTimersByTimeAsync(800)
+    expect(reader.state.value).toBe('waiting')
+    await vi.advanceTimersByTimeAsync(700)
+    expect(reader.state.value).toBe('reading')
+    await vi.advanceTimersByTimeAsync(700)
     const view = await done
     expect(view?.card?.nationalId).toBe('1101700005119')
+    expect(view?.lookup?.exists).toBe(false)
     expect(reader.state.value).toBe('done')
     expect(api.start).toHaveBeenCalledWith(1, 'REGISTER')
   })
 
-  it('reports a failed read with a Thai message', async () => {
-    const api = fakeApi([{ status: 'FAILED', outcome: 'NO_CARD', message: 'ไม่พบบัตร ใส่บัตรแล้วกดอ่านใหม่' }])
+  it('returns the patient when the card belongs to someone already registered', async () => {
+    const api = fakeApi([{ status: 'DONE', lookup: { exists: true, patient: { id: 5, hn: 'HN0005', fullName: 'สมชาย ใจดี' } } }])
     const reader = useIdCardReader({ api: api as never })
     await reader.load('01')
-    const done = reader.read('LOOKUP')
+    const done = reader.read()
+    await vi.advanceTimersByTimeAsync(800)
+    const view = await done
+    expect(view?.lookup?.patient?.id).toBe(5)
+    expect(view?.card).toBeUndefined()
+  })
+
+  it('reports a failed read with a Thai message', async () => {
+    const api = fakeApi([{ status: 'FAILED', outcome: 'NO_CARD', message: 'ไม่พบบัตร ใส่บัตรแล้วลองใหม่' }])
+    const reader = useIdCardReader({ api: api as never })
+    await reader.load('01')
+    const done = reader.read()
     await vi.advanceTimersByTimeAsync(800)
     expect(await done).toBeNull()
     expect(reader.state.value).toBe('failed')
-    expect(reader.message.value).toBe('ไม่พบบัตร ใส่บัตรแล้วกดอ่านใหม่')
+    expect(reader.message.value).toBe('ไม่พบบัตร ใส่บัตรแล้วลองใหม่')
   })
 
   it('says so when the counter program is offline (409) or too many reads (429)', async () => {
@@ -3280,29 +3406,29 @@ describe('useIdCardReader', () => {
     api.start.mockRejectedValueOnce(new ApiError('offline', 409))
     const reader = useIdCardReader({ api: api as never })
     await reader.load('01')
-    expect(await reader.read('REGISTER')).toBeNull()
+    expect(await reader.read()).toBeNull()
     expect(reader.message.value).toContain('ออฟไลน์')
 
     api.start.mockRejectedValueOnce(new ApiError('slow down', 429))
-    expect(await reader.read('REGISTER')).toBeNull()
+    expect(await reader.read()).toBeNull()
     expect(reader.message.value).toContain('บ่อยเกินไป')
   })
 
   it('gives up after the timeout', async () => {
     const reader = useIdCardReader({ api: fakeApi([]) as never, intervalMs: 700, timeoutMs: 3000 })
     await reader.load('01')
-    const done = reader.read('REGISTER')
+    const done = reader.read()
     await vi.advanceTimersByTimeAsync(4000)
     expect(await done).toBeNull()
     expect(reader.state.value).toBe('failed')
     expect(reader.message.value).toContain('หมดเวลา')
   })
 
-  it('stops polling when cancelled', async () => {
+  it('stops polling when cancelled (the dialog was closed)', async () => {
     const api = fakeApi([])
     const reader = useIdCardReader({ api: api as never, intervalMs: 700 })
     await reader.load('01')
-    const done = reader.read('REGISTER')
+    const done = reader.read()
     await vi.advanceTimersByTimeAsync(800)
     reader.cancel()
     await vi.advanceTimersByTimeAsync(5000)
@@ -3316,7 +3442,7 @@ describe('useIdCardReader', () => {
   it('needs a reader to be selected first', async () => {
     const reader = useIdCardReader({ api: fakeApi([], []) as never })
     await reader.load('01')
-    expect(await reader.read('REGISTER')).toBeNull()
+    expect(await reader.read()).toBeNull()
     expect(reader.message.value).toContain('เครื่องอ่านบัตร')
   })
 
@@ -3342,10 +3468,10 @@ Expected: FAIL (module not found).
 
 ```ts
 import { ref } from 'vue'
-import { ApiError, idCardApi, type IdCardReadPurpose, type IdCardReadView, type IdCardWorkstation } from '@/api/client'
+import { ApiError, idCardApi, type IdCardReadView, type IdCardWorkstation } from '@/api/client'
 
 type Api = Pick<typeof idCardApi, 'workstations' | 'start' | 'result'>
-type State = 'idle' | 'waiting' | 'done' | 'failed'
+type State = 'idle' | 'waiting' | 'reading' | 'done' | 'failed'
 
 const STORAGE_KEY = 'idCardWorkstationId'
 
@@ -3406,7 +3532,7 @@ export function useIdCardReader(options: { api?: Api; intervalMs?: number; timeo
     return null
   }
 
-  async function read(purpose: IdCardReadPurpose): Promise<IdCardReadView | null> {
+  async function read(): Promise<IdCardReadView | null> {
     const mine = ++generation
     message.value = ''
     if (selectedId.value === null) {
@@ -3415,7 +3541,7 @@ export function useIdCardReader(options: { api?: Api; intervalMs?: number; timeo
     state.value = 'waiting'
     let id: string
     try {
-      id = (await api.start(selectedId.value, purpose)).id
+      id = (await api.start(selectedId.value, 'REGISTER')).id
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         return fail('โปรแกรมตัวกลางของเครื่องนี้ออฟไลน์ ตรวจว่าเปิดโปรแกรมที่เคาน์เตอร์แล้ว')
@@ -3441,6 +3567,7 @@ export function useIdCardReader(options: { api?: Api; intervalMs?: number; timeo
         return view
       }
       if (view.status === 'FAILED') return fail(view.message ?? 'อ่านบัตรไม่สำเร็จ')
+      state.value = view.status === 'READING' ? 'reading' : 'waiting'
       if (Date.now() >= deadline) return fail('หมดเวลา ไม่ได้รับข้อมูลจากเครื่องอ่านบัตร')
     }
     return null
@@ -3452,33 +3579,203 @@ export function useIdCardReader(options: { api?: Api; intervalMs?: number; timeo
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: same command. Expected: 8 tests PASS.
+Run: same command. Expected: 9 tests PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add frontend/src/api/client.ts frontend/src/features/idcard
-git commit -m "feat(idcard): start a card read and poll for its one-time result"
+git commit -m "feat(idcard): start a card read and poll for waiting, reading and the one-time result"
+```
+
+### Task 14A: One-time hand-off of the card data, and the "insert the card" animation
+
+**Files:**
+- Create: `frontend/src/features/idcard/pendingCard.ts`, `frontend/src/features/idcard/pendingCard.spec.ts`
+- Create: `frontend/src/features/idcard/IdCardInsertAnimation.vue`, `frontend/src/features/idcard/IdCardInsertAnimation.spec.ts`
+
+**Interfaces:**
+- Consumes: `IdCardData` (Task 12).
+- Produces: `setPendingCard(card: IdCardData): void`, `takePendingCard(): IdCardData | null` (returns the card once, then `null`); component `<IdCardInsertAnimation />` (no props; an `svg.id-card-graphic` with `role="img"`).
+
+- [ ] **Step 1: Write the failing tests**
+
+```ts
+// pendingCard.spec.ts
+import { describe, expect, it } from 'vitest'
+import type { IdCardData } from '@/api/client'
+import { setPendingCard, takePendingCard } from './pendingCard'
+
+const card = { nationalId: '1101700005119' } as IdCardData
+
+describe('pendingCard', () => {
+  it('hands the card over once and then forgets it', () => {
+    expect(takePendingCard()).toBeNull()
+    setPendingCard(card)
+    expect(takePendingCard()).toEqual(card)
+    expect(takePendingCard()).toBeNull()
+  })
+
+  it('keeps only the latest card', () => {
+    setPendingCard({ nationalId: '1' } as IdCardData)
+    setPendingCard(card)
+    expect(takePendingCard()).toEqual(card)
+  })
+
+  it('never writes the card to browser storage', () => {
+    setPendingCard(card)
+    expect(JSON.stringify({ ...localStorage })).not.toContain('1101700005119')
+    expect(JSON.stringify({ ...sessionStorage })).not.toContain('1101700005119')
+    takePendingCard()
+  })
+})
+```
+
+```ts
+// IdCardInsertAnimation.spec.ts
+import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+import IdCardInsertAnimation from './IdCardInsertAnimation.vue'
+
+describe('IdCardInsertAnimation', () => {
+  it('draws a card going into a reader, described for screen readers', () => {
+    const wrapper = mount(IdCardInsertAnimation)
+    const svg = wrapper.get('svg.id-card-graphic')
+    expect(svg.attributes('role')).toBe('img')
+    expect(svg.attributes('aria-label')).toContain('เสียบบัตรประชาชน')
+    expect(wrapper.find('.card-moving').exists()).toBe(true)
+    expect(wrapper.find('.reader-body').exists()).toBe(true)
+  })
+})
+```
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run (from `frontend/`): `npx vitest run src/features/idcard/pendingCard.spec.ts src/features/idcard/IdCardInsertAnimation.spec.ts`
+Expected: FAIL (modules not found).
+
+- [ ] **Step 3: Implement**
+
+```ts
+// pendingCard.ts
+import type { IdCardData } from '@/api/client'
+
+// Personal data from a card read, handed from the registration dialog to the registration form once.
+// It is kept only in memory (never in the URL or in browser storage): a page reload forgets it and the card is read again.
+let pending: IdCardData | null = null
+
+export function setPendingCard(card: IdCardData): void {
+  pending = card
+}
+
+export function takePendingCard(): IdCardData | null {
+  const card = pending
+  pending = null
+  return card
+}
+```
+
+```vue
+<!-- IdCardInsertAnimation.vue: an ID card sliding into a card reader, drawn with SVG and CSS only -->
+<template>
+  <svg
+    class="id-card-graphic"
+    viewBox="0 0 240 190"
+    role="img"
+    aria-label="แอนิเมชันแสดงการเสียบบัตรประชาชนที่เครื่องอ่านบัตร"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <g class="card-moving">
+      <rect x="62" y="14" width="116" height="80" rx="9" fill="#e8f2fb" stroke="#7aa6cf" stroke-width="2" />
+      <rect x="72" y="30" width="28" height="34" rx="3" fill="#b9d3ea" />
+      <rect x="108" y="32" width="58" height="6" rx="3" fill="#9dbfdc" />
+      <rect x="108" y="46" width="46" height="6" rx="3" fill="#9dbfdc" />
+      <rect x="108" y="60" width="52" height="6" rx="3" fill="#9dbfdc" />
+      <rect x="72" y="72" width="20" height="14" rx="3" fill="#e0b84a" />
+    </g>
+    <g class="reader-body">
+      <rect x="30" y="110" width="180" height="64" rx="12" fill="#2f3b39" />
+      <rect x="48" y="118" width="144" height="8" rx="4" fill="#0f1514" />
+      <circle class="reader-light" cx="198" cy="152" r="4" fill="#3fd17a" />
+    </g>
+  </svg>
+</template>
+
+<style scoped>
+.id-card-graphic {
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+}
+.card-moving {
+  animation: card-insert 2.6s ease-in-out infinite;
+}
+.reader-light {
+  animation: reader-blink 1.3s ease-in-out infinite;
+}
+@keyframes card-insert {
+  0% {
+    transform: translateY(-6px);
+  }
+  55%,
+  75% {
+    transform: translateY(54px);
+  }
+  100% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes reader-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-moving,
+  .reader-light {
+    animation: none;
+  }
+}
+</style>
+```
+
+- [ ] **Step 4: Run to verify they pass**
+
+Run: same command. Expected: 4 tests PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/features/idcard
+git commit -m "feat(idcard): in-memory hand-off of the card and the insert-the-card animation"
 ```
 
 ---
 
-### Task 14: "อ่านบัตร" button, registration and search
+### Task 14B: The registration dialog (choose, wait for the card, reading, found, failed)
 
 **Files:**
-- Create: `frontend/src/features/idcard/IdCardReadButton.vue`, `frontend/src/features/idcard/IdCardReadButton.spec.ts`
-- Modify: `frontend/src/features/patients/views/PatientRegistrationView.vue`, `frontend/src/features/patients/views/PatientSearchView.vue`
+- Create: `frontend/src/features/idcard/RegisterMethodDialog.vue`, `frontend/src/features/idcard/RegisterMethodDialog.spec.ts`
 
 **Interfaces:**
-- Consumes: Tasks 12–13.
-- Produces: `<IdCardReadButton purpose="REGISTER" :branch-code="..." @card="(card: IdCardData) => void" />` and `<IdCardReadButton purpose="LOOKUP" @lookup="(result: IdCardLookup) => void" />`
+- Consumes: `useIdCardReader` (Task 13: `read()`, `state`, `message`, `workstations`, `selectedId`, `load`, `select`, `cancel`), `setPendingCard` and `IdCardInsertAnimation` (Task 14A), vue-router.
+- Produces: `<RegisterMethodDialog :open="boolean" :branch-code="string | undefined" @close="..." />`. Steps:
+  1. **choose** — two buttons: `กรอกข้อมูลเอง` (→ `/staff/patients/new`, form as before) and `อ่านข้อมูลจากบัตรประชาชน` (disabled, with a hint, when the branch has no card reader)
+  2. **waiting** — the animation and `กรุณาเสียบบัตรประชาชน`; **no cancel button**; Esc and backdrop clicks do nothing; the wait ends by itself (agent 30 s, screen 50 s)
+  3. **reading** — a spinner and `ระบบกำลังอ่านข้อมูล` (the card is in the reader)
+  4. **found** — `พบผู้ป่วยในระบบแล้ว` with the HN and name, a green `ดูรายละเอียด` button (→ `/staff/patients/{id}`) and `ปิด`
+  5. **not found** — the card is handed to the form with `setPendingCard` and the app goes to `/staff/patients/new`
+  6. **failed** — the reason, `ลองอีกครั้ง` and `กรอกข้อมูลเอง`
 
-- [ ] **Step 1: Write the failing component test**
+- [ ] **Step 1: Write the failing test**
 
 ```ts
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
+
+const push = vi.fn()
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 const read = vi.fn()
 const reader = {
@@ -3493,45 +3790,117 @@ const reader = {
 }
 vi.mock('./useIdCardReader', () => ({ useIdCardReader: () => reader }))
 
-import IdCardReadButton from './IdCardReadButton.vue'
+import RegisterMethodDialog from './RegisterMethodDialog.vue'
+import { takePendingCard } from './pendingCard'
 
-describe('IdCardReadButton', () => {
+const mountDialog = () =>
+  mount(RegisterMethodDialog, { props: { open: true, branchCode: '01' }, global: { stubs: { RouterLink: true } } })
+
+describe('RegisterMethodDialog', () => {
   beforeEach(() => {
+    push.mockReset()
     read.mockReset()
     reader.state.value = 'idle'
     reader.message.value = ''
     reader.selectedId.value = 1
     reader.workstations.value = [{ id: 1, name: 'เคาน์เตอร์ 1', branchCode: '01', online: true, status: 'Active' }]
+    takePendingCard()
   })
 
-  it('emits the card for a REGISTER read', async () => {
-    read.mockResolvedValue({ status: 'DONE', card: { nationalId: '1101700005119' } })
-    const wrapper = mount(IdCardReadButton, { props: { purpose: 'REGISTER', branchCode: '01' } })
-    await wrapper.get('button.id-card-read').trigger('click')
+  it('offers typing the data by hand or reading the card', () => {
+    const wrapper = mountDialog()
+    expect(wrapper.get('.method-manual').text()).toContain('กรอกข้อมูลเอง')
+    expect(wrapper.get('.method-card').text()).toContain('อ่านข้อมูลจากบัตรประชาชน')
+  })
+
+  it('goes to the plain registration form when the staff type the data by hand', async () => {
+    const wrapper = mountDialog()
+    await wrapper.get('.method-manual').trigger('click')
+    expect(push).toHaveBeenCalledWith('/staff/patients/new')
+    expect(wrapper.emitted('close')).toBeTruthy()
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it('asks for the card, then says it is reading, with nothing to press while it waits', async () => {
+    let finish: (value: unknown) => void = () => {}
+    read.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
+    const wrapper = mountDialog()
+    await wrapper.get('.method-card').trigger('click')
+
+    reader.state.value = 'waiting'
+    await nextTick()
+    expect(wrapper.text()).toContain('กรุณาเสียบบัตรประชาชน')
+    expect(wrapper.find('.id-card-graphic').exists()).toBe(true)
+    expect(wrapper.findAll('button')).toHaveLength(0)
+
+    reader.state.value = 'reading'
+    await nextTick()
+    expect(wrapper.text()).toContain('ระบบกำลังอ่านข้อมูล')
+    expect(wrapper.findAll('button')).toHaveLength(0)
+
+    await wrapper.get('.register-dialog-backdrop').trigger('click')
+    expect(wrapper.emitted('close')).toBeUndefined()
+
+    finish(null)
     await flushPromises()
-    expect(read).toHaveBeenCalledWith('REGISTER')
-    expect(wrapper.emitted('card')?.[0][0]).toEqual({ nationalId: '1101700005119' })
   })
 
-  it('emits the lookup result for a LOOKUP read', async () => {
+  it('shows the patient who is already registered, with a green button to their details', async () => {
     read.mockResolvedValue({ status: 'DONE', lookup: { exists: true, patient: { id: 5, hn: 'HN0005', fullName: 'สมชาย ใจดี' } } })
-    const wrapper = mount(IdCardReadButton, { props: { purpose: 'LOOKUP' } })
-    await wrapper.get('button.id-card-read').trigger('click')
+    const wrapper = mountDialog()
+    await wrapper.get('.method-card').trigger('click')
     await flushPromises()
-    expect(wrapper.emitted('lookup')?.[0][0]).toMatchObject({ exists: true })
+
+    expect(wrapper.text()).toContain('พบผู้ป่วยในระบบแล้ว')
+    expect(wrapper.text()).toContain('HN0005')
+    expect(wrapper.text()).toContain('สมชาย ใจดี')
+    expect(takePendingCard()).toBeNull()
+
+    await wrapper.get('.found-details').trigger('click')
+    expect(push).toHaveBeenCalledWith('/staff/patients/5')
+    expect(wrapper.emitted('close')).toBeTruthy()
   })
 
-  it('shows why a read failed and lets the staff type by hand', async () => {
+  it('hands a new patient’s card to the registration form', async () => {
+    read.mockResolvedValue({
+      status: 'DONE',
+      lookup: { exists: false, patient: null },
+      card: { nationalId: '1101700005119', firstNameTh: 'สมชาย' },
+    })
+    const wrapper = mountDialog()
+    await wrapper.get('.method-card').trigger('click')
+    await flushPromises()
+
+    expect(push).toHaveBeenCalledWith('/staff/patients/new')
+    expect(takePendingCard()?.nationalId).toBe('1101700005119')
+    expect(wrapper.emitted('close')).toBeTruthy()
+  })
+
+  it('says why the read failed and offers a retry or typing by hand', async () => {
     read.mockImplementation(async () => {
       reader.state.value = 'failed'
-      reader.message.value = 'ไม่พบบัตร ใส่บัตรแล้วกดอ่านใหม่'
+      reader.message.value = 'ไม่พบบัตร ใส่บัตรแล้วลองใหม่'
       return null
     })
-    const wrapper = mount(IdCardReadButton, { props: { purpose: 'REGISTER' } })
-    await wrapper.get('button.id-card-read').trigger('click')
+    const wrapper = mountDialog()
+    await wrapper.get('.method-card').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('ไม่พบบัตร ใส่บัตรแล้วกดอ่านใหม่')
-    expect(wrapper.emitted('card')).toBeUndefined()
+
+    expect(wrapper.text()).toContain('ไม่พบบัตร ใส่บัตรแล้วลองใหม่')
+    await wrapper.get('.retry').trigger('click')
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(2)
+
+    await wrapper.get('.method-manual-after-failure').trigger('click')
+    expect(push).toHaveBeenCalledWith('/staff/patients/new')
+  })
+
+  it('disables reading and explains when the branch has no card reader', () => {
+    reader.selectedId.value = null
+    reader.workstations.value = []
+    const wrapper = mountDialog()
+    expect(wrapper.get('.method-card').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('ยังไม่มีเครื่องอ่านบัตร')
   })
 
   it('asks which reader to use when there are several and none is chosen', () => {
@@ -3540,40 +3909,38 @@ describe('IdCardReadButton', () => {
       { id: 1, name: 'เคาน์เตอร์ 1', branchCode: '01', online: true, status: 'Active' },
       { id: 2, name: 'เคาน์เตอร์ 2', branchCode: '01', online: false, status: 'Active' },
     ]
-    const wrapper = mount(IdCardReadButton, { props: { purpose: 'REGISTER' } })
+    const wrapper = mountDialog()
     expect(wrapper.find('select').exists()).toBe(true)
-    expect(wrapper.get('button.id-card-read').attributes('disabled')).toBeDefined()
-  })
-
-  it('shows a hint when the branch has no card reader yet', () => {
-    reader.selectedId.value = null
-    reader.workstations.value = []
-    const wrapper = mount(IdCardReadButton, { props: { purpose: 'REGISTER' } })
-    expect(wrapper.text()).toContain('ยังไม่มีเครื่องอ่านบัตร')
+    expect(wrapper.get('.method-card').attributes('disabled')).toBeDefined()
   })
 })
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `npx vitest run src/features/idcard/IdCardReadButton.spec.ts`
+Run: `npx vitest run src/features/idcard/RegisterMethodDialog.spec.ts`
 Expected: FAIL (component missing).
 
-- [ ] **Step 3: Implement the component**
+- [ ] **Step 3: Implement**
 
 ```vue
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
-import type { IdCardData, IdCardLookup, IdCardReadPurpose } from '@/api/client'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import type { IdCardLookup } from '@/api/client'
+import IdCardInsertAnimation from './IdCardInsertAnimation.vue'
+import { setPendingCard } from './pendingCard'
 import { useIdCardReader } from './useIdCardReader'
 
-const props = defineProps<{ purpose: IdCardReadPurpose; branchCode?: string }>()
-const emit = defineEmits<{
-  (event: 'card', card: IdCardData): void
-  (event: 'lookup', result: IdCardLookup): void
-}>()
+const props = defineProps<{ open: boolean; branchCode?: string }>()
+const emit = defineEmits<{ (event: 'close'): void }>()
 
+type Phase = 'choose' | 'running' | 'found' | 'failed'
+const router = useRouter()
 const reader = useIdCardReader()
+const phase = ref<Phase>('choose')
+const found = ref<NonNullable<IdCardLookup['patient']> | null>(null)
+
 const authUser = computed(() => {
   try {
     return JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null
@@ -3583,17 +3950,60 @@ const authUser = computed(() => {
 })
 const isManager = computed(() => authUser.value?.role === 'MANAGER')
 const choices = computed(() => reader.workstations.value.filter((w) => w.status === 'Active'))
-const busy = computed(() => reader.state.value === 'waiting')
-const ready = computed(() => reader.selectedId.value !== null && !busy.value)
+const canRead = computed(() => reader.selectedId.value !== null)
 
-onMounted(() => reader.load(props.branchCode || undefined))
+watch(
+  () => props.open,
+  (open) => {
+    if (open) {
+      phase.value = 'choose'
+      found.value = null
+      reader.load(props.branchCode || undefined)
+    } else {
+      reader.cancel()
+    }
+  },
+  { immediate: true },
+)
 onBeforeUnmount(() => reader.cancel())
 
+// While a card is awaited or being read the dialog cannot be dismissed; the wait ends by itself.
+function close() {
+  if (phase.value === 'running') return
+  emit('close')
+}
+
+function manual() {
+  emit('close')
+  router.push('/staff/patients/new')
+}
+
 async function readCard() {
-  const view = await reader.read(props.purpose)
-  if (!view) return
-  if (props.purpose === 'REGISTER' && view.card) emit('card', view.card)
-  if (props.purpose === 'LOOKUP' && view.lookup) emit('lookup', view.lookup)
+  phase.value = 'running'
+  const view = await reader.read()
+  if (!view) {
+    phase.value = reader.state.value === 'idle' ? 'choose' : 'failed'
+    return
+  }
+  if (view.lookup?.exists && view.lookup.patient) {
+    found.value = view.lookup.patient
+    phase.value = 'found'
+    return
+  }
+  if (view.card) {
+    setPendingCard(view.card)
+    emit('close')
+    router.push('/staff/patients/new')
+    return
+  }
+  phase.value = 'failed'
+}
+
+function openDetails() {
+  if (!found.value) return
+  const id = found.value.id
+  emit('close')
+  router.push(`/staff/patients/${id}`)
 }
 
 function chooseReader(event: Event) {
@@ -3603,31 +4013,172 @@ function chooseReader(event: Event) {
 </script>
 
 <template>
-  <div class="id-card-read">
-    <select v-if="choices.length > 1" :value="reader.selectedId.value ?? ''" aria-label="เลือกเครื่องอ่านบัตร" @change="chooseReader">
-      <option value="" disabled>เลือกเครื่องอ่านบัตร</option>
-      <option v-for="w in choices" :key="w.id" :value="w.id">{{ w.name }}{{ w.online ? '' : ' (ออฟไลน์)' }}</option>
-    </select>
-    <button type="button" class="id-card-read secondary" :disabled="!ready" @click="readCard">
-      {{ busy ? 'รอบัตร… เสียบบัตรที่เครื่องอ่าน' : 'อ่านบัตรประชาชน' }}
-    </button>
-    <button v-if="busy" type="button" class="secondary" @click="reader.cancel()">ยกเลิก</button>
-    <small v-if="choices.length === 0" class="id-card-hint">
-      ยังไม่มีเครื่องอ่านบัตรของสาขานี้ พิมพ์ข้อมูลเองได้
-      <RouterLink v-if="isManager" to="/staff/settings/card-readers">จัดการเครื่องอ่านบัตร</RouterLink>
-    </small>
-    <small v-if="reader.state.value === 'failed'" role="alert" class="required-error">{{ reader.message.value }}</small>
+  <div v-if="open" class="register-dialog-backdrop" @click.self="close" @keydown.esc="close">
+    <section class="register-dialog" role="dialog" aria-modal="true" aria-labelledby="register-dialog-title" tabindex="-1">
+      <template v-if="phase === 'choose'">
+        <header>
+          <h2 id="register-dialog-title">ลงทะเบียนผู้ป่วยใหม่</h2>
+          <button type="button" class="dialog-close" aria-label="ปิด" @click="close">×</button>
+        </header>
+        <p>เลือกวิธีกรอกข้อมูลผู้ป่วย</p>
+        <div class="methods">
+          <button type="button" class="method method-manual" @click="manual">
+            <strong>กรอกข้อมูลเอง</strong>
+            <span>พิมพ์ข้อมูลผู้ป่วยในฟอร์ม</span>
+          </button>
+          <button type="button" class="method method-card" :disabled="!canRead" @click="readCard">
+            <strong>อ่านข้อมูลจากบัตรประชาชน</strong>
+            <span>เสียบบัตรที่เครื่องอ่านบัตร</span>
+          </button>
+        </div>
+        <select
+          v-if="choices.length > 1"
+          :value="reader.selectedId.value ?? ''"
+          aria-label="เลือกเครื่องอ่านบัตร"
+          @change="chooseReader"
+        >
+          <option value="" disabled>เลือกเครื่องอ่านบัตร</option>
+          <option v-for="w in choices" :key="w.id" :value="w.id">{{ w.name }}{{ w.online ? '' : ' (ออฟไลน์)' }}</option>
+        </select>
+        <small v-if="choices.length === 0" class="id-card-hint">
+          ยังไม่มีเครื่องอ่านบัตรของสาขานี้ กรอกข้อมูลเองได้
+          <RouterLink v-if="isManager" to="/staff/settings/card-readers" @click="emit('close')">จัดการเครื่องอ่านบัตร</RouterLink>
+        </small>
+      </template>
+
+      <template v-else-if="phase === 'running'">
+        <div class="running" aria-live="polite">
+          <template v-if="reader.state.value === 'reading'">
+            <div class="spinner" aria-hidden="true"></div>
+            <h2 id="register-dialog-title">ระบบกำลังอ่านข้อมูล</h2>
+            <p>กรุณาอย่าดึงบัตรออกจนกว่าจะอ่านเสร็จ</p>
+          </template>
+          <template v-else>
+            <IdCardInsertAnimation />
+            <h2 id="register-dialog-title">กรุณาเสียบบัตรประชาชน</h2>
+            <p>เสียบบัตรที่เครื่องอ่านบัตรให้สุด</p>
+          </template>
+        </div>
+      </template>
+
+      <template v-else-if="phase === 'found' && found">
+        <h2 id="register-dialog-title">พบผู้ป่วยในระบบแล้ว</h2>
+        <p class="found-patient">
+          <strong>{{ found.hn }}</strong>
+          <span>{{ found.fullName }}</span>
+        </p>
+        <div class="actions">
+          <button type="button" class="found-details" @click="openDetails">ดูรายละเอียด</button>
+          <button type="button" class="secondary" @click="close">ปิด</button>
+        </div>
+      </template>
+
+      <template v-else>
+        <h2 id="register-dialog-title">อ่านบัตรไม่สำเร็จ</h2>
+        <p role="alert">{{ reader.message.value || 'อ่านบัตรไม่สำเร็จ' }}</p>
+        <div class="actions">
+          <button type="button" class="primary retry" @click="readCard">ลองอีกครั้ง</button>
+          <button type="button" class="secondary method-manual-after-failure" @click="manual">กรอกข้อมูลเอง</button>
+        </div>
+      </template>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.id-card-read {
+.register-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgb(15 21 20 / 0.45);
+}
+.register-dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 24px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.25);
+  text-align: center;
+}
+.register-dialog header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  justify-content: space-between;
   align-items: center;
 }
+.dialog-close {
+  border: 0;
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
+}
+.methods {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.method {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid #cfe0da;
+  border-radius: 12px;
+  background: #f6fbf9;
+  font: inherit;
+  cursor: pointer;
+}
+.method:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.running {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 12px 0;
+}
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 6px solid #cfe9dc;
+  border-top-color: #1f9d55;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}
+.found-patient {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0 20px;
+  font-size: 18px;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.found-details {
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 8px;
+  background: #1f9d55;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
 .id-card-hint {
+  display: block;
   color: #6b7d76;
 }
 </style>
@@ -3635,79 +4186,110 @@ function chooseReader(event: Event) {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: same command. Expected: 5 tests PASS.
+Run: same command. Expected: 8 tests PASS.
 
-- [ ] **Step 5: Wire it into the registration view**
-
-In `PatientRegistrationView.vue` `<script setup>`, add imports and the handler (after the existing imports and `form` definition):
-
-```ts
-import IdCardReadButton from '@/features/idcard/IdCardReadButton.vue'
-import { cardExpired, mapCardToRegistration } from '@/features/idcard/cardToForm'
-import type { IdCardData } from '@/api/client'
-```
-
-```ts
-const cardExpiredWarning = ref('')
-function applyCard(card: IdCardData) {
-  Object.assign(form, mapCardToRegistration(card))
-  cardExpiredWarning.value = cardExpired(card, clinicToday()) ? 'บัตรประชาชนใบนี้หมดอายุแล้ว ตรวจสอบกับผู้ป่วยก่อนบันทึก' : ''
-}
-```
-
-In the template, directly after the identity-number `</label>` (the one whose text is `{{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }}`), insert:
-
-```vue
-              <div v-if="!isForeign" class="id-card-row">
-                <IdCardReadButton purpose="REGISTER" :branch-code="form.branchCode" @card="applyCard" />
-                <small v-if="cardExpiredWarning" role="status" class="required-error">{{ cardExpiredWarning }}</small>
-              </div>
-```
-
-- [ ] **Step 6: Wire it into the search view**
-
-In `PatientSearchView.vue` `<script setup>`, add:
-
-```ts
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import IdCardReadButton from '@/features/idcard/IdCardReadButton.vue'
-import type { IdCardLookup } from '@/api/client'
-
-const router = useRouter()
-const cardNotice = ref('')
-function onCardLookup(result: IdCardLookup) {
-  if (result.exists && result.patient) {
-    cardNotice.value = ''
-    router.push(`/staff/patients/${result.patient.id}`)
-  } else {
-    cardNotice.value = 'ไม่พบผู้ป่วยที่ใช้บัตรใบนี้ ลงทะเบียนผู้ป่วยใหม่ได้'
-  }
-}
-```
-
-In the template, inside `<section class="page-heading"><div>` directly after the "ลงทะเบียนผู้ป่วยใหม่" `<RouterLink>`, insert:
-
-```vue
-          <IdCardReadButton purpose="LOOKUP" @lookup="onCardLookup" />
-          <p v-if="cardNotice" role="status">
-            {{ cardNotice }} <RouterLink to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
-          </p>
-```
-
-- [ ] **Step 7: Run the affected existing specs**
-
-Run: `npx vitest run src/features/patients src/features/idcard`
-Expected: the new specs PASS; no *new* failures in the patients specs (compare to the failures that existed before the change). `npx vue-tsc --noEmit -p tsconfig.app.json` prints nothing.
-
-- [ ] **Step 8: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/features/idcard frontend/src/features/patients
-git commit -m "feat(idcard): read the card from the registration and search pages"
+git add frontend/src/features/idcard
+git commit -m "feat(idcard): registration dialog with the insert-card and reading steps and the found-patient popup"
 ```
 
 ---
+
+### Task 14C: Open the dialog from the patient page and fill the registration form from the card
+
+**Files:**
+- Modify: `frontend/src/features/patients/views/PatientSearchView.vue`
+- Modify: `frontend/src/features/patients/views/PatientRegistrationView.vue`
+- Modify (only if it asserts the old link): `frontend/src/features/patients/__tests__/PatientSearchView.spec.ts`
+
+**Interfaces:**
+- Consumes: `RegisterMethodDialog` (14B), `takePendingCard` (14A), `mapCardToRegistration` and `cardExpired` (Task 12), `selectedManagerBranch` from `@/features/staff/data/managerBranch`.
+- Only the patient page's "+ ลงทะเบียนผู้ป่วยใหม่" button uses the dialog; every other link to `/staff/patients/new` stays as it is (plain form).
+
+- [ ] **Step 1: Patient page — replace the link with a button that opens the dialog**
+
+In `PatientSearchView.vue` `<script setup>` add (merge with existing imports; `computed` and `ref` may already be imported):
+
+```ts
+import { computed, ref } from 'vue'
+import RegisterMethodDialog from '@/features/idcard/RegisterMethodDialog.vue'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
+
+const registerDialogOpen = ref(false)
+// a manager works in the branch chosen in the header; anyone else is scoped to their own branch by the server
+const readerBranch = computed(() => selectedManagerBranch()?.code)
+```
+
+In the template replace
+
+```vue
+<RouterLink class="primary" to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
+```
+
+with
+
+```vue
+<button type="button" class="primary" @click="registerDialogOpen = true">+ ลงทะเบียนผู้ป่วยใหม่</button>
+<RegisterMethodDialog :open="registerDialogOpen" :branch-code="readerBranch" @close="registerDialogOpen = false" />
+```
+
+- [ ] **Step 2: Registration form — take the card handed over by the dialog and fill the form**
+
+In `PatientRegistrationView.vue` `<script setup>` add the imports next to the existing ones:
+
+```ts
+import { takePendingCard } from '@/features/idcard/pendingCard'
+import { cardExpired, mapCardToRegistration } from '@/features/idcard/cardToForm'
+```
+
+and, after `form` is defined (the file already imports `onMounted` and `ref`):
+
+```ts
+const cardFilled = ref(false)
+const cardExpiredWarning = ref('')
+onMounted(() => {
+  const card = takePendingCard()
+  if (!card) return
+  Object.assign(form, mapCardToRegistration(card))
+  cardFilled.value = true
+  cardExpiredWarning.value = cardExpired(card, clinicToday())
+    ? 'บัตรประชาชนใบนี้หมดอายุแล้ว ตรวจสอบกับผู้ป่วยก่อนบันทึก'
+    : ''
+})
+```
+
+In the template, directly after the identity-number `</label>` (the one whose text is `{{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }}`) insert:
+
+```vue
+              <p v-if="cardFilled" class="card-filled-note" role="status">
+                กรอกข้อมูลจากบัตรประชาชนให้แล้ว ตรวจสอบและแก้ไขได้ก่อนบันทึก
+                <small v-if="cardExpiredWarning" class="required-error">{{ cardExpiredWarning }}</small>
+              </p>
+```
+
+- [ ] **Step 3: Update the existing patient-page spec if it looked for the old link**
+
+Run: `npx vitest run src/features/patients`
+If `PatientSearchView.spec.ts` fails because it asserted a link to `/staff/patients/new`, change that assertion to find the button by its text (`wrapper.findAll('button').find((b) => b.text().includes('ลงทะเบียนผู้ป่วยใหม่'))`) and add one assertion that clicking it opens the dialog (`wrapper.findComponent({ name: 'RegisterMethodDialog' }).props('open')` is `true`).
+Expected: no new failures compared to before the change (the repo already has 27 unrelated failures in the appointment specs).
+
+- [ ] **Step 4: Type-check**
+
+Run: `npx vue-tsc --noEmit -p tsconfig.app.json`
+Expected: no output.
+
+- [ ] **Step 5: Manual check of the form hand-off (needs the dev server)**
+
+With the dev server and a fake agent (Task 16's requests work), start a read from the patient page, answer it with a card of a number that is not registered, and confirm the registration form opens with the name, birth date, gender, ID number and address filled and editable, and that saving still requires the consent tick.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add frontend/src/features/patients
+git commit -m "feat(idcard): register a patient from the card, or open the patient the card belongs to"
+```
 
 ### Task 15: Manager page for card readers
 
@@ -4039,8 +4621,8 @@ This is the gate that confirms the chip commands in Task 7 and the platform clai
 | ข้อ | ตรวจ | ผล |
 |---|---|---|
 | B1 | จับคู่เครื่องด้วยรหัสจากหน้า "เครื่องอ่านบัตร" แล้วสถานะขึ้น "ออนไลน์" | |
-| B2 | หน้าลงทะเบียน: กด "อ่านบัตรประชาชน" แล้วฟอร์มเติมครบ แก้ไขได้ ต้องติ๊กยินยอมก่อนบันทึก | |
-| B3 | หน้าค้นหา: ผู้ป่วยที่มีอยู่เปิดโปรไฟล์; ผู้ป่วยที่ไม่มีขึ้นข้อความให้ลงทะเบียนใหม่ | |
+| B2 | ผู้ป่วยที่ยังไม่มี: หน้า "ผู้ป่วย" → "+ ลงทะเบียนผู้ป่วยใหม่" → "อ่านข้อมูลจากบัตรประชาชน" เห็นแอนิเมชันและ "กรุณาเสียบบัตรประชาชน" (ไม่มีปุ่มยกเลิก) → เสียบบัตรแล้วขึ้น "ระบบกำลังอ่านข้อมูล" → ฟอร์มเติมครบ แก้ไขได้ ต้องติ๊กยินยอมก่อนบันทึก | |
+| B3 | ผู้ป่วยที่มีอยู่แล้ว: ขึ้นป๊อปอัป "พบผู้ป่วยในระบบแล้ว" (HN + ชื่อ) กดปุ่มเขียว "ดูรายละเอียด" ไปหน้าโปรไฟล์ผู้ป่วย | |
 | B4 | ปิดตัวกลางแล้วกดอ่าน: ขึ้นข้อความว่าออฟไลน์ และยังพิมพ์เองได้ | |
 | B5 | เพิกถอนเครื่องแล้วตัวกลางหยุดทำงานและแจ้งให้จับคู่ใหม่ | |
 | B6 | ตรวจตาราง `id_card_read_audit` มีแถวของแต่ละครั้ง และไม่มีข้อมูลบัตรในฐานข้อมูลก่อนกดบันทึกลงทะเบียน | |
@@ -4074,16 +4656,18 @@ git commit -m "docs(idcard): device check for the card reader on each system"
 **Spec coverage** (section → task):
 - 1 Goals/scope, register + lookup → Tasks 5, 14; no photo → Tasks 6–7 (no photo command), Global Constraints
 - 2 Relay architecture / long-poll + polling → Tasks 4, 5, 9, 13
-- 3.1 Agent → Tasks 6–11; 3.2 Backend → Tasks 1–5; 3.3 Web → Tasks 12–15
-- 4.1 Pairing → Task 3 (+ Task 9 `pair`); 4.2 Register flow → Tasks 5, 13, 14; 4.3 Lookup server-side → Task 5 (`finishCard`, test `lookupFindsAnExistingPatientAndNeverReturnsTheCard`)
+- 3.1 Agent → Tasks 6–11; 3.2 Backend → Tasks 1–5; 3.3 Web → Tasks 12–14C and 15
+- 4.1 Pairing → Task 3 (+ Task 9 `pair`); 4.2 Register flow → Tasks 5, 13, 14; 4.3 Lookup server-side → Task 5 (`finishCard`, test `aPatientWhoIsAlreadyRegisteredIsFoundAndNoCardDataLeavesTheServer`)
 - 5 Field mapping → Tasks 6 (parse), 12 (form)
 - 6 Tables/APIs → Tasks 2, 3, 5; 7 Security (hash, one-time result, branch scope, rate limit, no card data in audit) → Tasks 3–5; consent before save → existing `privacyConsent` (no change; covered in Task 17 B2)
 - 8 Errors → Task 5 outcomes, Task 13 messages, Task 14 UI
 - 9 Installers/autostart → Tasks 10, 11; 10 Tests → each task + Tasks 16, 17; 11 Risks → Task 17 and Task 7 note
 - Spec scope narrowing applied: checksum only on card reads (Task 5); long-poll/polling (Tasks 4, 5, 9, 13).
 
-**Known gaps and decisions to confirm before executing:** the migration number `V1023` must be re-checked at execution time (and at merge: `fix-frontend` and `feat/database` already have different `V1022` files); the manager page is reachable by the link in the reader button and by URL (no entry in the back-office navigation yet, which touches `BackOfficeView.vue` and `CalendarSettingsView.vue` menus); signing/notarization of installers is not included; auto-update is out of scope.
+**Known gaps and decisions to confirm before executing:** the migration number `V1023` must be re-checked at execution time (and at merge: `fix-frontend` and `feat/database` already have different `V1022` files); the manager page is reachable by the link in the registration dialog and by URL (no entry in the back-office navigation yet, which touches `BackOfficeView.vue` and `CalendarSettingsView.vue` menus); signing/notarization of installers is not included; auto-update is out of scope.
 
 **Placeholder scan:** none of "TBD/TODO/similar to Task N"; every code step has code; commands have expected outcomes.
 
 **Type consistency:** `CardData` fields identical in backend (Task 4), agent (Task 6) and frontend `IdCardData` (Task 12); `ReadRequestStore` method names (`create/next/find/complete/fail/claim`) match their uses in `IdCardService` (Task 5); `WorkstationService` methods (`create/newPairingCode/revoke/pair/authenticate/touch/isOnline/require`) match uses in Tasks 3 and 5; REST paths and JSON field names match between backend tests (Tasks 3, 5), agent `BackendClient` (Task 9) and frontend `idCardApi` (Task 13); `ReadOutcome.Status` names (`OK/NO_CARD/NO_READER/ERROR`) match the backend's accepted `status` strings.
+
+**Revision 2 (flow):** the screen flow was changed to the registration dialog described under Global Constraints. Affected tasks: 4 (READING stage), 5 (register-or-find result, progress endpoint), 8–10 (card-present callback), 13 (reading state), and the former Task 14, now split into 14A (hand-off and animation), 14B (dialog) and 14C (patient page and form).
