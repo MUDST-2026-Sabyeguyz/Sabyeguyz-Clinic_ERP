@@ -86,7 +86,7 @@ final class BackendClient {
     }
 
     private HttpRequest.Builder authorized(String path, Duration timeout) {
-        return HttpRequest.newBuilder(URI.create(backendUrl + path)).timeout(timeout).header("Authorization", "Bearer " + token);
+        return HttpRequest.newBuilder(URI.create(backendUrl + path)).timeout(timeout).header("X-Agent-Token", token);
     }
 
     private static HttpResponse<String> send(HttpRequest request) throws IOException {
