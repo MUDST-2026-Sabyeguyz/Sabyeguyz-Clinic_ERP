@@ -76,6 +76,14 @@ public class RefundService {
     @Transactional
     public RefundTransaction request(PaymentTransaction payment, BigDecimal amount, PaymentMethod method,
                                       Permission permission, String reason, Long actorId, List<ItemRequest> items) {
+        return request(payment, amount, method, permission, com.sabyeguyz.clinicv2.enums.ReasonCode.Other,
+                reason, actorId, items);
+    }
+
+    @Transactional
+    public RefundTransaction request(PaymentTransaction payment, BigDecimal amount, PaymentMethod method,
+                                      Permission permission, com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode,
+                                      String reason, Long actorId, List<ItemRequest> items) {
         require(payment != null, "ต้องระบุรายการชำระเงิน");
         // Lock and reload before checking status or refund totals.
         payment = paymentLocks.lockForUpdate(payment.getId());
@@ -99,7 +107,7 @@ public class RefundService {
         List<CheckedItem> checkedItems = checkItems(requested, receiptCourses, amount, payment);
 
         TransactionCancellation cancellation = cancellationService.recordRefundCancellation(payment, permission,
-                reason, actorId);
+                reasonCode, reason, actorId);
         RefundTransaction refund = new RefundTransaction();
         refund.setCancellation(cancellation);
         refund.setOriginalPayment(payment);
@@ -160,9 +168,13 @@ public class RefundService {
                     && item.refundAmount().stripTrailingZeros().scale() <= 2, "ยอดคืนของแต่ละคอร์สต้องมากกว่า 0 และมีทศนิยมไม่เกิน 2 ตำแหน่ง");
             Course course = courses.findByIdForUpdate(item.courseId())
                     .orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
+            require(course.getPurchaserPatient() != null && payment.getPatient() != null
+                            && course.getPurchaserPatient().getId().equals(payment.getPatient().getId()),
+                    "คืนเงินได้เฉพาะผู้ซื้อเดิมของคอร์ส");
             CourseRefundItem mainItem = checkCancellationReference(item, course);
             if (mainItem == null) {
-                require(course.getRemainingVisits() - refundItems.pendingCancelledVisitsOfCourse(course.getId()) >= item.cancelledVisits(),
+                long ownerBalance = ledger.sumQtyChangeByCourseAndPatient(course.getId(), course.getPurchaserPatient().getId());
+                require(Math.min(course.getRemainingVisits(), ownerBalance) - refundItems.pendingCancelledVisitsOfCourse(course.getId()) >= item.cancelledVisits(),
                         "สิทธิ์ที่ยังไม่ใช้ของคอร์ส " + course.getCourseNo() + " ไม่พอสำหรับการยกเลิก " + item.cancelledVisits() + " ครั้ง");
             }
             // Limit refunds to this course's net amount from the original payment.

@@ -36,14 +36,16 @@ describe('v2 branch booking settings', () => {
     }))
   })
 
-  it('refuses a half-set window, a reversed window, a bad email and a length outside 5-480 minutes', () => {
+  it('refuses a half-set window, a reversed window, a bad email and a nonpositive length', () => {
     branch01().then((branch) => {
       putBranch(branch, { bookingOpenTime: '09:00' }).its('status').should('equal', 400)
       putBranch(branch, { bookingOpenTime: '18:00', bookingCloseTime: '09:00' }).its('status').should('equal', 400)
       putBranch(branch, { bookingOpenTime: '9am', bookingCloseTime: '18:00' }).its('status').should('equal', 400)
       putBranch(branch, { email: 'not-an-email' }).its('status').should('equal', 400)
-      putBranch(branch, { defaultAppointmentMinutes: 3 }).its('status').should('equal', 400)
-      putBranch(branch, { defaultAppointmentMinutes: 600 }).its('status').should('equal', 400)
+      putBranch(branch, { defaultAppointmentMinutes: 0 }).its('status').should('equal', 400)
+      putBranch(branch, { defaultAppointmentMinutes: -1 }).its('status').should('equal', 400)
+      putBranch(branch, { defaultAppointmentMinutes: 1 }).its('body.defaultAppointmentMinutes').should('equal', 1)
+      putBranch(branch, { defaultAppointmentMinutes: 600 }).its('body.defaultAppointmentMinutes').should('equal', 600)
     })
   })
 })
@@ -57,7 +59,10 @@ describe('v2 service appointment length and course validity units', () => {
       })
       send(45).its('body.defaultDurationMinutes').should('equal', 45)
       send(null).its('body.defaultDurationMinutes').should('equal', 0)
-      send(2).its('status').should('equal', 400)
+      send(1).its('body.defaultDurationMinutes').should('equal', 1)
+      send(600).its('body.defaultDurationMinutes').should('equal', 600)
+      send(0).its('status').should('equal', 400)
+      send(-1).its('status').should('equal', 400)
     })
   })
 

@@ -231,6 +231,35 @@ for (const [name, Component] of [
       view.unmount()
     })
 
+    it('uses the backend-resolved branch duration when the service has no explicit duration', async () => {
+      const { catalogApi } = await import('@/api/client')
+      vi.mocked(catalogApi.services).mockResolvedValueOnce([
+        { id: 7, name: 'Service using branch duration', durationMinutes: null },
+      ] as never)
+      api.availability.mockResolvedValue({
+        durationMinutes: 45,
+        slots: [{ time: '01:30', available: true }],
+      })
+      const { view, state } = await render()
+      state.openCreate()
+      await flushPromises()
+      state.serviceMode = 'single'
+      state.appointmentPatientType = 'CURRENT'
+      state.patientQuery = 'TEST009'
+      Object.assign(state.form, {
+        patientId: 9, therapistId: 3, branchCode: '01', date: '2030-01-08', time: '01:30',
+      })
+      state.formServiceModel = '7'
+      await nextTick()
+      await state.requestSaveConfirmation()
+      expect(state.pendingSaveConfirmation).toBe(true)
+      await state.save()
+      expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
+        startAt: '2030-01-08T01:30:00+07:00',
+        endAt: '2030-01-08T02:15:00+07:00',
+      }))
+      view.unmount()
+    })
     it('does not offer a separate end time field', async () => {
       const { view, state } = await render()
       state.openEdit(appointment)

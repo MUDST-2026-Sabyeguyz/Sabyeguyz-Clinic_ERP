@@ -26,8 +26,14 @@ describe('transaction cancellation review', () => {
     expect(source).not.toContain('<small>เบอร์โทรศัพท์ -</small>')
   })
 
-  it('keeps a typed fallback for a cancellation reason outside the presets', () => {
-    expect(source).toContain("reasonType === 'อื่น ๆ'")
+  it('sends a reason code and requires separate detail for every cancellation category', () => {
+    expect(source).toContain("{ code: 'WrongEntryOrService'")
+    expect(source).toContain("{ code: 'DuplicateEntry'")
+    expect(source).toContain("{ code: 'PatientRequested'")
+    expect(source).toContain("{ code: 'PaymentFailedOrIncorrectAmount'")
+    expect(source).toContain("{ code: 'Other'")
     expect(source).toContain('รายละเอียดเหตุผล *')
+    expect(source).toContain('required')
+    expect(source).toContain('reasonCode: command.reasonCode')
   })
 })

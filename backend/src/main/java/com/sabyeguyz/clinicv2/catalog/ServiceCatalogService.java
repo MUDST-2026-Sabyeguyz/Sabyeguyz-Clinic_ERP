@@ -51,7 +51,7 @@ public class ServiceCatalogService {
         service.setServicePrice(price);
         service.setServiceStatus(true);
         service.setDefaultTotalVisits(defaultTotalVisits);
-        service.setDefaultBonusVisits(0);
+        service.setDefaultBonusVisits(defaultBonusVisits == null ? 0 : defaultBonusVisits);
         service.setDefaultValidityDays(defaultValidityDays);
         service.setServiceCreateAt(Instant.now());
         service.setServiceCreateBy(actorId);

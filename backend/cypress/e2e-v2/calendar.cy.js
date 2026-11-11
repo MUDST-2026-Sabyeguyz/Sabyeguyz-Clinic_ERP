@@ -74,6 +74,29 @@ const activitySnapshot = () =>
     })
 
 describe('v2 Google Calendar sync - system to Google', () => {
+  it('imports an end-only change and editable note without duplicating appointment or patient', function () {
+    connect()
+    cy.registerPatient({ firstName: 'สมชาย', lastName: 'ใจดี', phone: '0811111111' }).then((patient) => {
+      book(this.fixtures, patient, { note: 'Before remote edit' }).then((booked) => {
+        sync()
+        edit({ appointmentId: booked.id, end: local(this.fixtures, '10:30'), description: 'Note changed in Google' })
+        sync()
+        appointment(booked.id).then((detail) => {
+          expect(detail.id).to.equal(booked.id)
+          expect(detail.patient.id).to.equal(patient.id)
+          expect(detail.note).to.equal('Note changed in Google')
+          expect(new Date(detail.endAt).getTime()).to.equal(new Date(at(this.fixtures, '10:30')).getTime())
+          expect(new Date(detail.startAt).getTime()).to.equal(new Date(at(this.fixtures, '09:00')).getTime())
+        })
+        sync().then((result) => {
+          expect(result.movedFromGoogle).to.equal(0)
+          expect(result.pushed).to.equal(0)
+        })
+        events().should('have.length', 1)
+      })
+    })
+  })
+
   it('writes a booked appointment to the branch calendar with little personal data', function () {
     connect()
     cy.registerPatient({ firstName: 'สมชาย', lastName: 'ใจดี', phone: '0811111111' }).then((patient) => {
@@ -226,6 +249,30 @@ describe('v2 Google Calendar sync - Google to system', () => {
             const event = list.find((item) => item.appointmentId === appointmentBody.id)
             expect(event.start).to.equal(local(this.fixtures, '10:00'))
           })
+        })
+      })
+    })
+  })
+
+  it('puts the time back in Google when the edited event overlaps a branch Busy block', function () {
+    connect()
+    cy.registerPatient().then((patient) => {
+      book(this.fixtures, patient).then((appointmentBody) => {
+        sync()
+        cy.api('POST', '/__cypress/calendar/busy', {
+          calendarId: CAL,
+          start: local(this.fixtures, '11:00'),
+          end: local(this.fixtures, '12:00'),
+        }).its('status').should('equal', 200)
+        edit({ appointmentId: appointmentBody.id, start: local(this.fixtures, '11:00') })
+        sync().then((result) => {
+          expect(result.movedFromGoogle).to.equal(0)
+          expect(result.revertedInGoogle).to.equal(1)
+        })
+        appointment(appointmentBody.id).its('startAt').should('contain', 'T02:00:00')
+        events().then((list) => {
+          const event = list.find((item) => item.appointmentId === appointmentBody.id)
+          expect(event.start).to.equal(local(this.fixtures, '09:00'))
         })
       })
     })
