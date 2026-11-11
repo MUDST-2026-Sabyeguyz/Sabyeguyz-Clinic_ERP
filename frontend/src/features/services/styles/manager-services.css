@@ -1096,7 +1096,6 @@
   display: grid;
   padding: 24px;
   background: rgb(0 0 0 / 32%);
-  backdrop-filter: blur(1px);
   place-items: center;
 }
 .payment-modal {
