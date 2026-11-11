@@ -358,6 +358,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overvi
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview > div {
   min-width: 0;
+  text-align: center;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview span {
   display: block;
