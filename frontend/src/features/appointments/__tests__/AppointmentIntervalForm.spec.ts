@@ -22,6 +22,7 @@ vi.mock('@/api/client', () => ({
   },
   catalogApi: {
     services: vi.fn(async () => [{ id: 7, name: 'Test service', durationMinutes: 30 }]),
+    courses: vi.fn(async () => []),
   },
   staffApi: { list: vi.fn(async () => [{ id: 3, userId: 1 }]) },
   courseApi: { patientCourses: vi.fn(async () => []) },
@@ -52,18 +53,16 @@ type Form = {
   branchCode: string
   date: string
   time: string
-  endDate: string
-  endTime: string
   note: string
 }
 type State = {
   requestStatusChange: (item: Appointment, status: string) => Promise<void>
   confirmCancellation: () => Promise<void>
   cancellationReason: string
-  openServiceFlow: (item: Appointment) => Promise<void>
   form: Form
   patientQuery: string
   serviceMode: string
+  formServiceModel: string
   appointmentPatientType: string
   newPatientForm: { firstName: string; lastName: string; nickname: string; phone: string }
   openCreate: () => void
@@ -122,7 +121,8 @@ for (const [name, Component] of [
 
     it('opens CURRENT services without changing status', async () => {
       const { view, state, router } = await render()
-      await state.openServiceFlow(appointment)
+      await state.requestStatusChange(appointment, 'CONFIRMED')
+      await flushPromises()
       expect(router.currentRoute.value.name).toBe('staff-services')
       expect(router.currentRoute.value.query).toEqual({ patientId: '9', appointmentId: '55' })
       expect(appointment.status).toBe('UNCONFIRMED')
@@ -150,9 +150,11 @@ for (const [name, Component] of [
 
     it('opens NEW registration and blocks cancelled appointments', async () => {
       const { view, state, router } = await render()
-      await state.openServiceFlow({ ...appointment, status: 'CANCELLED' })
+      await state.requestStatusChange({ ...appointment, status: 'CANCELLED' }, 'CONFIRMED')
+      await flushPromises()
       expect(router.currentRoute.value.name).toBe('staff-appointments')
-      await state.openServiceFlow({ ...appointment, patientType: 'NEW' })
+      await state.requestStatusChange({ ...appointment, patientType: 'NEW' }, 'CONFIRMED')
+      await flushPromises()
       expect(router.currentRoute.value.name).toBe('patient-registration')
       expect(router.currentRoute.value.query.appointmentId).toBe('55')
       view.unmount()
@@ -162,18 +164,13 @@ for (const [name, Component] of [
       const { view, state } = await render()
       state.openEdit(appointment)
       await flushPromises()
-      expect(state.form).toMatchObject({
-        date: '2030-01-08',
-        time: '01:30',
-        endDate: '2030-01-08',
-        endTime: '03:15',
-      })
-      expect(view.get('input[aria-label="เวลาจบนัด"]').element).toHaveProperty('value', '03:15')
+      expect(state.form).toMatchObject({ date: '2030-01-08', time: '01:30' })
+      expect(view.find('input[aria-label="เวลาจบนัด"]').exists()).toBe(false)
       expect(
         view
           .findAllComponents({ name: 'ThaiDatePicker' })
           .some(
-            (picker) => picker.props('modelValue') === '2030-01-08' && picker.props('inclusiveMin'),
+            (picker) => picker.props('modelValue') === '2030-01-08' && picker.props('minDate'),
           ),
       ).toBe(true)
       await state.save()
@@ -195,12 +192,7 @@ for (const [name, Component] of [
         endAt: '2030-01-08T17:30:00Z',
       })
       await flushPromises()
-      expect(state.form).toMatchObject({
-        date: '2030-01-08',
-        time: '23:30',
-        endDate: '2030-01-09',
-        endTime: '00:30',
-      })
+      expect(state.form).toMatchObject({ date: '2030-01-08', time: '23:30' })
       await state.save()
       expect(api.reschedule).toHaveBeenCalledWith(
         55,
@@ -212,7 +204,7 @@ for (const [name, Component] of [
       view.unmount()
     })
 
-    it.each(['CURRENT', 'NEW'])('sends the selected end on %s create', async (patientType) => {
+    it.each(['CURRENT', 'NEW'])('derives the end from the service duration on %s create', async (patientType) => {
       const { view, state } = await render()
       state.openCreate()
       await flushPromises()
@@ -223,51 +215,47 @@ for (const [name, Component] of [
       Object.assign(state.form, {
         patientId: 9,
         therapistId: 3,
-        serviceId: 7,
         branchCode: '01',
         date: '2030-01-08',
         time: '01:30',
-        endDate: '2030-01-08',
-        endTime: '03:15',
       })
+      state.formServiceModel = '7'
       await nextTick()
       await state.save()
       expect(api.create).toHaveBeenCalledWith(
         expect.objectContaining({
           startAt: '2030-01-08T01:30:00+07:00',
-          endAt: '2030-01-08T03:15:00+07:00',
+          endAt: '2030-01-08T02:00:00+07:00',
         }),
       )
       view.unmount()
     })
 
-    it.each(['', '01:30', '01:00'])(
-      'blocks missing or non-positive end %s before confirming or PATCHing',
-      async (endTime) => {
-        const { view, state } = await render()
-        state.openEdit(appointment)
-        await flushPromises()
-        await view.get('input[aria-label="เวลาจบนัด"]').setValue(endTime)
-        await state.requestSaveConfirmation()
-        expect(state.pendingSaveConfirmation).toBe(false)
-        expect(api.availability).not.toHaveBeenCalled()
-        await state.save()
-        expect(api.reschedule).not.toHaveBeenCalled()
-        expect(state.errorMessage).not.toBe('')
-        view.unmount()
-      },
-    )
-
-    it('checks availability when only the end time changes', async () => {
+    it('does not offer a separate end time field', async () => {
       const { view, state } = await render()
       state.openEdit(appointment)
       await flushPromises()
-      await view.get('input[aria-label="เวลาจบนัด"]').setValue('03:30')
+      expect(view.find('input[aria-label="เวลาจบนัด"]').exists()).toBe(false)
+      view.unmount()
+    })
+
+    it('checks availability and keeps the stored duration when only the start time changes', async () => {
+      api.availability.mockResolvedValue({ slots: [{ time: '02:00', available: true }] })
+      const { view, state } = await render()
+      state.openEdit(appointment)
+      await flushPromises()
+      state.form.time = '02:00'
       await state.requestSaveConfirmation()
       expect(api.availability).toHaveBeenCalledWith(
         expect.objectContaining({ excludeAppointmentId: 55 }),
       )
-      expect(state.pendingSaveConfirmation).toBe(true)
+      expect(api.reschedule).toHaveBeenCalledWith(
+        55,
+        expect.objectContaining({
+          startAt: '2030-01-08T02:00:00+07:00',
+          endAt: '2030-01-08T03:45:00+07:00',
+        }),
+      )
       view.unmount()
     })
   })

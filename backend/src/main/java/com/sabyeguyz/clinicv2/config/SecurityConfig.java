@@ -120,7 +120,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/actuator/health",
-                                "/error")
+                                "/error",
+                                "/api/id-card/agent/**")
                         .permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt ->

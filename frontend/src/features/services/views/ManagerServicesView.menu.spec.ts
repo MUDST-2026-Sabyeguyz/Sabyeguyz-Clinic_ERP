@@ -3,8 +3,8 @@ import source from './ManagerServicesView.vue?raw'
 
 describe('manager services patient menu', () => {
   it('keeps the two care workflows distinct and action-led', () => {
-    expect(source).toContain('เริ่มรายการขาย')
-    expect(source).toContain('>ใช้สิทธิ์<')
+    expect(source).toContain('>ชำระเงิน<')
+    expect(source).toContain('>ใช้สิทธิ์คอร์สที่มีอยู่<')
   })
 
   it('makes each workflow card its own full-surface button without a nested action button', () => {
@@ -17,10 +17,10 @@ describe('manager services patient menu', () => {
     )
   })
 
-  it('shows real course eligibility and lets staff change the selected patient', () => {
+  it('shows real course eligibility and lets staff go back to pick another patient', () => {
     expect(source).toContain('courseApi.patientCourses')
     expect(source).toContain('มีสิทธิ์คอร์ส')
-    expect(source).toContain('เปลี่ยนผู้ป่วย')
+    expect(source).toContain('class="service-menu-back" @click="backFromPaymentMenu"')
   })
 
   it('uses the phone icon only when a phone number exists', () => {

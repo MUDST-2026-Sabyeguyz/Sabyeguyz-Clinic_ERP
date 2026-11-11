@@ -90,8 +90,10 @@ const months = [
 ]
 const weekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 const years = computed(() => {
-  const maxYear = props.maxDate ? Number(props.maxDate.slice(0, 4)) : new Date().getFullYear() + 1
-  return Array.from({ length: Math.max(1, maxYear - 1900 + 1) }, (_, index) => 1900 + index)
+  const currentYear = new Date().getFullYear()
+  const firstYear = currentYear - 3
+  const lastYear = Math.min(currentYear + 3, props.maxDate ? Number(props.maxDate.slice(0, 4)) : currentYear + 3)
+  return Array.from({ length: Math.max(1, lastYear - firstYear + 1) }, (_, index) => firstYear + index)
 })
 
 const displayValue = computed(() => {

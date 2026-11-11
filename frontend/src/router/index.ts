@@ -6,18 +6,15 @@ function roleView(manager: RoleViewLoader, therapist: RoleViewLoader) {
   const ManagerView = defineAsyncComponent(manager)
   const TherapistView = defineAsyncComponent(therapist)
 
-  const currentRole = () =>
-    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role
-  const component = defineComponent({
+  return defineComponent({
     name: 'RoleSpecificView',
     setup() {
-      const View = currentRole() === 'MANAGER' ? ManagerView : TherapistView
+      const user = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+        role?: string
+      } | null
+      const View = user?.role === 'MANAGER' ? ManagerView : TherapistView
       return () => h(View)
     },
-  })
-  // Lets prefetchRoute() warm the chunk for the current role before the user finishes clicking.
-  return Object.assign(component, {
-    preload: () => (currentRole() === 'MANAGER' ? manager : therapist)(),
   })
 }
 
@@ -363,6 +360,12 @@ const router = createRouter({
       meta: { roles: ['manager', 'therapist'] },
     },
     {
+      path: '/staff/settings/card-readers',
+      name: 'staff-card-readers',
+      component: () => import('@/features/settings/views/BackOfficeView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/settings',
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
@@ -436,27 +439,5 @@ router.afterEach(() => {
   const usesSharedStaffUi = authUser?.role === 'THERAPIST' || authUser?.role === 'MANAGER'
   document.body.classList.toggle('therapist-ui', usesSharedStaffUi)
 })
-
-const warmed = new WeakSet<object>()
-/** Starts downloading the lazy chunk(s) for an in-app link so the click itself renders at once. */
-export function prefetchRoute(href: string) {
-  if (!href.startsWith('/staff/') && href !== '/') return
-  for (const record of router.resolve(href).matched) {
-    const component = record.components?.default as
-      | (Component & { preload?: () => Promise<unknown> })
-      | (() => Promise<unknown>)
-      | undefined
-    if (!component || warmed.has(component)) continue
-    const load =
-      'preload' in component && typeof component.preload === 'function'
-        ? component.preload
-        : typeof component === 'function' && !('setup' in component)
-          ? (component as () => Promise<unknown>)
-          : null
-    if (!load) continue
-    warmed.add(component)
-    void Promise.resolve(load()).catch(() => warmed.delete(component))
-  }
-}
 
 export default router

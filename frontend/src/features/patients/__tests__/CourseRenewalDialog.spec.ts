@@ -1,8 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CourseRenewalDialog from '../components/CourseRenewalDialog.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 
-const api = vi.hoisted(() => ({ extensions: vi.fn(), requestExtension: vi.fn() }))
+const api = vi.hoisted(() => ({
+  extensions: vi.fn(), requestExtension: vi.fn(),
+  previewDirectExtension: vi.fn(), extendDirect: vi.fn(),
+}))
 vi.mock('@/api/client', () => ({ courseApi: api }))
 
 const course = {
@@ -24,9 +28,9 @@ const course = {
   status: 'ACTIVE',
 }
 
-function render() {
+function render(manager = false) {
   return mount(CourseRenewalDialog, {
-    props: { course, patientId: 9 },
+    props: { course, patientId: 9, manager },
     global: {
       directives: { 'modal-focus': { mounted() {} } },
       stubs: { Teleport: true },
@@ -37,14 +41,64 @@ function render() {
 beforeEach(() => {
   api.extensions.mockReset().mockResolvedValue([])
   api.requestExtension.mockReset().mockResolvedValue({ id: 1, status: 'Pending' })
+  const dates = { oldExpiry: '2026-12-31', newExpiry: '2027-01-31' }
+  api.previewDirectExtension.mockReset().mockResolvedValue(dates)
+  api.extendDirect.mockReset().mockResolvedValue(dates)
 })
 
 describe('course extension request dialog', () => {
+  it('lets a Manager review and extend without creating a request', async () => {
+    const view = render(true)
+    expect(view.find('input[type="checkbox"]').exists()).toBe(false)
+    await flushPromises()
+    const body = { courseId: 43, requestedByPatientId: 9, value: 1, unit: 'Month', reason: '', ownerRequestConfirmed: false }
+    expect(api.previewDirectExtension).toHaveBeenCalledWith(body)
+    expect(api.extendDirect).not.toHaveBeenCalled()
+    expect(view.text()).toContain('คอร์สจะหมดอายุวันที่')
+    expect(view.get('button[type="submit"]').text()).toBe('ยืนยันต่ออายุ')
+    await view.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.extendDirect).toHaveBeenCalledWith({ ...body, oldExpiry: '2026-12-31', newExpiry: '2027-01-31', ownerRequestConfirmed: true })
+    expect(api.requestExtension).not.toHaveBeenCalled()
+    expect(api.extensions).not.toHaveBeenCalled()
+    expect(view.emitted('extended')).toEqual([['2027-01-31']])
+    view.unmount()
+  })
+
+  it('clamps a typed duration to the selected unit limit', async () => {
+    const view = render(true)
+    await flushPromises()
+    api.previewDirectExtension.mockClear()
+    const duration = view.get('input[type="number"]')
+    expect(duration.attributes('max')).toBe('12')
+    await duration.setValue('13')
+    expect((duration.element as HTMLInputElement).value).toBe('12')
+    expect(api.previewDirectExtension).toHaveBeenCalledWith(expect.objectContaining({ value: 12 }))
+    expect(api.extendDirect).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('keeps the previous day count when another digit would exceed the limit', async () => {
+    const view = render(true)
+    await flushPromises()
+    view.getComponent(FilterDropdown).vm.$emit('update:modelValue', 'Day')
+    await flushPromises()
+    const duration = view.get('input[type="number"]')
+    expect(duration.attributes('max')).toBe('99')
+    await duration.setValue('99')
+    api.previewDirectExtension.mockClear()
+    await duration.setValue('994')
+    expect((duration.element as HTMLInputElement).value).toBe('99')
+    expect(api.previewDirectExtension).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
   it('submits the main extension request contract and waits for manager approval', async () => {
     const view = render()
     await flushPromises()
+    expect(view.get('.course-renewal-duration + .course-renewal-preview').text()).toContain('คอร์สจะหมดอายุวันที่')
+    expect(api.previewDirectExtension).not.toHaveBeenCalled()
     await view.get('input[type="number"]').setValue('3')
-    await view.get('select').setValue('Month')
     await view.get('textarea').setValue('เหตุผลทดสอบ')
     await view.get('form').trigger('submit')
     await flushPromises()
@@ -57,8 +111,8 @@ describe('course extension request dialog', () => {
       requestedByPatientId: 9,
     })
     expect(api.extensions).toHaveBeenLastCalledWith({ courseId: 43 })
-    expect(view.text()).toContain('ยังไม่เปลี่ยนวันหมดอายุ')
-    expect(view.text()).toContain('รอ Manager อนุมัติก่อนวันหมดอายุจะเปลี่ยน')
+    expect(view.find('form').exists()).toBe(false)
+    expect(view.text()).not.toContain('คำขอและประวัติการต่ออายุ')
     expect(view.emitted('requested')).toHaveLength(1)
     view.unmount()
   })
@@ -82,7 +136,9 @@ describe('course extension request dialog', () => {
     ])
     const view = render()
     await flushPromises()
-    expect(view.text()).toContain('มีคำขอต่ออายุที่รอ Manager พิจารณาอยู่แล้ว')
+    expect(view.get('.course-renewal-success').text()).toBe('รอการพิจารณา')
+    expect(view.text()).not.toContain(course.course.name)
+    expect(view.text()).not.toContain('วันหมดอายุปัจจุบัน')
     expect(view.find('form').exists()).toBe(false)
     expect(api.requestExtension).not.toHaveBeenCalled()
     view.unmount()

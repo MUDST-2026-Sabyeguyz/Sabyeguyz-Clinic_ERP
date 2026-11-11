@@ -29,7 +29,16 @@ async function loadBranches() {
   errorMessage.value = ''
   try {
     const branches = await branchApi.list()
-    setManagerBranches(branches.filter((branch) => branch.active))
+    setManagerBranches(
+      branches
+        .filter((branch) => branch.active)
+        .sort((first, second) =>
+          first.branchCode.localeCompare(second.branchCode, 'th-TH', {
+            numeric: true,
+            sensitivity: 'base',
+          }),
+        ),
+    )
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลสาขาไม่สำเร็จ'
   } finally {

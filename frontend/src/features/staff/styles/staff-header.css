@@ -1,7 +1,7 @@
 .staff-header {
   position: relative;
   z-index: 20;
-  height: 64px;
+  height: 76px;
   padding: 0 30px 0 16px;
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr) 72px;
@@ -11,8 +11,8 @@
   box-shadow: 0 5px 20px #154f4b1f;
 }
 .brand {
-  width: 136px;
-  height: 52px;
+  width: 176px;
+  height: 68px;
   margin-left: -16px;
   overflow: visible;
   transition: transform 0.22s ease;
@@ -21,8 +21,8 @@
   transform: scale(1.025);
 }
 .brand img {
-  width: 136px;
-  height: 52px;
+  width: 176px;
+  height: 68px;
   object-fit: contain;
   object-position: center;
   transform: none;
@@ -240,8 +240,8 @@ nav a.router-link-active:after {
   top: 50%;
   left: 0;
   display: block;
-  height: 40px;
-  border-radius: 20px;
+  height: 48px;
+  border-radius: 24px;
   background: #fff;
   box-shadow: 0 3px 9px rgb(20 79 76 / 18%);
   translate: 0 -50%;
@@ -287,7 +287,7 @@ nav a.router-link-active:after {
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    min-height: 40px;
+    min-height: 48px;
     padding-inline: 20px;
     line-height: 1.4;
     text-align: center;
@@ -314,7 +314,7 @@ nav a.router-link-active:after {
     grid-template-columns: 170px minmax(0, 1fr) auto auto;
   }
   .brand {
-    width: 126px;
+    width: 150px;
   }
   nav {
     justify-content: flex-start;
@@ -329,8 +329,8 @@ nav a.router-link-active:after {
 @media (max-width: 1400px) {
   .staff-header {
     grid-template-columns: minmax(0, 1fr) auto auto;
-    height: 60px;
-    min-height: 60px;
+    height: 72px;
+    min-height: 72px;
   }
   .staff-header.manager-header {
     grid-template-columns: auto minmax(0, 1fr) 142px auto;
