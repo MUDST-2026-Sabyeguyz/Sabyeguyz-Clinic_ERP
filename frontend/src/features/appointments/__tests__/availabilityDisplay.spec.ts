@@ -13,6 +13,24 @@ const base = {
   googleCalendar: 'NOT_CONNECTED',
 } satisfies AppointmentAvailability
 describe('availability display', () => {
+  it('does not invent a duration when the backend returns none', () => {
+    const result = displayAvailability({
+      ...base, windowConfigured: true, openTime: '09:00', closeTime: '18:00',
+      durationMinutes: null,
+    }, 60)
+    expect(result.slots).toEqual([])
+    expect(result.message).toContain('อย่างใดอย่างหนึ่ง')
+  })
+
+  it('uses the backend service duration without requiring a branch default', () => {
+    const slots = [{ time: '09:00', available: true, reason: null }]
+    const result = displayAvailability({
+      ...base, windowConfigured: true, durationMinutes: 50, slots,
+    }, 60)
+    expect(result.slots).toEqual(slots)
+    expect(result.message).toBe('')
+  })
+
   it('shows disabled placeholders when opening hours are missing', () => {
     const result = displayAvailability(base, 60)
     expect(result.slots).toHaveLength(9)
