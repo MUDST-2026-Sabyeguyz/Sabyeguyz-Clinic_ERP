@@ -172,7 +172,7 @@ async function decide(row: ExtensionRow, decision: 'approve' | 'reject') {
       <div class="page-heading">
         <div>
           <h1>{{ patientId ? 'คำขอของผู้ป่วยรายนี้' : 'คำขอต่ออายุคอร์สทั้งหมด' }}</h1>
-          <p>{{ patientId ? 'แสดงเฉพาะคำขอของผู้ป่วยที่เลือก' : 'ตรวจและพิจารณาคำขอของผู้ป่วยทุกคน' }}</p>
+          <p v-if="patientId">แสดงเฉพาะคำขอของผู้ป่วยที่เลือก</p>
         </div>
         <div class="request-filter-actions">
           <div class="status-filter">
