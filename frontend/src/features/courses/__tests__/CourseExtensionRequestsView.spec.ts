@@ -1,6 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import View from '../views/CourseExtensionRequestsView.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+const testRoute = vi.hoisted(() => ({ query: {} as Record<string, string> }))
+vi.mock('vue-router', () => ({ useRoute: () => testRoute }))
 
 const api = vi.hoisted(() => ({
   extensions: vi.fn(),
@@ -35,10 +38,11 @@ const request = {
 }
 
 function render() {
-  return mount(View, { global: { stubs: { StaffHeader: true, RouterLink: true } } })
+  return mount(View, { global: { stubs: { StaffHeader: true, RouterLink: true, Teleport: true } } })
 }
 
 beforeEach(() => {
+  testRoute.query = {}
   api.extensions.mockReset().mockResolvedValue([request])
   api.approveExtension.mockReset().mockResolvedValue({
     ...request,
@@ -54,6 +58,21 @@ beforeEach(() => {
 })
 
 describe('manager course extension decisions', () => {
+  it('shows only the selected patient and supports searching within that scope', async () => {
+    testRoute.query = { patientId: '9' }
+    api.extensions.mockResolvedValue([request, { ...request, id: 99, requestedPatientId: 10 }])
+    const view = render()
+    await flushPromises()
+    expect(view.text()).toContain('คำขอของผู้ป่วยรายนี้')
+    expect(view.findAll('.request-card')).toHaveLength(1)
+    expect(api.patientGet).not.toHaveBeenCalledWith(10)
+    await view.get('input[type="search"]').setValue('ไม่ตรงกับข้อมูล')
+    expect(view.findAll('.request-card')).toHaveLength(0)
+    await view.get('input[type="search"]').setValue('HN9')
+    expect(view.findAll('.request-card')).toHaveLength(1)
+    view.unmount()
+  })
+
   it('loads the main pending request contract and approves through the decision endpoint', async () => {
     const view = render()
     await flushPromises()
@@ -61,12 +80,15 @@ describe('manager course extension decisions', () => {
     expect(view.text()).toContain('คอร์สทดสอบ')
     expect(view.text()).toContain('ผู้ป่วยทดสอบ')
     expect(view.text()).toContain('เพิ่ม 3 เดือน')
+    expect(view.get('.request-status').text()).toBe('รอพิจารณา')
 
     await view.get('button.approve').trigger('click')
+    expect(api.approveExtension).not.toHaveBeenCalled()
+    expect(view.get('[role="dialog"]').text()).toContain('ยืนยันอนุมัติคำขอ?')
+    await view.get('.decision-confirm').trigger('click')
     await flushPromises()
     expect(api.approveExtension).toHaveBeenCalledWith(8, undefined)
-    expect(view.text()).toContain('อนุมัติคำขอแล้ว')
-    expect(view.text()).toContain('2569')
+    expect(view.text()).not.toContain('อนุมัติคำขอแล้ว')
     expect(view.find('button.approve').exists()).toBe(false)
     view.unmount()
   })
@@ -74,14 +96,19 @@ describe('manager course extension decisions', () => {
   it('loads the selected status and rejects through the decision endpoint', async () => {
     const view = render()
     await flushPromises()
-    await view.get('select').setValue('Rejected')
+    view.getComponent(FilterDropdown).vm.$emit('update:modelValue', 'Rejected')
     await flushPromises()
     expect(api.extensions).toHaveBeenLastCalledWith({ status: 'Rejected' })
 
-    await view.get('button').trigger('click')
+    view.getComponent(FilterDropdown).vm.$emit('update:modelValue', 'Pending')
+    await flushPromises()
+    await view.get('.request-card footer button').trigger('click')
+    expect(api.rejectExtension).not.toHaveBeenCalled()
+    expect(view.get('[role="dialog"]').text()).toContain('ยืนยันปฏิเสธคำขอ?')
+    await view.get('.decision-confirm').trigger('click')
     await flushPromises()
     expect(api.rejectExtension).toHaveBeenCalledWith(8, undefined)
-    expect(view.text()).toContain('ปฏิเสธคำขอแล้ว')
+    expect(view.text()).not.toContain('ปฏิเสธคำขอแล้ว')
     view.unmount()
   })
 })
