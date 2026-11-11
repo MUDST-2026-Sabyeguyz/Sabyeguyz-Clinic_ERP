@@ -25,6 +25,7 @@ const authUser = computed(() => {
 const isManager = computed(() => authUser.value?.role === 'MANAGER')
 const choices = computed(() => reader.workstations.value.filter((w) => w.status === 'Active'))
 const canRead = computed(() => reader.selectedId.value !== null)
+const failureMessage = computed(() => /[\u0E00-\u0E7F]/.test(reader.message.value) ? reader.message.value : '')
 
 watch(
   () => props.open,
@@ -90,6 +91,7 @@ function chooseReader(event: Event) {
   <div v-if="open" class="register-dialog-backdrop" @click.self="close" @keydown.esc="close">
     <section
       class="register-dialog"
+      :class="{ 'read-failed': phase === 'failed' }"
       role="dialog"
       aria-modal="true"
       aria-labelledby="register-dialog-title"
@@ -140,7 +142,6 @@ function chooseReader(event: Event) {
           <template v-else>
             <IdCardInsertAnimation />
             <h2 id="register-dialog-title">กรุณาเสียบบัตรประชาชน</h2>
-            <p>เสียบบัตรที่เครื่องอ่านบัตรให้สุด</p>
           </template>
         </div>
       </template>
@@ -158,13 +159,16 @@ function chooseReader(event: Event) {
       </template>
 
       <template v-else>
+        <span class="read-failed-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </span>
         <h2 id="register-dialog-title">อ่านบัตรไม่สำเร็จ</h2>
-        <p role="alert">{{ reader.message.value || 'อ่านบัตรไม่สำเร็จ' }}</p>
+        <p v-if="failureMessage" role="alert">{{ failureMessage }}</p>
         <div class="actions">
-          <button type="button" class="primary retry" @click="readCard">ลองอีกครั้ง</button>
           <button type="button" class="secondary method-manual-after-failure" @click="manual">
             กรอกข้อมูลเอง
           </button>
+          <button type="button" class="primary retry" @click="readCard">ลองอีกครั้ง</button>
         </div>
       </template>
     </section>
@@ -181,12 +185,92 @@ function chooseReader(event: Event) {
   background: rgb(15 21 20 / 0.45);
 }
 .register-dialog {
+  box-sizing: border-box;
   width: min(520px, calc(100vw - 32px));
   padding: 24px;
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 18px 50px rgb(0 0 0 / 0.25);
   text-align: center;
+}
+.register-dialog.read-failed {
+  width: min(440px, calc(100vw - 32px));
+  padding: 32px;
+  border: 1px solid #e1eae6;
+  border-radius: 20px;
+  color: #25372e;
+}
+.read-failed-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: #fdecec;
+  color: #c44747;
+}
+.read-failed-icon svg { width: 28px; height: 28px; }
+.read-failed h2 {
+  margin: 0;
+  color: #25372e;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.read-failed p {
+  margin: 12px 0 26px;
+  color: #68776f;
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.register-dialog.read-failed .actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+  align-items: stretch;
+}
+.register-dialog.read-failed .actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 48px;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid #98c2bd;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 24px;
+  cursor: pointer;
+}
+.register-dialog.read-failed .actions .secondary {
+  background: #fff;
+  color: #187d78;
+  box-shadow: none;
+}
+.register-dialog.read-failed .actions .primary {
+  border-color: #187d78;
+  background: var(--ui-primary-gradient, #187d78);
+  color: #fff;
+  box-shadow: 0 4px 10px rgb(24 125 120 / 15%);
+}
+.register-dialog.read-failed button:focus-visible {
+  outline: 2px solid #187d78;
+  outline-offset: 3px;
+}
+@media (max-width: 420px) {
+  .register-dialog.read-failed { padding: 24px 20px; }
+  .register-dialog.read-failed .actions { grid-template-columns: 1fr; }
 }
 .register-dialog header {
   display: flex;
