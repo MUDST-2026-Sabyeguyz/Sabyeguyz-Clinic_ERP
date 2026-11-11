@@ -135,7 +135,7 @@
   padding: 8px 14px;
   border: 1px solid #c7d1cc;
   border-radius: 9px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   font-weight: 500;
   cursor: pointer;
@@ -150,7 +150,7 @@
   height: 20px;
   margin: 0;
   padding: 0;
-  accent-color: #1e807c;
+  accent-color: var(--color-primary);
 }
 .appointment-patient-field,
 .appointment-therapist-field,
@@ -227,7 +227,7 @@
   border-radius: 11px;
   background: #fff;
   box-shadow: 0 8px 18px rgb(34 67 59 / 18%);
-  scrollbar-color: #1e807c #dcecea;
+  scrollbar-color: var(--color-primary) #dcecea;
   scrollbar-width: thin;
 }
 .create-card .patient-search-results::-webkit-scrollbar {
@@ -411,13 +411,13 @@
 .appointment-confirm-modal .primary {
   border: 2px solid transparent;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .appointment-confirm-modal .primary:hover:not(:disabled) {
   background: #176c68;
 }
 .appointment-confirm-modal .secondary {
-  border: 2px solid #1e807c;
+  border: 2px solid var(--color-primary);
   color: #1f2937;
   background: #faf6f0;
 }
@@ -474,7 +474,7 @@
   border: 0;
   border-radius: 10px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-weight: 700;
 }
@@ -507,7 +507,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scrollbar-color: #1e807c #dcecea;
+  scrollbar-color: var(--color-primary) #dcecea;
   scrollbar-width: thin;
 }
 .appointment-table-scroll::-webkit-scrollbar {
@@ -518,7 +518,7 @@
   border-radius: 999px;
 }
 .appointment-table-scroll::-webkit-scrollbar-thumb {
-  background: #1e807c;
+  background: var(--color-primary);
   border-radius: 999px;
 }
 .appointment-panel .staff-table th,
@@ -587,10 +587,10 @@
 .appointment-pagination button {
   min-width: 104px;
   padding: 9px 14px;
-  border: 1px solid #1e807c;
+  border: 1px solid var(--color-primary);
   border-radius: 8px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -721,7 +721,7 @@
 }
 .appointment-page .staff-hero h1 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 55px;
   line-height: 1.3;
 }
@@ -794,7 +794,7 @@
   height: 46px;
   border: 1px solid #c2ccc9;
   border-radius: 9px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   box-sizing: border-box;
 }
@@ -803,7 +803,7 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   align-items: center;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
@@ -931,7 +931,7 @@
 .appointment-status-filter :deep(.filter-dropdown__button) {
   min-height: 36px;
   padding: 6px 13px;
-  border-color: #d9e1dc;
+  border-color: var(--color-border-soft);
   border-radius: 999px;
   background: #dbeafe;
 }
@@ -949,7 +949,7 @@
 }
 .appointment-edit {
   border: 0;
-  color: #25372e;
+  color: var(--color-ink);
   background: transparent;
   font: inherit;
   font-weight: 700;
@@ -987,7 +987,7 @@
   border: 0;
   border-radius: 9px;
   background: #edf2ed;
-  color: #25372e;
+  color: var(--color-ink);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -1318,7 +1318,7 @@
 .calendar-grid-scroll {
   overflow-x: auto;
   padding-bottom: 8px;
-  scrollbar-color: #1e807c #dcecea;
+  scrollbar-color: var(--color-primary) #dcecea;
   scrollbar-width: thin;
 }
 .calendar-grid-scroll::-webkit-scrollbar {
@@ -1330,7 +1330,7 @@
 }
 .calendar-grid-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .appointment-calendar .calendar-time,
 .appointment-calendar .calendar-column {
@@ -1611,7 +1611,7 @@
   box-sizing: border-box;
   border: 1px solid #8e8e8e;
   border-radius: 7px;
-  color: #56665d;
+  color: var(--color-muted);
   background: #f7f7f7;
   box-shadow: 0 1px 3.5px rgb(119 119 119 / 25%);
   font: inherit;

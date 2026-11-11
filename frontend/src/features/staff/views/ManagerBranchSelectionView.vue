@@ -118,7 +118,7 @@ onMounted(loadBranches)
   display: grid;
   grid-template-columns: 1fr 1fr;
   background: #e9f5f0;
-  color: #25372e;
+  color: var(--color-ink);
 }
 .branch-brand {
   display: grid;
@@ -126,7 +126,7 @@ onMounted(loadBranches)
   gap: 24px;
   min-height: 100vh;
   text-align: center;
-  background: #145c59 url('@/assets/brand-panel.png') center/cover;
+  background: var(--color-primary-strong) url('@/assets/brand-panel.png') center/cover;
   color: #c6dfd8;
 }
 .branch-brand img {
@@ -187,7 +187,7 @@ onMounted(loadBranches)
   background: #fff;
 }
 .branch-search-control:focus-within {
-  border-color: #145c59;
+  border-color: var(--color-primary-strong);
   box-shadow: 0 0 0 3px #145c5940;
 }
 .branch-search-control input {
@@ -198,7 +198,7 @@ onMounted(loadBranches)
   border: 0;
   border-radius: inherit;
   outline: 0;
-  color: #25372e;
+  color: var(--color-ink);
   background: transparent;
   font: inherit;
   font-weight: 400;
@@ -214,7 +214,7 @@ onMounted(loadBranches)
   padding: 0 12px;
   border: 0;
   border-radius: 8px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: transparent;
   font: inherit;
   font-weight: 700;
@@ -243,9 +243,9 @@ onMounted(loadBranches)
   width: 100%;
   min-height: 96px;
   padding: 18px 20px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 10px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   text-align: left;
   cursor: pointer;
@@ -255,7 +255,7 @@ onMounted(loadBranches)
     transform 0.2s;
 }
 .branch-option:hover {
-  border-color: #1e807c;
+  border-color: var(--color-primary);
   box-shadow: 0 8px 18px #1e807c1e;
   transform: translateY(-2px);
 }
@@ -265,7 +265,7 @@ onMounted(loadBranches)
 }
 .branch-option:focus-visible,
 .branch-search-control button:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
   position: relative;
   z-index: 1;
@@ -293,7 +293,7 @@ onMounted(loadBranches)
   line-height: 1.4;
 }
 .branch-option strong {
-  color: #1e807c;
+  color: var(--color-primary);
   font-size: 17px;
   font-weight: 600;
 }

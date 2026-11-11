@@ -926,7 +926,7 @@ async function submit() {
       </div>
     </Teleport>
 </template>
-<style scoped src="../styles/manager-patient-registration.css"></style>
-<style src="../styles/therapist.css"></style>
+<style scoped src="../styles/patient-registration.css"></style>
+<style src="../styles/patient-workspace.css"></style>
 
 <style scoped src="../styles/registration-polish.css"></style>

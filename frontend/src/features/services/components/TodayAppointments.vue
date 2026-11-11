@@ -137,10 +137,10 @@ onBeforeUnmount(() => {
 .today-appointments {
   margin-top: 28px;
   padding: 20px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   background: #fff;
-  color: #25372e;
+  color: var(--color-ink);
 }
 header {
   display: flex;
@@ -162,7 +162,7 @@ small {
   overflow-x: auto;
   width: 100%;
   max-width: 100%;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   background: white;
 }

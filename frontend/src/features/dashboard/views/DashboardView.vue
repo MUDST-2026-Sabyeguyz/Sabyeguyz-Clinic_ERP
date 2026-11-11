@@ -710,8 +710,8 @@ function applyCustomRange() {
 @import '../../staff/styles/staff.css';
 .manager-dashboard {
   min-height: 100vh;
-  background: var(--ui-workspace-background);
-  color: #25372e;
+  background: #f9f4ee;
+  color: var(--color-ink);
 }
 .dashboard-main {
   width: min(1420px, calc(100% - 88px));
@@ -860,18 +860,18 @@ function applyCustomRange() {
   margin: 0;
   font-size: clamp(1.75rem, 2.4vw, 2.25rem);
   line-height: 1.35;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 800;
 }
 .dashboard-heading .dashboard-branch-label {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 1rem;
   font-weight: 500;
 }
 .dashboard-heading p,
 .revenue-card header p {
   margin: 10px 0 0;
-  color: #56665d;
+  color: var(--color-muted);
 }
 .dashboard-section {
   margin-top: 42px;
@@ -883,7 +883,7 @@ function applyCustomRange() {
 }
 .section-caption {
   margin: 3px 0 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.92rem;
 }
 .today-grid {
@@ -910,7 +910,7 @@ function applyCustomRange() {
 }
 .today-card p {
   margin: 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.9rem;
 }
 .today-card b {
@@ -922,7 +922,7 @@ function applyCustomRange() {
   overflow-wrap: anywhere;
 }
 .today-card small {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.76rem;
 }
 .period-section .summary-card {
@@ -931,7 +931,7 @@ function applyCustomRange() {
   border-color: #e6e1dc;
 }
 .period-section .summary-card p {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.9rem;
 }
 .period-section .summary-card b {
@@ -1053,7 +1053,7 @@ function applyCustomRange() {
 }
 .range-month-hint {
   margin: 6px 0 14px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.82rem;
   line-height: 1.5;
 }
@@ -1083,7 +1083,7 @@ function applyCustomRange() {
   cursor: pointer;
 }
 .range-year-picker select:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 .range-months {
@@ -1192,7 +1192,7 @@ function applyCustomRange() {
 .filter-period {
   display: grid;
   gap: 4px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -1201,7 +1201,7 @@ function applyCustomRange() {
   padding-right: 18px;
 }
 .filter-label {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -1241,7 +1241,7 @@ function applyCustomRange() {
   padding: 11px 14px;
   border-radius: 9px;
   background: #e7f2ed;
-  color: #1e807c;
+  color: var(--color-primary);
 }
 .dashboard-feedback.error {
   background: #ffebe7;
@@ -1266,7 +1266,7 @@ function applyCustomRange() {
 .dashboard-retry:focus-visible,
 .custom-range-dialog button:focus-visible,
 .revenue-table-wrap:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 .revenue-table-wrap {
@@ -1282,7 +1282,7 @@ function applyCustomRange() {
 .revenue-table caption {
   text-align: left;
   margin-bottom: 8px;
-  color: #56665d;
+  color: var(--color-muted);
 }
 .revenue-table th,
 .revenue-table td {
@@ -1344,7 +1344,7 @@ function applyCustomRange() {
 }
 .summary-card p {
   margin: 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 1rem;
 }
 .summary-card b {
@@ -1353,7 +1353,7 @@ function applyCustomRange() {
   line-height: 1.1;
 }
 .summary-card small {
-  color: #56665d;
+  color: var(--color-muted);
 }
 .gender-bar {
   display: flex;
@@ -1361,13 +1361,13 @@ function applyCustomRange() {
   margin: 15px 0 9px;
   overflow: hidden;
   border-radius: 20px;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .gender-bar span {
   background: #e6d479;
 }
 .gender-bar .gender-secondary {
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .gender-labels {
   display: flex;
@@ -1386,7 +1386,7 @@ function applyCustomRange() {
   background: #e6d479;
 }
 .gender-labels i.secondary {
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .revenue-card {
   margin-top: 26px;
@@ -1422,7 +1422,7 @@ function applyCustomRange() {
 }
 .chart-legend .course::before,
 .bar-area .course {
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .chart-legend .visit::before,
 .bar-area .visit {
@@ -1440,7 +1440,7 @@ function applyCustomRange() {
   flex-direction: column;
   justify-content: space-between;
   box-sizing: border-box;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.75rem;
   text-align: right;
 }
@@ -1461,7 +1461,7 @@ function applyCustomRange() {
   justify-items: center;
   gap: 10px;
   min-width: 48px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.86rem;
 }
 .bar-area {
@@ -1496,10 +1496,10 @@ function applyCustomRange() {
   gap: 16px;
   align-items: center;
   padding: 12px 0;
-  color: #56665d;
+  color: var(--color-muted);
 }
 .status-row b {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 0.82rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -1541,7 +1541,7 @@ function applyCustomRange() {
   background: #a68abd;
 }
 .empty-state {
-  color: #56665d;
+  color: var(--color-muted);
 }
 @media (max-width: 1050px) {
   .dashboard-heading {
@@ -1729,7 +1729,7 @@ function applyCustomRange() {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #145c59;
+  color: var(--color-primary-strong);
   cursor: pointer;
 }
 .reset-range-button svg {
@@ -1740,7 +1740,7 @@ function applyCustomRange() {
   background: #edf5f1;
 }
 .reset-range-button:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 </style>
