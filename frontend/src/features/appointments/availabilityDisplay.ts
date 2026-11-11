@@ -1,6 +1,12 @@
 import type { AppointmentAvailability } from '@/api/client'
 
 export function displayAvailability(result: AppointmentAvailability, fallbackDuration: number) {
+  if (!result.durationMinutes || result.durationMinutes < 1) {
+    return {
+      slots: [],
+      message: 'ยังไม่มีระยะเวลานัดจากระบบ กรุณากำหนดระยะเวลาของบริการ หรือระยะเวลานัดเริ่มต้นของสาขาอย่างใดอย่างหนึ่ง',
+    }
+  }
   const duration = Math.max(1, result.durationMinutes || fallbackDuration || 30)
   if (result.slots.length) {
     let nextStart = -1
