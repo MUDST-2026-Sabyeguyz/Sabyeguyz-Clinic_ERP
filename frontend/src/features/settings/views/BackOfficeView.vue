@@ -654,7 +654,7 @@ function invalidMinutes(value: unknown) {
   const text = String(value ?? '').trim()
   if (text === '') return false
   const minutes = Number(text)
-  return !Number.isInteger(minutes) || minutes < 5 || minutes > 480
+  return !Number.isInteger(minutes) || minutes < 1
 }
 async function save() {
   fillDefaultBranch()
@@ -719,7 +719,7 @@ async function save() {
       fieldHints.openTime =
         'ต้องกรอกทั้งเวลาเริ่มและเวลาสิ้นสุด โดยเวลาเริ่มอยู่ก่อนเวลาสิ้นสุด (หรือเว้นว่างทั้งคู่)'
     if (fieldErrors.appointmentMinutes)
-      fieldHints.appointmentMinutes = 'ต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (หรือเว้นว่าง)'
+      fieldHints.appointmentMinutes = 'ต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที (หรือเว้นว่าง)'
     if (text('licenseNo').length > 50) fieldHints.licenseNo = 'เลขใบอนุญาตต้องไม่เกิน 50 ตัวอักษร'
     Object.keys(fieldHints).forEach((key) => (fieldErrors[key] = true))
   }
@@ -731,9 +731,8 @@ async function save() {
     if (!text('price')) fieldHints.price = 'กรุณากรอกราคา'
     else if (!Number.isFinite(Number(form.price)) || Number(form.price) < 0)
       fieldHints.price = 'ราคาต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป'
-    if (!text('duration')) fieldHints.duration = 'กรุณากรอกระยะเวลา (นาที)'
-    else if (invalidMinutes(form.duration))
-      fieldHints.duration = 'ต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที'
+    if (text('duration') && invalidMinutes(form.duration))
+      fieldHints.duration = 'ต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที'
     if (form.type === 'Course') {
       if (!text('sessions')) fieldHints.sessions = 'กรุณากรอกจำนวนครั้งรวม'
       else if (!Number.isInteger(Number(form.sessions)) || Number(form.sessions) < 1)
@@ -772,7 +771,7 @@ async function save() {
           : fieldErrors.email
             ? 'รูปแบบอีเมลสาขาไม่ถูกต้อง'
             : fieldErrors.appointmentMinutes || fieldErrors.duration
-              ? 'ระยะเวลานัดต้องเป็นจำนวนเต็ม 5 ถึง 480 นาที (เว้นว่างได้)'
+              ? 'ระยะเวลานัดต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที (เว้นว่างได้)'
               : 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'
     return
   }

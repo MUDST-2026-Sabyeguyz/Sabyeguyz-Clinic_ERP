@@ -2,10 +2,14 @@ const { spawnSync } = require('node:child_process')
 const net = require('node:net')
 const path = require('node:path')
 const cypress = require('cypress')
+const testPort = Number(process.env.CLINIC_V2_TEST_PORT || 18080)
+if (![18080, 18082].includes(testPort)) {
+  throw new Error('CLINIC_V2_TEST_PORT must be an isolated test port (18080 or 18082)')
+}
 
 process.chdir(path.resolve(__dirname, '..'))
 
-// Starts the v2 application (mvn -Pcypress-v2) on 127.0.0.1:18080 against the PostgreSQL given by
+// Starts the v2 application (mvn -Pcypress-v2) on the selected isolated loopback port against PostgreSQL given by
 // DATABASE_URL / DATABASE_USERNAME / DATABASE_PASSWORD, runs the v2 Cypress specs, then stops it.
 function maven(goal) {
   const result = spawnSync('mvn', ['--batch-mode', '--no-transfer-progress', '-Pcypress-v2', ...goal], {
@@ -32,7 +36,7 @@ async function main() {
     throw new Error('Usage: npm run test:v2 -- [--spec cypress/e2e-v2/auth.cy.js] or npm run test:v2:open')
   }
   if (!process.env.DATABASE_URL) throw new Error('Set DATABASE_URL (jdbc:postgresql://...) for the v2 tests')
-  await requireFreePort(18080)
+  await requireFreePort(testPort)
   await requireFreePort(19001)
   try {
     maven(['test-compile', 'spring-boot:start'])

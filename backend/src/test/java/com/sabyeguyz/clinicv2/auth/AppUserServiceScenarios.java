@@ -31,7 +31,7 @@ public class AppUserServiceScenarios {
         Map<String, Object> out = new LinkedHashMap<>();
         usersStub.on("findByUsername", args -> Optional.empty());
 
-        AppUser user = service().register("alice", "alice@example.com", "password123", null, 1L);
+        AppUser user = service().register("alice", "alice@example.com", "password1234", null, 1L);
 
         out.put("username", user.getUsername());
         out.put("passwordHash", user.getPasswordHash());

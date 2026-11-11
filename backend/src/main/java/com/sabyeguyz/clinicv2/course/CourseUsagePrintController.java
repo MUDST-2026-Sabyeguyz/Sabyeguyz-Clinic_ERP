@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.course;
 
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.enums.PrintEventType;
 import java.time.Instant;
@@ -25,11 +26,12 @@ public class CourseUsagePrintController {
     private final CourseUsagePrintService printService;
     private final BranchAccessPolicy branchAccess;
     private final CurrentActor actor;
+    private final AppUserRepository users;
 
     public CourseUsagePrintController(CourseUsagePrintRepository prints, CourseUsagePrintEventRepository events,
                                       CourseVisitUsageRepository usages, CourseRepository courses,
                                       CourseUsagePrintService printService,
-                                      BranchAccessPolicy branchAccess, CurrentActor actor) {
+                                      BranchAccessPolicy branchAccess, CurrentActor actor, AppUserRepository users) {
         this.prints = prints;
         this.events = events;
         this.usages = usages;
@@ -37,13 +39,15 @@ public class CourseUsagePrintController {
         this.printService = printService;
         this.branchAccess = branchAccess;
         this.actor = actor;
+        this.users = users;
     }
 
-    public record PrintEventResponse(Long id, PrintEventType type, Instant printedAt, String printedBy) {}
+    public record PrintEventResponse(Long id, PrintEventType type, Instant printedAt, String printedBy,
+                                     Long printedById, Long printId, int version) {}
 
     public record PrintDocumentResponse(Long id, Long courseId, Long usageId, int version, Instant issuedAt,
                                         String issuedBy, String documentSnapshot,
-                                        List<PrintEventResponse> events) {}
+                                        List<PrintEventResponse> events, Long issuedById) {}
 
     @GetMapping("/api/course-purchases/{courseId}/usage-prints")
     public List<PrintDocumentResponse> usagePrints(@PathVariable Long courseId) {
@@ -76,6 +80,9 @@ public class CourseUsagePrintController {
         CourseVisitUsage usage = usages.findById(usageId)
                 .orElseThrow(() -> notFound("ไม่พบรายการใช้สิทธิ์คอร์ส"));
         branchAccess.requireAccess(usage.getCourse().getBranch());
+        // The usage transaction also locks its course. Serialize explicit revisions
+        // with it so two requests cannot allocate the same document version.
+        courses.findByIdForUpdate(usage.getCourse().getId()).orElseThrow(() -> notFound("ไม่พบคอร์ส"));
         return toResponse(printService.issue(usage, actor.requireId()));
     }
 
@@ -87,13 +94,29 @@ public class CourseUsagePrintController {
     }
 
     private PrintDocumentResponse toResponse(CourseUsagePrint print) {
+        // Names are resolved for display only. Stored document snapshots and actor IDs stay immutable.
+        java.util.Map<Long, String> names = new java.util.HashMap<>();
         List<PrintEventResponse> printEvents = events.findByPrintIdOrderByPrintedAtAsc(print.getId()).stream()
                 .map(event -> new PrintEventResponse(event.getId(), event.getEventType(), event.getPrintedAt(),
-                        String.valueOf(event.getPrintedBy())))
+                        names.computeIfAbsent(event.getPrintedBy(), this::actorName), event.getPrintedBy(),
+                        print.getId(), print.getDocumentVersion()))
                 .toList();
         return new PrintDocumentResponse(print.getId(), print.getCourse().getId(), print.getVisitUsage().getId(),
-                print.getDocumentVersion(), print.getIssuedAt(), String.valueOf(print.getIssuedBy()),
-                print.getDocumentSnapshot(), printEvents);
+                print.getDocumentVersion(), print.getIssuedAt(), names.computeIfAbsent(print.getIssuedBy(), this::actorName),
+                print.getDocumentSnapshot(), printEvents, print.getIssuedBy());
+    }
+
+    private String actorName(Long actorId) {
+        if (actorId == null) return "ไม่ทราบผู้ใช้";
+        return users.findById(actorId).map(user -> {
+            if (user.getStaff() != null) {
+                String name = java.util.stream.Stream.of(user.getStaff().getStaffFname(), user.getStaff().getStaffLname())
+                        .filter(value -> value != null && !value.isBlank())
+                        .collect(java.util.stream.Collectors.joining(" "));
+                if (!name.isBlank()) return name;
+            }
+            return user.getUsername();
+        }).filter(name -> name != null && !name.isBlank()).orElse("ผู้ใช้ #" + actorId);
     }
 
     private static ResponseStatusException notFound(String message) {

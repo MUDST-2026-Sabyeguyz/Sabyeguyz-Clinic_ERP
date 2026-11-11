@@ -51,7 +51,9 @@ public class CourseTransferController {
 
     public record Request(Long sourcePurchaseId, Long destinationPatientId, int quantity, String reason) {}
 
-    public record ReverseRequest(String reason) {}
+    public record ReverseRequest(String reason, com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode) {
+        public ReverseRequest(String reason) { this(reason, com.sabyeguyz.clinicv2.enums.ReasonCode.Other); }
+    }
 
     public record Response(Long id, Long sourcePatientId, String sourcePatientHn, String sourcePatientName,
                             Long destinationPatientId, String destinationPatientHn, String destinationPatientName,
@@ -90,7 +92,9 @@ public class CourseTransferController {
         branchAccess.requireAccess(
                 transfer.getCourse().getBranch(),
                 "ย้อนรายการได้เฉพาะสาขาประจำของตัวเอง");
-        CourseTransfer reversed = service.reverse(transfer, permission, request.reason(), actor.currentId());
+        CourseTransfer reversed = service.reverse(transfer, permission,
+                request.reasonCode() == null ? com.sabyeguyz.clinicv2.enums.ReasonCode.Other : request.reasonCode(),
+                request.reason(), actor.currentId());
         audit.record("course_transfer", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Completed", "Reversed: " + request.reason(),
                 actor.currentId());
         return toResponse(reversed);

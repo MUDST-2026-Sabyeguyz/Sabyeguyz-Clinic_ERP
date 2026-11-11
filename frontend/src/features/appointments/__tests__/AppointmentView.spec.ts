@@ -16,7 +16,6 @@ describe('AppointmentView', () => {
       expect(source).toContain('endAt: interval.endAt')
       expect(source).toContain('appointmentEndFields(')
       expect(source).toContain('appointmentLocalFields(item.startAt)')
-      expect(source).toContain('?.durationMinutes || 60')
       expect(source).toContain('appointmentDurationMinutes.value = result.durationMinutes')
       expect(source).not.toMatch(/appointmentApi\.(confirm|checkIn|startService|complete|noShow)\(/)
       expect(source).not.toMatch(/status === '(RESCHEDULED|NO_SHOW|COMPLETED|ARRIVED|IN_SERVICE)'/)

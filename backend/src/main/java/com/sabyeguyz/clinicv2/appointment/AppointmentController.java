@@ -185,7 +185,7 @@ public class AppointmentController {
         AppointmentStatus initial = parseInitialStatus(request.status());
         Service chosen = request.serviceId() == null ? null : services.findById(request.serviceId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
-        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd);
+        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd, therapist.getId());
         if ("NEW".equalsIgnoreCase(request.patientType())) {
             RequestedServiceType requested = request.requestedServiceType() == null || request.requestedServiceType().isBlank()
                     ? null : RequestedServiceType.valueOf(request.requestedServiceType().trim());
@@ -302,7 +302,7 @@ public class AppointmentController {
         if (!branch.getId().equals(therapist.getBranch().getId())) {
             throw new IllegalArgumentException("นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
         }
-        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd);
+        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd, therapist.getId());
         Appointment appointment = service.reschedule(
                 id, branch, therapist, chosen, local.toLocalDate(), local.toLocalTime(), bookingEnd, "เลื่อนนัดผ่าน API", actor.currentId()
         );

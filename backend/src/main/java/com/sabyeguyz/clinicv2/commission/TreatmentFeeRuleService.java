@@ -49,9 +49,15 @@ public class TreatmentFeeRuleService {
     @Transactional
     public TreatmentFeeRule create( FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
                                     Branch branch, Permission permission, Long actorId) {
-        branchClosingGuard.requireCurrentMonthClosed(branch);
         rules.lockVersionAllocation();
+        requireSelectedBranch(branch);
+        if (!rules.findAllByOrderByEffectiveFromDesc().isEmpty()) {
+            branchClosingGuard.requireCurrentMonthClosed(branch);
+        }
         validate(feeType, feeValue, effectiveFrom, effectiveTo);
+        if (effectiveFrom.getDayOfMonth() != 1) {
+            throw new IllegalArgumentException("กฎต้องเริ่มวันที่ 1 ของเดือน");
+        }
         requireNoOtherPending(effectiveFrom);
         retireOverlapping(null, effectiveFrom, effectiveTo, actorId);
 
@@ -77,17 +83,17 @@ public class TreatmentFeeRuleService {
     @Transactional
     public TreatmentFeeRule update(Long id, FeeType feeType, BigDecimal feeValue, LocalDate effectiveFrom,
                                     LocalDate effectiveTo, Branch branch, Long actorId) {
-        branchClosingGuard.requireCurrentMonthClosed(branch);
+        requireSelectedBranch(branch);
         rules.lockVersionAllocation();
         TreatmentFeeRule rule = find(id);
+        boolean pendingUnused = !isUsed(id)
+                && rule.getEffectiveFrom().isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today());
+        if (!pendingUnused) {
+            branchClosingGuard.requireCurrentMonthClosed(branch);
+        }
         FeeType newType = feeType != null ? feeType : rule.getFeeType();
         BigDecimal newValue = feeValue != null ? feeValue : rule.getFeeValue();
         LocalDate newFrom = effectiveFrom != null ? effectiveFrom : rule.getEffectiveFrom();
-        // a version that waits to start is edited in its own month: the month is kept, so is its start date
-        if (rule.getEffectiveFrom().isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today())
-                && java.time.YearMonth.from(newFrom).equals(java.time.YearMonth.from(rule.getEffectiveFrom()))) {
-            newFrom = rule.getEffectiveFrom();
-        }
         // an omitted end date keeps the current one; a rule is reopened by creating a new rule
         LocalDate newTo = effectiveTo != null ? effectiveTo : rule.getEffectiveTo();
         validate(newType, newValue, newFrom, newTo);
@@ -209,6 +215,12 @@ public class TreatmentFeeRuleService {
     }
 
     /** A rule starts on the 1st of a month after the current one: the pay rules never change in the middle of a month. */
+    private static void requireSelectedBranch(Branch branch) {
+        if (branch == null || branch.getId() == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขา");
+        }
+    }
+
     private static void requireFutureCycleStart(LocalDate from) {
         if (from.getDayOfMonth() != 1) {
             throw new IllegalArgumentException("กฎค่ามือใหม่ต้องเริ่มวันที่ 1 ของเดือน เพื่อให้ใช้ทั้งรอบ");
