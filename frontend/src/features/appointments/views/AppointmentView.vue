@@ -18,7 +18,6 @@ import {
   catalogApi,
   courseApi,
   patientApi,
-  staffApi,
   type Appointment,
   type AppointmentAvailability,
   type AppointmentStatus,
@@ -38,6 +37,7 @@ import {
 
 const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
   id?: number
+  staffId?: number | null
   role?: string
   branchCode?: string
 } | null
@@ -45,21 +45,11 @@ const isManager = authUser?.role === 'MANAGER'
 
 const canChangeAppointments = isManager || authUser?.role === 'THERAPIST'
 
-const ownStaffId = ref<number | null>(null)
-let identityPromise: Promise<void> | null = null
-function loadStaffIdentity() {
-  if (isManager || identityPromise) return identityPromise ?? Promise.resolve()
-  identityPromise = staffApi
-    .list()
-    .then((items) => {
-      ownStaffId.value = items.find((item) => item.userId === authUser?.id)?.id ?? null
-    })
-    .catch(() => {
-      ownStaffId.value = null
-      identityPromise = null
-    })
-  return identityPromise
-}
+const ownStaffId = ref<number | null>(
+  typeof authUser?.staffId === 'number' && Number.isSafeInteger(authUser.staffId)
+    ? authUser.staffId
+    : null,
+)
 function canManageOwnAppointment(item: Appointment) {
   return (
     isManager ||
@@ -128,7 +118,6 @@ async function ensureFormData() {
         catalogApi.services(),
         loadAppointmentTherapists(),
         catalogApi.courses().catch(() => []),
-        loadStaffIdentity(),
       ])
       if (scope !== managerBranchCode.value) return
       branches.value = branchList
@@ -510,7 +499,6 @@ async function load() {
       setManagerBranches(initialBranches.filter((branch) => branch.active))
       if (!managerBranchCode.value) throw new Error('ไม่พบสาขาที่เปิดใช้งาน')
     }
-    void loadStaffIdentity()
     const result = await readAppointmentRange(
       {
         branchCode: managerBranchCode.value,
@@ -533,7 +521,6 @@ async function load() {
 }
 onMounted(async () => {
   await load()
-  await loadStaffIdentity()
   window.addEventListener('manager-branch-changed', applyManagerBranch)
   const editId = Number(route.params.id || route.query.edit)
   if (editId) {
@@ -1692,6 +1679,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   <FilterDropdown
                     v-model="listServiceMode"
                     class="appointment-service-filter"
+                    :menu-min-width="160"
                     :options="[
                       { value: 'single', label: 'รายครั้ง' },
                       { value: 'course', label: 'รายคอร์ส' },

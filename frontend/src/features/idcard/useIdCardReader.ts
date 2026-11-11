@@ -1,7 +1,9 @@
 import { ref } from 'vue'
 import { ApiError, idCardApi, type IdCardReadView, type IdCardWorkstation } from '@/api/client'
+import { agentLocal } from './agentLocal'
 
 type Api = Pick<typeof idCardApi, 'workstations' | 'start' | 'result'>
+type LocalAgent = Pick<typeof agentLocal, 'status'>
 type State = 'idle' | 'waiting' | 'reading' | 'done' | 'failed'
 
 const STORAGE_KEY = 'idCardWorkstationId'
@@ -17,8 +19,9 @@ function stored(): number | null {
   }
 }
 
-export function useIdCardReader(options: { api?: Api; intervalMs?: number; timeoutMs?: number } = {}) {
+export function useIdCardReader(options: { api?: Api; local?: LocalAgent; intervalMs?: number; timeoutMs?: number } = {}) {
   const api = options.api ?? idCardApi
+  const local = options.local ?? agentLocal
   const intervalMs = options.intervalMs ?? 700
   const timeoutMs = options.timeoutMs ?? 50_000
 
@@ -29,14 +32,20 @@ export function useIdCardReader(options: { api?: Api; intervalMs?: number; timeo
   let generation = 0
 
   async function load(branchCode?: string) {
-    try {
-      workstations.value = await api.workstations(branchCode)
-    } catch {
-      workstations.value = []
-    }
+    // asked together: the list comes from the backend, the agent answers (or not) from this PC
+    const [list, agent] = await Promise.all([
+      api.workstations(branchCode).catch((): IdCardWorkstation[] => []),
+      local.status().catch(() => null),
+    ])
+    workstations.value = list
     const online = workstations.value.filter((w) => w.online)
     const remembered = stored()
-    if (remembered && workstations.value.some((w) => w.id === remembered)) selectedId.value = remembered
+    // the agent installed on this PC is the reader at this counter; it beats a choice remembered from an earlier visit
+    const own = agent?.paired && agent.workstationId !== null
+      ? workstations.value.find((w) => w.id === agent.workstationId && w.status === 'Active')
+      : undefined
+    if (own) selectedId.value = own.id
+    else if (remembered && workstations.value.some((w) => w.id === remembered)) selectedId.value = remembered
     else if (online.length === 1) selectedId.value = online[0]!.id
     else if (workstations.value.length === 1) selectedId.value = workstations.value[0]!.id
     else selectedId.value = null

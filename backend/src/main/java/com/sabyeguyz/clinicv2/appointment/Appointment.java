@@ -89,7 +89,11 @@ public class Appointment {
     @Column(name = "contact_middle_name", length = 100)
     private String contactMiddleName;
 
+<<<<<<< Updated upstream
     @Column(name = "contact_nickname", length = 50)
+=======
+    @Column(name = "contact_nickname", length = 80)
+>>>>>>> Stashed changes
     private String contactNickname;
 
     @Column(name = "contact_phone", length = 20)
@@ -163,6 +167,9 @@ public class Appointment {
     public void setContactMiddleName(String contactMiddleName) {
         this.contactMiddleName = contactMiddleName;
     }
+
+    public String getContactNickname() { return contactNickname; }
+    public void setContactNickname(String contactNickname) { this.contactNickname = contactNickname; }
 
     public String getContactPhone() { return contactPhone; }
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
