@@ -710,7 +710,7 @@ function applyCustomRange() {
 @import '../../staff/styles/staff.css';
 .manager-dashboard {
   min-height: 100vh;
-  background: #f9f4ee;
+  background: var(--ui-workspace-background);
   color: #25372e;
 }
 .dashboard-main {
