@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { commissionApi } from '@/api/client'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import { clinicToday } from '@/utils/clinicDate'
+import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 
 const emit = defineEmits<{ saved: [] }>()
 const drawerOpen = ref(false)
@@ -134,18 +135,10 @@ async function save() {
                 errors.feeValue
               }}</small>
             </label>
-            <label>
-              <span>เดือนที่เริ่มใช้งาน<span class="req">*</span></span>
-              <input
-                v-model="form.effectiveMonth"
-                type="month"
-                :min="nextMonth()"
-                :class="{ invalid: errors.effectiveMonth }"
-              />
-              <small v-if="errors.effectiveMonth" class="field-hint" role="alert">{{
-                errors.effectiveMonth
-              }}</small>
-            </label>
+            <div class="treatment-fee-month-field">
+              <span>เดือนที่เริ่มใช้งาน</span>
+              <MonthFilterPicker v-model="form.effectiveMonth" :min="nextMonth()" />
+            </div>
             <p class="treatment-fee-branch">สาขา: {{ branchName }}</p>
           </div>
           <p v-if="error" class="treatment-fee-error" role="alert">{{ error }}</p>
@@ -239,7 +232,8 @@ async function save() {
   gap: 18px;
   margin: 28px 0;
 }
-.treatment-fee-form label {
+.treatment-fee-form label,
+.treatment-fee-month-field {
   display: grid;
   gap: 8px;
   color: #52645d;

@@ -89,7 +89,7 @@ public class Appointment {
     @Column(name = "contact_middle_name", length = 100)
     private String contactMiddleName;
 
-    @Column(name = "contact_nickname", length = 50)
+    @Column(name = "contact_nickname", length = 80)
     private String contactNickname;
 
     @Column(name = "contact_phone", length = 20)
@@ -163,6 +163,7 @@ public class Appointment {
     public void setContactMiddleName(String contactMiddleName) {
         this.contactMiddleName = contactMiddleName;
     }
+
 
     public String getContactPhone() { return contactPhone; }
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }

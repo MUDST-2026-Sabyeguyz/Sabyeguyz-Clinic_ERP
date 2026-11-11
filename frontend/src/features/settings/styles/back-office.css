@@ -960,9 +960,10 @@ a.edit {
   color: #fff;
 }
 .settings-nav-footer {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e8efeb;
+  display: grid;
+  gap: 3px;
+  margin-top: 3px;
+  padding-top: 0;
 }
 .settings-nav .settings-nav-link {
   display: flex;

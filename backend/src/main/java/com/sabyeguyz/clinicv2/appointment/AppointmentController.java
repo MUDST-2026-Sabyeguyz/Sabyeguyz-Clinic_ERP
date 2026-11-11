@@ -94,8 +94,8 @@ public class AppointmentController {
 
     public record Response(Long id, String branchCode, PatientSummary patient, TherapistSummary therapist,
                             ServiceSummary service, Instant startAt, Instant endAt, String status, String note,
-                            String cancelReason, String patientType, String contactName, String contactPhone, String contactMiddleName,
-                            String contactNickname) {}
+                            String cancelReason, String patientType, String contactName, String contactPhone,
+                            String contactMiddleName, String contactNickname) {}
 
     public record PageResponse(java.util.List<Response> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -203,8 +203,8 @@ public class AppointmentController {
             appointment.setContactMiddleName(
                     middleName == null || middleName.isBlank() ? null : middleName);
             String nickname = request.contactNickname() == null ? null : request.contactNickname().trim();
-            if (nickname != null && nickname.length() > 50) {
-                throw new IllegalArgumentException("ชื่อเล่นต้องไม่เกิน 50 ตัวอักษร");
+            if (nickname != null && nickname.length() > 80) {
+                throw new IllegalArgumentException("ชื่อเล่นต้องไม่เกิน 80 ตัวอักษร");
             }
             appointment.setContactNickname(nickname == null || nickname.isBlank() ? null : nickname);
             return createdResponse(appointment, request.note());
@@ -365,14 +365,20 @@ public class AppointmentController {
                         .filter(value -> value != null && !value.isBlank()).collect(java.util.stream.Collectors.joining(" ")),
                 patient.getPhone());
         Service svc = appointment.getService();
-        int duration = Math.toIntExact(java.time.Duration.between(
-                appointment.getAppointmentDate().atTime(appointment.getAppointmentTime()),
-                appointment.getAppointmentEndAt()).toMinutes());
+        java.time.LocalDateTime localStart = appointment.getAppointmentDate()
+                .atTime(appointment.getAppointmentTime());
+        java.time.LocalDateTime localEnd = appointment.getAppointmentEndAt();
+        // Legacy appointments predate appointment_end_at. Keep them readable without
+        // changing their stored history; new appointments still require an explicit end.
+        int duration = localEnd == null
+                ? (svc != null && svc.getDefaultAppointmentMinutes() != null
+                    ? svc.getDefaultAppointmentMinutes() : 60)
+                : Math.toIntExact(java.time.Duration.between(localStart, localEnd).toMinutes());
         ServiceSummary serviceSummary = svc == null
                 ? new ServiceSummary(null, appointment.getRequestedServiceType() == null ? null
                 : appointment.getRequestedServiceType().name(), duration)
                 : new ServiceSummary(svc.getId(), svc.getServiceName(), duration);
-        Instant endAt = appointment.getAppointmentEndAt()
+        Instant endAt = (localEnd == null ? localStart.plusMinutes(duration) : localEnd)
                 .atZone(CLINIC_ZONE).toInstant();
         return new Response(appointment.getId(), appointment.getBranch().getBranchCode(), patientSummary,
                 new TherapistSummary(appointment.getStaff().getId(),
@@ -381,7 +387,6 @@ public class AppointmentController {
                 history.findFirstByAppointmentIdAndToStatusOrderByChangedAtDescIdDesc(appointment.getId(), AppointmentStatus.Cancelled)
                         .map(AppointmentStatusHistory::getReason).orElse(null),
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),
-                appointment.getContactPhone(), appointment.getContactMiddleName(),
-                appointment.getContactNickname());
+                appointment.getContactPhone(), appointment.getContactMiddleName(), appointment.getContactNickname());
     }
 }

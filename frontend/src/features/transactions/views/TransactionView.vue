@@ -3,6 +3,7 @@ import { salesApi, courseApi } from '@/api/client'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { vModalFocus } from '@/features/appointments/modalFocus'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import AppointmentDateFilter from '@/features/appointments/components/AppointmentDateFilter.vue'
@@ -115,6 +116,7 @@ const step = ref<Step>('list')
 const rows = ref<Transaction[]>([])
 const selected = ref<Transaction | null>(null)
 const search = ref('')
+const statusFilter = ref<'all' | 'normal' | 'voided'>('all')
 const startDate = ref('')
 const endDate = ref('')
 const page = ref(1)
@@ -242,6 +244,13 @@ const visibleRows = computed(() => {
     )
     .filter(
       (row) =>
+        statusFilter.value === 'all' ||
+        (statusFilter.value === 'normal'
+          ? row.status === 'ปกติ'
+          : row.status === 'ยกเลิก (Void)'),
+    )
+    .filter(
+      (row) =>
         !term ||
         `${row.number} ${row.patient} ${row.hn} ${row.item}`.toLocaleLowerCase().includes(term),
     )
@@ -278,7 +287,7 @@ const reason = computed(() =>
 const canReview = computed(() =>
   reasonType.value === 'อื่น ๆ' ? Boolean(otherReason.value.trim()) : Boolean(reasonType.value),
 )
-watch([tab, search, startDate, endDate], () => {
+watch([tab, search, statusFilter, startDate, endDate], () => {
   page.value = 1
 })
 watch(totalPages, (count) => {
@@ -297,6 +306,7 @@ function changeTab(next: Tab) {
   step.value = 'list'
   selected.value = null
   search.value = ''
+  statusFilter.value = 'all'
 }
 
 async function openDetail(row: Transaction) {
@@ -493,7 +503,7 @@ function backToList(next: Tab = tab.value) {
               </button>
             </div>
             <div v-else-if="!visibleRows.length" class="transaction-empty">
-              {{ tab === 'history' ? 'ยังไม่มีประวัติการยกเลิก' : 'ไม่พบรายการที่ตรงกับเงื่อนไข' }}
+              {{ tab === 'history' ? 'ยังไม่มีประวัติการยกเลิก' : 'ไม่พบรายการ' }}
             </div>
             <div v-else class="transaction-table-wrap">
               <table class="transaction-table">
@@ -503,7 +513,7 @@ function backToList(next: Tab = tab.value) {
                       scope="col"
                       :aria-sort="sortOrder === 'oldest' ? 'ascending' : 'descending'"
                     >
-                      วันที่ / เลขรายการ
+                      {{ tab === 'usage' ? 'วันที่' : 'วันที่ / เลขรายการ' }}
                     </th>
                     <th>ผู้ป่วย / HN</th>
                     <th>รายละเอียด</th>
@@ -517,7 +527,22 @@ function backToList(next: Tab = tab.value) {
                             : 'ยอดเงิน'
                       }}
                     </th>
-                    <th>สถานะ</th>
+                    <th>
+                      <FilterDropdown
+                        v-model="statusFilter"
+                        class="transaction-status-filter"
+                        :options="[
+                          { value: 'normal', label: 'ปกติ' },
+                          { value: 'voided', label: 'ยกเลิกแล้ว' },
+                        ]"
+                        default-value="all"
+                        default-label="ทั้งหมด"
+                        trigger-label="สถานะ"
+                        label="กรองรายการตามสถานะ"
+                        :clear-on-reselect="false"
+                        :menu-min-width="140"
+                      />
+                    </th>
                     <th>จัดการ</th>
                   </tr>
                 </thead>
@@ -525,14 +550,15 @@ function backToList(next: Tab = tab.value) {
                   <tr v-for="row in pagedRows" :key="row.key">
                     <td>
                       <span>{{ formatShortDate(tab === 'history' ? row.voidedAt : row.date) }}</span
-                      ><small>{{ tab === 'history' ? row.number : row.number }}</small>
+                      ><small v-if="row.kind === 'sale'">{{ row.number }}</small>
                     </td>
                     <td>
                       <strong>{{ row.patient }}</strong
                       ><small>HN {{ row.hn }}</small>
                     </td>
                     <td v-if="tab === 'history'">
-                      <span>อ้างอิง {{ row.number }}</span
+                      <span v-if="row.kind === 'sale'">อ้างอิง {{ row.number }}</span>
+                      <span v-else>{{ row.item }}</span
                       ><small>{{ row.voidReason || 'ไม่ระบุเหตุผล' }}</small>
                     </td>
                     <td v-else>
@@ -544,18 +570,14 @@ function backToList(next: Tab = tab.value) {
                     <td>
                       <span
                         class="transaction-status"
-                        :class="{
-                          void: row.status !== 'ปกติ',
-                          usage: tab === 'usage' && row.status === 'ปกติ',
-                        }"
-                        >{{
-                          row.status === 'ปกติ'
-                            ? tab === 'sales'
-                              ? 'ปกติ'
-                              : 'ใช้บริการแล้ว'
-                            : 'ยกเลิกแล้ว'
-                        }}</span
-                      >
+                        :class="{ void: row.status !== 'ปกติ', usage: row.status === 'ปกติ' }"
+                      >{{
+                        row.status === 'ปกติ'
+                          ? tab === 'sales'
+                            ? 'ปกติ'
+                            : 'ใช้บริการแล้ว'
+                          : 'ยกเลิกแล้ว'
+                      }}</span>
                     </td>
                     <td>
                       <button
@@ -614,7 +636,7 @@ function backToList(next: Tab = tab.value) {
               <section>
                 <h2>ข้อมูลรายการต้นทาง</h2>
                 <dl class="transaction-audit-source">
-                  <div>
+                  <div v-if="selected.kind === 'sale'">
                     <dt>เลขที่รายการ</dt>
                     <dd>{{ selected.number }}</dd>
                   </div>
@@ -655,7 +677,7 @@ function backToList(next: Tab = tab.value) {
               <section>
                 <h2>ข้อมูลการยกเลิก</h2>
                 <dl class="transaction-audit-cancellation">
-                  <div>
+                  <div v-if="selected.kind === 'sale'">
                     <dt>เลขที่อ้างอิง</dt>
                     <dd>{{ selected.number }}</dd>
                   </div>
@@ -726,7 +748,7 @@ function backToList(next: Tab = tab.value) {
             <section class="transaction-review-card">
               <h2>ข้อมูลรายการ</h2>
               <dl class="transaction-review-grid">
-                <div>
+                <div v-if="selected.kind === 'sale'">
                   <dt>เลขที่รายการ</dt>
                   <dd>{{ selected.number }}</dd>
                 </div>
@@ -857,7 +879,7 @@ function backToList(next: Tab = tab.value) {
             <h1 id="transaction-success-title">ยกเลิกรายการสำเร็จ</h1>
             <p>บันทึกผลการยกเลิกไว้ในประวัติแล้ว</p>
             <dl>
-              <div>
+              <div v-if="selected.kind === 'sale'">
                 <dt>เลขรายการอ้างอิง</dt>
                 <dd>{{ selected.number || '-' }}</dd>
               </div>
@@ -945,7 +967,8 @@ function backToList(next: Tab = tab.value) {
           </button>
         </div>
         <p id="transaction-modal-description">
-          ต้องการยกเลิกรายการ {{ selected.number }} ใช่หรือไม่?
+          ต้องการยกเลิกรายการ
+          {{ selected.kind === 'sale' ? selected.number : selected.item }} ใช่หรือไม่?
         </p>
         <p
           v-if="showCancellationInfo"
