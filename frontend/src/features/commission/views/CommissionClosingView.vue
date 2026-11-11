@@ -1344,7 +1344,6 @@ td {
   place-items: center;
   padding: 24px;
   background: #232b2280;
-  backdrop-filter: blur(1.5px);
 }
 .confirm-modal {
   width: min(100%, 400px);
