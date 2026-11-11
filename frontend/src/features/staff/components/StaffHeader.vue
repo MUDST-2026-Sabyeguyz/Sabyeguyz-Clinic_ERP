@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import logo from '@/assets/sabyeguyz-logo.png'
-import drawerLogo from '@/assets/sabyeguyz-logo2.png'
+import drawerLogo from '@/assets/sabyeguyz-logo-clean.png'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { branchApi, clearSession } from '@/api/client'
 import {
@@ -190,7 +189,7 @@ function branchLabel(name: string) {
       'formula-route': route.path === '/staff/commission/formula',
     }"
   >
-    <RouterLink class="brand" :to="homePath"><img :src="logo" alt="SaByeGuyz" /></RouterLink>
+    <RouterLink class="brand" :to="homePath"><img :src="drawerLogo" alt="SaByeGuyz" /></RouterLink>
     <button
       class="menu-toggle"
       type="button"
