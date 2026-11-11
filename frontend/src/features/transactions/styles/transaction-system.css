@@ -1,6 +1,6 @@
 .transaction-page {
   background: var(--ui-workspace-background);
-  color: #25372e;
+  color: var(--color-ink);
 }
 .transaction-page .transaction-main {
   width: min(1420px, calc(100% - 64px));
@@ -12,14 +12,14 @@
   margin-bottom: 28px;
 }
 .transaction-heading h1 {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: clamp(28px, 2.4vw, 36px);
   font-weight: 800;
   line-height: 1.4;
 }
 .transaction-heading p {
   margin: 8px 0 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
   line-height: 1.5;
 }
@@ -46,7 +46,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 16px;
   line-height: 1.5;
   font-weight: 500;
@@ -81,11 +81,11 @@
   height: 48px;
   font-size: 16px;
   border-color: #b7cecc;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
 }
 .transaction-workspace input::placeholder {
-  color: #56665d;
+  color: var(--color-muted);
   opacity: 1;
 }
 .transaction-results-heading {
@@ -99,12 +99,12 @@
 }
 .transaction-results-heading h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 20px;
   line-height: 1.5;
 }
 .transaction-results-heading > span {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   font-weight: 600;
 }
@@ -160,7 +160,7 @@
 }
 .transaction-workspace .transaction-table td small {
   margin-top: 4px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
 }
 .transaction-workspace .transaction-table tbody tr:hover {
@@ -174,15 +174,15 @@
   border: 1px solid #b7cecc;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   line-height: 1.5;
   box-shadow: none;
 }
 .transaction-workspace .transaction-row-button:hover:not(:disabled) {
   background: #edf5f1;
-  border-color: #1e807c;
-  color: #145c59;
+  border-color: var(--color-primary);
+  color: var(--color-primary-strong);
 }
 .transaction-workspace .transaction-row-button:disabled {
   background: #f3f5f4;
@@ -199,7 +199,7 @@
   background: #e8f5ed;
 }
 .transaction-workspace .transaction-status.usage {
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: #e7f3f1;
 }
 .transaction-workspace .transaction-status.void {
@@ -235,7 +235,7 @@
   border: 1px solid #b7cecc;
   border-radius: 8px;
   padding: 8px 16px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: #fff;
   font-size: 16px;
 }
@@ -246,27 +246,27 @@
 }
 .transaction-workspace .transaction-empty {
   padding: 48px 24px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
 }
 .transaction-workspace .transaction-list-note {
   margin: 0;
   padding: 16px 24px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
 }
 .transaction-page button:focus-visible,
 .transaction-page input:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 .transaction-page .transaction-back {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 16px;
 }
 .transaction-page .transaction-secondary {
   border-color: #b7cecc;
-  color: #145c59;
+  color: var(--color-primary-strong);
   border-radius: 8px;
 }
 @media (max-width: 700px) {
@@ -318,7 +318,7 @@
 }
 .transaction-page .transaction-reason-flow > header h2 {
   margin: 0;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 22px;
 }
 .transaction-page .transaction-reason-panel {
@@ -339,16 +339,16 @@
   margin: 0 0 20px;
   min-height: 48px;
   padding: 10px 18px;
-  border: 1px solid #1e807c;
+  border: 1px solid var(--color-primary);
   border-radius: 8px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 .transaction-page .transaction-reason-shortcut:hover {
-  background: #145c59;
+  background: var(--color-primary-strong);
 }
 .transaction-page .transaction-reason-shortcut svg {
   width: 20px;
@@ -385,7 +385,7 @@
 }
 .transaction-page .transaction-reason-panel h2 {
   margin: 0 0 12px;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 18px;
   line-height: 1.4;
 }
@@ -399,7 +399,7 @@
   margin: 0;
   padding: 12px 14px;
   border-color: #dce8e1;
-  color: #25372e;
+  color: var(--color-ink);
   line-height: 1.45;
   transition:
     border-color 160ms ease,
@@ -411,9 +411,9 @@
   background: #f8fbf9;
 }
 .transaction-page .transaction-reason-option.selected {
-  border-color: #1e807c;
+  border-color: var(--color-primary);
   background: #e7f3ef;
-  box-shadow: inset 0 0 0 1px #1e807c;
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 .transaction-page .transaction-reason-option:last-child {
   grid-column: 1 / -1;
@@ -443,12 +443,12 @@
   border: 1px solid #b7cecc;
   border-radius: 6px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   font-weight: 600;
 }
 .transaction-page .transaction-reason-flow:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 4px;
   border-radius: 12px;
 }
@@ -457,7 +457,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 16px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   font-weight: 600;
 }
@@ -468,7 +468,7 @@
   border: 0;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-size: 16px;
   cursor: pointer;
@@ -496,13 +496,13 @@
 .transaction-page .transaction-success-result h1 {
   font-size: 28px;
   line-height: 1.4;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 .transaction-page .transaction-success-result > p {
   margin: 8px 0 24px;
   font-size: 16px;
   line-height: 1.6;
-  color: #56665d;
+  color: var(--color-muted);
 }
 .transaction-page .transaction-success-result dl {
   gap: 20px 24px;
@@ -512,7 +512,7 @@
 }
 .transaction-page .transaction-success-result dt {
   font-size: 14px;
-  color: #56665d;
+  color: var(--color-muted);
   line-height: 1.5;
 }
 .transaction-page .transaction-success-result dd {
@@ -527,7 +527,7 @@
   margin-top: 4px;
   font-size: 14px;
   font-weight: 400;
-  color: #56665d;
+  color: var(--color-muted);
 }
 .transaction-page .transaction-success-wide {
   grid-column: 1 / -1;
@@ -587,14 +587,14 @@
 }
 .transaction-page .transaction-modal h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 24px;
   line-height: 1.4;
   text-align: left;
 }
 .transaction-page .transaction-modal > p {
   margin: 0 0 24px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
   line-height: 1.6;
   text-align: left;
@@ -609,7 +609,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: transparent;
   font: inherit;
   font-size: 14px;
@@ -658,14 +658,14 @@
   border-bottom: 0;
 }
 .transaction-page .transaction-modal-summary dt {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
   line-height: 1.6;
 }
 .transaction-page .transaction-modal-summary dd {
   min-width: 0;
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 16px;
   font-weight: 500;
   line-height: 1.6;
@@ -678,7 +678,7 @@
 .transaction-page .transaction-modal-summary dd small {
   display: block;
   margin-top: 4px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
   font-weight: 400;
 }
@@ -707,7 +707,7 @@
 .transaction-page .transaction-modal .transaction-secondary {
   background: #fff;
   border: 1px solid #b7cecc;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 .transaction-page .transaction-modal .transaction-danger {
   background: #a83c38;

@@ -1,6 +1,6 @@
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page {
   background: var(--ui-workspace-background);
-  color: #25372e;
+  color: var(--color-ink);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page::before {
   content: none;
@@ -31,14 +31,14 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .page-headin
   font-size: clamp(28px, 2.4vw, 36px);
   font-weight: 800;
   line-height: 1.4;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .page-heading p {
   grid-column: 1;
   margin: 8px 0 0;
   font-size: 16px;
   line-height: 1.5;
-  color: #56665d;
+  color: var(--color-muted);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .page-heading .primary {
   grid-column: 2;
@@ -80,7 +80,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .search {
   box-sizing: border-box;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .search:focus-within {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .search input {
@@ -99,7 +99,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .directory .
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .result-count {
   margin-left: auto;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   white-space: nowrap;
 }
@@ -148,7 +148,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   align-items: center;
   min-height: 44px;
   font-size: 16px;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .patient-directory-page
@@ -172,13 +172,13 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .patient-pag
   font-size: 16px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page :is(button, a):focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .empty {
   font-size: 16px;
   padding: 40px 24px;
-  color: #56665d;
+  color: var(--color-muted);
 }
 .patient-directory-page .directory-sr-only {
   position: absolute;
@@ -255,7 +255,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .patient-directory-page
   :is(.directory-retry, .directory-date-retry):hover {
   background: #edf5f1;
-  border-color: #145c59;
+  border-color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .row-action {
   text-underline-offset: 3px;
@@ -288,7 +288,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .directory-r
   font-size: 18px;
   font-weight: 700;
   line-height: 1.5;
-  color: #25372e;
+  color: var(--color-ink);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page table {
   table-layout: fixed;
@@ -347,7 +347,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .directory t
   border: 1px solid #8fb5ae;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 16px;
   font-weight: 600;
   line-height: 1.5;
@@ -361,8 +361,8 @@ body:is(.therapist-ui, :not(.therapist-ui))
   table
   .row-action:hover {
   background: #edf5f1;
-  border-color: #145c59;
-  color: #145c59;
+  border-color: var(--color-primary-strong);
+  color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-directory-page .patient-heading-actions {
   grid-column: 2;
