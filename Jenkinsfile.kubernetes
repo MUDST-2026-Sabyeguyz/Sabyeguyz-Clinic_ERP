@@ -1,7 +1,7 @@
 pipeline {
     agent { label 'clinic-present' }
     triggers {
-        cron('H/1 * * * *')
+        cron('* * * * *')
     }
     options {
         skipDefaultCheckout(true)
@@ -13,7 +13,7 @@ pipeline {
         booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Retry this branch revision even if the same SHA was already attempted.')
         choice(name: 'CLINIC_SEED_MODE', choices: ['none', 'minimal', 'full'], description: 'Optional seed for an isolated local demo database only.')
         choice(name: 'CLINIC_DATABASE_KIND', choices: ['unspecified', 'local-demo'], description: 'Must be local-demo when a demo seed mode is selected.')
-        string(name: 'CLINIC_DATABASE_NAME', defaultValue: 'clinic_demo', description: 'Lowercase PostgreSQL database identifier. Use a new disposable name for demo seeding.')
+        string(name: 'CLINIC_DATABASE_NAME', defaultValue: 'clinic_timer_none', description: 'Timer target isolated from clinic_demo_review; schema migrations still modify this database.')
     }
     stages {
         stage('Capture local branch revision') {
@@ -23,7 +23,7 @@ pipeline {
                     script {
                         env.CLINIC_DATABASE_KIND = (params.CLINIC_DATABASE_KIND ?: 'unspecified').trim()
                         env.CLINIC_SEED_MODE = (params.CLINIC_SEED_MODE ?: 'none').trim()
-                        env.CLINIC_DATABASE_NAME = (params.CLINIC_DATABASE_NAME ?: 'clinic_demo').trim()
+                        env.CLINIC_DATABASE_NAME = (params.CLINIC_DATABASE_NAME ?: 'clinic_timer_none').trim()
                         if (!(env.CLINIC_DATABASE_NAME ==~ /[a-z][a-z0-9_]{0,62}/)) {
                             error('CLINIC_DATABASE_NAME must be a lowercase PostgreSQL identifier (1-63 characters).')
                         }
@@ -154,7 +154,13 @@ $state = Join-Path $env:LOCALAPPDATA 'ClinicJenkinsAgent/last-attempted-sha.txt'
             archiveArtifacts artifacts: 'source/reports/trivy-*.json,source/backend/target/surefire-reports/TEST-*.xml', allowEmptyArchive: true
         }
         success {
-            echo "Kubernetes rollout is Ready for ${env.SOURCE_SHA}. Open localhost:38001 after starting the documented port-forward command."
+            script {
+                if (env.SOURCE_CHANGED == 'true') {
+                    echo "Kubernetes rollout is Ready for ${env.SOURCE_SHA}. Open localhost:38001 after starting the documented port-forward command."
+                } else {
+                    echo "No new commit on ${env.CLINIC_SOURCE_BRANCH}; tests, image build, scan and deployment were skipped."
+                }
+            }
         }
         failure {
             echo 'Build, vulnerability gate or Kubernetes rollout failed; the last deployed SHA was retained.'
