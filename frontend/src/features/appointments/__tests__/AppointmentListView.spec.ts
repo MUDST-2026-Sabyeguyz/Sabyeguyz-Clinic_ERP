@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppointmentView from '../views/AppointmentView.vue'
@@ -78,7 +78,9 @@ for (const [role, Component] of [
       expect(view.get('.appointment-sort').text()).toBe('ล่าสุด ↓')
       expect(view.find('tbody tr').text()).toContain('Course patient')
       const requests = api.search.mock.calls.length
-      await view.findAll('.appointment-list-mode-toggle button')[2]!.trigger('click')
+      const serviceFilter = view.findComponent('.appointment-service-filter') as VueWrapper
+      serviceFilter.vm.$emit('update:modelValue', 'course')
+      await view.vm.$nextTick()
       await flushPromises()
       expect(view.findAll('tbody tr')).toHaveLength(1)
       expect(view.get('tbody').text()).toContain('Course patient')
