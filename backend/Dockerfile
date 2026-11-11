@@ -4,7 +4,7 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn --batch-mode --no-transfer-progress package -Dmaven.test.skip=true
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 # Fixed numeric uid so Kubernetes runAsNonRoot can verify it.
 RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --no-create-home app
