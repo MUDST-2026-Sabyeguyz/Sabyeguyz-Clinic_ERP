@@ -13,7 +13,7 @@
   text-align: center;
   overflow: hidden;
   color: #c6dfd8;
-  background: #145c59 url('@/assets/brand-panel.png') center / cover;
+  background: var(--color-primary-strong) url('@/assets/brand-panel.png') center / cover;
 }
 .login-brand img {
   width: min(430px, 72vw);

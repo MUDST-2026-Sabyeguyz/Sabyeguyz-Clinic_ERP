@@ -399,5 +399,5 @@ onMounted(async () => {
   </div>
 </template>
 
-<style scoped src="../styles/manager-patient-history.css"></style>
+<style scoped src="../styles/patient-history.css"></style>
 <style src="../../services/styles/services.css"></style>

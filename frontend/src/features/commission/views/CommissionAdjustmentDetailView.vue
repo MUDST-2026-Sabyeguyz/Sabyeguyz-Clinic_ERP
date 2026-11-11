@@ -398,7 +398,7 @@ async function confirmDecision() {
   padding: 12px 16px;
   border-radius: 8px;
   background: #e4f3ef;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 600;
 }
 .detail-status {
@@ -527,7 +527,7 @@ async function confirmDecision() {
   border: 1px solid #a9c7c1;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-weight: 700;
   cursor: pointer;

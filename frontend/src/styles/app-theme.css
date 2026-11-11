@@ -1,5 +1,5 @@
 /*
- * Chula-inspired UI layer: transparent navbar, rounded cards, pill buttons, soft shadows.
+ * UI layer: transparent navbar, rounded cards, pill buttons, soft shadows.
  * Loaded last (see main.ts). Selectors are prefixed with #app so they win over the
  * per-feature stylesheets without !important. Colors stay on the clinic green.
  */
@@ -14,7 +14,7 @@
   font-weight: 700;
 }
 
-/* ---------- Navbar (mirrors chula.ac.th: transparent bar over the page gradient,
+/* ---------- Navbar (transparent bar over the page gradient,
    logo left, compact plain-text menu, 40x40 / 8px icon-style controls on the right) ---------- */
 #app header.staff-header {
   color: var(--cu-ink);
@@ -82,7 +82,7 @@
   color: var(--cu-primary-dark);
 }
 
-/* No background box behind the active item (Chula has none): the sliding indicator is hidden
+/* No background box behind the active item (none here): the sliding indicator is hidden
    on desktop and the active link is marked by color plus a thin underline. */
 @media (min-width: 1401px) {
   #app header.staff-header nav .nav-pill {
@@ -104,7 +104,7 @@
   }
 }
 
-/* Icon-style controls: 40x40, 8px radius, no border (Chula's Aa / language / search / menu). */
+/* Icon-style controls: 40x40, 8px radius, no border. */
 #app header.staff-header .menu-toggle {
   width: 40px;
   height: 40px;
@@ -279,7 +279,7 @@ body.therapist-ui #app .appointment-page.appointment-form-open {
   box-shadow: var(--shadow-card);
 }
 
-/* ---------- Layout: one centered container (Chula: 1280px with 16px gutters) ---------- */
+/* ---------- Layout: one centered container ---------- */
 #app main:not(.registration-content, .workspace-main, .login-page, .branch-page) {
   width: min(var(--container-width), calc(100% - 2 * var(--container-gutter)));
   max-width: none;
@@ -290,7 +290,7 @@ body.therapist-ui #app .appointment-page.appointment-form-open {
 }
 
 /* responsive.css forces a dense desktop scale with !important (1440px width, 13-14px text).
-   Replace it with the Chula scale: 1248px container and 16px body/control text. */
+   Replace it with the app scale: 1248px container and 16px body/control text. */
 @media (min-width: 1100px) {
   #app
     :is(
@@ -468,7 +468,7 @@ body.therapist-ui #app .appointment-page.appointment-form-open {
   font-weight: 700;
 }
 
-/* Small chip-like buttons: 40px tall, pill (Chula chips). */
+/* Small chip-like buttons: 40px tall, pill. */
 #app
   :is(
     .appointment-retry,
@@ -583,6 +583,71 @@ body.therapist-ui #app .appointment-page.appointment-form-open {
   padding: 0 16px;
   border-radius: var(--radius-pill);
   font-weight: 700;
+}
+
+/* Patient directory: same structure as the payment page. Heading and search sit on the page
+   gradient; only the list (title + table) is a white card with an inset rounded table. The HN
+   cell stays a real table cell (a flex cell is what clipped the number). */
+@media (min-width: 761px) {
+  #app .patient-directory-page .page-heading,
+  #app .patient-directory-page .directory {
+    width: 100%;
+    margin-right: 0;
+    margin-left: 0;
+  }
+}
+#app .patient-directory-page .page-heading {
+  min-height: 0;
+  padding: 0;
+}
+#app .patient-directory-page .page-heading p {
+  color: var(--color-muted);
+}
+#app .patient-directory-page .directory {
+  margin-top: 28px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#app .patient-directory-page .directory > header {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+#app .patient-directory-page .directory-card {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: #fff;
+}
+#app .patient-directory-page .directory-results {
+  min-height: 0;
+  padding: 0 0 14px;
+}
+#app .patient-directory-page .table-scroll {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: #fff;
+}
+#app .patient-directory-page .patient-pagination {
+  padding: 16px 0 0;
+}
+#app .patient-directory-page .patient-avatar {
+  display: none;
+}
+#app .patient-directory-page table td.patient-id {
+  display: table-cell;
+  gap: 0;
+  text-align: left;
+}
+#app .patient-directory-page table :is(th, td) {
+  text-align: left;
+}
+#app .patient-directory-page table :is(th, td):last-child {
+  text-align: right;
 }
 
 /* The 1200px table minimum is wider than the 1248px container minus panel padding. */
