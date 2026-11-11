@@ -49,9 +49,6 @@ async function pairLocal() {
 }
 void refreshLocalAgent()
 function closePairing() {
-  pairSequence++
-  localPairState.value = 'idle'
-  localPairMessage.value = ''
   pairingOpen.value = false
   clearInterval(pairingTimer)
   pairingTimer = undefined

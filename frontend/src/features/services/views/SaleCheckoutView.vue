@@ -588,6 +588,7 @@ watch(
               </label>
             </section>
           </div>
+          <div class="summary-column">
           <aside class="panel summary">
             <h2>สรุปยอด</h2>
             <p>
@@ -653,14 +654,21 @@ watch(
               </button>
             </div>
           </aside>
+          <p v-if="error" ref="errorMessage" class="error" role="alert">{{ error }}</p>
+          </div>
         </div>
-        <p v-if="error" ref="errorMessage" class="error" role="alert">{{ error }}</p>
       </template>
     </main>
   </div>
 </template>
 
 <style scoped>
+.summary-column {
+  min-width: 0;
+}
+.summary-column > .error {
+  margin-top: 12px;
+}
 .checkout-page {
   min-height: 100vh;
   background: #f8f4ed;
