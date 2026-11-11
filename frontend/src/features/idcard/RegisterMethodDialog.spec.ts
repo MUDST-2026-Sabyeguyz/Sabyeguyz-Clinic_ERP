@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 
 const push = vi.fn()
@@ -24,11 +24,13 @@ import { takePendingCard } from './pendingCard'
 const mountDialog = () =>
   mount(RegisterMethodDialog, {
     props: { open: true, branchCode: '01' },
-    global: { stubs: { RouterLink: true } },
+    global: { stubs: { RouterLink: RouterLinkStub } },
   })
+enableAutoUnmount(afterEach)
 
 describe('RegisterMethodDialog', () => {
   beforeEach(() => {
+    localStorage.removeItem('authUser')
     push.mockReset()
     read.mockReset()
     reader.state.value = 'idle'
@@ -39,6 +41,8 @@ describe('RegisterMethodDialog', () => {
     ]
     takePendingCard()
   })
+
+  afterEach(() => localStorage.removeItem('authUser'))
 
   it('offers typing the data by hand or reading the card', () => {
     const wrapper = mountDialog()
@@ -63,6 +67,7 @@ describe('RegisterMethodDialog', () => {
         }),
     )
     const wrapper = mountDialog()
+    await flushPromises()
     await wrapper.get('.method-card').trigger('click')
 
     reader.state.value = 'waiting'
@@ -89,6 +94,7 @@ describe('RegisterMethodDialog', () => {
       lookup: { exists: true, patient: { id: 5, hn: 'HN0005', fullName: 'สมชาย ใจดี' } },
     })
     const wrapper = mountDialog()
+    await flushPromises()
     await wrapper.get('.method-card').trigger('click')
     await flushPromises()
 
@@ -109,6 +115,7 @@ describe('RegisterMethodDialog', () => {
       card: { nationalId: '1101700005119', firstNameTh: 'สมชาย' },
     })
     const wrapper = mountDialog()
+    await flushPromises()
     await wrapper.get('.method-card').trigger('click')
     await flushPromises()
 
@@ -124,6 +131,7 @@ describe('RegisterMethodDialog', () => {
       return null
     })
     const wrapper = mountDialog()
+    await flushPromises()
     await wrapper.get('.method-card').trigger('click')
     await flushPromises()
 
@@ -141,7 +149,21 @@ describe('RegisterMethodDialog', () => {
     reader.workstations.value = []
     const wrapper = mountDialog()
     expect(wrapper.get('.method-card').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('ยังไม่มีเครื่องอ่านบัตร')
+    expect(wrapper.get('.id-card-hint').text()).toBe('สาขานี้ยังไม่มีเครื่องอ่านบัตร')
+    expect(wrapper.findComponent(RouterLinkStub).exists()).toBe(false)
+  })
+
+  it('offers a reader settings link to a manager when the branch has no readers', async () => {
+    localStorage.setItem('authUser', JSON.stringify({ role: 'MANAGER' }))
+    reader.selectedId.value = null
+    reader.workstations.value = []
+    const wrapper = mountDialog()
+    const link = wrapper.getComponent(RouterLinkStub)
+    expect(link.classes()).toContain('id-card-settings-link')
+    expect(link.text()).toBe('จัดการเครื่องอ่านบัตร')
+    expect(link.props('to')).toBe('/staff/settings/card-readers')
+    await link.trigger('click')
+    expect(wrapper.emitted('close')).toBeTruthy()
   })
 
   it('hides the technical connection error and shows a plain cross icon', async () => {
@@ -151,6 +173,7 @@ describe('RegisterMethodDialog', () => {
       return null
     })
     const wrapper = mountDialog()
+    await flushPromises()
     await wrapper.get('.method-card').trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('อ่านบัตรไม่สำเร็จ')
@@ -168,5 +191,29 @@ describe('RegisterMethodDialog', () => {
     const wrapper = mountDialog()
     expect(wrapper.find('select').exists()).toBe(true)
     expect(wrapper.get('.method-card').attributes('disabled')).toBeDefined()
+  })
+
+  it('disables reading for an offline reader and enables it when connected', async () => {
+    reader.workstations.value[0]!.online = false
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.get('.method-card').element).toHaveProperty('disabled', true)
+    await wrapper.get('.method-card').trigger('click')
+    expect(read).not.toHaveBeenCalled()
+    reader.workstations.value[0]!.online = true
+    await nextTick()
+    expect(wrapper.get('.method-card').element).toHaveProperty('disabled', false)
+  })
+
+  it('does not allow a remembered ID without an active reader in this branch', async () => {
+    reader.workstations.value = []
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.get('.method-card').element).toHaveProperty('disabled', true)
+    reader.workstations.value = [
+      { id: 1, name: 'เครื่องสาขาอื่น', branchCode: '02', online: true, status: 'Active' },
+    ]
+    await nextTick()
+    expect(wrapper.get('.method-card').element).toHaveProperty('disabled', true)
   })
 })
