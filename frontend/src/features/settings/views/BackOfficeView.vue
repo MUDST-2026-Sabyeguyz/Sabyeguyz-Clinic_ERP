@@ -410,6 +410,14 @@ const filteredTableRows = computed(() => {
     return [] as Array<{ row: Row; index: number }>
 
   let rows = data[section.value].map((row, index) => ({ row, index }))
+  if (section.value === 'branches') {
+    rows = rows.sort((first, second) =>
+      String(first.row.code ?? '').localeCompare(String(second.row.code ?? ''), 'th-TH', {
+        numeric: true,
+        sensitivity: 'base',
+      }),
+    )
+  }
   if (section.value === 'rooms') {
     const branchName = selectedBranchName.value
     if (!branchName) return []
@@ -1659,7 +1667,8 @@ const drawerTitle = computed(() => {
               :options="[
                 { value: 'Customer Group', label: 'กลุ่มลูกค้า' },
                 { value: 'Referral Channel', label: 'ช่องทางแนะนำ' },
-                { value: 'Insurance Type', label: 'บริษัทประกัน' },
+                { value: 'Insurance Type', label: 'ประเภทประกัน' },
+                { value: 'Insurance Company', label: 'บริษัทประกัน' },
               ]"
               default-value="Customer Group"
               default-label="กลุ่มลูกค้า"
