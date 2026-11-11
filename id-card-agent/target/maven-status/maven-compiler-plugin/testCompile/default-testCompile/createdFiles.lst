@@ -1,0 +1,8 @@
+com\sabyeguyz\idcard\agent\AgentRuntimeTest.class
+com\sabyeguyz\idcard\agent\AgentLoopTest.class
+com\sabyeguyz\idcard\agent\AutostartTest.class
+com\sabyeguyz\idcard\agent\LocalServerTest.class
+com\sabyeguyz\idcard\agent\ThaiIdCardReaderTest$FakeCard.class
+com\sabyeguyz\idcard\agent\LocalServerTest$1.class
+com\sabyeguyz\idcard\agent\ThaiIdCardParserTest.class
+com\sabyeguyz\idcard\agent\ThaiIdCardReaderTest.class
