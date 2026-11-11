@@ -94,13 +94,8 @@ public class AppointmentController {
 
     public record Response(Long id, String branchCode, PatientSummary patient, TherapistSummary therapist,
                             ServiceSummary service, Instant startAt, Instant endAt, String status, String note,
-<<<<<<< Updated upstream
-                            String cancelReason, String patientType, String contactName, String contactPhone, String contactMiddleName,
-                            String contactNickname) {}
-=======
                             String cancelReason, String patientType, String contactName, String contactPhone,
                             String contactMiddleName, String contactNickname) {}
->>>>>>> Stashed changes
 
     public record PageResponse(java.util.List<Response> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -208,13 +203,8 @@ public class AppointmentController {
             appointment.setContactMiddleName(
                     middleName == null || middleName.isBlank() ? null : middleName);
             String nickname = request.contactNickname() == null ? null : request.contactNickname().trim();
-<<<<<<< Updated upstream
-            if (nickname != null && nickname.length() > 50) {
-                throw new IllegalArgumentException("ชื่อเล่นต้องไม่เกิน 50 ตัวอักษร");
-=======
             if (nickname != null && nickname.length() > 80) {
                 throw new IllegalArgumentException("ชื่อเล่นต้องไม่เกิน 80 ตัวอักษร");
->>>>>>> Stashed changes
             }
             appointment.setContactNickname(nickname == null || nickname.isBlank() ? null : nickname);
             return createdResponse(appointment, request.note());
@@ -397,11 +387,6 @@ public class AppointmentController {
                 history.findFirstByAppointmentIdAndToStatusOrderByChangedAtDescIdDesc(appointment.getId(), AppointmentStatus.Cancelled)
                         .map(AppointmentStatusHistory::getReason).orElse(null),
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),
-<<<<<<< Updated upstream
-                appointment.getContactPhone(), appointment.getContactMiddleName(),
-                appointment.getContactNickname());
-=======
                 appointment.getContactPhone(), appointment.getContactMiddleName(), appointment.getContactNickname());
->>>>>>> Stashed changes
     }
 }

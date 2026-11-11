@@ -75,9 +75,19 @@ describe('main care transactions', () => {
     expect(request.courseUsages).toEqual([{ coursePurchaseId: 101 }, { coursePurchaseId: 101 }])
     expect(request.payments[0]?.amount).toBe(800)
   })
+  it('allows a service sale without an appointment or treating staff', () => {
+    const request = buildSaleRequest({
+      ...context,
+      appointmentId: undefined,
+      treatingStaffId: undefined,
+    })
+    expect(request.appointmentId).toBeUndefined()
+    expect(request.payments[0]?.amount).toBe(800)
+  })
+  it('rejects a service sale in an appointment without the actual treating staff', () => {
+    expect(() => buildSaleRequest({ ...context, treatingStaffId: undefined })).toThrow()
+  })
   it.each([
-    { appointmentId: undefined },
-    { treatingStaffId: undefined },
     { paymentMethodCode: 'Cash' },
     { paymentLabelCode: '' },
     { branchCode: '' },
