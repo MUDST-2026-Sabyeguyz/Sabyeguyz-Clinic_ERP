@@ -60,8 +60,8 @@ main {
 .primary {
   padding: 11px 20px;
   color: white;
-  border-color: #1e807c;
-  background: #1e807c;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
   box-shadow: 0 7px 17px rgb(30 128 124 / 19%);
 }
 .outline {
@@ -167,10 +167,10 @@ tbody tr:nth-child(even) {
 .patient-pagination button {
   min-width: 104px;
   padding: 9px 14px;
-  border: 1px solid #1e807c;
+  border: 1px solid var(--color-primary);
   border-radius: 8px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -201,7 +201,7 @@ tbody tr:nth-child(even) {
   width: min(390px, calc(100vw - 40px));
   padding: 17px 28px;
   border-radius: 12px;
-  color: #1e807c;
+  color: var(--color-primary);
   background: #fff;
   box-shadow: 0 12px 30px rgb(23 63 68 / 16%);
   font-size: 19px;
@@ -256,9 +256,9 @@ tbody tr:nth-child(even) {
 .profile-heading {
   gap: 18px;
   padding: 22px 28px;
-  border-color: #1e807c;
+  border-color: var(--color-primary);
   border-radius: 15px 15px 0 0;
-  background: #1e807c;
+  background: var(--color-primary);
   box-shadow: 0 5px 12px rgb(30 128 124 / 16%);
 }
 .profile-heading small,
@@ -289,7 +289,7 @@ tbody tr:nth-child(even) {
   border-color: #fff;
   border: 1px solid #fff;
   border-radius: 10px;
-  color: #1e807c;
+  color: var(--color-primary);
   background: #fff;
   box-shadow: 0 4px 4px rgb(0 0 0 / 25%);
   font: inherit;
@@ -353,14 +353,14 @@ tbody tr:nth-child(even) {
   cursor: pointer;
 }
 .patient-confirmation .outline {
-  border: 2px solid #1e807c;
+  border: 2px solid var(--color-primary);
   color: #1f2937;
   background: #faf6f0;
 }
 .patient-confirmation .primary {
   border: 2px solid transparent;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
 }
 .patient-save-success-backdrop {
@@ -544,7 +544,7 @@ tbody tr:nth-child(even) {
 
 .patient-edit-title {
   margin: 28px 0 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 34px;
   line-height: 1.2;
 }
@@ -636,8 +636,8 @@ tbody tr:nth-child(even) {
 }
 .patient-edit footer .primary {
   min-width: 126px;
-  border-color: #1e807c;
-  background: #1e807c;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
   box-shadow: none;
 }
 .patient-edit footer button:disabled {

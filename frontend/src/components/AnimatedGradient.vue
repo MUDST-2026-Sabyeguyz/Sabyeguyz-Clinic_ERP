@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Slowly drifting mesh gradient behind the top of every staff page (same idea as chula.ac.th's
-// WebGL gradient). Falls back to the static CSS gradient on the container when WebGL is
+// Slowly drifting mesh gradient behind the top of every staff page (WebGL gradient). Falls back to the static CSS gradient on the container when WebGL is
 // unavailable, and renders a single still frame when the user prefers reduced motion.
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -211,7 +210,7 @@ onBeforeUnmount(() => cleanup?.())
   height: 100%;
 }
 
-/* Fades the gradient into the white page, like chula.ac.th. */
+/* Fades the gradient into the white page. */
 .animated-gradient__fade {
   background: linear-gradient(180deg, transparent 45%, #fff 100%);
 }

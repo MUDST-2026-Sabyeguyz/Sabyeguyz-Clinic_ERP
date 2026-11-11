@@ -181,9 +181,9 @@ async function decide(row: ExtensionRow, decision: 'approve' | 'reject') {
 <style scoped>
 .course-extensions-page { min-height: 100vh; background: #f4f7f5; color: #23382f; }
 main { width: min(1000px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 56px; }
-a { color: #145c59; font-weight: 600; text-decoration: none; }
+a { color: var(--color-primary-strong); font-weight: 600; text-decoration: none; }
 .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin: 28px 0; }
-h1 { margin: 0 0 8px; color: #145c59; }
+h1 { margin: 0 0 8px; color: var(--color-primary-strong); }
 .page-heading p { margin: 0; color: #52665e; }
 label { display: grid; gap: 8px; font-weight: 600; }
 select, textarea, button { font: inherit; }
@@ -200,11 +200,11 @@ dl div { min-width: 170px; }
 dt { color: #65766e; font-size: 13px; }
 dd { margin: 4px 0 0; font-weight: 600; }
 .decision-note { margin: 18px 0; }
-button { min-height: 42px; padding: 8px 14px; border: 1px solid #b7cecc; border-radius: 8px; background: white; color: #145c59; cursor: pointer; }
-button.approve { background: #145c59; color: white; }
+button { min-height: 42px; padding: 8px 14px; border: 1px solid #b7cecc; border-radius: 8px; background: white; color: var(--color-primary-strong); cursor: pointer; }
+button.approve { background: var(--color-primary-strong); color: white; }
 button:disabled { opacity: .6; cursor: not-allowed; }
 .error { color: #b42318; }
-.notice { color: #145c59; font-weight: 600; }
+.notice { color: var(--color-primary-strong); font-weight: 600; }
 .empty-state { text-align: center; }
 @media (max-width: 640px) { .page-heading { align-items: stretch; flex-direction: column; } .request-card header { align-items: flex-start; flex-direction: column; } }
 </style>
