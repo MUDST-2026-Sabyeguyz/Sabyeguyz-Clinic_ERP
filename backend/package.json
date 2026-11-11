@@ -12,7 +12,7 @@
     "test:v2:open": "node scripts/run-v2-tests.cjs --open"
   },
   "devDependencies": {
-    "cypress": "16.1.0"
+    "cypress": "16.2.1"
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
