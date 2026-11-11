@@ -21,7 +21,7 @@ public class WorkstationService {
 
     public record Created(Long id, String name, String branchCode, String pairingCode, Instant pairingExpiresAt) {}
 
-    public record Paired(String token, String workstationName, String branchCode) {}
+    public record Paired(String token, String workstationName, String branchCode, Long workstationId) {}
 
     private final CardReaderWorkstationRepository workstations;
     private final BranchRepository branches;
@@ -75,7 +75,7 @@ public class WorkstationService {
         workstation.setTokenHash(TokenHasher.sha256Hex(token));
         workstation.setPairingCodeHash(null);
         workstation.setPairingExpiresAt(null);
-        return new Paired(token, workstation.getName(), workstation.getBranch().getBranchCode());
+        return new Paired(token, workstation.getName(), workstation.getBranch().getBranchCode(), workstation.getId());
     }
 
     /**
