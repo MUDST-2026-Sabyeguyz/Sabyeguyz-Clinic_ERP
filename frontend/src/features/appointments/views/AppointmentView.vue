@@ -736,7 +736,7 @@ async function loadTimeAvailability() {
   availabilitySlots.value = []
   availabilityError.value = ''
   if (!form.value.branchCode || !form.value.therapistId || !form.value.date) {
-    availabilityError.value = 'เลือกสาขา นักกายภาพ และวันที่ก่อน'
+    availabilityError.value = 'เลือกนักกายภาพและวันที่ก่อน'
     return
   }
   availabilityLoading.value = true
