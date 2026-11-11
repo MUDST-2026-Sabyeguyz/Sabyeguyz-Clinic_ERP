@@ -98,11 +98,23 @@ async function loadSourceAppointment() {
 }
 // เปิดเฉพาะตอนระบบพาไปหน้าชำระเงินเอง ไม่ให้ guard ด้านล่างบล็อกการนำทางนี้
 const leavingToServices = ref(false)
+const leaveDialogOpen = ref(false)
+let resolveLeave: ((leave: boolean) => void) | undefined
+function answerLeave(leave: boolean) {
+  leaveDialogOpen.value = false
+  const resolve = resolveLeave
+  resolveLeave = undefined
+  resolve?.(leave)
+}
+onBeforeUnmount(() => answerLeave(false))
 onBeforeRouteLeave(() => {
   if (leavingToServices.value) return true
   if (submitting.value || continuingAppointment.value) return false
-  if (!registeredPatientId.value && initialForm.value && JSON.stringify(form) !== initialForm.value)
-    return window.confirm('ข้อมูลที่กรอกยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?')
+  if (!registeredPatientId.value && initialForm.value && JSON.stringify(form) !== initialForm.value) {
+    if (leaveDialogOpen.value) return false
+    leaveDialogOpen.value = true
+    return new Promise<boolean>((resolve) => { resolveLeave = resolve })
+  }
   return true
 })
 const submitted = ref(false)
@@ -888,6 +900,25 @@ async function submit() {
       </div>
     </Teleport>
   </div>
+    <Teleport to="body">
+      <div v-if="leaveDialogOpen" class="registration-modal-backdrop" @click.self="answerLeave(false)">
+        <section
+          class="registration-modal confirmation-modal"
+          v-modal-focus="{ close: () => answerLeave(false), busy: false }"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="registration-leave-title"
+          aria-describedby="registration-leave-description"
+        >
+          <h2 id="registration-leave-title">ออกจากหน้านี้?</h2>
+          <p id="registration-leave-description">ข้อมูลที่กรอกยังไม่ได้บันทึก หากออกจากหน้านี้ ข้อมูลจะไม่ถูกบันทึก</p>
+          <div class="registration-modal-actions">
+            <button type="button" class="secondary" autofocus @click="answerLeave(false)">ยกเลิก</button>
+            <button type="button" class="primary" @click="answerLeave(true)">ตกลง</button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
 </template>
 <style scoped src="../styles/patient-registration.css"></style>
 <style src="../styles/therapist.css"></style>

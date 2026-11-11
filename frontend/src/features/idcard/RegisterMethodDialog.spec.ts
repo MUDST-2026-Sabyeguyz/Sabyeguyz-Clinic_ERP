@@ -144,6 +144,21 @@ describe('RegisterMethodDialog', () => {
     expect(wrapper.text()).toContain('ยังไม่มีเครื่องอ่านบัตร')
   })
 
+  it('hides the technical connection error and shows a plain cross icon', async () => {
+    read.mockImplementation(async () => {
+      reader.state.value = 'failed'
+      reader.message.value = 'connect() failed'
+      return null
+    })
+    const wrapper = mountDialog()
+    await wrapper.get('.method-card').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('อ่านบัตรไม่สำเร็จ')
+    expect(wrapper.text()).not.toContain('connect() failed')
+    expect(wrapper.find('.read-failed-icon rect').exists()).toBe(false)
+    expect(wrapper.findAll('.read-failed .actions button')).toHaveLength(2)
+  })
+
   it('asks which reader to use when there are several and none is chosen', () => {
     reader.selectedId.value = null
     reader.workstations.value = [
