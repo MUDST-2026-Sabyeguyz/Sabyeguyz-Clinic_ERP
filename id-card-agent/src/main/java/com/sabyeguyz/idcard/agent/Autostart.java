@@ -62,6 +62,28 @@ final class Autostart {
         }
     }
 
+    /**
+     * First start of an installed Windows build: register for login once, so the installer needs no extra step. Only the
+     * installed launcher qualifies (a developer running the jar must not register a path that cannot start on its own),
+     * and the marker stops it from undoing an {@code autostart-remove} later.
+     */
+    static boolean shouldInstallOnFirstRun(String os, String installedLauncher, boolean alreadyDone) {
+        return !alreadyDone && os.toLowerCase().contains("win") && installedLauncher != null && !installedLauncher.isBlank();
+    }
+
+    static void installOnFirstRun(Path markerFile) {
+        String launcher = System.getProperty("jpackage.app-path");
+        if (!shouldInstallOnFirstRun(System.getProperty("os.name"), launcher, Files.exists(markerFile))) return;
+        try {
+            install(launcher);
+            Files.createDirectories(markerFile.getParent());
+            Files.writeString(markerFile, "done");
+        } catch (IOException | InterruptedException failed) {
+            if (failed instanceof InterruptedException) Thread.currentThread().interrupt();
+            System.err.println("ตั้งให้เริ่มอัตโนมัติไม่สำเร็จ: " + failed.getMessage());
+        }
+    }
+
     static void remove() throws IOException, InterruptedException {
         String os = System.getProperty("os.name").toLowerCase();
         Path home = Path.of(System.getProperty("user.home"));
