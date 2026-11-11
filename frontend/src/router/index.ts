@@ -362,7 +362,7 @@ const router = createRouter({
     {
       path: '/staff/settings/card-readers',
       name: 'staff-card-readers',
-      component: () => import('@/features/idcard/CardReadersView.vue'),
+      component: () => import('@/features/settings/views/BackOfficeView.vue'),
       meta: { roles: ['manager'] },
     },
     {
