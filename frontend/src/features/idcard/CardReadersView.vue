@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { vModalFocus } from '@/features/appointments/modalFocus'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
@@ -12,7 +12,10 @@ import {
 
 const workstations = ref<IdCardWorkstation[]>([])
 defineProps<{ embedded?: boolean }>()
+const addButton = ref<HTMLButtonElement | null>(null)
+const addOpen = ref(false)
 const name = ref('')
+const addError = ref('')
 const created = ref<IdCardWorkstationCreated | null>(null)
 const pairingOpen = ref(false)
 const pairingSeconds = ref(0)
@@ -36,13 +39,33 @@ function showPairing(item: IdCardWorkstationCreated) {
   update()
   if (pairingOpen.value) pairingTimer = setInterval(update, 1000)
 }
-onBeforeUnmount(closePairing)
 const message = ref('')
 const loadError = ref('')
 const loading = ref(false)
 const saving = ref(false)
 const branchCode = computed(() => selectedManagerBranch()?.code ?? '')
 let loadSequence = 0
+
+function resetAdd() {
+  addOpen.value = false
+  name.value = ''
+  addError.value = ''
+}
+
+function openAdd() {
+  if (saving.value || !branchCode.value) return
+  resetAdd()
+  addOpen.value = true
+}
+
+function closeAdd() {
+  if (!saving.value) resetAdd()
+}
+
+onBeforeUnmount(() => {
+  resetAdd()
+  closePairing()
+})
 
 async function load() {
   const sequence = ++loadSequence
@@ -65,25 +88,27 @@ async function load() {
 }
 
 async function add() {
-  if (saving.value) return
-  message.value = ''
-  if (!name.value.trim() || !branchCode.value) {
-    message.value = 'กรอกชื่อเครื่อง และเลือกสาขาก่อน'
-    return
-  }
-  saving.value = true
+  if (!addOpen.value || saving.value) return
+  const readerName = name.value.trim()
   const branch = branchCode.value
+  if (!readerName || !branch) return
+  addError.value = ''
+  saving.value = true
   try {
-    const added = await idCardApi.createWorkstation(name.value.trim(), branch)
-    if (branchCode.value !== branch) return
+    const added = await idCardApi.createWorkstation(readerName, branch)
+    if (branchCode.value !== branch || !addOpen.value) return
+    resetAdd()
+    await nextTick()
+    if (!addButton.value || branchCode.value !== branch) return
     showPairing(added)
     workstations.value = [...workstations.value.filter((row) => row.id !== added.id), {
       id: added.id, name: added.name, branchCode: added.branchCode, online: false, status: 'Active',
     }]
-    name.value = ''
     await load()
   } catch (error) {
-    message.value = error instanceof ApiError ? error.message : 'เพิ่มเครื่องอ่านบัตรไม่สำเร็จ'
+    if (addOpen.value && branchCode.value === branch) {
+      addError.value = error instanceof ApiError ? error.message : 'เพิ่มเครื่องอ่านบัตรไม่สำเร็จ'
+    }
   } finally {
     saving.value = false
   }
@@ -127,6 +152,7 @@ async function confirmCancel() {
 }
 
 watch(branchCode, () => {
+  resetAdd()
   cancelTarget.value = null
   closePairing()
   workstations.value = []
@@ -146,19 +172,54 @@ watch(branchCode, () => {
           <p>เพิ่มเครื่องอ่านบัตรของสาขา แล้วนำรหัสจับคู่ไปใส่ในโปรแกรมตัวกลางที่เครื่องหน้าเคาน์เตอร์</p>
           <p class="branch-context">สาขา: {{ selectedManagerBranch()?.name || 'ยังไม่ได้เลือกสาขา' }}</p>
         </div>
+        <button
+          ref="addButton"
+          type="button"
+          class="primary add-reader-trigger"
+          aria-haspopup="dialog"
+          :disabled="!branchCode"
+          @click="openAdd"
+        >
+          + เพิ่มเครื่อง
+        </button>
       </section>
 
-      <form class="card-reader-add" @submit.prevent="add">
-        <label>
-          ชื่อเครื่องใหม่
-          <input v-model="name" name="name" maxlength="100" placeholder="เช่น เคาน์เตอร์ 1" autocomplete="off" />
-        </label>
-        <button type="submit" class="primary" :disabled="saving">{{ saving ? 'กำลังเพิ่ม…' : '+ เพิ่มเครื่อง' }}</button>
-      </form>
       <p v-if="message" role="alert" class="required-error">{{ message }}</p>
       <p v-if="loadError" role="alert" class="required-error">{{ loadError }} <button type="button" @click="load">ลองโหลดรายการอีกครั้ง</button></p>
 
       <Teleport to="body">
+        <div v-if="addOpen" class="pairing-backdrop" @click.self="closeAdd">
+          <section
+            v-modal-focus="{ close: closeAdd, busy: saving }"
+            class="pairing-dialog add-reader-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-reader-title"
+          >
+            <h2 id="add-reader-title">เพิ่มเครื่องอ่านบัตร</h2>
+            <form class="add-reader-form" @submit.prevent="add">
+              <label>
+                ชื่อเครื่องอ่านบัตร
+                <input
+                  v-model="name"
+                  name="name"
+                  maxlength="100"
+                  placeholder="เช่น เคาน์เตอร์ 1"
+                  autocomplete="off"
+                  :readonly="saving"
+                  required
+                />
+              </label>
+              <p v-if="addError" class="add-reader-error" role="alert">{{ addError }}</p>
+              <div class="add-reader-actions">
+                <button type="button" :disabled="saving" @click="closeAdd">ยกเลิก</button>
+                <button type="submit" class="primary" :disabled="saving || !name.trim()">
+                  {{ saving ? 'กำลังเพิ่ม…' : 'เพิ่มเครื่อง' }}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
         <div v-if="cancelTarget" class="pairing-backdrop" @click.self="closeCancel">
           <section class="pairing-dialog cancel-reader-dialog" v-modal-focus="{ close: closeCancel, busy: cancelling }" role="alertdialog" aria-modal="true" aria-labelledby="cancel-reader-title" aria-describedby="cancel-reader-description">
             <h2 id="cancel-reader-title">ยืนยันยกเลิกเครื่องอ่านบัตร?</h2>
@@ -219,11 +280,15 @@ watch(branchCode, () => {
 .cancel-reader-dialog { text-align: center; }
 .cancel-reader-dialog h2 { color: #25372e; }
 .cancel-reader-actions { display: flex; justify-content: center; gap: 12px; margin-top: 26px; }
-.cancel-reader-actions button { min-width: 120px; min-height: 44px; padding: 10px 20px; border: 1px solid #a2c7c1; border-radius: 9px; background: #fff; color: #187d78; font: inherit; font-weight: 600; cursor: pointer; }
+.cancel-reader-actions button, .add-reader-actions button { min-width: 120px; min-height: 44px; padding: 10px 20px; border: 1px solid #a2c7c1; border-radius: 9px; background: #fff; color: #187d78; font: inherit; font-weight: 600; cursor: pointer; }
 .cancel-reader-actions .confirm-cancel-reader { border-color: #187d78; background: #187d78; color: #fff; }
-.cancel-reader-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.cancel-reader-actions button:disabled, .add-reader-actions button:disabled, .add-reader-trigger:disabled { opacity: 0.5; cursor: not-allowed; }
 .cancel-reader-dialog .cancel-reader-error { color: #b42318; }
-.cancel-reader-actions button:focus-visible { outline: 2px solid #187d78; outline-offset: 3px; }
+.cancel-reader-actions button:focus-visible, .add-reader-dialog :is(input, button):focus-visible { outline: 2px solid #187d78; outline-offset: 3px; }
+.add-reader-form { margin: 20px 0 0; }
+.add-reader-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.add-reader-actions button { min-width: 0; padding-inline: 12px; }
+.add-reader-dialog .add-reader-error { color: #b42318; text-align: left; }
 .card-reader-panel {
   min-width: 0;
   align-self: start;
@@ -246,10 +311,17 @@ watch(branchCode, () => {
   overflow: hidden;
 }
 .card-reader-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 28px 32px;
   border-bottom: 1px solid #e7ede9;
   background: linear-gradient(120deg, #fff, #f3faf7);
 }
+.card-reader-heading > div { flex: 1 1 320px; }
+.add-reader-trigger { white-space: nowrap; }
 .card-reader-heading h1 {
   margin: 0;
   color: #25372e;
@@ -267,17 +339,15 @@ watch(branchCode, () => {
   color: #187d78;
   font-weight: 600;
 }
-.card-reader-add label {
+.add-reader-form label {
   display: grid;
-  flex: 1;
-  max-width: 420px;
   gap: 8px;
   min-width: 0;
   color: #41594f;
   font-size: 14px;
   font-weight: 600;
 }
-.card-reader-add input {
+.add-reader-form input {
   width: 100%;
   min-height: 46px;
   padding: 10px 14px;
@@ -300,7 +370,7 @@ watch(branchCode, () => {
   font-weight: 600;
   cursor: pointer;
 }
-.card-reader-content button.primary {
+.card-reader-content button.primary, .add-reader-actions button.primary {
   min-height: 46px;
   border-color: transparent;
   background: var(--ui-primary-gradient, linear-gradient(120deg, #1b9289, #147771));
@@ -349,14 +419,6 @@ watch(branchCode, () => {
 .reader-status.online { color: #187d78; background: #def3e8; }
 .reader-status.offline { color: #946c22; background: #fff3d4; }
 .card-reader-list td.reader-empty { padding: 48px 20px; text-align: center; color: #68776f; }
-.card-reader-add {
-  display: flex;
-  gap: 12px;
-  align-items: end;
-  margin: 0;
-  padding: 24px 32px;
-  border-bottom: 1px solid #e7ede9;
-}
 .pairing-code strong {
   font-size: 32px;
   letter-spacing: 6px;
@@ -399,8 +461,7 @@ watch(branchCode, () => {
   color: #fff;
 }
 @media (max-width: 640px) {
-  .card-reader-heading, .card-reader-add { padding: 20px; }
-  .card-reader-add { flex-direction: column; align-items: stretch; }
+  .card-reader-heading { padding: 20px; }
   .pairing-code { margin: 20px; }
   .card-reader-list { min-width: 640px; }
 }

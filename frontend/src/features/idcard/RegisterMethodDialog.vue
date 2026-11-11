@@ -23,24 +23,53 @@ const authUser = computed(() => {
   }
 })
 const isManager = computed(() => authUser.value?.role === 'MANAGER')
-const choices = computed(() => reader.workstations.value.filter((w) => w.status === 'Active'))
-const canRead = computed(() => reader.selectedId.value !== null)
+const choices = computed(() => reader.workstations.value.filter(
+  (w) => w.status === 'Active' && (!props.branchCode || w.branchCode === props.branchCode),
+))
+const loadingReaders = ref(false)
+const canRead = computed(() => !loadingReaders.value && choices.value.some(
+  (w) => w.id === reader.selectedId.value && w.online,
+))
 const failureMessage = computed(() => /[\u0E00-\u0E7F]/.test(reader.message.value) ? reader.message.value : '')
+let statusTimer: ReturnType<typeof setInterval> | undefined
+let refreshing = false
+
+async function refreshReaders() {
+  if (refreshing || !props.open || phase.value !== 'choose') return
+  refreshing = true
+  try {
+    await reader.load(props.branchCode || undefined)
+  } finally {
+    refreshing = false
+    loadingReaders.value = false
+  }
+}
+
+function stopStatusRefresh() {
+  clearInterval(statusTimer)
+  statusTimer = undefined
+}
 
 watch(
-  () => props.open,
-  (open) => {
+  () => [props.open, props.branchCode] as const,
+  ([open]) => {
+    stopStatusRefresh()
     if (open) {
       phase.value = 'choose'
       found.value = null
-      reader.load(props.branchCode || undefined)
+      loadingReaders.value = true
+      void refreshReaders()
+      statusTimer = setInterval(() => void refreshReaders(), 5000)
     } else {
       reader.cancel()
     }
   },
   { immediate: true },
 )
-onBeforeUnmount(() => reader.cancel())
+onBeforeUnmount(() => {
+  stopStatusRefresh()
+  reader.cancel()
+})
 
 // While a card is awaited or being read the dialog cannot be dismissed; the wait ends by itself.
 function close() {
@@ -54,6 +83,7 @@ function manual() {
 }
 
 async function readCard() {
+  if (!canRead.value) return
   phase.value = 'running'
   const view = await reader.read()
   if (!view) {
@@ -120,15 +150,23 @@ function chooseReader(event: Event) {
           @change="chooseReader"
         >
           <option value="" disabled>เลือกเครื่องอ่านบัตร</option>
-          <option v-for="w in choices" :key="w.id" :value="w.id">
+          <option v-for="w in choices" :key="w.id" :value="w.id" :disabled="!w.online">
             {{ w.name }}{{ w.online ? '' : ' (ออฟไลน์)' }}
           </option>
         </select>
         <small v-if="choices.length === 0" class="id-card-hint">
-          ยังไม่มีเครื่องอ่านบัตรของสาขานี้ กรอกข้อมูลเองได้
-          <RouterLink v-if="isManager" to="/staff/settings/card-readers" @click="emit('close')"
-            >จัดการเครื่องอ่านบัตร</RouterLink
+          <span>สาขานี้ยังไม่มีเครื่องอ่านบัตร</span>
+          <RouterLink
+            v-if="isManager"
+            class="id-card-settings-link"
+            to="/staff/settings/card-readers"
+            @click="emit('close')"
           >
+            จัดการเครื่องอ่านบัตร
+          </RouterLink>
+        </small>
+        <small v-else-if="!choices.some((w) => w.online)" class="id-card-hint">
+          เครื่องอ่านบัตรยังไม่เชื่อมต่อ
         </small>
       </template>
 
@@ -298,9 +336,13 @@ function chooseReader(event: Event) {
   font: inherit;
   cursor: pointer;
 }
-.method:disabled {
-  opacity: 0.5;
+.register-dialog .method-card:disabled {
+  border-color: #e3e8e5;
+  background: #f3f5f4;
+  color: #8a9690;
+  opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
 }
 .running {
   display: grid;
@@ -348,7 +390,22 @@ function chooseReader(event: Event) {
   cursor: pointer;
 }
 .id-card-hint {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 8px;
   color: #6b7d76;
+  line-height: 1.6;
+}
+.id-card-settings-link {
+  color: var(--ui-primary, #187d78);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.id-card-settings-link:focus-visible {
+  outline: 2px solid var(--ui-primary, #187d78);
+  outline-offset: 3px;
 }
 </style>
