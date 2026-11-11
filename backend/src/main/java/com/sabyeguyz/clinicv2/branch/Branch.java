@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.branch;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -66,37 +67,112 @@ public class Branch {
 
     public Branch() {}
 
-    public String getBranchEmail() { return branchEmail; }
-    public void setBranchEmail(String branchEmail) { this.branchEmail = branchEmail; }
-    public String getLicenseNo() { return licenseNo; }
-    public void setLicenseNo(String licenseNo) { this.licenseNo = licenseNo; }
-    public java.time.LocalTime getBookingOpenTime() { return bookingOpenTime; }
-    public void setBookingOpenTime(java.time.LocalTime bookingOpenTime) { this.bookingOpenTime = bookingOpenTime; }
-    public java.time.LocalTime getBookingCloseTime() { return bookingCloseTime; }
-    public void setBookingCloseTime(java.time.LocalTime bookingCloseTime) { this.bookingCloseTime = bookingCloseTime; }
-    public Integer getDefaultAppointmentMinutes() { return defaultAppointmentMinutes; }
-    public void setDefaultAppointmentMinutes(Integer defaultAppointmentMinutes) { this.defaultAppointmentMinutes = defaultAppointmentMinutes; }
+    public String getBranchEmail() {
+        return branchEmail;
+    }
+    public void setBranchEmail(String branchEmail) {
+        this.branchEmail = branchEmail;
+    }
 
-    public String getGoogleCalendarId() { return googleCalendarId; }
-    public void setGoogleCalendarId(String googleCalendarId) { this.googleCalendarId = googleCalendarId; }
+    public String getLicenseNo() {
+        return licenseNo;
+    }
+    public void setLicenseNo(String licenseNo) {
+        this.licenseNo = licenseNo;
+    }
 
-    public Long getId() { return id; }
-    public String getBranchCode() { return branchCode; }
-    public void setBranchCode(String branchCode) { this.branchCode = branchCode; }
-    public String getBranchName() { return branchName; }
-    public void setBranchName(String branchName) { this.branchName = branchName; }
-    public String getAddress() { return address; }
-    public void setAddress(String address) { this.address = address; }
-    public String getPhone() { return phone; }
-    public void setPhone(String phone) { this.phone = phone; }
-    public boolean isBranchStatus() { return branchStatus; }
-    public void setBranchStatus(boolean branchStatus) { this.branchStatus = branchStatus; }
-    public Instant getBranchCreateAt() { return branchCreateAt; }
-    public void setBranchCreateAt(Instant branchCreateAt) { this.branchCreateAt = branchCreateAt; }
-    public Long getBranchCreateBy() { return branchCreateBy; }
-    public void setBranchCreateBy(Long branchCreateBy) { this.branchCreateBy = branchCreateBy; }
-    public Instant getBranchUpdateAt() { return branchUpdateAt; }
-    public void setBranchUpdateAt(Instant branchUpdateAt) { this.branchUpdateAt = branchUpdateAt; }
-    public Long getBranchUpdateBy() { return branchUpdateBy; }
-    public void setBranchUpdateBy(Long branchUpdateBy) { this.branchUpdateBy = branchUpdateBy; }
+    public java.time.LocalTime getBookingOpenTime() {
+        return bookingOpenTime;
+    }
+    public void setBookingOpenTime(java.time.LocalTime bookingOpenTime) {
+        this.bookingOpenTime = bookingOpenTime;
+    }
+
+    public java.time.LocalTime getBookingCloseTime() {
+        return bookingCloseTime;
+    }
+    public void setBookingCloseTime(java.time.LocalTime bookingCloseTime) {
+        this.bookingCloseTime = bookingCloseTime;
+    }
+
+    public Integer getDefaultAppointmentMinutes() {
+        return defaultAppointmentMinutes;
+    }
+    public void setDefaultAppointmentMinutes(Integer defaultAppointmentMinutes) {
+        this.defaultAppointmentMinutes = defaultAppointmentMinutes;
+    }
+
+    public String getGoogleCalendarId() {
+        return googleCalendarId;
+    }
+    public void setGoogleCalendarId(String googleCalendarId) {
+        this.googleCalendarId = googleCalendarId;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getBranchCode() {
+        return branchCode;
+    }
+    public void setBranchCode(String branchCode) {
+        this.branchCode = branchCode;
+    }
+
+    public String getBranchName() {
+        return branchName;
+    }
+    public void setBranchName(String branchName) {
+        this.branchName = branchName;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public boolean isBranchStatus() {
+        return branchStatus;
+    }
+    public void setBranchStatus(boolean branchStatus) {
+        this.branchStatus = branchStatus;
+    }
+
+    public Instant getBranchCreateAt() {
+        return branchCreateAt;
+    }
+    public void setBranchCreateAt(Instant branchCreateAt) {
+        this.branchCreateAt = branchCreateAt;
+    }
+
+    public Long getBranchCreateBy() {
+        return branchCreateBy;
+    }
+    public void setBranchCreateBy(Long branchCreateBy) {
+        this.branchCreateBy = branchCreateBy;
+    }
+
+    public Instant getBranchUpdateAt() {
+        return branchUpdateAt;
+    }
+    public void setBranchUpdateAt(Instant branchUpdateAt) {
+        this.branchUpdateAt = branchUpdateAt;
+    }
+
+    public Long getBranchUpdateBy() {
+        return branchUpdateBy;
+    }
+    public void setBranchUpdateBy(Long branchUpdateBy) {
+        this.branchUpdateBy = branchUpdateBy;
+    }
 }
