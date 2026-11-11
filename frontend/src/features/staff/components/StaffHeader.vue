@@ -162,6 +162,12 @@ async function loadManagerBranches() {
   try {
     const branches = (await branchApi.list())
       .filter((branch) => branch.active)
+      .sort((first, second) =>
+        first.code.localeCompare(second.code, 'th-TH', {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+      )
       .map((branch) => ({
         code: branch.code,
         name: branch.name,

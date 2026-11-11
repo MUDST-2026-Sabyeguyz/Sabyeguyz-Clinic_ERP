@@ -84,13 +84,23 @@ const filteredSingleVisits = computed(() => {
 const courseOverview = computed(() => ({
   total: courses.value.length,
   active: courses.value.filter((item) => item.usable).length,
-  remaining: courses.value
-    .filter((item) => item.usable)
-    .reduce((sum, item) => sum + item.remaining, 0),
   expired: courses.value.filter((item) => item.expired && item.status !== 'CANCELLED').length,
 }))
-const prepaidServiceBalance = computed(() =>
-  singleVisitEntitlements.value.reduce((sum, item) => sum + item.remaining, 0),
+const totalSingleVisitsPurchased = computed(() => {
+  const countedItems = new Set<number>()
+  return payments.value.reduce((sum, payment) => {
+    if (payment.status === 'VOIDED') return sum
+    return sum + (paymentDetails.value[payment.id]?.items.reduce((itemSum, item) => {
+      if (!isSingleVisit(item.type) || countedItems.has(item.id)) return itemSum
+      countedItems.add(item.id)
+      return itemSum + item.quantity
+    }, 0) ?? 0)
+  }, 0)
+})
+const availableSingleVisits = computed(() =>
+  singleVisitEntitlements.value.reduce(
+    (sum, item) => sum + (item.serviceActive ? item.remaining : 0), 0,
+  ),
 )
 function clearHistoryFilters() {
   query.value = ''
@@ -231,13 +241,13 @@ onMounted(async () => {
           <span>คอร์สที่ใช้ได้</span><strong>{{ courseOverview.active }} คอร์ส</strong>
         </div>
         <div>
-          <span>สิทธิ์ที่ใช้ได้คงเหลือ</span><strong>{{ courseOverview.remaining }} ครั้ง</strong>
-        </div>
-        <div>
           <span>คอร์สหมดอายุ</span><strong>{{ courseOverview.expired }} คอร์ส</strong>
         </div>
         <div>
-          <span>บริการรายครั้งที่ซื้อไว้</span><strong>{{ singleVisitEntitlementsAvailable ? `${prepaidServiceBalance} ครั้ง` : 'ตรวจสอบไม่ได้' }}</strong>
+          <span>บริการรายครั้งทั้งหมด</span><strong>{{ detailsIncomplete ? 'ตรวจสอบไม่ได้' : `${totalSingleVisitsPurchased} ครั้ง` }}</strong>
+        </div>
+        <div>
+          <span>บริการที่ใช้ได้</span><strong>{{ singleVisitEntitlementsAvailable ? `${availableSingleVisits} ครั้ง` : 'ตรวจสอบไม่ได้' }}</strong>
         </div>
       </section>
       <nav class="history-tabs" aria-label="เลือกรายการบริการและคอร์ส">
