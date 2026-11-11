@@ -82,8 +82,10 @@ describe('calendar settings', () => {
     setSelectedManagerBranch({ code: '02', name: 'แบริ่ง' })
     await nextTick()
     expect(view.find('[data-cy="calendar-row-01"]').exists()).toBe(false)
-    expect((view.get('input').element as HTMLInputElement).value).toBe('bearing@gmail.com')
-    await view.get('input').setValue('rama@gmail.com')
+    expect((view.get('[data-cy="calendar-id-02"]').element as HTMLInputElement).value).toBe(
+      'bearing@gmail.com',
+    )
+    await view.get('[data-cy="calendar-id-02"]').setValue('rama@gmail.com')
     api.save.mockResolvedValue({ branchCode: '02', googleCalendarId: 'rama@gmail.com' })
     await view.get('form').trigger('submit')
     await flushPromises()
@@ -91,7 +93,9 @@ describe('calendar settings', () => {
     expect(view.text()).not.toContain('แต่ละสาขาต้องใช้ Calendar ID คนละค่า')
     setSelectedManagerBranch({ code: '01', name: 'พระราม 9' })
     await nextTick()
-    expect((view.get('input').element as HTMLInputElement).value).toBe('rama@gmail.com')
+    expect((view.get('[data-cy="calendar-id-01"]').element as HTMLInputElement).value).toBe(
+      'rama@gmail.com',
+    )
     view.unmount()
   })
   it('only disconnects the selected branch after confirmation', async () => {
@@ -103,7 +107,7 @@ describe('calendar settings', () => {
     const view = mount(CalendarSettingsView, { global: { stubs: { StaffHeader: true, RouterLink: true } } })
     await flushPromises()
     await view.get('[data-cy="calendar-disconnect"]').trigger('click')
-    expect(view.get('dialog').attributes('open')).toBeDefined()
+    expect(view.get('dialog[aria-labelledby="disconnect-title"]').attributes('open')).toBeDefined()
     expect(api.save).not.toHaveBeenCalled()
     await view.get('[data-cy="calendar-confirm-disconnect"]').trigger('click')
     await flushPromises()
@@ -117,7 +121,7 @@ describe('calendar settings', () => {
     setManagerBranches([{ code: '01', name: 'พระราม 9' }])
     const view = mount(CalendarSettingsView, { global: { stubs: { StaffHeader: true, RouterLink: true } } })
     await flushPromises()
-    await view.get('input').setValue('')
+    await view.get('[data-cy="calendar-id-01"]').setValue('')
     await view.get('form').trigger('submit')
     expect(api.save).not.toHaveBeenCalled()
     expect(view.get('[data-cy="calendar-error"]').text()).toContain('กรุณากรอก Calendar ID')
