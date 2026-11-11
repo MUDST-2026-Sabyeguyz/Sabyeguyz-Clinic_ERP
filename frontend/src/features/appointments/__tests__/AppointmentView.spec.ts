@@ -14,9 +14,10 @@ describe('AppointmentView', () => {
 
       expect(source).toContain('appointmentInterval(')
       expect(source).toContain('endAt: interval.endAt')
-      expect(source).toContain('appointmentLocalFields(item.endAt)')
-      expect(source).toContain('availabilityDurationMinutes.value ?? selectedService.value?.durationMinutes ?? 60')
-      expect(source).toContain('availabilityDurationMinutes.value = result.durationMinutes')
+      expect(source).toContain('appointmentEndFields(')
+      expect(source).toContain('appointmentLocalFields(item.startAt)')
+      expect(source).toContain('?.durationMinutes || 60')
+      expect(source).toContain('appointmentDurationMinutes.value = result.durationMinutes')
       expect(source).not.toMatch(/appointmentApi\.(confirm|checkIn|startService|complete|noShow)\(/)
       expect(source).not.toMatch(/status === '(RESCHEDULED|NO_SHOW|COMPLETED|ARRIVED|IN_SERVICE)'/)
       expect(statusChoices).not.toContain("'PENDING'")
@@ -52,7 +53,7 @@ describe('AppointmentView', () => {
     )
 
     const filters = source.match(
-      /<div v-show="scheduleView === 'list'" class="appointment-list-controls">([\s\S]*?)<\/div>\s*<div v-if="scheduleView === 'list'" class="appointment-list-summary">/,
+      /<div v-if="scheduleView === 'list'" class="appointment-list-summary">([\s\S]*?)<section v-if="scheduleView !== 'list'" class="appointment-calendar">/,
     )
 
     expect(filters?.[1]).toBeDefined()
@@ -60,20 +61,22 @@ describe('AppointmentView', () => {
     expect(filters?.[1]).not.toContain('v-model="query"')
   })
 
-  it('keeps the service mode toggle and date filters in the same control row', () => {
+  it('keeps the date filter in the list summary and the service filter in the table header', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/views/AppointmentView.vue'),
       'utf8',
     )
 
-    const controls = source.match(
-      /<div v-show="scheduleView === 'list'" class="appointment-list-controls">([\s\S]*?)<\/div>\s*<div v-if="scheduleView === 'list'" class="appointment-list-summary">/,
+    const summary = source.match(
+      /<div v-if="scheduleView === 'list'" class="appointment-list-summary">([\s\S]*?)<section v-if="scheduleView !== 'list'" class="appointment-calendar">/,
     )
+    const header = source.match(/<table[\s\S]*?class="staff-table"[\s\S]*?<thead>([\s\S]*?)<\/thead>/)
 
-    expect(controls?.[1]).toBeDefined()
-    expect(controls?.[1]).toContain('class="appointment-list-mode-toggle"')
-    expect(controls?.[1]).toContain('appointment-list-filters')
-    expect(controls?.[1]).toContain('appointment-date-range')
+    expect(summary?.[1]).toBeDefined()
+    expect(summary?.[1]).toContain('appointment-list-filters')
+    expect(summary?.[1]).toContain('<AppointmentDateFilter')
+    expect(header?.[1]).toContain('class="appointment-service-filter"')
+    expect(header?.[1]).toContain('v-model="listServiceMode"')
   })
 
   it('shows the Figma patient details form when creating an appointment for a new patient', () => {
@@ -120,7 +123,7 @@ describe('AppointmentView', () => {
     expect(goBack?.[1]).toContain("createSource.value === 'calendar'")
     expect(goBack?.[1]).toContain("name: 'staff-appointment-calendar'")
     expect(goBack?.[1]).toContain("name: 'staff-appointments'")
-    expect(source).toContain("isCalendarCreate ? '← กลับไปหน้าปฏิทิน' : '← กลับไปหน้านัดหมาย'")
+    expect(source).toContain('@click="goToAppointmentList"')
   })
 
   it('allows a new-patient appointment after validating its contact details', () => {
