@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import View from '../views/ManagerPatientRegistrationView.vue'
 import TherapistView from '../views/PatientRegistrationView.vue'
 import { setSelectedManagerBranch } from '@/features/staff/data/managerBranch'
+import { onBeforeRouteLeave } from 'vue-router'
 
 const mocks = vi.hoisted(() => ({ register: vi.fn() }))
 vi.mock('@/api/patients', () => ({ registerPatient: mocks.register }))
@@ -25,6 +26,27 @@ vi.mock('vue-router', () => ({
 }))
 
 describe('Manager patient registration save flow', () => {
+  it.each([View, TherapistView])('uses a custom dialog to cancel or confirm leaving unsaved data', async (component) => {
+    localStorage.setItem('authUser', JSON.stringify({ role: 'MANAGER' }))
+    const view = mount(component, {
+      global: { stubs: { StaffHeader: true, RouterLink: true, ThaiDatePicker: true, FilterDropdown: true, Teleport: true } },
+    })
+    await flushPromises()
+    const state = view.vm as unknown as { form: { firstName: string } }
+    state.form.firstName = 'แก้ไขข้อมูล'
+    const guard = vi.mocked(onBeforeRouteLeave).mock.calls.at(-1)![0]
+    const navigate = () => (guard as () => Promise<boolean>)()
+    const cancelled = navigate()
+    await flushPromises()
+    expect(view.text()).toContain('ออกจากหน้านี้?')
+    await view.get('[aria-labelledby="registration-leave-title"] .secondary').trigger('click')
+    await expect(cancelled).resolves.toBe(false)
+    const confirmed = navigate()
+    await flushPromises()
+    await view.get('[aria-labelledby="registration-leave-title"] .primary').trigger('click')
+    await expect(confirmed).resolves.toBe(true)
+    view.unmount()
+  })
   it('does not send invented login credentials for a patient registration', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/features/patients/views/ManagerPatientRegistrationView.vue'),
