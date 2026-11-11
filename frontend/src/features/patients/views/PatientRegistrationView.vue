@@ -301,40 +301,6 @@ onMounted(async () => {
       ? 'บัตรประชาชนใบนี้หมดอายุแล้ว ตรวจสอบกับผู้ป่วยก่อนบันทึก'
       : ''
   }
-  if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
-    duplicatePatient.value = {
-      id: 10,
-      hn: '260801010',
-      fullName: 'ผู้ป่วยสาธิต ชาย 10',
-      phone: '0890000010',
-      active: true,
-      branch: { id: 1, code: 'BR', name: 'แบริ่ง', active: true },
-      title: 'นาย',
-      birthDate: '1990-01-01',
-      gender: 'ชาย',
-      identityDocumentType: 'NATIONAL_ID',
-      identityNumber: '1103700123456',
-      address: 'กรุงเทพฯ',
-      drugAllergy: false,
-      foodAllergy: false,
-      chronicDisease: '',
-      emergencyContactName: '',
-      emergencyContactRelationship: '',
-      emergencyContactPhone: '',
-      privacyConsent: true,
-    }
-    duplicateOpen.value = true
-  } else if (import.meta.env.DEV && route.query.previewSuccess === '1') {
-    Object.assign(form, {
-      title: 'นาย',
-      firstName: 'สมชาย',
-      lastName: 'ใจดี',
-      identityNumber: '1111111111111',
-    })
-    registeredHn.value = '260801022'
-    registeredPatientId.value = 10
-    successOpen.value = true
-  }
 })
 function applyManagerBranch() {
   if (sourceAppointment.value) return
