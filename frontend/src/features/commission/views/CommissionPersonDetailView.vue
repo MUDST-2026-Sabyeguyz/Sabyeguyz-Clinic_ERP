@@ -367,7 +367,7 @@ watch([staffId, month, selectedBranchCode], load);
   display: grid;
   gap: 12px;
   padding: 20px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 10px;
 }
 .tier-box b {
@@ -388,7 +388,7 @@ watch([staffId, month, selectedBranchCode], load);
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .breakdown-note {
   font-size: 12px;
@@ -471,7 +471,7 @@ watch([staffId, month, selectedBranchCode], load);
   padding: 12px;
   border-radius: 8px;
   background: #e7f4ef;
-  color: #1e807c !important;
+  color: var(--color-primary) !important;
   font-weight: 700;
 }
 .state-card {
@@ -511,7 +511,7 @@ watch([staffId, month, selectedBranchCode], load);
 }
 .action-modal h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   text-align: center;
 }
 .action-modal > p {

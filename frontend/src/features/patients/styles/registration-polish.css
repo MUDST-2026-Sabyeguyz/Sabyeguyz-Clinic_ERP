@@ -139,7 +139,7 @@
   border-color: #b42318;
 }
 .registration-page :is(input, textarea, select, button, a):focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 @media (max-width: 680px) {
@@ -234,13 +234,13 @@
   font-size: 36px;
   font-weight: 800;
   line-height: 1.4;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 .registration-page .registration-section > h2 {
   font-size: 24px;
   font-weight: 700;
   line-height: 1.5;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 .registration-page .registration-section + .registration-section {
   border-top-color: #b7cecc;
@@ -248,7 +248,7 @@
   padding-top: 32px;
 }
 .registration-page .patient-type label.selected {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 700;
   border-width: 2px;
   padding: 11px 15px;
@@ -258,7 +258,7 @@
   min-height: 52px;
   font-size: 17px;
   font-weight: 700;
-  background: #145c59;
+  background: var(--color-primary-strong);
 }
 .registration-page .actions.end .primary:hover:not(:disabled) {
   background: #176d68;
@@ -285,7 +285,7 @@
   border: 1px solid #b7cecc;
   border-radius: 8px;
   background: #edf5f1;
-  color: #145c59;
+  color: var(--color-primary-strong);
   line-height: 1.6;
 }
 .registration-page .registration-source p {

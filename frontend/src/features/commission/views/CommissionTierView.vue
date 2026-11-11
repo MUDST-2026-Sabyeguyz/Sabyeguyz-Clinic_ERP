@@ -681,7 +681,7 @@ onMounted(async () => {
 }
 .tier-drawer h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 1.65rem;
 }
 .tier-drawer header p {

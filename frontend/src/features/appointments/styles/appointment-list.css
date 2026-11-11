@@ -13,7 +13,7 @@ body .appointment-page .appointment-page-choices {
 }
 body .appointment-page .appointment-page-caption {
   font-size: 14px;
-  color: #56665d;
+  color: var(--color-muted);
 }
 body .appointment-page .appointment-page-numbers {
   display: flex;
@@ -26,7 +26,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-page-
   padding: 8px;
   border: 1px solid #cbd8d3;
   border-radius: 8px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: #fff;
   font: inherit;
   font-size: 15px;
@@ -35,8 +35,8 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-page-numbers
   button[aria-current='page'] {
-  background: #145c59;
-  border-color: #145c59;
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
   color: #fff;
 }
 @media (max-width: 700px) {
@@ -49,14 +49,14 @@ body .appointment-page .appointment-list-feedback {
   margin: 0;
   padding: 48px 24px;
   text-align: center;
-  color: #56665d;
+  color: var(--color-muted);
   line-height: 1.5;
   font-size: 16px;
 }
 body .appointment-page .appointment-list-notice {
   margin: 0;
   padding: 12px 24px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   text-align: right;
 }
 body .appointment-page .appointment-table-scroll:not(:has(table)) {
@@ -112,7 +112,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   > h1 {
   font-size: 32px;
   font-weight: 800;
-  color: #145c59;
+  color: var(--color-primary-strong);
   line-height: 1.4;
   letter-spacing: normal;
 }
@@ -132,7 +132,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-reschedule-modal
   :is(.reschedule-date-field, .reschedule-time-field) {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 700;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -140,8 +140,8 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-reschedule-modal
   .reschedule-date-field
   .date-trigger {
-  border-color: #145c59;
-  color: #145c59;
+  border-color: var(--color-primary-strong);
+  color: var(--color-primary-strong);
   font-size: 17px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -163,7 +163,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   min-height: 48px;
   font-size: 16px;
   font-weight: 700;
-  background: #145c59;
+  background: var(--color-primary-strong);
   color: #fff;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -213,7 +213,7 @@ body
 body .appointment-page .appointment-register {
   display: inline-block;
   padding: 8px 0;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -223,7 +223,7 @@ body .appointment-page .appointment-cancel-reason {
   max-width: 220px;
   white-space: normal;
   overflow-wrap: anywhere;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 13px;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -239,7 +239,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-patient-hn {
   display: block;
   margin-top: 4px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 13px;
   font-weight: 400;
   line-height: 1.5;
@@ -264,7 +264,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page:not(.appointment-form-open) {
   background: var(--ui-workspace-background);
-  color: #25372e;
+  color: var(--color-ink);
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page:not(.appointment-form-open)
@@ -289,7 +289,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   margin: 0;
   font-size: clamp(28px, 2.4vw, 36px);
   line-height: 1.35;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 800;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -298,7 +298,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   p {
   grid-column: 1;
   margin: 8px 0 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -380,7 +380,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-list-mode-toggle
   button.active {
-  background: #145c59;
+  background: var(--color-primary-strong);
   color: #fff;
   box-shadow: none;
 }
@@ -396,7 +396,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   margin: 0;
   padding: 0;
   background: transparent;
-  color: #56665d;
+  color: var(--color-muted);
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
@@ -411,7 +411,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-list-filters
   .appointment-date-range
   > span {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-today,
@@ -420,7 +420,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-retry
   padding: 8px 14px;
   border: 1px solid #8fb5ae;
   border-radius: 8px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: #fff;
   font: inherit;
   font-size: 14px;
@@ -438,7 +438,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-list-
   gap: 12px;
   flex-wrap: wrap;
   padding: 14px 24px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-list-summary p {
@@ -448,13 +448,13 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-list-summary
   .appointment-summary-date {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 18px;
   font-weight: 700;
   line-height: 1.5;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-summary-count {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -467,7 +467,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   td:nth-child(2) {
   font-size: 16px;
   font-weight: 700;
-  color: #145c59;
+  color: var(--color-primary-strong);
   white-space: nowrap;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -477,7 +477,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   width: 100%;
   min-width: 1200px;
   table-layout: fixed;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
   border: 0;
@@ -576,7 +576,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .staff-table
   .appointment-loading-cell {
   padding: 56px 24px;
-  color: #56665d;
+  color: var(--color-muted);
   text-align: center;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -608,19 +608,19 @@ body:is(.therapist-ui, :not(.therapist-ui))
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page button:focus-visible,
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page a:focus-visible,
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page input:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page select:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-today[aria-pressed='true'] {
   background: #edf5f1;
-  border-color: #145c59;
-  color: #145c59;
+  border-color: var(--color-primary-strong);
+  color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
@@ -635,7 +635,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   td.appointment-empty {
   padding: 48px 24px;
   background: #fff;
-  color: #56665d;
+  color: var(--color-muted);
   text-align: center;
   font-size: 16px;
   font-weight: 400;
@@ -798,7 +798,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-sort 
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-size: 16px;
   font-weight: 600;
@@ -963,7 +963,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-sort 
 body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page .appointment-row-notice {
   display: block;
   margin-top: 8px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   line-height: 1.5;
 }

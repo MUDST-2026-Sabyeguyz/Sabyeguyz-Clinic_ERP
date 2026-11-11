@@ -288,15 +288,11 @@ async function decide(row: ExtensionRow, decision: 'approve' | 'reject') {
 .request-search { display: grid; gap: 8px; margin: 0 0 20px; font-size: 14px; font-weight: 600; }
 .request-search input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid #b7cecc; border-radius: 8px; background: #fff; font: inherit; }
 .request-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
-.course-extensions-page {
-  min-height: 100vh;
-  background: radial-gradient(ellipse at top left, #e6f2ed 0, transparent 34rem), #f7f3ec;
-  color: #23382f;
-}
-main { width: min(1440px, calc(100% - 48px)); margin: 0 auto; padding: 32px 0 56px; }
-a { color: #145c59; font-weight: 600; text-decoration: none; }
-.page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin: 20px 0 24px; }
-h1 { margin: 0 0 6px; color: #145c59; font-size: clamp(26px, 4vw, 34px); }
+.course-extensions-page { min-height: 100vh; background: #f4f7f5; color: #23382f; }
+main { width: min(1000px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 56px; }
+a { color: var(--color-primary-strong); font-weight: 600; text-decoration: none; }
+.page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin: 28px 0; }
+h1 { margin: 0 0 8px; color: var(--color-primary-strong); }
 .page-heading p { margin: 0; color: #52665e; }
 .status-filter { width: min(100%, 220px); display: grid; gap: 6px; }
 .request-filter-actions { display: flex; align-items: flex-end; flex-wrap: nowrap; gap: 10px; flex: 0 0 auto; }
@@ -322,11 +318,12 @@ dt { color: #65766e; font-size: 13px; }
 dd { margin: 4px 0 0; font-weight: 600; }
 .decision-note { display: grid; gap: 8px; margin: 18px 0 14px; }
 footer { justify-content: flex-end; flex-wrap: wrap; }
-button { min-height: 44px; padding: 8px 18px; border: 1px solid #b7cecc; border-radius: 8px; background: white; color: #145c59; cursor: pointer; font-weight: 600; }
-button.approve { border-color: #187d78; background: #187d78; color: white; }
-button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid #187d78; outline-offset: 2px; }
+button { min-height: 44px; padding: 8px 18px; border: 1px solid #b7cecc; border-radius: 8px; background: white; color: var(--color-primary-strong); cursor: pointer; font-weight: 600; }
+button.approve { border-color: var(--color-primary-strong); background: var(--color-primary-strong); color: white; }
+button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--color-primary-strong); outline-offset: 2px; }
 button:disabled { opacity: .6; cursor: not-allowed; }
 .error { color: #b42318; }
+.notice { color: var(--color-primary-strong); font-weight: 600; }
 .empty-state { text-align: center; }
 .empty-state h2 { margin: 0 0 12px; font-size: 20px; }
 @media (max-width: 640px) {

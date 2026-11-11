@@ -14,7 +14,7 @@
   display: flex;
   align-items: center;
   padding: 4px 28px;
-  background: linear-gradient(90deg, #166361, #1e807c);
+  background: linear-gradient(90deg, #166361, var(--color-primary));
 }
 .clinic-header img {
   width: 228px;
@@ -152,7 +152,7 @@ fieldset {
   cursor: pointer;
 }
 .patient-type label.selected {
-  border: 2px solid #1e807c;
+  border: 2px solid var(--color-primary);
   background: #e8f3f0;
 }
 .patient-type input {
@@ -160,7 +160,7 @@ fieldset {
   min-height: 18px;
   margin: 0;
   padding: 0;
-  accent-color: #1e807c;
+  accent-color: var(--color-primary);
   box-shadow: none;
 }
 .duplicate-modal {
@@ -264,13 +264,13 @@ fieldset {
   font-weight: 500;
 }
 .duplicate-modal .registration-modal-actions .secondary {
-  border-color: #1e807c;
+  border-color: var(--color-primary);
   background: #fff;
-  color: #25372e;
+  color: var(--color-ink);
 }
 .duplicate-modal .registration-modal-actions .primary {
-  border-color: #1e807c;
-  background: #1e807c;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
   color: #fff;
 }
 input:disabled {
@@ -504,7 +504,7 @@ fieldset {
   cursor: pointer;
 }
 .primary {
-  background: #1e807c;
+  background: var(--color-primary);
   box-shadow: 0 6px 15px rgb(22 100 96 / 18%);
 }
 .primary:hover:not(:disabled) {
@@ -618,13 +618,13 @@ fieldset {
   line-height: 16px;
 }
 .confirmation-modal .registration-modal-actions .secondary {
-  border-color: #1e807c;
+  border-color: var(--color-primary);
   background: #faf6f0;
   color: #1f2937;
 }
 .confirmation-modal .registration-modal-actions .primary {
   border-color: transparent;
-  background: #1e807c;
+  background: var(--color-primary);
   color: #fff;
   box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
 }
@@ -850,13 +850,13 @@ fieldset {
   font-weight: 700;
 }
 .success-actions .secondary {
-  border-color: #1e807c;
+  border-color: var(--color-primary);
   color: #176c68;
   background: #fff;
 }
 .success-actions .primary {
-  border-color: #1e807c;
-  background: #1e807c;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
   color: #fff;
 }
 
