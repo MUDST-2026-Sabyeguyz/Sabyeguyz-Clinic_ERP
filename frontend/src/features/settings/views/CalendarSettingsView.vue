@@ -798,7 +798,7 @@ onMounted(load)
   border: 1px solid #cbdcd7;
   border-radius: 16px;
   padding: 30px 32px;
-  color: #25372e;
+  color: var(--color-ink);
   transform: translate(-50%, -50%);
 }
 .disconnect-dialog::backdrop {
@@ -1051,7 +1051,7 @@ button:disabled {
   padding: 12px 14px;
   border-radius: 10px;
   background: #edf8f2;
-  color: #1e807c;
+  color: var(--color-primary);
 }
 .calendar-error {
   margin: 18px 0 0;

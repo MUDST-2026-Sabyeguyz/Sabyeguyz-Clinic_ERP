@@ -72,6 +72,7 @@ const {
             :options="sortOptions"
           />
         </header>
+        <div class="directory-card">
         <div class="directory-results">
           <h2>รายชื่อผู้ป่วย</h2>
           <span v-if="!loading && !errorMessage" class="result-count" aria-live="polite"
@@ -156,6 +157,7 @@ const {
             ถัดไป →
           </button>
         </nav>
+        </div>
       </section>
     </main>
     <Teleport to="body">
@@ -173,6 +175,6 @@ const {
 </template>
 
 <style scoped src="../styles/patients.css"></style>
-<style src="../styles/therapist.css"></style>
+<style src="../styles/patient-workspace.css"></style>
 
 <style src="../styles/patient-directory.css"></style>

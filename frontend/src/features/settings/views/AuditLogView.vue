@@ -316,7 +316,7 @@ onMounted(async () => {
 @import '../../staff/styles/staff.css';
 .audit-page {
   min-height: 100vh;
-  color: #25372e;
+  color: var(--color-ink);
   background: #f8f4ed;
 }
 .audit-main {
@@ -325,7 +325,7 @@ onMounted(async () => {
   padding: 28px 0 80px;
 }
 .audit-back {
-  color: #1e807c;
+  color: var(--color-primary);
   font-weight: 600;
   text-decoration: none;
 }
@@ -381,11 +381,11 @@ onMounted(async () => {
 .audit-primary {
   border: 0;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .audit-secondary {
-  border: 2px solid #1e807c;
-  color: #1e807c;
+  border: 2px solid var(--color-primary);
+  color: var(--color-primary);
   background: #fff;
 }
 .audit-secondary:disabled {
@@ -449,7 +449,7 @@ onMounted(async () => {
   padding: 0;
   border: 0;
   background: none;
-  color: #1e807c;
+  color: var(--color-primary);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
