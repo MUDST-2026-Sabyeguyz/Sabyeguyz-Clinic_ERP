@@ -15,10 +15,16 @@ describe('CourseActionView course manager accessibility', () => {
     expect(viewSource).toContain('@keydown="handleCourseStatusTabKeydown"')
   })
 
-  it('gives the post-use success overlay dialog semantics', () => {
+  it('labels the post-use success summary as a page region', () => {
+    expect(viewSource).toContain('role="region"')
+    expect(viewSource).toContain('aria-labelledby="after-use-success-title"')
+    expect(viewSource).toContain('<h1 id="after-use-success-title">')
+  })
+
+  it('gives the confirmation dialogs modal semantics and focus handling', () => {
     expect(viewSource).toContain('role="dialog"')
     expect(viewSource).toContain('aria-modal="true"')
-    expect(viewSource).toContain('v-modal-focus="{ close: returnToCourseManager }"')
+    expect(viewSource).toContain('v-modal-focus="{ close: () => (usageConfirmDialog = false)')
   })
 
   it('does not calculate a progress width from a zero total', () => {
