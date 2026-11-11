@@ -490,7 +490,6 @@ function confirmClose() {
   place-items: center;
   padding: 20px;
   background: #28332d88;
-  backdrop-filter: blur(2px);
 }
 .confirm-modal {
   width: min(420px, 100%);
