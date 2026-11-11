@@ -76,6 +76,12 @@ const router = createRouter({
       meta: { permission: 'Patient' },
     },
     {
+      path: '/staff/patients/:patientId/course-payments',
+      name: 'patient-course-payments',
+      component: () => import('@/features/courses/views/CoursePaymentCollectionView.vue'),
+      meta: { permission: 'Treatment' },
+    },
+    {
       path: '/staff/patients/:id',
       name: 'patient-profile',
       component: roleView(
@@ -168,6 +174,12 @@ const router = createRouter({
       name: 'staff-receipt',
       component: () => import('@/features/transactions/views/ReceiptView.vue'),
       meta: { permission: 'Transaction' },
+    },
+    {
+      path: '/staff/course-payment-receipts/:id',
+      name: 'staff-course-payment-receipt',
+      component: () => import('@/features/transactions/views/CoursePaymentReceiptView.vue'),
+      meta: { permission: 'Treatment' },
     },
     {
       path: '/staff/course-prints/:courseId',

@@ -94,7 +94,8 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
                 String appointmentId = item.path("extendedProperties").path("private").path("appointmentId").asText("");
                 Long id = appointmentId.matches("\\d+") ? Long.valueOf(appointmentId) : null;
                 events.add(new RemoteEvent(item.path("id").asText(), item.path("etag").asText(),
-                        "cancelled".equals(item.path("status").asText()), start(item.path("start"), zone), id));
+                        "cancelled".equals(item.path("status").asText()), start(item.path("start"), zone), id,
+                        start(item.path("end"), zone), item.has("description") ? item.path("description").asText("") : ""));
             }
             pageToken = page.hasNonNull("nextPageToken") ? page.get("nextPageToken").asText() : null;
         } while (pageToken != null);
@@ -119,9 +120,19 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
                 if (privateProperties.hasNonNull("appointmentId") || "clinic-erp".equals(privateProperties.path("source").asText())) {
                     continue; // written by this system: it is an appointment already
                 }
+                // AC 037.01: scope must be explicit, never inferred from an event title.
+                String scope = privateProperties.path("busyScope").asText("");
+                Long therapistId = null;
+                if ("therapist".equals(scope)) {
+                    String id = privateProperties.path("staffId").asText("");
+                    if (!id.matches("[1-9][0-9]*")) continue;
+                    try { therapistId = Long.valueOf(id); } catch (NumberFormatException invalid) { continue; }
+                } else if (!"branch".equals(scope)) {
+                    continue;
+                }
                 LocalDateTime start = boundary(item.path("start"), zone);
                 LocalDateTime end = boundary(item.path("end"), zone);
-                if (start != null && end != null && end.isAfter(start)) blocks.add(new BusyBlock(start, end));
+                if (start != null && end != null && end.isAfter(start)) blocks.add(new BusyBlock(start, end, therapistId));
             }
             pageToken = page.hasNonNull("nextPageToken") ? page.get("nextPageToken").asText() : null;
         } while (pageToken != null);

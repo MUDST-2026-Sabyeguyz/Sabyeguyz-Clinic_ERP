@@ -78,9 +78,9 @@ public class RefundController {
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
         var permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         RefundTransaction refund = refundService.request(payment, request.amount(), method, permission,
+                request.reasonCode() == null ? ReasonCode.Other : request.reasonCode(),
                 request.reason().trim(), actor.currentId(), request.items());
         ReasonCode reasonCode = request.reasonCode() == null ? ReasonCode.Other : request.reasonCode();
-        refund.getCancellation().setReasonCode(reasonCode);
         audit.recordChange("refund_transaction", String.valueOf(refund.getId()), AuditAction.INSERT, null,
                 com.sabyeguyz.clinicv2.audit.AuditLogService.fields(
                         "status", "Pending", "amount", request.amount(), "payment_id", paymentId,

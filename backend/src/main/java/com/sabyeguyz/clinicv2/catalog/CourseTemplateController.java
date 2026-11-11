@@ -52,10 +52,9 @@ public class CourseTemplateController {
         }
 
         Integer duration() {
-            // 0 is how a response says "no length of its own", so a client that sends a response back means none
-            if (defaultDurationMinutes == null || defaultDurationMinutes == 0) return null;
-            if (defaultDurationMinutes < 5 || defaultDurationMinutes > 480) {
-                throw new IllegalArgumentException("ระยะเวลานัดต้องอยู่ระหว่าง 5 ถึง 480 นาที");
+            if (defaultDurationMinutes == null) return null;
+            if (defaultDurationMinutes < 1) {
+                throw new IllegalArgumentException("ระยะเวลานัดต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที");
             }
             return defaultDurationMinutes;
         }

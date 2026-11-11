@@ -192,6 +192,28 @@ describe('checkout main payload', () => {
     expect(request.payments[0].amount).toBe(2000)
     view.unmount()
   })
+  it('submits multiple service and course lines with one bill discount and one combined payment', async () => {
+    const { view, state } = await render()
+    state.lines = [
+      { key: 'service', category: 'service', catalogKey: 'service:7', quantity: 2, discountType: 'NONE', discountValue: 0 },
+      { key: 'course', category: 'course', catalogKey: 'course:12', quantity: 1, discountType: 'NONE', discountValue: 0 },
+    ]
+    state.billDiscountType = 'FIXED'
+    state.billDiscountValue = 100
+    await state.save()
+    const request = mock.create.mock.calls[0]![0]
+    expect(request.items).toEqual([
+      { type: 'SERVICE', referenceId: 7, quantity: 2 },
+      { type: 'COURSE', referenceId: 12, quantity: 1 },
+    ])
+    expect(request.billDiscountType).toBe('FIXED')
+    expect(request.billDiscountValue).toBe(100)
+    expect(request.payments).toEqual([{ paymentMethodCode: 'BankTransfer', amount: 2500 }])
+    expect(request.appointmentId).toBe(55)
+    expect(request.treatingStaffId).toBe(4)
+    expect(view.text()).toContain('บันทึกการขายสำเร็จ')
+    view.unmount()
+  })
   it('uses appointment branch and independently chosen treating staff', async () => {
     const { view, state } = await render()
     await state.save()

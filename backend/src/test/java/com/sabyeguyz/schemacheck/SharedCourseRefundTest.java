@@ -292,6 +292,8 @@ class SharedCourseRefundTest {
     }
     private static void sharedHolders() {
         rollback(() -> {
+            db.update("update refund_transaction set refund_status='Voided' where refund_status='Pending'");
+            em().clear();
             Long purchaser = db.queryForObject("select purchaser_patient_id from course where course_id=?", Long.class, courseId);
             Long other = db.queryForObject("select patient_id from patient where patient_id<>? order by patient_id limit 1",
                     Long.class, purchaser);
@@ -318,15 +320,30 @@ class SharedCourseRefundTest {
             var before = db.queryForList("select patient_id,allocated_visits,used_visits,remaining_visits from course_entitlement "
                     + "where course_id=? order by patient_id", courseId);
             em().clear();
-            Group g = group();
-            rights.cutForRefund(items.findById(g.mainItem()).orElseThrow(), actorId);
-            check(ledgerRows(g.mainItem(), "Cancellation") == 2, "shared cancellation cuts two holders");
+            var rejectedPartial = assertThrows(IllegalArgumentException.class,
+                    () -> main(courseId, paymentA, 2, "20"));
+            check(rejectedPartial.getMessage().contains("สิทธิ์"), "cannot take recipient rights for partial refund");
+            var rejectedFull = assertThrows(IllegalArgumentException.class,
+                    () -> main(courseId, paymentA, total, "20"));
+            check(rejectedFull.getMessage().contains("สิทธิ์"), "shared rights must be returned before a full refund");
+            CourseRefundItem main = main(courseId,paymentA,1,"20");
+            RefundTransaction related = request(paymentB,List.of(new RefundService.ItemRequest(courseId,amount("20"),null,main.getId())));
+            em().flush();
+            Group g = new Group(main.getRefund().getId(),related.getId(),main.getId(),items.findByRefundIdOrderByIdAsc(related.getId()).get(0).getId());
+            rights.cutForRefund(main, actorId);
+            check(ledgerRows(g.mainItem(), "Cancellation") == 1, "refund cancellation cuts purchaser only");
+            check(db.queryForObject("select remaining_visits from course_entitlement where course_id=? and patient_id=?",
+                    Integer.class,courseId,other) == total-1, "recipient rights remain unchanged");
+            check(db.queryForObject("select patient_id from course_ledger where course_refund_item_id=? and entry_type='Cancellation'",
+                    Long.class,main.getId()).equals(purchaser), "cancellation belongs to original purchaser");
+            check(db.queryForObject("select visits_used from course where course_id=?",Integer.class,courseId)==0,
+                    "cancellation does not create a treatment");
             refunds.voidRequest(g.mainRefund(), actorId); refunds.voidRequest(g.relatedRefund(), actorId);
             em().flush();
             check(before.equals(db.queryForList("select patient_id,allocated_visits,used_visits,remaining_visits "
                     + "from course_entitlement where course_id=? order by patient_id", courseId)),
                     "reversal restores each original holder");
-            check(ledgerRows(g.mainItem(), "Reversal") == 2, "shared reversal restores every original ledger row");
+            check(ledgerRows(g.mainItem(), "Reversal") == 1, "refund reversal restores purchaser cancellation once");
             check(remaining(courseId) == total, "shared course total restored");
         });
     }
@@ -384,7 +401,7 @@ class SharedCourseRefundTest {
     static void startApplication() {
         String[] locations = {"classpath:db/migration", "classpath:db/seed_v2"};
         Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-                .locations(locations).outOfOrder(true).target("1021").load().migrate();
+                .locations(locations).outOfOrder(true).target("1023").load().migrate();
         DriverManagerDataSource source = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         JdbcTemplate beforeUpgrade = new JdbcTemplate(source);
@@ -471,7 +488,7 @@ class SharedCourseRefundTest {
     }
 
     @Test
-    void reversalsRestoreEveryOriginalHolder() {
+    void refundsCutAndRestoreOnlyPurchaserWithoutTakingSharedRecipientRights() {
         sharedHolders();
     }
 

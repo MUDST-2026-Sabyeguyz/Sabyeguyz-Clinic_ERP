@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { salesApi, courseApi } from '@/api/client'
+import { salesApi, courseApi, type CancellationReasonCode } from '@/api/client'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -30,7 +30,11 @@ type Transaction = {
   voidReason?: string
 }
 
-type VoidTransactionCommand = { key: string; reason: string }
+type VoidTransactionCommand = {
+  key: string
+  reasonCode: CancellationReasonCode
+  reason: string
+}
 interface TransactionRepository {
   list(): Promise<Transaction[]>
   void(command: VoidTransactionCommand): Promise<Transaction>
@@ -66,14 +70,14 @@ const transactionRepository: TransactionRepository = {
         movementId: row.id,
         courseId: row.coursePurchaseId,
         kind: 'usage',
-        id: row.id ?? 0,
+        id: row.id,
         number: String(row.id),
-        date: row.usedAt,
-        patient: row.patientName,
-        hn: row.patientHn,
+        date: row.visitDate,
+        patient: row.usingPatientName,
+        hn: row.usingPatientHn,
         item: row.courseName,
         branchCode: row.branchCode,
-        quantity: '1 ครั้ง',
+        quantity: `${row.quantity} ครั้ง`,
         status: row.voidedAt ? 'ยกเลิก (Void)' : 'ปกติ',
         performedBy: row.therapistName || '—',
         paymentMethod: '—',
@@ -89,7 +93,10 @@ const transactionRepository: TransactionRepository = {
     if (row.kind === 'usage') {
       if (row.movementId == null)
         throw new Error('รายการนี้ไม่มี ledger อ้างอิง กรุณาให้ผู้ดูแลตรวจสอบ')
-      await courseApi.reverse(row.movementId, command.reason)
+      await courseApi.reverse(row.movementId, {
+        reasonCode: command.reasonCode,
+        reason: command.reason,
+      })
       const saved = (await courseApi.usageTransactions()).find((item) => item.id === row.movementId)
       if (!saved?.voidedAt)
         throw new Error('ส่งคำขอยกเลิกแล้ว แต่ยังยืนยันผลไม่ได้ กรุณาโหลดรายการใหม่ก่อนทำซ้ำ')
@@ -100,7 +107,10 @@ const transactionRepository: TransactionRepository = {
         voidReason: saved.voidReason || undefined,
       }
     }
-    const saved = await salesApi.reverse(row.id, command.reason)
+    const saved = await salesApi.reverse(row.id, {
+      reasonCode: command.reasonCode,
+      reason: command.reason,
+    })
     return {
       ...row,
       status: 'ยกเลิก (Void)',
@@ -132,8 +142,15 @@ const showCancellationInfo = ref(false)
 const cancelWarningBackButton = ref<HTMLButtonElement | null>(null)
 const errorMessage = ref('')
 const loadError = ref('')
-const reasonType = ref('')
+const reasonType = ref<CancellationReasonCode | ''>('')
 const otherReason = ref('')
+const reasonOptions: Array<{ code: CancellationReasonCode; label: string }> = [
+  { code: 'WrongEntryOrService', label: 'ลงรายการหรือเลือกบริการผิด' },
+  { code: 'DuplicateEntry', label: 'บันทึกรายการซ้ำ' },
+  { code: 'PatientRequested', label: 'ผู้ป่วยขอยกเลิกรายการ' },
+  { code: 'PaymentFailedOrIncorrectAmount', label: 'การชำระเงินไม่สำเร็จหรือยอดไม่ถูกต้อง' },
+  { code: 'Other', label: 'อื่น ๆ' },
+]
 const lastCancelledKey = ref('')
 const showPostCancellationNotice = ref(false)
 let postCancellationNoticeTimer: ReturnType<typeof setTimeout> | undefined
@@ -281,12 +298,11 @@ const totalPages = computed(() => Math.max(1, Math.ceil(visibleRows.value.length
 const pagedRows = computed(() =>
   visibleRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value),
 )
-const reason = computed(() =>
-  reasonType.value === 'อื่น ๆ' ? otherReason.value.trim() : reasonType.value,
+const reason = computed(() => otherReason.value.trim())
+const reasonLabel = computed(
+  () => reasonOptions.find((option) => option.code === reasonType.value)?.label ?? '',
 )
-const canReview = computed(() =>
-  reasonType.value === 'อื่น ๆ' ? Boolean(otherReason.value.trim()) : Boolean(reasonType.value),
-)
+const canReview = computed(() => Boolean(reasonType.value && reason.value))
 watch([tab, search, statusFilter, startDate, endDate], () => {
   page.value = 1
 })
@@ -342,6 +358,7 @@ async function confirmCancellation() {
   try {
     const updated = await transactionRepository.void({
       key: row.key,
+      reasonCode: reasonType.value as CancellationReasonCode,
       reason: reason.value,
     })
     Object.assign(row, updated)
@@ -815,27 +832,23 @@ function backToList(next: Tab = tab.value) {
                 aria-label="เลือกเหตุผลการยกเลิก"
               >
                 <label
-                  v-for="option in [
-                    'ลงรายการหรือเลือกบริการผิด',
-                    'บันทึกรายการซ้ำ',
-                    'ผู้ป่วยขอยกเลิกรายการ',
-                    'การชำระเงินไม่สำเร็จหรือยอดไม่ถูกต้อง',
-                    'อื่น ๆ',
-                  ]"
-                  :key="option"
+                  v-for="option in reasonOptions"
+                  :key="option.code"
                   class="transaction-reason-option"
-                  :class="{ selected: reasonType === option }"
+                  :class="{ selected: reasonType === option.code }"
                 >
-                  <input v-model="reasonType" type="radio" name="void-reason" :value="option" />
-                  <span>{{ option }}</span>
+                  <input v-model="reasonType" type="radio" name="void-reason" :value="option.code" />
+                  <span>{{ option.label }}</span>
                 </label>
               </div>
-              <div v-if="reasonType === 'อื่น ๆ'" class="transaction-other-reason">
+              <div class="transaction-other-reason">
                 <label for="transaction-other-reason">รายละเอียดเหตุผล *</label>
                 <textarea
                   id="transaction-other-reason"
                   v-model="otherReason"
                   rows="3"
+                  required
+                  maxlength="255"
                   placeholder="กรุณาระบุรายละเอียดเพื่อให้ตรวจสอบย้อนหลังได้"
                 />
               </div>
@@ -994,7 +1007,7 @@ function backToList(next: Tab = tab.value) {
           </div>
           <div>
             <dt>เหตุผล</dt>
-            <dd>{{ reason }}</dd>
+            <dd>{{ reasonLabel }} — {{ reason }}</dd>
           </div>
         </dl>
         <div class="transaction-actions">

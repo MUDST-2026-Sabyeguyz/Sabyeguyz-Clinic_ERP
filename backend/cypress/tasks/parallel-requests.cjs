@@ -1,6 +1,8 @@
 // cy.request commands are queued serially. Start independent Node HTTP requests
 // together so each request reaches its own Spring transaction while peers run.
 module.exports = async function parallelRequests({ token, requests }) {
+  const testPort = Number(process.env.CLINIC_V2_TEST_PORT || 18080)
+  if (![18080, 18082].includes(testPort)) throw new Error('Only isolated test ports are supported')
   if (!Array.isArray(requests) || requests.length !== 2) throw new Error('A race requires exactly two requests')
   for (const request of requests) {
     const allowedUrl =
@@ -16,7 +18,7 @@ module.exports = async function parallelRequests({ token, requests }) {
   const start = new Promise((resolve) => { release = resolve })
   const jobs = requests.map(async ({ method, url, body }) => {
     await start
-    const response = await fetch(`http://127.0.0.1:18080${url}`, {
+    const response = await fetch(`http://127.0.0.1:${testPort}${url}`, {
       method,
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),

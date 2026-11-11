@@ -80,7 +80,9 @@ public class CourseRightsService {
         int reserved = refundItems.pendingCancelledVisitsOfCourse(locked.course().getId());
         boolean groupPending = refundItems.findGroupRefundStatuses(main.getId())
                 .contains(com.sabyeguyz.clinicv2.enums.RefundStatus.Pending);
-        long available = (long) locked.course().getRemainingVisits() - reserved
+        long ownerBalance = ledger.sumQtyChangeByCourseAndPatient(locked.course().getId(),
+                locked.course().getPurchaserPatient().getId());
+        long available = Math.min(locked.course().getRemainingVisits(), ownerBalance) - reserved
                 + (groupPending ? count : 0);
         require(count <= available, "สิทธิ์คงเหลือหลังหักสิทธิ์ที่จองไว้ไม่พอสำหรับการยกเลิก");
     }
@@ -190,6 +192,15 @@ public class CourseRightsService {
         }
         List<CourseEntitlement> holders = entitlements.findByCourseId(course.getId());
         Long purchaserId = course.getPurchaserPatient().getId();
+        if (item != null) {
+            // A refund cancels only the original purchaser's unused rights. Shared recipients must return rights
+            // by a separate transfer before the purchaser can request cancellation of those rights.
+            holders = holders.stream().filter(holder -> holder.getPatient().getId().equals(purchaserId))
+                    .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+            holders.forEach(holder -> entityManager.refresh(holder, LockModeType.PESSIMISTIC_WRITE));
+            require(holders.stream().mapToLong(CourseEntitlement::getRemainingVisits).sum() >= count,
+                    "สิทธิ์คงเหลือของผู้ซื้อเดิมไม่พอ ต้องโอนสิทธิ์จากผู้รับแชร์กลับก่อน");
+        }
         holders.sort(Comparator.comparing((CourseEntitlement e) -> !e.getPatient().getId().equals(purchaserId))
                 .thenComparing(e -> e.getPatient().getId()));
         int left = count;

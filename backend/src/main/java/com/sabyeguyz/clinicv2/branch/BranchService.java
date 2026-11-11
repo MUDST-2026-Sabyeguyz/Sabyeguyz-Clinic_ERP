@@ -90,8 +90,8 @@ public class BranchService {
             throw new IllegalArgumentException("เวลาเริ่มรับนัดต้องอยู่ก่อนเวลาสิ้นสุด");
         }
         Integer minutes = settings.defaultAppointmentMinutes();
-        if (minutes != null && (minutes < 5 || minutes > 480)) {
-            throw new IllegalArgumentException("ระยะเวลานัดเริ่มต้นต้องอยู่ระหว่าง 5 ถึง 480 นาที");
+        if (minutes != null && minutes < 1) {
+            throw new IllegalArgumentException("ระยะเวลานัดเริ่มต้นต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที");
         }
         String license = blankToNull(settings.licenseNo());
         if (license != null && license.length() > 50) {

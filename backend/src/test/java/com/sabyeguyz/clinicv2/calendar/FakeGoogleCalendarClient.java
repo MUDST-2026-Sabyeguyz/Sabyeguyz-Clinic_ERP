@@ -79,7 +79,11 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
 
     /** A person adds a Busy event by hand in Google. */
     public synchronized void addBusy(String calendarId, LocalDateTime start, LocalDateTime end) {
-        busy.computeIfAbsent(calendarId, key -> new ArrayList<>()).add(new BusyBlock(start, end));
+        addBusy(calendarId, start, end, null);
+    }
+
+    public synchronized void addBusy(String calendarId, LocalDateTime start, LocalDateTime end, Long therapistId) {
+        busy.computeIfAbsent(calendarId, key -> new ArrayList<>()).add(new BusyBlock(start, end, therapistId));
     }
 
     @Override
@@ -141,7 +145,8 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
         List<RemoteEvent> changed = new ArrayList<>();
         for (FakeEvent event : calendars.getOrDefault(calendarId, Map.of()).values()) {
             if (!event.updated.isBefore(updatedMin)) {
-                changed.add(new RemoteEvent(event.id, event.etag, event.cancelled, event.start, event.appointmentId));
+                changed.add(new RemoteEvent(event.id, event.etag, event.cancelled, event.start, event.appointmentId,
+                        event.end, event.description));
             }
         }
         return changed;

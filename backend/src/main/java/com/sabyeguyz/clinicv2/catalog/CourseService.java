@@ -109,7 +109,18 @@ public class CourseService {
                 sellerStaff.getId());
 
         long existingOnReceipt = courses.countByReceiptId(receipt.getId());
+        require(existingOnReceipt < 99, "ซื้อคอร์สใหม่ได้ไม่เกิน 99 ชุดต่อใบเสร็จ");
         int courseSequence = (int) existingOnReceipt + 1;
+        if (courseSequence == 2) {
+            // Once a receipt contains multiple sets, every new course gets its
+            // two-digit suffix, including the first set created in this sale.
+            for (Course existing : courses.findByReceiptIdOrderByCourseSequenceAsc(receipt.getId())) {
+                if (existing.getCourseSequence() == 1 && existing.getCourseNo().equals(receipt.getReceiptNo())) {
+                    existing.setCourseNo(receipt.getReceiptNo() + "-01");
+                    courses.save(existing);
+                }
+            }
+        }
         String courseNo = courseSequence == 1 ? receipt.getReceiptNo()
                 : "%s-%02d".formatted(receipt.getReceiptNo(), courseSequence);
 

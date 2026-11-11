@@ -18,9 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/__cypress/calendar")
 @PreAuthorize("hasRole('MANAGER')")
 public class CypressCalendarFakeController {
-    public record EditRequest(String calendarId, Long appointmentId, String start, boolean cancel) {}
+    public record EditRequest(String calendarId, Long appointmentId, String start, boolean cancel, String end, String description) {}
 
-    public record BusyRequest(String calendarId, String start, String end) {}
+    public record BusyRequest(String calendarId, String start, String end, Long therapistId) {}
 
     private final FakeGoogleCalendarClient fake;
 
@@ -40,13 +40,15 @@ public class CypressCalendarFakeController {
     public Map<String, Object> edit(@RequestBody EditRequest request) {
         FakeGoogleCalendarClient.FakeEvent event = fake.edit(request.calendarId(), request.appointmentId(),
                 request.start() == null ? null : LocalDateTime.parse(request.start()), request.cancel());
+        if (request.end() != null) event.end = LocalDateTime.parse(request.end());
+        if (request.description() != null) event.description = request.description();
         return Map.of("id", event.id, "start", event.start.toString(), "cancelled", event.cancelled);
     }
 
     /** A person adds a Busy event by hand in the calendar. */
     @PostMapping("/busy")
     public Map<String, Object> busy(@RequestBody BusyRequest request) {
-        fake.addBusy(request.calendarId(), LocalDateTime.parse(request.start()), LocalDateTime.parse(request.end()));
+        fake.addBusy(request.calendarId(), LocalDateTime.parse(request.start()), LocalDateTime.parse(request.end()), request.therapistId());
         return Map.of("added", true);
     }
 

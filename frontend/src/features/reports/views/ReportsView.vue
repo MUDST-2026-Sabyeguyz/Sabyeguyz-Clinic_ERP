@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import TransactionReportView from './TransactionReportView.vue'
+import SalesPaymentReportView from './SalesPaymentReportView.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
@@ -19,8 +20,10 @@ import {
 } from '@/api/client'
 import { clinicToday } from '@/utils/clinicDate'
 import { filterPaymentReportRows } from '../lib/paymentReport'
+import { buildReportCsv } from '../lib/reportCsv'
 
 type ReportKey =
+  | 'sales'
   | 'revenue'
   | 'balance'
   | 'transfer'
@@ -51,6 +54,7 @@ type ReportData =
   | null
 
 const REPORT_KEYS: readonly ReportKey[] = [
+  'sales',
   'revenue',
   'balance',
   'transfer',
@@ -61,6 +65,7 @@ const REPORT_KEYS: readonly ReportKey[] = [
 ]
 
 const REPORTS: Array<[ReportKey, string]> = [
+  ['sales', 'รายงานยอดขาย'],
   ['revenue', 'รายรับตามวันที่รับชำระ'],
   ['balance', 'ยอดคงเหลือคอร์ส'],
   ['transfer', 'ประวัติการโอนคอร์ส'],
@@ -70,6 +75,7 @@ const REPORTS: Array<[ReportKey, string]> = [
 ]
 
 const TABLE_HEADERS: Record<ReportKey, string[]> = {
+  sales: [],
   revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระสุทธิ', 'สัดส่วน'],
   balance: ['ผู้ป่วย', 'คอร์ส', 'สาขา', 'วันที่ซื้อ', 'ซื้อ', 'ใช้', 'โอน', 'คงเหลือ', 'หมดอายุ'],
   transfer: ['เลขที่รายการ', 'ผู้โอน', 'ผู้รับ', 'สาขา', 'คอร์ส', 'ครั้ง', 'วันที่โอน'],
@@ -120,12 +126,13 @@ function isReportKey(value: string): value is ReportKey {
 }
 
 function reportFromQuery(value: unknown): ReportKey {
-  const reportKey = String(value ?? 'revenue')
-  return isReportKey(reportKey) ? reportKey : 'revenue'
+  const reportKey = String(value ?? 'sales')
+  return isReportKey(reportKey) ? reportKey : 'sales'
 }
 
 const route = useRoute()
 const report = ref<ReportKey>(reportFromQuery(route.query.report))
+const detailReportMode = computed(() => report.value === 'sales' || report.value === 'payment' ? report.value : null)
 watch(
   () => route.query.report,
   (value) => {
@@ -170,6 +177,10 @@ const selectedHeaderBranchCode = computed(
     JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ??
     '',
 )
+const canExport = computed(
+  () => JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER',
+)
+const supportsExport = computed(() => ['revenue', 'payment', 'salesTransaction'].includes(report.value))
 
 const currentReportTitle = computed(() => {
   if (['salesTransaction', 'treatmentTransaction'].includes(report.value)) return 'Transaction'
@@ -549,7 +560,7 @@ const totalRow = computed<string[] | null>(() => {
 })
 
 async function fetchReport() {
-  if (isTransactionReport.value) return
+  if (isTransactionReport.value || report.value === 'sales' || report.value === 'payment') return
   loading.value = true
   errorMessage.value = ''
   reportData.value = null
@@ -574,10 +585,6 @@ async function fetchReport() {
       case 'treatmentTransaction':
         reportData.value = await commissionApi.treatmentReport(filters.from, filters.to)
         break
-      case 'payment': {
-        reportData.value = await reportApi.revenue(filters.from, filters.to, branchCode)
-        break
-      }
     }
     updateTimestamp()
   } catch (error) {
@@ -585,6 +592,38 @@ async function fetchReport() {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดรายงานไม่สำเร็จ'
   } finally {
     loading.value = false
+  }
+}
+
+function exportReport() {
+  if (!canExport.value || loading.value || errorMessage.value || !supportsExport.value) return
+  try {
+    const csv = buildReportCsv({
+      title: currentReportTitle.value,
+      filters: {
+        สาขา: selectedHeaderBranchCode.value || 'ทั้งหมดที่มีสิทธิ์',
+        ตั้งแต่วันที่: filters.from,
+        ถึงวันที่: filters.to,
+        ประเภทการขาย: filters.saleType,
+        การรักษา: filters.treatment,
+        พนักงาน: filters.staff,
+      },
+      exportedAt: new Intl.DateTimeFormat('th-TH', {
+        dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok',
+      }).format(new Date()),
+      headers: TABLE_HEADERS[report.value],
+      rows: tableRows.value,
+      total: totalRow.value,
+    })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `sabyeguyz-${report.value}-${clinicToday()}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (cause) {
+    errorMessage.value = cause instanceof Error ? cause.message : 'สร้างหรือดาวน์โหลดไฟล์ไม่สำเร็จ'
   }
 }
 
@@ -617,7 +656,8 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
   <div class="reports-page-wrapper">
     <StaffHeader />
 
-    <TransactionReportView v-if="isTransactionReport" />
+    <SalesPaymentReportView v-if="detailReportMode" :mode="detailReportMode" />
+    <TransactionReportView v-else-if="isTransactionReport" />
     <main v-else class="reports-page-container">
       <section class="page-title-section">
         <div class="report-title-copy">
@@ -846,6 +886,13 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
       <section class="table-card">
         <p v-if="errorMessage" class="report-error" role="alert">{{ errorMessage }}</p>
         <p v-else-if="loading" class="report-loading">กำลังโหลดรายงาน...</p>
+        <button
+          v-if="canExport && supportsExport"
+          type="button"
+          class="report-export-button"
+          :disabled="loading || Boolean(errorMessage) || tableRows.length === 0"
+          @click="exportReport"
+        >ส่งออกรายงาน CSV</button>
         <div class="table-scroll-wrapper">
           <table :class="['report-figma-table', `report-figma-table--${report}`]">
             <thead>

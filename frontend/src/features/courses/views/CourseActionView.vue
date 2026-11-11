@@ -3,6 +3,7 @@ import { clinicToday } from '@/utils/clinicDate'
 import { buildCourseUsages, type UsageSelection } from '@/features/services/careTransactions'
 import CourseUsagePicker from '../components/CourseUsagePicker.vue'
 import CourseCutDocument from '../components/CourseCutDocument.vue'
+import FrozenCourseUsagePrints from '../components/FrozenCourseUsagePrints.vue'
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -13,6 +14,7 @@ import { vModalFocus } from '@/features/appointments/modalFocus'
 import CourseRenewalDialog from '@/features/patients/components/CourseRenewalDialog.vue'
 import CourseRenewalStatus from '../components/CourseRenewalStatus.vue'
 import CourseRenewalQueueLink from '../components/CourseRenewalQueueLink.vue'
+import { findDirectPatientCourse, resolveCourseRouteIds } from '../lib/courseRoute'
 import PhoneIcon from '@/components/PhoneIcon.vue'
 import {
   branchApi,
@@ -234,6 +236,12 @@ function purchaseDate(course: UiCourse) {
   }).format(new Date(course.purchasedAt))
 }
 async function loadOwner() {
+  const routeIds = resolveCourseRouteIds(route.params, route.query)
+  owner.value = null
+  patientCourses.value = []
+  selectedCourse.value = {} as UiCourse
+  selectedCourseId.value = 0
+  errorMessage.value = ''
   const [patientList, staffList] = await Promise.all([patientApi.searchAll(), staffApi.list()])
   owners.value = patientList
   therapists.value = staffList.filter(
@@ -255,12 +263,18 @@ async function loadOwner() {
   } catch {
     branches.value = []
   }
-  const patientId = Number(route.query.patientId)
-  owner.value = owners.value.find((patient) => patient.id === patientId) ?? null
-  if (!owner.value && route.query.patientId) throw new Error('ไม่พบผู้รับบริการที่ระบุ')
-  if (owner.value) await loadCourses(owner.value.id)
+  owner.value = owners.value.find((patient) => patient.id === routeIds.patientId) ?? null
+  if (!owner.value) {
+    try {
+      owner.value = await patientApi.get(routeIds.patientId)
+      owners.value = [...owners.value, owner.value]
+    } catch {
+      throw new Error('ไม่พบผู้รับบริการที่ระบุหรือไม่มีสิทธิ์ดูข้อมูล')
+    }
+  }
+  await loadCourses(owner.value.id, routeIds.courseId, routeIds.fromPath)
 }
-async function loadCourses(patientId: number) {
+async function loadCourses(patientId: number, requestedCourseId = 0, strictCourse = false) {
   const purchases = await courseApi.patientCourses(patientId)
   const courses = purchases.map((course) => ({
     ...course,
@@ -270,13 +284,18 @@ async function loadCourses(patientId: number) {
     total: course.purchased,
   }))
   patientCourses.value = courses
-  const requestedCourseId = Number(route.query.courseId)
   const purchasedWithReceipt = patientCourses.value.filter(
     (course) => course.receiptId && course.receiptId === Number(route.query.receiptId),
   )
-  const requestedCourse =
-    patientCourses.value.find((course) => course.id === requestedCourseId) ??
-    (purchasedWithReceipt.length === 1 ? purchasedWithReceipt[0] : undefined)
+  const requestedCourse = requestedCourseId
+    ? strictCourse
+      ? findDirectPatientCourse(patientCourses.value, patientId, requestedCourseId)
+      : patientCourses.value.find((course) => course.id === requestedCourseId)
+    : purchasedWithReceipt.length === 1
+      ? purchasedWithReceipt[0]
+      : undefined
+  if (requestedCourseId && !requestedCourse)
+    throw new Error('ไม่พบคอร์สนี้ในรายการสิทธิ์ของผู้ป่วยที่ระบุ')
   selectedCourseId.value = requestedCourse?.id ?? patientCourses.value[0]?.id ?? 0
   selectedCourse.value = requestedCourse ?? patientCourses.value[0] ?? ({} as UiCourse)
   if (route.query.action === 'history') {
@@ -331,8 +350,25 @@ onMounted(async () => {
     await loadOwner()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ'
+    patientCourses.value = []
+    selectedCourse.value = {} as UiCourse
+    selectedCourseId.value = 0
   }
 })
+watch(
+  () => [route.params.patientId, route.params.courseId],
+  async ([patientId]) => {
+    if (patientId == null) return
+    try {
+      await loadOwner()
+    } catch (error) {
+      errorMessage.value = error instanceof Error ? error.message : 'โหลดคอร์สไม่สำเร็จ'
+      patientCourses.value = []
+      selectedCourse.value = {} as UiCourse
+      selectedCourseId.value = 0
+    }
+  },
+)
 async function searchRecipients() {
   const keyword = recipientSearch.value.trim()
   recipientResults.value = []
@@ -690,6 +726,7 @@ function closePrintSuccess() {
 <template>
   <div class="staff-page course-page">
     <StaffHeader />
+    <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
     <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
     <div v-else-if="processError" role="alert">
       <p>{{ processError }}</p>
@@ -1240,25 +1277,9 @@ function closePrintSuccess() {
           <button class="course-cut-back-link" type="button" @click="cancelPatientCourseDetail">
             ← กลับไปประวัติการรักษา
           </button>
-          <CourseCutDocument
-            class="course-history-document"
-            :course-name="selectedCourse.name"
-            :address="documentClinicAddress"
-            :phone="documentClinicPhone"
-            :issued-at="clinicToday()"
-            :purchased-at="selectedCourse.purchasedAt"
-            :expires-at="selectedCourse.expiresAt"
-            :total="selectedCourse.total"
-            :used="usedSessions"
-            :remaining="selectedCourse.balance"
-            :entries="usageEntries.map((entry) => ({
-              date: entry.createdAt,
-              quantity: Math.abs(entry.quantity),
-            })).reverse()"
-          />
+          <FrozenCourseUsagePrints :course-id="selectedCourse.id" />
           <footer class="course-cut-actions">
             <button type="button" @click="cancelPatientCourseDetail">ยกเลิก</button>
-            <button type="button" @click="printDialog = 'confirm'">พิมพ์เอกสาร</button>
           </footer>
         </section>
         <template v-else>
@@ -1478,6 +1499,10 @@ function closePrintSuccess() {
           <div>
             <h1>คอร์สของผู้ป่วย</h1>
             <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
+            <RouterLink
+              v-if="owner"
+              :to="{ name: 'patient-course-payments', params: { patientId: owner.id } }"
+            >รับเงินคอร์สเดิม</RouterLink>
           </div>
           <CourseRenewalQueueLink
             v-if="canReviewCourseExtensions && owner"
