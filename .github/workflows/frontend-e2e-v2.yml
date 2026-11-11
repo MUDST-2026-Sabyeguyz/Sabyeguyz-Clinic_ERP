@@ -85,7 +85,7 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress -Pcypress-v2 test-compile spring-boot:start
 
       - name: Cypress browser tests
-        uses: cypress-io/github-action@f790eee7a50d9505912f50c2095510be7de06aa7 # v6.10.9
+        uses: cypress-io/github-action@18016a55674bd02cabf197de5762a1710cb5577c # v7.4.9
         env:
           VITE_API_PROXY_TARGET: http://127.0.0.1:18080
           CYPRESS_API_URL: http://127.0.0.1:18080
