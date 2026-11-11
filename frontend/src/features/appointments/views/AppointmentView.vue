@@ -1482,7 +1482,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             <p v-if="availabilityLoading" class="appointment-time-help" aria-live="polite">
               กำลังตรวจสอบเวลาว่าง...
             </p>
-            <p v-else-if="availabilityError" class="appointment-time-help" role="alert">
+            <p v-else-if="availabilityError && !availabilityError.startsWith('สาขายังไม่ได้ตั้งเวลาเปิด')" class="appointment-time-help" role="alert">
               {{ availabilityError }}
             </p>
             <p v-else-if="availabilitySlots.length === 0" class="appointment-time-help">
