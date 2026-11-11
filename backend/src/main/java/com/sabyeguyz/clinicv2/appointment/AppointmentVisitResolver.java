@@ -1,7 +1,13 @@
 package com.sabyeguyz.clinicv2.appointment;
 
+import java.util.Map;
+import java.util.TreeMap;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinicv2.audit.AuditLog;
 import com.sabyeguyz.clinicv2.audit.AuditLogRepository;
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
@@ -9,10 +15,6 @@ import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
 import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
 import com.sabyeguyz.clinicv2.enums.AuditAction;
 import com.sabyeguyz.clinicv2.enums.VisitStatus;
-import java.util.Map;
-import java.util.TreeMap;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
@@ -105,7 +107,9 @@ public class AppointmentVisitResolver {
             }
 
             return new Resolution(
-                    appointment, null, "NO_LINKED_RECORD",
+                    appointment,
+                    null,
+                    "NO_LINKED_RECORD",
                     "ไม่พบหลักฐานเชื่อม ไม่ใช่ข้อยืนยันว่าไม่เคยมีรายการ");
         }
 
@@ -125,8 +129,7 @@ public class AppointmentVisitResolver {
             if (visit.getAppointment() == null
                     || !appointmentId.equals(visit.getAppointment().getId())
                     || appointment.getPatient() == null
-                    || !appointment.getPatient().getId()
-                    .equals(visit.getPatient().getId())) {
+                    || !appointment.getPatient().getId().equals(visit.getPatient().getId())) {
                 return review(appointment, "Visit ไม่ตรงกับนัด CURRENT");
             }
         } else if (visit.getAppointment() != null
@@ -134,7 +137,11 @@ public class AppointmentVisitResolver {
             return review(appointment, "นัด NEW ต้องไม่ถูกผูกย้อนหลัง");
         }
 
-        return new Resolution(appointment, visit, "FOUND", null);
+        return new Resolution(
+                appointment,
+                visit,
+                "FOUND",
+                null);
     }
 
     private static Long positiveId(JsonNode value) {
@@ -146,8 +153,12 @@ public class AppointmentVisitResolver {
     }
 
     private static Resolution review(
-            Appointment appointment, String reason) {
+            Appointment appointment,
+            String reason) {
         return new Resolution(
-                appointment, null, "REVIEW_REQUIRED", reason);
+                appointment,
+                null,
+                "REVIEW_REQUIRED",
+                reason);
     }
 }
