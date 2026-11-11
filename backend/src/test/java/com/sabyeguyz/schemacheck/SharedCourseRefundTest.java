@@ -383,8 +383,9 @@ class SharedCourseRefundTest {
     @BeforeAll
     static void startApplication() {
         String[] locations = {"classpath:db/migration", "classpath:db/seed_v2"};
+        // The fixture needs V1023 receipt collections, before V1024 adds shared refund rights.
         Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-                .locations(locations).outOfOrder(true).target("1021").load().migrate();
+                .locations(locations).outOfOrder(true).target("1023").load().migrate();
         DriverManagerDataSource source = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         JdbcTemplate beforeUpgrade = new JdbcTemplate(source);
