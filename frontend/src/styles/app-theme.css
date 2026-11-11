@@ -1,0 +1,818 @@
+/*
+ * UI layer: transparent navbar, rounded cards, pill buttons, soft shadows.
+ * Loaded last (see main.ts). Selectors are prefixed with #app so they win over the
+ * per-feature stylesheets without !important. Colors stay on the clinic green.
+ */
+
+/* Workspace pages are transparent so the animated gradient (App.vue) shows behind them. */
+:root {
+  --ui-workspace-background: none;
+}
+
+/* ---------- Typography ---------- */
+#app :is(h1, h2, h3) {
+  font-weight: 700;
+}
+
+/* ---------- Navbar (transparent bar over the page gradient,
+   logo left, compact plain-text menu, 40x40 / 8px icon-style controls on the right) ---------- */
+#app header.staff-header {
+  color: var(--cu-ink);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The colored logo PNG has transparent padding: crop it with negative margins. */
+#app header.staff-header .brand {
+  align-items: center;
+  margin-left: 0;
+}
+
+#app header.staff-header .brand img {
+  /* The cleaned logo is cropped to its artwork: no halo, no negative margins. */
+  filter: none;
+  width: 150px;
+  height: auto;
+  margin: 0;
+  transform: none;
+  object-fit: contain;
+}
+
+/* Below 1401px the manager header hides the brand in favor of the menu button. */
+@media (min-width: 1401px) {
+  #app header.staff-header .brand {
+    display: flex;
+    width: 150px;
+    height: 66px;
+  }
+}
+
+@media (max-width: 1400px) {
+  #app header.staff-header.manager-header .brand {
+    display: none;
+  }
+}
+
+#app header.staff-header nav a,
+#app header.staff-header.manager-header nav a,
+#app header.staff-header.manager-header nav a.router-link-active {
+  color: var(--cu-ink);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 400;
+}
+
+#app header.staff-header nav a::after,
+#app header.staff-header.manager-header nav a::after {
+  display: none;
+}
+
+#app header.staff-header nav a:hover,
+#app header.staff-header.manager-header nav a:not(.pill-target):hover {
+  color: var(--cu-primary);
+  background: transparent;
+}
+
+#app header.staff-header nav a.router-link-active,
+#app header.staff-header nav a.pill-target,
+#app header.staff-header.manager-header nav a.pill-target,
+#app header.staff-header.manager-header nav a.pill-target:hover,
+#app header.staff-header.manager-header nav a.pill-target.router-link-active {
+  color: var(--cu-primary-dark);
+}
+
+/* No background box behind the active item (none here): the sliding indicator is hidden
+   on desktop and the active link is marked by color plus a thin underline. */
+@media (min-width: 1401px) {
+  #app header.staff-header nav .nav-pill {
+    display: none;
+  }
+
+  #app header.staff-header nav a.pill-target::after,
+  #app header.staff-header.manager-header nav a.pill-target::after {
+    position: absolute;
+    right: 10px;
+    bottom: 0;
+    left: 10px;
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--cu-primary);
+    content: '';
+    transform: none;
+  }
+}
+
+/* Icon-style controls: 40x40, 8px radius, no border. */
+#app header.staff-header .menu-toggle {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--cu-ink);
+  background: transparent;
+}
+
+#app header.staff-header .menu-toggle:hover {
+  background: var(--cu-primary-tint);
+}
+
+#app header.staff-header .profile-trigger {
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: var(--cu-ink);
+}
+
+#app header.staff-header .profile-trigger:hover,
+#app header.staff-header .profile-trigger[aria-expanded='true'] {
+  background: var(--cu-primary-tint);
+}
+
+#app header.staff-header .profile-trigger > .profile-avatar {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--cu-primary-dark);
+  background: transparent;
+}
+
+#app header.staff-header .manager-branch-filter .filter-dropdown__button {
+  height: 40px;
+  min-height: 40px;
+  border: 0 !important;
+  border-radius: var(--radius-sm);
+  color: var(--cu-ink) !important;
+  background: transparent !important;
+  font-weight: 400;
+}
+
+#app header.staff-header .manager-branch-filter .filter-dropdown__button:hover,
+#app header.staff-header .manager-branch-filter .filter-dropdown.open .filter-dropdown__button {
+  background: var(--cu-primary-tint) !important;
+}
+
+#app header.staff-header .manager-branch-filter .filter-dropdown__chevron {
+  border-color: var(--cu-ink);
+}
+
+#app header.staff-header .profile-menu {
+  border: 1px solid var(--cu-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+@media (min-width: 1401px) {
+  #app header.staff-header {
+    height: 80px;
+    min-height: 80px;
+    padding: 0 48px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 32px;
+  }
+
+  #app header.staff-header.manager-header {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    column-gap: 16px;
+  }
+
+  #app header.staff-header.manager-header .branch-switcher {
+    width: auto;
+  }
+
+  #app header.staff-header nav,
+  #app header.staff-header.manager-header nav {
+    /* Menu items sit together in the middle of the screen, independent of logo/controls width. */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  #app header.staff-header nav > a,
+  #app header.staff-header.manager-header nav > a {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    min-height: 36px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 18px;
+    line-height: 27px;
+  }
+}
+
+/* Drawer (tablet/mobile): readable on white. */
+@media (max-width: 1400px) {
+  #app header.staff-header nav {
+    border: 1px solid var(--cu-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  #app header.staff-header nav a,
+  #app header.staff-header.manager-header nav a {
+    border-radius: var(--radius-md);
+    font-weight: 600;
+  }
+
+  #app header.staff-header nav a.router-link-active,
+  #app header.staff-header.manager-header nav a.router-link-active {
+    color: var(--cu-primary-dark);
+    background: var(--cu-primary-tint);
+  }
+}
+
+/* ---------- Page layout (staff pages) ---------- */
+body.therapist-ui {
+  --therapist-cream: #fff;
+  --therapist-hero-green: #fff;
+  background: #fff;
+}
+
+body.therapist-ui .staff-page:not(.course-page):not(.transaction-page):not(.appointment-page),
+body.therapist-ui .staff-page.dashboard-page,
+#app :is(.staff-page, .registration-page) {
+  background: transparent;
+}
+
+body.therapist-ui
+  .staff-page:not(.course-page):not(.transaction-page):not(.appointment-page)
+  .staff-hero
+  h1 {
+  color: var(--cu-heading);
+  font-size: clamp(26px, 2.7vw, 38px);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Pages that declared their own cream background are transparent over the animated gradient. */
+#app
+  :is(
+    .manager-dashboard,
+    .appointment-page,
+    .closing-page,
+    .personnel-page,
+    .course-page,
+    .checkout-page,
+    .settings-page,
+    .commission-manager-page,
+    .formula-page,
+    .therapist-compensation-page,
+    .audit-page,
+    .history-page,
+    .transaction-page
+  ),
+body.therapist-ui #app .appointment-page.appointment-form-open {
+  background: transparent;
+}
+
+/* ---------- Cards / panels ---------- */
+#app :is(.staff-panel, .summary-strip, .registration-shell, .success-card, .patient-card) {
+  border: 1px solid var(--cu-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- Layout: one centered container ---------- */
+#app main:not(.registration-content, .workspace-main, .login-page, .branch-page) {
+  width: min(var(--container-width), calc(100% - 2 * var(--container-gutter)));
+  max-width: none;
+  margin-inline: auto;
+  padding-inline: 0;
+  padding-top: var(--page-pad-top);
+  padding-bottom: var(--page-pad-bottom);
+}
+
+/* responsive.css forces a dense desktop scale with !important (1440px width, 13-14px text).
+   Replace it with the app scale: 1248px container and 16px body/control text. */
+@media (min-width: 1100px) {
+  #app
+    :is(
+      .staff-main,
+      .commission-manager-main,
+      .dashboard-main,
+      .settings-main,
+      .patient-workspace > main,
+      .registration-page .registration-shell,
+      .sale-page
+    ) {
+    width: min(var(--container-width), calc(100% - 2 * var(--container-gutter))) !important;
+  }
+
+  #app
+    :is(
+      .staff-page,
+      .patient-workspace,
+      .registration-page,
+      .manager-dashboard,
+      .settings-page,
+      .commission-manager-page,
+      .formula-page,
+      .course-page,
+      .service-page,
+      .reports-page-wrapper,
+      .appointment-calendar-workspace
+    )
+    h1 {
+    font-size: clamp(26px, 2.7vw, 38px) !important;
+    line-height: 1.2 !important;
+  }
+
+  #app
+    :is(
+      .staff-page,
+      .patient-workspace,
+      .registration-page,
+      .manager-dashboard,
+      .settings-page,
+      .commission-manager-page,
+      .course-page,
+      .service-page
+    )
+    h2 {
+    font-size: clamp(20px, 1.7vw, 26px) !important;
+    line-height: 1.3 !important;
+  }
+
+  #app
+    :is(
+      .staff-page,
+      .patient-workspace,
+      .registration-page,
+      .manager-dashboard,
+      .settings-page,
+      .commission-manager-page,
+      .course-page,
+      .service-page
+    )
+    :is(input, select, textarea, button):not(.staff-header *) {
+    font-size: 16px;
+  }
+
+  #app
+    :is(
+      .staff-table,
+      .transaction-table,
+      .commission-table,
+      .revenue-table,
+      .report-figma-table,
+      .course-history-table,
+      .history-table,
+      .tier-table,
+      .audit-table,
+      .formula-table,
+      .adjustment-table-card table,
+      .round-table table,
+      .table-scroll > table,
+      .today-table-scroll table
+    ) {
+    font-size: 16px;
+  }
+
+  #app
+    :is(
+      .staff-table,
+      .transaction-table,
+      .commission-table,
+      .revenue-table,
+      .report-figma-table,
+      .course-history-table,
+      .history-table,
+      .tier-table,
+      .audit-table,
+      .formula-table,
+      .adjustment-table-card table,
+      .round-table table,
+      .table-scroll > table,
+      .today-table-scroll table
+    )
+    :is(th, td) {
+    padding: 14px 16px !important;
+    font-size: 16px;
+  }
+
+  #app
+    :is(
+      .staff-table,
+      .transaction-table,
+      .commission-table,
+      .revenue-table,
+      .report-figma-table,
+      .course-history-table,
+      .history-table,
+      .tier-table,
+      .audit-table,
+      .formula-table,
+      .adjustment-table-card table,
+      .round-table table,
+      .table-scroll > table,
+      .today-table-scroll table
+    )
+    td
+    :is(strong, b) {
+    font-size: 16px !important;
+  }
+
+  #app
+    :is(
+      .staff-table,
+      .transaction-table,
+      .commission-table,
+      .revenue-table,
+      .report-figma-table,
+      .course-history-table,
+      .history-table,
+      .tier-table,
+      .audit-table,
+      .formula-table,
+      .adjustment-table-card table,
+      .round-table table,
+      .table-scroll > table,
+      .today-table-scroll table
+    )
+    td
+    small {
+    font-size: 14px !important;
+  }
+}
+
+/* ---------- Buttons ---------- */
+/* Primary-size actions: 48px tall, 16px bold, pill. */
+#app
+  :is(.primary, .secondary, .hero-action, .calendar-entry, .service-search-button):not(
+    .staff-header *,
+    td *,
+    th *
+  ) {
+  display: inline-flex;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 var(--control-pad-x);
+  border-radius: var(--radius-pill);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+#app :is(.danger, .action-button) {
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+/* Small chip-like buttons: 40px tall, pill. */
+#app
+  :is(
+    .appointment-retry,
+    .dashboard-retry,
+    .directory-retry,
+    .appointment-date-today,
+    .appointment-date-range-button,
+    .custom-range-button
+  ) {
+  min-height: var(--control-h-sm);
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ---------- Fields: 48px tall, 12px radius, 16px text ---------- */
+#app
+  :is(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden']),
+    select,
+    .filter-dropdown__button,
+    .date-trigger
+  ):not(.staff-header *) {
+  height: var(--control-h);
+  min-height: var(--control-h);
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+#app textarea {
+  border-radius: var(--radius-md);
+  font-size: 16px;
+}
+
+#app :is(input[type='search'], input[placeholder*='ค้นหา']) {
+  height: var(--control-h) !important;
+  min-height: var(--control-h) !important;
+  border-radius: var(--radius-md) !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+}
+
+/* ---------- Tabs and segmented controls: pill shaped ---------- */
+#app
+  :is(.transaction-tabs, .commission-tabs, .course-status-tabs, .appointment-service-mode-options)
+  > * {
+  border-radius: var(--radius-pill);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+#app :is(.transaction-tabs, .course-status-tabs) {
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+#app .commission-tabs > *,
+#app .appointment-service-mode-options > * {
+  min-height: var(--control-h);
+  height: var(--control-h);
+}
+
+/* ---------- Remaining one-off controls found by the page sweep ---------- */
+#app :is(.settings-add, .appointment-time-picker > button) {
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding-inline: var(--control-pad-x);
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+#app :is(.transaction-sort, .appointment-sort, .transaction-secondary) {
+  height: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  border-radius: var(--radius-pill);
+}
+
+#app .appointment-calendar-workspace button.control {
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+#app :is(.back-link, .course-use-back, .appointment-back, .back) {
+  font-size: 16px;
+}
+
+/* ---------- Patient directory table: rebalance columns for 16px text ---------- */
+#app .patient-directory-page table :is(th, td):nth-child(1) {
+  width: 15%;
+}
+#app .patient-directory-page table :is(th, td):nth-child(2) {
+  width: 24%;
+}
+#app .patient-directory-page table :is(th, td):nth-child(3) {
+  width: 16%;
+}
+#app .patient-directory-page table :is(th, td):nth-child(4) {
+  width: 16%;
+}
+#app .patient-directory-page table :is(th, td):nth-child(5) {
+  width: 12%;
+}
+#app .patient-directory-page table :is(th, td):nth-child(6) {
+  width: 17%;
+}
+
+#app .patient-directory-page .directory table .row-action {
+  min-height: var(--control-h-sm);
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+/* Patient directory: same structure as the payment page. Heading and search sit on the page
+   gradient; only the list (title + table) is a white card with an inset rounded table. The HN
+   cell stays a real table cell (a flex cell is what clipped the number). */
+@media (min-width: 761px) {
+  #app .patient-directory-page .page-heading,
+  #app .patient-directory-page .directory {
+    width: 100%;
+    margin-right: 0;
+    margin-left: 0;
+  }
+}
+#app .patient-directory-page .page-heading {
+  min-height: 0;
+  padding: 0;
+}
+#app .patient-directory-page .page-heading p {
+  color: var(--color-muted);
+}
+#app .patient-directory-page .directory {
+  margin-top: 28px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#app .patient-directory-page .directory > header {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+#app .patient-directory-page .directory-card {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: #fff;
+}
+#app .patient-directory-page .directory-results {
+  min-height: 0;
+  padding: 0 0 14px;
+}
+#app .patient-directory-page .table-scroll {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: #fff;
+}
+#app .patient-directory-page .patient-pagination {
+  padding: 16px 0 0;
+}
+#app .patient-directory-page .patient-avatar {
+  display: none;
+}
+#app .patient-directory-page table td.patient-id {
+  display: table-cell;
+  gap: 0;
+  text-align: left;
+}
+#app .patient-directory-page table :is(th, td) {
+  text-align: left;
+}
+#app .patient-directory-page table :is(th, td):last-child {
+  text-align: right;
+}
+
+/* The 1200px table minimum is wider than the 1248px container minus panel padding. */
+#app .appointment-table-scroll table {
+  min-width: 1120px;
+}
+
+/* ---------- Controls inside table rows: compact (40px), pill ---------- */
+#app :is(.transaction-primary, .service-page td > button) {
+  height: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  padding-inline: 16px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+#app td .filter-dropdown__button {
+  height: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+}
+
+/* ---------- Pagination buttons ---------- */
+#app
+  :is(
+    .appointment-pagination,
+    .patient-pagination,
+    .transaction-pagination,
+    .pagination,
+    .table-pagination
+  )
+  button {
+  height: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  padding-inline: 16px;
+  border-radius: var(--radius-pill);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+#app .settings-nav-link {
+  font-size: 14px;
+}
+
+/* ---------- One shared tab bar (transactions, commission, courses) ---------- */
+#app :is(.transaction-tabs, .commission-tabs, .course-status-tabs) {
+  display: flex;
+  flex-wrap: nowrap;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
+  overflow-x: auto;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--cu-primary-tint);
+  scrollbar-width: none;
+}
+
+#app :is(.transaction-tabs, .commission-tabs, .course-status-tabs) > * {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-width: 176px;
+  height: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--cu-primary-dark);
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#app
+  :is(.transaction-tabs, .commission-tabs, .course-status-tabs)
+  > :is(.active, [aria-selected='true']) {
+  color: #fff;
+  background: var(--cu-primary);
+}
+
+/* ---------- Page titles share one color ---------- */
+#app
+  :is(
+    .staff-page,
+    .patient-workspace,
+    .registration-page,
+    .manager-dashboard,
+    .settings-page,
+    .commission-manager-page,
+    .formula-page,
+    .closing-page,
+    .course-page,
+    .service-page,
+    .reports-page-wrapper,
+    .therapist-compensation-page
+  )
+  h1 {
+  color: var(--cu-heading);
+}
+
+/* ---------- Commission cards: same radius, border and shadow as other pages ---------- */
+#app
+  :is(
+    .commission-directory,
+    .commission-card,
+    .adjustment-directory,
+    .create-card,
+    .formula-card,
+    :is(.commission-metrics, .metric-grid) > article
+  ) {
+  border: 1px solid var(--cu-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+#app
+  :is(
+    .commission-table-wrap,
+    .period-card,
+    .calculation-breakdown,
+    .pool,
+    .formula-example,
+    .payment-empty,
+    .state-card
+  ) {
+  border-radius: var(--radius-md);
+}
+
+/* Subtitles sit on the gradient: use a darker ink so they stay readable. */
+#app :is(.staff-hero, .page-heading) p {
+  color: #3d4f4b;
+}
+
+/* Summary cards: all four share the same white style (no tinted highlight/warning variants). */
+#app :is(.commission-metrics, .metric-grid) > article:is(.highlight, .warning) {
+  background: #fff;
+}
+
+#app :is(.commission-metrics, .metric-grid) > article:is(.highlight, .warning) b {
+  color: inherit;
+}
+
+/* ---------- Page titles: one size and color at every viewport width ---------- */
+#app
+  :is(
+    .staff-page,
+    .patient-workspace,
+    .registration-page,
+    .manager-dashboard,
+    .settings-page,
+    .commission-manager-page,
+    .formula-page,
+    .closing-page,
+    .course-page,
+    .service-page,
+    .reports-page-wrapper,
+    .appointment-calendar-workspace,
+    .therapist-compensation-page
+  )
+  h1 {
+  color: var(--cu-heading);
+  font-size: clamp(26px, 2.7vw, 38px) !important;
+  line-height: 1.2 !important;
+}

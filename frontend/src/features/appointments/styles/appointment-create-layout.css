@@ -35,14 +35,14 @@ body:is(.therapist-ui, :not(.therapist-ui))
   border-radius: 50%;
   box-shadow: none;
   background: transparent;
-  accent-color: #145c59;
+  accent-color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-create-card:not(.is-editing)
   .appointment-form-context {
   margin: 8px 0 24px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -142,7 +142,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-create-card:not(.is-editing)
   .appointment-patient-type-options
   label:hover {
-  border-color: #145c59;
+  border-color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
@@ -156,7 +156,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-create-card:not(.is-editing)
   :is(input, textarea, button, a):focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
@@ -266,7 +266,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 16px;
   font-weight: 600;
   line-height: 1.5;

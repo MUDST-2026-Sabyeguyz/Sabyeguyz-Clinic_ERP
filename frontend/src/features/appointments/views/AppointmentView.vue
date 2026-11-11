@@ -1931,7 +1931,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
   </div>
 </template>
 <style scoped src="../styles/appointments.css"></style>
-<style src="../styles/therapist.css"></style>
+<style src="../styles/appointment-theme.css"></style>
 
 <style src="../styles/appointment-list.css"></style>
 <style src="../styles/appointment-create-layout.css"></style>
