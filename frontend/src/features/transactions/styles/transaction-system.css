@@ -206,6 +206,23 @@
   color: #983d3d;
   background: #fceceb;
 }
+.transaction-status-filter {
+  display: flex;
+  justify-content: center;
+}
+.transaction-status-filter :deep(.filter-dropdown__button) {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #365e55;
+  font: inherit;
+  font-weight: 600;
+}
+.transaction-status-filter :deep(.filter-dropdown__chevron) {
+  margin-left: 8px;
+}
 .transaction-workspace .transaction-pagination {
   margin: 0;
   padding: 24px;

@@ -189,10 +189,13 @@
   margin-bottom: 0;
 }
 .registration-page .patient-name-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.registration-page .registration-section:last-of-type .form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .registration-page .patient-name-grid > :first-child {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 .registration-page .actions.end {
   margin-top: 32px;
@@ -214,7 +217,7 @@
 }
 @media (max-width: 680px) {
   .registration-page .patient-name-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .registration-page .patient-name-grid > :first-child {
     grid-column: auto;

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import drawerLogo from '@/assets/sabyeguyz-logo-clean.png'
+import logo from '@/assets/sabyeguyz-logo.png'
+import drawerLogo from '@/assets/sabyeguyz-logo2.png'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { branchApi, clearSession } from '@/api/client'
 import {
@@ -161,6 +162,12 @@ async function loadManagerBranches() {
   try {
     const branches = (await branchApi.list())
       .filter((branch) => branch.active)
+      .sort((first, second) =>
+        first.code.localeCompare(second.code, 'th-TH', {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+      )
       .map((branch) => ({
         code: branch.code,
         name: branch.name,
@@ -189,7 +196,7 @@ function branchLabel(name: string) {
       'formula-route': route.path === '/staff/commission/formula',
     }"
   >
-    <RouterLink class="brand" :to="homePath"><img :src="drawerLogo" alt="SaByeGuyz" /></RouterLink>
+    <RouterLink class="brand" :to="homePath"><img :src="logo" alt="SaByeGuyz" /></RouterLink>
     <button
       class="menu-toggle"
       type="button"

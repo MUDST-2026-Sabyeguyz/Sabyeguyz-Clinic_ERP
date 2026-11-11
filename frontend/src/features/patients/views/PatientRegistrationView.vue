@@ -19,6 +19,8 @@ import { type PatientRegistrationForm } from '../data/patientRegistration'
 import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
 import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 import { clinicToday, clinicYesterday } from '@/utils/clinicDate'
+import { takePendingCard } from '@/features/idcard/pendingCard'
+import { cardExpired, mapCardToRegistration } from '@/features/idcard/cardToForm'
 import {
   patientTitleOptions,
   titleForNationality,
@@ -96,14 +98,28 @@ async function loadSourceAppointment() {
 }
 // เปิดเฉพาะตอนระบบพาไปหน้าชำระเงินเอง ไม่ให้ guard ด้านล่างบล็อกการนำทางนี้
 const leavingToServices = ref(false)
+const leaveDialogOpen = ref(false)
+let resolveLeave: ((leave: boolean) => void) | undefined
+function answerLeave(leave: boolean) {
+  leaveDialogOpen.value = false
+  const resolve = resolveLeave
+  resolveLeave = undefined
+  resolve?.(leave)
+}
+onBeforeUnmount(() => answerLeave(false))
 onBeforeRouteLeave(() => {
   if (leavingToServices.value) return true
   if (submitting.value || continuingAppointment.value) return false
-  if (!registeredPatientId.value && initialForm.value && JSON.stringify(form) !== initialForm.value)
-    return window.confirm('ข้อมูลที่กรอกยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?')
+  if (!registeredPatientId.value && initialForm.value && JSON.stringify(form) !== initialForm.value) {
+    if (leaveDialogOpen.value) return false
+    leaveDialogOpen.value = true
+    return new Promise<boolean>((resolve) => { resolveLeave = resolve })
+  }
   return true
 })
 const submitted = ref(false)
+const cardFilled = ref(false)
+const cardExpiredWarning = ref('')
 const emailFocused = ref(false)
 const identityFocused = ref(false)
 const errorMessage = ref('')
@@ -123,6 +139,7 @@ const registeredIdentityNumber = computed(() => {
 })
 const customerGroups = ref<string[]>([])
 const referralChannels = ref<string[]>([])
+const insuranceTypes = ref<string[]>([])
 const insuranceCompanies = ref<string[]>([])
 const branches = ref<Array<{ code: string; name: string }>>([])
 const titleOptions = computed(() => patientTitleOptions(form.nationality === 'ต่างชาติ'))
@@ -139,6 +156,9 @@ const referralChannelOptions = computed(() =>
 )
 const insuranceCompanyOptions = computed(() =>
   insuranceCompanies.value.map((value) => ({ value, label: value })),
+)
+const insuranceTypeOptions = computed(() =>
+  insuranceTypes.value.map((value) => ({ value, label: value })),
 )
 const form = reactive<PatientRegistrationForm>({
   branchCode: '',
@@ -159,6 +179,7 @@ const form = reactive<PatientRegistrationForm>({
   bloodGroup: 'ไม่ทราบ',
   nationality: 'ไทย',
   customerSource: '',
+  insuranceType: '',
   insuranceCompany: '',
   salesChannel: 'หน้าสาขา',
   paymentType: 'ชำระด้วยตนเอง',
@@ -269,6 +290,7 @@ onMounted(async () => {
       active.filter((item) => item.category === category).map((item) => item.name)
     customerGroups.value = valuesFor('Customer Group')
     referralChannels.value = valuesFor('Referral Channel')
+    insuranceTypes.value = valuesFor('Insurance Type')
     insuranceCompanies.value = valuesFor('Insurance Company')
     if (!form.customerType) form.customerType = customerGroups.value[0]!
   } catch {
@@ -276,39 +298,14 @@ onMounted(async () => {
   }
   if (route.query.appointmentId) await loadSourceAppointment()
   initialForm.value = JSON.stringify(form)
-  if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
-    duplicatePatient.value = {
-      id: 10,
-      hn: '260801010',
-      fullName: 'ผู้ป่วยสาธิต ชาย 10',
-      phone: '0890000010',
-      active: true,
-      branch: { id: 1, code: 'BR', name: 'แบริ่ง', active: true },
-      title: 'นาย',
-      birthDate: '1990-01-01',
-      gender: 'ชาย',
-      identityDocumentType: 'NATIONAL_ID',
-      identityNumber: '1103700123456',
-      address: 'กรุงเทพฯ',
-      drugAllergy: false,
-      foodAllergy: false,
-      chronicDisease: '',
-      emergencyContactName: '',
-      emergencyContactRelationship: '',
-      emergencyContactPhone: '',
-      privacyConsent: true,
-    }
-    duplicateOpen.value = true
-  } else if (import.meta.env.DEV && route.query.previewSuccess === '1') {
-    Object.assign(form, {
-      title: 'นาย',
-      firstName: 'สมชาย',
-      lastName: 'ใจดี',
-      identityNumber: '1111111111111',
-    })
-    registeredHn.value = '260801022'
-    registeredPatientId.value = 10
-    successOpen.value = true
+  // a card read from the registration dialog: fill the form (after the snapshot above, so leaving it still asks)
+  const card = takePendingCard()
+  if (card) {
+    Object.assign(form, mapCardToRegistration(card))
+    cardFilled.value = true
+    cardExpiredWarning.value = cardExpired(card, clinicToday())
+      ? 'บัตรประชาชนใบนี้หมดอายุแล้ว ตรวจสอบกับผู้ป่วยก่อนบันทึก'
+      : ''
   }
 })
 function applyManagerBranch() {
@@ -321,7 +318,7 @@ async function requestSubmit() {
   if (submitting.value || confirmationOpen.value) return
   submitted.value = true
   if (!canSubmit.value) {
-    errorMessage.value = 'กรุณาตรวจสอบช่องที่ระบุข้อผิดพลาด'
+    errorMessage.value = ''
     await nextTick()
     const first = registrationForm.value?.querySelector<HTMLElement>(
       '.invalid-field input, .invalid-field select, .invalid-field textarea, .invalid-field button',
@@ -339,6 +336,7 @@ async function requestSubmit() {
   } catch {
     // backend ตรวจผู้ป่วยซ้ำอีกครั้งก่อนบันทึกจริง
   }
+  errorMessage.value = ''
   confirmationOpen.value = true
 }
 async function openExistingPatient() {
@@ -442,6 +440,7 @@ async function submit() {
       nationality: form.nationality,
       customerType: form.customerType,
       customerSource: form.customerSource,
+      insuranceType: form.insuranceType,
       insuranceCompany: form.insuranceCompany,
     })
     registeredHn.value = result.hn
@@ -647,6 +646,10 @@ async function submit() {
                   isForeign ? 'รูปแบบเลขพาสปอร์ตไม่ถูกต้อง' : 'กรุณากรอกตัวเลข 13 หลัก'
                 }}</small>
               </label>
+              <p v-if="cardFilled" class="card-filled-note" role="status" style="grid-column: 1 / -1">
+                กรอกข้อมูลจากบัตรประชาชนให้แล้ว ตรวจสอบและแก้ไขได้ก่อนบันทึก
+                <small v-if="cardExpiredWarning" class="required-error">{{ cardExpiredWarning }}</small>
+              </p>
             </div>
           </section>
           <section class="registration-section">
@@ -713,6 +716,14 @@ async function submit() {
                   :options="referralChannelOptions"
                   default-label="ไม่ระบุ"
                   label="ช่องทางแนะนำ"
+                  :clear-on-reselect="false"
+              /></label>
+              <label
+                >ประเภทประกัน<FilterDropdown
+                  v-model="form.insuranceType"
+                  :options="insuranceTypeOptions"
+                  default-label="ไม่ระบุ"
+                  label="ประเภทประกัน"
                   :clear-on-reselect="false"
               /></label>
               <label
@@ -889,6 +900,25 @@ async function submit() {
       </div>
     </Teleport>
   </div>
+    <Teleport to="body">
+      <div v-if="leaveDialogOpen" class="registration-modal-backdrop" @click.self="answerLeave(false)">
+        <section
+          class="registration-modal confirmation-modal"
+          v-modal-focus="{ close: () => answerLeave(false), busy: false }"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="registration-leave-title"
+          aria-describedby="registration-leave-description"
+        >
+          <h2 id="registration-leave-title">ออกจากหน้านี้?</h2>
+          <p id="registration-leave-description">ข้อมูลที่กรอกยังไม่ได้บันทึก หากออกจากหน้านี้ ข้อมูลจะไม่ถูกบันทึก</p>
+          <div class="registration-modal-actions">
+            <button type="button" class="secondary" autofocus @click="answerLeave(false)">ยกเลิก</button>
+            <button type="button" class="primary" @click="answerLeave(true)">ตกลง</button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
 </template>
 <style scoped src="../styles/patient-registration.css"></style>
 <style src="../styles/patient-workspace.css"></style>
