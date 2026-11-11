@@ -249,15 +249,6 @@ onMounted(load)
               <span>ส่วนลดท้ายบิล</span><b>{{ money(receipt.billDiscountAmount) }}</b>
             </p>
             <p>
-              <span>มูลค่าก่อนภาษี</span><b>{{ money(receipt.taxableAmount) }}</b>
-            </p>
-            <p>
-              <span>{{
-                receipt.taxAmount === 0 ? 'ภาษีมูลค่าเพิ่ม (ไม่มีภาษี)' : 'ภาษีมูลค่าเพิ่ม'
-              }}</span
-              ><b>{{ money(receipt.taxAmount) }}</b>
-            </p>
-            <p>
               <span>ยอดชำระ</span><b>{{ money(receipt.paid) }}</b>
             </p>
           </section>
