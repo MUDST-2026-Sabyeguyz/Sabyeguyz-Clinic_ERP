@@ -264,4 +264,4 @@ function branchLabel(name: string) {
 </template>
 
 <style scoped src="../styles/staff-header.css"></style>
-<style src="../styles/therapist.css"></style>
+<style src="../styles/staff-header-theme.css"></style>

@@ -385,7 +385,7 @@ watch(reportSelection, (report) => {
   padding: 56px 40px;
   display: grid;
   gap: 32px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #f8f4ee;
 }
 .transaction-workspace h1 {
@@ -423,7 +423,7 @@ watch(reportSelection, (report) => {
   gap: 16px;
   padding: 24px;
   background: white;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   align-items: end;
 }
@@ -449,7 +449,7 @@ watch(reportSelection, (report) => {
   font-size: 15px;
 }
 .type-choices button.active {
-  background: #1e807c;
+  background: var(--color-primary);
   color: white;
   font-weight: 600;
 }
@@ -457,7 +457,7 @@ watch(reportSelection, (report) => {
   height: 52px;
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 8px;
   padding: 14px;
   font: inherit;
@@ -492,7 +492,7 @@ watch(reportSelection, (report) => {
   min-width: 0;
   padding: 24px;
   background: white;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
 }
 .transaction-metrics strong {
@@ -523,7 +523,7 @@ watch(reportSelection, (report) => {
 }
 .transaction-table {
   overflow: auto;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   background: white;
 }
@@ -533,7 +533,7 @@ watch(reportSelection, (report) => {
   min-width: 1000px;
 }
 .transaction-table th {
-  background: #1e807c;
+  background: var(--color-primary);
   color: white;
   text-align: left;
   font-weight: 500;
@@ -542,7 +542,7 @@ watch(reportSelection, (report) => {
 }
 .transaction-table td {
   padding: 28px 24px;
-  border-bottom: 1px solid #d9e1dc;
+  border-bottom: 1px solid var(--color-border-soft);
   white-space: nowrap;
 }
 .transaction-table tr:last-child td {
@@ -561,7 +561,7 @@ watch(reportSelection, (report) => {
   border: 0;
   border-radius: 14px;
   padding: 10px 20px;
-  background: #1e807c;
+  background: var(--color-primary);
   color: white;
   font: inherit;
   cursor: pointer;

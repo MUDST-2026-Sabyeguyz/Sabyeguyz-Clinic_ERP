@@ -153,7 +153,7 @@ onMounted(async () => {
 @import '../../staff/styles/staff.css';
 .history-page {
   min-height: 100vh;
-  color: #25372e;
+  color: var(--color-ink);
   background: #f8f4ed;
 }
 .history-main {
@@ -162,7 +162,7 @@ onMounted(async () => {
   padding: 28px 0 80px;
 }
 .history-back {
-  color: #1e807c;
+  color: var(--color-primary);
   font-weight: 600;
   text-decoration: none;
 }
@@ -245,7 +245,7 @@ onMounted(async () => {
   padding: 0;
   border: 0;
   background: none;
-  color: #1e807c;
+  color: var(--color-primary);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
