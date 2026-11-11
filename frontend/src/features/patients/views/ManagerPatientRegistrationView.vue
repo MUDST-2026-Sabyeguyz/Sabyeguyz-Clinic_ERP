@@ -138,6 +138,7 @@ const registeredIdentityNumber = computed(() => {
 })
 const customerGroups = ref<string[]>([])
 const referralChannels = ref<string[]>([])
+const insuranceTypes = ref<string[]>([])
 const insuranceCompanies = ref<string[]>([])
 const branches = ref<Array<{ code: string; name: string }>>([])
 const titleOptions = computed(() => patientTitleOptions(form.nationality === 'ต่างชาติ'))
@@ -158,6 +159,9 @@ const referralChannelOptions = computed(() =>
 const insuranceCompanyOptions = computed(() =>
   insuranceCompanies.value.map((value) => ({ value, label: value })),
 )
+const insuranceTypeOptions = computed(() =>
+  insuranceTypes.value.map((value) => ({ value, label: value })),
+)
 const form = reactive<PatientRegistrationForm>({
   branchCode: '',
   email: '',
@@ -177,6 +181,7 @@ const form = reactive<PatientRegistrationForm>({
   bloodGroup: 'ไม่ทราบ',
   nationality: 'ไทย',
   customerSource: '',
+  insuranceType: '',
   insuranceCompany: '',
   salesChannel: 'หน้าสาขา',
   paymentType: 'ชำระด้วยตนเอง',
@@ -282,6 +287,7 @@ onMounted(async () => {
       active.filter((item) => item.category === category).map((item) => item.name)
     customerGroups.value = valuesFor('Customer Group')
     referralChannels.value = valuesFor('Referral Channel')
+    insuranceTypes.value = valuesFor('Insurance Type')
     insuranceCompanies.value = valuesFor('Insurance Company')
     if (!form.customerType) form.customerType = customerGroups.value[0]!
   } catch {
@@ -309,7 +315,7 @@ async function requestSubmit() {
   if (submitting.value || confirmationOpen.value) return
   submitted.value = true
   if (!canSubmit.value) {
-    errorMessage.value = 'กรุณาตรวจสอบช่องที่ระบุข้อผิดพลาด'
+    errorMessage.value = ''
     await nextTick()
     const first = registrationForm.value?.querySelector<HTMLElement>(
       '.invalid-field input, .invalid-field select, .invalid-field textarea, .invalid-field button',
@@ -325,6 +331,7 @@ async function requestSubmit() {
       return
     }
   } catch {}
+  errorMessage.value = ''
   confirmationOpen.value = true
 }
 async function openExistingPatient() {
@@ -428,6 +435,7 @@ async function submit() {
       nationality: form.nationality,
       customerType: form.customerType,
       customerSource: form.customerSource,
+      insuranceType: form.insuranceType,
       insuranceCompany: form.insuranceCompany,
     })
     registeredHn.value = result.hn
@@ -710,6 +718,14 @@ async function submit() {
                   :options="referralChannelOptions"
                   default-label="ไม่ระบุ"
                   label="ช่องทางแนะนำ"
+                  :clear-on-reselect="false"
+              /></label>
+              <label
+                >ประเภทประกัน<FilterDropdown
+                  v-model="form.insuranceType"
+                  :options="insuranceTypeOptions"
+                  default-label="ไม่ระบุ"
+                  label="ประเภทประกัน"
                   :clear-on-reselect="false"
               /></label>
               <label
