@@ -13,6 +13,7 @@ final class AgentLoop {
     private final CardSource source;
     private final Duration cardWait;
     private volatile boolean running = true;
+    private volatile boolean revoked;
     private Consumer<String> onStatus = status -> {};
 
     AgentLoop(BackendClient client, CardSource source, Duration cardWait) {
@@ -27,6 +28,11 @@ final class AgentLoop {
 
     void stop() {
         running = false;
+    }
+
+    /** True once the backend refused this agent's token: the loop has ended and the counter must be paired again. */
+    boolean wasRevoked() {
+        return revoked;
     }
 
     /** One poll cycle (used by the loop and by tests). True when a command was handled. */
@@ -47,10 +53,12 @@ final class AgentLoop {
             try {
                 runOnce();
                 backoffMillis = 1_000;
-            } catch (BackendClient.UnauthorizedException revoked) {
+            } catch (BackendClient.UnauthorizedException unauthorized) {
+                revoked = true;
                 onStatus.accept("เครื่องนี้ถูกเพิกถอน ต้องจับคู่ใหม่");
                 return;
             } catch (IOException offline) {
+                if (!running) return; // stopped (for example by pairing again) while a request was in flight
                 onStatus.accept("เชื่อมต่อ backend ไม่ได้ จะลองใหม่");
                 sleep(backoffMillis);
                 backoffMillis = Math.min(backoffMillis * 2, 30_000);

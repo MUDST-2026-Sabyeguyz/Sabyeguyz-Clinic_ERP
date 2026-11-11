@@ -18,8 +18,15 @@ const props = withDefaults(
     emptySearchLabel?: string
     invalid?: boolean
     describedBy?: string
+    menuMinWidth?: number
   }>(),
-  { defaultValue: '', disabled: false, clearOnReselect: true, hideDefaultOption: false },
+  {
+    defaultValue: '',
+    disabled: false,
+    clearOnReselect: true,
+    hideDefaultOption: false,
+    menuMinWidth: 0,
+  },
 )
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const root = ref<HTMLElement | null>(null)
@@ -85,7 +92,7 @@ async function positionMenu() {
   if (!triggerElement || !menuElement) return
 
   const rect = triggerElement.getBoundingClientRect()
-  const width = Math.min(rect.width, window.innerWidth - 16)
+  const width = Math.min(Math.max(rect.width, props.menuMinWidth), window.innerWidth - 16)
   menuElement.style.width = `${width}px`
   const menuHeight = menuElement.offsetHeight
   const gap = 5

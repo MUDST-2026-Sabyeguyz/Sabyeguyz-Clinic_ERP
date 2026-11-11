@@ -368,6 +368,7 @@ export type SingleVisitEntitlement = {
   purchased: number
   used: number
   remaining: number
+  serviceActive: boolean
   purchasedAt: string
   receiptNo: string
 }
