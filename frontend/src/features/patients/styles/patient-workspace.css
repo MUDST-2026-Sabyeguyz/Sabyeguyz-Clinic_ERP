@@ -97,7 +97,7 @@ body.therapist-ui .registration-page .actions {
 body.therapist-ui .registration-page .actions .primary {
   min-width: 210px;
   min-height: 48px;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 
 body.therapist-ui .registration-page .registration-content {
@@ -351,18 +351,6 @@ body.therapist-ui .patient-workspace {
   font-family: var(--app-font);
 }
 
-body.therapist-ui .patient-workspace::before {
-  position: absolute;
-  z-index: 10;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 40px;
-  background: var(--therapist-cream);
-  content: '';
-  pointer-events: none;
-}
-
 body.therapist-ui .patient-workspace > .staff-header {
   z-index: 20;
 }
@@ -397,7 +385,7 @@ body.therapist-ui .patient-workspace .page-heading .primary {
   padding: 12px 28px;
   border: 0;
   border-radius: 10px;
-  background: #1e807c;
+  background: var(--color-primary);
   font-size: 17px;
 }
 
@@ -502,7 +490,7 @@ body.therapist-ui .patient-workspace .table-scroll {
 body.therapist-ui .patient-workspace table th {
   padding-block: 20px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font-size: 21px;
   font-weight: 500;
   text-align: center;
@@ -530,7 +518,7 @@ body.therapist-ui .patient-workspace .patient-avatar {
   place-items: center;
   border-radius: 50%;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 
 body.therapist-ui .patient-workspace .row-action {
@@ -540,7 +528,7 @@ body.therapist-ui .patient-workspace .row-action {
   padding: 8px 18px;
   border-radius: 10px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font-weight: 700;
 }
 
@@ -550,7 +538,7 @@ body.therapist-ui .patient-workspace .row-action {
     overflow-y: hidden;
     padding-bottom: 8px;
     -webkit-overflow-scrolling: touch;
-    scrollbar-color: #1e807c #e5f0ef;
+    scrollbar-color: var(--color-primary) #e5f0ef;
     scrollbar-width: thin;
   }
 
@@ -565,7 +553,7 @@ body.therapist-ui .patient-workspace .row-action {
 
   body.therapist-ui .patient-workspace .table-scroll::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: #1e807c;
+    background: var(--color-primary);
   }
 }
 

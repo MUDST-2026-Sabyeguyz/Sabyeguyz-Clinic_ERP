@@ -1,7 +1,7 @@
 import './styles/main.css'
 import './styles/therapist-theme.css'
 import './features/commission/styles/commission-manager.css'
-import './styles/chula-theme.css'
+import './styles/app-theme.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
