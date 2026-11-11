@@ -253,7 +253,7 @@ select {
   border: 1px solid #b7cecc;
   border-radius: 8px;
   background: white;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-size: 16px;
   cursor: pointer;
@@ -261,7 +261,7 @@ select {
 }
 .appointment-date-range-button,
 .appointment-date-today {
-  border-color: #1e807c;
+  border-color: var(--color-primary);
   font-weight: 700;
 }
 .appointment-date-range-button {
@@ -280,7 +280,7 @@ select {
 }
 button:hover:not(:disabled) {
   background: #edf5f1;
-  border-color: #145c59;
+  border-color: var(--color-primary-strong);
 }
 button[aria-pressed='true'],
 .range-confirm {
@@ -289,7 +289,7 @@ button[aria-pressed='true'],
   border-color: #167f7a;
 }
 button[aria-pressed='true']:hover {
-  background: #145c59;
+  background: var(--color-primary-strong);
 }
 button:disabled {
   opacity: 0.45;
@@ -410,7 +410,7 @@ footer button {
   color: #b42318;
 }
 :is(button, select):focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 @media (max-width: 650px) {
