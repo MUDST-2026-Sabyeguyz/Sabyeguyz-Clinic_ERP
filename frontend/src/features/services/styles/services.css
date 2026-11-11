@@ -14,14 +14,14 @@
 .service-page > main > h1,
 .sale-page > h1 {
   margin: 0;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: clamp(28px, 2.4vw, 36px);
   font-weight: 800;
   line-height: 1.4;
 }
 .service-page-intro {
   margin: 8px 0 28px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
   line-height: 1.5;
 }
@@ -76,7 +76,7 @@
   border: 0;
   border-radius: 9px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-size: 15px;
   font-weight: 700;
@@ -100,7 +100,7 @@
   padding: 24px;
   border-radius: 20px;
   background: #fff;
-  color: #56665d;
+  color: var(--color-muted);
   place-items: center;
   text-align: center;
 }
@@ -120,12 +120,12 @@
 }
 .service-results-card > h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 28px;
 }
 .service-results-card > p {
   margin: 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 17px;
 }
 .service-patient-result {
@@ -137,7 +137,7 @@
   padding: 24px;
   border: 0;
   border-radius: 16px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #eff4ed;
   font: inherit;
   text-align: left;
@@ -159,7 +159,7 @@
   padding: 14px 16px;
   border-radius: 12px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   text-align: center;
   font-size: 18px;
 }
@@ -196,7 +196,7 @@
   padding: 18px 22px;
   border-radius: 14px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .patient-summary strong {
   font-size: 24px;
@@ -240,7 +240,7 @@
   text-decoration: underline;
 }
 .service-menu-back:focus-visible {
-  outline: 2px solid #1e807c;
+  outline: 2px solid var(--color-primary);
   outline-offset: 3px;
   border-radius: 3px;
 }
@@ -333,12 +333,12 @@
 }
 .service-menu-actions h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 32px;
 }
 .service-menu-actions p {
   margin: 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 18px;
   line-height: 1.5;
 }
@@ -350,7 +350,7 @@
   border: 0;
   border-radius: 12px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-size: 18px;
   font-weight: 700;
@@ -377,7 +377,7 @@
 .sale-details h2,
 .order-summary h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 24px;
 }
 .sale-tabs {
@@ -391,7 +391,7 @@
   padding: 0 14px;
   border: 0;
   border-radius: 10px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #eff4ed;
   font: inherit;
   font-size: 16px;
@@ -401,7 +401,7 @@
 .sale-tabs button.active,
 .payment-options button.active {
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .sale-details label,
 .payment-group {
@@ -439,7 +439,7 @@
 }
 .payment-group small,
 .order-summary small {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
   font-weight: 400;
   line-height: 1.5;
@@ -449,7 +449,7 @@
   align-content: start;
 }
 .order-summary > span {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
   font-weight: 500;
 }
@@ -463,7 +463,7 @@
   font-size: 16px;
 }
 .order-summary > b {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 40px;
   line-height: 1.2;
 }
@@ -487,12 +487,12 @@
 .payment-review h2,
 .receipt-confirmation h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: clamp(30px, 4vw, 38px);
 }
 .payment-review > p {
   margin: 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 18px;
 }
 .payment-review-details {
@@ -500,7 +500,7 @@
   gap: 10px;
   padding: 20px;
   border-radius: 16px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #eff4ed;
   font-size: 17px;
 }
@@ -524,7 +524,7 @@
   min-height: 56px;
   border: 0;
   border-radius: 12px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #eff4ed;
   font: inherit;
   font-size: 18px;
@@ -537,11 +537,11 @@
   display: grid;
   place-items: center;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   text-decoration: none;
 }
 .receipt-confirmation > strong {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 24px;
 }
 .receipt-confirmation > p {
@@ -549,7 +549,7 @@
   font-size: 18px;
 }
 .receipt-confirmation small {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
 }
 .success {
@@ -687,7 +687,7 @@
 }
 .sales-progress li.active,
 .sales-progress li.done {
-  color: #25372e;
+  color: var(--color-ink);
   font-weight: 700;
 }
 .sales-progress li.active i,
@@ -783,7 +783,7 @@
 }
 .sale-line-card,
 .sale-summary-card {
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 2px 8px rgb(0 0 0 / 5%);
@@ -835,9 +835,9 @@
   min-width: 0;
   height: 40px;
   padding: 0 12px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 8px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   font: inherit;
 }
@@ -845,7 +845,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 14px;
   font-weight: 500;
 }
@@ -865,7 +865,7 @@
   margin-top: 0;
 }
 .sale-line-card .payment-group > span {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 18px;
   font-weight: 600;
 }
@@ -878,7 +878,7 @@
 }
 .payment-status-group legend {
   margin-bottom: 12px;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 18px;
   font-weight: 600;
 }
@@ -909,7 +909,7 @@
   display: grid;
   width: min(320px, 100%);
   gap: 8px;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 16px;
   font-weight: 600;
 }
@@ -920,7 +920,7 @@
   padding: 0 14px;
   border: 1px solid #cad4cc;
   border-radius: 10px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   box-shadow: 0 1px 3.5px rgb(119 119 119 / 25%);
   font: inherit;
@@ -974,7 +974,7 @@
 .sale-note textarea {
   min-height: 56px;
   padding: 14px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 8px;
   background: #f8faf9;
   font: inherit;
@@ -985,7 +985,7 @@
   padding: 11px 16px;
   border: 0;
   border-radius: 8px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #eff4ed;
   font: inherit;
   font-weight: 700;
@@ -1041,7 +1041,7 @@
   border: 0;
   border-radius: 8px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -1082,7 +1082,7 @@
   gap: 8px;
 }
 .payment-modal section:first-child > span:first-child {
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 16px;
   font-weight: 500;
 }
@@ -1105,7 +1105,7 @@
   padding: 0 22px;
   border: 0;
   border-radius: 8px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #eff4ed;
   font: inherit;
   font-weight: 700;
@@ -1115,7 +1115,7 @@
 .sale-success-card button:last-child,
 .receipt-print-actions button:last-child {
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .sale-success-card {
   display: grid;
@@ -1124,7 +1124,7 @@
   margin: 44px auto;
   min-height: 496px;
   padding: 42px 30px 44px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 4px 16px rgb(0 0 0 / 7%);
@@ -1155,7 +1155,7 @@
   margin: 0;
 }
 .sale-success-card h1 {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 32px;
   line-height: 1.45;
 }
@@ -1180,7 +1180,7 @@
   gap: 12px;
 }
 .sale-success-card section:first-child > b {
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 16px;
 }
 .sale-success-card section:first-child > span {
@@ -1224,7 +1224,7 @@
   box-sizing: border-box;
   margin: 0 auto;
   padding: 34px 36px 24px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   background: #fff;
   box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
 }
@@ -1234,7 +1234,7 @@
   gap: 24px;
   min-height: 140px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #25372e;
+  border-bottom: 1px solid var(--color-ink);
 }
 .printable-receipt h1,
 .printable-receipt h2,
@@ -1256,7 +1256,7 @@
 }
 .receipt-document h2 {
   margin-bottom: 6px;
-  color: #1e807c;
+  color: var(--color-primary);
   font-size: 26px;
 }
 .receipt-document > div {
@@ -1276,7 +1276,7 @@
 .printable-receipt table {
   width: 100%;
   border-collapse: collapse;
-  border-bottom: 1px solid #25372e;
+  border-bottom: 1px solid var(--color-ink);
 }
 .printable-receipt th,
 .printable-receipt td {
@@ -1284,7 +1284,7 @@
   text-align: center;
 }
 .printable-receipt th {
-  color: #25372e;
+  color: var(--color-ink);
   background: #2fa4a0;
 }
 .printable-receipt tbody tr {
@@ -1348,7 +1348,7 @@
   position: absolute;
   right: 36px;
   bottom: 20px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 13px;
 }
 .receipt-print-actions {
@@ -1364,14 +1364,14 @@
   padding: 0 18px;
   border: 0;
   border-radius: 10px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #f1f4f1;
   font-size: 15px;
   box-shadow: none;
 }
 .receipt-print-actions button:last-child {
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .receipt-print-modal-backdrop {
   position: fixed;
@@ -1423,7 +1423,7 @@
 .receipt-print-modal button:last-child {
   padding-inline: 22px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 @media (max-width: 1100px) {
   .sales-workspace {

@@ -186,7 +186,7 @@ function setPage(category: string, page: number) {
   padding: 12px 14px;
   border: 1px solid #b5ccc4;
   border-radius: 8px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   font: inherit;
   font-weight: 400;
@@ -212,7 +212,7 @@ function setPage(category: string, page: number) {
   border: 1px solid transparent;
   border-bottom-color: #dfe9e4;
   background: #fff;
-  color: #25372e;
+  color: var(--color-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -260,7 +260,7 @@ function setPage(category: string, page: number) {
   flex-shrink: 0;
   min-height: 44px;
   padding: 10px 16px;
-  border: 1px solid #1e807c;
+  border: 1px solid var(--color-primary);
   border-radius: 8px;
   background: #fff;
   color: #176965;

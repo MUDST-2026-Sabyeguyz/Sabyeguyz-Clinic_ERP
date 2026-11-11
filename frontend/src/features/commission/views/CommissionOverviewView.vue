@@ -292,12 +292,12 @@ watch([date, selectedBranchCode], loadOverview);
   border: 1px solid #8fb5ae;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 700;
   text-decoration: none;
 }
 .detail-button:hover {
-  border-color: #145c59;
+  border-color: var(--color-primary-strong);
   background: #edf5f1;
 }
 .commission-directory {
@@ -316,7 +316,7 @@ watch([date, selectedBranchCode], loadOverview);
 }
 .directory-results h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 18px;
 }
 .directory-results p {
@@ -325,7 +325,7 @@ watch([date, selectedBranchCode], loadOverview);
   font-size: 13px;
 }
 .directory-results > span {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   font-weight: 700;
 }
@@ -350,7 +350,7 @@ watch([date, selectedBranchCode], loadOverview);
 .commission-directory .commission-table td {
   padding: 16px 20px;
   border-bottom: 1px solid #e7ede9;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 15px;
   vertical-align: middle;
 }

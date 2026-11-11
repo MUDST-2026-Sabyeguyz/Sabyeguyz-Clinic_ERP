@@ -828,7 +828,7 @@ function selectView(event: Event) {
   display: grid;
   width: min(320px, 100%);
   gap: 7px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 0.9rem;
 }
 .closing-period-picker :deep(.date-field) {
@@ -998,7 +998,7 @@ function selectView(event: Event) {
   font-size: 0.86rem;
 }
 .checklist-summary b {
-  color: #25372e;
+  color: var(--color-ink);
 }
 .check-list {
   display: grid;
@@ -1167,7 +1167,7 @@ function selectView(event: Event) {
   border-right: 0;
 }
 .closing-summary span {
-  color: #56665d;
+  color: var(--color-muted);
 }
 .closing-summary b {
   color: #1f2937;
@@ -1218,7 +1218,7 @@ function selectView(event: Event) {
 .search-field svg {
   width: 23px;
   height: 23px;
-  stroke: #56665d;
+  stroke: var(--color-muted);
   stroke-width: 2;
   fill: none;
 }
@@ -1228,7 +1228,7 @@ function selectView(event: Event) {
   min-width: 0;
   border: 0;
   outline: 0;
-  color: #25372e;
+  color: var(--color-ink);
   background: transparent;
   font: inherit;
 }
@@ -1242,7 +1242,7 @@ function selectView(event: Event) {
   min-height: 54px;
   border: 1px solid #173d47;
   border-radius: 9px;
-  color: #25372e;
+  color: var(--color-ink);
 }
 .month-field :deep(.calendar) {
   z-index: 40;
@@ -1268,7 +1268,7 @@ function selectView(event: Event) {
 .close-one {
   padding: 10px 19px;
   border-radius: 20px;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .close-all:disabled,
 .confirm:disabled {
@@ -1298,7 +1298,7 @@ table {
 th {
   padding: 20px 28px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font-weight: 600;
   text-align: left;
 }
@@ -1314,7 +1314,7 @@ td {
   font-size: 0.95rem;
 }
 .status.open {
-  border: 1px solid #1e807c;
+  border: 1px solid var(--color-primary);
   color: #647a63;
   background: #b9ef9a;
 }
@@ -1333,7 +1333,7 @@ td {
 }
 .empty-row {
   padding: 44px;
-  color: #56665d;
+  color: var(--color-muted);
   text-align: center;
 }
 .modal-backdrop {
@@ -1357,7 +1357,7 @@ td {
 }
 .confirm-modal h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 20px;
   text-align: center;
 }
@@ -1402,7 +1402,7 @@ td {
 .cancel {
   flex: 1;
   min-height: 46px;
-  border: 2px solid #1e807c;
+  border: 2px solid var(--color-primary);
   border-radius: 12px;
   color: #1f2937;
   background: #faf6f0;
