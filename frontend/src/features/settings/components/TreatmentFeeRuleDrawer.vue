@@ -135,25 +135,10 @@ async function save() {
                 errors.feeValue
               }}</small>
             </label>
-<<<<<<< Updated upstream
-            <label>
-              <span>เดือนที่เริ่มใช้งาน<span class="req">*</span></span>
-              <input
-                v-model="form.effectiveMonth"
-                type="month"
-                :min="nextMonth()"
-                :class="{ invalid: errors.effectiveMonth }"
-              />
-              <small v-if="errors.effectiveMonth" class="field-hint" role="alert">{{
-                errors.effectiveMonth
-              }}</small>
-            </label>
-=======
             <div class="treatment-fee-month-field">
               <span>เดือนที่เริ่มใช้งาน</span>
               <MonthFilterPicker v-model="form.effectiveMonth" :min="nextMonth()" />
             </div>
->>>>>>> Stashed changes
             <p class="treatment-fee-branch">สาขา: {{ branchName }}</p>
           </div>
           <p v-if="error" class="treatment-fee-error" role="alert">{{ error }}</p>
