@@ -18,16 +18,15 @@ const categories = [
   },
   {
     key: 'Insurance Type',
-    label: 'บริษัทประกัน',
+    label: 'ประเภทประกัน',
   },
+  { key: 'Insurance Company', label: 'บริษัทประกัน' },
 ]
 const categoryOptions = categories.map((category) => ({ value: category.key, label: category.label }))
 const groups = computed(() =>
   categories.map((category) => {
     const matchingItems = props.items.filter(
-      (item) =>
-        item.category === category.key ||
-        (category.key === 'Insurance Type' && item.category === 'Insurance Company'),
+      (item) => item.category === category.key,
     )
     const normalizedQuery = query.value.trim().toLocaleLowerCase('th-TH')
     const items = normalizedQuery

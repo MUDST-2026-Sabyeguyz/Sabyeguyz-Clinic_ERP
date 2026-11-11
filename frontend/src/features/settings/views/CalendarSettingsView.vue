@@ -294,6 +294,11 @@ onMounted(load)
             >
           </nav>
           <div class="settings-nav-footer">
+            <RouterLink class="settings-nav-item" to="/staff/settings/card-readers">
+              <span class="settings-nav-icon" aria-hidden="true"><SettingsNavIcon name="payments" /></span>
+              <span><b>เครื่องอ่านบัตรประชาชน</b><small>อุปกรณ์และการจับคู่</small></span>
+              <span class="settings-nav-arrow" aria-hidden="true">›</span>
+            </RouterLink>
             <RouterLink
               class="settings-nav-item active"
               to="/staff/settings/calendar"
@@ -364,12 +369,23 @@ onMounted(load)
                     </li>
                     <li>เลือกไฟล์ หรือวางเนื้อหาไฟล์ JSON ในช่องนี้ แล้วกดเชื่อมต่อ</li>
                   </ol>
-                  <label class="google-key-file"
-                    >เลือกไฟล์ key (.json)
-                    <input type="file" accept=".json,application/json" @change="onKeyFile" />
-                  </label>
-                  <p v-if="keyFileName" class="google-key-name">ไฟล์: {{ keyFileName }}</p>
+                  <div class="google-key-inputs">
+                  <div class="google-key-upload-group">
+                  <label for="google-key-file">อัปโหลดไฟล์</label>
+                  <div class="google-key-upload">
+                    <label class="google-key-file">
+                      <span class="google-key-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m-4 4 4-4 4 4M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" /></svg></span>
+                      <small>เลือกไฟล์ Service Account นามสกุล .json</small>
+                      <input id="google-key-file" type="file" accept=".json,application/json" @change="onKeyFile" />
+                      <span class="google-key-choose" aria-hidden="true">เลือกไฟล์</span>
+                      <span class="google-key-selected">{{ keyFileName || 'ยังไม่ได้เลือกไฟล์' }}</span>
+                    </label>
+                  </div>
+                  </div>
+                  <div class="google-key-paste">
+                  <label for="google-key-json">หรือวางเนื้อหา JSON</label>
                   <textarea
+                    id="google-key-json"
                     v-model="keyText"
                     rows="5"
                     spellcheck="false"
@@ -381,6 +397,9 @@ onMounted(load)
                   <small v-if="keyInvalid" class="field-hint" role="alert">
                     ต้องเป็นเนื้อหาไฟล์ JSON ของ service account (มี client_email และ private_key)
                   </small>
+                  </div>
+                  </div>
+                  <div class="google-key-footer">
                   <small class="google-key-note"
                     >key ถูกเก็บแบบเข้ารหัสบนเซิร์ฟเวอร์ และจะไม่แสดงกลับมาอีก</small
                   >
@@ -393,6 +412,7 @@ onMounted(load)
                   >
                     {{ busy === 'key' ? 'กำลังตรวจสอบ…' : 'เชื่อมต่อ' }}
                   </button>
+                  </div>
                 </template>
               </section>
               <div class="calendar-workspace">
@@ -940,6 +960,101 @@ button:disabled {
 .google-key .field-hint {
   color: #b42318;
   font-size: 0.82rem;
+}
+.google-key-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 8px;
+}
+.google-key-upload {
+  display: grid;
+  align-content: center;
+  box-sizing: border-box;
+  height: 220px;
+  min-width: 0;
+  padding: 24px 18px;
+  border: 1px dashed #a8cac3;
+  border-radius: 12px;
+  background: #fff;
+}
+.google-key-upload .google-key-file {
+  justify-items: center;
+  gap: 12px;
+  color: #28564e;
+  text-align: center;
+}
+.google-key-file small { font-weight: 400; color: #68776f; line-height: 1.5; }
+.google-key-file-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: #eaf5f1;
+  border-radius: 12px;
+  color: #187d78;
+}
+.google-key-file-icon svg { width: 24px; height: 24px; }
+.google-key-file input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+}
+.google-key-file { cursor: pointer; }
+.google-key-choose {
+  padding: 9px 18px;
+  border: 1px solid #96bfb8;
+  border-radius: 8px;
+  background: #fff;
+  color: #187d78;
+  font-weight: 600;
+}
+.google-key-file:focus-within .google-key-choose { outline: 2px solid #187d78; outline-offset: 3px; }
+.google-key-selected { max-width: 100%; overflow-wrap: anywhere; color: #68776f; font-size: 13px; font-weight: 400; }
+.google-key-file input::file-selector-button {
+  padding: 9px 12px;
+  margin-right: 10px;
+  border: 1px solid #96bfb8;
+  border-radius: 8px;
+  color: #187d78;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.google-key-paste, .google-key-upload-group { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.google-key-paste > label, .google-key-upload-group > label { color: #415b52; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.google-key-paste textarea { flex: none; height: 220px; min-height: 220px; margin: 0; resize: none; }
+.google-key-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid #dfeae5;
+}
+.google-key-footer .calendar-save {
+  min-width: 140px;
+  min-height: 46px;
+  margin: 0;
+  padding: 10px 22px;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--ui-primary-gradient, #187d78);
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+}
+.google-key-footer .calendar-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.google-key-upload-group .google-key-name { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 1050px) {
+  .google-key-inputs { grid-template-columns: minmax(0, 1fr); }
 }
 .calendar-section-heading {
   margin-bottom: 16px;

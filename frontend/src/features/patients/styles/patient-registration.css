@@ -1,5 +1,5 @@
 .registration-page {
-  font-family: var(--app-font);
+  font-family: 'Noto Sans Thai', 'Leelawadee UI', Tahoma, Arial, sans-serif;
   min-height: 100vh;
   background: var(--clinic-background);
 }

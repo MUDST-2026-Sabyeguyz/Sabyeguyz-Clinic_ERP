@@ -5,12 +5,14 @@ import CourseUsagePicker from '../components/CourseUsagePicker.vue'
 import CourseCutDocument from '../components/CourseCutDocument.vue'
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { vModalFocus } from '@/features/appointments/modalFocus'
 import CourseRenewalDialog from '@/features/patients/components/CourseRenewalDialog.vue'
+import CourseRenewalStatus from '../components/CourseRenewalStatus.vue'
+import CourseRenewalQueueLink from '../components/CourseRenewalQueueLink.vue'
 import PhoneIcon from '@/components/PhoneIcon.vue'
 import {
   branchApi,
@@ -50,7 +52,7 @@ const recipientSearch = ref('')
 const recipientSearchOpen = ref(false)
 const selectedRecipient = ref<Patient | null>(null)
 const recipientConfirmed = ref(false)
-const transferAmount = ref(2)
+const transferAmount = ref(1)
 const transferReason = ref('แชร์สิทธิ์ตามคำขอผู้ป่วย')
 const showReasonError = ref(false)
 const coTherapistId = ref<number | ''>('')
@@ -93,6 +95,10 @@ const courseUsageHistory = ref<CourseMovement[]>([])
 const errorMessage = ref('')
 const selectedCourse = ref<UiCourse>({} as UiCourse)
 const renewingCourse = ref<CoursePurchase | null>(null)
+const renewalRevisions = ref<Record<number, number>>({})
+const renewalNotice = ref('')
+let renewalNoticeTimer: ReturnType<typeof setTimeout> | undefined
+onUnmounted(() => clearTimeout(renewalNoticeTimer))
 const selectedCourseId = ref(0)
 const usageNote = ref('')
 const usageDate = ref(clinicToday())
@@ -106,16 +112,17 @@ const selectedUsageQuantity = computed(() =>
     .filter((row) => row.coursePurchaseId === selectedCourse.value.id)
     .reduce((total, row) => total + row.quantity, 0),
 )
+const usageBranchCode = computed(() => sourceAppointment.value?.branchCode)
 const treatingOptions = computed(() =>
-  therapists.value.filter((person) => person.branchCode === sourceAppointment.value?.branchCode),
+  therapists.value.filter((person) => person.branchCode === usageBranchCode.value),
 )
 const selectedTreatingStaff = computed(() =>
   treatingOptions.value.find((person) => person.id === treatingStaffId.value),
 )
 const usageBranchName = computed(
   () =>
-    branches.value.find((branch) => branch.code === sourceAppointment.value?.branchCode)?.name ??
-    sourceAppointment.value?.branchCode ??
+    branches.value.find((branch) => branch.code === usageBranchCode.value)?.name ??
+    usageBranchCode.value ??
     '—',
 )
 watch(
@@ -197,7 +204,9 @@ function courseUsageProgressWidth(course: Pick<UiCourse, 'balance' | 'total'>) {
   return `${Math.min(100, Math.max(0, (Math.max(0, course.balance - selectedUsageQuantity.value) / course.total) * 100))}%`
 }
 function courseInactiveReason(course: UiCourse) {
-  return course.balance <= 0 ? 'ใช้สิทธิ์ครบ' : 'หมดอายุ'
+  if (!Number.isFinite(course.balance) || course.balance < 0) return 'ไม่พร้อมใช้งาน'
+  if (course.balance === 0) return 'ใช้สิทธิ์ครบ'
+  return course.expired ? 'หมดอายุ' : 'ไม่พร้อมใช้งาน'
 }
 function selectCourseStatusTab(status: 'active' | 'inactive') {
   courseStatusTab.value = status
@@ -252,7 +261,7 @@ async function loadOwner() {
   if (owner.value) await loadCourses(owner.value.id)
 }
 async function loadCourses(patientId: number) {
-  const purchases: CoursePurchase[] = await courseApi.patientCourses(patientId)
+  const purchases = await courseApi.patientCourses(patientId)
   const courses = purchases.map((course) => ({
     ...course,
     name: course.course.name,
@@ -288,13 +297,33 @@ async function loadCourses(patientId: number) {
     transferStep.value = 'form'
   } else action.value = 'manage'
 }
-async function refreshCoursesAfterExtensionRequest() {
-  if (!owner.value) return
-  try {
-    await loadCourses(owner.value.id)
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลคอร์สใหม่ไม่สำเร็จ'
-  }
+function completeExtensionRequest() {
+  return finishRenewal('ส่งคำขอแล้ว')
+}
+
+function completeDirectExtension(newExpiry: string) {
+  const course = renewingCourse.value
+  if (!course) return
+  const expiry = new Intl.DateTimeFormat('th-TH', { timeZone: 'Asia/Bangkok' }).format(
+    new Date(`${newExpiry}T00:00:00+07:00`),
+  )
+  const update = (item: UiCourse) => item.id === course.id
+    ? { ...item, expiry, expiresAt: newExpiry, expired: false, usable: item.balance > 0 }
+    : item
+  patientCourses.value = patientCourses.value.map(update)
+  selectedCourse.value = update(selectedCourse.value)
+  return finishRenewal('ต่ออายุคอร์สแล้ว')
+}
+
+async function finishRenewal(message: string) {
+  const courseId = renewingCourse.value?.id
+  if (courseId == null) return
+  renewingCourse.value = null
+  renewalRevisions.value[courseId] = (renewalRevisions.value[courseId] ?? 0) + 1
+  await nextTick()
+  clearTimeout(renewalNoticeTimer)
+  renewalNotice.value = message
+  renewalNoticeTimer = setTimeout(() => (renewalNotice.value = ''), 2000)
 }
 onMounted(async () => {
   await refreshAppointmentProcess()
@@ -336,7 +365,7 @@ async function start(nextAction: CourseAction, course: UiCourse) {
   recipientSearchOpen.value = false
   selectedRecipient.value = null
   recipientConfirmed.value = false
-  transferAmount.value = 2
+  transferAmount.value = 1
   transferReason.value = 'แชร์สิทธิ์ตามคำขอผู้ป่วย'
   transferConfirmDialog.value = false
   showReasonError.value = false
@@ -450,27 +479,20 @@ function cancelPatientCourseDetail() {
   }
   coursePrintPreview.value = false
 }
-function returnToCourseManager() {
-  if (openedFromPatientProfile.value) {
-    void router.push(patientCoursesLocation.value)
-    return
-  }
+async function returnToCourseManager() {
   action.value = 'manage'
   usageReview.value = false
   usageSuccess.value = false
+  courseStatusTab.value = selectedCourse.value.usable && selectedCourse.value.balance > 0 ? 'active' : 'inactive'
   if (owner.value) {
-    router.replace({
-      path: '/staff/courses',
-      query: transferReceiptId.value
-        ? {
-            patientId: owner.value.id,
-            view: 'after-transfer',
-            courseId: selectedCourse.value.id,
-            balance: selectedCourse.value.balance,
-          }
-        : { patientId: owner.value.id },
+    await router.replace({
+      path: route.path,
+      query: { patientId: owner.value.id, courseId: selectedCourse.value.id },
     })
   }
+  await nextTick()
+  document.getElementById(`patient-course-${selectedCourse.value.id}`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 watch(
   () => [route.query.action, route.query.courseId],
@@ -624,7 +646,7 @@ function startAnotherTransfer() {
   recipientSearchOpen.value = false
   selectedRecipient.value = null
   recipientConfirmed.value = false
-  transferAmount.value = 2
+  transferAmount.value = 1
   transferReason.value = ''
   showReasonError.value = false
   coTherapistId.value = ''
@@ -723,7 +745,7 @@ function closePrintSuccess() {
               <div><dt>สิทธิ์คงเหลือ</dt><dd>{{ usageSuccessBalance }} ครั้ง</dd></div>
             </dl>
             <footer>
-              <button type="button" @click="returnToCourseManager">กลับไปจัดการคอร์ส</button>
+              <button type="button" @click="returnToCourseManager">กลับหน้าคอร์ส</button>
               <button type="button" @click="start('history', selectedCourse)">
                 ดูประวัติการใช้คอร์ส
               </button>
@@ -794,7 +816,9 @@ function closePrintSuccess() {
                 </div>
                 <div>
                   <dt>นักกายภาพ</dt>
-                  <dd>{{ selectedTreatingStaff?.fullName || '—' }}</dd>
+                  <dd>
+                    {{ selectedTreatingStaff?.fullName || '—' }}
+                  </dd>
                 </div>
                 <div>
                   <dt>สาขา</dt>
@@ -1446,33 +1470,42 @@ function closePrintSuccess() {
       <main
         v-else-if="action === 'manage'"
         class="course-manager-main"
-        :class="{ 'after-transfer': transferReceiptId }"
       >
         <RouterLink class="course-use-back" :to="sourceLocation">{{
           openedFromPatientProfile ? '← กลับไปคอร์สของผู้ป่วย' : '← กลับไปหน้าบริการ'
         }}</RouterLink>
-        <h1>คอร์สของผู้ป่วย</h1>
-        <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
-        <RouterLink
-          v-if="canReviewCourseExtensions"
-          class="course-use-back"
-          :to="{ name: 'staff-course-extensions' }"
-        >
-          ตรวจคำขอต่ออายุคอร์ส
-        </RouterLink>
+        <div class="course-manager-heading">
+          <div>
+            <h1>คอร์สของผู้ป่วย</h1>
+            <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
+          </div>
+          <CourseRenewalQueueLink
+            v-if="canReviewCourseExtensions && owner"
+            :key="owner.id"
+            :patient-id="owner.id"
+          />
+        </div>
+        <Teleport to="body">
+          <div class="course-renewal-announcement" role="status">
+            <div v-if="renewalNotice" class="course-confirm-backdrop course-renewal-notice">
+              <section class="course-confirm-dialog course-renewal-result">
+                <span class="usage-success-check" aria-hidden="true">✓</span>
+                <h2>{{ renewalNotice }}</h2>
+              </section>
+            </div>
+          </div>
+        </Teleport>
         <CourseRenewalDialog
           v-if="renewingCourse && owner"
           :key="renewingCourse.id"
           :course="renewingCourse"
           :patient-id="owner.id"
+          :manager="canReviewCourseExtensions"
           @close="renewingCourse = null"
-          @requested="refreshCoursesAfterExtensionRequest"
+          @requested="completeExtensionRequest"
+          @extended="completeDirectExtension"
         />
-        <section v-if="transferReceiptId" class="course-after-patient">
-          <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong>
-          <span>HN {{ owner?.hn || '-' }}</span>
-        </section>
-        <section v-else class="course-use-patient">
+        <section class="course-use-patient">
           <i>{{ owner?.fullName?.replace(/^(นาย|นางสาว|นาง)/, '').slice(0, 2) || '--' }}</i>
           <div>
             <strong>{{ owner?.fullName || 'กำลังโหลด...' }}</strong
@@ -1535,79 +1568,7 @@ function closePrintSuccess() {
           </section>
           <template v-for="course in displayedCourses" :key="course.id">
             <section
-              v-if="transferReceiptId && courseStatusTab === 'active'"
-              class="course-after-share-card"
-            >
-              <header>
-                <div>
-                  <h2>{{ course.name }}</h2>
-                  <p>{{ course.course.code }}</p>
-                </div>
-                <span>✓　ใช้งานได้</span>
-              </header>
-              <div class="course-after-remaining">
-                <span>สิทธิ์คงเหลือ</span>
-                <p>
-                  <strong>{{ course.balance }}</strong> ครั้ง
-                </p>
-                <small>จากทั้งหมด {{ course.total }} ครั้ง</small>
-              </div>
-              <div class="course-after-counts">
-                <article>
-                  <span>ใช้แล้ว</span><strong>{{ course.used }} ครั้ง</strong>
-                </article>
-                <article>
-                  <span>แชร์ออก</span><strong>{{ transferAmount }} ครั้ง</strong>
-                </article>
-                <article>
-                  <span>สิทธิ์เพิ่มเติม</span><strong>{{ course.bonusSessions }} ครั้ง</strong>
-                </article>
-              </div>
-              <div class="course-after-dates">
-                <p>
-                  <span
-                    >วันที่ซื้อ<br /><b>{{
-                      new Date(course.purchasedAt).toLocaleDateString('th-TH', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })
-                    }}</b></span
-                  >
-                </p>
-                <p>
-                  <span
-                    >วันหมดอายุ<br /><b>{{ course.expiry }}</b></span
-                  >
-                </p>
-              </div>
-              <div class="course-after-actions">
-                <button type="button" @click="start('history', course)">ดูประวัติคอร์ส</button>
-                <button
-                  type="button"
-                  :disabled="!course.usable || course.balance <= 0"
-                  @click="start('use', course)"
-                >
-                  ใช้สิทธิ์คอร์ส
-                </button>
-                <button
-                  v-if="course.status === 'ACTIVE' && !isSharedCourse(course)"
-                  type="button"
-                  @click="renewingCourse = course"
-                >
-                  ขอต่ออายุคอร์ส
-                </button>
-              </div>
-              <button
-                class="course-manager-latest-transfer"
-                type="button"
-                @click="openLatestTransfer(course)"
-              >
-                ← ดูรายการแชร์ล่าสุด
-              </button>
-            </section>
-            <section
-              v-else
+              :id="`patient-course-${course.id}`"
               class="course-manager-card"
               :class="{ 'is-shared': isSharedCourse(course) }"
             >
@@ -1642,13 +1603,19 @@ function closePrintSuccess() {
                   <small>ใช้แล้วทั้งหมด</small><strong>{{ course.used }} ครั้ง</strong>
                 </article>
                 <article>
-                  <small>คงเหลือ</small><strong>{{ course.balance }} ครั้ง</strong>
+                  <small>คงเหลือ</small>
+                  <strong>{{ Number.isFinite(course.balance) ? Math.max(0, course.balance) : 0 }} ครั้ง</strong>
                 </article>
                 <article class="course-expiry-metric">
                   <small>{{
                     isSharedCourse(course) ? 'วันหมดอายุสิทธิ์ของผู้รับ' : 'วันหมดอายุคอร์ส'
                   }}</small>
                   <strong>{{ course.expiry }}</strong>
+                  <CourseRenewalStatus
+                    v-if="courseStatusTab === 'active' && owner && !isSharedCourse(course)"
+                    :course-id="course.id"
+                    :revision="renewalRevisions[course.id] ?? 0"
+                  />
                 </article>
               </div>
               <div
@@ -1664,13 +1631,17 @@ function closePrintSuccess() {
               <p class="course-manager-used">
                 ใช้แล้วทั้งหมด {{ course.used }} จาก {{ course.total }} ครั้ง
               </p>
-              <p v-if="isSharedCourse(course)" class="course-shared-note">
-                ทุกผู้ถือสิทธิ์ใช้วันหมดอายุร่วมกัน · การต่ออายุต้องดำเนินการโดยเจ้าของคอร์ส
-              </p>
               <div class="course-manager-actions">
                 <button type="button" @click="start('history', course)">ดูประวัติการใช้</button>
                 <button
-                  v-if="!isSharedCourse(course)"
+                  v-if="courseStatusTab === 'active' && course.status === 'ACTIVE' && !isSharedCourse(course)"
+                  type="button"
+                  @click="renewingCourse = course"
+                >
+                  ต่ออายุคอร์ส
+                </button>
+                <button
+                  v-if="courseStatusTab === 'active' && !isSharedCourse(course)"
                   class="course-share-button"
                   type="button"
                   @click="start('transfer', course)"
@@ -1678,6 +1649,7 @@ function closePrintSuccess() {
                   แชร์คอร์ส
                 </button>
                 <button
+                  v-if="courseStatusTab === 'active'"
                   type="button"
                   :disabled="!course.usable || course.balance <= 0"
                   @click="start('use', course)"
@@ -1686,7 +1658,7 @@ function closePrintSuccess() {
                 </button>
               </div>
               <button
-                v-if="transferReceiptId"
+                v-if="courseStatusTab === 'active' && transferReceiptId && course.id === selectedCourse.id"
                 class="course-manager-latest-transfer"
                 type="button"
                 @click="openLatestTransfer(course)"
@@ -1704,6 +1676,51 @@ function closePrintSuccess() {
 <style src="../../staff/styles/staff.css"></style>
 <style scoped src="../styles/course-page.css"></style>
 <style scoped>
+.course-manager-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 26px 0 24px;
+}
+.course-manager-heading h1 {
+  margin: 0 0 4px;
+  font-size: 32px;
+}
+.course-manager-heading .course-manager-intro {
+  margin: 0;
+}
+.course-confirm-backdrop.course-renewal-notice {
+  z-index: 1100;
+  pointer-events: none;
+}
+.course-confirm-dialog.course-renewal-result {
+  width: min(380px, 100%);
+  gap: 0;
+  text-align: center;
+}
+.course-renewal-review-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin: 0 0 16px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: #187d78;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+.course-renewal-review-button:hover {
+  background: #145c59;
+  color: #fff;
+}
+.course-renewal-review-button:focus-visible {
+  outline: 2px solid #145c59;
+  outline-offset: 3px;
+}
 .course-use-main {
   width: min(1080px, calc(100% - 48px));
   margin: auto;
@@ -1957,6 +1974,7 @@ function closePrintSuccess() {
 }
 .course-manager-actions {
   display: flex;
+  flex-wrap: wrap;
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -3422,6 +3440,7 @@ function closePrintSuccess() {
   font-weight: 700;
 }
 .course-manager-card {
+  scroll-margin-top: 24px;
   position: relative;
   gap: 5px;
   align-content: start;
@@ -4850,17 +4869,6 @@ function closePrintSuccess() {
 .course-manager-latest-transfer {
   cursor: pointer;
 }
-.course-after-actions button:disabled {
-  cursor: not-allowed;
-}
-.course-after-actions button:last-child {
-  border-color: #1e8883;
-  color: #fff;
-  background: #1e8883;
-}
-.course-after-share-card .course-manager-latest-transfer {
-  margin-top: 0;
-}
 
 .course-use-main.after-transfer {
   display: grid;
@@ -5144,24 +5152,6 @@ function closePrintSuccess() {
     gap: 10px;
     margin-top: 28px;
   }
-  .course-manager-main.after-transfer {
-    width: min(100% - 28px, 1200px);
-  }
-  .course-manager-main.after-transfer > h1 {
-    font-size: 30px;
-  }
-  .course-after-counts {
-    grid-template-columns: 1fr;
-  }
-  .course-after-dates,
-  .course-after-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .course-after-actions button {
-    width: 100%;
-    min-width: 0;
-  }
   .course-after-use-success-modal {
     padding: 22px 18px;
   }
@@ -5191,19 +5181,6 @@ function closePrintSuccess() {
   }
 }
 @media (max-width: 480px) {
-  .course-after-share-card {
-    padding: 18px;
-  }
-  .course-after-share-card header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .course-after-share-card header > span {
-    min-width: 0;
-  }
-  .course-manager-main.after-transfer .course-status-tabs {
-    grid-template-columns: 1fr;
-  }
   .course-after-history-totals > div {
     grid-template-columns: 1fr;
   }
@@ -5309,14 +5286,6 @@ function closePrintSuccess() {
 }
 .course-manager-used {
   margin: 8px 0 0 !important;
-}
-.course-shared-note {
-  margin: 22px 0 0 !important;
-  padding: 13px 16px;
-  border-radius: 8px;
-  color: #4d71a7 !important;
-  background: #e7f0ff;
-  font-size: 13px !important;
 }
 .course-manager-actions {
   position: static;

@@ -6,6 +6,7 @@ import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue
 import TimeFilterPicker from '@/features/staff/components/TimeFilterPicker.vue'
 import MasterDataGroups from '../components/MasterDataGroups.vue'
 import SettingsNavIcon from '../components/SettingsNavIcon.vue'
+import CardReadersView from '@/features/idcard/CardReadersView.vue'
 import TreatmentFeeRuleDrawer from '../components/TreatmentFeeRuleDrawer.vue'
 import {
   type TreatmentFeeRule,
@@ -56,6 +57,7 @@ const section = ref<SectionKey>(initialSection()),
   editingIndex = ref<number | null>(null),
   savedMessage = ref(''),
   saveModalOpen = ref(false)
+const showingCardReaders = ref(window.location.pathname === '/staff/settings/card-readers')
 const fieldErrors = reactive<Record<string, boolean>>({})
 const fieldHints = reactive<Record<string, string>>({})
 const validationMessage = ref('')
@@ -408,6 +410,14 @@ const filteredTableRows = computed(() => {
     return [] as Array<{ row: Row; index: number }>
 
   let rows = data[section.value].map((row, index) => ({ row, index }))
+  if (section.value === 'branches') {
+    rows = rows.sort((first, second) =>
+      String(first.row.code ?? '').localeCompare(String(second.row.code ?? ''), 'th-TH', {
+        numeric: true,
+        sensitivity: 'base',
+      }),
+    )
+  }
   if (section.value === 'rooms') {
     const branchName = selectedBranchName.value
     if (!branchName) return []
@@ -1013,8 +1023,8 @@ const drawerTitle = computed(() => {
             <button
               v-for="item in sections"
               :key="item.key"
-              :class="{ active: section === item.key }"
-              @click="section = item.key"
+              :class="{ active: !showingCardReaders && section === item.key }"
+              @click="section = item.key; showingCardReaders = false"
             >
               <span class="settings-nav-icon" aria-hidden="true"
                 ><SettingsNavIcon :name="item.icon"
@@ -1027,6 +1037,11 @@ const drawerTitle = computed(() => {
             </button>
           </nav>
           <div class="settings-nav-footer">
+            <button :class="{ active: showingCardReaders }" @click="showingCardReaders = true">
+              <span class="settings-nav-icon" aria-hidden="true"><SettingsNavIcon name="payments" /></span>
+              <span><b>เครื่องอ่านบัตรประชาชน</b><small>อุปกรณ์และการจับคู่</small></span>
+              <span class="settings-nav-arrow" aria-hidden="true">›</span>
+            </button>
             <RouterLink class="settings-nav-item" to="/staff/settings/calendar">
               <span class="settings-nav-icon" aria-hidden="true"
                 ><SettingsNavIcon name="calendar" /></span
@@ -1038,7 +1053,8 @@ const drawerTitle = computed(() => {
             >
           </div>
         </aside>
-        <section class="settings-panel">
+        <CardReadersView v-if="showingCardReaders" embedded />
+        <section v-else class="settings-panel">
           <header class="settings-panel-head">
             <div>
               <h2>{{ copy[0] }}</h2>
@@ -1651,7 +1667,8 @@ const drawerTitle = computed(() => {
               :options="[
                 { value: 'Customer Group', label: 'กลุ่มลูกค้า' },
                 { value: 'Referral Channel', label: 'ช่องทางแนะนำ' },
-                { value: 'Insurance Type', label: 'บริษัทประกัน' },
+                { value: 'Insurance Type', label: 'ประเภทประกัน' },
+                { value: 'Insurance Company', label: 'บริษัทประกัน' },
               ]"
               default-value="Customer Group"
               default-label="กลุ่มลูกค้า"

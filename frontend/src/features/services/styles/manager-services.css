@@ -12,6 +12,7 @@
   padding: 40px 0 48px;
 }
 .service-page > main > h1,
+.payment-page-heading h1,
 .sale-page > h1 {
   margin: 0;
   color: var(--color-primary-strong);
@@ -1096,6 +1097,7 @@
   display: grid;
   padding: 24px;
   background: rgb(0 0 0 / 32%);
+  backdrop-filter: blur(1px);
   place-items: center;
 }
 .payment-modal {
@@ -1727,4 +1729,18 @@
 .sale-discount-controls :is(select, input):focus-visible {
   outline: 2px solid #168783;
   outline-offset: 2px;
+}
+.payment-page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.payment-page-heading h1 {
+  margin-top: 0;
+}
+.payment-page-heading .service-page-intro {
+  margin-bottom: 0;
 }
