@@ -6,15 +6,18 @@ function roleView(manager: RoleViewLoader, therapist: RoleViewLoader) {
   const ManagerView = defineAsyncComponent(manager)
   const TherapistView = defineAsyncComponent(therapist)
 
-  return defineComponent({
+  const currentRole = () =>
+    (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role
+  const component = defineComponent({
     name: 'RoleSpecificView',
     setup() {
-      const user = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
-        role?: string
-      } | null
-      const View = user?.role === 'MANAGER' ? ManagerView : TherapistView
+      const View = currentRole() === 'MANAGER' ? ManagerView : TherapistView
       return () => h(View)
     },
+  })
+  // Lets prefetchRoute() warm the chunk for the current role before the user finishes clicking.
+  return Object.assign(component, {
+    preload: () => (currentRole() === 'MANAGER' ? manager : therapist)(),
   })
 }
 
@@ -439,5 +442,27 @@ router.afterEach(() => {
   const usesSharedStaffUi = authUser?.role === 'THERAPIST' || authUser?.role === 'MANAGER'
   document.body.classList.toggle('therapist-ui', usesSharedStaffUi)
 })
+
+const warmed = new WeakSet<object>()
+/** Starts downloading the lazy chunk(s) for an in-app link so the click itself renders at once. */
+export function prefetchRoute(href: string) {
+  if (!href.startsWith('/staff/') && href !== '/') return
+  for (const record of router.resolve(href).matched) {
+    const component = record.components?.default as
+      | (Component & { preload?: () => Promise<unknown> })
+      | (() => Promise<unknown>)
+      | undefined
+    if (!component || warmed.has(component)) continue
+    const load =
+      'preload' in component && typeof component.preload === 'function'
+        ? component.preload
+        : typeof component === 'function' && !('setup' in component)
+          ? (component as () => Promise<unknown>)
+          : null
+    if (!load) continue
+    warmed.add(component)
+    void Promise.resolve(load()).catch(() => warmed.delete(component))
+  }
+}
 
 export default router
