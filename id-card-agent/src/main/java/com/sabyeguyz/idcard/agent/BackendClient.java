@@ -45,7 +45,15 @@ final class BackendClient {
                 .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(Map.of("code", code.trim().toUpperCase()))))
                 .build());
         if (response.statusCode() != 200) throw new IOException("จับคู่ไม่สำเร็จ: รหัสไม่ถูกต้องหรือหมดอายุ");
-        return new AgentConfig(base, JSON.readTree(response.body()).path("token").asText());
+        JsonNode body = JSON.readTree(response.body());
+        String token = body.path("token").asText();
+        if (token.isBlank()) throw new IOException("จับคู่ไม่สำเร็จ: backend ไม่ได้ส่งโทเคนกลับมา");
+        return new AgentConfig(base, token, textOrNull(body, "workstationName"), textOrNull(body, "branchCode"),
+                body.hasNonNull("workstationId") ? body.get("workstationId").asLong() : null);
+    }
+
+    private static String textOrNull(JsonNode body, String field) {
+        return body.hasNonNull(field) ? body.get(field).asText() : null;
     }
 
     /** Long-poll: returns after a command arrives or {@code waitSeconds} pass. */

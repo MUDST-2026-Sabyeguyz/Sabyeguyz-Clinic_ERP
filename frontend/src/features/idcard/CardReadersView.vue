@@ -9,6 +9,7 @@ import {
   type IdCardWorkstation,
   type IdCardWorkstationCreated,
 } from '@/api/client'
+import { agentLocal, type LocalAgentStatus } from './agentLocal'
 
 const workstations = ref<IdCardWorkstation[]>([])
 defineProps<{ embedded?: boolean }>()
@@ -18,13 +19,46 @@ const pairingOpen = ref(false)
 const pairingSeconds = ref(0)
 const pairingTime = computed(() => `${Math.floor(pairingSeconds.value / 60)}:${String(pairingSeconds.value % 60).padStart(2, '0')}`)
 let pairingTimer: ReturnType<typeof setInterval> | undefined
+// The agent installed on this PC, if any. The manager may be at another PC, so pairing it is always an explicit click.
+const localAgent = ref<LocalAgentStatus | null>(null)
+const localPairState = ref<'idle' | 'working' | 'done'>('idle')
+const localPairMessage = ref('')
+let pairSequence = 0
+let reloadTimer: ReturnType<typeof setTimeout> | undefined
+async function refreshLocalAgent() {
+  localAgent.value = (await agentLocal.status()) ?? null
+}
+async function pairLocal() {
+  const item = created.value
+  if (!item || localPairState.value === 'working') return
+  const mine = ++pairSequence
+  localPairState.value = 'working'
+  localPairMessage.value = ''
+  const result = await agentLocal.pair(item.pairingCode)
+  if (mine !== pairSequence) return
+  if (!result.ok) {
+    localPairState.value = 'idle'
+    localPairMessage.value = result.message
+    return
+  }
+  localAgent.value = result.status
+  localPairState.value = 'done'
+  clearTimeout(reloadTimer)
+  // the agent reports in as soon as it starts; give it a moment, then show the reader online
+  reloadTimer = setTimeout(() => void load(), 1500)
+}
+void refreshLocalAgent()
 function closePairing() {
+  pairSequence++
+  localPairState.value = 'idle'
+  localPairMessage.value = ''
   pairingOpen.value = false
   clearInterval(pairingTimer)
   pairingTimer = undefined
 }
 function showPairing(item: IdCardWorkstationCreated) {
   closePairing()
+  void refreshLocalAgent()
   created.value = item
   const expires = Date.parse(item.pairingExpiresAt)
   const deadline = Math.min(Date.now() + 600000, Number.isFinite(expires) ? expires : Date.now() + 600000)
@@ -36,7 +70,10 @@ function showPairing(item: IdCardWorkstationCreated) {
   update()
   if (pairingOpen.value) pairingTimer = setInterval(update, 1000)
 }
-onBeforeUnmount(closePairing)
+onBeforeUnmount(() => {
+  closePairing()
+  clearTimeout(reloadTimer)
+})
 const message = ref('')
 const loadError = ref('')
 const loading = ref(false)
@@ -145,6 +182,11 @@ watch(branchCode, () => {
           <h1>เครื่องอ่านบัตรประชาชน</h1>
           <p>เพิ่มเครื่องอ่านบัตรของสาขา แล้วนำรหัสจับคู่ไปใส่ในโปรแกรมตัวกลางที่เครื่องหน้าเคาน์เตอร์</p>
           <p class="branch-context">สาขา: {{ selectedManagerBranch()?.name || 'ยังไม่ได้เลือกสาขา' }}</p>
+          <p v-if="localAgent" class="local-agent-note">
+            {{ localAgent.paired
+              ? `พบโปรแกรมตัวกลางบนเครื่องนี้ จับคู่กับ “${localAgent.workstationName ?? 'เครื่องอ่านบัตร'}” แล้ว`
+              : 'พบโปรแกรมตัวกลางบนเครื่องนี้ ยังไม่ได้จับคู่ เพิ่มเครื่องแล้วกดจับคู่ได้ทันที' }}
+          </p>
         </div>
       </section>
 
@@ -176,6 +218,21 @@ watch(branchCode, () => {
             <p>{{ created.name }}</p>
             <p>รหัสใช้ได้ครั้งเดียว · หมดอายุใน <b>{{ pairingTime }}</b> นาที</p>
             <div class="pairing-code"><strong>{{ created.pairingCode }}</strong></div>
+            <div v-if="localAgent" class="pairing-local">
+              <p v-if="localPairState === 'done'" role="status" class="pairing-local-ok">จับคู่โปรแกรมบนเครื่องนี้สำเร็จ</p>
+              <template v-else>
+                <p>
+                  {{ localAgent.paired
+                    ? `โปรแกรมตัวกลางบนเครื่องนี้จับคู่กับ “${localAgent.workstationName ?? 'เครื่องอ่านบัตร'}” อยู่ การจับคู่ใหม่จะแทนที่`
+                    : 'พบโปรแกรมตัวกลางบนเครื่องนี้ ยังไม่ได้จับคู่' }}
+                </p>
+                <button type="button" class="primary pair-local" :disabled="localPairState === 'working'" @click="pairLocal">
+                  {{ localPairState === 'working' ? 'กำลังจับคู่…' : 'จับคู่โปรแกรมบนเครื่องนี้' }}
+                </button>
+                <p class="pairing-local-hint">กดเฉพาะเมื่อเครื่องนี้คือเครื่องหน้าเคาน์เตอร์ของ “{{ created.name }}”</p>
+                <p v-if="localPairMessage" role="alert" class="required-error">{{ localPairMessage }}</p>
+              </template>
+            </div>
           </section>
         </div>
       </Teleport>
@@ -216,6 +273,12 @@ watch(branchCode, () => {
 .pairing-dialog:focus { outline: none; }
 .pairing-dialog .pairing-code { margin: 16px 0 0; padding: 14px 18px; border: 0; text-align: center; }
 .pairing-dialog .pairing-code strong { font-size: clamp(24px, 6vw, 32px); letter-spacing: 5px; }
+.local-agent-note { margin: 6px 0 0; color: #187d78; }
+.pairing-local { margin-top: 18px; padding-top: 14px; border-top: 1px solid #e6eae5; text-align: center; }
+.pairing-local .pair-local { margin-top: 12px; min-height: 44px; padding: 10px 20px; border: 1px solid #187d78; border-radius: 9px; background: #187d78; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.pairing-local .pair-local:disabled { opacity: 0.5; cursor: not-allowed; }
+.pairing-dialog .pairing-local-hint { font-size: 14px; margin-top: 8px; }
+.pairing-dialog .pairing-local-ok { color: #187d78; font-weight: 600; }
 .cancel-reader-dialog { text-align: center; }
 .cancel-reader-dialog h2 { color: #25372e; }
 .cancel-reader-actions { display: flex; justify-content: center; gap: 12px; margin-top: 26px; }
