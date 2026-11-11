@@ -658,8 +658,12 @@ watch(appointmentAlreadyProcessed, (done) => {
         <button type="button" @click="returnToAppointments">กลับหน้านัดหมาย</button>
       </div>
       <template v-else-if="screen === 'search'">
-        <h1>ชำระเงิน</h1>
-        <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
+        <div class="payment-page-heading">
+          <div>
+            <h1>ชำระเงิน</h1>
+            <p class="service-page-intro">ค้นหาและเลือกผู้ป่วยเพื่อขาย ใช้สิทธิ์ และจัดการคอร์ส</p>
+          </div>
+        </div>
         <section class="service-search">
           <div class="search-wrap">
             <label class="search">
