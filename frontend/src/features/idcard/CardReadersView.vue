@@ -102,7 +102,7 @@ async function add() {
   if (saving.value) return
   message.value = ''
   if (!name.value.trim() || !branchCode.value) {
-    message.value = 'กรอกชื่อเครื่อง และเลือกสาขาก่อน'
+    message.value = 'กรอกชื่อเครื่อง'
     return
   }
   saving.value = true
@@ -189,7 +189,7 @@ watch(branchCode, () => {
 
       <form class="card-reader-add" @submit.prevent="add">
         <label>
-          ชื่อเครื่องใหม่
+          ชื่อเครื่อง
           <input v-model="name" name="name" maxlength="100" placeholder="เช่น เคาน์เตอร์ 1" autocomplete="off" />
         </label>
         <button type="submit" class="primary" :disabled="saving">{{ saving ? 'กำลังเพิ่ม…' : '+ เพิ่มเครื่อง' }}</button>
