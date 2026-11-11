@@ -1,8 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type IdCardReadView, type IdCardWorkstation } from '@/api/client'
+import type { LocalAgentStatus } from './agentLocal'
 import { useIdCardReader } from './useIdCardReader'
 
-const ws = (over: Partial<IdCardWorkstation> = {}): IdCardWorkstation => ({
+// no agent on this PC unless a test says so (these tests run on fake timers, so nothing may wait on a real request)
+vi.mock('./agentLocal', () => ({ agentLocal: { status: vi.fn<() => Promise<null>>().mockResolvedValue(null), pair: vi.fn<() => void>() } }))
+
+const agent = (over: Partial<{ paired: boolean; workstationId: number | null }> = {}) => ({
+  status: vi.fn<() => Promise<LocalAgentStatus | null>>().mockResolvedValue({
+    paired: true,
+    workstationName: 'เคาน์เตอร์ 2',
+    branchCode: '01',
+    workstationId: 2,
+    version: '1.0.0',
+    ...over,
+  }),
+})
+
+const ws =(over: Partial<IdCardWorkstation> = {}): IdCardWorkstation => ({
   id: 1,
   name: 'เคาน์เตอร์ 1',
   branchCode: '01',
@@ -137,5 +152,55 @@ describe('useIdCardReader', () => {
     })
     await again.load('01')
     expect(again.selectedId.value).toBe(2)
+  })
+
+  describe('with the agent installed on this PC', () => {
+    const two = () => fakeApi([], [ws(), ws({ id: 2, name: 'เคาน์เตอร์ 2' })]) as never
+
+    it('selects the reader the agent is paired with, even among several', async () => {
+      const reader = useIdCardReader({ api: two(), local: agent() })
+      await reader.load('01')
+      expect(reader.selectedId.value).toBe(2)
+    })
+
+    it('prefers it over a reader remembered from an earlier visit', async () => {
+      localStorage.setItem('idCardWorkstationId', '1')
+      const reader = useIdCardReader({ api: two(), local: agent() })
+      await reader.load('01')
+      expect(reader.selectedId.value).toBe(2)
+    })
+
+    it('does not use an agent that is not paired', async () => {
+      const reader = useIdCardReader({ api: two(), local: agent({ paired: false, workstationId: null }) })
+      await reader.load('01')
+      expect(reader.selectedId.value).toBeNull()
+    })
+
+    it('ignores the agent’s reader when it was cancelled, and falls back to the only online one', async () => {
+      const reader = useIdCardReader({
+        api: fakeApi([], [ws(), ws({ id: 2, status: 'Revoked', online: false })]) as never,
+        local: agent(),
+      })
+      await reader.load('01')
+      expect(reader.selectedId.value).toBe(1)
+    })
+
+    it('carries on as before when the agent does not answer', async () => {
+      const reader = useIdCardReader({
+        api: two(),
+        local: { status: vi.fn<() => Promise<LocalAgentStatus | null>>().mockRejectedValue(new Error('refused')) },
+      })
+      await reader.load('01')
+      expect(reader.workstations.value).toHaveLength(2)
+      expect(reader.selectedId.value).toBeNull()
+    })
+
+    it('still lists nothing, without failing, when the backend list cannot be loaded', async () => {
+      const api = { ...fakeApi([]), workstations: vi.fn<() => Promise<unknown>>().mockRejectedValue(new Error('offline')) }
+      const reader = useIdCardReader({ api: api as never, local: agent() })
+      await reader.load('01')
+      expect(reader.workstations.value).toEqual([])
+      expect(reader.selectedId.value).toBeNull()
+    })
   })
 })
