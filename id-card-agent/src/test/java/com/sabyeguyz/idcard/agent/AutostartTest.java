@@ -23,6 +23,16 @@ class AutostartTest {
     }
 
     @Test
+    void registersItselfOnFirstRunOnlyWhenInstalledOnWindows() {
+        String launcher = "C:\\Users\\a\\AppData\\Local\\ClinicIdCardAgent\\ClinicIdCardAgent.exe";
+        assertTrue(Autostart.shouldInstallOnFirstRun("Windows 11", launcher, false));
+        assertFalse(Autostart.shouldInstallOnFirstRun("Windows 11", launcher, true), "an autostart-remove must stick");
+        assertFalse(Autostart.shouldInstallOnFirstRun("Windows 11", null, false), "running the jar by hand is not an install");
+        assertFalse(Autostart.shouldInstallOnFirstRun("Mac OS X", launcher, false));
+        assertFalse(Autostart.shouldInstallOnFirstRun("Linux", launcher, false));
+    }
+
+    @Test
     void windowsUsesTheCurrentUsersRunKey() {
         String[] command = Autostart.windowsRunCommand("C:\\Program Files\\ClinicIdCardAgent\\ClinicIdCardAgent.exe");
         assertEquals("reg", command[0]);
