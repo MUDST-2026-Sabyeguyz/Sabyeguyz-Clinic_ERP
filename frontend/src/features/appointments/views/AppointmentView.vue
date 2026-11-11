@@ -188,7 +188,7 @@ const form = ref({
   time: '09:00',
   note: '',
 })
-const appointmentDurationMinutes = ref(60)
+const appointmentDurationMinutes = ref(0)
 const managerBranchCode = computed(() =>
   isManager ? selectedManagerBranch()?.code : authUser?.branchCode,
 )
@@ -271,7 +271,9 @@ const drawerServiceLabel = computed(() => {
     selectedService.value?.name ||
     catalogCourses.value.find((course) => course.id === form.value.serviceId)?.name ||
     'บริการ'
-  return /นาที/.test(label) ? label : `${label} ${appointmentDurationMinutes.value} นาที`
+  return /นาที/.test(label) || !appointmentDurationMinutes.value
+    ? label
+    : `${label} ${appointmentDurationMinutes.value} นาที`
 })
 const morningTimeOptions = computed(() =>
   availabilitySlots.value.filter((slot) => Number(slot.time.slice(0, 2)) < 12),
@@ -379,7 +381,7 @@ const formServiceModel = computed({
   set: (value: string) => {
     form.value.serviceId = Number(value) || 0
     appointmentDurationMinutes.value =
-      services.value.find((service) => service.id === form.value.serviceId)?.durationMinutes || 60
+      services.value.find((service) => service.id === form.value.serviceId)?.durationMinutes || 0
   },
 })
 const formTherapistModel = computed({
@@ -587,7 +589,7 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   const branch = branchOptions.value[0]
   const branchCode = branch?.code ?? ''
   const today = clinicToday()
-  appointmentDurationMinutes.value = 60
+  appointmentDurationMinutes.value = 0
   form.value = {
     patientId: 0,
     therapistId: 0,
@@ -754,9 +756,7 @@ async function loadTimeAvailability() {
       if (!display.slots.some((slot) => slot.time === form.value.time && slot.available))
         form.value.time = ''
 
-      if (form.value.serviceId && result.durationMinutes) {
-        appointmentDurationMinutes.value = result.durationMinutes
-      }
+      appointmentDurationMinutes.value = result.durationMinutes || 0
     }
   } catch (error) {
     if (requestId === availabilityRequest) {
@@ -794,6 +794,7 @@ async function refreshAvailabilityQuietly() {
       patientId: form.value.patientId || undefined,
     })
     if (requestId !== availabilityRequest || !timeDrawerOpen.value) return
+    appointmentDurationMinutes.value = result.durationMinutes || 0
     const display = displayAvailability(result, appointmentDurationMinutes.value)
     availabilitySlots.value = display.slots
     availabilityError.value = display.message
@@ -1482,7 +1483,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             <p v-if="availabilityLoading" class="appointment-time-help" aria-live="polite">
               กำลังตรวจสอบเวลาว่าง...
             </p>
-            <p v-else-if="availabilityError && !availabilityError.startsWith('สาขายังไม่ได้ตั้งเวลาเปิด')" class="appointment-time-help" role="alert">
+            <p v-else-if="availabilityError" class="appointment-time-help" role="alert">
               {{ availabilityError }}
             </p>
             <p v-else-if="availabilitySlots.length === 0" class="appointment-time-help">
