@@ -34,7 +34,8 @@ describe('Manager patient registration save flow', () => {
     await flushPromises()
     const state = view.vm as unknown as { form: { firstName: string } }
     state.form.firstName = 'แก้ไขข้อมูล'
-    const guard = vi.mocked(onBeforeRouteLeave).mock.calls.at(-1)![0]
+    const guardCalls = vi.mocked(onBeforeRouteLeave).mock.calls
+    const guard = guardCalls[guardCalls.length - 1]![0]
     const navigate = () => (guard as () => Promise<boolean>)()
     const cancelled = navigate()
     await flushPromises()
