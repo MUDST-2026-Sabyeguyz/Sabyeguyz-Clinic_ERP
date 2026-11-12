@@ -17,27 +17,38 @@ public class CurrentActor {
 
     public Long requireId() {
         Long id = currentId();
+
         if (id == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication required");
         }
+
         return id;
     }
 
     /** Null is reserved for legacy, non-HTTP service calls without an authenticated actor. */
     public Long currentId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()
+
+        if (authentication == null
+                || !authentication.isAuthenticated()
                 || "anonymousUser".equals(authentication.getPrincipal())) {
             return null;
         }
+
         try {
             long id = Long.parseLong(authentication.getName());
             if (id <= 0 || users.findById(id).filter(AppUser::isUserStatus).isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Active user required");
+                throw new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Active user required");
             }
             return id;
         } catch (NumberFormatException invalidSubject) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid authenticated subject");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid authenticated subject");
         }
     }
 }
