@@ -18,11 +18,14 @@ public class StaffGroupMember {
 
     public StaffGroupMember() {}
 
-    public StaffGroupMember(StaffGroup staffGroup, Staff staff) {
+    public StaffGroupMember(
+            StaffGroup staffGroup,
+            Staff staff) {
         this.staffGroup = staffGroup;
         this.staff = staff;
     }
 
     public StaffGroup getStaffGroup() { return staffGroup; }
+
     public Staff getStaff() { return staff; }
 }

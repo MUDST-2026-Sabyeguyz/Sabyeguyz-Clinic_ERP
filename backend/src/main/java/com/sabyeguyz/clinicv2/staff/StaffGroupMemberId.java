@@ -9,7 +9,9 @@ public class StaffGroupMemberId implements Serializable {
 
     public StaffGroupMemberId() {}
 
-    public StaffGroupMemberId(Long staffGroup, Long staff) {
+    public StaffGroupMemberId(
+            Long staffGroup,
+            Long staff) {
         this.staffGroup = staffGroup;
         this.staff = staff;
     }
@@ -17,10 +19,14 @@ public class StaffGroupMemberId implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
+
         if (!(o instanceof StaffGroupMemberId that)) return false;
+
         return Objects.equals(staffGroup, that.staffGroup) && Objects.equals(staff, that.staff);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(staffGroup, staff); }
+    public int hashCode() {
+        return Objects.hash(staffGroup, staff);
+    }
 }
