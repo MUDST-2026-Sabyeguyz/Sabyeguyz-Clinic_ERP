@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.masterdata;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "master_data_value")
@@ -39,20 +40,28 @@ public class MasterDataValue {
     public MasterDataValue() {}
 
     public Long getId() { return id; }
+
     public MasterDataType getType() { return type; }
     public void setType(MasterDataType type) { this.type = type; }
+
     public String getValueName() { return valueName; }
     public void setValueName(String valueName) { this.valueName = valueName; }
+
     public boolean isValueStatus() { return valueStatus; }
     public void setValueStatus(boolean valueStatus) { this.valueStatus = valueStatus; }
+
     public Integer getSortOrder() { return sortOrder; }
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
+
     public Instant getValueCreateAt() { return valueCreateAt; }
     public void setValueCreateAt(Instant valueCreateAt) { this.valueCreateAt = valueCreateAt; }
+
     public Long getValueCreateBy() { return valueCreateBy; }
     public void setValueCreateBy(Long valueCreateBy) { this.valueCreateBy = valueCreateBy; }
+
     public Instant getValueUpdateAt() { return valueUpdateAt; }
     public void setValueUpdateAt(Instant valueUpdateAt) { this.valueUpdateAt = valueUpdateAt; }
+
     public Long getValueUpdateBy() { return valueUpdateBy; }
     public void setValueUpdateBy(Long valueUpdateBy) { this.valueUpdateBy = valueUpdateBy; }
 }
