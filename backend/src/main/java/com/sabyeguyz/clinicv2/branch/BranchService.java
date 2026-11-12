@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.branch;
 
 import java.time.Instant;
 import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,18 +36,27 @@ public class BranchService {
     public String nextBranchCode() {
         String max = repository.findMaxBranchCode();
         int next = max == null ? 1 : Integer.parseInt(max.trim()) + 1;
+
         if (next > 99) {
             throw new IllegalArgumentException("รหัสสาขาเต็มแล้ว (สูงสุด 99 สาขา)");
         }
+
         return String.format("%02d", next);
     }
 
     @Transactional
-    public Branch create(String branchCode, String name, String address, String phone, Long actorId) {
+    public Branch create(
+            String branchCode,
+            String name,
+            String address,
+            String phone,
+            Long actorId) {
         String code = normalizeCode(branchCode);
+
         if (repository.findByBranchCode(code).isPresent()) {
             throw new IllegalArgumentException("รหัสสาขาซ้ำ");
         }
+
         Branch branch = new Branch();
         branch.setBranchCode(code);
         branch.setBranchName(requireText(name, "branchName"));
@@ -55,34 +65,51 @@ public class BranchService {
         branch.setBranchStatus(true);
         branch.setBranchCreateAt(Instant.now());
         branch.setBranchCreateBy(actorId);
+
         return repository.save(branch);
     }
 
     @Transactional
-    public Branch update(Long id, String name, String address, String phone, Long actorId) {
+    public Branch update(
+            Long id,
+            String name,
+            String address,
+            String phone,
+            Long actorId) {
         Branch branch = find(id);
         branch.setBranchName(requireText(name, "branchName"));
         branch.setAddress(requireText(address, "address"));
         branch.setPhone(requireText(phone, "phone"));
         branch.setBranchUpdateAt(Instant.now());
         branch.setBranchUpdateBy(actorId);
+
         return repository.save(branch);
     }
 
     /** The optional branch settings. Times are "HH:mm"; the booking window needs both ends. */
-    public record Settings(String email, String licenseNo, String bookingOpenTime, String bookingCloseTime,
-                           Integer defaultAppointmentMinutes) {}
+    public record Settings(
+            String email,
+            String licenseNo,
+            String bookingOpenTime,
+            String bookingCloseTime,
+            Integer defaultAppointmentMinutes) {}
 
     @Transactional
-    public Branch applySettings(Long id, Settings settings, Long actorId) {
+    public Branch applySettings(
+            Long id,
+            Settings settings,
+            Long actorId) {
         Branch branch = find(id);
         String email = blankToNull(settings.email());
+
         if (email != null && (email.length() > 254
                 || !email.matches("^[^@.\\s]+(\\.[^@.\\s]+)*@[^@.\\s]+(\\.[^@.\\s]+)+$"))) {
             throw new IllegalArgumentException("รูปแบบอีเมลสาขาไม่ถูกต้อง");
         }
+
         java.time.LocalTime open = parseTime(settings.bookingOpenTime(), "เวลาเริ่มรับนัด");
         java.time.LocalTime close = parseTime(settings.bookingCloseTime(), "เวลาสิ้นสุดรับนัด");
+
         if ((open == null) != (close == null)) {
             throw new IllegalArgumentException("ต้องระบุช่วงเปิดรับนัดทั้งเวลาเริ่มและเวลาสิ้นสุด");
         }
@@ -97,6 +124,7 @@ public class BranchService {
         if (license != null && license.length() > 50) {
             throw new IllegalArgumentException("เลขใบอนุญาตยาวเกิน 50 ตัวอักษร");
         }
+
         branch.setBranchEmail(email);
         branch.setLicenseNo(license);
         branch.setBookingOpenTime(open);
@@ -104,6 +132,7 @@ public class BranchService {
         branch.setDefaultAppointmentMinutes(minutes);
         branch.setBranchUpdateAt(Instant.now());
         branch.setBranchUpdateBy(actorId);
+
         return repository.save(branch);
     }
 
@@ -111,9 +140,13 @@ public class BranchService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private static java.time.LocalTime parseTime(String value, String field) {
+    private static java.time.LocalTime parseTime(
+            String value,
+            String field) {
         String text = blankToNull(value);
+
         if (text == null) return null;
+
         try {
             return java.time.LocalTime.parse(text);
         } catch (java.time.format.DateTimeParseException exception) {
@@ -122,20 +155,26 @@ public class BranchService {
     }
 
     @Transactional
-    public Branch deactivate(Long id, Long actorId) {
+    public Branch deactivate(
+            Long id,
+            Long actorId) {
         Branch branch = find(id);
         branch.setBranchStatus(false);
         branch.setBranchUpdateAt(Instant.now());
         branch.setBranchUpdateBy(actorId);
+
         return repository.save(branch);
     }
 
     @Transactional
-    public Branch activate(Long id, Long actorId) {
+    public Branch activate(
+            Long id,
+            Long actorId) {
         Branch branch = find(id);
         branch.setBranchStatus(true);
         branch.setBranchUpdateAt(Instant.now());
         branch.setBranchUpdateBy(actorId);
+
         return repository.save(branch);
     }
 
@@ -147,6 +186,7 @@ public class BranchService {
         if (branchCode == null || !BRANCH_CODE.matcher(branchCode.trim()).matches()) {
             throw new IllegalArgumentException("branchCode ต้องเป็นตัวเลข 2 หลัก");
         }
+
         return branchCode.trim();
     }
 
@@ -154,6 +194,7 @@ public class BranchService {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
         }
+
         return value.trim();
     }
 }
