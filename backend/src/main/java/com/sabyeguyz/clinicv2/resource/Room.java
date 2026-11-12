@@ -1,8 +1,10 @@
 package com.sabyeguyz.clinicv2.resource;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
 
 @Entity
 @Table(name = "room")
@@ -47,20 +49,28 @@ public class Room {
     public void setCapacity(Integer capacity) { this.capacity = capacity; }
 
     public Long getId() { return id; }
+
     public Branch getBranch() { return branch; }
     public void setBranch(Branch branch) { this.branch = branch; }
+
     public String getRoomName() { return roomName; }
     public void setRoomName(String roomName) { this.roomName = roomName; }
+
     public String getRoomType() { return roomType; }
     public void setRoomType(String roomType) { this.roomType = roomType; }
+
     public boolean isRoomStatus() { return roomStatus; }
     public void setRoomStatus(boolean roomStatus) { this.roomStatus = roomStatus; }
+
     public Instant getRoomCreateAt() { return roomCreateAt; }
     public void setRoomCreateAt(Instant roomCreateAt) { this.roomCreateAt = roomCreateAt; }
+
     public Long getRoomCreateBy() { return roomCreateBy; }
     public void setRoomCreateBy(Long roomCreateBy) { this.roomCreateBy = roomCreateBy; }
+
     public Instant getRoomUpdateAt() { return roomUpdateAt; }
     public void setRoomUpdateAt(Instant roomUpdateAt) { this.roomUpdateAt = roomUpdateAt; }
+
     public Long getRoomUpdateBy() { return roomUpdateBy; }
     public void setRoomUpdateBy(Long roomUpdateBy) { this.roomUpdateBy = roomUpdateBy; }
 }
