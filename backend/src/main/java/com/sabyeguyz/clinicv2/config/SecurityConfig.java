@@ -1,11 +1,12 @@
 package com.sabyeguyz.clinicv2.config;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,19 +16,20 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.web.SecurityFilterChain;
+
 import com.sabyeguyz.clinicv2.auth.AppUser;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.auth.UserRoleRepository;
@@ -47,10 +49,13 @@ public class SecurityConfig {
         if (secret.length() < 32) {
             throw new IllegalArgumentException("JWT secret must be at least 32 characters");
         }
+
         String lower = secret.toLowerCase(java.util.Locale.ROOT);
+
         if (lower.contains("change-me") || lower.contains("replace-with") || lower.contains("local-secret")) {
             throw new IllegalArgumentException("JWT secret is a placeholder; set JWT_SECRET to a random value");
         }
+
         signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     }
 
@@ -68,13 +73,17 @@ public class SecurityConfig {
                 .build();
         OAuth2TokenValidator<Jwt> activeUserValidator = jwt -> {
             Long userId;
+
             try {
                 userId = Long.valueOf(jwt.getSubject());
             } catch (NumberFormatException ex) {
                 return OAuth2TokenValidatorResult.failure(
-                        new OAuth2Error("invalid_token",
-                                "Invalid token subject", null));
+                        new OAuth2Error(
+                                "invalid_token",
+                                "Invalid token subject",
+                                null));
             }
+
             boolean active = users.findById(userId)
                     .map(AppUser::isUserStatus)
                     .orElse(false);
@@ -82,8 +91,10 @@ public class SecurityConfig {
             return active
                     ? OAuth2TokenValidatorResult.success()
                     : OAuth2TokenValidatorResult.failure(
-                    new OAuth2Error("invalid_token",
-                            "User account is inactive", null));
+                            new OAuth2Error(
+                                    "invalid_token",
+                                    "User account is inactive",
+                                    null));
         };
 
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
@@ -100,19 +111,21 @@ public class SecurityConfig {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
             accountState.requireCurrent(jwt);
+
             return userRoles.findRoleNamesByUserId(Long.valueOf(jwt.getSubject()))
-                        .stream()
-                        .<GrantedAuthority>map(role ->
-                                new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT)))
-                        .toList();
+                    .stream()
+                    .<GrantedAuthority>map(role ->
+                            new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT)))
+                    .toList();
         });
 
         return converter;
     }
 
     @Bean
-    SecurityFilterChain security(HttpSecurity http, JwtAuthenticationConverter authenticationConverter)
-            throws Exception {
+    SecurityFilterChain security(
+            HttpSecurity http,
+            JwtAuthenticationConverter authenticationConverter) throws Exception {
         return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
