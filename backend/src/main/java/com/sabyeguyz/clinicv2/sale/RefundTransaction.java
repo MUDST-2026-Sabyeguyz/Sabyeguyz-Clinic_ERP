@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.enums.RefundStatus;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
+import com.sabyeguyz.clinicv2.enums.RefundStatus;
 
 /**
  * Money returned against a payment. Every refund hangs off a Refund
@@ -55,16 +57,22 @@ public class RefundTransaction {
     public RefundTransaction() {}
 
     public Long getId() { return id; }
+
     public TransactionCancellation getCancellation() { return cancellation; }
     public void setCancellation(TransactionCancellation cancellation) { this.cancellation = cancellation; }
+
     public PaymentTransaction getOriginalPayment() { return originalPayment; }
     public void setOriginalPayment(PaymentTransaction originalPayment) { this.originalPayment = originalPayment; }
+
     public BigDecimal getRefundAmount() { return refundAmount; }
     public void setRefundAmount(BigDecimal refundAmount) { this.refundAmount = refundAmount; }
+
     public PaymentMethod getPaymentMethod() { return paymentMethod; }
     public void setPaymentMethod(PaymentMethod paymentMethod) { this.paymentMethod = paymentMethod; }
+
     public RefundStatus getRefundStatus() { return refundStatus; }
     public void setRefundStatus(RefundStatus refundStatus) { this.refundStatus = refundStatus; }
+
     public Instant getRefundedAt() { return refundedAt; }
     public void setRefundedAt(Instant refundedAt) { this.refundedAt = refundedAt; }
     /** Approver of the refund (required before it is Completed); kept permanently. */
@@ -76,12 +84,16 @@ public class RefundTransaction {
 
     public Long getApprovedBy() { return approvedBy; }
     public void setApprovedBy(Long approvedBy) { this.approvedBy = approvedBy; }
+
     public Instant getApprovedAt() { return approvedAt; }
     public void setApprovedAt(Instant approvedAt) { this.approvedAt = approvedAt; }
+
     public Long getRefundedBy() { return refundedBy; }
     public void setRefundedBy(Long refundedBy) { this.refundedBy = refundedBy; }
+
     public Instant getRequestedAt() { return requestedAt; }
     public void setRequestedAt(Instant requestedAt) { this.requestedAt = requestedAt; }
+
     public Long getRequestedBy() { return requestedBy; }
     public void setRequestedBy(Long requestedBy) { this.requestedBy = requestedBy; }
 }

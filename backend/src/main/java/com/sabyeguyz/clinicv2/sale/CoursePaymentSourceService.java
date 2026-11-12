@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.catalog.Course;
-import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import java.math.BigDecimal;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.catalog.Course;
+import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 
 @Service
 @Transactional(readOnly = true)
@@ -15,8 +17,7 @@ public class CoursePaymentSourceService {
 
     public CoursePaymentSourceService(
             CourseRepository courses,
-            ReceiptCoursePaymentRepository coursePayments
-    ) {
+            ReceiptCoursePaymentRepository coursePayments) {
         this.courses = courses;
         this.coursePayments = coursePayments;
     }
@@ -25,7 +26,9 @@ public class CoursePaymentSourceService {
      * Returns this course's net item amount on the specified receipt.
      * The caller must separately validate the original payment and access.
      */
-    public BigDecimal netAmountFor(Long receiptId, Long courseId) {
+    public BigDecimal netAmountFor(
+            Long receiptId,
+            Long courseId) {
         if (receiptId == null || courseId == null) {
             throw new IllegalArgumentException(
                     "ต้องระบุรหัสใบเสร็จและคอร์ส"

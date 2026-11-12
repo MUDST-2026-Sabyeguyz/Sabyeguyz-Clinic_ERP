@@ -1,14 +1,16 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 
 @Service
 @Transactional(readOnly = true)
@@ -20,10 +22,11 @@ public class ReceiptReadService {
     private final BranchAccessPolicy branchAccess;
 
     public ReceiptReadService(
-            ReceiptRepository receipts, SalesTransactionRepository sales,
+            ReceiptRepository receipts,
+            SalesTransactionRepository sales,
             ReceiptCoursePaymentRepository coursePayments,
-            PaymentTransactionRepository payments, BranchAccessPolicy branchAccess
-    ) {
+            PaymentTransactionRepository payments,
+            BranchAccessPolicy branchAccess) {
         this.receipts = receipts;
         this.sales = sales;
         this.coursePayments = coursePayments;
@@ -41,24 +44,21 @@ public class ReceiptReadService {
             BigDecimal amount,
             BigDecimal lineDiscountAmount,
             BigDecimal allocatedBillDiscountAmount,
-            boolean effective
-    ) {}
+            boolean effective) {}
 
     public record CoursePaymentLine(
             Long courseId,
             String itemNameSnapshot,
             BigDecimal amount,
             BigDecimal allocatedBillDiscountAmount,
-            BigDecimal netAmount
-    ) {}
+            BigDecimal netAmount) {}
 
     public record PaymentLine(
             Long paymentId,
             Instant paymentDate,
             String paymentMethod,
             BigDecimal amount,
-            String status
-    ) {}
+            String status) {}
 
     public record Detail(
             Long receiptId,
@@ -74,8 +74,7 @@ public class ReceiptReadService {
             BigDecimal netAmount,
             List<SaleLine> sales,
             List<CoursePaymentLine> coursePayments,
-            List<PaymentLine> payments
-    ) {}
+            List<PaymentLine> payments) {}
 
     public record Summary(
             Long receiptId,
@@ -86,8 +85,7 @@ public class ReceiptReadService {
             String receiptStatus,
             String paymentLabelCode,
             String paymentLabelName,
-            BigDecimal netAmount
-    ) {}
+            BigDecimal netAmount) {}
 
     public Detail getDetail(Long receiptId) {
         if (receiptId == null) {
@@ -112,8 +110,7 @@ public class ReceiptReadService {
                         line.getAmount(),
                         line.getLineDiscountAmount(),
                         line.getAllocatedBillDiscountAmount(),
-                        line.isTransactionStatus()
-                ))
+                        line.isTransactionStatus()))
                 .toList();
 
         List<CoursePaymentLine> courseLines = coursePayments
@@ -124,8 +121,7 @@ public class ReceiptReadService {
                         item.getItemNameSnapshot(),
                         item.getAmount(),
                         item.getAllocatedBillDiscountAmount(),
-                        item.getAmount().subtract(item.getAllocatedBillDiscountAmount())
-                ))
+                        item.getAmount().subtract(item.getAllocatedBillDiscountAmount())))
                 .toList();
 
         List<PaymentLine> paymentLines = payments
@@ -138,11 +134,11 @@ public class ReceiptReadService {
                         payment.getAmount(),
                         payment.isPaymentStatus()
                                 ? "Completed"
-                                : "Voided"
-                ))
+                                : "Voided"))
                 .toList();
 
         // Preserve the stored receipt totals instead of recalculating history.
+
         return new Detail(
                 receipt.getId(),
                 receipt.getReceiptNo(),
@@ -155,8 +151,9 @@ public class ReceiptReadService {
                 receipt.getSubtotalBeforeDiscount(),
                 receipt.getBillDiscountAmount(),
                 receipt.getNetAmount(),
-                saleLines, courseLines, paymentLines
-        );
+                saleLines,
+                courseLines,
+                paymentLines);
     }
 
     /**
@@ -185,8 +182,7 @@ public class ReceiptReadService {
             Long patientId,
             String branchCode,
             int page,
-            int size
-    ) {
+            int size) {
         if (patientId != null && patientId <= 0) {
             throw new IllegalArgumentException("รหัสผู้ป่วยไม่ถูกต้อง");
         }
@@ -206,17 +202,16 @@ public class ReceiptReadService {
         return receipts.searchReceiptHistory(
                 patientId,
                 branchId,
-                PageRequest.of(page, size)
-        ).map(receipt -> new Summary(
-                receipt.getId(),
-                receipt.getReceiptNo(),
-                receipt.getPatient().getId(),
-                receipt.getBranch().getId(),
-                receipt.getSaleDate(),
-                receipt.getReceiptStatus().name(),
-                receipt.getPaymentLabelOption().getCode(),
-                receipt.getPaymentLabelOption().getName(),
-                receipt.getNetAmount()
-        ));
+                PageRequest.of(page, size))
+                .map(receipt -> new Summary(
+                        receipt.getId(),
+                        receipt.getReceiptNo(),
+                        receipt.getPatient().getId(),
+                        receipt.getBranch().getId(),
+                        receipt.getSaleDate(),
+                        receipt.getReceiptStatus().name(),
+                        receipt.getPaymentLabelOption().getCode(),
+                        receipt.getPaymentLabelOption().getName(),
+                        receipt.getNetAmount()));
     }
 }

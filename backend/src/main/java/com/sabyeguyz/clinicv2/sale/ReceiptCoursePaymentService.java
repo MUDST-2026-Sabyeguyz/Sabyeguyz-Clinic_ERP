@@ -1,18 +1,20 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
-import com.sabyeguyz.clinicv2.catalog.Course;
-import com.sabyeguyz.clinicv2.catalog.CourseRepository;
-import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
+import com.sabyeguyz.clinicv2.catalog.Course;
+import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 
 @Service
 public class ReceiptCoursePaymentService {
@@ -24,19 +26,20 @@ public class ReceiptCoursePaymentService {
     public ReceiptCoursePaymentService(
             ReceiptCoursePaymentRepository repository,
             CourseRepository courses,
-            BranchAccessPolicy branchAccess
-    ) {
+            BranchAccessPolicy branchAccess) {
         this.repository = repository;
         this.courses = courses;
         this.branchAccess = branchAccess;
     }
 
-    public record ItemRequest(Long courseId, BigDecimal amount) {}
+    public record ItemRequest(
+            Long courseId,
+            BigDecimal amount) {}
 
     @Transactional(propagation = Propagation.MANDATORY)
     public List<ReceiptCoursePayment> prepareAll(
-            Receipt receipt, List<ItemRequest> requests
-    ) {
+            Receipt receipt,
+            List<ItemRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             return List.of();
         }
@@ -69,8 +72,7 @@ public class ReceiptCoursePaymentService {
     public ReceiptCoursePayment prepare(
             Receipt receipt,
             Long courseId,
-            BigDecimal amount
-    ) {
+            BigDecimal amount) {
         if (receipt == null || receipt.getId() == null) {
             throw new IllegalArgumentException("ต้องระบุใบเสร็จที่บันทึกแล้ว");
         }
