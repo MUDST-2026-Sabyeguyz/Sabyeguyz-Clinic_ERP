@@ -17,8 +17,8 @@ if(-not(Test-Path -LiteralPath $envFile)){
     $existing=@(& docker volume ls --filter "name=^${project}_postgres-v2-data$" --format '{{.Name}}')
     if($LASTEXITCODE -ne 0){throw 'Volume inventory failed'}
     if($existing.Count){throw 'Existing data found without this environment file. Recover its credentials instead of generating new ones.'}
-    $lines=@('POSTGRES_DB=clinic_erp_v2','POSTGRES_USER=clinic',('POSTGRES_PASSWORD='+(New-LocalSecret)),('JWT_SECRET='+(New-LocalSecret)),'POSTGRES_PORT=127.0.0.1:15432','BACKEND_PORT=127.0.0.1:18081','FRONTEND_PORT=127.0.0.1:18082')
-    if(-not $DemoSeed){$lines+=@('CLINIC_BOOTSTRAP_MANAGER_USERNAME=phase1.manager',('CLINIC_BOOTSTRAP_MANAGER_PASSWORD='+(New-LocalSecret)))}
+    $lines=@('POSTGRES_DB=clinic_erp_v2','POSTGRES_USER=clinic',('POSTGRES_PASSWORD='+(New-LocalSecret)),('JWT_SECRET='+(New-LocalSecret)),'POSTGRES_PORT=15432','BACKEND_PORT=127.0.0.1:18081','FRONTEND_PORT=127.0.0.1:18082')
+    if(-not $DemoSeed){$lines+=@('CLINIC_BOOTSTRAP_MANAGER_USERNAME=phase1.manager','CLINIC_BOOTSTRAP_MANAGER_EMAIL=phase1.manager@example.invalid',('CLINIC_BOOTSTRAP_MANAGER_PASSWORD='+(New-LocalSecret)))}
     [IO.File]::WriteAllLines($envFile,$lines,(New-Object Text.UTF8Encoding($false)))
     $lines=$null
 }

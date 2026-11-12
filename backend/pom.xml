@@ -160,9 +160,9 @@
                         <artifactId>spring-boot-maven-plugin</artifactId>
                         <configuration>
                             <mainClass>com.sabyeguyz.clinicv2.ClinicV2Application</mainClass>
-                            <jvmArguments>-Xmx512m</jvmArguments>
+
                             <useTestClasspath>true</useTestClasspath>
-                            <jvmArguments>&quot;-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco.exec,append=true,includes=com/sabyeguyz/clinicv2/*&quot;</jvmArguments>
+                            <jvmArguments>-Xmx512m</jvmArguments>
                             <classesDirectory>${project.build.testOutputDirectory}</classesDirectory>
                             <additionalClasspathElements>
                                 <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
