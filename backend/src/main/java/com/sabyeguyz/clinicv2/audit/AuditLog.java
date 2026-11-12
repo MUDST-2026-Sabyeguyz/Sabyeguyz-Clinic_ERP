@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.audit;
 
-import com.sabyeguyz.clinicv2.enums.AuditAction;
+import java.time.Instant;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.Instant;
+
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 
 @Entity
 @Table(name = "audit_log")
@@ -39,19 +41,56 @@ public class AuditLog {
 
     public AuditLog() {}
 
-    public Long getId() { return id; }
-    public String getTableName() { return tableName; }
-    public void setTableName(String tableName) { this.tableName = tableName; }
-    public String getRecordId() { return recordId; }
-    public void setRecordId(String recordId) { this.recordId = recordId; }
-    public AuditAction getAction() { return action; }
-    public void setAction(AuditAction action) { this.action = action; }
-    public String getOldValue() { return oldValue; }
-    public void setOldValue(String oldValue) { this.oldValue = oldValue; }
-    public String getNewValue() { return newValue; }
-    public void setNewValue(String newValue) { this.newValue = newValue; }
-    public Long getChangedBy() { return changedBy; }
-    public void setChangedBy(Long changedBy) { this.changedBy = changedBy; }
-    public Instant getChangedAt() { return changedAt; }
-    public void setChangedAt(Instant changedAt) { this.changedAt = changedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getTableName() {
+        return tableName;
+    }
+    public void setTableName(String tableName) {
+        this.tableName = tableName;
+    }
+
+    public String getRecordId() {
+        return recordId;
+    }
+    public void setRecordId(String recordId) {
+        this.recordId = recordId;
+    }
+
+    public AuditAction getAction() {
+        return action;
+    }
+    public void setAction(AuditAction action) {
+        this.action = action;
+    }
+
+    public String getOldValue() {
+        return oldValue;
+    }
+    public void setOldValue(String oldValue) {
+        this.oldValue = oldValue;
+    }
+
+    public String getNewValue() {
+        return newValue;
+    }
+    public void setNewValue(String newValue) {
+        this.newValue = newValue;
+    }
+
+    public Long getChangedBy() {
+        return changedBy;
+    }
+    public void setChangedBy(Long changedBy) {
+        this.changedBy = changedBy;
+    }
+
+    public Instant getChangedAt() {
+        return changedAt;
+    }
+    public void setChangedAt(Instant changedAt) {
+        this.changedAt = changedAt;
+    }
 }
