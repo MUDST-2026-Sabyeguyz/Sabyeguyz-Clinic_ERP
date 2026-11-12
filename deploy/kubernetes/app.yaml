@@ -1,63 +1,4 @@
 apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-data
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-spec:
-  selector: {app: postgres}
-  ports: [{port: 5432, targetPort: 5432}]
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgres
-spec:
-  serviceName: postgres
-  replicas: 1
-  selector:
-    matchLabels: {app: postgres}
-  template:
-    metadata:
-      labels: {app: postgres}
-    spec:
-      automountServiceAccountToken: false
-      containers:
-        - name: postgres
-          image: postgres:16-alpine
-          env:
-            - {name: POSTGRES_DB, value: clinic_demo}
-            - {name: POSTGRES_USER, value: clinic}
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef: {name: clinic-secrets, key: POSTGRES_PASSWORD}
-          ports: [{containerPort: 5432}]
-          securityContext:
-            allowPrivilegeEscalation: false
-            seccompProfile: {type: RuntimeDefault}
-          resources:
-            requests: {cpu: 100m, memory: 256Mi}
-            limits: {cpu: '1', memory: 1Gi}
-          volumeMounts:
-            - {name: data, mountPath: /var/lib/postgresql/data, subPath: postgres}
-          readinessProbe:
-            exec:
-              command: [pg_isready, -U, clinic, -d, clinic_demo]
-            initialDelaySeconds: 5
-            periodSeconds: 5
-      volumes:
-        - name: data
-          persistentVolumeClaim: {claimName: postgres-data}
----
-apiVersion: v1
 kind: Service
 metadata:
   name: backend
@@ -82,25 +23,14 @@ spec:
         - name: backend
           image: __BACKEND_IMAGE__
           imagePullPolicy: IfNotPresent
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
-            seccompProfile: {type: RuntimeDefault}
-          resources:
-            requests: {cpu: 250m, memory: 512Mi}
-            limits: {cpu: '1', memory: 1Gi}
-          volumeMounts:
-            - {name: tmp, mountPath: /tmp}
           env:
             - {name: SPRING_PROFILES_ACTIVE, value: 'docker,v2'}
+            - {name: CLINIC_DATABASE_KIND, value: '__DATABASE_KIND__'}
+            - {name: CLINIC_SEED_MODE, value: '__SEED_MODE__'}
             - {name: SERVER_FORWARD_HEADERS_STRATEGY, value: framework}
-            - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/clinic_demo'}
+            - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/__DATABASE_NAME__'}
             - {name: SPRING_DATASOURCE_USERNAME, value: clinic}
-            - {name: APP_V2_FLYWAY_EXTRA_LOCATIONS, value: '__FLYWAY_EXTRA_LOCATIONS__'}
+            - {name: SPRING_FLYWAY_ENABLED, value: 'true'}
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef: {name: clinic-secrets, key: SPRING_DATASOURCE_PASSWORD}
@@ -115,9 +45,6 @@ spec:
           readinessProbe:
             httpGet: {path: /actuator/health, port: 8080}
             periodSeconds: 5
-      volumes:
-        - name: tmp
-          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -144,45 +71,7 @@ spec:
         - name: frontend
           image: __FRONTEND_IMAGE__
           imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: [ALL]
-              add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
-            seccompProfile: {type: RuntimeDefault}
-          resources:
-            requests: {cpu: 50m, memory: 64Mi}
-            limits: {cpu: 500m, memory: 256Mi}
           ports: [{containerPort: 80}]
           readinessProbe:
             httpGet: {path: /healthz, port: 80}
             periodSeconds: 5
----
-# Only the backend may reach the database, and only the frontend may reach the backend.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: postgres-from-backend
-spec:
-  podSelector:
-    matchLabels: {app: postgres}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels: {app: backend}
-      ports: [{port: 5432}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: backend-from-frontend
-spec:
-  podSelector:
-    matchLabels: {app: backend}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels: {app: frontend}
-      ports: [{port: 8080}]
