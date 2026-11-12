@@ -39,11 +39,14 @@ try {
 $images=@("clinic-actions-backend:$tag","clinic-actions-frontend:$tag")
 Invoke-Checked docker @('build','--platform','linux/amd64','--label',"org.opencontainers.image.revision=$SourceSha",'-t',$images[0],'./backend')
 Invoke-Checked docker @('build','--platform','linux/amd64','--label',"org.opencontainers.image.revision=$SourceSha",'-t',$images[1],'./frontend')
+$scanner='aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e'
+Invoke-Checked docker @('pull',$scanner)
 foreach($index in 0..1) {
  $name=@('backend','frontend')[$index]
  Invoke-Checked docker @('run','--rm','--mount','type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock',
- '--mount',"type=bind,source=$evidence,target=/reports",'--mount','type=volume,source=clinic-actions-trivy-cache,target=/root/.cache/',
- 'aquasec/trivy:0.66.0','image','--exit-code','1','--severity','HIGH,CRITICAL','--format','json','--output',"/reports/trivy-$name.json",$images[$index])
+ '--mount','type=volume,source=clinic-actions-trivy-cache,target=/root/.cache/',
+ $scanner,'image','--timeout','10m','--exit-code','1','--severity','HIGH,CRITICAL','--format','json',$images[$index]) |
+ Set-Content "$evidence/trivy-$name.json" -Encoding utf8
 }
 Invoke-Checked docker @('pull','--platform','linux/amd64','postgres:16-alpine')
 Invoke-Checked python @('./scripts/actions/import-images.py','--nodes',(Join-Path $script:Runtime 'nodes.json'),$images[0],$images[1],'postgres:16-alpine')
