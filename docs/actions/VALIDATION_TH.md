@@ -20,8 +20,14 @@ Branch เริ่มจาก develop `dc7e9242cf3d174b93e5dcefccc27d58fe766b6
 
 Legacy launcher/config/concurrency task เคยกำหนด 18080 ตายตัว ซึ่งมี Compose frontend เดิมใช้อยู่ เพิ่ม `CLINIC_API_TEST_PORT` แบบ allowlist เฉพาะ 18080/18083 และใช้ 18083 ใน pipeline; ไม่ย้ายหรือหยุด service เดิม Profile ทดสอบยัง bind loopback และใช้ H2 แยกเท่านั้น ส่วน 19001 ต้องว่างและ launcher ปฏิเสธถ้าไม่ว่าง
 
-## ยังไม่ใช่ผล deployment
+## ผล deployment จริงหลังแก้ dependencies
 
-ยังไม่มี GitHub Actions run, Trivy image scan, actual image import, Flyway Job, rollout หรือ authenticated deployed smoke ที่ยืนยันจาก GitHub workflow นี้ เพราะ default branch ยังไม่มี entrypoint และ Actions ยังปิดอยู่ Bootstrap PR และ branch งานต้องได้รับการ review ก่อนอนุมัติ merge/bootstrap และเปิดใช้งานจริง ห้ามอ้างว่าไฟล์หรือ dry-run เป็น rollout สำเร็จ
+[GitHub Actions run 43318023222](https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP/actions/runs/43318023222) สำเร็จจาก source SHA `ab5b9e349ac44bd0c5332929d1c8f00cf7ac70c4`; API suite 17 XML / 434 executed ผ่านทั้งหมด ไม่มี failure/error/skip; frontend 153 tests และ typecheck/build ผ่าน
 
-Runtime credentials, runner settings, logs, XML, node_modules, dist, target และ generated manifests ไม่รวมใน commit รายงานนี้จะเพิ่มผล rerun ที่พอร์ตแยกหลังเสร็จเท่านั้น
+Trivy HIGH/CRITICAL: backend 44 → 0, frontend 0; ทั้งสอง scans ใช้ pinned Trivy เดียวกับ workflow และฐานข้อมูลปัจจุบัน ณ run นั้น รายงาน JSON before/after และตารางครบ 44 CVE อยู่ใน `docs/actions/evidence/` และ `docs/actions-dependency-remediation.md`
+
+Image tag `ab5b9e349ac4-43318023222-1`; annotation SHA และ image tags ตรง run, Flyway migration Job สำเร็จ 1/1 (12 migrations, v1008), backend/frontend/Postgres Ready 1/1; health=200, Manager login/protected read=200, anonymous protected API=401
+
+Artifact `clinic-actions-release-43318023222-1` มี 27 files รวม 17 API reports, Trivy, manifests, release/smoke และ previous release; ตรวจแล้วไม่มี kubeconfig หรือ runtime secret values อยู่ใน artifact
+
+Jenkins เดิมยังทำงาน และ clinic-present backend 1/1 กับ frontend 2/2 หลัง deploy. Runtime credentials, runner settings, logs, node_modules, dist และ target ยังคงอยู่นอก Git; บัญชี Manager อยู่ใน `%LOCALAPPDATA%\ClinicActionsDeploy\credentials.json` และไม่บันทึกรหัสผ่านในรายงาน

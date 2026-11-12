@@ -89,3 +89,19 @@ Rollback เปลี่ยนเฉพาะ image ของแอป ไม่
 ## นำเสนอ
 
 แสดง source SHA ใน GitHub → manual run → runner name → tests/build/scan → migration/rollout → pods/imageID → login/read smoke และ artifacts ต้องใช้ run จริงเท่านั้น ไม่ใช้ local validation หรือ dry-run อ้างว่า GitHub deployment ผ่านแล้ว
+
+## Deployment จริงหลังแก้ dependencies
+
+GitHub Actions [run 43318023222](https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP/actions/runs/43318023222) สำเร็จครบทุกขั้นจาก source SHA `ab5b9e349ac44bd0c5332929d1c8f00cf7ac70c4` ใน namespace `clinic-actions-demo`:
+
+- Frontend 153 tests และ typecheck/build ผ่าน; backend API Cypress 17 XML / 434 executed, failures 0, errors 0, skips 0
+- Trivy backend และ frontend: HIGH/CRITICAL 0 ทั้งคู่ (baseline ก่อนแก้: 33 HIGH + 11 CRITICAL ใน backend; frontend ยังไม่ได้สแกนใน run เดิม)
+- Image tag: `ab5b9e349ac4-43318023222-1`; backend/frontend Deployment annotations ตรง full source SHA และ image IDs ถูกตรวจใน smoke
+- Flyway Job `migrate-ab5b9e349ac4-43318023222-1` สำเร็จ 1/1, ใช้ migrations 12 รายการ ถึง v1008; backend/frontend/Postgres Ready 1/1
+- Frontend health 200, Manager login และ protected read 200, anonymous protected API 401
+- Artifact `clinic-actions-release-43318023222-1` มี reports/manifests/smoke และไม่มี kubeconfig หรือค่า credential ตรวจเทียบกับไฟล์ runtime แล้ว
+- หลัง run ยืนยัน Jenkins container ยังทำงาน และ clinic-present backend 1/1, frontend 2/2
+
+เปิดแอปจากเครื่องนี้ที่ **http://127.0.0.1:18190** (local port-forward; ไม่ใช่ public URL) บัญชีที่สุ่มให้การ deploy อยู่ใน `%LOCALAPPDATA%\ClinicActionsDeploy\credentials.json`; อ่านรหัสผ่านจากเครื่องที่ provision เท่านั้น อย่าแนบไฟล์หรือรหัสผ่านในเอกสาร/แชท
+
+PR #111 ยังเปิดอยู่และยังไม่ merge
