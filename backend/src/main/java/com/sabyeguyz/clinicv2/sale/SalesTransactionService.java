@@ -1,5 +1,12 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.Course;
@@ -8,11 +15,6 @@ import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Records a Sales_transaction line on a Receipt (Clinic ERP Workflow Brief
@@ -33,45 +35,111 @@ public class SalesTransactionService {
     private final SalesTransactionRepository transactions;
     private final CourseService courseService;
 
-    public SalesTransactionService(SalesTransactionRepository transactions, CourseService courseService) {
+    public SalesTransactionService(
+            SalesTransactionRepository transactions,
+            CourseService courseService) {
         this.transactions = transactions;
         this.courseService = courseService;
     }
 
-    public record CoursePurchase(SalesTransaction transaction, Course course) {}
+    public record CoursePurchase(
+            SalesTransaction transaction,
+            Course course) {}
 
     /** SingleVisit: a plain priced line, no Course involved. Assessment is no longer sold. */
     @Transactional
-    public SalesTransaction recordVisitSale(Receipt receipt, Patient patient, Branch branch, Service service,
-                                             TransactionType type, Staff treatingStaff, Staff salespersonStaff,
-                                             int quantity, BigDecimal unitPrice, PatientVisit visit,
-                                             Discount discount, Long actorId) {
-        require(type == TransactionType.SingleVisit, "recordVisitSale ใช้ได้เฉพาะ SingleVisit (ไม่รองรับ Assessment แล้ว)");
+    public SalesTransaction recordVisitSale(
+            Receipt receipt,
+            Patient patient,
+            Branch branch,
+            Service service,
+            TransactionType type,
+            Staff treatingStaff,
+            Staff salespersonStaff,
+            int quantity,
+            BigDecimal unitPrice,
+            PatientVisit visit,
+            Discount discount,
+            Long actorId) {
+        require(
+                type == TransactionType.SingleVisit,
+                "recordVisitSale ใช้ได้เฉพาะ SingleVisit (ไม่รองรับ Assessment แล้ว)");
         BigDecimal price = unitPrice != null ? unitPrice : service.getServicePrice();
-        SalesTransaction transaction = base(receipt, patient, branch, service, type, treatingStaff, salespersonStaff,
-                quantity, price, visit, discount, UNIT_VISIT, actorId);
+        SalesTransaction transaction = base(
+                receipt,
+                patient,
+                branch,
+                service,
+                type,
+                treatingStaff,
+                salespersonStaff,
+                quantity,
+                price,
+                visit,
+                discount,
+                UNIT_VISIT,
+                actorId);
+
         return transactions.save(transaction);
     }
 
     /** CoursePurchase: records the sale line first, then the Course that references it. */
     @Transactional
-    public CoursePurchase recordCoursePurchase(Receipt receipt, Patient patient, Branch branch, Service courseTemplate,
-                                                Staff sellerStaff, BigDecimal priceOverride,
-                                                Integer totalVisitsOverride, Integer bonusVisitsOverride,
-                                                Discount discount, LocalDate saleDate, Long actorId) {
+    public CoursePurchase recordCoursePurchase(
+            Receipt receipt,
+            Patient patient,
+            Branch branch,
+            Service courseTemplate,
+            Staff sellerStaff,
+            BigDecimal priceOverride,
+            Integer totalVisitsOverride,
+            Integer bonusVisitsOverride,
+            Discount discount,
+            LocalDate saleDate,
+            Long actorId) {
         BigDecimal price = priceOverride != null ? priceOverride : courseTemplate.getServicePrice();
-        SalesTransaction transaction = transactions.save(base(receipt, patient, branch, courseTemplate,
-                TransactionType.CoursePurchase, null, sellerStaff, 1, price, null, discount, UNIT_COURSE, actorId));
+        SalesTransaction transaction = transactions.save(base(
+                receipt,
+                patient,
+                branch,
+                courseTemplate,
+                TransactionType.CoursePurchase,
+                null,
+                sellerStaff,
+                1,
+                price,
+                null,
+                discount,
+                UNIT_COURSE,
+                actorId));
 
-        Course course = courseService.sell(receipt, transaction, courseTemplate, sellerStaff,
-                totalVisitsOverride, bonusVisitsOverride, saleDate, actorId);
+        Course course = courseService.sell(
+                receipt,
+                transaction,
+                courseTemplate,
+                sellerStaff,
+                totalVisitsOverride,
+                bonusVisitsOverride,
+                saleDate,
+                actorId);
+
         return new CoursePurchase(transaction, course);
     }
 
-    private SalesTransaction base(Receipt receipt, Patient patient, Branch branch, Service service,
-                                   TransactionType type, Staff treatingStaff, Staff salespersonStaff, int quantity,
-                                   BigDecimal unitPrice, PatientVisit visit, Discount discount, String unitName,
-                                   Long actorId) {
+    private SalesTransaction base(
+            Receipt receipt,
+            Patient patient,
+            Branch branch,
+            Service service,
+            TransactionType type,
+            Staff treatingStaff,
+            Staff salespersonStaff,
+            int quantity,
+            BigDecimal unitPrice,
+            PatientVisit visit,
+            Discount discount,
+            String unitName,
+            Long actorId) {
         require(receipt != null, "ต้องระบุใบเสร็จ");
         require(patient != null, "ต้องระบุผู้ป่วย");
         require(branch != null, "ต้องระบุสาขา");
@@ -108,24 +176,32 @@ public class SalesTransactionService {
         transaction.setTransactionStatus(true);
         transaction.setTransactionCreateAt(Instant.now());
         transaction.setTransactionCreateBy(actorId);
+
         return transaction;
     }
 
     /** Reverses a transaction without deleting it (Clinic ERP Workflow Brief Section 6 "Cancellation/Void"). */
     @Transactional
-    public SalesTransaction voidTransaction(Long transactionId, Long actorId) {
+    public SalesTransaction voidTransaction(
+            Long transactionId,
+            Long actorId) {
         SalesTransaction transaction = transactions.findById(transactionId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการขาย"));
+
         if (!transaction.isTransactionStatus()) {
             throw new IllegalArgumentException("รายการนี้ถูกยกเลิกไปแล้ว");
         }
+
         transaction.setTransactionStatus(false);
         transaction.setTransactionUpdateAt(Instant.now());
         transaction.setTransactionUpdateBy(actorId);
+
         return transactions.save(transaction);
     }
 
-    private static void require(boolean condition, String message) {
+    private static void require(
+            boolean condition,
+            String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
         }

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,8 +22,10 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     /** Completed payments in [from, to); callers supply an exclusive upper bound. */
     @Query("select p from PaymentTransaction p where p.paymentDate >= :from and p.paymentDate < :to "
             + "and p.paymentStatus = true and (:branchId is null or p.branch.id = :branchId)")
-    List<PaymentTransaction> findByPaymentDateBetween(@Param("from") Instant from, @Param("to") Instant to,
-                                                        @Param("branchId") Long branchId);
+    List<PaymentTransaction> findByPaymentDateBetween(
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("branchId") Long branchId);
 
     /**
      * Returns the completed payment for a receipt.
