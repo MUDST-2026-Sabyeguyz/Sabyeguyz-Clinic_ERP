@@ -1,19 +1,21 @@
 package com.sabyeguyz.clinic.auth;
 
-import com.sabyeguyz.clinic.branch.Branch;
-import com.sabyeguyz.clinic.branch.BranchRepository;
-import com.sabyeguyz.clinic.staff.Staff;
-import com.sabyeguyz.clinic.staff.StaffRepository;
+import java.util.List;
+
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+
+import com.sabyeguyz.clinic.branch.Branch;
+import com.sabyeguyz.clinic.branch.BranchRepository;
+import com.sabyeguyz.clinic.staff.Staff;
+import com.sabyeguyz.clinic.staff.StaffRepository;
 
 @RestController
 @RequestMapping("/api/users")
@@ -38,7 +40,8 @@ public class UserManagementController {
             @NotBlank @Size(max = 40) String employeeCode,
             @NotBlank @Size(max = 160) String fullName,
             @Size(max = 40) String phone,
-            String branchCode) {}
+            String branchCode) {
+    }
 
     public record Response(
             Long id,
@@ -50,12 +53,15 @@ public class UserManagementController {
             String phone,
             String branchCode,
             String branchName,
-            boolean active) {}
+            boolean active) {
+    }
 
     @GetMapping
     @Transactional
     public List<Response> list() {
-        return staff.findAllByOrderByFullName().stream().map(this::out).toList();
+        return staff.findAllByOrderByFullName().stream()
+                .map(this::out)
+                .toList();
     }
 
     @PostMapping
@@ -76,9 +82,16 @@ public class UserManagementController {
             throw new IllegalArgumentException("รหัสพนักงานซ้ำ");
         }
         AppUser user = users.save(
-                new AppUser(username, email, encoder.encode(request.password()), request.role()));
+                new AppUser(
+                        username,
+                        email,
+                        encoder.encode(request.password()),
+                        request.role()));
         Staff value = new Staff(
-                user, employeeCode, request.fullName().trim(), normalize(request.phone()));
+                user,
+                employeeCode,
+                request.fullName().trim(),
+                normalize(request.phone()));
         value.assignBranch(resolveBranch(request.branchCode()));
         return out(staff.save(value));
     }
