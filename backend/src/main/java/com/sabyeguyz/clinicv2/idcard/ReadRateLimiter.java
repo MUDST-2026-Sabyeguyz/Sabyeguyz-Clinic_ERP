@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -21,18 +22,25 @@ public class ReadRateLimiter {
         this(Clock.systemUTC(), 20);
     }
 
-    public ReadRateLimiter(Clock clock, int maxPerMinute) {
+    public ReadRateLimiter(
+            Clock clock,
+            int maxPerMinute) {
         this.clock = clock;
         this.maxPerMinute = maxPerMinute;
     }
 
     public boolean tryAcquire(Long userId) {
         ArrayDeque<Instant> window = starts.computeIfAbsent(userId, key -> new ArrayDeque<>());
+
         synchronized (window) {
             Instant now = clock.instant();
+
             while (!window.isEmpty() && window.peekFirst().isBefore(now.minus(Duration.ofMinutes(1)))) window.pollFirst();
+
             if (window.size() >= maxPerMinute) return false;
+
             window.addLast(now);
+
             return true;
         }
     }
