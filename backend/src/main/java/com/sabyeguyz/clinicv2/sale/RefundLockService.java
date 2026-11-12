@@ -16,8 +16,7 @@ public class RefundLockService {
     public RefundLockService(
             RefundTransactionRepository refunds,
             PaymentLockService paymentLocks,
-            EntityManager entityManager
-    ) {
+            EntityManager entityManager) {
         this.refunds = refunds;
         this.paymentLocks = paymentLocks;
         this.entityManager = entityManager;
