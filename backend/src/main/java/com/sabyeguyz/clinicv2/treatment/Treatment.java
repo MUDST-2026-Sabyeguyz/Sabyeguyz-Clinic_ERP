@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.treatment;
 
+import java.time.Instant;
+
+import jakarta.persistence.*;
+
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import jakarta.persistence.*;
-import java.time.Instant;
 
 @Entity
 @Table(name = "treatment")
@@ -50,22 +52,31 @@ public class Treatment {
     public Treatment() {}
 
     public Long getId() { return id; }
+
     public PatientVisit getVisit() { return visit; }
     public void setVisit(PatientVisit visit) { this.visit = visit; }
+
     public Service getService() { return service; }
     public void setService(Service service) { this.service = service; }
+
     public Staff getTreatingStaff() { return treatingStaff; }
     public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
+
     public SalesTransaction getSalesTransaction() { return salesTransaction; }
     public void setSalesTransaction(SalesTransaction salesTransaction) { this.salesTransaction = salesTransaction; }
+
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
     public Long getTreatmentCreateBy() { return treatmentCreateBy; }
     public void setTreatmentCreateBy(Long treatmentCreateBy) { this.treatmentCreateBy = treatmentCreateBy; }
+
     public Instant getTreatmentCreateAt() { return treatmentCreateAt; }
     public void setTreatmentCreateAt(Instant treatmentCreateAt) { this.treatmentCreateAt = treatmentCreateAt; }
+
     public Instant getTreatmentUpdateAt() { return treatmentUpdateAt; }
     public void setTreatmentUpdateAt(Instant treatmentUpdateAt) { this.treatmentUpdateAt = treatmentUpdateAt; }
+
     public Long getTreatmentUpdateBy() { return treatmentUpdateBy; }
     public void setTreatmentUpdateBy(Long treatmentUpdateBy) { this.treatmentUpdateBy = treatmentUpdateBy; }
 }
