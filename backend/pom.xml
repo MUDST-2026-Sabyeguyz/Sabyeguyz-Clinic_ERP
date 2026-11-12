@@ -93,6 +93,39 @@
 
     <profiles>
         <profile>
+            <id>coverage</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <version>0.8.13</version>
+                        <configuration>
+                            <append>true</append>
+                            <includes>
+                                <include>com/sabyeguyz/clinicv2/**</include>
+                            </includes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals><goal>prepare-agent</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <agents>
+                                <agent>${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.13/org.jacoco.agent-0.8.13-runtime.jar</agent>
+                            </agents>
+                            <workingDirectory>${project.build.directory}</workingDirectory>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>cypress-api</id>
             <build>
                 <plugins>
@@ -101,6 +134,7 @@
                         <artifactId>spring-boot-maven-plugin</artifactId>
                         <configuration>
                             <mainClass>com.sabyeguyz.clinic.cypress.CypressApiApplication</mainClass>
+                            <jvmArguments>-Xmx512m</jvmArguments>
                             <useTestClasspath>true</useTestClasspath>
                             <classesDirectory>${project.build.testOutputDirectory}</classesDirectory>
                             <additionalClasspathElements>
@@ -126,6 +160,7 @@
                         <artifactId>spring-boot-maven-plugin</artifactId>
                         <configuration>
                             <mainClass>com.sabyeguyz.clinicv2.ClinicV2Application</mainClass>
+                            <jvmArguments>-Xmx512m</jvmArguments>
                             <useTestClasspath>true</useTestClasspath>
                             <jvmArguments>&quot;-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco.exec,append=true,includes=com/sabyeguyz/clinicv2/*&quot;</jvmArguments>
                             <classesDirectory>${project.build.testOutputDirectory}</classesDirectory>

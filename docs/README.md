@@ -13,6 +13,7 @@
 - [Testing](./testing/README.md)
 - [Branching และ Pull Request](./branching.md)
 - [GitHub Repository Settings](./github-repository-settings.md)
+- [Jenkins CI และการทดสอบ commit ย้อนหลัง](../jenkins-backup/JENKINS_CI_TH.md)
 - [GitHub Actions Guide](./tech-guide/github-actions-guide.md)
 - [GitHub Actions Zero Cost](./github-actions-zero-cost.md)
 

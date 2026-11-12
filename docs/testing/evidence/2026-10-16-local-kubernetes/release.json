@@ -1,0 +1,16 @@
+{
+  "deployedAt": "2026-10-16T10:26:51.7106842Z",
+  "applicationSourceDirty": false,
+  "images": {
+    "traefik:v3.7.15": "sha256:0f6150202bc1fed72a7bd2107460eaa510e5b8a905f3fdb5b84f2c8619c33368",
+    "clinic-frontend:32fa619c14cf-20261016172136": "sha256:244dafb505f1622ee27b5f8b8077a6436c8deb8bab8436d07bb64ac2afe59ce1",
+    "clinic-backend:32fa619c14cf-20261016172136": "sha256:56093f9159bee55563bf05e8ea99324e6f9b8db6c4a5941773d5b1dcabc26397",
+    "postgres:16-alpine": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
+  },
+  "hostBuild": true,
+  "deploymentSourceRevision": "32fa619c14cf70200ff02c12f2079179302656c9",
+  "imageTag": "32fa619c14cf-20261016172136",
+  "sourceRevision": "32fa619c14cf70200ff02c12f2079179302656c9",
+  "reusedImages": false,
+  "context": "docker-desktop"
+}
