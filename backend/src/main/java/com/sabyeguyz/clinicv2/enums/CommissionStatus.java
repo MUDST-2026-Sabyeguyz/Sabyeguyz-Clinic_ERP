@@ -1,3 +1,6 @@
 package com.sabyeguyz.clinicv2.enums;
 
-public enum CommissionStatus { Provisional, Locked }
+public enum CommissionStatus {
+    Provisional,
+    Locked
+}
