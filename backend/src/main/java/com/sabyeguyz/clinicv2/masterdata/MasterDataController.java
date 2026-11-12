@@ -1,12 +1,14 @@
 package com.sabyeguyz.clinicv2.masterdata;
 
-import org.springframework.transaction.annotation.Transactional;
-import com.sabyeguyz.clinicv2.auth.CurrentActor;
-import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
 import java.util.List;
+
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+
+import com.sabyeguyz.clinicv2.auth.CurrentActor;
 
 /**
  * Matches frontend/src/api/client.ts's masterDataApi (/api/master-data),
@@ -23,20 +25,34 @@ public class MasterDataController {
     private final MasterDataValueRepository values;
     private final CurrentActor actor;
 
-    public MasterDataController(MasterDataService service, MasterDataTypeRepository types,
-                                 MasterDataValueRepository values, CurrentActor actor) {
+    public MasterDataController(
+            MasterDataService service,
+            MasterDataTypeRepository types,
+            MasterDataValueRepository values,
+            CurrentActor actor) {
         this.service = service;
         this.types = types;
         this.values = values;
         this.actor = actor;
     }
 
-    public record Request(@NotBlank String category, String code, @NotBlank String name) {}
-    public record Response(Long id, String category, String code, String name, boolean active) {}
+    public record Request(
+            @NotBlank String category,
+            String code,
+            @NotBlank String name) {}
+
+    public record Response(
+            Long id,
+            String category,
+            String code,
+            String name,
+            boolean active) {}
 
     @GetMapping
     public List<Response> list() {
-        return values.findAll().stream().map(MasterDataController::toResponse).toList();
+        return values.findAll().stream()
+                .map(MasterDataController::toResponse)
+                .toList();
     }
 
     @PostMapping
@@ -44,17 +60,24 @@ public class MasterDataController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@RequestBody Request request) {
         MasterDataType type = resolveOrCreateType(request.category());
+
         MasterDataValue value = service.createValue(type, request.name(), null, actor.currentId());
+
         return toResponse(value);
     }
 
     @PutMapping("/{id}")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
-    public Response update(@PathVariable Long id, @RequestBody Request request) {
-        MasterDataValue value = values.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
+    public Response update(
+            @PathVariable Long id,
+            @RequestBody Request request) {
+        MasterDataValue value = values.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
+
         value.setValueName(request.name());
         value.setValueUpdateAt(Instant.now());
         value.setValueUpdateBy(actor.currentId());
+
         return toResponse(values.save(value));
     }
 
@@ -68,8 +91,11 @@ public class MasterDataController {
     @PatchMapping("/{id}/activate")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
-        MasterDataValue value = values.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
+        MasterDataValue value = values.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบข้อมูล"));
+
         value.setValueStatus(true);
+
         return toResponse(values.save(value));
     }
 
@@ -79,6 +105,11 @@ public class MasterDataController {
     }
 
     private static Response toResponse(MasterDataValue value) {
-        return new Response(value.getId(), value.getType().getTypeName(), null, value.getValueName(), value.isValueStatus());
+        return new Response(
+                value.getId(),
+                value.getType().getTypeName(),
+                null,
+                value.getValueName(),
+                value.isValueStatus());
     }
 }
