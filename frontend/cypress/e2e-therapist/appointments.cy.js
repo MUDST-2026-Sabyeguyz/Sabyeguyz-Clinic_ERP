@@ -45,7 +45,7 @@ const choosePatient = (p) => {
 const confirmSave = (editing = false) => {
   cy.contains('.appointment-save button.primary', editing ? /^บันทึก$/ : 'บันทึกนัดหมาย').click()
   cy.contains('.appointment-confirm-modal button', /^ใช่$/).click()
-  cy.contains('.appointment-success-modal', editing ? 'เลื่อนนัดหมายสำเร็จ' : 'สร้างนัดหมายสำเร็จ').should('be.visible')
+  cy.contains('.appointment-success-modal', editing ? 'แก้ไขนัดหมายสำเร็จ' : 'สร้างนัดหมายสำเร็จ').should('be.visible')
   cy.contains('.appointment-success-modal button', 'ตกลง').click()
 }
 const persisted = (id, expected) => api('GET', `/api/appointments/${id}`).then((r) => {
@@ -118,9 +118,9 @@ describe('Therapist appointments — real backend', () => {
       chooseDate('.appointment-date-range:first', fixtures.tomorrow)
       chooseDate('.appointment-date-range:last', fixtures.tomorrow)
       row(p.fullName).contains('button', 'แก้ไข').click()
-      cy.get('.reschedule-patient-field input').should('have.value', p.fullName).and('have.attr', 'readonly')
+      cy.get('.appointment-patient-field input').should('have.value', p.fullName).and('have.attr', 'readonly')
       chooseTime('13:00')
-      cy.get('.reschedule-note-field textarea').clear().type('เลื่อนไปช่วงบ่าย')
+      cy.get('.appointment-note-field textarea').clear().type('เลื่อนไปช่วงบ่าย')
       confirmSave(true)
       row(p.fullName).should('contain.text', '12:00')
       persisted(a.id, { note: 'เลื่อนไปช่วงบ่าย', status: 'CONFIRMED' }).then((saved) => {

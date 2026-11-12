@@ -1,128 +1,56 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import RegisterMethodDialog from '@/features/idcard/RegisterMethodDialog.vue'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { branchApi, patientApi, type Branch, type Patient } from '@/api/client'
-import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
+import { usePatientDirectory } from '../usePatientDirectory'
+const {
+  isManager,
+  query,
+  branch,
+  sortOrder,
+  sortOptions,
+  branches,
+  page,
+  totalPages,
+  totalItems,
+  loading,
+  errorMessage,
+  showCreationNotice,
+  filteredPatients,
+  refreshSearch,
+  changePage,
+  retryLoad,
+  birthDateLabel,
+  birthDateStates,
+} = usePatientDirectory()
 
-const isManager = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
-const query = ref('')
-const branch = ref('ทั้งหมด')
-const sortOrder = ref('asc')
-const sortOptions = [
-  { value: 'desc', label: 'ชื่อ ฮ-ก' },
-  { value: 'newest', label: 'เพิ่มล่าสุด' },
-]
-const newPatientHn = ref('')
-const showCreationNotice = ref(false)
-const patients = ref<Patient[]>([])
-const patientBirthDates = ref<Record<number, string>>({})
-const branches = ref<Branch[]>([])
-const page = ref(0)
-const totalPages = ref(0)
-const totalItems = ref(0)
-const loading = ref(true)
-const errorMessage = ref('')
-const thaiDate = (value?: string) =>
-  value ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'long' }).format(new Date(value)) : '-'
-const filteredPatients = computed(() => {
-  if (sortOrder.value === 'newest') return [...patients.value]
-  return [...patients.value].sort((left, right) => {
-    const comparison = new Intl.Collator('th').compare(left.fullName, right.fullName)
-    return sortOrder.value === 'asc' ? comparison : -comparison
-  })
-})
-async function loadPatients() {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const sort =
-      sortOrder.value === 'asc' ? 'nameAsc' : sortOrder.value === 'desc' ? 'nameDesc' : 'newest'
-    const result = await patientApi.search(
-      query.value.trim(),
-      page.value,
-      20,
-      branch.value === 'ทั้งหมด' ? '' : branch.value,
-      sort,
-    )
-    patients.value = result.items
-    const profiles = await Promise.allSettled(result.items.map((item) => patientApi.get(item.id)))
-    patientBirthDates.value = Object.fromEntries(
-      profiles.flatMap((profile, index) =>
-        profile.status === 'fulfilled' ? [[result.items[index]!.id, profile.value.birthDate]] : [],
-      ),
-    )
-    totalPages.value = result.totalPages
-    totalItems.value = result.totalItems
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ'
-  } finally {
-    loading.value = false
-  }
-}
-async function changePage(nextPage: number) {
-  if (nextPage >= 0 && nextPage < totalPages.value) {
-    page.value = nextPage
-    await loadPatients()
-  }
-}
-let searchTimer: number | undefined
-function refreshSearch() {
-  window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => {
-    page.value = 0
-    void loadPatients()
-  }, 250)
-}
-onMounted(() => {
-  const createdHn = localStorage.getItem('patientCreationHn')
-  if (!createdHn) return
-  newPatientHn.value = createdHn
-  localStorage.removeItem('patientCreationHn')
-  showCreationNotice.value = true
-  window.setTimeout(() => {
-    showCreationNotice.value = false
-  }, 1800)
-})
-onMounted(async () => {
-  branches.value = (await branchApi.list()).filter((item) => item.active)
-  if (isManager) {
-    setManagerBranches(branches.value)
-    applyManagerBranch()
-  }
-  await loadPatients()
-})
-function applyManagerBranch() {
-  if (!isManager) return
-  branch.value = selectedManagerBranch()?.code ?? 'ทั้งหมด'
-  page.value = 0
-  void loadPatients()
-}
-onMounted(() => window.addEventListener('manager-branch-changed', applyManagerBranch))
-onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
-watch(branch, () => {
-  page.value = 0
-  void loadPatients()
-})
-watch(sortOrder, () => {
-  page.value = 0
-  void loadPatients()
-})
+const registerDialogOpen = ref(false)
+// a manager works in the branch chosen in the header; anyone else is scoped to their own branch by the server
+const readerBranch = computed(() => selectedManagerBranch()?.code)
 </script>
 
 <template>
-  <div class="patient-workspace">
+  <div class="patient-workspace patient-directory-page">
     <StaffHeader />
     <main>
       <section class="page-heading">
         <div>
           <h1>ค้นหาผู้ป่วย</h1>
-          <p>ค้นหาด้วยชื่อหรือเลขประจำตัวผู้ป่วย</p>
-          <RouterLink class="primary" to="/staff/patients/new">+ ลงทะเบียนผู้ป่วยใหม่</RouterLink>
+          <p>ค้นหาด้วยชื่อหรือหมายเลข HN</p>
+          <button type="button" class="primary" @click="registerDialogOpen = true">
+            + ลงทะเบียนผู้ป่วยใหม่
+          </button>
+          <RegisterMethodDialog
+            :open="registerDialogOpen"
+            :branch-code="readerBranch"
+            @close="registerDialogOpen = false"
+          />
         </div>
       </section>
 
-      <section class="directory">
+      <section class="directory" :aria-busy="loading">
         <header>
           <div class="search">
             <span class="search-icon" aria-hidden="true"
@@ -131,9 +59,12 @@ watch(sortOrder, () => {
                 <path d="m16 16 4 4" /></svg></span
             ><input
               v-model="query"
+              type="search"
+              autocomplete="off"
+              spellcheck="false"
               @input="refreshSearch"
               aria-label="ค้นหาผู้ป่วย"
-              placeholder="ค้นหาชื่อหรือเลขประจำตัวผู้ป่วย"
+              placeholder="ค้นหาชื่อหรือหมายเลข HN"
             />
           </div>
           <FilterDropdown
@@ -154,20 +85,39 @@ watch(sortOrder, () => {
             :clear-on-reselect="false"
             :options="sortOptions"
           />
-          <span class="result-count">พบผู้ป่วยทั้งหมด {{ totalItems }} ราย</span>
         </header>
+        <div class="directory-card">
+        <div class="directory-results">
+          <h2>รายชื่อผู้ป่วย</h2>
+          <span v-if="!loading && !errorMessage" class="result-count" aria-live="polite"
+            >ทั้งหมด {{ totalItems }} ราย</span
+          >
+        </div>
         <div class="table-scroll">
-          <div v-if="loading" class="empty">กำลังโหลดข้อมูลผู้ป่วย...</div>
-          <div v-else-if="errorMessage" class="empty">{{ errorMessage }}</div>
-          <table>
+          <div v-if="loading" class="empty" role="status">กำลังโหลดข้อมูลผู้ป่วย...</div>
+          <div v-else-if="errorMessage" class="empty" role="alert">
+            <p>{{ errorMessage }}</p>
+            <button type="button" class="directory-retry" @click="retryLoad">ลองใหม่</button>
+          </div>
+          <table v-else>
+            <caption class="directory-sr-only">
+              รายชื่อผู้ป่วยและข้อมูลติดต่อ
+            </caption>
             <thead>
               <tr>
-                <th>เลขประจำตัวผู้ป่วย</th>
-                <th>ชื่อผู้ป่วย</th>
-                <th>เบอร์โทรศัพท์</th>
-                <th>วันเกิด</th>
-                <th>สาขา</th>
-                <th aria-label="การดำเนินการ"></th>
+                <th scope="col">หมายเลข HN</th>
+                <th
+                  scope="col"
+                  :aria-sort="
+                    sortOrder === 'asc' ? 'ascending' : sortOrder === 'desc' ? 'descending' : 'none'
+                  "
+                >
+                  ชื่อผู้ป่วย
+                </th>
+                <th scope="col">เบอร์โทรศัพท์</th>
+                <th scope="col">วันเกิด</th>
+                <th scope="col">สาขา</th>
+                <th scope="col" aria-label="การดำเนินการ"></th>
               </tr>
             </thead>
             <tbody>
@@ -177,12 +127,28 @@ watch(sortOrder, () => {
                   <b>{{ patient.hn }}</b>
                 </td>
                 <td>{{ patient.fullName }}</td>
-                <td>{{ patient.phone }}</td>
-                <td>{{ thaiDate(patientBirthDates[patient.id]) }}</td>
+                <td>{{ patient.phone || '-' }}</td>
+                <td>
+                  <span v-if="birthDateStates[patient.id] !== 'error'">{{
+                    birthDateLabel(patient.id)
+                  }}</span
+                  ><button
+                    v-else
+                    class="directory-date-retry"
+                    type="button"
+                    @click="retryLoad"
+                    :aria-label="'โหลดวันเกิดของ ' + patient.fullName + ' อีกครั้ง'"
+                  >
+                    โหลดวันเกิดอีกครั้ง
+                  </button>
+                </td>
                 <td>{{ patient.branchName ?? patient.branchCode ?? '-' }}</td>
                 <td>
-                  <RouterLink class="row-action" :to="`/staff/patients/${patient.id}`"
-                    >ดูข้อมูล</RouterLink
+                  <RouterLink
+                    class="row-action"
+                    :to="`/staff/patients/${patient.id}`"
+                    :aria-label="'รายละเอียดผู้ป่วย ' + patient.fullName"
+                    >รายละเอียด</RouterLink
                   >
                 </td>
               </tr>
@@ -193,7 +159,7 @@ watch(sortOrder, () => {
           </table>
         </div>
         <nav
-          v-if="totalPages > 1"
+          v-if="!loading && !errorMessage && totalPages > 1"
           class="patient-pagination"
           aria-label="เปลี่ยนหน้ารายชื่อผู้ป่วย"
         >
@@ -205,11 +171,16 @@ watch(sortOrder, () => {
             ถัดไป →
           </button>
         </nav>
+        </div>
       </section>
     </main>
     <Teleport to="body">
       <Transition name="save-success">
-        <div v-if="showCreationNotice" class="patient-save-success-backdrop" role="status">
+        <div
+          v-if="showCreationNotice"
+          class="patient-save-success-backdrop patient-directory-toast"
+          role="status"
+        >
           <section class="patient-save-success">ลงทะเบียนผู้ป่วยแล้ว</section>
         </div>
       </Transition>
@@ -218,4 +189,6 @@ watch(sortOrder, () => {
 </template>
 
 <style scoped src="../styles/patients.css"></style>
-<style src="../styles/therapist.css"></style>
+<style src="../styles/patient-workspace.css"></style>
+
+<style src="../styles/patient-directory.css"></style>

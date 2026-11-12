@@ -92,6 +92,7 @@ public class CourseTemplateController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
         Service created = service.create(request.code(), request.name(), ServiceType.Course, request.price(),
                 request.sessions(), request.bonusSessions() == null ? 0 : request.bonusSessions(),
@@ -103,6 +104,7 @@ public class CourseTemplateController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Service existing = find(id);
         Response before = toResponse(existing);
@@ -127,11 +129,13 @@ public class CourseTemplateController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
         service.deactivate(id, actor.currentId());
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/activate")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
         return toResponse(service.activate(id, actor.currentId()));
     }

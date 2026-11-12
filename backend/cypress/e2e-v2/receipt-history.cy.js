@@ -67,7 +67,11 @@ describe('v2 patient receipt history', () => {
       items: [{ ...lines(this.fixtures)[0], discountType: 'BAHT', discountValue: 100 }, lines(this.fixtures)[1]],
       payments: [{ paymentMethodCode: 'QR', amount: 1900 }],
     }).then(created => {
+<<<<<<< HEAD
       const expected = { receiptId: created.receiptId, subtotalBeforeDiscount: 1900, billDiscountAmount: 0,
+=======
+      const expected = { receiptId: created.receiptId, subtotalBeforeDiscount: 2000, billDiscountAmount: 0,
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
         taxableAmount: 1900, taxAmount: 0, netAmount: 1900, total: 1900, paid: 1900, paymentLabel: 'Installment' }
       expect(created.receiptId).to.be.a('number')
       expect(created).to.include(expected)

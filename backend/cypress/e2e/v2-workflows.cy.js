@@ -18,10 +18,16 @@ function rejected(group, name, message) {
     if (message) expect(body.errorMessage).to.include(message)
   })
 }
+function rejectedState(group, name, message) {
+  return scenario(group, name).then((body) => {
+    expect(body.error).to.equal('IllegalStateException')
+    expect(body.errorMessage).to.include(message)
+  })
+}
 
 describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
-  it('booksAConfirmedAppointment', () => {
-    value('appointment', 'book').its('status').should('equal', 'Confirmed')
+  it('booksAnUnconfirmedAppointmentByDefault', () => {
+    value('appointment', 'book').its('status').should('equal', 'Unconfirmed')
   })
   it('rejectsBookingWhenStaffAlreadyBooked', () => rejected('appointment', 'conflict'))
   it('booksAnUnconfirmedAppointment', () => {
@@ -35,15 +41,24 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
   })
   it('booksANewPatientByNicknameWithPhone', () => {
     value('appointment', 'new-nickname-with-phone').should('include', {
-      status: 'Confirmed', patientType: 'NEW', contactName: 'แบงค์', contactPhone: '0812345678',
+      status: 'Unconfirmed', patientType: 'NEW', contactName: 'แบงค์', contactPhone: '0812345678',
     })
   })
   it('rejectsANewPatientNicknameWithoutPhone', () => rejected('appointment', 'new-nickname-without-phone', 'เบอร์โทร'))
   it('rejectsANewPatientWithoutAName', () => rejected('appointment', 'new-without-name'))
-  it('confirmMovesUnconfirmedToConfirmedAndRecordsHistory', () => {
-    value('appointment', 'confirm').should('include', { status: 'Confirmed', historySaves: 1 })
+  it('confirmAfterServiceMovesUnconfirmedToConfirmedAndRecordsHistory', () => {
+    value('appointment', 'confirm-after-service').should('include', { status: 'Confirmed', historySaves: 1 })
   })
+<<<<<<< HEAD
   it('rejectsConfirmingAnAppointmentThatIsNotUnconfirmed', () => rejected('appointment', 'confirm-already-confirmed'))
+=======
+  it('rejectsManualConfirmationBeforeServiceCompletion', () => {
+    rejectedState('appointment', 'confirm', 'ต้องบันทึกบริการและรับชำระ')
+  })
+  it('rejectsConfirmingAnAppointmentThatIsNotUnconfirmed', () => {
+    rejected('appointment', 'confirm-after-service-already-confirmed', 'ไม่ได้อยู่ในสถานะยังไม่ยืนยัน')
+  })
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 
   for (const name of ['link-patient', 'link-patient-already-linked']) {
     it(`rejects retroactive patient linking: ${name}`, () => {
@@ -54,8 +69,17 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
     })
   }
 
+<<<<<<< HEAD
   it('rejectsCheckInOfAnUnconfirmedAppointment', () => rejected('appointment', 'arrive-unconfirmed', 'ยืนยัน'))
   it('rejectsCheckInOfANewPatientWhoIsNotRegistered', () => rejected('appointment', 'arrive-new-patient', 'ลงทะเบียน'))
+=======
+  it('rejectsStandaloneArrivedTransitionForAnUnconfirmedAppointment', () => {
+    rejectedState('appointment', 'arrive-unconfirmed', 'ไม่รองรับสถานะ Arrived')
+  })
+  it('rejectsStandaloneArrivedTransitionForANewPatient', () => {
+    rejectedState('appointment', 'arrive-new-patient', 'ไม่รองรับสถานะ Arrived')
+  })
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
   it('cancelRecordsStatusHistory', () => {
     value('appointment', 'cancel').should('include', { status: 'Cancelled', historySaves: 1 })
   })
@@ -68,12 +92,8 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
 })
 
 describe('clinicv2 PatientVisitServiceTest migrated assertions', () => {
-  it('checkInFromAppointmentMarksTheAppointmentArrived', () => {
-    value('visit', 'check-in').then((body) => {
-      expect(body.status).to.equal('Arrived')
-      expect(body.sameAppointment).to.equal(true)
-      expect(body.arrivedCalls).to.deep.equal([[5, 1]])
-    })
+  it('rejectsStandaloneCheckInBeforeSuccessfulService', () => {
+    rejectedState('visit', 'check-in', 'ระบบจะสร้าง Visit เมื่อทำรายการสำเร็จ')
   })
   it('checkInWalkInRequiresAPatientAndBranch', () => rejected('visit', 'missing-patient'))
   it('completeSetsCheckoutTimeAndPropagatesToTheAppointment', () => {

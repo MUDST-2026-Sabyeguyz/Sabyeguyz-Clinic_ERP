@@ -16,6 +16,7 @@ import com.sabyeguyz.clinicv2.enums.VisitStatus;
 import com.sabyeguyz.clinicv2.sale.PaymentTransaction;
 import com.sabyeguyz.clinicv2.sale.PaymentTransactionRepository;
 import com.sabyeguyz.clinicv2.sale.Receipt;
+import com.sabyeguyz.clinicv2.sale.ReceiptCoursePaymentRepository;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.sale.SalesTransactionRepository;
 import java.math.BigDecimal;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Transactional
 @RestController
+@org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
 public class ReportController {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
 
@@ -48,6 +50,7 @@ public class ReportController {
     private final PaymentTransactionRepository payments;
     private final com.sabyeguyz.clinicv2.sale.ReceiptRepository receipts;
     private final SalesTransactionRepository transactions;
+    private final ReceiptCoursePaymentRepository coursePayments;
     private final AppointmentRepository appointments;
     private final CourseRepository courses;
     private final BranchRepository branches;
@@ -57,11 +60,13 @@ public class ReportController {
                              com.sabyeguyz.clinicv2.sale.ReceiptRepository receipts,
                              SalesTransactionRepository transactions, AppointmentRepository appointments,
                              CourseRepository courses, BranchRepository branches,
-                             DashboardMetricsService dashboardMetrics) {
+                             DashboardMetricsService dashboardMetrics,
+                             ReceiptCoursePaymentRepository coursePayments) {
         this.visits = visits;
         this.payments = payments;
         this.receipts = receipts;
         this.transactions = transactions;
+        this.coursePayments = coursePayments;
         this.appointments = appointments;
         this.courses = courses;
         this.branches = branches;
@@ -131,9 +136,16 @@ public class ReportController {
 
         List<Receipt> activeSales = receiptsInRange.stream()
                 .filter(r -> r.getReceiptStatus() != ReceiptStatus.Voided).toList();
-        BigDecimal salesTotal = sum(activeSales, Receipt::getNetAmount);
         Map<LocalDate, BigDecimal> salesByDay = new LinkedHashMap<>();
-        activeSales.forEach(r -> salesByDay.merge(r.getSaleDate().toLocalDate(), r.getNetAmount(), BigDecimal::add));
+        for (Receipt receipt : activeSales) {
+            BigDecimal netSales = transactions.netSalesOfReceipt(receipt.getId());
+            salesByDay.merge(
+                    receipt.getSaleDate().toLocalDate(),
+                    netSales,
+                    BigDecimal::add);
+        }
+        BigDecimal salesTotal = salesByDay.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         List<DailySales> dailySales = from.datesUntil(to.plusDays(1))
                 .map(date -> new DailySales(date, salesByDay.getOrDefault(date, BigDecimal.ZERO))).toList();
         DashboardMetricsService.Activity activity = dashboardMetrics.activity(fromInstant, toInstant, branchId, attendedVisits);
@@ -146,9 +158,11 @@ public class ReportController {
     }
 
     private Map<TransactionType, BigDecimal> revenueSplit(PaymentTransaction payment) {
-        List<SalesTransaction> lines = transactions.findByReceiptId(payment.getReceipt().getId()).stream()
+        Long receiptId = payment.getReceipt().getId();
+        List<SalesTransaction> lines = transactions.findReceiptLines(receiptId).stream()
                 .filter(SalesTransaction::isTransactionStatus).toList();
-        return RevenueSplit.split(payment.getAmount(), lines);
+        var collectionItems = coursePayments.findByReceipt_IdOrderByCourse_IdAsc(receiptId);
+        return RevenueSplit.split(payment.getAmount(), lines, collectionItems);
     }
 
     @GetMapping("/api/reports/appointments")

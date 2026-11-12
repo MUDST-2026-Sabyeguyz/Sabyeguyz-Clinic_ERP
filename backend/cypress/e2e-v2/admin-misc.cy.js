@@ -3,28 +3,32 @@ const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year:
 describe('v2 users, commission schemes, course templates, treatments and lookups', () => {
   describe('users', () => {
     const user = {
+<<<<<<< HEAD
       username: 'editme01', email: 'editme01@example.com', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-810',
+=======
+      username: 'editme01', email: 'editme01@example.com', password: 'password12345', role: 'THERAPIST', employeeCode: 'THP-810',
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
       fullName: 'ผู้ใช้ แก้ไขได้', branchCode: '01',
     }
 
     it('edits a user: new username, new password, new name and branch', () => {
       cy.api('POST', '/api/users', user).then(({ body }) => {
         cy.api('PUT', `/api/users/${body.id}`, {
-          ...user, username: 'edited01', password: 'newpassword1', fullName: 'ชื่อ ที่เปลี่ยน', branchCode: '02',
+          ...user, username: 'edited01', password: 'newpassword12345', fullName: 'ชื่อ ที่เปลี่ยน', branchCode: '02',
         }).then((updated) => {
           expect(updated.status, JSON.stringify(updated.body)).to.equal(200)
           expect(updated.body.username).to.equal('edited01')
           expect(updated.body.branchCode).to.equal('02')
         })
-        cy.login('edited01', 'newpassword1').its('status').should('equal', 200)
-        cy.login('editme01', 'password123').its('status').should('be.within', 400, 403)
+        cy.login('edited01', 'newpassword12345').its('status').should('equal', 200)
+        cy.login('editme01', 'password12345').its('status').should('be.within', 400, 403)
       })
     })
 
     it('keeps the old password when none is sent and refuses a taken username', () => {
       cy.api('POST', '/api/users', user).then(({ body }) => {
         cy.api('PUT', `/api/users/${body.id}`, { ...user, password: undefined, fullName: 'เปลี่ยนแต่ชื่อ' }).its('status').should('equal', 200)
-        cy.login('editme01', 'password123').its('status').should('equal', 200)
+        cy.login('editme01', 'password12345').its('status').should('equal', 200)
         cy.api('PUT', `/api/users/${body.id}`, { ...user, username: 'manager' }).its('status').should('be.within', 400, 409)
       })
     })
@@ -32,9 +36,9 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
     it('deactivates and re-activates a user', () => {
       cy.api('POST', '/api/users', user).then(({ body }) => {
         cy.api('DELETE', `/api/users/${body.id}`).its('status').should('equal', 204)
-        cy.login('editme01', 'password123').its('status').should('be.within', 400, 403)
+        cy.login('editme01', 'password12345').its('status').should('be.within', 400, 403)
         cy.api('PATCH', `/api/users/${body.id}/activate`).its('body.active').should('equal', true)
-        cy.login('editme01', 'password123').its('status').should('equal', 200)
+        cy.login('editme01', 'password12345').its('status').should('equal', 200)
       })
     })
   })
@@ -137,6 +141,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
     beforeEach(() => {
       cy.configureBookingWindows()
     })
+<<<<<<< HEAD
     function checkedInVisit(fx, patient) {
       return cy.api('POST', '/api/appointments', {
         branchCode: '01',
@@ -154,12 +159,45 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
           expect(checkedIn.status).to.equal(200)
           return body
         })
+=======
+    function completeService(fx, patient, appointment) {
+      return cy.api('GET', '/api/catalog/services').then(({ status, body }) => {
+        expect(status).to.equal(200)
+        const service = body.find((item) => item.id === fx.serviceId)
+        expect(service, 'service used by the appointment').to.exist
+        return cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: fx.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{ type: 'SERVICE', referenceId: fx.serviceId, quantity: 1 }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: Number(service.price) }],
+        })
+      }).then(({ status, body }) => {
+        expect(status, JSON.stringify(body)).to.equal(201)
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
       })
     }
 
-    it('records a treatment note for a checked-in appointment and lists it for the patient', function () {
+    function completedServiceVisit(fx, patient) {
+      return cy.api('POST', '/api/appointments', {
+        branchCode: '01',
+        patientId: patient.id,
+        therapistId: fx.therapistId,
+        serviceId: fx.serviceId,
+        startAt: `${fx.tomorrow}T09:00:00+07:00`,
+        endAt: `${fx.tomorrow}T10:00:00+07:00`,
+      }).then(({ status, body }) => {
+        expect(status, JSON.stringify(body)).to.equal(201)
+
+        return completeService(fx, patient, body).then(() => body)
+      })
+    }
+
+    it('records a treatment note after completed service and lists it for the patient', function () {
       cy.registerPatient().then((patient) => {
-        checkedInVisit(this.fixtures, patient).then((appointment) => {
+        completedServiceVisit(this.fixtures, patient).then((appointment) => {
           cy.api('POST', '/api/treatments', {
             patientId: patient.id, appointmentId: appointment.id, staffId: this.fixtures.therapistId,
             serviceId: this.fixtures.serviceId, note: 'ปวดหลังดีขึ้น',
@@ -175,7 +213,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
       })
     })
 
-    it('refuses a treatment before check-in, without an appointment, or for the wrong patient', function () {
+    it('refuses a treatment before service, without an appointment, or for the wrong patient', function () {
       cy.registerPatient().then((patient) => {
         cy.registerPatient({ firstName: 'คนอื่น', phone: '0822222222', identityNumber: '1100000000102' }).then((other) => {
           cy.api('POST', '/api/appointments', {
@@ -193,9 +231,11 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
             })
             treatment({}).its('status').should('equal', 400)
             treatment({ appointmentId: null }).its('status').should('equal', 400)
-            cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)
-            treatment({ patientId: other.id }).its('status').should('equal', 400)
-            treatment({}).its('status').should('equal', 201)
+            cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 409)
+            completeService(this.fixtures, patient, appointment).then(() => {
+              treatment({ patientId: other.id }).its('status').should('equal', 400)
+              treatment({}).its('status').should('equal', 201)
+            })
           })
         })
       })
