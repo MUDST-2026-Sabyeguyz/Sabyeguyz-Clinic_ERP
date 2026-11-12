@@ -18,15 +18,15 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
  * Google Calendar REST API over plain HTTP, authorised by a service account key file (recommended) or by a refresh token (OAuth of the clinic's own Gmail
- * account). Only created when {@code app.calendar.enabled=true}.
+ * account). The service account key can also be pasted in the UI (see {@link CalendarCredentialStore}); the sync only
+ * does anything once {@link CalendarSyncService#isEnabled()}.
  */
 @Component
-@ConditionalOnProperty(prefix = "app.calendar", name = "enabled", havingValue = "true")
 public class HttpGoogleCalendarClient implements GoogleCalendarClient {
     private static final DateTimeFormatter LOCAL = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
@@ -36,10 +36,28 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
     private String accessToken;
     private Instant accessTokenExpiresAt = Instant.EPOCH;
     private ServiceAccountCredentials serviceAccount;
+    private ServiceAccountCredentials activeAccount;
+    private final CalendarCredentialStore store;
 
-    public HttpGoogleCalendarClient(CalendarProperties properties, ObjectMapper json) {
+    @Autowired
+    public HttpGoogleCalendarClient(CalendarProperties properties, ObjectMapper json, CalendarCredentialStore store) {
         this.properties = properties;
         this.json = json;
+        this.store = store;
+    }
+
+    public HttpGoogleCalendarClient(CalendarProperties properties, ObjectMapper json) {
+        this(properties, json, null);
+    }
+
+    @Override
+    public void verifyCredentials(ServiceAccountCredentials credentials) {
+        try {
+            requestToken(credentials);
+        } catch (IOException | InterruptedException exception) {
+            if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new CalendarApiException("Google is not reachable", exception);
+        }
     }
 
     @Override
@@ -76,7 +94,8 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
                 String appointmentId = item.path("extendedProperties").path("private").path("appointmentId").asText("");
                 Long id = appointmentId.matches("\\d+") ? Long.valueOf(appointmentId) : null;
                 events.add(new RemoteEvent(item.path("id").asText(), item.path("etag").asText(),
-                        "cancelled".equals(item.path("status").asText()), start(item.path("start"), zone), id));
+                        "cancelled".equals(item.path("status").asText()), start(item.path("start"), zone), id,
+                        start(item.path("end"), zone), item.has("description") ? item.path("description").asText("") : ""));
             }
             pageToken = page.hasNonNull("nextPageToken") ? page.get("nextPageToken").asText() : null;
         } while (pageToken != null);
@@ -101,9 +120,19 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
                 if (privateProperties.hasNonNull("appointmentId") || "clinic-erp".equals(privateProperties.path("source").asText())) {
                     continue; // written by this system: it is an appointment already
                 }
+                // AC 037.01: scope must be explicit, never inferred from an event title.
+                String scope = privateProperties.path("busyScope").asText("");
+                Long therapistId = null;
+                if ("therapist".equals(scope)) {
+                    String id = privateProperties.path("staffId").asText("");
+                    if (!id.matches("[1-9][0-9]*")) continue;
+                    try { therapistId = Long.valueOf(id); } catch (NumberFormatException invalid) { continue; }
+                } else if (!"branch".equals(scope)) {
+                    continue;
+                }
                 LocalDateTime start = boundary(item.path("start"), zone);
                 LocalDateTime end = boundary(item.path("end"), zone);
-                if (start != null && end != null && end.isAfter(start)) blocks.add(new BusyBlock(start, end));
+                if (start != null && end != null && end.isAfter(start)) blocks.add(new BusyBlock(start, end, therapistId));
             }
             pageToken = page.hasNonNull("nextPageToken") ? page.get("nextPageToken").asText() : null;
         } while (pageToken != null);
@@ -171,17 +200,43 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
     }
 
     private synchronized String token() throws IOException, InterruptedException {
+        ServiceAccountCredentials account = activeServiceAccount();
+        if (account != activeAccount) { // the key changed (pasted or removed in the UI): forget the old token
+            activeAccount = account;
+            accessToken = null;
+            accessTokenExpiresAt = Instant.EPOCH;
+        }
         if (accessToken != null && Instant.now().isBefore(accessTokenExpiresAt.minusSeconds(60))) return accessToken;
-        String form;
-        String tokenUrl = properties.getTokenUrl();
+        JsonNode token = requestToken(account);
+        accessToken = token.path("access_token").asText();
+        accessTokenExpiresAt = Instant.now().plusSeconds(token.path("expires_in").asLong(3600));
+        return accessToken;
+    }
+
+    /** The service account to sign in with (key file, else the key saved in the UI), or null to use the OAuth refresh token. */
+    private ServiceAccountCredentials activeServiceAccount() {
         if (!properties.getServiceAccountKeyFile().isBlank()) {
-            // Service account: sign a JWT with the key from the JSON file (no consent screen, nothing that expires).
             if (serviceAccount == null) {
                 serviceAccount = ServiceAccountCredentials.load(java.nio.file.Path.of(properties.getServiceAccountKeyFile()), json);
             }
-            tokenUrl = serviceAccount.tokenUri();
+            return serviceAccount;
+        }
+        ServiceAccountCredentials stored = store == null ? null : store.current().orElse(null);
+        if (stored != null) return stored;
+        if (properties.getClientId().isBlank() || properties.getRefreshToken().isBlank()) {
+            throw new CalendarApiException(0, "Google Calendar is not connected yet");
+        }
+        return null;
+    }
+
+    /** Signs in to Google as the service account (a signed JWT, nothing that expires) or with the refresh token. */
+    private JsonNode requestToken(ServiceAccountCredentials account) throws IOException, InterruptedException {
+        String form;
+        String tokenUrl = properties.getTokenUrl();
+        if (account != null) {
+            tokenUrl = account.tokenUri();
             form = "grant_type=" + encode("urn:ietf:params:oauth:grant-type:jwt-bearer")
-                    + "&assertion=" + encode(serviceAccount.assertion("https://www.googleapis.com/auth/calendar", Instant.now()));
+                    + "&assertion=" + encode(account.assertion("https://www.googleapis.com/auth/calendar", Instant.now()));
         } else {
             form = "client_id=" + encode(properties.getClientId()) + "&client_secret=" + encode(properties.getClientSecret())
                     + "&refresh_token=" + encode(properties.getRefreshToken()) + "&grant_type=refresh_token";
@@ -192,9 +247,6 @@ public class HttpGoogleCalendarClient implements GoogleCalendarClient {
         if (response.statusCode() / 100 != 2) {
             throw new CalendarApiException(response.statusCode(), "Google sign-in was refused (" + response.statusCode() + ")");
         }
-        JsonNode token = json.readTree(response.body());
-        accessToken = token.path("access_token").asText();
-        accessTokenExpiresAt = Instant.now().plusSeconds(token.path("expires_in").asLong(3600));
-        return accessToken;
+        return json.readTree(response.body());
     }
 }

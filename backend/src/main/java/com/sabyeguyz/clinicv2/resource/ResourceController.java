@@ -48,7 +48,7 @@ public class ResourceController {
         room.setBranch(branch);
         room.setRoomName(request.name());
         room.setRoomType(request.type());
-        room.setRoomStatus(enabled(request.status(), true));
+        room.setRoomStatus(true);
         room.setRoomCreateAt(Instant.now());
         room.setRoomCreateBy(actor.currentId());
         return toResponse(repository.save(room));
@@ -60,7 +60,6 @@ public class ResourceController {
         Room room = find(id);
         room.setRoomName(request.name());
         room.setRoomType(request.type());
-        room.setRoomStatus(enabled(request.status(), room.isRoomStatus()));
         room.setRoomUpdateAt(Instant.now());
         room.setRoomUpdateBy(actor.currentId());
         return toResponse(repository.save(room));
@@ -81,12 +80,6 @@ public class ResourceController {
         Room room = find(id);
         room.setRoomStatus(true);
         return toResponse(repository.save(room));
-    }
-
-    /** Enabled or Disabled, as in the data dictionary: INACTIVE closes the room, anything else keeps it open. */
-    private static boolean enabled(String status, boolean fallback) {
-        if (status == null || status.isBlank()) return fallback;
-        return !"INACTIVE".equalsIgnoreCase(status.trim());
     }
 
     private Room find(Long id) {

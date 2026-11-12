@@ -32,6 +32,7 @@ import com.sabyeguyz.clinicv2.course.*;
 import com.sabyeguyz.clinicv2.enums.*;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
+import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -50,12 +51,34 @@ public class V2WorkflowScenariosController {
     public Map<String, Object> appointment(@PathVariable String scenario) {
         var appointments = new V2RepositoryStub<>(AppointmentRepository.class);
         var history = new V2RepositoryStub<>(AppointmentStatusHistoryRepository.class);
-        var service = new AppointmentService(appointments.proxy(), history.proxy());
+        var staffRepository = new V2RepositoryStub<>(StaffRepository.class);
+        var service = new AppointmentService(appointments.proxy(), history.proxy(), staffRepository.proxy());
+        Branch branch = new Branch();
+        setId(branch, 1L);
+        branch.setBookingOpenTime(LocalTime.of(9, 0));
+        branch.setBookingCloseTime(LocalTime.of(18, 0));
+        branch.setDefaultAppointmentMinutes(60);
+
+        Staff therapist = new Staff();
+        setId(therapist, 2L);
+        therapist.setBranch(branch);
+
+        staffRepository.on("findByIdForUpdate",
+                args -> Optional.of(therapist));
+        appointments.on("activeOfStaffForInterval",
+                args -> List.of());
+
         Appointment existing = new Appointment();
-        existing.setStaff(new Staff());
+        setId(existing, 1L);
+        existing.setBranch(branch);
+        existing.setStaff(therapist);
+        existing.setAppointmentDate(LocalDate.of(2026, 12, 1));
+        existing.setAppointmentTime(LocalTime.of(9, 0));
+        existing.setAppointmentEndAt(
+                LocalDate.of(2026, 12, 1).atTime(10, 0));
         existing.setAppointmentStatus(switch (scenario) {
             case "completed" -> AppointmentStatus.Completed;
-            case "confirm", "arrive-unconfirmed" -> AppointmentStatus.Unconfirmed;
+            case "confirm", "confirm-after-service", "arrive-unconfirmed" -> AppointmentStatus.Unconfirmed;
             default -> AppointmentStatus.Confirmed;
         });
         if (scenario.equals("link-patient") || scenario.equals("arrive-new-patient")) {
@@ -70,24 +93,25 @@ public class V2WorkflowScenariosController {
                 args -> scenario.equals("conflict"));
         return V2RepositoryStub.outcome(() -> {
             Appointment result = switch (scenario) {
-                case "book", "conflict" -> service.book(new Patient(), new Branch(), new Staff(), new Service(), null,
+                case "book", "conflict" -> service.book(new Patient(), branch, therapist, new Service(), null,
                         LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), 1L);
                 case "cancel", "completed" -> service.cancel(1L, "ผู้ป่วยขอยกเลิก", 9L);
                 case "reschedule" -> service.reschedule(1L, LocalDate.of(2026, 12, 5), LocalTime.of(10, 0), "ผู้ป่วยขอเลื่อน", 9L);
-                case "book-unconfirmed" -> service.book(new Patient(), new Branch(), new Staff(), new Service(), null,
+                case "book-unconfirmed" -> service.book(new Patient(), branch, therapist, new Service(), null,
                         LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), AppointmentStatus.Unconfirmed, 1L);
-                case "book-bad-initial-status" -> service.book(new Patient(), new Branch(), new Staff(), new Service(), null,
+                case "book-bad-initial-status" -> service.book(new Patient(), branch, therapist, new Service(), null,
                         LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), AppointmentStatus.Completed, 1L);
-                case "book-new-patient" -> service.bookNewPatient("สมชาย ใจดี", "0812345678", new Branch(), new Staff(),
+                case "book-new-patient" -> service.bookNewPatient("สมชาย ใจดี", "0812345678", branch, therapist,
                         com.sabyeguyz.clinicv2.enums.RequestedServiceType.Course, null, LocalDate.of(2026, 12, 1),
                         LocalTime.of(9, 0), AppointmentStatus.Unconfirmed, 1L);
-                case "new-nickname-with-phone" -> service.bookNewPatient("แบงค์", "0812345678", new Branch(), new Staff(),
+                case "new-nickname-with-phone" -> service.bookNewPatient("แบงค์", "0812345678", branch, therapist,
                         null, null, LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), null, 1L);
-                case "new-nickname-without-phone" -> service.bookNewPatient("แบงค์", " ", new Branch(), new Staff(),
+                case "new-nickname-without-phone" -> service.bookNewPatient("แบงค์", " ", branch, therapist,
                         null, null, LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), null, 1L);
-                case "new-without-name" -> service.bookNewPatient("  ", "0812345678", new Branch(), new Staff(),
+                case "new-without-name" -> service.bookNewPatient("  ", "0812345678", branch, therapist,
                         null, null, LocalDate.of(2026, 12, 1), LocalTime.of(9, 0), null, 1L);
                 case "confirm", "confirm-already-confirmed" -> service.confirm(1L, 9L);
+                case "confirm-after-service", "confirm-after-service-already-confirmed" -> service.confirmAfterService(1L, 9L);
                 case "link-patient", "link-patient-already-linked" -> service.linkRegisteredPatient(1L, new Patient(), 9L);
                 case "arrive-unconfirmed", "arrive-new-patient", "arrive-confirmed" -> service.markArrived(1L, 9L);
                 default -> throw new IllegalArgumentException("Unknown scenario");
@@ -116,7 +140,7 @@ public class V2WorkflowScenariosController {
         List<List<Long>> arrivedCalls = new ArrayList<>();
         List<List<Long>> completedCalls = new ArrayList<>();
         // Explicit recording collaborator replaces the original class mock.
-        AppointmentService appointments = new AppointmentService(null, null) {
+        AppointmentService appointments = new AppointmentService(null, null, null) {
             @Override public Appointment markArrived(Long id, Long actor) {
                 arrivedCalls.add(Arrays.asList(id, actor));
                 return appointment;
@@ -131,7 +155,10 @@ public class V2WorkflowScenariosController {
         existing.setAppointment(appointment);
         existing.setVisitStatus(scenario.equals("cancelled") ? VisitStatus.Cancelled : VisitStatus.InService);
         visits.on("findById", args -> Optional.of(existing));
-        var service = new PatientVisitService(visits.proxy(), appointments);
+        var auditRows = new V2RepositoryStub<>(AuditLogRepository.class);
+        var auditService = new AuditLogService(auditRows.proxy());
+        var service = new PatientVisitService(
+                visits.proxy(), appointments, auditService);
         return V2RepositoryStub.outcome(() -> {
             PatientVisit result = switch (scenario) {
                 case "check-in" -> service.checkInFromAppointment(5L, 1L);
@@ -154,30 +181,10 @@ public class V2WorkflowScenariosController {
     public Map<String, Object> audit(@PathVariable String scenario) {
         var repository = new V2RepositoryStub<>(AuditLogRepository.class);
         return V2RepositoryStub.outcome(() -> {
-            var service = new AuditLogService(repository.proxy());
-            var log = switch (scenario) {
-                // plain text is kept as JSON (Data Dictionary: old_value/new_value are JSON)
-                case "plain-text" -> service.record("course", "7", AuditAction.UPDATE, "Active", "Cancelled", 1L);
-                // an automatic event has no user and always names its source
-                case "automatic" -> service.record("appointment", "5", AuditAction.UPDATE, "{\"status\":\"Confirmed\"}",
-                        "{\"status\":\"Cancelled\"}", null);
-                case "google" -> service.recordAutomatic("appointment", "5", AuditAction.UPDATE,
-                        AuditLogService.fields("appointment_status", "Confirmed"),
-                        AuditLogService.fields("appointment_status", "Cancelled"), "GoogleCalendar");
-                case "change" -> service.recordChange("commission_scheme", "3", AuditAction.UPDATE,
-                        AuditLogService.fields("effective_to", null), AuditLogService.fields("effective_to", "2026-10-31",
-                                "reason", "ended by the new version"), 1L);
-                default -> service.record("branch", "1",
-                        scenario.equals("missing-action") ? null : AuditAction.UPDATE,
-                        "{\"phone\":\"080\"}", "{\"phone\":\"081\"}", 1L);
-            };
-            Map<String, Object> saved = new java.util.LinkedHashMap<>();
-            saved.put("tableName", log.getTableName());
-            saved.put("action", log.getAction());
-            saved.put("oldValue", log.getOldValue());
-            saved.put("newValue", log.getNewValue());
-            saved.put("changedBy", log.getChangedBy());
-            return saved;
+            var log = new AuditLogService(repository.proxy()).record("branch", "1",
+                    scenario.equals("missing-action") ? null : AuditAction.UPDATE,
+                    "{\"phone\":\"080\"}", "{\"phone\":\"081\"}", 1L);
+            return Map.of("tableName", log.getTableName(), "action", log.getAction());
         });
     }
 
@@ -299,7 +306,7 @@ public class V2WorkflowScenariosController {
                     new com.sabyeguyz.clinicv2.commission.CourseCommissionService(usages.proxy(), allocations.proxy(),
                             courses.proxy(), new TreatmentFeeRuleResolver(rules.proxy())),
                     new CourseUsagePrintService(new V2RepositoryStub<>(CourseUsagePrintRepository.class).proxy(),
-                            new V2RepositoryStub<>(CourseUsagePrintEventRepository.class).proxy(), usages.proxy()));
+                            new V2RepositoryStub<>(CourseUsagePrintEventRepository.class).proxy(), usages.proxy(), ledger.proxy()));
             var result = service.use(course, new PatientVisit(), patient, ownerTreats ? owner : substitute,
                     LocalDate.of(2026, 9, 1), 1L);
             Map<String, Object> resultMap = new LinkedHashMap<>();
@@ -351,7 +358,8 @@ public class V2WorkflowScenariosController {
         var prints = new V2RepositoryStub<>(CourseUsagePrintRepository.class);
         var events = new V2RepositoryStub<>(CourseUsagePrintEventRepository.class);
         var service = new CourseUsagePrintService(prints.proxy(), events.proxy(),
-                new V2RepositoryStub<>(CourseVisitUsageRepository.class).proxy());
+                new V2RepositoryStub<>(CourseVisitUsageRepository.class).proxy(),
+                new V2RepositoryStub<>(CourseLedgerRepository.class).proxy());
         Course course = lockedCourse(); course.setCourseNo("RE00000010"); course.setCourseName("คอร์สทดสอบ");
         var usage = new CourseVisitUsage();
         usage.setCourse(course); usage.setVisitDate(LocalDate.of(2026, 9, 1).atStartOfDay());

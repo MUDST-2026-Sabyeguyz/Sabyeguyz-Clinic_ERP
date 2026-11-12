@@ -34,7 +34,16 @@ public final class ServiceAccountCredentials {
     /** Reads the JSON key file; the private key is never logged. */
     public static ServiceAccountCredentials load(Path keyFile, ObjectMapper json) {
         try {
-            JsonNode key = json.readTree(Files.readString(keyFile, StandardCharsets.UTF_8));
+            return parse(Files.readString(keyFile, StandardCharsets.UTF_8), json);
+        } catch (IOException exception) {
+            throw new CalendarApiException("The service account key file cannot be read", exception);
+        }
+    }
+
+    /** Parses the JSON text of a key file; the private key is never logged. */
+    public static ServiceAccountCredentials parse(String keyJson, ObjectMapper json) {
+        try {
+            JsonNode key = json.readTree(keyJson);
             String email = key.path("client_email").asText("");
             String pem = key.path("private_key").asText("");
             if (email.isBlank() || pem.isBlank()) {
@@ -43,7 +52,7 @@ public final class ServiceAccountCredentials {
             String uri = key.path("token_uri").asText("https://oauth2.googleapis.com/token");
             return new ServiceAccountCredentials(email, privateKeyFrom(pem), uri);
         } catch (IOException | GeneralSecurityException | IllegalArgumentException exception) {
-            throw new CalendarApiException("The service account key file cannot be read", exception);
+            throw new CalendarApiException("The service account key cannot be read", exception);
         }
     }
 
