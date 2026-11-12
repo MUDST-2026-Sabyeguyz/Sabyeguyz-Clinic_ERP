@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.catalog;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "service_group")
@@ -29,15 +30,42 @@ public class ServiceGroup {
 
     public ServiceGroup() {}
 
-    public Long getId() { return id; }
-    public String getGroupName() { return groupName; }
-    public void setGroupName(String groupName) { this.groupName = groupName; }
-    public Instant getServiceGroupCreateAt() { return serviceGroupCreateAt; }
-    public void setServiceGroupCreateAt(Instant serviceGroupCreateAt) { this.serviceGroupCreateAt = serviceGroupCreateAt; }
-    public Long getServiceGroupCreateBy() { return serviceGroupCreateBy; }
-    public void setServiceGroupCreateBy(Long serviceGroupCreateBy) { this.serviceGroupCreateBy = serviceGroupCreateBy; }
-    public Instant getServiceGroupUpdateAt() { return serviceGroupUpdateAt; }
-    public void setServiceGroupUpdateAt(Instant serviceGroupUpdateAt) { this.serviceGroupUpdateAt = serviceGroupUpdateAt; }
-    public Long getServiceGroupUpdateBy() { return serviceGroupUpdateBy; }
-    public void setServiceGroupUpdateBy(Long serviceGroupUpdateBy) { this.serviceGroupUpdateBy = serviceGroupUpdateBy; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getGroupName() {
+        return groupName;
+    }
+    public void setGroupName(String groupName) {
+        this.groupName = groupName;
+    }
+
+    public Instant getServiceGroupCreateAt() {
+        return serviceGroupCreateAt;
+    }
+    public void setServiceGroupCreateAt(Instant serviceGroupCreateAt) {
+        this.serviceGroupCreateAt = serviceGroupCreateAt;
+    }
+
+    public Long getServiceGroupCreateBy() {
+        return serviceGroupCreateBy;
+    }
+    public void setServiceGroupCreateBy(Long serviceGroupCreateBy) {
+        this.serviceGroupCreateBy = serviceGroupCreateBy;
+    }
+
+    public Instant getServiceGroupUpdateAt() {
+        return serviceGroupUpdateAt;
+    }
+    public void setServiceGroupUpdateAt(Instant serviceGroupUpdateAt) {
+        this.serviceGroupUpdateAt = serviceGroupUpdateAt;
+    }
+
+    public Long getServiceGroupUpdateBy() {
+        return serviceGroupUpdateBy;
+    }
+    public void setServiceGroupUpdateBy(Long serviceGroupUpdateBy) {
+        this.serviceGroupUpdateBy = serviceGroupUpdateBy;
+    }
 }
