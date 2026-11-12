@@ -349,6 +349,28 @@ public class StaffPayAdjustmentService {
         return adjustments.save(adjustment);
     }
 
+    /** Cancel all unpaid adjustment balances when a staff member resigns. */
+    @Transactional
+    public void cancelOnTermination(Long staffId, Long actorId) {
+        for (StaffPayAdjustment adjustment : adjustments.findByStaffIdOrderByIdDesc(staffId)) {
+            if (adjustment.getRemainingAmount() == null || adjustment.getRemainingAmount().signum() <= 0
+                    || adjustment.getAdjustmentStatus() == AdjustmentStatus.Applied
+                    || adjustment.getAdjustmentStatus() == AdjustmentStatus.Cancelled) {
+                continue;
+            }
+            cancelDrafts(adjustment);
+            adjustment.setAdjustmentStatus(AdjustmentStatus.Cancelled);
+            adjustment.setCancellationReason("นักกายภาพลาออก");
+            adjustment.setCancelledAt(Instant.now());
+            adjustments.save(adjustment);
+        }
+        for (StaffMonthlyPayment payment : payments.findByStaffIdOrderByPaymentMonthDesc(staffId)) {
+            if (payment.getPaymentStatus() == PaymentStatus.Open) {
+                paymentService.refresh(payment);
+            }
+        }
+    }
+
     /**
      * Reserves an amount of an approved adjustment on the payment of a month ({@code amountAbs} defaults to what is left
      * after the other Draft applications). The payment must be Open and the month not before the first intended month.
