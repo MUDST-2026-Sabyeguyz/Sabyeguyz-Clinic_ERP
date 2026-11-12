@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.catalog;
 
-import com.sabyeguyz.clinicv2.enums.ServiceType;
+import java.math.BigDecimal;
+import java.time.Instant;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.math.BigDecimal;
-import java.time.Instant;
+
+import com.sabyeguyz.clinicv2.enums.ServiceType;
 
 @Entity
 @Table(name = "service")
@@ -68,38 +70,114 @@ public class Service {
 
     public Service() {}
 
-    public Integer getDefaultAppointmentMinutes() { return defaultAppointmentMinutes; }
-    public void setDefaultAppointmentMinutes(Integer minutes) { this.defaultAppointmentMinutes = minutes; }
+    public Integer getDefaultAppointmentMinutes() {
+        return defaultAppointmentMinutes;
+    }
+    public void setDefaultAppointmentMinutes(Integer minutes) {
+        this.defaultAppointmentMinutes = minutes;
+    }
 
-    public Long getId() { return id; }
-    public ServiceType getServiceType() { return serviceType; }
-    public void setServiceType(ServiceType serviceType) { this.serviceType = serviceType; }
-    public String getServiceName() { return serviceName; }
-    public void setServiceName(String serviceName) { this.serviceName = serviceName; }
-    public BigDecimal getServicePrice() { return servicePrice; }
-    public void setServicePrice(BigDecimal servicePrice) { this.servicePrice = servicePrice; }
-    public boolean isServiceStatus() { return serviceStatus; }
-    public void setServiceStatus(boolean serviceStatus) { this.serviceStatus = serviceStatus; }
-    public String getServiceCode() { return serviceCode; }
-    public void setServiceCode(String serviceCode) { this.serviceCode = serviceCode; }
-    public Instant getServiceCreateAt() { return serviceCreateAt; }
-    public void setServiceCreateAt(Instant serviceCreateAt) { this.serviceCreateAt = serviceCreateAt; }
-    public Long getServiceCreateBy() { return serviceCreateBy; }
-    public void setServiceCreateBy(Long serviceCreateBy) { this.serviceCreateBy = serviceCreateBy; }
-    public Instant getServiceUpdateAt() { return serviceUpdateAt; }
-    public void setServiceUpdateAt(Instant serviceUpdateAt) { this.serviceUpdateAt = serviceUpdateAt; }
-    public Long getServiceUpdateBy() { return serviceUpdateBy; }
-    public void setServiceUpdateBy(Long serviceUpdateBy) { this.serviceUpdateBy = serviceUpdateBy; }
-    public Integer getDefaultTotalVisits() { return defaultTotalVisits; }
-    public void setDefaultTotalVisits(Integer defaultTotalVisits) { this.defaultTotalVisits = defaultTotalVisits; }
-    public Integer getDefaultBonusVisits() { return defaultBonusVisits; }
-    public void setDefaultBonusVisits(Integer defaultBonusVisits) { this.defaultBonusVisits = defaultBonusVisits; }
-    public Integer getDefaultValidityValue() { return defaultValidityValue; }
-    public void setDefaultValidityValue(Integer value) { this.defaultValidityValue = value; }
-    public com.sabyeguyz.clinicv2.enums.ValidityUnit getDefaultValidityUnit() { return defaultValidityUnit; }
-    public void setDefaultValidityUnit(com.sabyeguyz.clinicv2.enums.ValidityUnit unit) { this.defaultValidityUnit = unit; }
-    public String getUnitName() { return unitName; }
-    public void setUnitName(String value) { this.unitName = value; }
+    public Long getId() {
+        return id;
+    }
+
+    public ServiceType getServiceType() {
+        return serviceType;
+    }
+    public void setServiceType(ServiceType serviceType) {
+        this.serviceType = serviceType;
+    }
+
+    public String getServiceName() {
+        return serviceName;
+    }
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
+
+    public BigDecimal getServicePrice() {
+        return servicePrice;
+    }
+    public void setServicePrice(BigDecimal servicePrice) {
+        this.servicePrice = servicePrice;
+    }
+
+    public boolean isServiceStatus() {
+        return serviceStatus;
+    }
+    public void setServiceStatus(boolean serviceStatus) {
+        this.serviceStatus = serviceStatus;
+    }
+
+    public String getServiceCode() {
+        return serviceCode;
+    }
+    public void setServiceCode(String serviceCode) {
+        this.serviceCode = serviceCode;
+    }
+
+    public Instant getServiceCreateAt() {
+        return serviceCreateAt;
+    }
+    public void setServiceCreateAt(Instant serviceCreateAt) {
+        this.serviceCreateAt = serviceCreateAt;
+    }
+
+    public Long getServiceCreateBy() {
+        return serviceCreateBy;
+    }
+    public void setServiceCreateBy(Long serviceCreateBy) {
+        this.serviceCreateBy = serviceCreateBy;
+    }
+
+    public Instant getServiceUpdateAt() {
+        return serviceUpdateAt;
+    }
+    public void setServiceUpdateAt(Instant serviceUpdateAt) {
+        this.serviceUpdateAt = serviceUpdateAt;
+    }
+
+    public Long getServiceUpdateBy() {
+        return serviceUpdateBy;
+    }
+    public void setServiceUpdateBy(Long serviceUpdateBy) {
+        this.serviceUpdateBy = serviceUpdateBy;
+    }
+
+    public Integer getDefaultTotalVisits() {
+        return defaultTotalVisits;
+    }
+    public void setDefaultTotalVisits(Integer defaultTotalVisits) {
+        this.defaultTotalVisits = defaultTotalVisits;
+    }
+
+    public Integer getDefaultBonusVisits() {
+        return defaultBonusVisits;
+    }
+    public void setDefaultBonusVisits(Integer defaultBonusVisits) {
+        this.defaultBonusVisits = defaultBonusVisits;
+    }
+
+    public Integer getDefaultValidityValue() {
+        return defaultValidityValue;
+    }
+    public void setDefaultValidityValue(Integer value) {
+        this.defaultValidityValue = value;
+    }
+
+    public com.sabyeguyz.clinicv2.enums.ValidityUnit getDefaultValidityUnit() {
+        return defaultValidityUnit;
+    }
+    public void setDefaultValidityUnit(com.sabyeguyz.clinicv2.enums.ValidityUnit unit) {
+        this.defaultValidityUnit = unit;
+    }
+
+    public String getUnitName() {
+        return unitName;
+    }
+    public void setUnitName(String value) {
+        this.unitName = value;
+    }
     /** Compatibility for API clients that specify days; months/years keep their calendar semantics. */
     public Integer getDefaultValidityDays() {
         return defaultValidityUnit == com.sabyeguyz.clinicv2.enums.ValidityUnit.Day ? defaultValidityValue : null;
@@ -111,6 +189,7 @@ public class Service {
     public java.time.LocalDate expiryFrom(java.time.LocalDate date) {
         if (defaultValidityValue == null || defaultValidityValue < 1 || defaultValidityUnit == null)
             throw new IllegalArgumentException("คอร์สต้องระบุระยะเวลาใช้งานอย่างน้อย 1");
+
         return switch (defaultValidityUnit) {
             case Day -> date.plusDays(defaultValidityValue);
             case Month -> date.plusMonths(defaultValidityValue);
