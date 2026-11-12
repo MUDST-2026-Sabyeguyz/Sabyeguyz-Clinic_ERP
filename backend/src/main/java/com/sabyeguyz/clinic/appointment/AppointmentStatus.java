@@ -8,19 +8,33 @@ import java.util.Set;
  * (Appointment &amp; Patient Visit Workflow)
  */
 public enum AppointmentStatus {
-    /** นัดหมายแล้ว */
+    /**
+     * นัดหมายแล้ว
+     */
     CONFIRMED,
-    /** มาถึงคลินิก */
+    /**
+     * มาถึงคลินิก
+     */
     ARRIVED,
-    /** เข้ารับบริการ */
+    /**
+     * เข้ารับบริการ
+     */
     IN_SERVICE,
-    /** เสร็จสิ้น */
+    /**
+     * เสร็จสิ้น
+     */
     COMPLETED,
-    /** ยกเลิก */
+    /**
+     * ยกเลิก
+     */
     CANCELLED,
-    /** เลื่อนนัด */
+    /**
+     * เลื่อนนัด
+     */
     RESCHEDULED,
-    /** ไม่มาตามนัด */
+    /**
+     * ไม่มาตามนัด
+     */
     NO_SHOW;
 
     /**

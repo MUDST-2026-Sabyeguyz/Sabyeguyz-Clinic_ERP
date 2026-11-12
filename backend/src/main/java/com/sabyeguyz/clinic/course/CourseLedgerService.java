@@ -1,5 +1,16 @@
 package com.sabyeguyz.clinic.course;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinic.appointment.Appointment;
 import com.sabyeguyz.clinic.appointment.AppointmentNotFoundException;
 import com.sabyeguyz.clinic.appointment.AppointmentRepository;
@@ -8,23 +19,14 @@ import com.sabyeguyz.clinic.branch.BranchRepository;
 import com.sabyeguyz.clinic.catalog.Course;
 import com.sabyeguyz.clinic.catalog.CourseNotFoundException;
 import com.sabyeguyz.clinic.catalog.CourseRepository;
-import com.sabyeguyz.clinic.patient.Patient;
-import com.sabyeguyz.clinic.patient.PatientNotFoundException;
-import com.sabyeguyz.clinic.patient.PatientRepository;
-import com.sabyeguyz.clinic.staff.StaffRepository;
-import java.time.Instant;
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import com.sabyeguyz.clinic.staff.Staff;
 import com.sabyeguyz.clinic.commission.CommissionAllocationLedger;
 import com.sabyeguyz.clinic.commission.CommissionAllocationLedgerRepository;
 import com.sabyeguyz.clinic.commission.TreatmentFeeRuleRepository;
+import com.sabyeguyz.clinic.patient.Patient;
+import com.sabyeguyz.clinic.patient.PatientNotFoundException;
+import com.sabyeguyz.clinic.patient.PatientRepository;
+import com.sabyeguyz.clinic.staff.Staff;
+import com.sabyeguyz.clinic.staff.StaffRepository;
 
 /**
  * ดูแลยอดคงเหลือของคอร์สทั้งหมดผ่านบัญชีเดินสะพัด ({@link CourseMovement})
@@ -42,12 +44,16 @@ public class CourseLedgerService {
     private final TreatmentFeeRuleRepository treatmentFees;
     private final CommissionAllocationLedgerRepository ledger;
 
-    public CourseLedgerService(CoursePurchaseRepository purchaseRepository,
-                               CourseMovementRepository movementRepository,
-                               PatientRepository patientRepository,
-                               CourseRepository courseRepository,
-                               BranchRepository branchRepository,
-                               AppointmentRepository appointmentRepository, StaffRepository staffRepository, TreatmentFeeRuleRepository treatmentFees, CommissionAllocationLedgerRepository ledger) {
+    public CourseLedgerService(
+            CoursePurchaseRepository purchaseRepository,
+            CourseMovementRepository movementRepository,
+            PatientRepository patientRepository,
+            CourseRepository courseRepository,
+            BranchRepository branchRepository,
+            AppointmentRepository appointmentRepository,
+            StaffRepository staffRepository,
+            TreatmentFeeRuleRepository treatmentFees,
+            CommissionAllocationLedgerRepository ledger) {
         this.purchaseRepository = purchaseRepository;
         this.movementRepository = movementRepository;
         this.patientRepository = patientRepository;
@@ -55,7 +61,8 @@ public class CourseLedgerService {
         this.branchRepository = branchRepository;
         this.appointmentRepository = appointmentRepository;
         this.staffRepository = staffRepository;
-        this.treatmentFees=treatmentFees; this.ledger=ledger;
+        this.treatmentFees = treatmentFees;
+        this.ledger = ledger;
     }
 
     @Transactional
@@ -74,7 +81,9 @@ public class CourseLedgerService {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
 
         CoursePurchase purchase = openPurchase(patient, course, branch, Instant.now());
-        if (request.sellerEmployeeId()!=null) purchase.assignSeller(staffRepository.findById(request.sellerEmployeeId()).orElseThrow(()->new IllegalArgumentException("ไม่พบพนักงานผู้ขาย")));
+        if (request.sellerEmployeeId() != null)
+            purchase.assignSeller(staffRepository.findById(request.sellerEmployeeId())
+                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานผู้ขาย")));
         purchaseRepository.save(purchase);
         return describe(purchase, Instant.now());
     }
@@ -89,7 +98,11 @@ public class CourseLedgerService {
             throw new IllegalArgumentException("คอร์สถูกปิดการใช้งาน");
         }
         CoursePurchase purchase = purchaseRepository.save(
-                new CoursePurchase(patient, course, branch, purchasedAt));
+                new CoursePurchase(
+                        patient,
+                        course,
+                        branch,
+                        purchasedAt));
         movementRepository.save(CourseMovement.purchase(purchase));
         return purchase;
     }
@@ -117,19 +130,37 @@ public class CourseLedgerService {
 
         Appointment appointment = resolveAppointment(request.appointmentId(), purchase);
         movementRepository.save(CourseMovement.usage(purchase, appointment, request.note()));
-        if (purchase.getCommissionAllocationPerVisit()!=null) allocationLedger(request, purchase, appointment, now);
+        if (purchase.getCommissionAllocationPerVisit() != null) allocationLedger(request, purchase, appointment, now);
 
         return describe(purchase, now);
     }
 
     private void allocationLedger(CourseUsageRequest request, CoursePurchase purchase, Appointment appointment, Instant now) {
-        Staff treating = request.treatingStaffId()==null?null:staffRepository.findById(request.treatingStaffId()).orElseThrow(()->new IllegalArgumentException("ไม่พบผู้รักษา"));
-        BigDecimal gross=purchase.getCommissionAllocationPerVisit(); BigDecimal fee=BigDecimal.ZERO;
-        if(treating!=null && purchase.getCaseOwner()!=null && !treating.getId().equals(purchase.getCaseOwner().getId())) fee=treatmentFees.findCurrent(treating.getId(),now.atZone(java.time.ZoneId.of("Asia/Bangkok")).toLocalDate()).map(r->r.calculate(purchase)).orElse(BigDecimal.ZERO).min(gross);
-        ledger.save(new CommissionAllocationLedger(purchase,gross,fee,gross.subtract(fee),purchase.getCaseOwner(),treating,now.atZone(java.time.ZoneId.of("Asia/Bangkok")).toLocalDate()));
+        Staff treating = request.treatingStaffId() == null ? null
+                : staffRepository.findById(request.treatingStaffId())
+                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้รักษา"));
+        BigDecimal gross = purchase.getCommissionAllocationPerVisit();
+        BigDecimal fee = BigDecimal.ZERO;
+        if (treating != null && purchase.getCaseOwner() != null && !treating.getId().equals(purchase.getCaseOwner().getId()))
+            fee = treatmentFees.findCurrent(
+                            treating.getId(),
+                            now.atZone(java.time.ZoneId.of("Asia/Bangkok")).toLocalDate())
+                    .map(r -> r.calculate(purchase))
+                    .orElse(BigDecimal.ZERO)
+                    .min(gross);
+        ledger.save(new CommissionAllocationLedger(
+                purchase,
+                gross,
+                fee,
+                gross.subtract(fee),
+                purchase.getCaseOwner(),
+                treating,
+                now.atZone(java.time.ZoneId.of("Asia/Bangkok")).toLocalDate()));
     }
 
-    /** รายการใช้สิทธิ์ทั้งหมดสำหรับหน้าธุรกรรม พร้อมข้อมูลการกลับรายการ */
+    /**
+     * รายการใช้สิทธิ์ทั้งหมดสำหรับหน้าธุรกรรม พร้อมข้อมูลการกลับรายการ
+     */
     @Transactional(readOnly = true)
     public List<CourseUsageTransactionResponse> listUsageTransactions() {
         List<CourseMovement> usages = movementRepository.findByTypeOrderByIdDesc(CourseMovementType.USAGE);
@@ -141,7 +172,9 @@ public class CourseLedgerService {
                 usage, reversals.get(usage.getId()))).toList();
     }
 
-    /** กลับรายการการตัดสิทธิ์ที่บันทึกผิด — รายการเดิมยังอยู่ในประวัติเสมอ */
+    /**
+     * กลับรายการการตัดสิทธิ์ที่บันทึกผิด — รายการเดิมยังอยู่ในประวัติเสมอ
+     */
     @Transactional
     public CoursePurchaseResponse reverseUsage(long movementId, CourseReasonRequest request) {
         CourseMovement original = movementRepository.findById(movementId)
@@ -159,7 +192,9 @@ public class CourseLedgerService {
         return describe(purchase, Instant.now());
     }
 
-    /** ยกเลิกใบซื้อทั้งใบ: ล้างสิทธิ์คงเหลือเป็นศูนย์ ครั้งที่ใช้ไปแล้วยังคงอยู่ในประวัติ */
+    /**
+     * ยกเลิกใบซื้อทั้งใบ: ล้างสิทธิ์คงเหลือเป็นศูนย์ ครั้งที่ใช้ไปแล้วยังคงอยู่ในประวัติ
+     */
     @Transactional
     public CoursePurchaseResponse cancel(long purchaseId, CourseReasonRequest request) {
         CoursePurchase purchase = lock(purchaseId);
@@ -198,7 +233,10 @@ public class CourseLedgerService {
             running += movement.getQuantity();
             movements.add(CourseMovementResponse.from(movement, running));
         }
-        return new CourseLedgerResponse(describe(purchase, Instant.now()), movements, ledger.findByCoursePurchaseIdOrderByVisitDateAsc(purchaseId));
+        return new CourseLedgerResponse(
+                describe(purchase, Instant.now()),
+                movements,
+                ledger.findByCoursePurchaseIdOrderByVisitDateAsc(purchaseId));
     }
 
     private CoursePurchase lock(long purchaseId) {

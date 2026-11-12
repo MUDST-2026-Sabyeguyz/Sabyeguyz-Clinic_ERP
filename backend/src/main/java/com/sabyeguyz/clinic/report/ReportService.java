@@ -1,13 +1,5 @@
 package com.sabyeguyz.clinic.report;
 
-import com.sabyeguyz.clinic.appointment.AppointmentStatus;
-import com.sabyeguyz.clinic.branch.Branch;
-import com.sabyeguyz.clinic.branch.BranchRepository;
-import com.sabyeguyz.clinic.course.CoursePurchaseStatus;
-import com.sabyeguyz.clinic.patient.PatientNotFoundException;
-import com.sabyeguyz.clinic.patient.PatientRepository;
-import com.sabyeguyz.clinic.sale.SaleItemType;
-import com.sabyeguyz.clinic.sale.SaleStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -18,8 +10,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinic.appointment.AppointmentStatus;
+import com.sabyeguyz.clinic.branch.Branch;
+import com.sabyeguyz.clinic.branch.BranchRepository;
+import com.sabyeguyz.clinic.course.CoursePurchaseStatus;
+import com.sabyeguyz.clinic.patient.PatientNotFoundException;
+import com.sabyeguyz.clinic.patient.PatientRepository;
+import com.sabyeguyz.clinic.sale.SaleItemType;
+import com.sabyeguyz.clinic.sale.SaleStatus;
 
 /**
  * Dashboard และ Report ตาม Workflow Brief V1 §8
@@ -94,8 +96,11 @@ public class ReportService {
 
         List<AppointmentReportResponse.TherapistLoad> byTherapist = queries
                 .appointmentsByTherapist(from, to, EnumSet.allOf(AppointmentStatus.class), branchId).stream()
-                .map(row -> new AppointmentReportResponse.TherapistLoad(row.therapistId(), row.code(),
-                        row.fullName(), row.appointments(),
+                .map(row -> new AppointmentReportResponse.TherapistLoad(
+                        row.therapistId(),
+                        row.code(),
+                        row.fullName(),
+                        row.appointments(),
                         visitsByTherapist.getOrDefault(row.therapistId(), 0L)))
                 .sorted((left, right) -> Long.compare(right.appointments(), left.appointments()))
                 .toList();
@@ -107,7 +112,9 @@ public class ReportService {
                 // ตัวหารคือนัดที่ถึงกำหนดแล้วจริงๆ นัดที่ยังไม่ถึงเวลาหรือถูกเลื่อนไม่ควรทำให้อัตราดูดีเกินจริง
                 noShowRate(noShows, visits + noShows),
                 statuses.stream()
-                        .map(row -> new AppointmentReportResponse.StatusCount(row.status(), row.appointments()))
+                        .map(row -> new AppointmentReportResponse.StatusCount(
+                                row.status(),
+                                row.appointments()))
                         .sorted((left, right) -> left.status().compareTo(right.status()))
                         .toList(),
                 byTherapist,
@@ -125,7 +132,10 @@ public class ReportService {
         List<RevenueReportResponse.CategoryRevenue> byCategory = new ArrayList<>();
         for (SaleItemType type : SaleItemType.values()) {
             BigDecimal amount = categories.getOrDefault(type, zero());
-            byCategory.add(new RevenueReportResponse.CategoryRevenue(type, amount, share(amount, total)));
+            byCategory.add(new RevenueReportResponse.CategoryRevenue(
+                    type,
+                    amount,
+                    share(amount, total)));
         }
 
         return new RevenueReportResponse(
@@ -151,8 +161,16 @@ public class ReportService {
         List<ReportRows.PurchaseRow> purchases = queries.coursePurchases(
                 period.startInstant(), period.endInstantExclusive(), branchId, patientId);
         if (purchases.isEmpty()) {
-            return new CourseBalanceReportResponse(period.from(), period.to(), normalise(branchCode),
-                    0, 0, 0, 0, zero(), List.of());
+            return new CourseBalanceReportResponse(
+                    period.from(),
+                    period.to(),
+                    normalise(branchCode),
+                    0,
+                    0,
+                    0,
+                    0,
+                    zero(),
+                    List.of());
         }
 
         // ดึงยอดคงเหลือและยอดที่ใช้ไปของทุกใบในคราวเดียว ไม่ยิง query ต่อหนึ่งใบ
@@ -164,12 +182,19 @@ public class ReportService {
         List<CourseBalanceReportResponse.Row> rows = purchases.stream().map(purchase -> {
             int purchased = purchase.sessions() + purchase.bonusSessions();
             return new CourseBalanceReportResponse.Row(
-                    purchase.purchaseId(), purchase.patientId(), purchase.hn(), purchase.patientFullName(),
-                    purchase.branchCode(), purchase.courseCode(), purchase.courseName(), purchase.price(),
+                    purchase.purchaseId(),
+                    purchase.patientId(),
+                    purchase.hn(),
+                    purchase.patientFullName(),
+                    purchase.branchCode(),
+                    purchase.courseCode(),
+                    purchase.courseName(),
+                    purchase.price(),
                     purchased,
                     Math.toIntExact(used.getOrDefault(purchase.purchaseId(), 0L)),
                     Math.toIntExact(balances.getOrDefault(purchase.purchaseId(), 0L)),
-                    purchase.purchasedAt(), purchase.expiresAt(),
+                    purchase.purchasedAt(),
+                    purchase.expiresAt(),
                     !now.isBefore(purchase.expiresAt()),
                     purchase.status());
         }).toList();
@@ -196,14 +221,27 @@ public class ReportService {
         StaffSalesReportResponse.Row unassigned = raw.stream()
                 .filter(row -> row.staffId() == null)
                 .findFirst()
-                .map(row -> new StaffSalesReportResponse.Row(null, null, "ไม่ระบุผู้ขาย",
-                        row.receipts(), money(row.amount())))
-                .orElse(new StaffSalesReportResponse.Row(null, null, "ไม่ระบุผู้ขาย", 0, zero()));
+                .map(row -> new StaffSalesReportResponse.Row(
+                        null,
+                        null,
+                        "ไม่ระบุผู้ขาย",
+                        row.receipts(),
+                        money(row.amount())))
+                .orElse(new StaffSalesReportResponse.Row(
+                        null,
+                        null,
+                        "ไม่ระบุผู้ขาย",
+                        0,
+                        zero()));
 
         List<StaffSalesReportResponse.Row> rows = raw.stream()
                 .filter(row -> row.staffId() != null)
-                .map(row -> new StaffSalesReportResponse.Row(row.staffId(), row.employeeCode(),
-                        row.fullName(), row.receipts(), money(row.amount())))
+                .map(row -> new StaffSalesReportResponse.Row(
+                        row.staffId(),
+                        row.employeeCode(),
+                        row.fullName(),
+                        row.receipts(),
+                        money(row.amount())))
                 .sorted((left, right) -> right.amount().compareTo(left.amount()))
                 .toList();
 
@@ -212,8 +250,14 @@ public class ReportService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
         long receipts = raw.stream().mapToLong(ReportRows.StaffSaleRow::receipts).sum();
 
-        return new StaffSalesReportResponse(period.from(), period.to(), normalise(branchCode),
-                branchTotal, receipts, rows, unassigned);
+        return new StaffSalesReportResponse(
+                period.from(),
+                period.to(),
+                normalise(branchCode),
+                branchTotal,
+                receipts,
+                rows,
+                unassigned);
     }
 
     /**
@@ -231,7 +275,9 @@ public class ReportService {
             buckets.computeIfPresent(date, (key, running) -> running.add(sale.amount()));
         }
         return buckets.entrySet().stream()
-                .map(entry -> new RevenueReportResponse.DailyRevenue(entry.getKey(), money(entry.getValue())))
+                .map(entry -> new RevenueReportResponse.DailyRevenue(
+                        entry.getKey(),
+                        money(entry.getValue())))
                 .toList();
     }
 
@@ -254,11 +300,15 @@ public class ReportService {
         return buckets.entrySet().stream()
                 .flatMap(entry -> entry.getValue().entrySet().stream().map(category ->
                         new RevenueReportResponse.DailyCategoryRevenue(
-                                entry.getKey(), category.getKey(), money(category.getValue()))))
+                                entry.getKey(),
+                                category.getKey(),
+                                money(category.getValue()))))
                 .toList();
     }
 
-    /** จำนวนนัดรายวันตามวันที่ของคลินิก เติมวันที่ไม่มีนัดให้เป็นศูนย์ เหมือนซีรีส์รายได้ */
+    /**
+     * จำนวนนัดรายวันตามวันที่ของคลินิก เติมวันที่ไม่มีนัดให้เป็นศูนย์ เหมือนซีรีส์รายได้
+     */
     private List<AppointmentReportResponse.DailyCount> dailyAppointments(
             ReportPeriod period, List<ReportRows.AppointmentMoment> moments) {
         Map<LocalDate, long[]> buckets = new LinkedHashMap<>();
@@ -277,7 +327,9 @@ public class ReportService {
         }
         return buckets.entrySet().stream()
                 .map(entry -> new AppointmentReportResponse.DailyCount(
-                        entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+                        entry.getKey(),
+                        entry.getValue()[0],
+                        entry.getValue()[1]))
                 .toList();
     }
 
@@ -317,7 +369,9 @@ public class ReportService {
         return gender == null || gender.isBlank() ? UNKNOWN_GENDER : gender;
     }
 
-    /** สัดส่วนของยอดต่อรายได้รวม ทศนิยม 4 ตำแหน่ง คืน 0 เมื่อไม่มีรายได้เลย */
+    /**
+     * สัดส่วนของยอดต่อรายได้รวม ทศนิยม 4 ตำแหน่ง คืน 0 เมื่อไม่มีรายได้เลย
+     */
     private static BigDecimal share(BigDecimal amount, BigDecimal total) {
         if (total.signum() == 0) {
             return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
