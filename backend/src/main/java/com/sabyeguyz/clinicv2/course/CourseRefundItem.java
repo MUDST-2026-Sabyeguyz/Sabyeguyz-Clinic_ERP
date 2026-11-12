@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.course;
 
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.sale.RefundTransaction;
 
@@ -38,20 +40,19 @@ public class CourseRefundItem {
     public CourseRefundItem() {}
 
     public Long getId() { return id; }
+
     public RefundTransaction getRefund() { return refund; }
     public void setRefund(RefundTransaction refund) { this.refund = refund; }
+
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+
     public BigDecimal getRefundAmount() { return refundAmount; }
     public void setRefundAmount(BigDecimal refundAmount) { this.refundAmount = refundAmount; }
+
     public Integer getCancelledVisits() { return cancelledVisits; }
     public void setCancelledVisits(Integer cancelledVisits) { this.cancelledVisits = cancelledVisits; }
 
-    public CourseRefundItem getRightsCancellationItem() {
-        return rightsCancellationItem;
-    }
-
-    public void setRightsCancellationItem(CourseRefundItem item) {
-        this.rightsCancellationItem = item;
-    }
+    public CourseRefundItem getRightsCancellationItem() { return rightsCancellationItem; }
+    public void setRightsCancellationItem(CourseRefundItem item) { this.rightsCancellationItem = item; }
 }

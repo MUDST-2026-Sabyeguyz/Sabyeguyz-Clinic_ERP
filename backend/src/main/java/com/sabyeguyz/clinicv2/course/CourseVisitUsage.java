@@ -1,5 +1,13 @@
 package com.sabyeguyz.clinicv2.course;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.commission.TreatmentFeeRule;
@@ -7,12 +15,6 @@ import com.sabyeguyz.clinicv2.enums.UsageStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.treatment.Treatment;
-import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
 
 /**
  * One use of a Course entitlement. Follows Commission_System_Requirement_Dev
@@ -99,42 +101,63 @@ public class CourseVisitUsage {
     public CourseVisitUsage() {}
 
     public Long getId() { return id; }
+
     public PatientVisit getVisit() { return visit; }
     public void setVisit(PatientVisit visit) { this.visit = visit; }
+
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+
     public Patient getPatient() { return patient; }
     public void setPatient(Patient patient) { this.patient = patient; }
+
     public Staff getTreatingStaff() { return treatingStaff; }
     public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
+
     /** The Owner PT of the usage is the course's seller. */
-    public Staff getOwnerStaff() { return course.getOwnerStaff(); }
+    public Staff getOwnerStaff() {
+        return course.getOwnerStaff();
+    }
+
     public LocalDateTime getVisitDate() { return visitDate; }
     public void setVisitDate(LocalDateTime visitDate) { this.visitDate = visitDate; }
+
     public int getVisitQty() { return visitQty; }
     public void setVisitQty(int visitQty) { this.visitQty = visitQty; }
+
     public BigDecimal getCommissionAllocationPerVisit() { return commissionAllocationPerVisit; }
     public void setCommissionAllocationPerVisit(BigDecimal commissionAllocationPerVisit) { this.commissionAllocationPerVisit = commissionAllocationPerVisit; }
+
     public TreatmentFeeRule getTreatmentFeeRule() { return treatmentFeeRule; }
     public void setTreatmentFeeRule(TreatmentFeeRule treatmentFeeRule) { this.treatmentFeeRule = treatmentFeeRule; }
+
     public BigDecimal getSubstituteTreatmentFeeAmount() { return substituteTreatmentFeeAmount; }
     public void setSubstituteTreatmentFeeAmount(BigDecimal substituteTreatmentFeeAmount) { this.substituteTreatmentFeeAmount = substituteTreatmentFeeAmount; }
+
     public BigDecimal getOwnerNetCommission() { return ownerNetCommission; }
     public void setOwnerNetCommission(BigDecimal ownerNetCommission) { this.ownerNetCommission = ownerNetCommission; }
+
     public Instant getUsageCreateAt() { return usageCreateAt; }
     public void setUsageCreateAt(Instant usageCreateAt) { this.usageCreateAt = usageCreateAt; }
+
     public Long getUsageCreateBy() { return usageCreateBy; }
     public void setUsageCreateBy(Long usageCreateBy) { this.usageCreateBy = usageCreateBy; }
+
     public Instant getUsageUpdateAt() { return usageUpdateAt; }
     public void setUsageUpdateAt(Instant usageUpdateAt) { this.usageUpdateAt = usageUpdateAt; }
+
     public Long getUsageUpdateBy() { return usageUpdateBy; }
     public void setUsageUpdateBy(Long usageUpdateBy) { this.usageUpdateBy = usageUpdateBy; }
+
     public UsageStatus getUsageStatus() { return usageStatus; }
     public void setUsageStatus(UsageStatus usageStatus) { this.usageStatus = usageStatus; }
+
     public int getUsageSequence() { return usageSequence; }
     public void setUsageSequence(int usageSequence) { this.usageSequence = usageSequence; }
+
     public CourseVisitUsage getReplacesUsage() { return replacesUsage; }
     public void setReplacesUsage(CourseVisitUsage replacesUsage) { this.replacesUsage = replacesUsage; }
+
     public Treatment getTreatment() { return treatment; }
     public void setTreatment(Treatment treatment) { this.treatment = treatment; }
 }
