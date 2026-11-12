@@ -34,6 +34,9 @@ Workflow **Legacy data migration** สร้างฐานข้อมูลแ
 และตรวจผ่าน API (`ci/verify-migrated-app.sh`): ล็อกอินด้วยรหัสผ่านเดิม ข้อมูลผู้ป่วย/นัดหมาย/ledger ครบ
 และเมื่อลงทะเบียนผู้ป่วย ขาย หรือนัดหมายใหม่ เลข HN และเลขใบเสร็จต่อจากของเดิมได้
 
+ไฟล์ SQL สำหรับสร้างฐานข้อมูลเดิมใน CI อยู่ที่ `backend/src/test/resources/db/legacy_schema` เท่านั้น
+ส่วนระบบจริงใช้ Flyway จาก `backend/src/main/resources/db/migration` ชุดเดียว
+
 ## การจับคู่ข้อมูล (เดิม → ใหม่)
 
 | ข้อมูลเดิม | ข้อมูลใหม่ | หมายเหตุ |

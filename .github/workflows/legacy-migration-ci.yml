@@ -10,6 +10,7 @@ on:
     paths:
       - 'backend/scripts/legacy-migration/**'
       - 'backend/src/main/resources/db/**'
+      - 'backend/src/test/resources/db/legacy_schema/**'
       - 'backend/src/main/java/com/sabyeguyz/clinicv2/**'
       - '.github/workflows/legacy-migration-ci.yml'
   pull_request:
@@ -17,6 +18,7 @@ on:
     paths:
       - 'backend/scripts/legacy-migration/**'
       - 'backend/src/main/resources/db/**'
+      - 'backend/src/test/resources/db/legacy_schema/**'
       - '.github/workflows/legacy-migration-ci.yml'
   workflow_dispatch:
 
@@ -99,7 +101,7 @@ jobs:
           def key(path):
               m = re.search(r'V(\d+)(?:_(\d+))?__', path)
               return (int(m.group(1)), int(m.group(2) or 0))
-          for path in sorted(glob.glob('src/main/resources/db/migration_old/V*__*.sql'), key=key):
+          for path in sorted(glob.glob('src/test/resources/db/legacy_schema/V*__*.sql'), key=key):
               print('applying', path, flush=True)
               subprocess.run(['psql', '-v', 'ON_ERROR_STOP=1', '-q', '-f', path], check=True)
           PY
