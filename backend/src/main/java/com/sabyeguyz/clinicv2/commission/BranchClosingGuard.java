@@ -1,14 +1,16 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.catalog.CourseRepository;
-import com.sabyeguyz.clinicv2.config.ClinicTime;
 import java.time.YearMonth;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 
 @Service
 public class BranchClosingGuard {
@@ -17,7 +19,9 @@ public class BranchClosingGuard {
     private final BranchMonthlyClosingRepository branchClosings;
 
     public BranchClosingGuard(
-            MonthlyCommissionClosingRepository closings, CourseRepository courses, BranchMonthlyClosingRepository branchClosings) {
+            MonthlyCommissionClosingRepository closings,
+            CourseRepository courses,
+            BranchMonthlyClosingRepository branchClosings) {
         this.closings = closings;
         this.courses = courses;
         this.branchClosings = branchClosings;
