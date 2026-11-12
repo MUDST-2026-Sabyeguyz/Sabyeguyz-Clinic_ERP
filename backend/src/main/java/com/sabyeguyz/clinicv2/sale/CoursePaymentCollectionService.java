@@ -1,18 +1,19 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import java.math.BigDecimal;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import static com.sabyeguyz.clinicv2.audit.AuditLogService.fields;
+
+import com.sabyeguyz.clinicv2.audit.AuditLogService;
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
-import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.enums.AuditAction;
-import com.sabyeguyz.clinicv2.audit.AuditLogService;
-import java.math.BigDecimal;
-import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import static com.sabyeguyz.clinicv2.audit.AuditLogService.fields;
+import com.sabyeguyz.clinicv2.patient.Patient;
 
 @Service
 public class CoursePaymentCollectionService {
@@ -26,10 +27,13 @@ public class CoursePaymentCollectionService {
     private final AuditLogService audit;
 
     public CoursePaymentCollectionService(
-            ReceiptService receipts, ReceiptCoursePaymentService coursePayments,
-            ReceiptCoursePaymentRepository paymentItems, PaymentTransactionService payments,
-            BranchAccessPolicy branchAccess, CurrentActor actor, AuditLogService audit
-    ) {
+            ReceiptService receipts,
+            ReceiptCoursePaymentService coursePayments,
+            ReceiptCoursePaymentRepository paymentItems,
+            PaymentTransactionService payments,
+            BranchAccessPolicy branchAccess,
+            CurrentActor actor,
+            AuditLogService audit) {
         this.receipts = receipts;
         this.coursePayments = coursePayments;
         this.paymentItems = paymentItems;
@@ -43,16 +47,17 @@ public class CoursePaymentCollectionService {
             Long receiptId,
             Long paymentId,
             String receiptNo,
-            BigDecimal netAmount
-    ) {}
+            BigDecimal netAmount) {}
 
     @Transactional
     public Result collect(
-            Patient patient, Branch branch,
+            Patient patient,
+            Branch branch,
             List<ReceiptCoursePaymentService.ItemRequest> items,
-            Discount billDiscount, String paymentLabelCode,
-            PaymentMethod paymentMethod, BigDecimal paymentAmount
-    ) {
+            Discount billDiscount,
+            String paymentLabelCode,
+            PaymentMethod paymentMethod,
+            BigDecimal paymentAmount) {
         Long actorId = actor.requireId();
 
         if (patient == null || patient.getId() == null) {
@@ -145,7 +150,10 @@ public class CoursePaymentCollectionService {
                 actorId
         );
 
-        return new Result(receipt.getId(), payment.getId(), receipt.getReceiptNo(), receipt.getNetAmount()
-        );
+        return new Result(
+                receipt.getId(),
+                payment.getId(),
+                receipt.getReceiptNo(),
+                receipt.getNetAmount());
     }
 }

@@ -1,8 +1,10 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.catalog.Course;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
+
+import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.catalog.Course;
 
 @Entity
 @Table(name = "receipt_course_payment")
@@ -37,49 +39,20 @@ public class ReceiptCoursePayment {
 
     public ReceiptCoursePayment() {}
 
-    public ReceiptCoursePaymentId getId() {
-        return id;
-    }
+    public ReceiptCoursePaymentId getId() { return id; }
 
-    public Receipt getReceipt() {
-        return receipt;
-    }
+    public Receipt getReceipt() { return receipt; }
+    public void setReceipt(Receipt receipt) { this.receipt = receipt; }
 
-    public void setReceipt(Receipt receipt) {
-        this.receipt = receipt;
-    }
+    public Course getCourse() { return course; }
+    public void setCourse(Course course) { this.course = course; }
 
-    public Course getCourse() {
-        return course;
-    }
+    public String getItemNameSnapshot() { return itemNameSnapshot; }
+    public void setItemNameSnapshot(String itemNameSnapshot) { this.itemNameSnapshot = itemNameSnapshot; }
 
-    public void setCourse(Course course) {
-        this.course = course;
-    }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
 
-    public String getItemNameSnapshot() {
-        return itemNameSnapshot;
-    }
-
-    public void setItemNameSnapshot(String itemNameSnapshot) {
-        this.itemNameSnapshot = itemNameSnapshot;
-    }
-
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    public BigDecimal getAllocatedBillDiscountAmount() {
-        return allocatedBillDiscountAmount;
-    }
-
-    public void setAllocatedBillDiscountAmount(
-            BigDecimal allocatedBillDiscountAmount
-    ) {
-        this.allocatedBillDiscountAmount = allocatedBillDiscountAmount;
-    }
+    public BigDecimal getAllocatedBillDiscountAmount() { return allocatedBillDiscountAmount; }
+    public void setAllocatedBillDiscountAmount(BigDecimal allocatedBillDiscountAmount) { this.allocatedBillDiscountAmount = allocatedBillDiscountAmount; }
 }

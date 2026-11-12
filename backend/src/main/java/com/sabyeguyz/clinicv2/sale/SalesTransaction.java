@@ -1,16 +1,18 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import java.math.BigDecimal;
-import java.time.Instant;
 
 @Entity
 @Table(name = "sales_transaction")
@@ -113,54 +115,79 @@ public class SalesTransaction {
     public SalesTransaction() {}
 
     public Long getId() { return id; }
+
     public PatientVisit getVisit() { return visit; }
     public void setVisit(PatientVisit visit) { this.visit = visit; }
+
     public Patient getPatient() { return patient; }
     public void setPatient(Patient patient) { this.patient = patient; }
+
     public Branch getBranch() { return branch; }
     public void setBranch(Branch branch) { this.branch = branch; }
+
     public Service getService() { return service; }
     public void setService(Service service) { this.service = service; }
+
     public TransactionType getTransactionType() { return transactionType; }
     public void setTransactionType(TransactionType transactionType) { this.transactionType = transactionType; }
+
     public Staff getTreatingStaff() { return treatingStaff; }
     public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
+
     public Staff getSalespersonStaff() { return salespersonStaff; }
     public void setSalespersonStaff(Staff salespersonStaff) { this.salespersonStaff = salespersonStaff; }
+
     public int getQuantity() { return quantity; }
     public void setQuantity(int quantity) { this.quantity = quantity; }
+
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
+
     public Instant getTransactionDate() { return transactionDate; }
     public void setTransactionDate(Instant transactionDate) { this.transactionDate = transactionDate; }
+
     public boolean isTransactionStatus() { return transactionStatus; }
     public void setTransactionStatus(boolean transactionStatus) { this.transactionStatus = transactionStatus; }
+
     public Instant getTransactionCreateAt() { return transactionCreateAt; }
     public void setTransactionCreateAt(Instant transactionCreateAt) { this.transactionCreateAt = transactionCreateAt; }
+
     public Long getTransactionCreateBy() { return transactionCreateBy; }
     public void setTransactionCreateBy(Long transactionCreateBy) { this.transactionCreateBy = transactionCreateBy; }
+
     public Instant getTransactionUpdateAt() { return transactionUpdateAt; }
     public void setTransactionUpdateAt(Instant transactionUpdateAt) { this.transactionUpdateAt = transactionUpdateAt; }
+
     public Long getTransactionUpdateBy() { return transactionUpdateBy; }
     public void setTransactionUpdateBy(Long transactionUpdateBy) { this.transactionUpdateBy = transactionUpdateBy; }
+
     public Receipt getReceipt() { return receipt; }
     public void setReceipt(Receipt receipt) { this.receipt = receipt; }
+
     public int getLineNo() { return lineNo; }
     public void setLineNo(int lineNo) { this.lineNo = lineNo; }
+
     public DiscountType getLineDiscountType() { return lineDiscountType; }
     public void setLineDiscountType(DiscountType lineDiscountType) { this.lineDiscountType = lineDiscountType; }
+
     public BigDecimal getLineDiscountValue() { return lineDiscountValue; }
     public void setLineDiscountValue(BigDecimal lineDiscountValue) { this.lineDiscountValue = lineDiscountValue; }
+
     public BigDecimal getLineDiscountAmount() { return lineDiscountAmount; }
     public void setLineDiscountAmount(BigDecimal lineDiscountAmount) { this.lineDiscountAmount = lineDiscountAmount; }
+
     public BigDecimal getAllocatedBillDiscountAmount() { return allocatedBillDiscountAmount; }
     public void setAllocatedBillDiscountAmount(BigDecimal allocatedBillDiscountAmount) { this.allocatedBillDiscountAmount = allocatedBillDiscountAmount; }
+
     public BigDecimal getCommissionableAmount() { return commissionableAmount; }
     public void setCommissionableAmount(BigDecimal commissionableAmount) { this.commissionableAmount = commissionableAmount; }
+
     public String getItemNameSnapshot() { return itemNameSnapshot; }
     public void setItemNameSnapshot(String itemNameSnapshot) { this.itemNameSnapshot = itemNameSnapshot; }
+
     public String getUnitNameSnapshot() { return unitNameSnapshot; }
     public void setUnitNameSnapshot(String unitNameSnapshot) { this.unitNameSnapshot = unitNameSnapshot; }
 }

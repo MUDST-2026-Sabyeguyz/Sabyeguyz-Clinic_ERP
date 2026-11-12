@@ -1,13 +1,15 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import org.springframework.transaction.annotation.Transactional;
-import com.sabyeguyz.clinicv2.auth.CurrentActor;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
 import java.util.List;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+
+import com.sabyeguyz.clinicv2.auth.CurrentActor;
 
 /** Matches frontend/src/api/client.ts's paymentMethodApi (/api/payment-methods). */
 @Transactional
@@ -17,17 +19,29 @@ public class PaymentMethodController {
     private final PaymentMethodRepository repository;
     private final CurrentActor actor;
 
-    public PaymentMethodController(PaymentMethodRepository repository, CurrentActor actor) {
+    public PaymentMethodController(
+            PaymentMethodRepository repository,
+            CurrentActor actor) {
         this.repository = repository;
         this.actor = actor;
     }
 
-    public record Request(@NotBlank String code, @NotBlank String name) {}
-    public record Response(Long id, String code, String name, boolean active) {}
+    public record Request(
+            @NotBlank String code,
+            @NotBlank String name) {}
+
+    public record Response(
+            Long id,
+            String code,
+            String name,
+            boolean active) {}
 
     @GetMapping
     public List<Response> list() {
-        return repository.findAll().stream().map(PaymentMethodController::toResponse).toList();
+        return repository.findAll()
+                .stream()
+                .map(PaymentMethodController::toResponse)
+                .toList();
     }
 
     @PostMapping
@@ -39,16 +53,20 @@ public class PaymentMethodController {
         method.setPaymentMethodStatus(true);
         method.setPaymentMethodCreateAt(Instant.now());
         method.setPaymentMethodCreateBy(actor.currentId());
+
         return toResponse(repository.save(method));
     }
 
     @PutMapping("/{id}")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
-    public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
+    public Response update(
+            @PathVariable Long id,
+            @Valid @RequestBody Request request) {
         PaymentMethod method = find(id);
         method.setMethodName(PaymentMethod.canonicalName(request.name()));
         method.setPaymentMethodUpdateAt(Instant.now());
         method.setPaymentMethodUpdateBy(actor.currentId());
+
         return toResponse(repository.save(method));
     }
 
@@ -67,15 +85,21 @@ public class PaymentMethodController {
         PaymentMethod method = find(id);
         PaymentMethod.canonicalName(method.getMethodName());
         method.setPaymentMethodStatus(true);
+
         return toResponse(repository.save(method));
     }
 
     private PaymentMethod find(Long id) {
-        return repository.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน"));
+        return repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน"));
     }
 
     // v2's Payment_method has no "code" column (just method_name) - code here mirrors the name.
     private static Response toResponse(PaymentMethod method) {
-        return new Response(method.getId(), method.getMethodName(), method.getMethodName(), method.isPaymentMethodStatus());
+        return new Response(
+                method.getId(),
+                method.getMethodName(),
+                method.getMethodName(),
+                method.isPaymentMethodStatus());
     }
 }
