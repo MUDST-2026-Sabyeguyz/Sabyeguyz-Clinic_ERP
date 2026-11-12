@@ -1,15 +1,17 @@
 package com.sabyeguyz.clinicv2.staff;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.enums.StaffPosition;
-import com.sabyeguyz.clinicv2.auth.AppUserRepository;
-import com.sabyeguyz.clinicv2.commission.StaffPayAdjustmentService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.commission.StaffPayAdjustmentService;
+import com.sabyeguyz.clinicv2.enums.StaffPosition;
 
 /**
  * Staff/Physiotherapist management (Clinic ERP Workflow Brief §2).
@@ -22,13 +24,17 @@ public class StaffService {
     private final AppUserRepository users;
     private final StaffPayAdjustmentService adjustments;
 
-    public StaffService(StaffRepository repository, AppUserRepository users) {
+    public StaffService(
+            StaffRepository repository,
+            AppUserRepository users) {
         this(repository, users, null);
     }
 
     @Autowired
-    public StaffService(StaffRepository repository, AppUserRepository users,
-                        StaffPayAdjustmentService adjustments) {
+    public StaffService(
+            StaffRepository repository,
+            AppUserRepository users,
+            StaffPayAdjustmentService adjustments) {
         this.repository = repository;
         this.users = users;
         this.adjustments = adjustments;
@@ -53,21 +59,31 @@ public class StaffService {
         do {
             code = String.format("%s%03d", prefix, n++);
         } while (repository.findByStaffCode(code).isPresent());
+
         return code;
     }
 
     @Transactional
-    public Staff create(String staffCode, String fname, String lname, StaffPosition position,
-                         Branch branch, LocalDate hireDate, Long actorId) {
+    public Staff create(
+            String staffCode,
+            String fname,
+            String lname,
+            StaffPosition position,
+            Branch branch,
+            LocalDate hireDate,
+            Long actorId) {
         if (repository.findByStaffCode(normalize(staffCode)).isPresent()) {
             throw new IllegalArgumentException("รหัสพนักงานซ้ำ");
         }
+
         if (branch == null) {
             throw new IllegalArgumentException("ต้องระบุสาขาต้นสังกัด");
         }
+
         if (hireDate == null) {
             throw new IllegalArgumentException("ต้องระบุวันที่เริ่มงาน");
         }
+
         Staff staff = new Staff();
         staff.setStaffCode(normalize(staffCode));
         staff.setStaffFname(requireText(fname, "staffFname"));
@@ -78,43 +94,62 @@ public class StaffService {
         staff.setStaffStatus(true);
         staff.setStaffCreateAt(Instant.now());
         staff.setStaffCreateBy(actorId);
+
         return repository.save(staff);
     }
 
     @Transactional
-    public Staff update(Long id, String fname, String lname, StaffPosition position, Branch branch, Long actorId) {
+    public Staff update(
+            Long id,
+            String fname,
+            String lname,
+            StaffPosition position,
+            Branch branch,
+            Long actorId) {
         Staff staff = find(id);
         staff.setStaffFname(requireText(fname, "staffFname"));
         staff.setStaffLname(requireText(lname, "staffLname"));
         staff.setPosition(requirePosition(position));
+
         if (branch != null) {
             staff.setBranch(branch);
         }
+
         staff.setStaffUpdateAt(Instant.now());
         staff.setStaffUpdateBy(actorId);
+
         return repository.save(staff);
     }
 
     /** Switches a staff member off without a termination record (no commission policy involved). */
     @Transactional
-    public Staff deactivate(Long id, Long actorId) {
+    public Staff deactivate(
+            Long id,
+            Long actorId) {
         Staff staff = find(id);
         staff.setStaffStatus(false);
         staff.setStaffUpdateAt(Instant.now());
         staff.setStaffUpdateBy(actorId);
+
         return repository.save(staff);
     }
 
     /** Marks the staff as terminated on the given date (Inactive from then on). */
     @Transactional
-    public Staff terminate(Long id, LocalDate terminationDate, Long actorId) {
+    public Staff terminate(
+            Long id,
+            LocalDate terminationDate,
+            Long actorId) {
         Staff staff = find(id);
+
         if (terminationDate == null) {
             throw new IllegalArgumentException("ต้องระบุวันที่ลาออก");
         }
+
         if (staff.getHireDate() != null && terminationDate.isBefore(staff.getHireDate())) {
             throw new IllegalArgumentException("วันที่ลาออกต้องไม่ก่อนวันที่เริ่มงาน");
         }
+
         staff.setStaffStatus(false);
         staff.setTerminationDate(terminationDate);
         staff.setStaffUpdateAt(Instant.now());
@@ -127,11 +162,14 @@ public class StaffService {
             user.setUserUpdateAt(updatedAt);
             user.setUserUpdateBy(actorId);
         }
+
         users.saveAll(linkedUsers);
         Staff saved = repository.save(staff);
+
         if (adjustments != null) {
             adjustments.cancelOnTermination(saved.getId(), actorId);
         }
+
         return saved;
     }
 
@@ -143,6 +181,7 @@ public class StaffService {
         if (position == null) {
             throw new IllegalArgumentException("ต้องระบุตำแหน่ง");
         }
+
         return position;
     }
 
@@ -150,13 +189,17 @@ public class StaffService {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("staffCode ห้ามว่าง");
         }
+
         return value.trim();
     }
 
-    private static String requireText(String value, String field) {
+    private static String requireText(
+            String value,
+            String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
         }
+
         return value.trim();
     }
 }

@@ -1,14 +1,14 @@
 package com.sabyeguyz.clinicv2.staff;
 
-import java.util.Map;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
-import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
+import java.util.Map;
+import java.util.Optional;
 
+import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
-import com.sabyeguyz.clinicv2.auth.AppUserRepository;
-import java.time.LocalDate;
-import java.util.Optional;
 
 public class StaffServiceScenarios {
     V2RepositoryStub<StaffRepository> repositoryStub = new V2RepositoryStub<>(StaffRepository.class);
@@ -28,6 +28,7 @@ public class StaffServiceScenarios {
         out.put("staffCode", staff.getStaffCode());
         out.put("staffStatus", staff.isStaffStatus());
         out.put("assignedBranchIsRequestedBranch", staff.getBranch() == branch);
+
         return out;
     }
 
@@ -36,6 +37,7 @@ public class StaffServiceScenarios {
         repositoryStub.on("findByStaffCode", args -> Optional.of(new Staff()));
         out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).create(
                 "THP-001", "สมชาย", "ใจดี", StaffPosition.Therapist, new Branch(), LocalDate.now(), 1L); return null; }));
+
         return out;
     }
 
@@ -44,6 +46,7 @@ public class StaffServiceScenarios {
         repositoryStub.on("findByStaffCode", args -> Optional.empty());
         out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).create(
                 "THP-002", "สมหญิง", "ใจดี", StaffPosition.Therapist, null, LocalDate.now(), 1L); return null; }));
+
         return out;
     }
 
@@ -57,6 +60,7 @@ public class StaffServiceScenarios {
 
         out.put("staffStatus", terminated.isStaffStatus());
         out.put("terminationDate", terminated.getTerminationDate());
+
         return out;
     }
 
@@ -64,6 +68,7 @@ public class StaffServiceScenarios {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findById", args -> Optional.of(new Staff()));
         out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).terminate(5L, null, 9L); return null; }));
+
         return out;
     }
 
@@ -73,6 +78,7 @@ public class StaffServiceScenarios {
         staff.setHireDate(LocalDate.of(2026, 7, 1));
         repositoryStub.on("findById", args -> Optional.of(staff));
         out.putAll(V2RepositoryStub.outcome(() -> { new StaffService(repository, users).terminate(5L, LocalDate.of(2026, 6, 30), 9L); return null; }));
+
         return out;
     }
 }
