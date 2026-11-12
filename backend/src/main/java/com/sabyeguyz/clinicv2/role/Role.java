@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.role;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "role")
@@ -30,14 +31,19 @@ public class Role {
     public Role() {}
 
     public Long getId() { return id; }
+
     public String getRoleName() { return roleName; }
     public void setRoleName(String roleName) { this.roleName = roleName; }
+
     public Instant getRoleCreateAt() { return roleCreateAt; }
     public void setRoleCreateAt(Instant roleCreateAt) { this.roleCreateAt = roleCreateAt; }
+
     public Long getRoleCreateBy() { return roleCreateBy; }
     public void setRoleCreateBy(Long roleCreateBy) { this.roleCreateBy = roleCreateBy; }
+
     public Instant getRoleUpdateAt() { return roleUpdateAt; }
     public void setRoleUpdateAt(Instant roleUpdateAt) { this.roleUpdateAt = roleUpdateAt; }
+
     public Long getRoleUpdateBy() { return roleUpdateBy; }
     public void setRoleUpdateBy(Long roleUpdateBy) { this.roleUpdateBy = roleUpdateBy; }
 }

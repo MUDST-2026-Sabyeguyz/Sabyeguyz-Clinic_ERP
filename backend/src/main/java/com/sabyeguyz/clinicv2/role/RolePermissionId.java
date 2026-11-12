@@ -9,7 +9,9 @@ public class RolePermissionId implements Serializable {
 
     public RolePermissionId() {}
 
-    public RolePermissionId(Long role, Long permission) {
+    public RolePermissionId(
+            Long role,
+            Long permission) {
         this.role = role;
         this.permission = permission;
     }
@@ -17,10 +19,14 @@ public class RolePermissionId implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
+
         if (!(o instanceof RolePermissionId that)) return false;
+
         return Objects.equals(role, that.role) && Objects.equals(permission, that.permission);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(role, permission); }
+    public int hashCode() {
+        return Objects.hash(role, permission);
+    }
 }
