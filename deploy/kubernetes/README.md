@@ -1,10 +1,10 @@
 # Jenkins to Docker Desktop Kubernetes (Windows presentation)
 
-Run on the Windows machine where Docker Desktop Kubernetes is Ready. From the intended local source branch (for example `feat/ops`), the setup starts a local Jenkins controller bound only to `127.0.0.1:8086`.
+Run on the Windows machine where Docker Desktop Kubernetes is Ready. From the intended local source branch (for example `xan-merge/user-phase2-completion`), the setup starts a local Jenkins controller bound only to `127.0.0.1:8086`.
 
 ```powershell
-git switch feat/ops
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-jenkins-kubernetes.ps1 -SourceBranch feat/ops
+git switch xan-merge/user-phase2-completion
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-jenkins-kubernetes.ps1 -SourceBranch xan-merge/user-phase2-completion
 ```
 
 The setup script downloads a Windows Java 21 runtime if needed, registers an exclusive `clinic-present` Windows agent, adds the `Clinic-Kubernetes` Pipeline, connects the agent over WebSocket and queues its initial build. Jenkins is bound to localhost at `http://127.0.0.1:8086`; it does not replace or modify another Jenkins controller.

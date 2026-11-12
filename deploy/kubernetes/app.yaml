@@ -3,8 +3,11 @@ kind: Service
 metadata:
   name: backend
 spec:
-  selector: {app: backend}
-  ports: [{port: 8080, targetPort: 8080}]
+  selector:
+    app: backend
+  ports:
+  - port: 8080
+    targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -13,46 +16,91 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: {app: backend}
+    matchLabels:
+      app: backend
   template:
     metadata:
-      labels: {app: backend}
+      labels:
+        app: backend
     spec:
       automountServiceAccountToken: false
       containers:
-        - name: backend
-          image: __BACKEND_IMAGE__
-          imagePullPolicy: IfNotPresent
-          env:
-            - {name: SPRING_PROFILES_ACTIVE, value: 'docker,v2'}
-            - {name: CLINIC_DATABASE_KIND, value: '__DATABASE_KIND__'}
-            - {name: CLINIC_SEED_MODE, value: '__SEED_MODE__'}
-            - {name: SERVER_FORWARD_HEADERS_STRATEGY, value: framework}
-            - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/__DATABASE_NAME__'}
-            - {name: SPRING_DATASOURCE_USERNAME, value: clinic}
-            - {name: SPRING_FLYWAY_ENABLED, value: 'true'}
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef: {name: clinic-secrets, key: SPRING_DATASOURCE_PASSWORD}
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef: {name: clinic-secrets, key: JWT_SECRET}
-          ports: [{containerPort: 8080}]
-          startupProbe:
-            httpGet: {path: /actuator/health, port: 8080}
-            failureThreshold: 60
-            periodSeconds: 5
-          readinessProbe:
-            httpGet: {path: /actuator/health, port: 8080}
-            periodSeconds: 5
+      - name: backend
+        image: __BACKEND_IMAGE__
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: docker,v2
+        - name: CLINIC_DATABASE_KIND
+          value: __DATABASE_KIND__
+        - name: CLINIC_SEED_MODE
+          value: __SEED_MODE__
+        - name: SERVER_FORWARD_HEADERS_STRATEGY
+          value: framework
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres:5432/__DATABASE_NAME__
+        - name: SPRING_DATASOURCE_USERNAME
+          value: clinic
+        - name: SPRING_FLYWAY_ENABLED
+          value: 'true'
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clinic-secrets
+              key: SPRING_DATASOURCE_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: clinic-secrets
+              key: JWT_SECRET
+        ports:
+        - containerPort: 8080
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          failureThreshold: 60
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend
 spec:
-  selector: {app: frontend}
-  ports: [{port: 80, targetPort: 80}]
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -61,17 +109,41 @@ metadata:
 spec:
   replicas: 2
   selector:
-    matchLabels: {app: frontend}
+    matchLabels:
+      app: frontend
   template:
     metadata:
-      labels: {app: frontend}
+      labels:
+        app: frontend
     spec:
       automountServiceAccountToken: false
       containers:
-        - name: frontend
-          image: __FRONTEND_IMAGE__
-          imagePullPolicy: IfNotPresent
-          ports: [{containerPort: 80}]
-          readinessProbe:
-            httpGet: {path: /healthz, port: 80}
-            periodSeconds: 5
+      - name: frontend
+        image: __FRONTEND_IMAGE__
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - CHOWN
+            - SETGID
+            - SETUID
+            - NET_BIND_SERVICE
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi

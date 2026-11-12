@@ -1,3 +1,4 @@
+<!-- Current Xan consolidation: docs/integration/xan-consolidation-20261112.md -->
 # Sabyeguyz Clinic ERP
 
 Monorepo: Vue frontend, Spring Boot backend, PostgreSQL database, and deployment configuration.
