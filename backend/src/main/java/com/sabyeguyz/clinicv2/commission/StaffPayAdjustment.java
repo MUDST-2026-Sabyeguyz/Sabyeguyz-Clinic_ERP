@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.enums.AdjustmentStatus;
@@ -88,38 +90,55 @@ public class StaffPayAdjustment {
     public StaffPayAdjustment() {}
 
     public Long getId() { return id; }
+
     public Staff getStaff() { return staff; }
     public void setStaff(Staff staff) { this.staff = staff; }
+
     public String getOriginalMonth() { return originalMonth; }
     public void setOriginalMonth(String originalMonth) { this.originalMonth = originalMonth; }
+
     public String getAppliedMonth() { return appliedMonth; }
     public void setAppliedMonth(String appliedMonth) { this.appliedMonth = appliedMonth; }
+
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
+
     public CommissionAllocationLedger getAllocation() { return allocation; }
     public void setAllocation(CommissionAllocationLedger allocation) { this.allocation = allocation; }
+
     public SingleVisitFeeLedger getSingleVisitFee() { return singleVisitFee; }
     public void setSingleVisitFee(SingleVisitFeeLedger singleVisitFee) { this.singleVisitFee = singleVisitFee; }
+
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+
     public PatientVisit getVisit() { return visit; }
     public void setVisit(PatientVisit visit) { this.visit = visit; }
+
     public SalesTransaction getSaleTransaction() { return saleTransaction; }
     public void setSaleTransaction(SalesTransaction saleTransaction) { this.saleTransaction = saleTransaction; }
+
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+
     public Long getApprovedBy() { return approvedBy; }
     public void setApprovedBy(Long approvedBy) { this.approvedBy = approvedBy; }
+
     public Instant getApprovedAt() { return approvedAt; }
     public void setApprovedAt(Instant approvedAt) { this.approvedAt = approvedAt; }
+
     public BigDecimal getProcessedAmount() { return processedAmount; }
     public void setProcessedAmount(BigDecimal processedAmount) { this.processedAmount = processedAmount; }
+
     public BigDecimal getRemainingAmount() { return remainingAmount; }
     public void setRemainingAmount(BigDecimal remainingAmount) { this.remainingAmount = remainingAmount; }
+
     public AdjustmentStatus getAdjustmentStatus() { return adjustmentStatus; }
     public void setAdjustmentStatus(AdjustmentStatus adjustmentStatus) { this.adjustmentStatus = adjustmentStatus; }
+
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
 }
