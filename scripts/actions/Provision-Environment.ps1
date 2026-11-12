@@ -40,7 +40,9 @@ $cluster = $config.clusters[0].cluster
 $runnerConfig = @{apiVersion='v1';kind='Config';'current-context'='clinic-actions-demo';clusters=@(@{name='clinic-actions';cluster=$cluster});users=@(@{name='clinic-actions-runner';user=@{token=$tokenResult.status.token}});contexts=@(@{name='clinic-actions-demo';context=@{cluster='clinic-actions';user='clinic-actions-runner';namespace=$ns}})}
 $kubeconfig=Join-Path $script:Runtime 'runner.kubeconfig'
 $runnerConfig | ConvertTo-Json -Depth 20 | Set-Content $kubeconfig -Encoding utf8
-$tokenResult.status.expirationTimestamp | Set-Content (Join-Path $script:Runtime 'token-expires.txt')
+$expiry = [DateTimeOffset]$tokenResult.status.expirationTimestamp
+$expiry.ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture) |
+ Set-Content (Join-Path $script:Runtime 'token-expires.txt') -Encoding utf8
 $nodes = (Admin get nodes -o json | ConvertFrom-Json).items.metadata.name
 foreach ($node in $nodes) { Invoke-Checked docker @('inspect',$node,'--format','{{.Name}}') | Out-Null }
 ConvertTo-Json -InputObject @($nodes) | Set-Content (Join-Path $script:Runtime 'nodes.json') -Encoding utf8
