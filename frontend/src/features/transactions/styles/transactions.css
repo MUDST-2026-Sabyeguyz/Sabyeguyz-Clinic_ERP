@@ -2,7 +2,7 @@
 
 .transaction-page {
   min-height: 100vh;
-  color: var(--color-ink);
+  color: #25372e;
   background: #f9f4ee;
 }
 
@@ -19,7 +19,7 @@
 .transaction-heading h1,
 .transaction-success-heading h1 {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: clamp(30px, 3vw, 40px);
   line-height: 1.4;
 }
@@ -60,7 +60,7 @@
   font-weight: 600;
 }
 .transaction-cancelled-notice strong {
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 16px;
 }
 .transaction-cancelled-notice p {
@@ -94,7 +94,7 @@
 }
 .transaction-history-empty h2 {
   margin: 18px 0 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 24px;
 }
 .transaction-history-empty p {
@@ -113,7 +113,7 @@
   padding: 8px 20px;
   border: 0;
   border-radius: 11px;
-  color: var(--color-ink);
+  color: #25372e;
   background: #eff4ed;
   font: inherit;
   font-weight: 700;
@@ -121,7 +121,7 @@
 }
 .transaction-tabs button.active {
   color: #fff;
-  background: var(--color-primary);
+  background: #1e807c;
 }
 
 .transaction-card {
@@ -166,7 +166,7 @@
   min-width: 0;
   border: 0;
   outline: none;
-  color: var(--color-ink);
+  color: #25372e;
   background: transparent;
   font: inherit;
 }
@@ -175,13 +175,13 @@
   flex: 0 1 165px;
   min-width: 145px;
   min-height: 44px;
-  color: var(--color-ink);
+  color: #25372e;
   font: inherit;
 }
 .transaction-table-wrap {
   max-width: 100%;
   overflow-x: auto;
-  scrollbar-color: var(--color-primary) #eff4ed;
+  scrollbar-color: #1e807c #eff4ed;
   scrollbar-width: thin;
 }
 .transaction-table-wrap::-webkit-scrollbar {
@@ -194,7 +194,7 @@
 .transaction-table-wrap::-webkit-scrollbar-thumb {
   border: 2px solid #eff4ed;
   border-radius: 999px;
-  background: var(--color-primary);
+  background: #1e807c;
 }
 .transaction-table-wrap::-webkit-scrollbar-thumb:hover {
   background: #176c69;
@@ -212,7 +212,7 @@
 .transaction-table th {
   padding: 13px 12px;
   color: #fff;
-  background: var(--color-primary);
+  background: #1e807c;
   font-size: 14px;
   font-weight: 600;
   text-align: left;
@@ -303,13 +303,13 @@
 }
 .transaction-primary {
   color: #fff;
-  background: var(--ui-primary-gradient);
+  background: #1e807c;
 }
 .transaction-primary:hover:not(:disabled) {
-  background: var(--ui-primary-gradient-hover);
+  background: #176c69;
 }
 .transaction-secondary {
-  color: var(--color-ink);
+  color: #25372e;
   background: #eff4ed;
 }
 .transaction-danger {
@@ -332,7 +332,7 @@
 }
 .transaction-empty {
   padding: 46px 24px;
-  color: var(--color-muted);
+  color: #56665d;
   text-align: center;
 }
 .transaction-history-list {
@@ -368,7 +368,7 @@
 }
 .transaction-pagination button {
   color: #fff;
-  background: var(--color-primary);
+  background: #1e807c;
 }
 .transaction-pagination button:disabled {
   color: #72847b;
@@ -418,7 +418,7 @@
 .transaction-record-head small {
   display: block;
   margin-bottom: 5px;
-  color: var(--color-muted);
+  color: #56665d;
   font-size: 13px;
 }
 .transaction-record-head strong {
@@ -426,7 +426,7 @@
 }
 .transaction-record-head p {
   margin: 4px 0 0;
-  color: var(--color-muted);
+  color: #56665d;
   font-size: 14px;
 }
 .transaction-patient {
@@ -442,7 +442,7 @@
   font-size: 17px;
 }
 .transaction-patient span {
-  color: var(--color-muted);
+  color: #56665d;
   font-size: 14px;
 }
 .transaction-detail-grid {
@@ -455,7 +455,7 @@
   min-width: 0;
 }
 .transaction-detail-grid dt {
-  color: var(--color-muted);
+  color: #56665d;
   font-size: 13px;
 }
 .transaction-detail-grid dd {
@@ -505,7 +505,7 @@
   padding: 10px 12px;
   border: 1px solid #a8b8b1;
   border-radius: 10px;
-  color: var(--color-ink);
+  color: #25372e;
   background: #fff;
   font: inherit;
 }
@@ -531,7 +531,7 @@
 .transaction-review-reason button {
   flex: none;
   border: 0;
-  color: var(--color-primary);
+  color: #1e807c;
   background: transparent;
   font: inherit;
   font-weight: 700;
@@ -570,7 +570,7 @@
   place-items: center;
   border-radius: 50%;
   color: #fff;
-  background: var(--color-primary);
+  background: #1e807c;
   font-size: 25px;
 }
 .transaction-success-result {
@@ -597,7 +597,7 @@
 }
 .transaction-success-result h1 {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 26px;
   line-height: 1.45;
 }
@@ -622,7 +622,7 @@
 }
 .transaction-success-result dd {
   margin: 2px 0 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -663,7 +663,7 @@
   overflow-y: auto;
   padding: 25px 32px 26px;
   border-radius: 12px;
-  color: var(--color-ink);
+  color: #25372e;
   background: #fff;
   box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
 }
@@ -674,7 +674,7 @@
 }
 .transaction-modal > p {
   margin: 0 0 16px;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 14px;
   line-height: 1.5;
   text-align: center;
@@ -808,6 +808,7 @@
   }
 }
 
+/* Phase 4A — node 147:1966 */
 .transaction-main {
   width: min(1200px, calc(100% - 48px));
   padding-top: 16px;
@@ -867,7 +868,7 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 13px;
   font-weight: 600;
 }
@@ -1137,7 +1138,7 @@
 .transaction-review-grid dd,
 .transaction-service-detail dd {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 14px;
   font-weight: 600;
 }
@@ -1151,7 +1152,7 @@
   background: #edf7f4;
 }
 .transaction-review-patient b {
-  color: var(--color-primary);
+  color: #1e807c;
   font-size: 12px;
 }
 .transaction-review-patient strong {
@@ -1226,7 +1227,7 @@
 }
 .transaction-history-detail > header h1 {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 30px;
   line-height: 1.45;
 }
@@ -1235,9 +1236,16 @@
   color: #6b7d76;
   font-size: 14px;
 }
-.transaction-history-detail > header .transaction-receipt-link {
-  flex: none;
-  margin: 4px 0 0;
+.transaction-history-detail > header > span {
+  min-width: 126px;
+  margin-top: 4px;
+  padding: 7px 16px;
+  border-radius: 16px;
+  color: #111;
+  background: #fee2e2;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
 }
 .transaction-audit-card {
   box-sizing: border-box;
@@ -1255,7 +1263,7 @@
 }
 .transaction-audit-card h2 {
   margin: 0 0 12px;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 18px;
 }
 .transaction-audit-card dl {
@@ -1276,7 +1284,7 @@
 }
 .transaction-audit-card dd {
   margin: 3px 0 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -1338,6 +1346,9 @@
   }
   .transaction-history-detail > header h1 {
     font-size: 25px;
+  }
+  .transaction-history-detail > header > span {
+    min-width: auto;
   }
   .transaction-audit-source,
   .transaction-audit-patient,
@@ -1415,7 +1426,7 @@
   border: 1px solid #dce4df;
   border-radius: 8px;
   outline: none;
-  color: var(--color-ink);
+  color: #25372e;
   background: #fff;
   font: inherit;
   font-size: 13px;
@@ -1453,7 +1464,7 @@
 }
 .transaction-confirm-flow > header h1 {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 30px;
   line-height: 1.45;
 }
@@ -1473,7 +1484,7 @@
 }
 .transaction-confirm-summary h2 {
   margin: 0 0 16px;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 18px;
 }
 .transaction-confirm-summary dl {
@@ -1488,7 +1499,7 @@
 }
 .transaction-confirm-summary dd {
   margin: 3px 0 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -1562,33 +1573,4 @@
   color: #218b85;
   background: #fff;
   box-shadow: 0 2px 7px rgb(30 80 70 / 8%);
-}
-
-.transaction-page .transaction-table td {
-  font-size: 16px;
-}
-.transaction-page .transaction-table th,
-.transaction-page .transaction-table td small {
-  font-size: 14px;
-}
-.transaction-date-filter {
-  display: grid;
-  gap: 8px;
-  margin-left: auto;
-}
-.transaction-date-filter > span {
-  font-size: 14px;
-  font-weight: 600;
-}
-.transaction-page .transaction-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 16px;
-}
-@media (max-width: 700px) {
-  .transaction-date-filter {
-    margin-left: 0;
-    width: 100%;
-  }
 }

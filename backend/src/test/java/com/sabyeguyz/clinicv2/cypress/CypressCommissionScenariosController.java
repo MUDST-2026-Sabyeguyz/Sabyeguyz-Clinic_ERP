@@ -52,14 +52,9 @@ public class CypressCommissionScenariosController {
     /** The sessions of a course in order of position, with what the Owner earned (null while unknown). */
     @GetMapping("/courses/{courseId}/usages")
     public List<Map<String, Object>> usages(@PathVariable Long courseId) {
-        return jdbc.queryForList(
-                "SELECT visit_usage_id, visit_id, visit_date::text AS visit_date, "
-                        + "usage_sequence, usage_status::text AS usage_status, treating_staff_id, "
-                        + "commission_allocation_per_visit, owner_net_commission, "
-                        + "substitute_treatment_fee_amount, replaces_usage_id, treatment_id "
-                        + "FROM course_visit_usage WHERE course_id = ? "
-                        + "ORDER BY usage_sequence, visit_usage_id",
-                courseId);
+        return jdbc.queryForList("SELECT visit_usage_id, usage_sequence, usage_status::text AS usage_status, treating_staff_id, "
+                + "commission_allocation_per_visit, owner_net_commission, substitute_treatment_fee_amount, replaces_usage_id, treatment_id "
+                + "FROM course_visit_usage WHERE course_id = ? ORDER BY usage_sequence, visit_usage_id", courseId);
     }
 
     /** Usage slips of a course (document snapshots), oldest first. */

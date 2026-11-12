@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-clinic}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-v2-data:/var/lib/postgresql/data
     healthcheck:
@@ -22,18 +22,13 @@ services:
     build:
       context: ./backend
     environment:
-      SPRING_PROFILES_ACTIVE: docker,v2
-      SPRING_FLYWAY_ENABLED: "true"
-      CLINIC_DATABASE_KIND: ${CLINIC_DATABASE_KIND:-unspecified}
-      CLINIC_SEED_MODE: ${CLINIC_SEED_MODE:-none}
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-clinic_erp_v2}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-clinic}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       CLINIC_BOOTSTRAP_MANAGER_USERNAME: ${CLINIC_BOOTSTRAP_MANAGER_USERNAME:-}
-      CLINIC_BOOTSTRAP_MANAGER_EMAIL: ${CLINIC_BOOTSTRAP_MANAGER_EMAIL:-}
       CLINIC_BOOTSTRAP_MANAGER_PASSWORD: ${CLINIC_BOOTSTRAP_MANAGER_PASSWORD:-}
-      APP_V2_FLYWAY_EXTRA_LOCATIONS: ${APP_V2_FLYWAY_EXTRA_LOCATIONS:-}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:

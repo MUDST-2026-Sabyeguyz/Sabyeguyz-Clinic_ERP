@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.appointment;
 
+import com.sabyeguyz.clinicv2.catalog.ClosedGuard;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
@@ -21,7 +22,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -72,21 +72,15 @@ public class AppointmentController {
      * contactPhone); status may be Unconfirmed or Confirmed (default). The older
      * fields keep working unchanged for CURRENT patients.
      */
-    public record CreateRequest(
-            String branchCode, Long patientId, Long therapistId, Long serviceId,
-            OffsetDateTime startAt, String note, String status, String patientType,
-            String contactName, String contactPhone, String requestedServiceType,
-            String contactMiddleName, OffsetDateTime endAt, String contactNickname) {}
+    public record CreateRequest(String branchCode, Long patientId, Long therapistId, Long serviceId,
+                                 OffsetDateTime startAt, String note, String status, String patientType,
+                                 String contactName, String contactPhone, String requestedServiceType) {}
 
     public record LinkPatientRequest(Long patientId) {}
 
     public record CancelRequest(String reason) {}
 
-    public record RescheduleRequest(
-            OffsetDateTime startAt, Long therapistId, Long serviceId,
-            String branchCode,
-            com.fasterxml.jackson.databind.JsonNode note,
-            OffsetDateTime endAt) {}
+    public record RescheduleRequest(OffsetDateTime startAt, Long therapistId, com.fasterxml.jackson.databind.JsonNode note) {}
 
     public record PatientSummary(Long id, String hn, String fullName, String phone) {}
     public record TherapistSummary(Long id, String fullName) {}
@@ -94,8 +88,7 @@ public class AppointmentController {
 
     public record Response(Long id, String branchCode, PatientSummary patient, TherapistSummary therapist,
                             ServiceSummary service, Instant startAt, Instant endAt, String status, String note,
-                            String cancelReason, String patientType, String contactName, String contactPhone,
-                            String contactMiddleName, String contactNickname) {}
+                            String cancelReason, String patientType, String contactName, String contactPhone) {}
 
     public record PageResponse(java.util.List<Response> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -103,29 +96,19 @@ public class AppointmentController {
     public PageResponse search(@RequestParam(required = false) String branchCode,
                                 @RequestParam(defaultValue = "") String query,
                                 @RequestParam(required = false) LocalDate date,
-                                @RequestParam(required = false) LocalDate startDate,
-                                @RequestParam(required = false) LocalDate endDate,
                                 @RequestParam(required = false) Long therapistId,
                                 @RequestParam(required = false) String status,
-                                @RequestParam(defaultValue = "newest") String sortOrder,
                                 @RequestParam(defaultValue = "0") int page,
                                 @RequestParam(defaultValue = "20") int size) {
         Branch scope = branchAccess.scope(branchCode);
         Long branchId = scope == null ? null : scope.getId();
         AppointmentStatus statusValue = status == null || status.isBlank() ? null : parseStatus(status);
         if (page < 0 || size < 1 || size > 100) throw new IllegalArgumentException("Invalid pagination");
-        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            throw new IllegalArgumentException("วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด");
-        }
-        Sort.Direction direction = "oldest".equalsIgnoreCase(sortOrder) ? Sort.Direction.ASC : Sort.Direction.DESC;
         String keyword = query.trim().toLowerCase(java.util.Locale.ROOT);
-        Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date,
-                startDate != null, startDate == null ? LocalDate.EPOCH : startDate,
-                endDate != null, endDate == null ? LocalDate.EPOCH : endDate, therapistId,
+        Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date, therapistId,
                 statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
                 keyword, "%" + keyword + "%",
-                PageRequest.of(page, size, Sort.by(direction, "appointmentDate")
-                        .and(Sort.by(direction, "appointmentTime")).and(Sort.by(direction, "id"))));
+                PageRequest.of(page, size, Sort.by("appointmentDate").ascending().and(Sort.by("appointmentTime").ascending())));
         return new PageResponse(result.getContent().stream().map(this::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
@@ -167,70 +150,34 @@ public class AppointmentController {
         if (!branch.getId().equals(therapist.getBranch().getId())) {
             throw new IllegalArgumentException("ผู้ให้บริการต้องอยู่สาขาเดียวกับนัดหมาย");
         }
-        if (!branchAccess.isManager() && !therapist.getId().equals(branchAccess.currentStaffId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "นักกายภาพจองนัดได้เฉพาะเวลาว่างของตัวเอง");
-        }
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
-        if (request.endAt() == null) {
-            throw new IllegalArgumentException("ต้องระบุเวลาจบนัด");
-        }
-        java.time.LocalDateTime bookingEnd = request.endAt()
-                .atZoneSameInstant(CLINIC_ZONE)
-                .toLocalDateTime();
-
-        if (!bookingEnd.isAfter(local.toLocalDateTime())) {
-            throw new IllegalArgumentException(
-                    "เวลาจบนัดต้องอยู่หลังเวลาเริ่มนัด");
-        }
         AppointmentStatus initial = parseInitialStatus(request.status());
-        Service chosen = request.serviceId() == null ? null : services.findById(request.serviceId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
-        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd, therapist.getId());
+        Service chosen = request.serviceId() == null ? null : services.findById(request.serviceId()).orElse(null);
+        availability.requireNoGoogleBusy(branch, chosen, local.toLocalDate(), local.toLocalTime());
         if ("NEW".equalsIgnoreCase(request.patientType())) {
             RequestedServiceType requested = request.requestedServiceType() == null || request.requestedServiceType().isBlank()
                     ? null : RequestedServiceType.valueOf(request.requestedServiceType().trim());
-            String middleName = request.contactMiddleName() == null
-                    ? null : request.contactMiddleName().trim();
-            if (middleName != null && middleName.length() > 100) {
-                throw new IllegalArgumentException("ชื่อกลางต้องไม่เกิน 100 ตัวอักษร");
-            }
-            Appointment appointment = service.bookNewPatient(
-                    request.contactName(), request.contactPhone(), branch, therapist,
-                    requested, chosen, null,
-                    local.toLocalDate(), local.toLocalTime(),
-                    bookingEnd, initial, actor.currentId());
-
-            appointment.setContactMiddleName(
-                    middleName == null || middleName.isBlank() ? null : middleName);
-            String nickname = request.contactNickname() == null ? null : request.contactNickname().trim();
-            if (nickname != null && nickname.length() > 80) {
-                throw new IllegalArgumentException("ชื่อเล่นต้องไม่เกิน 80 ตัวอักษร");
-            }
-            appointment.setContactNickname(nickname == null || nickname.isBlank() ? null : nickname);
-            return createdResponse(appointment, request.note());
+            return createdResponse(service.bookNewPatient(request.contactName(), request.contactPhone(), branch, therapist,
+                    requested, null, local.toLocalDate(), local.toLocalTime(), initial, actor.currentId()), request.note());
         }
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         // The service is optional: an appointment can be made before anyone decides what will be done.
-        Service svc = request.serviceId() == null ? null : services.findById(request.serviceId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
-        Appointment appointment = service.book(
-                patient, branch, therapist, svc, null,
-                local.toLocalDate(), local.toLocalTime(),
-                bookingEnd, initial, actor.currentId());
+        Service svc = request.serviceId() == null ? null : ClosedGuard.open(services.findById(request.serviceId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ")));
+        Appointment appointment = service.book(patient, branch, therapist, svc, null,
+                local.toLocalDate(), local.toLocalTime(), initial, actor.currentId());
         return createdResponse(appointment, request.note());
     }
 
     @PostMapping("/{id}/confirm")
     public Response confirm(@PathVariable Long id) {
-        branchAccess.requireManager();
         requireAppointmentAccess(id);
         return toResponse(service.confirm(id, actor.currentId()));
     }
 
     @PostMapping("/{id}/link-patient")
     public Response linkPatient(@PathVariable Long id, @RequestBody LinkPatientRequest request) {
-        branchAccess.requireManager();
         // Lock before the first entity load: otherwise a waiting transaction could keep a stale NEW snapshot.
         branchAccess.requireAccess(service.getForUpdate(id).getBranch());
         Patient patient = patients.findById(request.patientId())
@@ -240,7 +187,6 @@ public class AppointmentController {
 
     @PostMapping("/{id}/check-in")
     public Response checkIn(@PathVariable Long id) {
-        branchAccess.requireManager();
         requireAppointmentAccess(id);
         visitService.checkInFromAppointment(id, actor.currentId());
         return toResponse(service.get(id));
@@ -248,7 +194,6 @@ public class AppointmentController {
 
     @PostMapping("/{id}/start-service")
     public Response startService(@PathVariable Long id) {
-        branchAccess.requireManager();
         requireAppointmentAccess(id);
         PatientVisit visit = requireVisit(id);
         visitService.startService(visit.getId(), actor.currentId());
@@ -257,7 +202,6 @@ public class AppointmentController {
 
     @PostMapping("/{id}/complete")
     public Response complete(@PathVariable Long id) {
-        branchAccess.requireManager();
         requireAppointmentAccess(id);
         PatientVisit visit = requireVisit(id);
         visitService.complete(visit.getId(), actor.currentId());
@@ -266,7 +210,6 @@ public class AppointmentController {
 
     @PostMapping("/{id}/no-show")
     public Response noShow(@PathVariable Long id) {
-        branchAccess.requireManager();
         requireAppointmentAccess(id);
         return toResponse(service.markNoShow(id, actor.currentId()));
     }
@@ -282,30 +225,12 @@ public class AppointmentController {
         requireAppointmentAccess(id);
         if (request.startAt() == null) throw new IllegalArgumentException("ต้องระบุเวลานัดใหม่");
         OffsetDateTime local = request.startAt().atZoneSameInstant(CLINIC_ZONE).toOffsetDateTime();
-        if (request.endAt() == null) {
-            throw new IllegalArgumentException("ต้องระบุเวลาจบนัด");
-        }
-        java.time.LocalDateTime bookingEnd = request.endAt()
-                .atZoneSameInstant(CLINIC_ZONE)
-                .toLocalDateTime();
-        if (!bookingEnd.isAfter(local.toLocalDateTime())) {
-            throw new IllegalArgumentException("เวลาจบนัดต้องอยู่หลังเวลาเริ่มนัด");
-        }
-        Appointment current = service.getForUpdate(id);
-        branchAccess.requireAccess(current.getBranch());
-        Branch branch = request.branchCode() == null || request.branchCode().isBlank()
-                ? current.getBranch() : branchAccess.scope(request.branchCode());
-        Staff therapist = request.therapistId() == null ? current.getStaff()
-                : staff.findById(request.therapistId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ให้บริการ"));
-        Service chosen = request.serviceId() == null ? current.getService()
-                : services.findById(request.serviceId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
-        if (!branch.getId().equals(therapist.getBranch().getId())) {
-            throw new IllegalArgumentException("นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
-        }
-        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd, therapist.getId());
-        Appointment appointment = service.reschedule(
-                id, branch, therapist, chosen, local.toLocalDate(), local.toLocalTime(), bookingEnd, "เลื่อนนัดผ่าน API", actor.currentId()
-        );
+        Appointment current = service.get(id);
+        availability.requireNoGoogleBusy(current.getBranch(), current.getService(), local.toLocalDate(), local.toLocalTime());
+        // Reassigning the therapist on reschedule is not supported yet (AppointmentService.reschedule
+        // only moves date/time) - request.therapistId() is accepted but ignored, flagged for the team.
+        Appointment appointment = service.reschedule(id, local.toLocalDate(), local.toLocalTime(),
+                "เลื่อนนัดผ่าน API", actor.currentId());
         if (request.note() != null) {
             if (!request.note().isNull() && !request.note().isTextual()) {
                 throw new IllegalArgumentException("หมายเหตุต้องเป็นข้อความหรือ null");
@@ -316,9 +241,7 @@ public class AppointmentController {
     }
 
     private static AppointmentStatus parseInitialStatus(String status) {
-        if (status == null || status.isBlank()) {
-            return AppointmentStatus.Unconfirmed;
-        }
+        if (status == null || status.isBlank()) return AppointmentStatus.Confirmed;
         return parseStatus(status);
     }
 
@@ -361,25 +284,19 @@ public class AppointmentController {
         PatientSummary patientSummary = patient == null
                 ? new PatientSummary(null, null, appointment.getContactName(), appointment.getContactPhone())
                 : new PatientSummary(patient.getId(), patient.getPatientHn(),
-                java.util.stream.Stream.of(patient.getPatientFname(), patient.getPatientMiddleName(), patient.getPatientLname())
-                        .filter(value -> value != null && !value.isBlank()).collect(java.util.stream.Collectors.joining(" ")),
-                patient.getPhone());
+                        java.util.stream.Stream.of(patient.getPatientFname(), patient.getPatientMiddleName(), patient.getPatientLname())
+                            .filter(value -> value != null && !value.isBlank()).collect(java.util.stream.Collectors.joining(" ")),
+                        patient.getPhone());
         Service svc = appointment.getService();
-        java.time.LocalDateTime localStart = appointment.getAppointmentDate()
-                .atTime(appointment.getAppointmentTime());
-        java.time.LocalDateTime localEnd = appointment.getAppointmentEndAt();
-        // Legacy appointments predate appointment_end_at. Keep them readable without
-        // changing their stored history; new appointments still require an explicit end.
-        int duration = localEnd == null
-                ? (svc != null && svc.getDefaultAppointmentMinutes() != null
-                    ? svc.getDefaultAppointmentMinutes() : 60)
-                : Math.toIntExact(java.time.Duration.between(localStart, localEnd).toMinutes());
+        Integer minutes = AppointmentService.effectiveMinutes(svc, appointment.getBranch());
+        int duration = minutes == null ? 0 : minutes;
         ServiceSummary serviceSummary = svc == null
                 ? new ServiceSummary(null, appointment.getRequestedServiceType() == null ? null
-                : appointment.getRequestedServiceType().name(), duration)
+                        : appointment.getRequestedServiceType().name(), duration)
                 : new ServiceSummary(svc.getId(), svc.getServiceName(), duration);
-        Instant endAt = (localEnd == null ? localStart.plusMinutes(duration) : localEnd)
-                .atZone(CLINIC_ZONE).toInstant();
+        Instant endAt = appointment.getAppointmentEndAt() == null
+                ? startAt.plusSeconds(duration * 60L)
+                : appointment.getAppointmentEndAt().atZone(CLINIC_ZONE).toInstant();
         return new Response(appointment.getId(), appointment.getBranch().getBranchCode(), patientSummary,
                 new TherapistSummary(appointment.getStaff().getId(),
                         appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname()),
@@ -387,6 +304,6 @@ public class AppointmentController {
                 history.findFirstByAppointmentIdAndToStatusOrderByChangedAtDescIdDesc(appointment.getId(), AppointmentStatus.Cancelled)
                         .map(AppointmentStatusHistory::getReason).orElse(null),
                 appointment.getAppointmentPatientType().name(), appointment.getContactName(),
-                appointment.getContactPhone(), appointment.getContactMiddleName(), appointment.getContactNickname());
+                appointment.getContactPhone());
     }
 }

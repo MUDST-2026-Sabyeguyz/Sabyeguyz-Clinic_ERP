@@ -6,12 +6,3 @@
 # Google service account keys must never be committed
 calendar-sync-key*.json
 /secrets/
-.codex-temp-vitest/node-compile-cache/
-state/
-/evidence/
-/deploy/k8s/*.rendered.yaml
-**/__pycache__/
-/artifacts/
-/deployment-evidence.json
-/reports/
-/node_modules/

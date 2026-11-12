@@ -62,7 +62,7 @@ public class Appointment {
     @Column(name = "appointment_time", nullable = false)
     private LocalTime appointmentTime;
 
-    @Column(name = "appointment_end_at", nullable = false)
+    @Column(name = "appointment_end_at")
     private LocalDateTime appointmentEndAt;
 
     @Column(name = "appointment_create_at", nullable = false, updatable = false)
@@ -85,12 +85,6 @@ public class Appointment {
     /** NEW: name, or nickname with phone; CURRENT: taken from the Patient. */
     @Column(name = "contact_name", length = 200)
     private String contactName;
-
-    @Column(name = "contact_middle_name", length = 100)
-    private String contactMiddleName;
-
-    @Column(name = "contact_nickname", length = 80)
-    private String contactNickname;
 
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
@@ -153,18 +147,6 @@ public class Appointment {
     public void setAppointmentPatientType(AppointmentPatientType appointmentPatientType) { this.appointmentPatientType = appointmentPatientType; }
     public String getContactName() { return contactName; }
     public void setContactName(String contactName) { this.contactName = contactName; }
-
-    public String getContactNickname() { return contactNickname; }
-    public void setContactNickname(String contactNickname) { this.contactNickname = contactNickname; }
-
-    public String getContactMiddleName() {
-        return contactMiddleName;
-    }
-    public void setContactMiddleName(String contactMiddleName) {
-        this.contactMiddleName = contactMiddleName;
-    }
-
-
     public String getContactPhone() { return contactPhone; }
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
     public String getNotes() { return notes; }

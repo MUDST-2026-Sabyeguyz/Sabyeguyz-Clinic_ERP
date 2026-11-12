@@ -12,8 +12,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Comparator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,107 +30,10 @@ public class ReceiptService {
     private final ReceiptRepository repository;
 
     private final CourseRepository courses;
-    private final PaymentLabelOptionRepository paymentLabels;
 
-    public ReceiptService(ReceiptRepository repository, CourseRepository courses, PaymentLabelOptionRepository paymentLabels) {
+    public ReceiptService(ReceiptRepository repository, CourseRepository courses) {
         this.repository = repository;
         this.courses = courses;
-        this.paymentLabels = paymentLabels;
-    }
-
-    private List<BigDecimal> allocateBillDiscount(
-            List<BigDecimal> amounts,
-            BigDecimal total,
-            BigDecimal discount
-    ) {
-        BigDecimal zero = new BigDecimal("0.00");
-
-        if (discount.signum() < 0 || discount.compareTo(total) > 0) {
-            throw new IllegalArgumentException(
-                    "ส่วนลดท้ายบิลต้องอยู่ระหว่าง 0 ถึงยอดก่อนลดท้ายบิล"
-            );
-        }
-
-        List<BigDecimal> shares = new ArrayList<>();
-        BigDecimal remainingDiscount = discount;
-        BigDecimal remainingAmount = total;
-
-        for (int i = 0; i < amounts.size(); i++) {
-            BigDecimal amount = amounts.get(i);
-
-            if (amount == null || amount.signum() < 0) {
-                throw new IllegalArgumentException("ยอดรายการต้องไม่เป็น null หรือติดลบ");
-            }
-
-            remainingAmount = remainingAmount.subtract(amount);
-            BigDecimal share;
-
-            if (i == amounts.size() - 1) {
-                share = remainingDiscount;
-            } else if (total.signum() == 0) {
-                share = zero;
-            } else {
-                share = discount.multiply(amount).divide(total, 2, RoundingMode.HALF_UP);
-                BigDecimal minimumShare = remainingDiscount.subtract(remainingAmount).max(zero);
-                BigDecimal maximumShare = amount.min(remainingDiscount);
-                share = share.max(minimumShare).min(maximumShare);
-            }
-
-            if (share.signum() < 0 || share.compareTo(amount) > 0) {
-                throw new IllegalArgumentException("ส่วนลดจัดสรรต้องอยู่ระหว่าง 0 ถึงยอดรายการ");
-            }
-
-            shares.add(share);
-            remainingDiscount = remainingDiscount.subtract(share);
-        }
-
-        if (remainingDiscount.signum() != 0) {
-            throw new IllegalStateException("ยอดส่วนลดจัดสรรรวมไม่ตรงกับส่วนลดท้ายบิล");
-        }
-
-        return shares;
-    }
-
-    /**
-     * Assigns an enabled payment label selected for a new receipt.
-     * Writes both the new FK and the legacy enum during migration.
-     */
-    public void assignPaymentLabel(Receipt receipt, String code) {
-        if (receipt == null) {
-            throw new IllegalArgumentException("ต้องระบุใบเสร็จ");
-        }
-        if (code == null || code.isBlank()) {
-            throw new IllegalArgumentException("ต้องเลือกสถานะการชำระเงิน");
-        }
-
-        String normalized = code.trim().toUpperCase(java.util.Locale.ROOT);
-        String databaseCode = "PAID".equals(normalized)
-                ? "FULL" : normalized;
-
-        PaymentLabelOption option = paymentLabels.findByCode(databaseCode)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("ไม่พบสถานะการชำระเงิน"));
-
-        if (!option.isEnabled()) {
-            throw new IllegalArgumentException(
-                    "สถานะการชำระเงินนี้ถูกปิดใช้งาน");
-        }
-
-        com.sabyeguyz.clinicv2.enums.PaymentLabel legacyLabel =
-                switch (option.getCode()) {
-                    case "FULL" ->
-                            com.sabyeguyz.clinicv2.enums.PaymentLabel.FullyPaid;
-                    case "INSTALLMENT" ->
-                            com.sabyeguyz.clinicv2.enums.PaymentLabel.Installment;
-                    case "DEPOSIT" ->
-                            com.sabyeguyz.clinicv2.enums.PaymentLabel.Deposit;
-                    default ->
-                            throw new IllegalArgumentException(
-                                    "รหัสสถานะการชำระเงินไม่รองรับ");
-                };
-
-        receipt.setPaymentLabelOption(option);
-        receipt.setPaymentLabel(legacyLabel);
     }
 
     @Transactional(readOnly = true)
@@ -149,7 +50,7 @@ public class ReceiptService {
     }
 
     @Transactional
-    public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, String paymentLabelCode, Long actorId) {
+    public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, Long actorId) {
         String no = requireText(receiptNo, "receiptNo");
         if (!no.matches(RECEIPT_NO_FORMAT)) {
             throw new IllegalArgumentException("เลขที่ใบเสร็จต้องอยู่ในรูปแบบ REYYMMNNNN");
@@ -170,128 +71,51 @@ public class ReceiptService {
         receipt.setSaleDate(saleDate == null ? ClinicTime.now() : saleDate.atStartOfDay());
         receipt.setReceiptCreateAt(Instant.now());
         receipt.setReceiptCreateBy(actorId);
-        assignPaymentLabel(receipt, paymentLabelCode);
         return repository.save(receipt);
     }
 
     /**
-     * Calculates receipt totals from effective sales and existing-course payments.
-     * Subtotal includes sales quantities multiplied by unit prices before discounts.
-     * Net amount includes sales amounts after line discounts, plus existing-course
-     * payments, minus the bill discount. Bill discounts are allocated across both
-     * item types without changing sales commissionable amounts.
+     * Totals a receipt from its lines: subtotal is the sum of the line amounts
+     * (already after line discounts), the bill discount comes off that subtotal
+     * and is allocated back onto the lines in proportion to their amounts, the
+     * last line taking the rounding remainder. A bill discount never changes a
+     * line's commissionable amount.
      */
     @Transactional
-    public Receipt finalizeTotals(
-            Receipt receipt, List<SalesTransaction> lines, Discount billDiscount, Long actorId
-    ) {
-        return finalizeTotals(receipt, lines, List.of(), billDiscount, actorId);
-    }
-
-    @Transactional
-    public Receipt finalizeTotals(
-            Receipt receipt, List<SalesTransaction> lines,
-            List<ReceiptCoursePayment> coursePayments,
-            Discount billDiscount, Long actorId
-    ) {
+    public Receipt finalizeTotals(Receipt receipt, List<SalesTransaction> lines, Discount billDiscount, Long actorId) {
         if (receipt == null) {
             throw new IllegalArgumentException("ต้องระบุใบเสร็จ");
         }
-
-        lines = lines == null
-                ? List.of()
-                : lines.stream().filter(SalesTransaction::isTransactionStatus).toList();
-
-        coursePayments = coursePayments == null
-                ? List.of()
-                : coursePayments;
-
-        if (lines.isEmpty() && coursePayments.isEmpty()) {
+        if (lines == null || lines.isEmpty()) {
             throw new IllegalArgumentException("ใบเสร็จต้องมีรายการอย่างน้อย 1 รายการ");
         }
-
-        BigDecimal coursePaymentTotal = coursePayments.stream()
-                .map(ReceiptCoursePayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal subtotal = lines.stream()
-                .map(line -> line.getUnitPrice()
-                        .multiply(BigDecimal.valueOf(line.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .add(coursePaymentTotal)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        BigDecimal amountBeforeBillDiscount = lines.stream()
-                .map(SalesTransaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .add(coursePaymentTotal)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        Discount bill = billDiscount == null
-                ? Discount.none()
-                : billDiscount;
-
-        boolean hasLineDiscount = lines.stream()
-                .anyMatch(line -> line.getLineDiscountAmount() != null
-                        && line.getLineDiscountAmount().signum() > 0);
-
-        if (hasLineDiscount && !bill.isNone()) {
-            throw new IllegalArgumentException(
-                    "ไม่สามารถใช้ส่วนลดรายการร่วมกับส่วนลดทั้งบิลได้"
-            );
+        Discount bill = billDiscount == null ? Discount.none() : billDiscount;
+        BigDecimal subtotal = lines.stream().map(SalesTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal billAmount = bill.amountOff(subtotal);
+        if (billAmount.signum() > 0 && lines.stream().anyMatch(line ->
+                line.getLineDiscountAmount() != null && line.getLineDiscountAmount().signum() > 0)) {
+            throw new IllegalArgumentException("ไม่สามารถใช้ส่วนลดรายการร่วมกับส่วนลดทั้งบิลได้");
         }
 
-        BigDecimal billAmount = bill.amountOff(amountBeforeBillDiscount);
-
-        if (lines.stream().anyMatch(line -> line.getId() == null)) {
-            throw new IllegalArgumentException(
-                    "ต้องบันทึกรายการขายก่อนคำนวณใบเสร็จ"
-            );
-        }
-
-        lines = lines.stream()
-                .sorted(Comparator.comparing(SalesTransaction::getId))
-                .toList();
-
-        coursePayments = coursePayments.stream()
-                .sorted(Comparator.comparing(item -> item.getCourse().getId()))
-                .toList();
-
-        List<BigDecimal> amounts = new ArrayList<>();
-
-        for (SalesTransaction line : lines) {
-            amounts.add(line.getAmount());
-        }
-
-        for (ReceiptCoursePayment item : coursePayments) {
-            amounts.add(item.getAmount());
-        }
-
-        List<BigDecimal> shares = allocateBillDiscount(
-                amounts, amountBeforeBillDiscount, billAmount
-        );
-
-        int index = 0;
-
-        for (SalesTransaction line : lines) {
-            BigDecimal share = shares.get(index++);
+        BigDecimal remaining = billAmount;
+        for (int i = 0; i < lines.size(); i++) {
+            SalesTransaction line = lines.get(i);
+            BigDecimal share = i == lines.size() - 1 ? remaining
+                    : subtotal.signum() == 0 ? BigDecimal.ZERO.setScale(2)
+                    : billAmount.multiply(line.getAmount()).divide(subtotal, 2, RoundingMode.HALF_UP);
             line.setAllocatedBillDiscountAmount(share);
-
-            if (line.getTransactionType() == TransactionType.CoursePurchase) {
+            remaining = remaining.subtract(share);
+            if (line.getTransactionType() == TransactionType.CoursePurchase && line.getId() != null) {
+                // The substitute-fee base of a course is the net amount paid: the line amount after the bill discount.
                 courses.findBySaleTransactionId(line.getId()).ifPresent(course -> {
-                    course.setTreatmentFeeBaseAmount(
-                            line.getAmount().subtract(share)
-                    );
+                    course.setTreatmentFeeBaseAmount(line.getAmount().subtract(share));
                     courses.save(course);
                 });
             }
         }
 
-        for (ReceiptCoursePayment item : coursePayments) {
-            item.setAllocatedBillDiscountAmount(shares.get(index++));
-        }
-
-        BigDecimal taxable = amountBeforeBillDiscount.subtract(billAmount);
+        BigDecimal taxable = subtotal.subtract(billAmount);
         receipt.setSubtotalBeforeDiscount(subtotal);
         receipt.setBillDiscountType(bill.type());
         receipt.setBillDiscountValue(bill.value());

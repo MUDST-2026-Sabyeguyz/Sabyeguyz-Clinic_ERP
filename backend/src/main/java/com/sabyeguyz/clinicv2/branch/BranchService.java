@@ -30,17 +30,6 @@ public class BranchService {
         return find(id);
     }
 
-    /** Next free 2-digit branch code (01..99), one above the current highest. */
-    @Transactional(readOnly = true)
-    public String nextBranchCode() {
-        String max = repository.findMaxBranchCode();
-        int next = max == null ? 1 : Integer.parseInt(max.trim()) + 1;
-        if (next > 99) {
-            throw new IllegalArgumentException("รหัสสาขาเต็มแล้ว (สูงสุด 99 สาขา)");
-        }
-        return String.format("%02d", next);
-    }
-
     @Transactional
     public Branch create(String branchCode, String name, String address, String phone, Long actorId) {
         String code = normalizeCode(branchCode);
@@ -90,8 +79,8 @@ public class BranchService {
             throw new IllegalArgumentException("เวลาเริ่มรับนัดต้องอยู่ก่อนเวลาสิ้นสุด");
         }
         Integer minutes = settings.defaultAppointmentMinutes();
-        if (minutes != null && minutes < 1) {
-            throw new IllegalArgumentException("ระยะเวลานัดเริ่มต้นต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที");
+        if (minutes != null && (minutes < 5 || minutes > 480)) {
+            throw new IllegalArgumentException("ระยะเวลานัดเริ่มต้นต้องอยู่ระหว่าง 5 ถึง 480 นาที");
         }
         String license = blankToNull(settings.licenseNo());
         if (license != null && license.length() > 50) {

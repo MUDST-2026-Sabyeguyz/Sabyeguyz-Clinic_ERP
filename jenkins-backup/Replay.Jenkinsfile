@@ -22,7 +22,7 @@ pipeline {
 set -euo pipefail
 export WORKFLOWS="${WORKFLOWS:-}"
 mkdir -p "$WORKSPACE/results" /var/jenkins_home/ci-worker-home
-docker run --rm --init --name "clinic-replay-$BUILD_NUMBER" --network host \
+docker run --rm --name "clinic-replay-$BUILD_NUMBER" --network host \
   --user 1000:1000 \
   -e DOCKER_HOST=tcp://127.0.0.1:2375 -e BUILD_NUMBER -e SOURCE_SHA -e WORKFLOWS \
   -e HOME=/var/jenkins_home/ci-worker-home -e CI=true \

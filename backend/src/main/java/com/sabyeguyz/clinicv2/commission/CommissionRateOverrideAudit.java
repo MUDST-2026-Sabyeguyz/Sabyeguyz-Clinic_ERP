@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/** Audits calculated rate changes after Reopen and before Finalize. */
+/** Admin Override audit required by Commission_System_Requirement_Dev §12 whenever a Closed month's rate must change. */
 @Entity
 @Table(name = "commission_rate_override_audit")
 public class CommissionRateOverrideAudit {

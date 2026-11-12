@@ -3,7 +3,6 @@ package com.sabyeguyz.clinicv2.commission;
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
-import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.catalog.ServiceRepository;
 import com.sabyeguyz.clinicv2.sale.Discount;
@@ -30,35 +29,27 @@ public class CommissionPreviewController {
     private final StaffRepository staff;
     private final AppUserRepository users;
     private final CurrentActor actor;
-    private final BranchAccessPolicy branchAccess;
 
     public CommissionPreviewController(CommissionPreviewService previewService, ServiceRepository services,
-                                       StaffRepository staff, AppUserRepository users, CurrentActor actor,
-                                       BranchAccessPolicy branchAccess) {
+                                        StaffRepository staff, AppUserRepository users, CurrentActor actor) {
         this.previewService = previewService;
         this.services = services;
         this.staff = staff;
         this.users = users;
         this.actor = actor;
-        this.branchAccess = branchAccess;
     }
 
     @GetMapping
     public CommissionPreviewService.Preview preview(@RequestParam Long courseId,
-                                                    @RequestParam String branchCode,
-                                                    @RequestParam(required = false) Long sellerStaffId,
-                                                    @RequestParam(required = false) BigDecimal price,
-                                                    @RequestParam(required = false) String discountType,
-                                                    @RequestParam(required = false) BigDecimal discountValue) {
-        var branch = branchAccess.scope(branchCode);
-        if (branch == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขาสำหรับคำนวณคอมมิชชัน");
-        }
+                                                     @RequestParam(required = false) Long sellerStaffId,
+                                                     @RequestParam(required = false) BigDecimal price,
+                                                     @RequestParam(required = false) String discountType,
+                                                     @RequestParam(required = false) BigDecimal discountValue) {
         Service course = services.findById(courseId).orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
         Staff seller = sellerStaffId != null
                 ? staff.findById(sellerStaffId).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"))
                 : currentStaff();
-        return previewService.previewCourse(course, seller, price, Discount.of(discountType, discountValue), null, branch.getId());
+        return previewService.previewCourse(course, seller, price, Discount.of(discountType, discountValue), null);
     }
 
     private Staff currentStaff() {

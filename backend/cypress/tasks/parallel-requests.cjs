@@ -1,16 +1,9 @@
 // cy.request commands are queued serially. Start independent Node HTTP requests
 // together so each request reaches its own Spring transaction while peers run.
 module.exports = async function parallelRequests({ token, requests }) {
-  const testPort = Number(process.env.CLINIC_V2_TEST_PORT || 18080)
-  if (![18080, 18082].includes(testPort)) throw new Error('Only isolated test ports are supported')
   if (!Array.isArray(requests) || requests.length !== 2) throw new Error('A race requires exactly two requests')
   for (const request of requests) {
-    const allowedUrl =
-        /^\/api\/[a-zA-Z0-9/-]+$/.test(request.url)
-        || /^\/__cypress\/payment-policy\/\d+\/record$/.test(request.url)
-        || /^\/api\/commission\/closings\/\d{4}-(0[1-9]|1[0-2])\?branchCode=[a-zA-Z0-9_-]+$/.test(request.url)
-
-    if (!allowedUrl || !['POST', 'PATCH'].includes(request.method)) {
+    if (!(/^\/api\/[a-zA-Z0-9/-]+$/.test(request.url) || /^\/__cypress\/payment-policy\/\d+\/record$/.test(request.url)) || !['POST', 'PATCH'].includes(request.method)) {
       throw new Error('Concurrency task only supports local API mutation routes')
     }
   }
@@ -18,7 +11,7 @@ module.exports = async function parallelRequests({ token, requests }) {
   const start = new Promise((resolve) => { release = resolve })
   const jobs = requests.map(async ({ method, url, body }) => {
     await start
-    const response = await fetch(`http://127.0.0.1:${testPort}${url}`, {
+    const response = await fetch(`http://127.0.0.1:18080${url}`, {
       method,
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),

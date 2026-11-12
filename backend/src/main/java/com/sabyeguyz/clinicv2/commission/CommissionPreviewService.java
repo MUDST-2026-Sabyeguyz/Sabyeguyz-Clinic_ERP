@@ -41,15 +41,12 @@ public class CommissionPreviewService {
 
     @Transactional(readOnly = true)
     public Preview previewCourse(Service courseTemplate, Staff seller, BigDecimal priceOverride, Discount discount,
-                                  LocalDate saleDate, Long branchId) {
+                                  LocalDate saleDate) {
         if (courseTemplate == null || courseTemplate.getServiceType() != ServiceType.Course) {
             throw new IllegalArgumentException("ต้องระบุคอร์ส");
         }
         if (seller == null) {
             throw new IllegalArgumentException("ต้องระบุผู้ขาย");
-        }
-        if (branchId == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขาสำหรับคำนวณคอมมิชชัน");
         }
         Integer totalVisits = courseTemplate.getDefaultTotalVisits();
         if (totalVisits == null || totalVisits < 1) {
@@ -61,7 +58,7 @@ public class CommissionPreviewService {
 
         CommissionScheme scheme = schemeResolver.resolveEffective(date);
         BigDecimal monthlySalesToDate = tierSales
-                .netSales(seller.getId(), date.format(SALE_MONTH), branchId).add(net);
+                .netSales(seller.getId(), date.format(SALE_MONTH)).add(net);
         BigDecimal rate = tierResolver.resolve(scheme, monthlySalesToDate).getCommissionRate();
 
         BigDecimal pool = net.multiply(rate).setScale(2, RoundingMode.HALF_UP);

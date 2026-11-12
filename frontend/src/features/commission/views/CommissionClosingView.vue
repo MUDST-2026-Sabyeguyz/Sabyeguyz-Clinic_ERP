@@ -1,64 +1,31 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { clinicToday } from '@/utils/clinicDate'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import CommissionTabs from './CommissionTabs.vue'
-import { commissionApi, type StaffPayment } from '@/api/client'
-import { canClosePaymentBatch, isPaymentDateAllowed } from '../lib/paymentBatch'
-import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
-import { clinicToday } from '@/utils/clinicDate'
+import { commissionApi } from '@/api/client'
 
 type ClosingRow = {
   id: number
   staff: string
   sales: number
   rate: number
-  status: 'Open' | 'Closed'
+  status: 'Open' | 'Closed' | 'Finalized'
+  reopenReason: string | null
 }
 
-const selectedMonth = ref(`${clinicToday().slice(0, 7)}-01`)
+const selectedMonth = ref(`${clinicToday().slice(0, 8)}01`)
 const month = computed(() => selectedMonth.value.slice(0, 7))
-const selectedBranchCode = computed(() => selectedManagerBranch()?.code ?? '')
 const router = useRouter()
-const branch = ref('ทุกสาขา')
 const search = ref('')
 const rows = ref<ClosingRow[]>([])
 const errorMessage = ref('')
 const isConfirming = ref(false)
 const isSaving = ref(false)
 const closedSuccessfully = ref(false)
-const branchClosing = ref<{ status: 'OPEN' | 'CLOSED' } | null>(null)
-const reopenReason = ref('')
-const paymentRows = ref<StaffPayment[]>([])
-const paymentError = ref('')
-const paymentBusy = ref(false)
-const paymentForms = ref<Record<number, { paidDate: string; reference: string }>>({})
 const validationLoading = ref(false)
-const closingsLoading = ref(false)
-const validationError = ref('')
-const tierIssue = ref('')
-const dialogRef = ref<HTMLElement | null>(null)
-const cancelRef = ref<HTMLButtonElement | null>(null)
-let triggerElement: HTMLElement | null = null
-let requestId = 0
-const reportRows = ref<Awaited<ReturnType<typeof commissionApi.report>>>([])
-const schemeLabel = ref('ยังไม่มีข้อมูลกฎค่าคอมมิชชัน')
-const schemePeriodLabel = ref('ยังไม่มีข้อมูลช่วงวันที่')
-const shortDate = (value: string) =>
-  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(
-    new Date(`${value}T12:00:00`),
-  )
-const totalBase = computed(() => reportRows.value.reduce((sum, r) => sum + Number(r.base), 0))
-const commissionPool = computed(() =>
-  reportRows.value.reduce((sum, r) => sum + Number(r.commission), 0),
-)
-const reportCount = computed(() => reportRows.value.reduce((sum, r) => sum + r.saleCount, 0))
-const proposedRate = computed(() => {
-  if (validationLoading.value || hasBlockingIssues.value) return 'รอตรวจสอบข้อมูล'
-  const rates = [...new Set(reportRows.value.map((r) => Number(r.rate) * 100))]
-  return rates.length === 1 ? `${rates[0]}%` : rates.length ? 'ตามช่วงยอดขายรายบุคคล' : '—'
-})
 const validationResults = ref({
   tiers: null as boolean | null,
   sales: null as boolean | null,
@@ -66,56 +33,29 @@ const validationResults = ref({
   treatment: null as boolean | null,
 })
 
-async function validatePeriod(id: number, selectedPeriod: string) {
+async function validatePeriod() {
   validationLoading.value = true
-  validationError.value = ''
-  tierIssue.value = ''
-  reportRows.value = []
-  schemeLabel.value = 'ยังไม่มีข้อมูลกฎค่าคอมมิชชัน'
-  schemePeriodLabel.value = 'ยังไม่มีข้อมูลช่วงวันที่'
-  validationResults.value = { tiers: null, sales: null, courses: null, treatment: null }
-  const [year, number] = selectedPeriod.split('-').map(Number)
-  const from = `${selectedPeriod}-01`
-  const to = `${selectedPeriod}-${String(new Date(year!, number!, 0).getDate()).padStart(2, '0')}`
-  const branchCode = selectedBranchCode.value
-  if (!branchCode) {
-    validationError.value = 'กรุณาเลือกสาขาก่อนตรวจรอบ'
-    validationResults.value = { tiers: null, sales: null, courses: null, treatment: null }
-    validationLoading.value = false
-    return
-  }
+  const [year, number] = month.value.split('-').map(Number)
+  const from = `${month.value}-01`
+  const to = `${month.value}-${String(new Date(year!, number!, 0).getDate()).padStart(2, '0')}`
 
   const [schemesResult, salesResult, treatmentResult] = await Promise.allSettled([
     commissionApi.schemes(),
     commissionApi.report(from, to),
     commissionApi.treatmentReport(from, to),
   ])
-  if (id !== requestId) return
 
-  if (
-    schemesResult.status === 'rejected' ||
-    salesResult.status === 'rejected' ||
-    treatmentResult.status === 'rejected'
-  ) {
-    validationError.value = 'โหลดข้อมูลตรวจสอบไม่ครบ กรุณาตรวจอีกครั้งก่อนปิดรอบ'
-  }
-
-  const scopedSales =
-    salesResult.status === 'fulfilled'
-      ? salesResult.value.filter((item) => item.branchCode === branchCode)
-      : []
-  if (salesResult.status === 'fulfilled') reportRows.value = scopedSales
   validationResults.value.sales =
     salesResult.status === 'fulfilled'
-      ? scopedSales.every((item) => item.staffId !== null && Number(item.base) >= 0)
+      ? salesResult.value.length > 0 &&
+        salesResult.value.every((item) => item.staffId !== null && Number(item.base) >= 0)
       : null
 
   if (treatmentResult.status === 'fulfilled') {
-    const scopedTreatments = treatmentResult.value.filter((item) => item.branchCode === branchCode)
-    validationResults.value.courses = scopedTreatments.every(
+    validationResults.value.courses = treatmentResult.value.every(
       (item) => Boolean(item.courseCode) && item.ownerStaffId !== null,
     )
-    validationResults.value.treatment = scopedTreatments.every(
+    validationResults.value.treatment = treatmentResult.value.every(
       (item) => Number(item.treatmentFee) <= Number(item.gross),
     )
   } else {
@@ -124,226 +64,57 @@ async function validatePeriod(id: number, selectedPeriod: string) {
   }
 
   if (schemesResult.status === 'fulfilled' && Array.isArray(schemesResult.value)) {
-    const scheme = (
-      schemesResult.value as Array<{
-        id: number
-        name: string
-        active: boolean
-        effectiveFrom: string
-        effectiveTo: string | null
-      }>
-    ).find((s) => s.active && s.effectiveFrom <= to && (!s.effectiveTo || s.effectiveTo > to))
+    const scheme = (schemesResult.value as Array<{ id: number }>)[0]
     if (scheme) {
-      schemeLabel.value = scheme.name
-      if (scheme.effectiveTo) {
-        const lastDay = new Date(`${scheme.effectiveTo}T12:00:00`)
-        lastDay.setDate(lastDay.getDate() - 1)
-        const inclusiveEnd = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
-        schemePeriodLabel.value = `${shortDate(scheme.effectiveFrom)}–${shortDate(inclusiveEnd)}`
-      } else schemePeriodLabel.value = `${shortDate(scheme.effectiveFrom)} เป็นต้นไป`
-
       try {
         const tierData = (await commissionApi.tiers(scheme.id)) as Array<{
           minimum: number
           maximum: number | null
         }>
         const tiers = [...tierData].sort((a, b) => Number(a.minimum) - Number(b.minimum))
-        if (id !== requestId) return
-        if (!tiers.length) tierIssue.value = 'ยังไม่มีช่วงยอดขายในกฎนี้'
-        else if (Number(tiers[0]!.minimum) !== 0)
-          tierIssue.value = `ช่วงแรกต้องเริ่มที่ ฿0 (ขณะนี้เริ่มที่ ${currency(Number(tiers[0]!.minimum))})`
-        else {
-          for (let index = 0; index < tiers.length; index++) {
-            const tier = tiers[index]!
-            const minimum = Number(tier.minimum)
-            const maximum = tier.maximum === null ? null : Number(tier.maximum)
-            if (maximum !== null && maximum < minimum) {
-              tierIssue.value = `ช่วงที่ ${index + 1}: ยอดสูงสุดต่ำกว่ายอดขั้นต่ำ`
-              break
-            }
-            if (index < tiers.length - 1) {
-              const nextMinimum = Number(tiers[index + 1]!.minimum)
-              if (maximum === null) {
-                tierIssue.value = `ช่วงที่ ${index + 1} ไม่จำกัดยอดสูงสุด แต่ยังมีช่วงถัดไป`
-                break
-              }
-              if (Math.abs(nextMinimum - maximum - 0.01) >= 0.001) {
-                tierIssue.value =
-                  nextMinimum > maximum
-                    ? `มีช่วงว่างระหว่าง ${currency(maximum)} ถึง ${currency(nextMinimum)}`
-                    : `มีช่วงซ้อนระหว่าง ${currency(nextMinimum)} ถึง ${currency(maximum)}`
-                break
-              }
-            }
-          }
-        }
-        validationResults.value.tiers = !tierIssue.value
+        validationResults.value.tiers =
+          tiers.length > 0 &&
+          tiers.every((tier, index) => {
+            if (index === 0) return Number(tier.minimum) === 0
+            const previous = tiers[index - 1]!
+            // tier ranges are in baht with two decimals: the next tier starts exactly one satang above the previous maximum
+            return (
+              previous.maximum !== null &&
+              Math.round((Number(tier.minimum) - Number(previous.maximum)) * 100) === 1
+            )
+          })
       } catch {
-        if (id !== requestId) return
         validationResults.value.tiers = null
-        tierIssue.value = 'โหลดช่วงยอดขายไม่สำเร็จ'
       }
-    } else {
-      const noCourseSales = reportRows.value.length === 0
-      validationResults.value.tiers = noCourseSales
-      tierIssue.value = noCourseSales ? '' : 'ไม่พบกฎค่าคอมมิชชันที่ใช้งานในเดือนนี้'
-    }
+    } else validationResults.value.tiers = false
   } else validationResults.value.tiers = null
   validationLoading.value = false
 }
 
 async function load() {
-  const id = ++requestId
-  const selectedPeriod = month.value
-  closedSuccessfully.value = false
-  branchClosing.value = null
-  rows.value = []
-  paymentRows.value = []
-  paymentForms.value = {}
-  errorMessage.value = ''
-  closingsLoading.value = true
-  void validatePeriod(id, selectedPeriod)
+  void validatePeriod()
   try {
-    // โหลดสถานะปิดรอบระดับสาขาแยกจากรายการรายบุคคล
-    const branchCode = selectedBranchCode.value
-    if (!branchCode) throw new Error('กรุณาเลือกสาขาก่อนตรวจรอบ')
-    const [data, state, payroll] = await Promise.all([
-        commissionApi.closings(selectedPeriod, branchCode),
-      commissionApi.branchClosing(selectedPeriod, branchCode),
-      commissionApi.payments(selectedPeriod, branchCode),
-    ])
-    if (id !== requestId) return
-    branchClosing.value = state
-    paymentRows.value = payroll
-    for (const row of payroll)
-      paymentForms.value[row.id] ??= {
-        paidDate: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date()),
-        reference: '',
-      }
+    const data = await commissionApi.closings(month.value)
     rows.value = data.map((row) => ({
       id: row.id,
       staff: row.employeeName,
       sales: Number(row.sales),
-      rate: Number(row.rate) * 100,
-      status: row.status === 'CLOSED' ? 'Closed' : 'Open',
+      rate: Math.round(Number(row.rate) * 10000) / 100,
+      status:
+        row.status === 'FINALIZED' ? 'Finalized' : row.status === 'CLOSED' ? 'Closed' : 'Open',
+      reopenReason: row.reopenReason ?? null,
     }))
     errorMessage.value = ''
   } catch (error) {
-    if (id !== requestId) return
     errorMessage.value = error instanceof Error ? error.message : 'โหลดรอบคอมมิชชันไม่สำเร็จ'
-  } finally {
-    if (id === requestId) closingsLoading.value = false
-  }
-}
-
-async function preparePayments() {
-  const branchCode = selectedManagerBranch()?.code
-  if (!branchCode || branchClosing.value?.status !== 'CLOSED' || paymentBusy.value) return
-  paymentBusy.value = true
-  paymentError.value = ''
-  try {
-    // เตรียมงวดจ่ายได้หลังปิดยอดคอมมิชชันของสาขาแล้ว
-    paymentRows.value = await commissionApi.preparePayments(month.value, branchCode)
-  } catch (error) {
-    paymentError.value = error instanceof Error ? error.message : 'เตรียมงวดจ่ายไม่สำเร็จ'
-  } finally {
-    paymentBusy.value = false
-  }
-}
-
-async function closePaymentMonth() {
-  const branchCode = selectedManagerBranch()?.code
-  if (!branchCode || branchClosing.value?.status !== 'CLOSED' || paymentBusy.value) return
-  if (!canClosePaymentBatch(paymentRows.value)) {
-    paymentError.value = 'ยอดหรือจำนวนครั้งบางรายการยังไม่ครบ จึงปิดงวดจ่ายไม่ได้'
-    return
-  }
-  paymentBusy.value = true
-  paymentError.value = ''
-  try {
-    // ปิดงวดได้เมื่อรายการ OPEN มีข้อมูลครบตาม contract
-    paymentRows.value = await commissionApi.closePayments(month.value, branchCode)
-  } catch (error) {
-    paymentError.value = error instanceof Error ? error.message : 'ปิดงวดจ่ายไม่สำเร็จ'
-  } finally {
-    paymentBusy.value = false
-  }
-}
-
-async function payStaff(row: StaffPayment) {
-  const form = paymentForms.value[row.id]
-  if (row.status !== 'CLOSED' || !form?.paidDate || !form.reference.trim() || paymentBusy.value) return
-  if (!isPaymentDateAllowed(form.paidDate, clinicToday())) {
-    paymentError.value = 'วันที่จ่ายต้องไม่เกินวันที่ปัจจุบันของคลินิก'
-    return
-  }
-  paymentBusy.value = true
-  paymentError.value = ''
-  try {
-    // บันทึกวันจ่ายและเลขอ้างอิงเพื่อเปลี่ยนงวดจาก CLOSED เป็น PAID
-      await commissionApi.pay(row.id, form.paidDate, form.reference.trim())
-    const branchCode = selectedManagerBranch()?.code
-    if (branchCode) paymentRows.value = await commissionApi.payments(month.value, branchCode)
-  } catch (error) {
-    paymentError.value = error instanceof Error ? error.message : 'บันทึกการจ่ายไม่สำเร็จ'
-  } finally {
-    paymentBusy.value = false
-  }
-}
-
-async function reopenPayment(row: StaffPayment) {
-  if (row.status !== 'CLOSED' || paymentBusy.value) return
-  paymentBusy.value = true
-  paymentError.value = ''
-  try {
-    await commissionApi.reopenPayment(row.id)
-    const branchCode = selectedManagerBranch()?.code
-    if (branchCode) paymentRows.value = await commissionApi.payments(month.value, branchCode)
-  } catch (error) {
-    paymentError.value = error instanceof Error ? error.message : 'เปิดงวดรายบุคคลไม่สำเร็จ'
-  } finally {
-    paymentBusy.value = false
-  }
-}
-
-function openConfirm(event: Event) {
-  triggerElement = event.currentTarget as HTMLElement
-  isConfirming.value = true
-  void nextTick(() => cancelRef.value?.focus())
-}
-
-function closeConfirm() {
-  if (isSaving.value) return
-  isConfirming.value = false
-  void nextTick(() => triggerElement?.focus())
-}
-
-function onDialogKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    closeConfirm()
-    return
-  }
-  if (event.key !== 'Tab' || !dialogRef.value) return
-  const controls = [...dialogRef.value.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
-  const first = controls[0]
-  const last = controls[controls.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last?.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first?.focus()
   }
 }
 
 async function confirmClosing() {
   isSaving.value = true
   try {
-    const branchCode = selectedManagerBranch()?.code
-    if (!branchCode) throw new Error('กรุณาเลือกสาขาก่อนปิดรอบ')
-    // ปิดยอดของเดือนและสาขาที่เลือก
-    await commissionApi.closeMonth(month.value, branchCode)
+    await commissionApi.closeMonth(month.value)
+    await load()
     isConfirming.value = false
     closedSuccessfully.value = true
   } catch (error) {
@@ -355,35 +126,41 @@ async function confirmClosing() {
   }
 }
 
-async function reopenBranch() {
-  const branchCode = selectedManagerBranch()?.code
-  const reason = reopenReason.value.trim()
-  if (!branchCode || !reason || reason.length > 255 || isSaving.value) return
-  isSaving.value = true
-  errorMessage.value = ''
-  try {
-    // เปิดรอบสาขาที่ไม่มีรายการรายบุคคลได้เมื่อระบุเหตุผล
-    await commissionApi.reopenEmptyBranch(month.value, branchCode, reason)
-    reopenReason.value = ''
-    await load()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'เปิดรอบสาขาไม่สำเร็จ'
-  } finally {
-    isSaving.value = false
-  }
-}
-
 onMounted(load)
-watch([month, selectedBranchCode], load)
-onUnmounted(() => {
-  requestId++
-})
+watch(month, load)
 
 const visible = computed(() => {
   const keyword = search.value.trim().toLowerCase()
   return rows.value.filter((row) => !keyword || row.staff.toLowerCase().includes(keyword))
 })
+const reopenTarget = ref<ClosingRow | null>(null)
+const reopenReason = ref('')
+async function reopen() {
+  const row = reopenTarget.value
+  if (!row) return
+  if (!reopenReason.value.trim()) {
+    errorMessage.value = 'กรุณาระบุเหตุผลที่ Reopen'
+    return
+  }
+  isSaving.value = true
+  try {
+    await commissionApi.reopenClosing(row.id, reopenReason.value.trim())
+    reopenTarget.value = null
+    reopenReason.value = ''
+    closedSuccessfully.value = false
+    await load()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Reopen ไม่สำเร็จ'
+    reopenTarget.value = null
+  } finally {
+    isSaving.value = false
+  }
+}
 const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)
+const totalPool = computed(() =>
+  rows.value.reduce((sum, row) => sum + (row.sales * row.rate) / 100, 0),
+)
+const totalSales = computed(() => rows.value.reduce((sum, row) => sum + row.sales, 0))
 const monthLabel = computed(() => {
   const [year, number] = month.value.split('-').map(Number)
   if (!year || !number) return month.value
@@ -404,8 +181,7 @@ const periodLabel = computed(() => {
   return `1–${new Date(year, number, 0).getDate()} ${fullMonthLabel.value}`
 })
 const monthOptions = Array.from({ length: 12 }, (_, index) => {
-  const now = new Date()
-  const date = new Date(now.getFullYear(), now.getMonth() - index, 1)
+  const date = new Date(2026, 9 - index, 1)
   return {
     value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`,
     label: new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(date),
@@ -414,32 +190,16 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => {
 const currency = (value: number) => `฿${value.toLocaleString()}`
 const closeChecks = computed(() =>
   [
-    { key: 'tiers', label: 'ช่วงยอดขายค่าคอมมิชชันไม่ซ้อนกันหรือมีช่วงว่าง' },
+    { key: 'tiers', label: 'ไม่มีช่วง Tier ซ้อนกันหรือช่วงว่าง' },
     { key: 'sales', label: 'ยอดขายและข้อมูลผู้ขายครบถ้วน' },
-    { key: 'courses', label: 'รหัสคอร์สและเจ้าของคอร์สครบทุกคอร์ส' },
+    { key: 'courses', label: 'Course ID และเจ้าของคอร์สครบทุกคอร์ส' },
     { key: 'treatment', label: 'ค่ารักษาแทนไม่เกินยอดบริการ' },
   ].map((item) => ({
     ...item,
     result: validationResults.value[item.key as keyof typeof validationResults.value],
   })),
 )
-const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result !== true))
-const passedChecks = computed(() => closeChecks.value.filter((item) => item.result === true).length)
-const periodStatus = computed(() =>
-  closingsLoading.value
-    ? 'กำลังโหลด'
-    : errorMessage.value
-      ? 'ตรวจสอบไม่ได้'
-      : branchClosing.value?.status === 'CLOSED'
-        ? 'ปิดรอบแล้ว'
-        : 'ยังไม่ปิดรอบ',
-)
-
-function selectView(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
-  if (value === 'Sales') void router.push('/staff/commission')
-  if (value === 'Treatment') void router.push('/staff/commission?type=Treatment')
-}
+const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result === false))
 </script>
 
 <template>
@@ -451,69 +211,76 @@ function selectView(event: Event) {
         <p>
           {{
             closedSuccessfully
-              ? 'ระบบบันทึกรอบค่าคอมมิชชันเรียบร้อยแล้ว'
-              : 'ตรวจยอดขาย กำหนดช่วงค่าคอมมิชชัน และล็อกอัตราของคอร์สในรอบเดือน'
+              ? 'อัตราค่าคอมมิชชันของคอร์สในรอบนี้ถูกล็อกและบันทึก Audit Log แล้ว'
+              : 'ตรวจยอดขาย กำหนด Tier และล็อกอัตราของคอร์สในรอบเดือน'
           }}
         </p>
       </header>
-      <div v-if="!closedSuccessfully" class="closing-month-selector">
-        <FilterDropdown
-          v-model="selectedMonth"
-          :options="monthOptions"
-          :default-value="selectedMonth"
-          :default-label="periodLabel"
-          label="เลือกรอบคำนวณ"
-          hide-default-option
-          :clear-on-reselect="false"
-        />
-      </div>
       <CommissionTabs active="closing" />
-      <section v-if="branchClosing?.status === 'CLOSED' && rows.length === 0" class="commission-card reopen-panel" aria-label="เปิดรอบสาขาที่ไม่มีรายการรายบุคคล">
-        <h2>เปิดรอบสาขาอีกครั้ง</h2>
-        <p>รอบนี้ปิดแล้วและไม่มีรายการรายบุคคล หากต้องการเปิดรอบอีกครั้ง กรุณาระบุเหตุผล</p>
-        <label for="branch-reopen-reason">เหตุผลที่เปิดรอบอีกครั้ง<textarea id="branch-reopen-reason" v-model="reopenReason" maxlength="255" rows="2" /></label>
-        <button class="commission-secondary" type="button" :disabled="isSaving || !reopenReason.trim()" @click="reopenBranch">
-          เปิดรอบสาขาอีกครั้ง
-        </button>
+      <p v-if="errorMessage && !reopenTarget" class="reopen-error" role="alert">
+        {{ errorMessage }}
+      </p>
+      <section class="commission-card commission-table-wrap">
+        <table class="commission-table">
+          <thead>
+            <tr>
+              <th>ผู้ขาย</th>
+              <th>ยอดขาย</th>
+              <th>อัตรา</th>
+              <th>สถานะ</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in visible" :key="row.id">
+              <td>{{ row.staff }}</td>
+              <td>{{ currency(row.sales) }}</td>
+              <td>{{ row.rate }}%</td>
+              <td>
+                {{
+                  row.status === 'Finalized'
+                    ? 'ปิดรอบแล้ว (จ่ายแล้ว)'
+                    : row.status === 'Closed'
+                      ? 'ปิดรอบแล้ว'
+                      : 'รอปิดรอบ'
+                }}
+                <small v-if="row.reopenReason" class="reopen-reason"
+                  >Reopen ล่าสุด: {{ row.reopenReason }}</small
+                >
+              </td>
+              <td>
+                <button
+                  v-if="row.status === 'Closed'"
+                  class="reopen-button"
+                  type="button"
+                  @click="reopenTarget = row"
+                >
+                  Reopen
+                </button>
+              </td>
+            </tr>
+            <tr v-if="visible.length === 0">
+              <td colspan="5">ไม่พบข้อมูลตามตัวกรอง</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
-      <section class="commission-card payment-panel" aria-label="งวดจ่ายค่าตอบแทน">
-        <header class="payment-panel-heading">
-        <h2>งวดจ่ายค่าตอบแทน · {{ fullMonthLabel }}</h2>
-        <span class="payment-round-status" role="status">{{ branchClosing?.status === 'CLOSED' ? 'ปิดรอบแล้ว' : branchClosing?.status === 'OPEN' ? 'รอบยังเปิดอยู่' : branchClosing?.status ?? 'กำลังโหลด' }}</span>
-        </header>
-        <p class="payment-panel-description">คำนวณงวดจ่ายหลังปิดรอบ จากนั้นตรวจสอบยอดรายบุคคลก่อนปิดงวดจ่ายทั้งสาขา</p>
-        <div class="payment-panel-actions">
-        <button class="commission-secondary" type="button" :disabled="paymentBusy || branchClosing?.status !== 'CLOSED'" @click="preparePayments">{{ paymentBusy ? 'กำลังดำเนินการ…' : 'คำนวณงวดจ่าย' }}</button>
-        <button class="commission-primary" type="button" :disabled="paymentBusy || branchClosing?.status !== 'CLOSED' || !canClosePaymentBatch(paymentRows)" @click="closePaymentMonth">ปิดงวดจ่ายทั้งสาขา</button>
-        </div>
-        <p v-if="paymentError" role="alert">{{ paymentError }}</p>
-        <p v-if="!paymentRows.length" class="payment-empty" role="status">ยังไม่มีงวดจ่ายสำหรับสาขาและเดือนนี้</p>
-        <article v-for="row in paymentRows" :key="row.id" class="payment-row">
-          <b>{{ row.staffName }}</b>
-          <span>สถานะ {{ row.status }}</span>
-          <span>ยอดสุทธิ {{ row.net == null ? '—' : currency(row.net) }}</span>
-          <span>ครั้งรอปิด {{ row.pendingSessions == null ? '—' : row.pendingSessions }}</span>
-          <template v-if="row.status === 'CLOSED'">
-            <label>วันที่จ่าย<input v-model="paymentForms[row.id]!.paidDate" type="date" :max="clinicToday()" /></label>
-            <label>เลขอ้างอิง<input v-model="paymentForms[row.id]!.reference" maxlength="120" /></label>
-            <button class="commission-primary" type="button" :disabled="paymentBusy || !paymentForms[row.id]?.paidDate || !paymentForms[row.id]?.reference.trim()" @click="payStaff(row)">บันทึกว่าจ่ายแล้ว</button>
-            <button class="commission-secondary" type="button" :disabled="paymentBusy" @click="reopenPayment(row)">เปิดงวดรายบุคคล</button>
-          </template>
-        </article>
-      </section>
-      <p v-if="errorMessage" class="state-card error" role="alert">{{ errorMessage }}</p>
       <section v-if="closedSuccessfully" class="closed-success commission-card">
         <i>✓</i>
         <h2>ปิดรอบ{{ fullMonthLabel }} เรียบร้อย</h2>
-        <p>{{ schemeLabel }} · บันทึกรอบและล็อกอัตราสำเร็จ</p>
+        <p>อัตราตาม Tier ถูกล็อกกับคอร์สในรอบเดือนแล้ว</p>
         <dl>
           <div>
             <dt>ยอดฐานที่ล็อก</dt>
-            <dd>{{ currency(totalBase) }}</dd>
+            <dd>{{ currency(totalSales) }}</dd>
           </div>
           <div>
-            <dt>ยอดค่าคอมมิชชัน</dt>
-            <dd>{{ currency(commissionPool) }}</dd>
+            <dt>Commission Pool</dt>
+            <dd>{{ currency(totalPool) }}</dd>
+          </div>
+          <div>
+            <dt>ผู้ดำเนินการ</dt>
+            <dd>Manager / Finance</dd>
           </div>
         </dl>
         <button class="commission-primary" @click="router.push('/staff/commission')">
@@ -523,181 +290,109 @@ function selectView(event: Event) {
       <template v-else>
         <section class="closing-summary" aria-label="สรุปรอบรายเดือน">
           <article>
-            <span>อัตราค่าคอมมิชชัน</span><b>{{ proposedRate }}</b>
-            <small v-if="hasBlockingIssues">แสดงอัตราเมื่อข้อมูลผ่านการตรวจ</small>
+            <span>รอบคำนวณ</span><b>{{ monthLabel }}</b>
           </article>
           <article>
-            <span>สถานะการปิดรอบ</span><b>{{ periodStatus }}</b>
-            <small v-if="!validationLoading && hasBlockingIssues && periodStatus === 'ยังไม่ปิดรอบ'"
-              >ยังปิดรอบไม่ได้ · ดูผลตรวจด้านล่าง</small
-            >
+            <span>ยอดขายรวม</span><b>{{ currency(totalSales) }}</b>
+          </article>
+          <article>
+            <span>รอปิดรอบ</span><b>{{ openCount }}</b>
+          </article>
+          <article>
+            <span>สถานะเดือน</span><b>{{ openCount ? 'รอปิดรอบ' : 'ปิดรอบแล้ว' }}</b>
           </article>
         </section>
         <section class="closing-workspace">
           <article class="commission-card calculation">
-            <div class="workspace-heading">
-              <div>
-                <span class="eyebrow">ขั้นตอนที่ 1</span>
-                <h2>ตรวจสอบยอดสำหรับปิดรอบ</h2>
-                <p class="calculation-caption">ข้อมูลสรุปที่จะใช้ล็อกอัตราค่าคอมมิชชันของรอบนี้</p>
+            <h2>รายละเอียดรอบคำนวณ</h2>
+            <div class="calculation-period">
+              <span>รอบคำนวณ</span>
+              <div class="calculation-period-control">
+                <FilterDropdown
+                  v-model="selectedMonth"
+                  :options="monthOptions"
+                  :default-value="selectedMonth"
+                  :default-label="fullMonthLabel"
+                  label="เลือกรอบคำนวณ"
+                  hide-default-option
+                  :clear-on-reselect="false"
+                /><small>ช่วงวันที่ {{ periodLabel }}</small>
               </div>
             </div>
-            <div class="period-cards">
-              <div class="period-card">
-                <span>รอบคำนวณ</span><b>{{ periodLabel }}</b>
-              </div>
-              <div class="period-card scheme-card">
-                <span>กฎค่าคอมมิชชัน</span><b>{{ schemePeriodLabel }}</b>
-              </div>
+            <div>
+              <span>ยอดขายคอร์สรวม</span><b>{{ currency(totalSales) }}</b>
             </div>
-            <div class="calculation-breakdown">
-              <div><span>ยอดขายคอร์สรวมก่อนส่วนลด</span><b>—</b></div>
-              <div><span>ส่วนลดรายรายการ</span><b>—</b></div>
-              <div class="base-total">
-                <span>ฐานคำนวณค่าคอมมิชชัน</span>
-                <b>{{ validationLoading || validationError ? '—' : currency(totalBase) }}</b>
-              </div>
+            <div><span>ส่วนลดรายการ</span><b>รวมในฐานคำนวณสุทธิ</b></div>
+            <div>
+              <span>ฐานคำนวณ Tier</span><b>{{ currency(totalSales) }}</b>
             </div>
-            <p class="data-note">ยอดก่อนส่วนลดและส่วนลดรายรายการจะแสดงเมื่อรายงานส่งข้อมูลครบ</p>
-            <div class="pool" aria-label="ยอดค่าคอมมิชชันที่จะสร้าง">
-              <span>
-                <small>ยอดค่าคอมมิชชันที่จะสร้าง</small>
-                <b>{{
-                  validationLoading || validationError || hasBlockingIssues
-                    ? 'รอตรวจสอบข้อมูล'
-                    : currency(commissionPool)
-                }}</b>
-              </span>
-              <em>คำนวณตามช่วงยอดขายของแต่ละบุคคล</em>
+            <div class="pool">
+              <span>Commission Pool ที่จะสร้าง</span><b>{{ currency(totalPool) }}</b>
             </div>
+            <aside>เมื่อปิดรอบ อัตราที่คำนวณแล้วจะถูกล็อกตาม Course ID และแก้ไขไม่ได้โดยตรง</aside>
           </article>
           <article class="commission-card checklist">
-            <div class="workspace-heading checklist-heading">
-              <div>
-                <span class="eyebrow">ขั้นตอนที่ 2</span>
-                <h2>ตรวจสอบความพร้อม</h2>
-              </div>
-              <span
-                class="readiness-badge"
-                :class="{ ready: !validationLoading && !hasBlockingIssues }"
-              >
-                {{
-                  validationLoading
-                    ? 'กำลังตรวจ'
-                    : hasBlockingIssues
-                      ? 'ต้องตรวจสอบ'
-                      : 'พร้อมปิดรอบ'
-                }}
-              </span>
-            </div>
-            <p class="checklist-summary">
-              ผ่าน <b>{{ passedChecks }}</b> จาก 4 รายการ
-              <span v-if="hasBlockingIssues"> · แก้รายการที่แจ้งก่อนดำเนินการ</span>
-            </p>
-            <p v-if="validationError" class="validation-error" role="alert">
-              {{ validationError }}
-            </p>
-            <div v-if="validationLoading" class="check-row checking">กำลังตรวจสอบข้อมูลรอบนี้…</div>
-            <ul v-else class="check-list">
-              <li
+            <h2>ตรวจสอบก่อนปิดรอบ</h2>
+            <p v-if="validationLoading" class="checking">… กำลังตรวจสอบข้อมูลรอบนี้</p>
+            <template v-else>
+              <p
                 v-for="check in closeChecks"
                 :key="check.key"
-                :class="{ issue: check.result === false, unknown: check.result === null }"
+                :class="{ warn: check.result === false, unknown: check.result === null }"
               >
-                <span class="check-icon">{{
-                  check.result === true ? '✓' : check.result === false ? '!' : '?'
-                }}</span>
-                <span>{{ check.label }}</span>
-                <small>{{
-                  check.result === true
-                    ? 'ผ่าน'
-                    : check.result === false
-                      ? 'ต้องแก้ไข'
-                      : 'ตรวจไม่ได้'
-                }}</small>
-              </li>
-            </ul>
-            <div v-if="tierIssue" class="tier-recovery" role="status">
-              <p>{{ tierIssue }}</p>
-              <div>
-                <RouterLink to="/staff/settings/commission-tiers">แก้กฎค่าคอมมิชชัน</RouterLink>
-                <button
-                  type="button"
-                  :disabled="validationLoading"
-                  @click="validatePeriod(requestId, month)"
-                >
-                  ตรวจอีกครั้ง
-                </button>
-              </div>
-            </div>
-            <button
-              v-else-if="validationError"
-              type="button"
-              class="retry-button"
-              :disabled="validationLoading"
-              @click="load"
-            >
-              โหลดข้อมูลอีกครั้ง
-            </button>
-            <div class="closing-actions">
-              <p
-                v-if="!validationLoading && !closingsLoading && hasBlockingIssues"
-                class="closing-blocker"
-                role="status"
-              >
-                ยังปิดรอบไม่ได้ · แก้รายการที่ไม่ผ่านด้านบนแล้วตรวจอีกครั้ง
+                {{ check.result === true ? '✓' : check.result === false ? '!' : '?' }}
+                {{ check.label }}
+                <small v-if="check.result === null">ยังตรวจสอบไม่ได้</small>
               </p>
-              <button
-                v-if="branchClosing?.status !== 'CLOSED'"
-                class="commission-primary"
-                :disabled="
-                  validationLoading || closingsLoading || !!errorMessage || hasBlockingIssues
-                "
-                @click="openConfirm"
-              >
-                ปิดรอบ{{ fullMonthLabel }}
-              </button>
-            </div>
+            </template>
+            <button
+              class="commission-primary"
+              :disabled="validationLoading || hasBlockingIssues || openCount === 0"
+              @click="isConfirming = true"
+            >
+              ยืนยันปิดรอบ
+            </button>
           </article>
         </section>
       </template>
     </main>
-    <div v-if="isConfirming" class="modal-backdrop" role="presentation" @click.self="closeConfirm">
-      <section
-        ref="dialogRef"
-        class="confirm-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="close-title"
-        aria-describedby="close-description"
-        @keydown="onDialogKeydown"
-      >
-        <h2 id="close-title">ยืนยันปิดรอบ{{ fullMonthLabel }}</h2>
-        <p id="close-description">
-          ตรวจสอบยอดและรายการก่อนปิดรอบ เมื่อยืนยันแล้วระบบจะล็อกอัตราค่าคอมมิชชันของรอบนี้
+    <div
+      v-if="reopenTarget"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="reopenTarget = null"
+    >
+      <section class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="reopen-title">
+        <h2 id="reopen-title">Reopen รอบของ {{ reopenTarget.staff }}?</h2>
+        <p>
+          อัตราที่ล็อกไว้จะถูกปลดและค่าคอมมิชชันที่จัดสรรไว้จะถูกกลับรายการ ปิดรอบใหม่เพื่อคำนวณ
+          Tier ตามยอดขายล่าสุด ทำได้ก่อนจ่ายเท่านั้น
         </p>
-        <dl class="confirm-facts">
-          <div>
-            <dt>รายการขาย</dt>
-            <dd>{{ reportCount }} รายการ</dd>
-          </div>
-          <div>
-            <dt>ฐานคำนวณ</dt>
-            <dd>{{ currency(totalBase) }}</dd>
-          </div>
-          <div>
-            <dt>ค่าคอมมิชชันรวม</dt>
-            <dd>{{ currency(commissionPool) }}</dd>
-          </div>
-        </dl>
-        <div class="confirm-actions">
-          <button
-            ref="cancelRef"
-            class="cancel"
-            type="button"
-            :disabled="isSaving"
-            @click="closeConfirm"
-          >
+        <input
+          v-model="reopenReason"
+          aria-label="เหตุผลที่ Reopen"
+          placeholder="เหตุผลที่ Reopen"
+        />
+        <p v-if="errorMessage" class="reopen-error" role="alert">{{ errorMessage }}</p>
+        <div>
+          <button class="cancel" type="button" :disabled="isSaving" @click="reopenTarget = null">
+            ยกเลิก</button
+          ><button class="confirm" type="button" :disabled="isSaving" @click="reopen">
+            ยืนยัน Reopen
+          </button>
+        </div>
+      </section>
+    </div>
+    <div
+      v-if="isConfirming"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="isConfirming = false"
+    >
+      <section class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="close-title">
+        <h2 id="close-title">ต้องการปิดรอบเดือนหรือไม่?</h2>
+        <div>
+          <button class="cancel" type="button" :disabled="isSaving" @click="isConfirming = false">
             ยกเลิก</button
           ><button class="confirm" type="button" :disabled="isSaving" @click="confirmClosing">
             {{ isSaving ? 'กำลังบันทึก...' : 'ยืนยันปิดรอบ' }}
@@ -711,46 +406,6 @@ function selectView(event: Event) {
 <style scoped>
 @import '../../staff/styles/staff.css';
 @import '../styles/commission-manager.css';
-.payment-panel,
-.reopen-panel {
-  padding: 24px;
-  margin: 24px 0;
-}
-.payment-panel-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.payment-panel h2,
-.reopen-panel h2 { margin: 0; }
-.payment-panel-description,
-.reopen-panel > p { color: #6c8589; margin: 10px 0 20px; }
-.payment-round-status {
-  padding: 7px 14px;
-  border-radius: 8px;
-  background: #e8f4f1;
-  color: #167d79;
-  font-weight: 600;
-}
-.payment-panel-actions { display: flex; flex-wrap: wrap; gap: 12px; }
-.payment-panel button,
-.reopen-panel button { min-height: 42px; cursor: pointer; }
-.payment-panel button:disabled,
-.reopen-panel button:disabled { opacity: .45; cursor: not-allowed; }
-.payment-empty { margin: 20px 0 0; padding: 28px 16px; text-align: center; color: #6c8589; background: #f5f9f8; border-radius: 8px; }
-.payment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 20px 0; border-top: 1px solid #e1e9e8; margin-top: 20px; }
-.payment-row label,
-.reopen-panel label { display: flex; flex-direction: column; gap: 8px; color: #526b70; }
-.reopen-panel label { max-width: 640px; margin-bottom: 16px; }
-.payment-row input,
-.reopen-panel textarea { box-sizing: border-box; max-width: 100%; padding: 10px 12px; border: 1px solid #bfd2d1; border-radius: 8px; font: inherit; background: white; }
-.reopen-panel textarea { width: 100%; resize: vertical; }
-@media (max-width: 600px) {
-  .payment-panel, .reopen-panel { padding: 18px; }
-  .payment-panel-actions > button, .payment-row label { width: 100%; }
-}
 .closing-page {
   min-height: 100vh;
   background: #f9f4ee;
@@ -759,64 +414,6 @@ function selectView(event: Event) {
   width: min(1540px, calc(100% - 10vw));
   margin: 0 auto;
   padding: 54px 0 64px;
-}
-.closing-month-selector {
-  display: flex;
-  justify-content: flex-end;
-  margin: -60px 0 24px;
-}
-.closing-month-selector :deep(.filter-dropdown) {
-  width: 280px;
-}
-.calculation .period-cards {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
-  padding: 16px 0;
-}
-.period-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid #dce5e1;
-  border-radius: 9px;
-  min-width: 0;
-}
-.period-card span {
-  color: #6d7d78;
-  font-size: 13px;
-}
-.period-card b {
-  font-size: 16px;
-  font-weight: 400;
-}
-.scheme-card {
-  background: #e3f4ed;
-  border-color: #e3f4ed;
-}
-.closing-blocker {
-  margin: 0 0 10px;
-  color: #805318;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-@media (max-width: 900px) {
-  .closing-month-selector {
-    margin: 16px 0 20px;
-  }
-}
-@media (max-width: 620px) {
-  .closing-summary {
-    grid-template-columns: 1fr;
-  }
-  .calculation .period-cards {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  .closing-month-selector :deep(.filter-dropdown) {
-    width: 100%;
-  }
 }
 .closing-period-picker {
   display: flex;
@@ -828,7 +425,7 @@ function selectView(event: Event) {
   display: grid;
   width: min(320px, 100%);
   gap: 7px;
-  color: var(--color-muted);
+  color: #56665d;
   font-size: 0.9rem;
 }
 .closing-period-picker :deep(.date-field) {
@@ -870,12 +467,13 @@ function selectView(event: Event) {
   border-radius: 999px;
 }
 .closing-summary {
-  gap: 20px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   margin-bottom: 42px;
   overflow: hidden;
-  background: transparent;
+  border-radius: 22px;
+  background: #fffafa;
+  box-shadow: 0 4px 18px #00000014;
 }
 .closing-workspace {
   display: grid;
@@ -884,44 +482,10 @@ function selectView(event: Event) {
   margin-top: 24px;
 }
 .closing-workspace article {
-  padding: 28px;
+  padding: 24px;
 }
 .closing-workspace h2 {
-  margin: 3px 0 0;
-  font-size: 1.25rem;
-}
-.workspace-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-.eyebrow {
-  display: block;
-  color: #16877f;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.period-badge,
-.readiness-badge {
-  flex: none;
-  padding: 7px 10px;
-  border-radius: 999px;
-  color: #647a63;
-  background: #f0f5f1;
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.readiness-badge {
-  color: #9a6517;
-  background: #fff1c7;
-}
-.readiness-badge.ready {
-  color: #16875b;
-  background: #def3e7;
+  margin: 0 0 18px;
 }
 .calculation > div {
   display: flex;
@@ -929,186 +493,34 @@ function selectView(event: Event) {
   padding: 14px 0;
 }
 .calculation .pool {
-  align-items: center;
-  color: #135f5a;
+  color: #16877f;
+  font-weight: 700;
 }
 .calculation aside {
-  margin-top: 18px;
-}
-.calculation-caption {
-  margin: 6px 0 0;
-  color: #6d7d78;
-  font-size: 14px;
-}
-.calculation .calculation-breakdown {
-  display: block;
-  padding: 12px 18px;
-  border: 1px solid #dce5e1;
-  border-radius: 10px;
-  background: #fbfcfb;
-}
-.calculation-breakdown > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 0;
-}
-.calculation-breakdown .base-total {
-  border-top: 1px solid #dce5e1;
-}
-.calculation .pool {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 16px;
-  padding: 16px 18px;
-  border-radius: 12px;
-  background: #dff2eb;
-}
-.pool small {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.pool b {
-  font-size: 1.4rem;
-}
-.pool em {
-  color: #54716b;
-  font-size: 0.8rem;
-  font-style: normal;
-  text-align: right;
-}
-.data-note {
-  margin: 10px 0 0;
-  color: #7a8782;
-  font-size: 0.78rem;
-}
-.closing-summary small {
-  color: #6d7d78;
-  font-size: 13px;
+  margin-top: 24px;
+  padding: 18px;
+  border-radius: 9px;
+  background: #fff1c7;
 }
 .checklist {
-  display: block;
-}
-.checklist-summary {
-  margin: 16px 0 12px;
-  color: #687a74;
-  font-size: 0.86rem;
-}
-.checklist-summary b {
-  color: var(--color-ink);
-}
-.check-list {
-  display: grid;
-  gap: 8px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-.check-list li,
-.check-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid #d7eadf;
-  border-radius: 9px;
-  color: #35584d;
-  background: #f3faf6;
-  font-size: 0.84rem;
-}
-.check-list li.issue {
-  border-color: #f2dda4;
-  color: #76551b;
-  background: #fff8e6;
-}
-.check-list li.unknown,
-.check-row.checking {
-  border-color: #e0e6e2;
-  color: #6b7d76;
-  background: #f6f8f7;
-}
-.check-icon {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border-radius: 50%;
-  color: #16875b;
-  background: #dff2e8;
-  font-size: 0.75rem;
-  font-weight: 800;
-}
-.issue .check-icon {
-  color: #9a6517;
-  background: #fff0c1;
-}
-.unknown .check-icon {
-  color: #6b7d76;
-  background: #e8ece9;
-}
-.check-list small {
-  color: inherit;
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.tier-recovery,
-.validation-error {
-  margin: 12px 0 0;
-  padding: 12px 14px;
-  border: 1px solid #e9d6a4;
-  border-radius: 10px;
-  color: #634b1d;
-  background: #fff8e9;
-  font-size: 0.85rem;
-}
-.tier-recovery p {
-  margin: 0 0 10px;
-}
-.tier-recovery div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.tier-recovery a,
-.tier-recovery button,
-.retry-button {
-  padding: 8px 11px;
-  border: 1px solid #9cbfbb;
-  border-radius: 8px;
-  color: #155f5c;
-  background: #fff;
-  font: inherit;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-}
-.retry-button {
-  margin-top: 12px;
-}
-.tier-recovery a:hover,
-.tier-recovery button:hover,
-.retry-button:hover {
-  background: #e7f4f1;
-}
-.tier-recovery :is(a, button):focus-visible,
-.retry-button:focus-visible {
-  outline: 3px solid #16877f;
-  outline-offset: 2px;
-}
-.closing-actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  margin-top: 20px;
+  gap: 10px;
 }
-.closing-actions button {
-  min-height: 46px;
-  min-width: 210px;
+.checklist p {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #def3e7;
+}
+.checklist p.warn {
+  background: #fff1c7;
+}
+.checklist button {
+  margin-top: 0;
+}
+.checklist p.warn + button {
+  margin-top: 6px;
 }
 .closed-success {
   width: min(760px, 100%);
@@ -1151,6 +563,16 @@ function selectView(event: Event) {
   width: 280px;
   max-width: 100%;
 }
+.checklist p.unknown,
+.checklist p.checking {
+  background: #eef1ef;
+  color: #667a72;
+}
+.checklist p small {
+  display: block;
+  margin-top: 4px;
+  color: #7c8983;
+}
 .checklist .commission-primary:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -1159,15 +581,13 @@ function selectView(event: Event) {
   display: grid;
   gap: 5px;
   padding: 25px 34px;
-  border: 1px solid #dce5e1;
-  border-radius: 12px;
-  background: #fff;
+  border-right: 1px solid #dde6df;
 }
 .closing-summary article:last-child {
   border-right: 0;
 }
 .closing-summary span {
-  color: var(--color-muted);
+  color: #56665d;
 }
 .closing-summary b {
   color: #1f2937;
@@ -1218,7 +638,7 @@ function selectView(event: Event) {
 .search-field svg {
   width: 23px;
   height: 23px;
-  stroke: var(--color-muted);
+  stroke: #56665d;
   stroke-width: 2;
   fill: none;
 }
@@ -1228,7 +648,7 @@ function selectView(event: Event) {
   min-width: 0;
   border: 0;
   outline: 0;
-  color: var(--color-ink);
+  color: #25372e;
   background: transparent;
   font: inherit;
 }
@@ -1242,7 +662,7 @@ function selectView(event: Event) {
   min-height: 54px;
   border: 1px solid #173d47;
   border-radius: 9px;
-  color: var(--color-ink);
+  color: #25372e;
 }
 .month-field :deep(.calendar) {
   z-index: 40;
@@ -1268,7 +688,7 @@ function selectView(event: Event) {
 .close-one {
   padding: 10px 19px;
   border-radius: 20px;
-  background: var(--color-primary);
+  background: #1e807c;
 }
 .close-all:disabled,
 .confirm:disabled {
@@ -1298,7 +718,7 @@ table {
 th {
   padding: 20px 28px;
   color: #fff;
-  background: var(--color-primary);
+  background: #1e807c;
   font-weight: 600;
   text-align: left;
 }
@@ -1314,7 +734,7 @@ td {
   font-size: 0.95rem;
 }
 .status.open {
-  border: 1px solid var(--color-primary);
+  border: 1px solid #1e807c;
   color: #647a63;
   background: #b9ef9a;
 }
@@ -1333,7 +753,7 @@ td {
 }
 .empty-row {
   padding: 44px;
-  color: var(--color-muted);
+  color: #56665d;
   text-align: center;
 }
 .modal-backdrop {
@@ -1358,52 +778,19 @@ td {
 }
 .confirm-modal h2 {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 20px;
   text-align: center;
 }
-.confirm-actions {
+.confirm-modal div {
   display: flex;
   gap: 10px;
   margin-top: 18px;
 }
-.confirm-modal p {
-  margin: 12px 0 0;
-  color: #536a63;
-  line-height: 1.5;
-  text-align: center;
-}
-.confirm-facts {
-  margin: 18px 0 0;
-  padding: 8px 14px;
-  border-radius: 10px;
-  background: #eef6f3;
-}
-.confirm-facts div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 0;
-}
-.confirm-facts div + div {
-  border-top: 1px solid #d9e6e1;
-}
-.confirm-facts dt {
-  color: #536a63;
-}
-.confirm-facts dd {
-  margin: 0;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.confirm-modal :is(.cancel, .confirm):focus-visible {
-  outline: 3px solid #16877f;
-  outline-offset: 2px;
-}
 .cancel {
   flex: 1;
   min-height: 46px;
-  border: 2px solid var(--color-primary);
+  border: 2px solid #1e807c;
   border-radius: 12px;
   color: #1f2937;
   background: #faf6f0;
@@ -1477,23 +864,10 @@ td {
   .confirm-modal {
     padding: 27px 23px;
   }
-  .confirm-actions {
+  .confirm-modal div {
     flex-direction: column-reverse;
   }
   .confirm-modal button {
-    width: 100%;
-  }
-  .workspace-heading,
-  .pool {
-    flex-direction: column;
-  }
-  .pool em {
-    text-align: left;
-  }
-  .closing-actions {
-    display: block;
-  }
-  .closing-actions button {
     width: 100%;
   }
 }
@@ -1520,5 +894,31 @@ td {
   .table-scroll {
     grid-column: 1 / -1;
   }
+}
+.reopen-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff1ef;
+  color: #b42318;
+}
+.reopen-button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #d9e1dc;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.confirm-modal input {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid #b7cecc;
+  border-radius: 9px;
+  font: inherit;
 }
 </style>

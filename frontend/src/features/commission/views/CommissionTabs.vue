@@ -1,9 +1,16 @@
 <script setup lang="ts">
-defineProps<{ active: 'overview' | 'closing' | 'tiers' | 'compensation' | 'adjustments' }>()
+defineProps<{
+  active:
+    'overview' | 'transactions' | 'closing' | 'payments' | 'adjustments' | 'tiers' | 'compensation'
+}>()
 const tabs = [
   { key: 'overview', label: 'ภาพรวม', to: '/staff/commission' },
+  { key: 'transactions', label: 'รายการขายและรักษา', to: '/staff/commission/transactions' },
   { key: 'closing', label: 'ปิดรอบรายเดือน', to: '/staff/commission/closing' },
-  { key: 'adjustments', label: 'รายการปรับปรุงค่าตอบแทน', to: '/staff/commission/adjustments' },
+  { key: 'payments', label: 'งวดจ่าย', to: '/staff/commission/payments' },
+  { key: 'adjustments', label: 'ใบปรับยอด', to: '/staff/commission/adjustments' },
+  { key: 'tiers', label: 'ตั้งค่า Tier', to: '/staff/commission/tiers' },
+  { key: 'compensation', label: 'ค่ารักษาแทน', to: '/staff/commission/compensation-settings' },
 ] as const
 </script>
 <template>
@@ -20,26 +27,23 @@ const tabs = [
 <style scoped>
 .commission-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 12px;
-  margin: 20px 0 28px;
-  overflow: hidden;
+  grid-template-columns: repeat(7, minmax(125px, 170px));
+  gap: 10px;
+  margin: 18px 0 26px;
+  overflow-x: auto;
 }
 .commission-tabs a {
-  min-width: 0;
-  min-height: 48px;
-  padding: 0 18px;
+  min-height: 42px;
+  padding: 0 14px;
   display: flex;
   align-items: center;
   border: 1px solid #dde6e1;
-  border-radius: 10px;
+  border-radius: 9px;
   background: #fff;
   color: #25372f;
-  font-size: 1rem;
+  font-size: 0.94rem;
   font-weight: 700;
   text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .commission-tabs a.active {
@@ -49,8 +53,7 @@ const tabs = [
 }
 @media (max-width: 720px) {
   .commission-tabs {
-    grid-template-columns: 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-bottom: 20px;
   }
   .commission-tabs a {

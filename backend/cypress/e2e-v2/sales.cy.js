@@ -1,41 +1,14 @@
-let bookingSequence = 0
-
 function sale(fx, patient, overrides = {}) {
-  const hour = 9 + bookingSequence++
-  const startAt =
-      `${fx.tomorrow}T${String(hour).padStart(2, '0')}:00:00+07:00`
-  const endAt =
-      `${fx.tomorrow}T${String(hour + 1).padStart(2, '0')}:00:00+07:00`
-
-  return cy.api('POST', '/api/appointments', {
-    patientId: patient.id,
-    branchCode: '01',
-    therapistId: fx.therapistId,
-    startAt, endAt,
-  }).then(({ status, body: appointment }) => {
-    expect(status).to.equal(201)
-    expect(appointment.status).to.equal('UNCONFIRMED')
-
-    return cy.api('POST', '/api/payments', {
-      patientId: patient.id,
-      branchCode: '01',
-      appointmentId: appointment.id,
-      treatingStaffId: fx.therapistId,
-      paymentLabelCode: 'FULL',
-      items: [{type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1,}],
-      payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
-      ...overrides,
-    })
+  return cy.api('POST', '/api/payments', {
+    patientId: patient.id, branchCode: '01',
+    items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
+    payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+    ...overrides,
   })
 }
 
 describe('v2 sales and payments', () => {
-  beforeEach(() => {
-    bookingSequence = 0
-    cy.configureBookingWindows()
-  })
-
-  it('sells a single visit paid by bank transfer and returns an REYYMMNNNN receipt number', function () {
+  it('sells a single visit paid in cash and returns an REYYMMNNNN receipt number', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient).then(({ status, body }) => {
         expect(status).to.equal(201)
@@ -61,49 +34,18 @@ describe('v2 sales and payments', () => {
 
   it('never hands the same receipt number to two parallel sales', function () {
     cy.registerPatient().then((patient) => {
-      const bookAt = (hour) => cy.api('POST', '/api/appointments', {
-        patientId: patient.id,
-        branchCode: '01',
-        therapistId: this.fixtures.therapistId,
-        startAt: `${this.fixtures.tomorrow}T${hour}:00:00+07:00`,
-        endAt: new Date(
-            new Date(`${this.fixtures.tomorrow}T${hour}:00:00+07:00`)
-                .getTime() + 60 * 60 * 1000
-        ).toISOString(),
-      }).then(({ status, body }) => {
-        expect(status).to.equal(201)
-        return body.id
-      })
-
-      bookAt('09').then((firstId) => {
-        bookAt('10').then((secondId) => {
-          const request = (appointmentId) => ({
-            method: 'POST',
-            url: '/api/payments',
-            body: {
-              patientId: patient.id,
-              branchCode: '01',
-              appointmentId,
-              treatingStaffId: this.fixtures.therapistId,
-              paymentLabelCode: 'FULL',
-              items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
-              payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
-            },
-          })
-
-          cy.parallelApi([
-            request(firstId),
-            request(secondId),
-          ]).then((responses) => {
-            expect(
-                responses.map((response) => response.status),
-                JSON.stringify(responses.map((response) => response.body))
-            ).to.deep.equal([201, 201])
-
-            expect(responses[0].body.receiptNo)
-                .to.not.equal(responses[1].body.receiptNo)
-          })
-        })
+      const request = {
+        method: 'POST', url: '/api/payments',
+        body: {
+          patientId: patient.id, branchCode: '01',
+          items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
+          payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+        },
+      }
+      cy.parallelApi([request, request]).then((responses) => {
+        const statuses = responses.map((response) => response.status)
+        expect(statuses, JSON.stringify(responses.map((response) => response.body))).to.deep.equal([201, 201])
+        expect(responses[0].body.receiptNo).to.not.equal(responses[1].body.receiptNo)
       })
     })
   })
@@ -113,7 +55,7 @@ describe('v2 sales and payments', () => {
       sale(this.fixtures, patient, {
         items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,
                   discountType: 'PERCENT', discountValue: 10 }],
-        payments: [{ paymentMethodCode: 'BankTransfer', amount: 720 }],
+        payments: [{ paymentMethodCode: 'Cash', amount: 720 }],
       }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.total)).to.equal(720)
@@ -154,7 +96,7 @@ describe('v2 sales and payments', () => {
           { type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 },
           { type: 'SERVICE', referenceId: this.fixtures.serviceId, quantity: 1 },
         ],
-        payments: [{ paymentMethodCode: 'BankTransfer', amount: 2000 }],
+        payments: [{ paymentMethodCode: 'Cash', amount: 2000 }],
       }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.total)).to.equal(2000)
@@ -175,7 +117,7 @@ describe('v2 sales and payments', () => {
           { type: 'SERVICE', referenceId: this.fixtures.serviceId, quantity: 1 },
         ],
         billDiscountType: 'BAHT', billDiscountValue: 100,
-        payments: [{ paymentMethodCode: 'BankTransfer', amount: 1900 }],
+        payments: [{ paymentMethodCode: 'Cash', amount: 1900 }],
       }).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.total)).to.equal(1900)
@@ -183,45 +125,26 @@ describe('v2 sales and payments', () => {
     })
   })
 
-  it('rejects multiple payment records on one receipt', function () {
-    cy.registerPatient().then(patient => {
-      cy.api('GET', '/__cypress/payment-policy/counts').then(({ body: before }) => {
-        sale(this.fixtures, patient, {
-          paymentLabelCode: 'FULL',
-          payments: [
-            { paymentMethodCode: 'PromptPay', amount: 300 },
-            { paymentMethodCode: 'PromptPay', amount: 500 },
-          ],
-        }).its('status').should('equal', 400)
-
-        cy.api('GET', '/__cypress/payment-policy/counts').its('body').should('deep.equal', before)
-      })
-    })
-  })
-
-  it('rejects a service sale without an appointment', function () {
+  it('preserves multiple payment records with the same method on one receipt', function () {
     cy.registerPatient().then((patient) => {
-      cy.api('POST', '/api/payments', {
-        patientId: patient.id,
-        branchCode: '01',
-        treatingStaffId: this.fixtures.therapistId,
-        paymentLabelCode: 'FULL',
-        items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
-        payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+      sale(this.fixtures, patient, {
+        payments: [{ paymentMethodCode: 'Cash', amount: 300 }, { paymentMethodCode: 'Cash', amount: 500 }],
       }).then(({ status, body }) => {
-        expect(status).to.equal(400)
-        expect(body.message).to.include('appointmentId')
+        expect(status).to.equal(201)
+        expect(Number(body.paid)).to.equal(800)
+        cy.api('GET', `/api/receipts/${body.id}`).then((detail) => {
+          expect(detail.status).to.equal(200)
+          expect(detail.body.payments).to.have.length(2)
+          expect(detail.body.items).to.have.length(1)
+        })
       })
-
-      cy.api('GET', '/api/appointments')
-          .its('body.totalItems').should('equal', 0)
     })
   })
 
   it('rejects an empty sale, an unknown patient and an unknown payment method', function () {
     cy.registerPatient().then((patient) => {
       sale(this.fixtures, patient, { items: [] }).its('status').should('equal', 400)
-      sale(this.fixtures, patient, { patientId: 999999 }).its('status').should('equal', 400)
+      sale(this.fixtures, { id: 999999 }).its('status').should('equal', 400)
       sale(this.fixtures, patient, { payments: [{ paymentMethodCode: 'Bitcoin', amount: 800 }] })
         .its('status').should('equal', 400)
     })

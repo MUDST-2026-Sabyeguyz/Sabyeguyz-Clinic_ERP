@@ -19,18 +19,10 @@
 
     <properties>
         <java.version>17</java.version>
-        <testcontainers.version>1.21.4</testcontainers.version>
         <start-class>com.sabyeguyz.clinicv2.ClinicV2Application</start-class>
-        <argLine></argLine>
-        <jacoco.version>0.8.13</jacoco.version>
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -72,21 +64,6 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -160,16 +137,15 @@
                         <artifactId>spring-boot-maven-plugin</artifactId>
                         <configuration>
                             <mainClass>com.sabyeguyz.clinicv2.ClinicV2Application</mainClass>
-
-                            <useTestClasspath>true</useTestClasspath>
                             <jvmArguments>-Xmx512m</jvmArguments>
+                            <useTestClasspath>true</useTestClasspath>
                             <classesDirectory>${project.build.testOutputDirectory}</classesDirectory>
                             <additionalClasspathElements>
                                 <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
                             </additionalClasspathElements>
                             <jmxPort>19001</jmxPort>
                             <wait>500</wait>
-                            <maxAttempts>360</maxAttempts>
+                            <maxAttempts>120</maxAttempts>
                             <arguments>
                                 <argument>--spring.profiles.active=v2,cypress-v2</argument>
                             </arguments>
@@ -196,28 +172,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco.version}</version>
-                <configuration>
-                    <append>true</append>
-                    <includes>
-                        <include>com/sabyeguyz/clinicv2/**</include>
-                    </includes>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>instrument-tests</id>
-                        <goals><goal>prepare-agent</goal></goals>
-                    </execution>
-                    <execution>
-                        <id>coverage-report</id>
-                        <phase>verify</phase>
-                        <goals><goal>report</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
