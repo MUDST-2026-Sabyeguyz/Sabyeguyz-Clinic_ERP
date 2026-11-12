@@ -2,6 +2,20 @@
 
 Monorepo: Vue frontend, Spring Boot backend, PostgreSQL database, and deployment configuration.
 
+## Submission and local Kubernetes (16 October 2026)
+
+See the [Thai Kubernetes runbook](deploy/k8s/README_TH.md) for a repeatable local deployment, login, test/coverage commands and troubleshooting. The [submission report](docs/testing/2026-10-16-Local-Kubernetes.md) records observed results. Code standards and quality gates are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+```powershell
+pwsh -File deploy/k8s/Start-Local.ps1
+pwsh -File deploy/k8s/Open-Local.ps1
+# Open http://localhost:18088
+# In another terminal:
+pwsh -File deploy/k8s/Test-Local.ps1 -TestPersistence
+```
+
+The [Kubernetes GitHub Actions pipeline](.github/workflows/kubernetes-ci.yml) defines standards, tests, coverage, image builds, kind deployment, persistent-data acceptance and production browser E2E. Local results and GitHub-hosted CI results are reported separately.
+
 ## Quick Start
 
 Requirements: Git and Docker with Docker Compose. No local Java, Maven, Node.js, or PostgreSQL installation is required.
@@ -84,4 +98,10 @@ Create `feat/<feature-name>` branches from `develop`, then open a pull request i
 
 ### Frontend tests
 
-Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. The GitHub Actions workflow starts the backend and Vite server before running the same Cypress command in Chrome.
+Use Node.js 24 as specified by `frontend/.nvmrc`. From `frontend/`, run `npm ci`, `npm run test:unit -- --run`, and `npm run build`. For E2E, first start PostgreSQL and backend from the repository root with `docker compose up --build -d postgres backend`; then run `npm run dev -- --host localhost` in one terminal and `npm run test:e2e -- --browser chrome` in another. Cypress tests exercise the login form against the real backend. Jenkins starts the backend and Vite server when running the corresponding browser checks.
+
+### Jenkins CI
+
+Jenkins is the primary CI runner. See the [Jenkins CI guide](jenkins-backup/JENKINS_CI_TH.md) for setup, branch monitoring, exact-commit replay, reports and GitHub status contexts. The CI dashboard uses http://localhost:8086/; the older backup Jenkins uses port 8085.
+
+The files under `.github/workflows/` remain the test definitions read from each selected commit. GitHub-hosted workflows are disabled separately in repository settings to avoid billing-blocked runs; their historical results are retained.
