@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.course;
 
-import com.sabyeguyz.clinic.appointment.Appointment;
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,7 +14,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import java.time.Instant;
+
+import com.sabyeguyz.clinic.appointment.Appointment;
 
 /**
  * รายการเดินบัญชีของคอร์ส — เขียนเพิ่มอย่างเดียว ห้ามแก้หรือลบ
@@ -50,7 +52,8 @@ public class CourseMovement {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    protected CourseMovement() {}
+    protected CourseMovement() {
+    }
 
     private CourseMovement(CoursePurchase coursePurchase, CourseMovementType type, int quantity,
                            String reason, Appointment appointment, CourseMovement reversesMovement) {
@@ -64,36 +67,89 @@ public class CourseMovement {
     }
 
     public static CourseMovement purchase(CoursePurchase purchase) {
-        return new CourseMovement(purchase, CourseMovementType.PURCHASE, purchase.totalSessions(),
-                "ซื้อคอร์ส " + purchase.getCourseCode(), null, null);
+        return new CourseMovement(
+                purchase,
+                CourseMovementType.PURCHASE,
+                purchase.totalSessions(),
+                "ซื้อคอร์ส " + purchase.getCourseCode(),
+                null,
+                null);
     }
 
     public static CourseMovement usage(CoursePurchase purchase, Appointment appointment, String reason) {
-        return new CourseMovement(purchase, CourseMovementType.USAGE, -1, reason, appointment, null);
+        return new CourseMovement(
+                purchase,
+                CourseMovementType.USAGE,
+                -1,
+                reason,
+                appointment,
+                null);
     }
 
     public static CourseMovement transfer(CoursePurchase purchase, CourseMovementType type, int quantity, String reason) {
         if (type != CourseMovementType.TRANSFER_IN && type != CourseMovementType.TRANSFER_OUT)
             throw new IllegalArgumentException("Invalid transfer movement type");
-        return new CourseMovement(purchase, type, quantity, reason, null, null);
+        return new CourseMovement(
+                purchase,
+                type,
+                quantity,
+                reason,
+                null,
+                null);
     }
 
     public static CourseMovement reversalOf(CourseMovement original, String reason) {
-        return new CourseMovement(original.getCoursePurchase(), CourseMovementType.REVERSAL,
-                -original.getQuantity(), reason, original.getAppointment(), original);
+        return new CourseMovement(
+                original.getCoursePurchase(),
+                CourseMovementType.REVERSAL,
+                -original.getQuantity(),
+                reason,
+                original.getAppointment(),
+                original);
     }
 
-    /** ใช้ตอนยกเลิกใบซื้อทั้งใบ: ล้างสิทธิ์คงเหลือให้เป็นศูนย์ */
+    /**
+     * ใช้ตอนยกเลิกใบซื้อทั้งใบ: ล้างสิทธิ์คงเหลือให้เป็นศูนย์
+     */
     public static CourseMovement cancellation(CoursePurchase purchase, int remaining, String reason) {
-        return new CourseMovement(purchase, CourseMovementType.REVERSAL, -remaining, reason, null, null);
+        return new CourseMovement(
+                purchase,
+                CourseMovementType.REVERSAL,
+                -remaining,
+                reason,
+                null,
+                null);
     }
 
-    public Long getId() { return id; }
-    public CoursePurchase getCoursePurchase() { return coursePurchase; }
-    public CourseMovementType getType() { return type; }
-    public int getQuantity() { return quantity; }
-    public String getReason() { return reason; }
-    public Appointment getAppointment() { return appointment; }
-    public CourseMovement getReversesMovement() { return reversesMovement; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public CoursePurchase getCoursePurchase() {
+        return coursePurchase;
+    }
+
+    public CourseMovementType getType() {
+        return type;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public Appointment getAppointment() {
+        return appointment;
+    }
+
+    public CourseMovement getReversesMovement() {
+        return reversesMovement;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

@@ -1,8 +1,9 @@
 package com.sabyeguyz.clinic.course;
 
-import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -10,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface CoursePurchaseRepository extends JpaRepository<CoursePurchase, Long> {
     List<CoursePurchase> findBySaleMonthAndSellerId(java.time.LocalDate month, Long sellerId);
+
     List<CoursePurchase> findBySaleMonthBetween(java.time.LocalDate from, java.time.LocalDate to);
 
     /**

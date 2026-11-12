@@ -1,6 +1,8 @@
 package com.sabyeguyz.clinic.course;
 
-import com.sabyeguyz.clinic.api.ApiErrorResponse;
+import java.net.URI;
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -9,8 +11,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.net.URI;
-import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.sabyeguyz.clinic.api.ApiErrorResponse;
 
 @RestController
 @RequestMapping("/api")
@@ -37,9 +39,13 @@ public class CourseLedgerController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Course purchased and entitlement credited"),
             @ApiResponse(responseCode = "400", description = "Validation failed, or the patient, course, or branch is inactive",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Patient or course not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ResponseEntity<CoursePurchaseResponse> purchase(@Valid @RequestBody CoursePurchaseRequest request) {
         CoursePurchaseResponse response = service.purchase(request);
@@ -53,7 +59,9 @@ public class CourseLedgerController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Courses returned, empty list when the patient has none"),
             @ApiResponse(responseCode = "404", description = "Patient not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public List<CoursePurchaseResponse> listByPatient(
             @Parameter(description = "Patient database identifier", required = true) @PathVariable long patientId) {
@@ -67,7 +75,9 @@ public class CourseLedgerController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ledger returned"),
             @ApiResponse(responseCode = "404", description = "Course purchase not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public CourseLedgerResponse ledger(
             @Parameter(description = "Course purchase database identifier", required = true) @PathVariable long id) {
@@ -81,11 +91,17 @@ public class CourseLedgerController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Session consumed"),
             @ApiResponse(responseCode = "400", description = "Validation failed or the appointment belongs to another patient",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Course purchase or appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Course is expired, cancelled, or has no sessions left",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ResponseEntity<CoursePurchaseResponse> use(@Valid @RequestBody CourseUsageRequest request) {
         return ResponseEntity.status(201).body(service.use(request));
@@ -104,9 +120,13 @@ public class CourseLedgerController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Usage reversed and the session credited back"),
             @ApiResponse(responseCode = "400", description = "Reason is missing",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Movement does not exist, is not a usage, or was already reversed",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public CoursePurchaseResponse reverseUsage(
             @Parameter(description = "Course movement database identifier", required = true) @PathVariable long movementId,
@@ -122,11 +142,17 @@ public class CourseLedgerController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Course cancelled and remaining balance written off"),
             @ApiResponse(responseCode = "400", description = "Reason is missing",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Course purchase not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Course was already cancelled",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public CoursePurchaseResponse cancel(
             @Parameter(description = "Course purchase database identifier", required = true) @PathVariable long id,
