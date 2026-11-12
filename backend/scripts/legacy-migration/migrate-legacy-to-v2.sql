@@ -3,7 +3,7 @@
 --
 -- Layout when this runs (see docs/legacy-data-migration.md):
 --   schema "legacy" : the old tables, untouched (the old "public" schema renamed)
---   schema "public" : the new empty v2 schema (db/migration V1 + V2 + V3 applied)
+--   schema "public" : the new v2 schema (db/migration applied; only reference data/default branches)
 --
 -- The script runs in ONE transaction: any problem rolls everything back and
 -- leaves the database as it was. Nothing in "legacy" is changed or dropped, so
@@ -26,9 +26,18 @@ BEGIN
     IF to_regclass('legacy.patients') IS NULL OR to_regclass('legacy.app_users') IS NULL THEN
         RAISE EXCEPTION 'schema "legacy" with the old tables was not found (rename the old public schema first)';
     END IF;
-    IF EXISTS (SELECT 1 FROM public.patient) OR EXISTS (SELECT 1 FROM public.branch)
+    IF EXISTS (SELECT 1 FROM public.patient)
        OR EXISTS (SELECT 1 FROM public.staff) OR (SELECT count(*) FROM public.app_user) > 1 THEN
         RAISE EXCEPTION 'the new schema already contains data; this script only fills an empty v2 schema';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM public.branch
+        WHERE (branch_code, branch_name, address, phone) NOT IN (
+            ('01', 'สาขาพระราม 9', 'สาขาพระราม 9 (ที่อยู่ตัวอย่าง)', '02-000-0001'),
+            ('02', 'สาขาแบริ่ง', 'สาขาแบริ่ง (ที่อยู่ตัวอย่าง)', '02-000-0002')
+        )
+    ) THEN
+        RAISE EXCEPTION 'the new schema already contains non-default branches';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.app_user WHERE username = 'system') THEN
         RAISE EXCEPTION 'reference data (V3: the system user, roles, permissions) is missing in the new schema';
@@ -38,6 +47,9 @@ BEGIN
     END IF;
     IF EXISTS (SELECT 1 FROM legacy.app_users WHERE role NOT IN ('MANAGER', 'THERAPIST')) THEN
         RAISE EXCEPTION 'a legacy user role has no supported v2 role mapping';
+    END IF;
+    IF EXISTS (SELECT 1 FROM legacy.app_users WHERE email IS NULL OR btrim(email) = '') THEN
+        RAISE EXCEPTION 'legacy users need reviewed email addresses before importing into current v2';
     END IF;
     IF EXISTS (SELECT 1 FROM legacy.payment_methods WHERE upper(code) NOT IN ('CASH', 'CARD', 'QR', 'TRANSFER', 'CREDITCARD', 'PROMPTPAY', 'BANKTRANSFER')) THEN
         RAISE EXCEPTION 'a legacy payment method has no supported v2 mapping; review legacy.payment_methods before importing';
@@ -75,6 +87,10 @@ SELECT (SELECT user_id FROM public.app_user WHERE username = 'system') AS sys_us
 -- ---------------------------------------------------------------------------
 -- 1. Branches (ids kept)
 -- ---------------------------------------------------------------------------
+-- V1025 seeds demo branches on fresh installs. Replace only those untouched
+-- defaults so the imported branch ids and real clinic details stay intact.
+DELETE FROM public.branch;
+
 INSERT INTO public.branch (branch_id, branch_code, branch_name, address, phone, branch_status,
                            branch_create_at, branch_create_by)
 SELECT b.branch_id, b.branch_code, left(b.branch_name, 100), left(coalesce(b.address, ''), 255),
@@ -148,8 +164,8 @@ WHERE m.name <> p.method_name::text;
 -- ---------------------------------------------------------------------------
 -- 4. Users, staff, roles, branch access
 -- ---------------------------------------------------------------------------
-INSERT INTO public.app_user (username, password_hash, user_status, last_login_at, user_create_at, user_create_by)
-SELECT u.username, u.password_hash, u.active, u.created_at AT TIME ZONE 'UTC', u.created_at AT TIME ZONE 'UTC',
+INSERT INTO public.app_user (username, email, password_hash, user_status, last_login_at, user_create_at, user_create_by)
+SELECT u.username, u.email, u.password_hash, u.active, u.created_at AT TIME ZONE 'UTC', u.created_at AT TIME ZONE 'UTC',
        (SELECT sys_user FROM _ctx)
 FROM legacy.app_users u;
 
@@ -242,22 +258,39 @@ SELECT 'commission scheme', 'commission_schemes.id=' || id, 'scheme was inactive
 FROM legacy.commission_schemes WHERE NOT active;
 
 INSERT INTO public.commission_tier (tier_id, commission_scheme_id, permission_id, tier_order, minimum_monthly_sales,
-                                    maximum_monthly_sales, commission_rate, tier_status, effective_from, effective_to,
+                                    maximum_monthly_sales, commission_rate, effective_from, effective_to,
                                     tier_create_at, tier_create_by)
 SELECT t.id, t.scheme_id, (SELECT scheme_perm FROM _ctx), t.tier_order, t.minimum_sales, t.maximum_sales,
-       round(t.commission_rate, 4), t.active, s.effective_from, s.effective_to,
+       round(t.commission_rate, 4), s.effective_from, s.effective_to,
        s.created_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx)
 FROM legacy.commission_tiers t JOIN legacy.commission_schemes s ON s.id = t.scheme_id;
 
-INSERT INTO public.treatment_fee_rule (treatment_fee_rule_id, permission_id, staff_id, fee_type, fee_value,
-                                       percentage_base, effective_from, effective_to, treatment_fee_rule_status,
+INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
+SELECT 'commission tier', 'commission_tiers.id=' || id,
+       'tier was inactive (the new schema has no status flag)', 'migrated as a normal tier, review it'
+FROM legacy.commission_tiers WHERE NOT active;
+
+INSERT INTO public.treatment_fee_rule (treatment_fee_rule_id, permission_id, fee_type, fee_value,
+                                       effective_from, effective_to, rule_version,
                                        treatment_fee_rule_create_by)
-SELECT r.id, (SELECT scheme_perm FROM _ctx), ms.new_staff_id,
+SELECT r.id, (SELECT scheme_perm FROM _ctx),
        CASE WHEN upper(r.fee_type) LIKE 'FIX%' THEN 'Fixed' ELSE 'Percentage' END::fee_type_enum,
        r.fee_value,
-       CASE WHEN upper(r.fee_type) LIKE 'FIX%' THEN NULL ELSE 'CourseValuePerVisit' END::percentage_base_enum,
-       r.effective_from, r.effective_to, r.active, (SELECT sys_user FROM _ctx)
-FROM legacy.treatment_fee_rules r LEFT JOIN legacy.map_staff ms ON ms.old_staff_id = r.employee_id;
+       r.effective_from, r.effective_to, row_number() OVER (ORDER BY r.effective_from, r.id)::int,
+       (SELECT sys_user FROM _ctx)
+FROM legacy.treatment_fee_rules r
+WHERE r.employee_id IS NULL AND r.active;
+
+INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
+SELECT 'treatment fee rule', 'treatment_fee_rules.id=' || id,
+       'rule was inactive (the new schema has no status flag)', 'migrated as a normal rule, review it'
+FROM legacy.treatment_fee_rules WHERE NOT active;
+
+INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
+SELECT 'treatment fee rule', 'treatment_fee_rules.id=' || id,
+       'staff-specific scope cannot be represented by current v2 treatment_fee_rule',
+       'not imported; review and recreate as a current rule before commission calculations'
+FROM legacy.treatment_fee_rules WHERE employee_id IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- 7. Patients (ids kept; HN kept when valid, otherwise re-issued)
@@ -285,6 +318,26 @@ SELECT p.id, p.branch_id, p.created_at, p.updated_at, p.active,
        p.phone, p.nickname, p.nationality, p.address, p.birth_date,
        p.customer_type AS customer_group_text, p.customer_source, p.insurance_company
 FROM legacy.patients p;
+
+UPDATE _patient
+SET title_new = CASE title_new
+    WHEN 'นาย' THEN 'Mr.'
+    WHEN 'นางสาว' THEN 'Miss'
+    WHEN 'นาง' THEN 'Mrs.'
+    WHEN 'เด็กชาย' THEN 'Boy'
+    WHEN 'เด็กหญิง' THEN 'Girl'
+END
+WHERE customer_type = 'Foreigner' AND title_new IN ('นาย', 'นางสาว', 'นาง', 'เด็กชาย', 'เด็กหญิง');
+
+UPDATE _patient
+SET title_new = CASE title_new
+    WHEN 'Mr.' THEN 'นาย'
+    WHEN 'Miss' THEN 'นางสาว'
+    WHEN 'Mrs.' THEN 'นาง'
+    WHEN 'Boy' THEN 'เด็กชาย'
+    WHEN 'Girl' THEN 'เด็กหญิง'
+END
+WHERE customer_type = 'Thai' AND title_new IN ('Mr.', 'Miss', 'Mrs.', 'Boy', 'Girl');
 
 INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
 SELECT 'patient', 'patients.id=' || p.id, 'identity number "' || p.identity_number || '" is not a 13-digit national id', 'national_id left empty; the number stays in legacy.patients'
@@ -348,7 +401,7 @@ SELECT branch_id, ym, max(n) FROM (
 -- 8. Appointments (ids kept), status history, visits
 -- ---------------------------------------------------------------------------
 CREATE TEMP TABLE _appt AS
-SELECT a.id, a.branch_id, a.patient_id, a.service_id, a.therapist_id, a.start_at, a.created_at, a.updated_at,
+SELECT a.id, a.branch_id, a.patient_id, a.service_id, a.therapist_id, a.start_at, a.end_at, a.created_at, a.updated_at,
        a.note, a.cancel_reason,
        CASE a.status WHEN 'CONFIRMED' THEN 'Confirmed' WHEN 'SCHEDULED' THEN 'Confirmed' WHEN 'ARRIVED' THEN 'Arrived'
                      WHEN 'CHECKED_IN' THEN 'Arrived' WHEN 'IN_SERVICE' THEN 'InService' WHEN 'COMPLETED' THEN 'Completed'
@@ -357,16 +410,26 @@ SELECT a.id, a.branch_id, a.patient_id, a.service_id, a.therapist_id, a.start_at
 FROM legacy.appointments a;
 
 INSERT INTO public.appointment (appointment_id, patient_id, branch_id, staff_id, service_id, appointment_status,
-                                appointment_date, appointment_time, appointment_create_at, appointment_create_by,
+                                appointment_date, appointment_time, appointment_end_at,
+                                appointment_create_at, appointment_create_by,
                                 appointment_update_at, appointment_update_by, appointment_patient_type)
-SELECT x.id, x.patient_id, x.branch_id, mt.new_staff_id, ms.new_service_id, x.status_new::appointment_status_enum,
+SELECT x.id, x.patient_id, x.branch_id, mt.new_staff_id, ms.new_service_id,
+       CASE WHEN x.status_new IN ('Cancelled', 'NoShow') THEN 'Cancelled'
+            ELSE 'Confirmed' END::appointment_status_enum,
        (x.start_at AT TIME ZONE 'Asia/Bangkok')::date, (x.start_at AT TIME ZONE 'Asia/Bangkok')::time,
+       x.end_at AT TIME ZONE 'Asia/Bangkok',
        x.created_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx),
        CASE WHEN x.updated_at > x.created_at THEN x.updated_at AT TIME ZONE 'UTC' END,
        CASE WHEN x.updated_at > x.created_at THEN (SELECT sys_user FROM _ctx) END, 'CURRENT'
 FROM _appt x
 JOIN legacy.map_therapist mt ON mt.old_therapist_id = x.therapist_id
 JOIN legacy.map_service ms ON ms.old_service_id = x.service_id;
+
+INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
+SELECT 'appointment', 'appointments.id=' || id,
+       'legacy status ' || status_new || ' is no longer an active appointment status',
+       'current appointment mapped to Confirmed/Cancelled; original status kept in appointment_status_history and legacy.appointments'
+FROM _appt WHERE status_new NOT IN ('Confirmed', 'Cancelled');
 
 INSERT INTO public.appointment_status_history (appointment_id, from_status, to_status, changed_by, changed_at, reason)
 SELECT x.id, NULL, x.status_new::appointment_status_enum, (SELECT sys_user FROM _ctx),
@@ -378,9 +441,12 @@ CREATE TEMP TABLE _visit_appt AS
 SELECT x.id AS appointment_id, nextval(pg_get_serial_sequence('public.patient_visit', 'visit_id')) AS visit_id
 FROM _appt x WHERE x.status_new IN ('Arrived', 'InService', 'Completed');
 
-INSERT INTO public.patient_visit (visit_id, appointment_id, patient_id, branch_id, assigned_staff_id, visit_date,
-                                  visit_status, visit_create_at, visit_create_by)
-SELECT v.visit_id, x.id, x.patient_id, x.branch_id, mt.new_staff_id, x.start_at AT TIME ZONE 'UTC',
+INSERT INTO public.patient_visit (visit_id, appointment_id, patient_id, branch_id, assigned_staff_id,
+                                  treating_staff_id, visit_date, checkout_time, visit_status,
+                                  visit_create_at, visit_create_by)
+SELECT v.visit_id, x.id, x.patient_id, x.branch_id, mt.new_staff_id, mt.new_staff_id,
+       x.start_at AT TIME ZONE 'UTC',
+       CASE WHEN x.status_new = 'Completed' THEN x.end_at AT TIME ZONE 'UTC' END,
        x.status_new::visit_status_enum, x.created_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx)
 FROM _visit_appt v JOIN _appt x ON x.id = v.appointment_id
 JOIN legacy.map_therapist mt ON mt.old_therapist_id = x.therapist_id;
@@ -403,9 +469,11 @@ INSERT INTO legacy.migration_issue (area, old_ref, issue, action)
 SELECT 'treatment', 'treatments.id=' || old_id, 'service text "' || service || '" matches no service', 'linked to the inactive service LEGACY'
 FROM _treat WHERE service_id IS NULL;
 
-INSERT INTO public.patient_visit (visit_id, appointment_id, patient_id, branch_id, assigned_staff_id, visit_date,
-                                  visit_status, visit_create_at, visit_create_by)
-SELECT t.new_visit_id, NULL, t.patient_id, p.branch_id, ms.new_staff_id, t.created_at AT TIME ZONE 'UTC', 'Completed',
+INSERT INTO public.patient_visit (visit_id, appointment_id, patient_id, branch_id, assigned_staff_id,
+                                  treating_staff_id, visit_date, checkout_time, visit_status,
+                                  visit_create_at, visit_create_by)
+SELECT t.new_visit_id, NULL, t.patient_id, p.branch_id, ms.new_staff_id, ms.new_staff_id,
+       t.created_at AT TIME ZONE 'UTC', t.created_at AT TIME ZONE 'UTC', 'Completed',
        t.created_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx)
 FROM _treat t JOIN public.patient p ON p.patient_id = t.patient_id
 LEFT JOIN legacy.map_staff ms ON ms.old_staff_id = t.staff_id
@@ -447,12 +515,15 @@ FROM legacy.sales s JOIN _receipt_number n ON n.kind = 'sale' AND n.old_id = s.i
 
 INSERT INTO public.receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_at,
                             receipt_create_by, subtotal_before_discount, bill_discount_amount, taxable_amount,
-                            tax_amount, net_amount, receipt_status, payment_label)
+                            tax_amount, net_amount, receipt_status, payment_label, payment_label_id)
 SELECT s.id, mr.new_receipt_no, s.patient_id, s.branch_id, s.sold_at AT TIME ZONE 'UTC', s.created_at AT TIME ZONE 'UTC',
        (SELECT sys_user FROM _ctx), tot.total, 0, tot.total, 0, tot.total,
        CASE WHEN s.status = 'VOIDED' THEN 'Voided' ELSE 'Issued' END::receipt_status_enum,
        CASE WHEN coalesce((SELECT sum(p.amount) FROM legacy.sale_payments p WHERE p.sale_id = s.id AND p.type = 'PAYMENT'), 0) >= tot.total
-            THEN 'FullyPaid' ELSE 'Deposit' END::payment_label_enum
+            THEN 'FullyPaid' ELSE 'Deposit' END::payment_label_enum,
+       (SELECT payment_label_id FROM public.payment_label WHERE payment_label_code =
+           CASE WHEN coalesce((SELECT sum(p.amount) FROM legacy.sale_payments p WHERE p.sale_id = s.id AND p.type = 'PAYMENT'), 0) >= tot.total
+                THEN 'FULL' ELSE 'DEPOSIT' END)
 FROM legacy.sales s
 JOIN legacy.map_receipt mr ON mr.old_sale_id = s.id
 CROSS JOIN LATERAL (SELECT coalesce((SELECT sum(i.line_total) FROM legacy.sale_items i WHERE i.sale_id = s.id), s.total) AS total) tot;
@@ -555,9 +626,11 @@ SELECT 'course purchase', 'course_purchases.id=' || old_id, 'purchase has no sal
 FROM _orphan;
 
 INSERT INTO public.receipt (receipt_id, receipt_no, patient_id, branch_id, sale_date, receipt_create_at, receipt_create_by,
-                            subtotal_before_discount, bill_discount_amount, taxable_amount, tax_amount, net_amount, receipt_status, payment_label)
+                            subtotal_before_discount, bill_discount_amount, taxable_amount, tax_amount, net_amount,
+                            receipt_status, payment_label, payment_label_id)
 SELECT o.receipt_id, o.receipt_no, p.patient_id, p.branch_id, p.purchased_at AT TIME ZONE 'UTC',
-       p.purchased_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx), p.price, 0, p.price, 0, p.price, 'Issued', 'Deposit'
+       p.purchased_at AT TIME ZONE 'UTC', (SELECT sys_user FROM _ctx), p.price, 0, p.price, 0, p.price,
+       'Issued', 'Deposit', (SELECT payment_label_id FROM public.payment_label WHERE payment_label_code = 'DEPOSIT')
 FROM _orphan o JOIN _purchase p ON p.old_id = o.old_id;
 
 INSERT INTO public.sales_transaction (transaction_id, patient_id, branch_id, service_id, transaction_type, salesperson_staff_id,

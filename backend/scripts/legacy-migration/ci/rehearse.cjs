@@ -56,7 +56,7 @@ function main() {
   }
   function sql(db, input) { return run('psql', ['-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', user, '-d', db], input) }
   const file = relative => readFileSync(path.join(root, relative), 'utf8')
-  const oldFolder = 'src/main/resources/db/migration_old'
+  const oldFolder = 'src/test/resources/db/legacy_schema'
   const newFolder = 'src/main/resources/db/migration'
   const oldFiles = migrationFiles(readdirSync(path.join(root, oldFolder)))
   const newFiles = migrationFiles(readdirSync(path.join(root, newFolder)))
