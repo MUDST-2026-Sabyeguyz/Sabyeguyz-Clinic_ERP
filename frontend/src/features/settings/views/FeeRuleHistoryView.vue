@@ -35,7 +35,7 @@ const selected = computed(() => versions.value.find((item) => item.rule.id === s
 
 onMounted(async () => {
   try {
-    const rules = (await commissionApi.treatmentFees()) as TreatmentFeeRule[]
+    const rules = await commissionApi.treatmentFees()
     // newest version first, numbered from the oldest
     versions.value = rules
       .slice()
@@ -139,7 +139,7 @@ onMounted(async () => {
 @import '../../staff/styles/staff.css';
 .history-page {
   min-height: 100vh;
-  color: var(--color-ink);
+  color: #25372e;
   background: #f8f4ed;
 }
 .history-main {
@@ -148,7 +148,7 @@ onMounted(async () => {
   padding: 28px 0 80px;
 }
 .history-back {
-  color: var(--color-primary);
+  color: #1e807c;
   font-weight: 600;
   text-decoration: none;
 }
@@ -231,7 +231,7 @@ onMounted(async () => {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-primary);
+  color: #1e807c;
   font: inherit;
   font-weight: 600;
   cursor: pointer;

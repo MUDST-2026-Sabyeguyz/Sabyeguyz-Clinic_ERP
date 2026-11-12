@@ -71,10 +71,10 @@ public class UserManagementController {
 
     public record Request(
             @NotBlank @Size(max = 50) String username,
-            @NotBlank @Size(max = 254) String email,
-            @Size(min = 12, max = 100) String password,
+            String email,
+            @Size(min = 8, max = 100) String password,
             @NotNull String role,
-            @Size(max = 20) String employeeCode, // optional: auto-generated on create when blank
+            @NotBlank @Size(max = 20) String employeeCode,
             @NotBlank @Size(max = 160) String fullName,
             String phone,
             @NotBlank String branchCode) {}
@@ -94,9 +94,7 @@ public class UserManagementController {
         String[] names = splitName(request.fullName());
         StaffPosition position = resolvePosition(request.role());
 
-        String employeeCode = request.employeeCode() == null || request.employeeCode().isBlank()
-                ? staffService.nextStaffCode(position) : request.employeeCode();
-        Staff staff = staffService.create(employeeCode, names[0], names[1], position, branch,
+        Staff staff = staffService.create(request.employeeCode(), names[0], names[1], position, branch,
                 ClinicTime.today(), actor.currentId());
         AppUser user = appUserService.register(request.username(), request.email(), request.password(), staff, actor.currentId());
         Role role = resolveOrCreateRole(request.role());

@@ -6,22 +6,5 @@
   },
   "categories": {
     "correctness": "error"
-  },
-  "overrides": [
-    {
-      "files": ["cypress/**"],
-      "rules": {
-        "vitest/valid-expect": "off",
-        "vitest/no-standalone-expect": "off",
-        "eslint/no-unused-expressions": "off"
-      }
-    },
-    {
-      "files": ["src/**/__tests__/**"],
-      "rules": {
-        "vitest/valid-expect": ["error", { "maxArgs": 2 }],
-        "vitest/require-mock-type-parameters": "warn"
-      }
-    }
-  ]
+  }
 }

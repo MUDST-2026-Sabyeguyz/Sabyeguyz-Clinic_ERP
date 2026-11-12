@@ -1,15 +1,10 @@
 # User Stories
-Status: Update User story
+Status: ส่งเมล และ รอ comfirmed จากอาจารย์
 
+## User story map document
+### Canva: 
 
-## User Story
-### Document Link:
-Phase 1: [Sabyeguyz_Userstories-Phase1](https://docs.google.com/document/d/1-2WLmgEvaAiSM-U2VmLGoWfkPSYMEkQpCTOxS1uiqOQ/edit?usp=sharing)
-Phase 2: [Sabyeguyz_Userstories-Phase2](https://docs.google.com/document/d/1xNi1H6X1KUUAaTJ9Pwa8GPzZ5y3vnt-BLSCHfbY12y0/edit?usp=sharing)
-
-### PDF:
-[Sabyeguyz_Userstories-Phase1.pdf](https://github.com/user-attachments/files/33579123/Sabyeguyz_Userstories-Phase1.pdf)
-
+[ User Story - Sabyeguyz <<< Click to Open ](https://canva.link/d43i2b768wai8ha)
 
 ## Template
 

@@ -1,621 +1,513 @@
 <script setup lang="ts">
-// รายการปรับยอดคอมมิชชันสำหรับ Manager
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { commissionApi, type ManagerAdjustment } from '@/api/client'
 import CommissionTabs from './CommissionTabs.vue'
+import {
+  commissionApi,
+  staffApi,
+  type AdjustmentInput,
+  type PayAdjustment,
+  type Staff,
+} from '@/api/client'
+import { clinicToday } from '@/utils/clinicDate'
 
-const adjustments = ref<ManagerAdjustment[]>([])
-const loading = ref(true)
+const adjustments = ref<PayAdjustment[]>([])
+const staff = ref<Staff[]>([])
+const loading = ref(false)
 const errorMessage = ref('')
-const search = ref('')
-const month = ref('')
-const status = ref('')
-const statusGroups: Record<string, string[]> = {
-  pending: ['Pending', 'Approved', 'ExternalReview'],
-  completed: ['PartiallyApplied', 'Applied'],
-  cancelled: ['Cancelled'],
-}
-const page = ref(1)
-const pageSize = 10
-const statusGroup = (value: string) =>
-  Object.keys(statusGroups).find((group) => statusGroups[group]?.includes(value)) ?? 'other'
-const statusNames: Record<string, string> = {
-  pending: 'รอดำเนินการ',
-  completed: 'ดำเนินการแล้ว',
-  cancelled: 'ยกเลิก',
-  other: 'สถานะอื่น',
-}
+const notice = ref('')
+const selectedId = ref<number | null>(null)
+const selected = computed(
+  () => adjustments.value.find((row) => row.id === selectedId.value) ?? null,
+)
 
-const monthLabel = (value: string) => {
-  const [year, number] = value.split('-').map(Number)
-  if (!year || !number) return value
-  return new Intl.DateTimeFormat('th-TH', { month: 'short', year: 'numeric' }).format(
-    new Date(year, number - 1, 1),
-  )
+const drawerOpen = ref(false)
+const drawerError = ref('')
+const saving = ref(false)
+type SourceKind = 'allocationId' | 'singleVisitFeeId' | 'courseId' | 'visitId' | 'saleTransactionId'
+const sourceLabels: Record<SourceKind, string> = {
+  allocationId: 'รายการจัดสรรค่าตอบแทน (allocation)',
+  singleVisitFeeId: 'ค่ามือรายครั้ง',
+  courseId: 'คอร์ส',
+  visitId: 'Visit',
+  saleTransactionId: 'รายการขาย',
 }
-const amount = (value: number) =>
-  `${value > 0 ? '+' : '-'}฿${Math.abs(value).toLocaleString('th-TH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`
-const reference = (row: ManagerAdjustment) => {
-  if (row.saleTransactionId) return `SALE-${String(row.saleTransactionId).padStart(5, '0')}`
-  if (row.courseId) return `COURSE-${String(row.courseId).padStart(5, '0')}`
-  if (row.visitId) return `VISIT-${String(row.visitId).padStart(5, '0')}`
-  if (row.singleVisitFeeId) return `FEE-${String(row.singleVisitFeeId).padStart(5, '0')}`
-  return `ADJ-${String(row.id).padStart(5, '0')}`
-}
-const statusLabel = (value: string) => statusNames[statusGroup(value)] ?? 'สถานะอื่น'
-const stepLabel: Record<string, string> = {
-  Pending: 'รออนุมัติรายการ',
-  Approved: 'อนุมัติรายการแล้ว',
-  PartiallyApplied: 'นำยอดไปใช้บางส่วน',
-  Applied: 'นำยอดไปใช้ครบ',
-  ExternalReview: 'ยอดของพนักงานลาออก',
-  Cancelled: 'ยกเลิกรายการแล้ว',
-}
-const reservedAmount = (row: ManagerAdjustment) =>
-  row.applications
-    .filter((item) => item.status === 'Draft')
-    .reduce((sum, item) => sum + Math.abs(item.amount), 0)
-const statusPriority: Record<string, number> = {
-  Pending: 0,
-  ExternalReview: 1,
-  Approved: 2,
-  PartiallyApplied: 3,
-  Applied: 4,
-  Cancelled: 5,
-}
-const reasonSummary = (value: string) => value?.trim() || 'ไม่ระบุเหตุผล'
-const clearFilters = () => {
-  search.value = ''
-  month.value = ''
-  status.value = ''
-}
-const hasFilters = computed(() => Boolean(search.value || month.value || status.value))
-const visible = computed(() => {
-  const keyword = search.value.trim().toLowerCase()
-  return adjustments.value
-    .filter(
-      (row) =>
-        (!keyword ||
-          row.staffName.toLowerCase().includes(keyword) ||
-          reference(row).toLowerCase().includes(keyword)) &&
-        (!month.value || row.originalMonth === month.value) &&
-        (!status.value || statusGroups[status.value]?.includes(row.status)),
-    )
-    .sort(
-      (a, b) => (statusPriority[a.status] ?? 3) - (statusPriority[b.status] ?? 3) || b.id - a.id,
-    )
+const form = reactive({
+  staffId: 0,
+  direction: 'deduct' as 'add' | 'deduct',
+  amount: 0,
+  reason: '',
+  sourceKind: 'allocationId' as SourceKind,
+  sourceId: 0,
+  originalMonth: '',
+  appliedMonth: '',
+  // one step: approve the adjustment and put it into the payment of the month (the rest carries over by itself)
+  applyNow: true,
+  reference: '',
 })
-const monthOptions = computed(() =>
-  [...new Set(adjustments.value.map((row) => row.originalMonth))].sort().reverse(),
-)
-const statusOptions = [
-  { value: 'pending', label: 'รอดำเนินการ' },
-  { value: 'completed', label: 'ดำเนินการแล้ว' },
-  { value: 'cancelled', label: 'ยกเลิก' },
-]
-const totalPages = computed(() => Math.max(1, Math.ceil(visible.value.length / pageSize)))
-const pageRows = computed(() =>
-  visible.value.slice((page.value - 1) * pageSize, page.value * pageSize),
-)
-watch([search, month, status], () => {
-  page.value = 1
-})
+
+const application = reactive({ month: '', amount: '' as number | '', reference: '' })
+
+const baht = (value: number) =>
+  `${value < 0 ? '−' : value > 0 ? '+' : ''}฿${Math.abs(value).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
+const statusLabel: Record<PayAdjustment['status'], string> = {
+  Pending: 'รออนุมัติ',
+  Approved: 'อนุมัติแล้ว',
+  PartiallyApplied: 'หักไปบางส่วน',
+  Applied: 'ครบแล้ว',
+  ExternalReview: 'ส่งตรวจนอกระบบ',
+  Cancelled: 'ยกเลิก',
+}
 
 async function load() {
   loading.value = true
   errorMessage.value = ''
   try {
     adjustments.value = await commissionApi.adjustments()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการปรับปรุงไม่สำเร็จ'
+  } catch (caught) {
+    errorMessage.value = caught instanceof Error ? caught.message : 'โหลดใบปรับยอดไม่สำเร็จ'
   } finally {
     loading.value = false
   }
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  try {
+    staff.value = await staffApi.list()
+  } catch {
+    staff.value = []
+  }
+})
+
+async function run(action: () => Promise<unknown>, done: string) {
+  errorMessage.value = ''
+  notice.value = ''
+  try {
+    await action()
+    notice.value = done
+    await load()
+  } catch (caught) {
+    errorMessage.value = caught instanceof Error ? caught.message : 'ดำเนินการไม่สำเร็จ'
+  }
+}
+
+function openDrawer() {
+  drawerError.value = ''
+  Object.assign(form, {
+    staffId: staff.value[0]?.id ?? 0,
+    direction: 'deduct',
+    amount: 0,
+    reason: '',
+    sourceKind: 'allocationId',
+    sourceId: 0,
+    originalMonth: '',
+    appliedMonth: '',
+    applyNow: true,
+    reference: '',
+  })
+  drawerOpen.value = true
+}
+
+async function create() {
+  drawerError.value = ''
+  if (!form.staffId || !(form.amount > 0) || !form.reason.trim() || !(form.sourceId > 0)) {
+    drawerError.value = 'กรุณาเลือกพนักงาน ระบุยอด เหตุผล และเลขที่ต้นทางที่อ้างอิง'
+    return
+  }
+  if (form.applyNow && form.direction === 'deduct' && !form.reference.trim()) {
+    drawerError.value = 'การหักเงินต้องระบุเลขที่อ้างอิงความยินยอมของพนักงาน'
+    return
+  }
+  const body: AdjustmentInput = {
+    staffId: form.staffId,
+    amount: form.direction === 'deduct' ? -form.amount : form.amount,
+    reason: form.reason.trim(),
+    [form.sourceKind]: form.sourceId,
+  }
+  if (form.originalMonth) body.originalMonth = form.originalMonth
+  if (form.appliedMonth) body.appliedMonth = form.appliedMonth
+  saving.value = true
+  try {
+    const created = await commissionApi.createAdjustment(body)
+    drawerOpen.value = false
+    selectedId.value = created.id
+    if (form.applyNow) {
+      try {
+        await commissionApi.approveAdjustment(created.id)
+        const month = created.appliedMonth || form.appliedMonth
+        const added = await commissionApi.createApplication(created.id, month)
+        await commissionApi.approveApplication(
+          added.id,
+          form.direction === 'deduct' ? form.reference.trim() : undefined,
+        )
+        notice.value = `บันทึกใบปรับยอดและนำไปใช้ในงวด ${month} แล้ว จะมีผลเมื่อยืนยันจ่ายงวดนั้น ส่วนที่หักไม่ครบจะยกไปงวดถัดไปเอง`
+      } catch (caught) {
+        errorMessage.value = `บันทึกใบปรับยอดแล้ว แต่นำไปใช้ในงวดไม่สำเร็จ: ${
+          caught instanceof Error ? caught.message : 'ไม่ทราบสาเหตุ'
+        } (ทำต่อได้จากรายละเอียดด้านล่าง)`
+      }
+    } else {
+      notice.value = 'บันทึกใบปรับยอดแล้ว รออนุมัติ'
+    }
+    await load()
+  } catch (caught) {
+    drawerError.value = caught instanceof Error ? caught.message : 'บันทึกใบปรับยอดไม่สำเร็จ'
+  } finally {
+    saving.value = false
+  }
+}
+
+function select(row: PayAdjustment) {
+  selectedId.value = row.id
+}
+// whichever way an adjustment gets selected, the form to reserve it starts from its first intended month
+watch(
+  () => selected.value?.id,
+  () => {
+    application.month = selected.value?.appliedMonth ?? ''
+    application.amount = ''
+    application.reference = ''
+  },
+)
+const canApply = (row: PayAdjustment) => ['Approved', 'PartiallyApplied'].includes(row.status)
+const canReview = (row: PayAdjustment) =>
+  row.amount < 0 && canApply(row) && row.remaining > 0 && Boolean(row.staffId)
+
+const approve = (row: PayAdjustment) =>
+  run(() => commissionApi.approveAdjustment(row.id), 'อนุมัติใบปรับยอดแล้ว')
+const cancel = (row: PayAdjustment) =>
+  run(() => commissionApi.cancelAdjustment(row.id), 'ยกเลิกใบปรับยอดแล้ว')
+const review = (row: PayAdjustment) =>
+  run(() => commissionApi.externalReviewAdjustment(row.id), 'ส่งตรวจนอกระบบแล้ว')
+const addApplication = (row: PayAdjustment) =>
+  run(
+    () =>
+      commissionApi.createApplication(
+        row.id,
+        application.month,
+        application.amount === '' ? undefined : Number(application.amount),
+      ),
+    `เพิ่มในงวด ${application.month} แล้ว (Draft)`,
+  )
+const approveApplication = (id: number, negative: boolean) =>
+  run(
+    () => commissionApi.approveApplication(id, negative ? application.reference : undefined),
+    'อนุมัติการนำไปใช้แล้ว จะมีผลเมื่อยืนยันจ่ายงวดนั้น',
+  )
+const cancelApplication = (id: number) =>
+  run(() => commissionApi.cancelApplication(id), 'ยกเลิกรายการนำไปใช้แล้ว')
+
+const today = clinicToday()
 </script>
 
 <template>
-  <div class="commission-manager-page adjustment-page">
+  <div class="commission-manager-page">
     <StaffHeader />
-    <main class="commission-manager-main adjustment-main">
-      <header class="adjustment-title">
-        <div>
-          <h1>รายการปรับปรุงค่าตอบแทน</h1>
-          <p>ตรวจสอบและจัดการรายการปรับปรุงค่าตอบแทนหลังปิดรอบ</p>
-        </div>
-        <RouterLink class="commission-primary add-adjustment" to="/staff/commission/adjustments/new"
-          >+ เพิ่มรายการปรับปรุง</RouterLink
-        >
+    <main class="commission-manager-main">
+      <header class="commission-title">
+        <h1>ใบปรับยอดค่าตอบแทน</h1>
+        <p>
+          แก้ไขเงินที่จ่ายไปแล้วในงวดถัดไป งวดที่จ่ายแล้วและอัตราที่ล็อกไม่เปลี่ยน
+          การหักไม่เกินค่าตอบแทนที่ได้ในงวด ส่วนที่เหลือยกไปงวดถัดไป
+        </p>
       </header>
       <CommissionTabs active="adjustments" />
+      <section class="toolbar">
+        <button class="commission-primary" @click="openDrawer">+ สร้างใบปรับยอด</button>
+      </section>
+      <p v-if="errorMessage" class="page-error" role="alert">{{ errorMessage }}</p>
+      <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+      <section class="commission-card commission-table-wrap">
+        <table class="commission-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>พนักงาน</th>
+              <th>เดือนเดิม → เดือนที่ใช้</th>
+              <th>ยอด</th>
+              <th>ดำเนินการแล้ว / คงเหลือ</th>
+              <th>สถานะ</th>
+              <th>เหตุผล</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in adjustments" :key="row.id" :class="{ chosen: row.id === selectedId }">
+              <td>{{ row.id }}</td>
+              <td>{{ row.staffName }}</td>
+              <td>{{ row.originalMonth }} → {{ row.appliedMonth }}</td>
+              <td>
+                <b :class="row.amount < 0 ? 'minus' : 'plus'">{{ baht(row.amount) }}</b>
+              </td>
+              <td>
+                ฿{{ row.processed.toLocaleString('th-TH') }} / ฿{{
+                  row.remaining.toLocaleString('th-TH')
+                }}
+              </td>
+              <td>{{ statusLabel[row.status] }}</td>
+              <td class="reason">{{ row.reason }}</td>
+              <td><button class="commission-secondary" @click="select(row)">รายละเอียด</button></td>
+            </tr>
+            <tr v-if="!loading && adjustments.length === 0">
+              <td colspan="8">ยังไม่มีใบปรับยอด</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
 
-      <section class="adjustment-directory commission-card">
-        <header class="adjustment-filters" aria-label="ตัวกรองรายการปรับปรุง">
-          <label>
-            <span class="sr-only">ค้นหารายการ</span>
-            <input v-model="search" placeholder="ค้นหาชื่อพนักงานหรือรหัสอ้างอิง" />
-          </label>
-          <FilterDropdown
-            v-model="month"
-            label="รอบที่ต้องการปรับ"
-            default-label="รอบที่ต้องการปรับ: ทั้งหมด"
-            :options="monthOptions.map((item) => ({ value: item, label: monthLabel(item) }))"
-          />
-          <FilterDropdown
-            v-model="status"
-            label="สถานะรายการ"
-            default-label="ทุกสถานะ"
-            :options="statusOptions"
-          />
-          <button v-if="hasFilters" type="button" class="clear-filters" @click="clearFilters">
-            ล้างตัวกรอง
-          </button>
+      <section v-if="selected" class="commission-card detail" aria-label="รายละเอียดใบปรับยอด">
+        <header>
+          <h2>ใบปรับยอด #{{ selected.id }} · {{ selected.staffName }}</h2>
+          <span>{{ statusLabel[selected.status] }}</span>
         </header>
-        <div class="directory-results">
-          <div>
-            <h2>รายการปรับปรุง</h2>
-            <p>
-              ต้องตรวจสอบหรือดำเนินการ
-              {{
-                visible.filter((row) =>
-                  ['Pending', 'ExternalReview', 'Approved', 'PartiallyApplied'].includes(
-                    row.status,
-                  ),
-                ).length
-              }}
-              รายการ · เรียงงานที่ต้องทำไว้ก่อน
-            </p>
-          </div>
-          <span v-if="!loading && !errorMessage">ทั้งหมด {{ visible.length }} รายการ</span>
-        </div>
-        <p v-if="loading" class="state-card">กำลังโหลดรายการปรับปรุง...</p>
-        <p v-else-if="errorMessage" class="state-card error" role="alert">{{ errorMessage }}</p>
-        <template v-else>
-          <div class="adjustment-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>พนักงาน</th>
-                  <th>รายการปรับปรุง</th>
-                  <th>รอบที่อ้างอิง</th>
-                  <th>ยอดปรับปรุง</th>
-                  <th>สถานะรายการ</th>
-                  <th><span class="sr-only">การทำงาน</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in pageRows" :key="row.id">
-                  <td>{{ row.staffName }}</td>
-                  <td data-label="รายการปรับปรุง">
-                    <strong>{{ reference(row) }}</strong>
-                    <small class="row-reason">{{ reasonSummary(row.reason) }}</small>
-                  </td>
-                  <td data-label="รอบที่อ้างอิง">{{ monthLabel(row.originalMonth) }}</td>
-                  <td data-label="ยอดปรับปรุง" :class="{ deduction: row.amount < 0 }">
-                    {{ amount(row.amount) }}
-                    <small v-if="reservedAmount(row) > 0" class="amount-context"
-                      >กันไว้ {{ amount(Math.sign(row.amount) * reservedAmount(row)) }}</small
-                    >
-                    <small v-if="row.status === 'Cancelled'" class="amount-context"
-                      >ยอดเดิมก่อนยกเลิก</small
-                    >
-                  </td>
-                  <td data-label="สถานะรายการ">
-                    <span class="adjustment-status" :class="`status-${statusGroup(row.status)}`">{{
-                      statusLabel(row.status)
-                    }}</span>
-                    <small class="row-step">{{ stepLabel[row.status] ?? 'ไม่ทราบขั้นตอน' }}</small>
-                  </td>
-                  <td data-label="รายละเอียด">
-                    <RouterLink
-                      class="detail-button"
-                      :to="{ name: 'commission-adjustment-detail', params: { id: row.id } }"
-                      >ดูรายละเอียด</RouterLink
-                    >
-                  </td>
-                </tr>
-                <tr v-if="visible.length === 0">
-                  <td colspan="6" class="empty-row">
-                    ไม่พบรายการตามเงื่อนไขที่เลือก
-                    <button
-                      v-if="hasFilters"
-                      type="button"
-                      class="empty-clear"
-                      @click="clearFilters"
-                    >
-                      ล้างตัวกรอง
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <nav
-            v-if="visible.length > pageSize"
-            class="adjustment-pagination"
-            aria-label="หน้ารายการปรับปรุง"
+        <p>
+          {{ baht(selected.amount) }} · ต้นทาง:
+          <template v-if="selected.allocationId">allocation #{{ selected.allocationId }}</template>
+          <template v-if="selected.singleVisitFeeId">
+            ค่ามือรายครั้ง #{{ selected.singleVisitFeeId }}</template
           >
-            <button type="button" :disabled="page === 1" @click="page--">← ก่อนหน้า</button>
-            <span>หน้า {{ page }} จาก {{ totalPages }}</span>
-            <button type="button" :disabled="page === totalPages" @click="page++">ถัดไป →</button>
-          </nav>
-          <footer class="adjustment-table-footer">
-            <span>รวม {{ visible.length }} รายการ</span>
-            <span>ยอดคงเหลือจะยังไม่ถูกหักเงินจริงอัตโนมัติ</span>
-          </footer>
-        </template>
+          <template v-if="selected.courseId"> คอร์ส #{{ selected.courseId }}</template>
+          <template v-if="selected.visitId"> Visit #{{ selected.visitId }}</template>
+          <template v-if="selected.saleTransactionId">
+            รายการขาย #{{ selected.saleTransactionId }}</template
+          >
+        </p>
+        <div class="actions">
+          <button
+            v-if="selected.status === 'Pending'"
+            class="commission-primary"
+            @click="approve(selected)"
+          >
+            อนุมัติใบปรับยอด
+          </button>
+          <button
+            v-if="selected.status === 'Pending' || selected.status === 'Approved'"
+            class="commission-secondary"
+            @click="cancel(selected)"
+          >
+            ยกเลิกใบปรับยอด
+          </button>
+          <button v-if="canReview(selected)" class="commission-secondary" @click="review(selected)">
+            ส่งตรวจนอกระบบ (พนักงานลาออก)
+          </button>
+        </div>
+
+        <h3>การนำไปใช้ในงวดจ่าย</h3>
+        <table v-if="selected.applications.length" class="commission-table inner">
+          <thead>
+            <tr>
+              <th>ยอด</th>
+              <th>สถานะ</th>
+              <th>อนุมัติหัก/จ่ายจริง</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="app in selected.applications" :key="app.id">
+              <td>{{ baht(app.amount) }}</td>
+              <td>{{ app.status }}</td>
+              <td>
+                {{ app.approved ? 'อนุมัติแล้ว' : 'ยังไม่อนุมัติ'
+                }}<template v-if="app.approvalReference">
+                  · อ้างอิง {{ app.approvalReference }}</template
+                >
+              </td>
+              <td class="actions">
+                <template v-if="app.status === 'Draft'">
+                  <button
+                    v-if="!app.approved"
+                    class="commission-secondary"
+                    @click="approveApplication(app.id, app.amount < 0)"
+                  >
+                    อนุมัติ</button
+                  ><button class="commission-secondary" @click="cancelApplication(app.id)">
+                    ยกเลิก
+                  </button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="muted">ยังไม่มีการนำไปใช้</p>
+
+        <div v-if="canApply(selected)" class="apply-form">
+          <label
+            >งวดที่นำไปใช้<input
+              v-model="application.month"
+              type="month"
+              :min="selected.appliedMonth"
+          /></label>
+          <label
+            >ยอดที่นำไปใช้ (บาท, ว่าง = ทั้งหมดที่เหลือ)<input
+              v-model.number="application.amount"
+              type="number"
+              min="0.01"
+              step="0.01"
+          /></label>
+          <label v-if="selected.amount < 0"
+            >เลขอ้างอิงความยินยอม (จำเป็นเมื่ออนุมัติการหัก)<input v-model="application.reference"
+          /></label>
+          <button class="commission-primary" @click="addApplication(selected)">
+            เพิ่มในงวดจ่าย
+          </button>
+        </div>
       </section>
     </main>
+    <Teleport to="body"
+      ><div v-if="drawerOpen" class="rule-drawer-backdrop" @click.self="drawerOpen = false">
+        <aside class="rule-drawer" role="dialog" aria-modal="true">
+          <header>
+            <div>
+              <h2>สร้างใบปรับยอด</h2>
+              <p>
+                ต้องอ้างอิงต้นทางของพนักงานคนเดียวกันอย่างน้อยหนึ่งรายการ ระบบอนุมัติและนำไปใช้ในงวดให้ในขั้นตอนเดียว ส่วนที่หักไม่ครบยกไปงวดถัดไปเอง
+              </p>
+            </div>
+            <button class="drawer-close" @click="drawerOpen = false">×</button>
+          </header>
+          <div class="rule-form">
+            <label
+              >พนักงาน<select v-model.number="form.staffId">
+                <option v-for="person in staff" :key="person.id" :value="person.id">
+                  {{ person.fullName }}
+                </option>
+              </select></label
+            ><label
+              >ประเภท<select v-model="form.direction">
+                <option value="deduct">หักเงิน (−)</option>
+                <option value="add">เพิ่มเงิน (+)</option>
+              </select></label
+            ><label
+              >ยอด (บาท)<input v-model.number="form.amount" type="number" min="0.01" step="0.01"
+            /></label>
+            <label
+              >เหตุผล<input
+                v-model="form.reason"
+                maxlength="255"
+                placeholder="เช่น บันทึกผู้รักษาผิดคน"
+            /></label>
+            <label
+              >ต้นทางที่อ้างอิง<select v-model="form.sourceKind">
+                <option v-for="(label, key) in sourceLabels" :key="key" :value="key">
+                  {{ label }}
+                </option>
+              </select></label
+            ><label
+              >เลขที่ต้นทาง<input v-model.number="form.sourceId" type="number" min="1"
+            /></label>
+            <label
+              >เดือนที่เกิดข้อผิดพลาด (ว่าง = ตามต้นทาง)<input
+                v-model="form.originalMonth"
+                type="month"
+                :max="today.slice(0, 7)"
+            /></label>
+            <label
+              >เดือนที่นำไปใช้ (ว่าง = งวดถัดไปหลังเดือนที่จ่ายล่าสุด)<input
+                v-model="form.appliedMonth"
+                type="month"
+            /></label>
+            <label class="check-row"
+              ><input v-model="form.applyNow" type="checkbox" aria-label="นำไปใช้ในงวดทันที" />
+              นำไปใช้ในงวดทันที (อนุมัติและเพิ่มในงวดให้เลย)</label
+            >
+            <label v-if="form.applyNow && form.direction === 'deduct'"
+              >เลขที่อ้างอิงความยินยอมของพนักงาน *<input
+                v-model="form.reference"
+                maxlength="100"
+                aria-label="เลขที่อ้างอิงความยินยอม"
+                placeholder="เช่น เลขที่เอกสารที่พนักงานเซ็นรับทราบ"
+            /></label>
+          </div>
+          <p v-if="drawerError" class="drawer-error" role="alert">{{ drawerError }}</p>
+          <footer>
+            <button class="commission-secondary" @click="drawerOpen = false">ยกเลิก</button
+            ><button class="commission-primary" :disabled="saving" @click="create">
+              {{
+                saving ? 'กำลังบันทึก...' : form.applyNow ? 'บันทึกและนำไปใช้ในงวด' : 'บันทึกใบปรับยอด'
+              }}
+            </button>
+          </footer>
+        </aside>
+      </div></Teleport
+    >
   </div>
 </template>
 
 <style scoped>
 @import '../styles/commission-manager.css';
-.adjustment-main {
-  padding-top: 34px;
-}
-.adjustment-title {
+.toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
-.back-to-overview {
-  display: inline-flex;
-  margin-bottom: 8px;
-  color: #397b74;
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-decoration: none;
+.minus {
+  color: #b42318;
 }
-.back-to-overview:hover {
-  color: #1e8b86;
-  text-decoration: underline;
+.plus {
+  color: #16875b;
 }
-.adjustment-title h1 {
-  margin: 0;
-  font-size: clamp(1.75rem, 2.7vw, 2.25rem);
+.reason {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.adjustment-title p {
-  margin: 7px 0 0;
-  color: #667a72;
+.chosen td {
+  background: #eef7f6;
 }
-.adjustment-title .commission-primary {
-  min-height: 42px;
-  font-size: 0.9rem;
-  white-space: nowrap;
+.detail {
+  margin-top: 26px;
+  padding: 22px;
 }
-.add-adjustment {
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-}
-.adjustment-filters {
-  display: grid;
-  grid-template-columns: 1.55fr 1fr 1.1fr;
-  gap: 16px;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e7ede9;
-}
-.clear-filters,
-.empty-clear {
-  border: 0;
-  background: transparent;
-  color: var(--color-primary-strong);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.clear-filters {
-  grid-column: 1 / -1;
-  justify-self: end;
-}
-.empty-clear {
-  display: block;
-  margin: 12px auto 0;
-}
-.adjustment-status {
-  display: inline-block;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #edf0f1;
-  color: #40545b;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.row-step {
-  display: block;
-  margin-top: 6px;
-  color: #536a61;
-  font-size: 0.78rem;
-}
-.status-pending {
-  background: #fff0c6;
-  color: #74510a;
-}
-.status-completed {
-  background: #def1f0;
-  color: #12625e;
-}
-.status-cancelled {
-  background: #f9e4e8;
-  color: #923f50;
-}
-.adjustment-pagination {
+.detail header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px 24px;
-  color: #50645a;
 }
-.adjustment-pagination button {
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid #b7cecc;
-  border-radius: 8px;
-  background: #fff;
-  color: var(--color-primary-strong);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
+.detail h2,
+.detail h3 {
+  margin: 0 0 8px;
 }
-.adjustment-pagination button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.adjustment-pagination button:focus-visible {
-  outline: 2px solid var(--color-primary-strong);
-  outline-offset: 3px;
-}
-.clear-filters:focus-visible,
-.empty-clear:focus-visible,
-.detail-button:focus-visible {
-  outline: 2px solid var(--color-primary-strong);
-  outline-offset: 3px;
-}
-.adjustment-filters input {
-  width: 100%;
-  min-height: 46px;
-  box-sizing: border-box;
-  padding: 0 14px;
-  border: 1px solid #b7cecc;
-  border-radius: 10px;
-  background: #fff;
-  color: #3f514a;
-  font: inherit;
-  font-size: 0.87rem;
-}
-.adjustment-directory {
-  overflow: hidden;
-  padding: 0;
-}
-.adjustment-directory .directory-results {
+.actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 24px;
-  min-height: 60px;
-  padding: 16px 24px;
-  box-sizing: border-box;
+  gap: 10px;
+  margin: 12px 0;
 }
-.directory-results h2 {
-  margin: 0;
-  color: var(--color-ink);
-  font-size: 18px;
+.inner {
+  min-width: 0;
 }
-.directory-results p {
-  margin: 4px 0 0;
-  color: #667a72;
-  font-size: 13px;
-}
-.directory-results > span {
-  color: var(--color-primary-strong);
-  font-size: 14px;
-  font-weight: 700;
-}
-.adjustment-table-wrap {
-  overflow-x: auto;
-}
-table {
-  width: 100%;
-  min-width: 920px;
-  border-collapse: collapse;
-  font-size: 0.84rem;
-}
-th {
-  padding: 14px 18px;
-  border: 0;
-  background: #f2f7f4;
-  color: #34594f;
-  text-align: left;
-  font-weight: 600;
-  white-space: nowrap;
-}
-td {
-  padding: 16px 18px;
-  border-bottom: 1px solid #e7ede9;
-  color: var(--color-ink);
-  vertical-align: middle;
-}
-tbody td:first-child {
-  color: #25372f;
-  font-weight: 700;
-}
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-tbody tr:hover td {
-  background: #f7faf8;
-}
-.deduction {
-  color: #bd514c;
-  font-weight: 700;
-}
-.row-reason,
-.amount-context {
-  display: block;
-  margin-top: 4px;
-  color: #667a72;
-  font-size: 0.78rem;
-  font-weight: 400;
-  line-height: 1.4;
-}
-.amount-context {
-  color: #923f50;
-}
-.detail-button {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #8fb5ae;
-  border-radius: 8px;
-  padding: 0 14px;
-  background: #fff;
-  color: var(--color-primary-strong);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-decoration: none;
-}
-.detail-button:hover {
-  border-color: var(--color-primary-strong);
-  background: #edf5f1;
-}
-.empty-row {
-  padding: 32px;
-  color: #667a72;
-  text-align: center;
-}
-.adjustment-table-footer {
+.apply-form {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 15px 18px;
-  border-top: 1px solid #e7ede9;
-  background: #eff6ee;
-  color: #718078;
-  font-size: 0.82rem;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+  margin-top: 18px;
 }
-.adjustment-table-footer span:first-child {
-  color: #50645a;
-  font-weight: 700;
+.apply-form label {
+  display: grid;
+  gap: 6px;
+  color: #52635b;
 }
-.adjustment-directory > .state-card {
-  margin: 0;
-  border-radius: 0;
+.apply-form input {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #b7cecc;
+  border-radius: 9px;
+  font: inherit;
 }
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+.muted {
+  color: #667a72;
 }
-@media (max-width: 900px) {
-  .adjustment-filters {
-    grid-template-columns: 1fr 1fr;
-  }
-  .adjustment-table-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-  }
+.page-error {
+  padding: 11px;
+  border-radius: 8px;
+  background: #fff1ef;
+  color: #b42318;
 }
-@media (max-width: 620px) {
-  .adjustment-main {
-    padding-top: 26px;
-  }
-  .adjustment-title {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .adjustment-filters {
-    grid-template-columns: 1fr;
-  }
-  .adjustment-directory .directory-results {
-    padding: 16px;
-  }
-  .adjustment-table-wrap {
-    overflow: visible;
-    padding: 0 12px;
-  }
-  table {
-    display: block;
-    min-width: 0;
-  }
-  thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-  }
-  tbody {
-    display: grid;
-    gap: 10px;
-  }
-  tbody tr {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px 14px;
-    padding: 12px;
-    border: 1px solid #dce7e2;
-    border-radius: 10px;
-    background: #fff;
-  }
-  tbody td,
-  tbody tr:last-child td {
-    display: block;
-    min-width: 0;
-    padding: 7px 0;
-    border: 0;
-    background: transparent;
-    overflow-wrap: anywhere;
-  }
-  tbody td::before {
-    display: block;
-    margin-bottom: 4px;
-    color: #667a72;
-    content: attr(data-label);
-    font-size: 0.72rem;
-    font-weight: 600;
-  }
-  tbody td:first-child {
-    grid-column: 1 / -1;
-    position: static;
-  }
-  tbody td:last-child {
-    grid-column: 1 / -1;
-    position: static;
-    border: 0;
-  }
-  tbody td:last-child::before {
-    content: none;
-  }
-  .detail-button {
-    width: 100%;
-  }
-  .empty-row {
-    grid-column: 1 / -1;
-  }
-  .adjustment-title .commission-primary {
-    width: 100%;
-  }
+.notice {
+  padding: 11px;
+  border-radius: 8px;
+  background: #e8f6ef;
+  color: #16875b;
 }
 </style>

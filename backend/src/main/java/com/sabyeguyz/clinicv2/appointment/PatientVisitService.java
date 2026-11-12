@@ -1,10 +1,7 @@
 package com.sabyeguyz.clinicv2.appointment;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.audit.AuditLogService;
-import com.sabyeguyz.clinicv2.enums.AuditAction;
 import com.sabyeguyz.clinicv2.enums.VisitStatus;
-import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import java.time.Instant;
@@ -21,12 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class PatientVisitService {
     private final PatientVisitRepository visits;
     private final AppointmentService appointmentService;
-    private final AuditLogService audit;
 
-    public PatientVisitService(PatientVisitRepository visits, AppointmentService appointmentService, AuditLogService audit) {
+    public PatientVisitService(PatientVisitRepository visits, AppointmentService appointmentService) {
         this.visits = visits;
         this.appointmentService = appointmentService;
-        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -39,36 +34,16 @@ public class PatientVisitService {
         return find(id);
     }
 
-    @Transactional
-    public PatientVisit createForService(Long appointmentId, Patient patient, Branch branch, Staff treatingStaff, Long actorId) {
-        Appointment appointment = appointmentService.requireServiceAppointment(appointmentId, patient, branch);
-        require(treatingStaff != null
-                        && treatingStaff.getBranch() != null
-                        && branch.getId().equals(
-                        treatingStaff.getBranch().getId()),
-                "ผู้รักษาต้องอยู่ในสาขารับบริการ");
-
-        PatientVisit visit = new PatientVisit();
-        visit.setPatient(patient);
-        visit.setBranch(branch);
-        visit.setAssignedStaff(appointment.getStaff());
-        visit.setTreatingStaff(treatingStaff);
-
-        if (appointment.getAppointmentPatientType() == AppointmentPatientType.CURRENT) {
-            if (visits.findFirstByAppointmentIdOrderByIdDesc(appointmentId).isPresent()) {
-                throw new IllegalStateException("นัดนี้มี Visit แล้ว ต้องตรวจรายการเดิมก่อน");
-            }
-            visit.setAppointment(appointment);
-        }
-
-        return save(visit, actorId);
-    }
-
     /** Checks in a patient against an existing, booked Appointment. */
     @Transactional
     public PatientVisit checkInFromAppointment(Long appointmentId, Long actorId) {
-        throw new IllegalStateException(
-                "ให้บันทึกบริการและรับชำระ หรือใช้สิทธิ์คอร์สผ่านหน้าบริการ " + "ระบบจะสร้าง Visit เมื่อทำรายการสำเร็จ");
+        Appointment appointment = appointmentService.markArrived(appointmentId, actorId);
+        PatientVisit visit = new PatientVisit();
+        visit.setAppointment(appointment);
+        visit.setPatient(appointment.getPatient());
+        visit.setBranch(appointment.getBranch());
+        visit.setAssignedStaff(appointment.getStaff());
+        return save(visit, actorId);
     }
 
     /** Walk-in / Changing: no prior Appointment. */
@@ -94,53 +69,6 @@ public class PatientVisitService {
             appointmentService.markInService(visit.getAppointment().getId(), actorId);
         }
         return visits.save(visit);
-    }
-
-    /** Called after payment or course usage succeeds. */
-    @Transactional
-    public PatientVisit completeForService(Long visitId, Long appointmentId, Long actorId) {
-        PatientVisit visit = find(visitId);
-        requireNotTerminal(visit);
-        ensureTreatingStaff(visit);
-
-        Appointment appointment = appointmentService.requireServiceAppointment(
-                        appointmentId, visit.getPatient(), visit.getBranch());
-
-        if (appointment.getAppointmentPatientType() == AppointmentPatientType.CURRENT) {
-            require(visit.getAppointment() != null
-                            && appointmentId.equals(
-                            visit.getAppointment().getId()),
-                    "Visit ต้องเชื่อมกับนัด CURRENT ที่รับบริการ");
-        } else {
-            require(visit.getAppointment() == null,
-                    "Visit จากนัด NEW ต้องไม่เชื่อมนัดย้อนหลัง");
-        }
-
-        Instant completedAt = Instant.now();
-        visit.setVisitStatus(VisitStatus.Completed);
-        visit.setVisitDate(completedAt);
-        visit.setCheckoutTime(completedAt);
-        touch(visit, actorId);
-
-        appointmentService.confirmAfterService(appointmentId, actorId);
-        PatientVisit saved = visits.save(visit);
-
-        audit.recordChange(
-                "appointment",
-                String.valueOf(appointmentId),
-                AuditAction.UPDATE,
-                AuditLogService.fields(
-                        "status", "Unconfirmed"),
-                AuditLogService.fields(
-                        "event", "ServiceCompleted",
-                        "status", "Confirmed",
-                        "visitId", saved.getId(),
-                        "patientId", saved.getPatient().getId(),
-                        "branchId", saved.getBranch().getId(),
-                        "completedAt", completedAt),
-                actorId);
-
-        return saved;
     }
 
     @Transactional

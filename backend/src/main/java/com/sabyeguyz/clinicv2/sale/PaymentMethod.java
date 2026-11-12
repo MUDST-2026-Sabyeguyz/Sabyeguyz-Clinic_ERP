@@ -7,16 +7,13 @@ import java.time.Instant;
 @Table(name = "payment_method")
 public class PaymentMethod {
     public static String canonicalName(String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("ต้องระบุช่องทางชำระเงิน");
-        }
-
+        if (value == null) throw new IllegalArgumentException("ต้องระบุช่องทางชำระเงิน");
         return switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "cash" -> "Cash";
             case "creditcard", "credit card" -> "CreditCard";
             case "promptpay", "qr" -> "PromptPay";
             case "banktransfer", "transfer" -> "BankTransfer";
-            default -> throw new IllegalArgumentException(
-                    "ช่องทางชำระเงินต้องเป็น CreditCard, PromptPay หรือ BankTransfer");
+            default -> throw new IllegalArgumentException("ช่องทางชำระเงินต้องเป็น Cash, CreditCard, PromptPay หรือ BankTransfer");
         };
     }
 
@@ -25,7 +22,7 @@ public class PaymentMethod {
     @Column(name = "payment_method_id")
     private Long id;
 
-    /** Supported payment channels: CreditCard, PromptPay and BankTransfer. */
+    /** e.g. Cash, Transfer, QR, Credit Card. */
     @org.hibernate.annotations.ColumnTransformer(write = "cast(? as method_name_enum)")
     @Column(name = "method_name", length = 50, nullable = false)
     private String methodName;

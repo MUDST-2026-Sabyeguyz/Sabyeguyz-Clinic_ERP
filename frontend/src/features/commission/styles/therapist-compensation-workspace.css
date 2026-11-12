@@ -361,7 +361,7 @@
   border: 1px solid #dce4df;
   border-radius: 8px;
   background: #fff;
-  color: var(--color-ink);
+  color: #25372e;
   text-align: left;
 }
 .therapist-payment-card {
@@ -488,6 +488,7 @@
   }
 }
 
+/* live data of the therapist pay pages */
 .therapist-error {
   padding: 11px;
   border-radius: 8px;
@@ -547,7 +548,7 @@
 .therapist-line-row {
   margin-bottom: 8px;
   border: 1px solid #d3e3e0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 14px;
   text-decoration: none;
 }
@@ -673,42 +674,7 @@
   display: flex;
   gap: 8px;
 }
-.therapist-month-pickers > .filter-dropdown,
-.therapist-payment-range > .filter-dropdown {
-  width: 130px;
-}
 
-.therapist-month-stepper {
-  display: flex;
-  align-items: center;
-  min-width: 130px;
-  min-height: 42px;
-  border: 1px solid #b7cecc;
-  border-radius: 9px;
-  background: #fff;
-  color: #193b3a;
-}
-.therapist-month-stepper strong {
-  flex: 1;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-}
-.therapist-month-stepper button {
-  display: grid;
-  width: 34px;
-  min-height: 40px;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  color: #137d78;
-  font: inherit;
-  font-size: 22px;
-  cursor: pointer;
-}
-.therapist-month-stepper button:hover {
-  background: #eef6f4;
-}
 .therapist-payment-range select,
 .therapist-month-pickers select {
   width: auto;

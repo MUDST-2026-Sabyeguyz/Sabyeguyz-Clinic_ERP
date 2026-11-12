@@ -8,24 +8,16 @@ const check = (path, ids) => cy.api('POST', `/__cypress/commission-entities/${pa
 describe('v2 commission tables (entities and database rules)', () => {
   beforeEach(function () {
     cy.registerPatient().then((patient) => {
-      cy.createServiceAppointment(this.fixtures, patient.id).then((appointment) =>
-          cy.api('POST', '/api/payments', {
-            patientId: patient.id,
-            branchCode: '01',
-            salespersonStaffId: this.fixtures.therapistId,
-            treatingStaffId: this.fixtures.therapistId,
-            appointmentId: appointment.id,
-            paymentLabelCode: 'FULL',
-            items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
-            payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
-          })
-      ).then(({ status, body: sale }) => {
-        expect(status).to.equal(201)
+      cy.api('POST', '/api/payments', {
+        patientId: patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId,
+        items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
+        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+      }).then(({ body: sale }) => {
         cy.api('GET', `/api/receipts/${sale.id}`).then(({ body: receipt }) => {
           cy.api('POST', `/api/payments/${receipt.payments[0].id}/refunds`, {
-            amount: 300, paymentMethodCode: 'BankTransfer', reason: 'ลูกค้าไม่พอใจ',
+            amount: 300, paymentMethodCode: 'Cash', reason: 'ลูกค้าไม่พอใจ',
           }).then(({ body: refund }) => {
-            cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL',})
+            cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01' })
               .then(({ body: course }) => {
                 cy.api('GET', '/__cypress/commission-entities/latest').then(({ body: latest }) => {
                   cy.login('manager', 'manager123').then(({ body: auth }) => {

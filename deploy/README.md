@@ -2,8 +2,6 @@
 
 Run from the repository root with Docker Desktop (Linux containers) running:
 
-For an existing Windows installation, pull `main`, then run `powershell -ExecutionPolicy Bypass -File scripts/update-local.ps1` from the repository root. The updater reuses the running application's Compose project and database, rebuilds both application images, replaces their containers, and waits for health checks.
-
 Copy `.env.example` to `.env`, then set unique `POSTGRES_PASSWORD` and `JWT_SECRET` values.
 
 ```bash

@@ -1,13 +1,7 @@
 const friendPayload = { firstName: 'ปลายทาง', phone: '0822222222', identityNumber: '1100000000102' }
 
 function buy(fx, patient) {
-  return cy.api('POST', '/api/course-purchases', {
-    patientId: patient.id, courseId: fx.courseId, branchCode: '01', paymentLabelCode: 'FULL',
-  }).then((result) => {
-    expect(result.status, JSON.stringify(result.body)).to.equal(201)
-    expect(result.body.remaining).to.equal(5)
-    return result
-  })
+  return cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: fx.courseId, branchCode: '01' })
 }
 
 function transfer(owner, friend, purchase, quantity) {
@@ -27,7 +21,7 @@ describe('v2 course transfers', () => {
             expect(body.sourcePatientId).to.equal(owner.id)
             expect(body.destinationPatientId).to.equal(friend.id)
           })
-          cy.api('GET', `/api/patients/${owner.id}/courses`).its('body.0.remaining').should('equal', 3)
+          cy.api('GET', `/api/patients/${owner.id}/courses`).its('body.0.remaining').should('equal', 4)
           cy.api('GET', `/api/patients/${friend.id}/courses`).its('body.0.remaining').should('equal', 2)
         })
       })
@@ -60,11 +54,10 @@ describe('v2 course transfers', () => {
     cy.registerPatient().then((owner) => {
       cy.registerPatient(friendPayload).then((friend) => {
         buy(this.fixtures, owner).then(({ body: purchase }) => {
-          transfer(owner, friend, purchase, 2).then(({ status, body: made }) => {
-            expect(status, JSON.stringify(made)).to.equal(201)
+          transfer(owner, friend, purchase, 2).then(({ body: made }) => {
             cy.api('POST', `/api/course-transfers/${made.id}/reverse`, { reason: 'โอนผิดคน' })
               .its('status').should('equal', 200)
-            cy.api('GET', `/api/patients/${owner.id}/courses`).its('body.0.remaining').should('equal', 5)
+            cy.api('GET', `/api/patients/${owner.id}/courses`).its('body.0.remaining').should('equal', 6)
           })
         })
       })

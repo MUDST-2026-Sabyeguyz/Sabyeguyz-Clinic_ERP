@@ -3,17 +3,15 @@ import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import type { TherapistCompensationTab } from '../types/therapistCompensation'
 import TherapistCompensationTabs from './TherapistCompensationTabs.vue'
 
-withDefaults(
-  defineProps<{
-    title: string
-    subtitle: string
-    activeTab: TherapistCompensationTab
-    tabs?: boolean
-    error?: string
-    loading?: boolean
-  }>(),
-  { tabs: true },
-)
+// the frame every therapist pay page shares: staff header, page title and the four tabs
+withDefaults(defineProps<{
+  title: string
+  subtitle: string
+  activeTab: TherapistCompensationTab
+  tabs?: boolean
+  error?: string
+  loading?: boolean
+}>(), { tabs: true })
 </script>
 
 <template>

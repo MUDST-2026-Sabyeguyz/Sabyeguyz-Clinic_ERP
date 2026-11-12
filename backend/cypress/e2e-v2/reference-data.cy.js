@@ -103,23 +103,13 @@ describe('v2 reference data: branches, staff, payment methods, master data, room
     })
 
     it('the seeded PromptPay method can be used to pay a sale', function () {
-      cy.api('POST', '/api/payment-methods', {
-        code: 'PromptPay',
-        name: 'PromptPay',
-      }).its('status').should('equal', 409)
-
+      cy.api('POST', '/api/payment-methods', { code: 'PromptPay', name: 'PromptPay' }).its('status').should('equal', 409)
       cy.registerPatient().then((patient) => {
-        cy.createServiceAppointment(this.fixtures, patient.id).then((appointment) => {
-          cy.api('POST', '/api/payments', {
-            patientId: patient.id,
-            branchCode: '01',
-            appointmentId: appointment.id,
-            treatingStaffId: this.fixtures.therapistId,
-            paymentLabelCode: 'FULL',
-            items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
-            payments: [{ paymentMethodCode: 'PromptPay', amount: 800 }],
-          }).its('status').should('equal', 201)
-        })
+        cy.api('POST', '/api/payments', {
+          patientId: patient.id, branchCode: '01',
+          items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
+          payments: [{ paymentMethodCode: 'PromptPay', amount: 800 }],
+        }).its('status').should('equal', 201)
       })
     })
 

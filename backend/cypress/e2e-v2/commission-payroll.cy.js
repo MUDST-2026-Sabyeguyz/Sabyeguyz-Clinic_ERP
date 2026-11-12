@@ -16,38 +16,22 @@ const template = (code, price, sessions) => cy.api('POST', '/api/courses',
   return body.id
 })
 const buy = (patient, courseId, ownerId) => cy.api('POST', '/api/course-purchases', {
-  patientId: patient.id, courseId, branchCode: '01', caseOwnerStaffId: ownerId, paymentLabelCode: 'FULL',
+  patientId: patient.id, courseId, branchCode: '01', caseOwnerStaffId: ownerId,
 }).then(({ status, body }) => {
   expect(status, JSON.stringify(body)).to.equal(201)
   return body
 })
-const use = (courseId, extra = {}) => cy.useCourseSession(courseId, extra)
-const closeMonth = () =>
-    cy.api(
-        'POST',
-        `/api/commission/closings/${month}?branchCode=01`
-    ).its('status').should('equal', 200)
-
-const closingOf = (staffId) =>
-    cy.api(
-        'GET',
-        `/api/commission/closings?month=${month}&branchCode=01`
-    ).then(({ body }) =>
-        body.find((row) => row.employeeId === staffId)
-    )
+const use = (courseId, extra = {}) => cy.api('POST', '/api/course-usages', { coursePurchaseId: courseId, ...extra })
+const closeMonth = () => cy.api('POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 200)
+const closingOf = (staffId) => cy.api('GET', `/api/commission/closings?month=${month}`).then(({ body }) => body.find((row) => row.employeeId === staffId))
 const usages = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/usages`).its('body')
 const allocations = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/allocations`).its('body')
 const totals = (courseId) => cy.api('GET', `/__cypress/commission/courses/${courseId}/totals`).its('body')
-const prepare = (m = month) => cy.api('POST', `/api/commission/payments/prepare?month=${m}&branchCode=01`).then(({ status, body }) => {
+const prepare = (m = month) => cy.api('POST', `/api/commission/payments/prepare?month=${m}`).then(({ status, body }) => {
   expect(status, JSON.stringify(body)).to.equal(200)
   return body
 })
 const paymentOf = (staffId, m = month) => prepare(m).then((rows) => rows.find((row) => row.staffId === staffId))
-const closePayments = (m = month) =>
-    cy.api(
-        'POST',
-        `/api/commission/payments/close?month=${m}&branchCode=01`
-    )
 
 describe('v2 commission: reopen the month before payment (test 05)', () => {
   it('works the tier out again from the sales at that time and allocates a new version', function () {
@@ -58,7 +42,8 @@ describe('v2 commission: reopen the month before payment (test 05)', () => {
         usages(course.id).then((rows) => expect(money(rows[0].owner_net_commission)).to.equal(38.46)) // 10,000 at 5% / 13
         closingOf(this.fixtures.therapistId).then((closing) => expect(closing.status).to.equal('CLOSED'))
 
-        // Reopen before adding sales, then close again to recalculate the tier.
+        // more is sold in the same month: the tier changes (70,000 = 7%), but a Closed month keeps its rate until reopened
+        buy(patient, bigId, this.fixtures.therapistId)
         cy.api('POST', `/api/commission/closings/0/reopen`, { reason: 'x' }).its('status').should('equal', 400)
         closingOf(this.fixtures.therapistId).then((closing) => {
           cy.api('POST', `/api/commission/closings/${closing.id}/reopen`, { reason: ' ' }).its('status').should('equal', 400)
@@ -73,7 +58,6 @@ describe('v2 commission: reopen the month before payment (test 05)', () => {
         })
         usages(course.id).then((rows) => expect(rows[0].owner_net_commission).to.equal(null))
         allocations(course.id).then((rows) => expect(rows.map((row) => row.entry_type)).to.deep.equal(['Allocation', 'Reversal']))
-        buy(patient, bigId, this.fixtures.therapistId)
 
         closeMonth()
         totals(course.id).then((row) => {
@@ -89,7 +73,7 @@ describe('v2 commission: reopen the month before payment (test 05)', () => {
         })
         totals(course.id).then((row) => expect(money(row.owner_net_commission_released_total)).to.equal(53.85))
         // one Open row per staff and month: the second close used the same row
-        cy.api('GET', `/api/commission/closings?month=${month}&branchCode=01`).its('body').should('have.length', 1)
+        cy.api('GET', `/api/commission/closings?month=${month}`).its('body').should('have.length', 1)
       }))
     }))
   })
@@ -110,8 +94,8 @@ describe('v2 commission: reopen the month before payment (test 05)', () => {
   it('is manager-only', function () {
     cy.login('therapist', 'therapist123').then(({ body: auth }) => {
       cy.apiAs(auth.token, 'POST', '/api/commission/closings/1/reopen', { reason: 'x' }).its('status').should('equal', 403)
-      cy.apiAs(auth.token, 'GET', `/api/commission/payments?month=${month}&branchCode=01`).its('status').should('equal', 403)
-      cy.apiAs(auth.token, 'POST', `/api/commission/payments/prepare?month=${month}&branchCode=01`).its('status').should('equal', 403)
+      cy.apiAs(auth.token, 'GET', `/api/commission/payments?month=${month}`).its('status').should('equal', 403)
+      cy.apiAs(auth.token, 'POST', `/api/commission/payments/prepare?month=${month}`).its('status').should('equal', 403)
       cy.apiAs(auth.token, 'POST', '/api/commission/payments/1/pay').its('status').should('equal', 403)
       cy.apiAs(auth.token, 'GET', '/api/commission/adjustments').its('status').should('equal', 403)
       cy.apiAs(auth.token, 'POST', '/api/commission/adjustments', {}).its('status').should('equal', 403)
@@ -129,36 +113,28 @@ describe('v2 commission: the monthly payment of a staff member', () => {
     })))
 
   it('stays unknown (not 0) until the sale month is closed, then adds the three kinds of money', function () {
-    cy.api('POST', '/__cypress/treatment-fee-fixture', {
-      feeType: 'Fixed',
-      feeValue: 45,
-    }).then(({ status, body }) => {
-      expect(status).to.equal(200)
-      expect(body.updated).to.equal(1)
-    })
     sellAndUse(this.fixtures).then((course) => {
       paymentOf(this.fixtures.therapistId).then((payment) => {
         expect(payment.status).to.equal('OPEN')
         expect(payment.pendingSessions).to.equal(2)
         expect(payment.courseCommission, 'unknown, not 0').to.equal(null)
         expect(payment.net).to.equal(null)
-        closePayments().its('status').should('equal', 409)
+        cy.api('POST', `/api/commission/payments/${payment.id}/close`).its('status').should('equal', 409)
         cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('status').should('equal', 409)
       })
+      // a substitute session and a single visit by the same PT add the other two kinds
+      cy.api('GET', '/api/commission/treatment-fees').then(({ body }) => {
+        const id = body[0].id
+        cy.api('PATCH', `/api/commission/treatment-fees/${id}/disable`).its('status').should('equal', 200)
+        cy.api('PUT', `/api/commission/treatment-fees/${id}`, { feeType: 'Fixed', feeValue: 45 }).its('status').should('equal', 200)
+        cy.api('PATCH', `/api/commission/treatment-fees/${id}/enable`).its('status').should('equal', 200)
+      })
       use(course.id, { treatingStaffId: this.fixtures.managerStaffId }).its('status').should('equal', 200)
-      cy.createServiceAppointment(this.fixtures, course.patient.id)
-          .then((appointment) => {
-            return cy.api('POST', '/api/payments', {
-              patientId: course.patient.id,
-              branchCode: '01',
-              appointmentId: appointment.id,
-              salespersonStaffId: this.fixtures.therapistId,
-              treatingStaffId: this.fixtures.therapistId,
-              paymentLabelCode: 'FULL',
-              items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
-              payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
-            })
-          }).its('status').should('equal', 201)
+      cy.api('POST', '/api/payments', {
+        patientId: course.patient.id, branchCode: '01', salespersonStaffId: this.fixtures.therapistId, treatingStaffId: this.fixtures.therapistId,
+        items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
+        payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
+      }).its('status').should('equal', 201)
       closeMonth()
       paymentOf(this.fixtures.therapistId).then((payment) => {
         expect(payment.pendingSessions).to.equal(0)
@@ -183,17 +159,14 @@ describe('v2 commission: the monthly payment of a staff member', () => {
       closeMonth()
       paymentOf(this.fixtures.therapistId).then((payment) => {
         cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('status').should('equal', 409) // must be Closed first
-        closePayments().then(({ status, body }) => {
+        cy.api('POST', `/api/commission/payments/${payment.id}/close`).then(({ status, body }) => {
           expect(status, JSON.stringify(body)).to.equal(200)
-
-          const closed = body.find((row) => row.id === payment.id)
-          expect(closed).to.exist
-          expect(closed.status).to.equal('CLOSED')
-          expect(money(closed.net)).to.equal(76.92)
-          expect(money(closed.adjustment)).to.equal(0)
+          expect(body.status).to.equal('CLOSED')
+          expect(money(body.net)).to.equal(76.92)
+          expect(money(body.adjustment)).to.equal(0)
         })
         cy.api('POST', `/api/commission/payments/${payment.id}/reopen`).its('body.status').should('equal', 'OPEN')
-        closePayments().its('status').should('equal', 200)
+        cy.api('POST', `/api/commission/payments/${payment.id}/close`).its('status').should('equal', 200)
         closingOf(this.fixtures.therapistId).then((closing) => expect(closing.status).to.equal('CLOSED'))
         cy.api('POST', `/api/commission/payments/${payment.id}/pay`).then(({ status, body }) => {
           expect(status, JSON.stringify(body)).to.equal(200)
@@ -207,14 +180,7 @@ describe('v2 commission: the monthly payment of a staff member', () => {
           cy.api('POST', `/api/commission/closings/${closing.id}/reopen`, { reason: 'ลองย้อน' }).its('status').should('equal', 409)
         })
         cy.api('POST', `/api/commission/payments/${payment.id}/reopen`).its('status').should('equal', 409)
-        closePayments().then(({ status, body }) => {
-          expect(status, JSON.stringify(body)).to.equal(200)
-
-          const paid = body.find((row) => row.id === payment.id)
-          expect(paid).to.exist
-          expect(paid.status).to.equal('PAID')
-          expect(money(paid.net)).to.equal(76.92)
-        })
+        cy.api('POST', `/api/commission/payments/${payment.id}/close`).its('status').should('equal', 409)
         cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('status').should('equal', 409)
         // a session whose money was paid cannot be reversed either
         cy.api('GET', `/api/course-purchases/${course.id}`).then(({ body }) => {
@@ -246,7 +212,7 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
       for (let i = 0; i < sessions; i += 1) use(course.id).its('status').should('equal', 200)
       closeMonth()
       return paymentOf(fx.therapistId).then((payment) => {
-        closePayments().its('status').should('equal', 200)
+        cy.api('POST', `/api/commission/payments/${payment.id}/close`).its('status').should('equal', 200)
         cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('status').should('equal', 200)
         return allocations(course.id).then((rows) => ({ course, payment, allocation: rows[0] }))
       })
@@ -264,13 +230,13 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
         expect(body.appliedMonth).to.equal(nextMonth)
         expect(money(body.remaining)).to.equal(140)
         cy.api('POST', `/api/commission/adjustments/${body.id}/approve`).its('body.status').should('equal', 'Approved')
-        cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month: nextMonth, branchCode: '01' }).then(({ status: s2, body: app }) => {
+        cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month: nextMonth }).then(({ status: s2, body: app }) => {
           expect(s2, JSON.stringify(app)).to.equal(201)
           expect(money(app.amount)).to.equal(-140)
           expect(app.status).to.equal('Draft')
         })
         // not in the paid month
-        cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month, branchCode: '01' }).its('status').should('equal', 400)
+        cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month }).its('status').should('equal', 400)
       })
       // the paid period is unchanged; the next period carries the draft
       cy.api('GET', `/api/commission/payments/${ctx.payment.id}`).then(({ body }) => {
@@ -278,7 +244,7 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
         expect(money(body.net)).to.equal(76.92)
         expect(money(body.adjustment)).to.equal(0)
       })
-      cy.api('GET', `/api/commission/payments?month=${nextMonth}&branchCode=01`).then(({ body }) => {
+      cy.api('GET', `/api/commission/payments?month=${nextMonth}`).then(({ body }) => {
         const next = body.find((row) => row.staffId === this.fixtures.therapistId)
         expect(next.status).to.equal('OPEN')
         expect(next.applications.map((app) => money(app.amount))).to.deep.equal([-140])
@@ -301,21 +267,14 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
     paidMonthOf(this.fixtures).then((ctx) => {
       adjust(this.fixtures, ctx, 50).then(({ body }) => {
         cy.api('POST', `/api/commission/adjustments/${body.id}/approve`).its('status').should('equal', 200)
-        cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month: nextMonth, branchCode: '01' }).then(({ body: app }) => {
+        cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month: nextMonth }).then(({ body: app }) => {
           // a draft that the Manager has not approved is not paid
           paymentOf(this.fixtures.therapistId, nextMonth).then((payment) => expect(money(payment.adjustment)).to.equal(0))
           cy.api('POST', `/api/commission/adjustment-applications/${app.id}/approve`, {}).its('status').should('equal', 200)
         })
         paymentOf(this.fixtures.therapistId, nextMonth).then((payment) => {
           expect(money(payment.adjustment)).to.equal(50)
-          closePayments(nextMonth).then(({ status, body }) => {
-            expect(status, JSON.stringify(body)).to.equal(200)
-
-            const closed = body.find((row) => row.id === payment.id)
-            expect(closed).to.exist
-            expect(closed.status).to.equal('CLOSED')
-            expect(money(closed.net)).to.equal(50)
-          })
+          cy.api('POST', `/api/commission/payments/${payment.id}/close`).its('body.net').then((net) => expect(money(net)).to.equal(50))
           cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('body.status').should('equal', 'PAID')
         })
         cy.api('GET', `/api/commission/adjustments/${body.id}`).then(({ body: done }) => {
@@ -343,7 +302,7 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
         }).then(({ status, body }) => {
           expect(status, JSON.stringify(body)).to.equal(201)
           cy.api('POST', `/api/commission/adjustments/${body.id}/approve`).its('status').should('equal', 200)
-          cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month, branchCode: '01' }).then(({ body: app }) => {
+          cy.api('POST', `/api/commission/adjustments/${body.id}/applications`, { month }).then(({ body: app }) => {
             // a deduction needs the consent reference
             cy.api('POST', `/api/commission/adjustment-applications/${app.id}/approve`, {}).its('status').should('equal', 400)
             cy.api('POST', `/api/commission/adjustment-applications/${app.id}/approve`, { reference: 'ใบยินยอม 2569/10' }).its('status').should('equal', 200)
@@ -351,14 +310,7 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
           paymentOf(this.fixtures.therapistId).then((payment) => {
             expect(money(payment.adjustment)).to.equal(-38.46)
             expect(money(payment.net)).to.equal(0)
-            closePayments().then(({ status, body }) => {
-              expect(status, JSON.stringify(body)).to.equal(200)
-
-              const closed = body.find((row) => row.id === payment.id)
-              expect(closed).to.exist
-              expect(closed.status).to.equal('CLOSED')
-              expect(money(closed.net)).to.equal(0)
-            })
+            cy.api('POST', `/api/commission/payments/${payment.id}/close`).its('body.net').then((net) => expect(money(net)).to.equal(0))
             cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('status').should('equal', 200)
           })
           cy.api('GET', `/api/commission/adjustments/${body.id}`).then(({ body: partly }) => {

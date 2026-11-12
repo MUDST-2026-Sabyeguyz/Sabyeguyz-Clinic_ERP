@@ -1,132 +1,25 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { vModalFocus } from '@/features/appointments/modalFocus'
-import { vRegistrationErrors } from '../registrationErrors'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { registerPatient } from '@/api/patients'
-import {
-  appointmentApi,
-  branchApi,
-  masterDataApi,
-  patientApi,
-  type PatientProfile,
-  type Appointment,
-} from '@/api/client'
-import { type PatientRegistrationForm } from '../data/patientRegistration'
-import { selectedManagerBranch, setManagerBranches } from '@/features/staff/data/managerBranch'
-import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
-import { clinicToday, clinicYesterday } from '@/utils/clinicDate'
-import { takePendingCard } from '@/features/idcard/pendingCard'
-import { cardExpired, mapCardToRegistration } from '@/features/idcard/cardToForm'
-import {
-  patientTitleOptions,
-  titleForNationality,
-  titleForGender,
-  genderForTitle,
-} from '../data/patientTitles'
+import { appointmentApi, branchApi, masterDataApi, patientApi, type Appointment } from '@/api/client'
+import { type PatientRegistrationForm, patientTitleOptions, patientGenderOptions } from '../data/patientRegistration'
 
-const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null')
-const isManager = authUser?.role === 'MANAGER'
 
 const submitting = ref(false)
 const route = useRoute()
-// ป้องกันผลคำขอเก่าพากลับไปหน้าเดิมหลังผู้ใช้ออกจากฟอร์มแล้ว
-const registrationActive = ref(true)
-onBeforeUnmount(() => {
-  registrationActive.value = false
-})
 const router = useRouter()
-const registrationBackTarget = computed(() =>
-  route.query.appointmentId
-    ? {
-        name: 'staff-appointments',
-        query: {
-          startDate:
-            typeof route.query.returnStartDate === 'string' ? route.query.returnStartDate : '',
-          endDate: typeof route.query.returnEndDate === 'string' ? route.query.returnEndDate : '',
-          type: typeof route.query.returnType === 'string' ? route.query.returnType : 'all',
-        },
-      }
-    : { name: 'patient-search' },
-)
-const registrationForm = ref<HTMLFormElement | null>(null)
-const sourceAppointment = ref<Appointment | null>(null)
-const sourceLoading = ref(Boolean(route.query.appointmentId))
-const sourceError = ref('')
-const initialForm = ref('')
-const appointmentSummary = computed(() => {
-  const item = sourceAppointment.value
-  if (!item) return ''
-  const date = new Intl.DateTimeFormat('th-TH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Bangkok',
-  }).format(new Date(item.startAt))
-  return [
-    item.contactName || item.patient?.fullName,
-    item.contactPhone ? `โทร ${item.contactPhone}` : null,
-    `วันที่ ${date} น.`,
-  ]
-    .filter(Boolean)
-    .join(' ')
-})
-async function loadSourceAppointment() {
-  sourceLoading.value = true
-  sourceError.value = ''
-  try {
-    const id = Number(route.query.appointmentId)
-    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('ไม่พบนัดหมายต้นทาง')
-    const item = await appointmentApi.get(id)
-    if (!registrationActive.value) return
-    if (item.patient?.id)
-      throw new Error('นัดหมายนี้มีผู้ป่วยที่ลงทะเบียนแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
-    if (item.patientType !== 'NEW') throw new Error('นัดหมายนี้ไม่ใช่นัดสำหรับผู้ป่วยใหม่')
-    if (item.status !== 'UNCONFIRMED')
-      throw new Error('นัดหมายนี้ยังไม่พร้อมลงทะเบียน กรุณากลับไปตรวจสอบสถานะ')
-    sourceAppointment.value = item
-    form.branchCode = item.branchCode
-    if (!form.nickname) form.nickname = item.contactNickname || ''
-    if (!form.phone) form.phone = limitPhoneDigits(item.contactPhone || '')
-  } catch (error) {
-    sourceError.value = error instanceof Error ? error.message : 'โหลดนัดหมายไม่สำเร็จ'
-  } finally {
-    sourceLoading.value = false
-  }
-}
-// เปิดเฉพาะตอนระบบพาไปหน้าชำระเงินเอง ไม่ให้ guard ด้านล่างบล็อกการนำทางนี้
-const leavingToServices = ref(false)
-const leaveDialogOpen = ref(false)
-let resolveLeave: ((leave: boolean) => void) | undefined
-function answerLeave(leave: boolean) {
-  leaveDialogOpen.value = false
-  const resolve = resolveLeave
-  resolveLeave = undefined
-  resolve?.(leave)
-}
-onBeforeUnmount(() => answerLeave(false))
-onBeforeRouteLeave(() => {
-  if (leavingToServices.value) return true
-  if (submitting.value || continuingAppointment.value) return false
-  if (!registeredPatientId.value && initialForm.value && JSON.stringify(form) !== initialForm.value) {
-    if (leaveDialogOpen.value) return false
-    leaveDialogOpen.value = true
-    return new Promise<boolean>((resolve) => { resolveLeave = resolve })
-  }
-  return true
-})
 const submitted = ref(false)
-const cardFilled = ref(false)
-const cardExpiredWarning = ref('')
 const emailFocused = ref(false)
 const identityFocused = ref(false)
 const errorMessage = ref('')
 const confirmationOpen = ref(false)
 const duplicateOpen = ref(false)
 const successOpen = ref(false)
-const duplicatePatient = ref<PatientProfile | null>(null)
+const duplicatePatient = ref<{ id: number; hn: string; fullName: string; identityNumber?: string } | null>(null)
 const registeredHn = ref('')
 const registeredPatientId = ref<number | null>(null)
 const registeredPatientName = computed(() =>
@@ -137,16 +30,22 @@ const registeredIdentityNumber = computed(() => {
   if (!value || isForeign.value) return value
   return value.replace(/^(\d)(\d{4})(\d{5})(\d{2})(\d)$/, '$1-$2-$3-$4-$5')
 })
-const customerGroups = ref<string[]>([])
-const referralChannels = ref<string[]>([])
-const insuranceTypes = ref<string[]>([])
-const insuranceCompanies = ref<string[]>([])
-const branches = ref<Array<{ code: string; name: string }>>([])
-const titleOptions = computed(() => patientTitleOptions(form.nationality === 'ต่างชาติ'))
-const genderOptions = ['ชาย', 'หญิง', 'ไม่ระบุ'].map((value) => ({ value, label: value }))
+const sourceAppointment = ref<Appointment | null>(null)
+const appointmentId = computed(() => Number(route.query.appointmentId) || null)
+const customerGroups = ref(['ลูกค้าทั่วไป', 'ชาวต่างชาติ'])
+const referralChannels = ref(['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'])
+const insuranceCompanies = ref(['AIA'])
+const branches = ref<Array<{ branchCode: string; name: string }>>([])
+const titleOptions = patientTitleOptions
+const genderOptions = patientGenderOptions
+const identityDocumentOptions = [
+  { value: 'NATIONAL_ID', label: 'บัตรประชาชน' },
+  { value: 'PASSPORT', label: 'หนังสือเดินทาง' },
+]
+
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const branchOptions = computed(() =>
-  branches.value.map((branch) => ({ value: branch.code, label: branch.name })),
+  branches.value.map((branch) => ({ value: branch.branchCode, label: branch.name })),
 )
 const customerGroupOptions = computed(() =>
   customerGroups.value.map((value) => ({ value, label: value })),
@@ -156,9 +55,6 @@ const referralChannelOptions = computed(() =>
 )
 const insuranceCompanyOptions = computed(() =>
   insuranceCompanies.value.map((value) => ({ value, label: value })),
-)
-const insuranceTypeOptions = computed(() =>
-  insuranceTypes.value.map((value) => ({ value, label: value })),
 )
 const form = reactive<PatientRegistrationForm>({
   branchCode: '',
@@ -171,7 +67,7 @@ const form = reactive<PatientRegistrationForm>({
   nickname: '',
   fullNameEnglish: '',
   birthDate: '',
-  gender: 'ชาย',
+  gender: 'Male',
   phone: '',
   identityDocumentType: 'NATIONAL_ID',
   identityNumber: '',
@@ -179,7 +75,6 @@ const form = reactive<PatientRegistrationForm>({
   bloodGroup: 'ไม่ทราบ',
   nationality: 'ไทย',
   customerSource: '',
-  insuranceType: '',
   insuranceCompany: '',
   salesChannel: 'หน้าสาขา',
   paymentType: 'ชำระด้วยตนเอง',
@@ -199,8 +94,7 @@ const isForeign = computed(() => form.nationality === 'ต่างชาติ'
 const emailIsValid = computed(() =>
   !form.email.trim()
     ? true
-    : form.email.trim().length <= 254 &&
-      /^[^@.\s]+(\.[^@.\s]+)*@[^@.\s]+(\.[^@.\s]+)+$/.test(form.email.trim()),
+    : /^[a-z0-9](?:[a-z0-9._%+-]*[a-z0-9])?@gmail\.com$/i.test(form.email.trim()),
 )
 const emailErrorVisible = computed(
   () => submitted.value && !emailFocused.value && !emailIsValid.value,
@@ -210,52 +104,35 @@ const identityErrorVisible = computed(
 )
 const thaiOnly = (value: string) => value.replace(/[^\u0E00-\u0E7F\s]/g, '')
 const allowedName = (value: string) =>
-  isForeign.value ? value.replace(/[^\p{L}\s.'-]/gu, '') : thaiOnly(value)
+  isForeign.value ? value.replace(/[^\p{L}\p{M}\s.'-]/gu, '') : thaiOnly(value)
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
 const thaiNameIsValid = (value: string) => /^[\u0E00-\u0E7F\s]+$/.test(value.trim())
 const personNameIsValid = (value: string) =>
-  isForeign.value ? /^[\p{L}\s.'-]+$/u.test(value.trim()) : thaiNameIsValid(value)
-const phoneIsValid = computed(() =>
-  isForeign.value ? isOptionalPhoneValid(form.phone) : /^[0-9]{10}$/.test(form.phone),
-)
+  isForeign.value ? /^[\p{L}\p{M}\s.'-]+$/u.test(value.trim()) : thaiNameIsValid(value)
+const phoneIsValid = computed(() => /^\d{10}$/.test(form.phone))
+
 const birthDateIsValid = computed(() =>
   isForeign.value && !form.birthDate
     ? true
-    : Boolean(form.birthDate && form.birthDate < clinicToday()),
-)
-const birthDateErrorVisible = computed(
-  () => (Boolean(form.birthDate) || submitted.value) && !birthDateIsValid.value,
+    : Boolean(form.birthDate && form.birthDate < new Date().toISOString().slice(0, 10)),
 )
 const canSubmit = computed(() =>
   Boolean(
-    !sourceLoading.value &&
-    !sourceError.value &&
     form.branchCode &&
     branches.value.length &&
     personNameIsValid(form.firstName) &&
     personNameIsValid(form.lastName) &&
     (!form.nickname || personNameIsValid(form.nickname)) &&
     emailIsValid.value &&
-    birthDateIsValid.value &&
-    phoneIsValid.value &&
+    (isForeign.value || birthDateIsValid.value) &&
+    ((isForeign.value && !form.phone.trim()) || phoneIsValid.value) &&
+    (isForeign.value || form.identityDocumentType) &&
+
     identityIsValid.value,
   ),
 )
 watch(
-  () => form.title,
-  (title) => {
-    const gender = genderForTitle(title)
-    if (gender && form.gender !== 'ไม่ระบุ') form.gender = gender
-  },
-)
-watch(
-  () => form.gender,
-  (gender) => {
-    if (gender === 'ชาย' || gender === 'หญิง')
-      form.title = titleForGender(form.title, gender, form.nationality === 'ต่างชาติ')
-  },
-)
-watch(
+
   () => form.identityDocumentType,
   () => {
     form.identityNumber = ''
@@ -264,131 +141,97 @@ watch(
 watch(
   () => form.nationality,
   (nationality) => {
-    form.title = titleForNationality(form.title, nationality === 'ต่างชาติ')
     form.identityDocumentType = nationality === 'ต่างชาติ' ? 'PASSPORT' : 'NATIONAL_ID'
   },
 )
 onMounted(async () => {
   try {
-    const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.list()])
+    const [items, branchList] = await Promise.all([masterDataApi.list(), branchApi.listActive()])
     branches.value = branchList
       .filter((item) => item.active)
-      .map((item) => ({ code: item.code, name: item.name }))
-    if (isManager) {
-      setManagerBranches(branches.value)
-      applyManagerBranch()
-      if (branches.value.length && !branches.value.some((item) => item.code === form.branchCode))
-        form.branchCode = branches.value[0]!.code
-    } else {
-      form.branchCode =
-        branches.value.find((item) => item.code === authUser?.branchCode)?.code ?? ''
-      if (!form.branchCode)
-        errorMessage.value = 'ไม่พบสาขาที่เปิดใช้งานของบัญชีนี้ กรุณาตรวจสอบข้อมูลบัญชี'
-    }
+      .map((item) => ({ branchCode: item.branchCode, name: item.name }))
+    if (
+      branches.value.length &&
+      !branches.value.some((item) => item.branchCode === form.branchCode)
+    )
+      form.branchCode = branches.value[0]!.branchCode
     const active = items.filter((item) => item.active)
     const valuesFor = (category: string) =>
       active.filter((item) => item.category === category).map((item) => item.name)
     customerGroups.value = valuesFor('Customer Group')
     referralChannels.value = valuesFor('Referral Channel')
-    insuranceTypes.value = valuesFor('Insurance Type')
     insuranceCompanies.value = valuesFor('Insurance Company')
     if (!form.customerType) form.customerType = customerGroups.value[0]!
+    if (!form.customerSource) form.customerSource = referralChannels.value[0]!
   } catch {
     errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
   }
-  if (route.query.appointmentId) await loadSourceAppointment()
-  initialForm.value = JSON.stringify(form)
-  // a card read from the registration dialog: fill the form (after the snapshot above, so leaving it still asks)
-  const card = takePendingCard()
-  if (card) {
-    Object.assign(form, mapCardToRegistration(card))
-    cardFilled.value = true
-    cardExpiredWarning.value = cardExpired(card, clinicToday())
-      ? 'บัตรประชาชนใบนี้หมดอายุแล้ว ตรวจสอบกับผู้ป่วยก่อนบันทึก'
-      : ''
+  if (appointmentId.value) {
+    try {
+      const appointment = await appointmentApi.get(appointmentId.value)
+      if (appointment.patientType !== 'NEW' || appointment.status !== 'CONFIRMED') throw new Error('นัดหมายนี้ไม่อยู่ในขั้นตอนลงทะเบียนผู้ป่วยใหม่')
+      sourceAppointment.value = appointment
+      form.phone = appointment.contactPhone ?? ''
+      form.branchCode = appointment.branchCode
+    } catch (error) {
+      errorMessage.value = error instanceof Error ? error.message : 'โหลดนัดหมายไม่สำเร็จ'
+    }
+  }
+  if (import.meta.env.DEV && route.query.previewDuplicate === '1') {
+    duplicatePatient.value = {
+      id: 10,
+      hn: '070700000010',
+      fullName: 'ผู้ป่วยสาธิต ชาย 10',
+
+    }
+    duplicateOpen.value = true
+  } else if (import.meta.env.DEV && route.query.previewSuccess === '1') {
+    Object.assign(form, {
+      title: 'นาย',
+      firstName: 'สมชาย',
+      lastName: 'ใจดี',
+      identityNumber: '1111111111111',
+    })
+    registeredHn.value = '2601080022'
+    registeredPatientId.value = 10
+    successOpen.value = true
   }
 })
-function applyManagerBranch() {
-  if (sourceAppointment.value) return
-  if (isManager) form.branchCode = selectedManagerBranch()?.code ?? form.branchCode
-}
-onMounted(() => window.addEventListener('manager-branch-changed', applyManagerBranch))
-onBeforeUnmount(() => window.removeEventListener('manager-branch-changed', applyManagerBranch))
 async function requestSubmit() {
-  if (submitting.value || confirmationOpen.value) return
   submitted.value = true
   if (!canSubmit.value) {
     errorMessage.value = ''
-    await nextTick()
-    const first = registrationForm.value?.querySelector<HTMLElement>(
-      '.invalid-field input, .invalid-field select, .invalid-field textarea, .invalid-field button',
-    )
-    first?.focus()
-    first?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     return
   }
   try {
-    duplicatePatient.value = await findDuplicatePatient()
+    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
+    const [nameCandidates, identity] = await Promise.all([
+      patientApi.searchAll(fullName),
+      form.identityDocumentType === 'NATIONAL_ID' && /^[0-9]{13}$/.test(form.identityNumber)
+        ? patientApi.identityLookup(form.identityNumber)
+        : Promise.resolve({ patient: null }),
+    ])
+    // Preserve the existing name warning while Q2 is open; exact identity takes precedence.
+    duplicatePatient.value = identity.patient ?? nameCandidates.find(
+      (item) => item.fullName.trim().toLocaleLowerCase('th-TH') === fullName.toLocaleLowerCase('th-TH'),
+    ) ?? null
+
     if (duplicatePatient.value) {
       duplicateOpen.value = true
       return
     }
   } catch {
-    // backend ตรวจผู้ป่วยซ้ำอีกครั้งก่อนบันทึกจริง
+    // The backend still performs the authoritative duplicate validation on submit.
   }
-  errorMessage.value = ''
   confirmationOpen.value = true
 }
-async function openExistingPatient() {
-  if (!duplicatePatient.value || continuingAppointment.value) return
-  if (route.query.appointmentId) {
-    if (await continueToServices(duplicatePatient.value.id)) duplicateOpen.value = false
-    return
-  }
+function openExistingPatient() {
+  if (!duplicatePatient.value) return
   duplicateOpen.value = false
   void router.push(`/staff/patients/${duplicatePatient.value.id}`)
 }
-const continuingAppointment = ref(false)
-async function continueToServices(patientId: number) {
-  if (continuingAppointment.value || !registrationActive.value) return false
-  const appointmentId = Number(route.query.appointmentId)
-  if (!Number.isSafeInteger(appointmentId) || appointmentId <= 0) {
-    errorMessage.value = 'ไม่พบนัดหมายต้นทาง กรุณากลับไปหน้านัดหมาย'
-    return false
-  }
-  continuingAppointment.value = true
-  errorMessage.value = ''
-  try {
-    // ตรวจสถานะนัดอีกครั้งก่อนพาไปหน้าบริการ
-    const appointment = await appointmentApi.get(appointmentId)
-    if (!Number.isSafeInteger(patientId) || patientId <= 0)
-      throw new Error('ไม่พบรหัสผู้ป่วยที่ลงทะเบียน')
-    if (appointment.patientType !== 'NEW' || appointment.status !== 'UNCONFIRMED')
-      throw new Error('สถานะนัดหมายเปลี่ยนแล้ว กรุณากลับไปตรวจสอบนัดหมาย')
-    if (!registrationActive.value) return true
-    // ส่ง patientId จริงคู่กับ appointmentId โดยไม่ผูกนัดย้อนหลัง
-    leavingToServices.value = true
-    const failure = await router.push({
-      name: 'staff-services',
-      query: { patientId: String(patientId), appointmentId: String(appointmentId) },
-    })
-    if (failure) throw new Error('ไปหน้าชำระเงินไม่สำเร็จ กรุณาลองใหม่')
-    return true
-  } catch (error) {
-    leavingToServices.value = false
-    errorMessage.value =
-      error instanceof Error ? error.message : 'ไปหน้าบริการไม่สำเร็จ กรุณาลองใหม่'
-    return false
-  } finally {
-    continuingAppointment.value = false
-  }
-}
-async function openRegisteredPatient() {
-  if (!registeredPatientId.value || continuingAppointment.value || !registrationActive.value) return
-  if (route.query.appointmentId) {
-    if (await continueToServices(registeredPatientId.value)) successOpen.value = false
-    return
-  }
+function openRegisteredPatient() {
+  if (!registeredPatientId.value) return
   successOpen.value = false
   void router.push(`/staff/patients/${registeredPatientId.value}`)
 }
@@ -405,23 +248,24 @@ async function findDuplicatePatient() {
   )
 }
 async function submit() {
-  if (submitting.value || !canSubmit.value) return
   confirmationOpen.value = false
+  form.privacyConsent = true
   submitting.value = true
   errorMessage.value = ''
   try {
-    const fullName = `${form.firstName} ${form.middleName} ${form.lastName}`
-      .replace(/\s+/g, ' ')
-      .trim()
-    // ส่งข้อมูลสุขภาพ ผู้ติดต่อฉุกเฉิน และความยินยอมไปบันทึกพร้อมโปรไฟล์
-    const result = await registerPatient({
+    if (appointmentId.value && !sourceAppointment.value) throw new Error('กรุณาตรวจสอบนัดหมายก่อนลงทะเบียน')
+    const fullName = [form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')
+    const result = registeredPatientId.value ? await patientApi.get(registeredPatientId.value) : await registerPatient({
+
       branchCode: form.branchCode,
+      username: `patient-${Date.now()}`,
+      password: `Temp${form.identityNumber.slice(-6)}!`,
       email: form.email,
       title: form.title,
-      fullName,
       firstName: form.firstName,
-      middleName: form.middleName || null,
       lastName: form.lastName,
+      middleName: form.middleName || null,
+      fullName,
       birthDate: form.birthDate,
       gender: form.gender,
       phone: form.phone,
@@ -434,24 +278,24 @@ async function submit() {
       emergencyContactName: fullName,
       emergencyContactRelationship: 'ญาติ',
       emergencyContactPhone: form.phone,
-      privacyConsent: form.privacyConsent,
+      privacyConsent: true,
       nickname: form.nickname,
       bloodGroup: form.bloodGroup,
       nationality: form.nationality,
-      customerType: form.customerType,
+      customerType: isForeign.value ? 'Foreigner' : 'Thai',
       customerSource: form.customerSource,
-      insuranceType: form.insuranceType,
       insuranceCompany: form.insuranceCompany,
     })
-    registeredHn.value = result.hn
     registeredPatientId.value = result.id
+    if (appointmentId.value) {
+      // The NEW appointment only brought the contact details here: the patient is not linked back to it and the
+      // visit does not remember which NEW appointment it came from. Go straight on to the services page.
+      await router.push({ path: '/staff/services', query: { patientId: result.id } })
+      return
+    }
+    registeredHn.value = result.hn
     localStorage.setItem('patientCreationHn', result.hn)
     successOpen.value = true
-    if (route.query.appointmentId) {
-      // ให้เห็นป๊อปอัปลงทะเบียนสำเร็จและ HN ก่อนพาไปหน้าชำระเงิน
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-      await openRegisteredPatient()
-    }
   } catch (error) {
     try {
       duplicatePatient.value = await findDuplicatePatient()
@@ -471,37 +315,15 @@ async function submit() {
     <StaffHeader />
     <main class="registration-content">
       <div class="back-row">
-        <RouterLink :to="registrationBackTarget" class="back-link">{{
-          route.query.appointmentId ? '← กลับไปหน้านัดหมาย' : '← กลับไปค้นหาผู้ป่วย'
-        }}</RouterLink>
+        <RouterLink to="/staff/patients" class="back-link">← กลับไปค้นหาผู้ป่วย</RouterLink>
       </div>
       <section v-if="!registeredHn" class="registration-shell">
         <div class="intro">
           <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
-          <p>กรอกข้อมูลเพื่อสร้างประวัติและหมายเลข HN</p>
+          <p>กรอกข้อมูลเพื่อสร้างประวัติและเลขประจำตัวผู้ป่วย (HN)</p>
         </div>
-        <aside
-          v-if="route.query.appointmentId"
-          class="registration-source"
-          aria-label="นัดหมายต้นทาง"
-        >
-          <p v-if="sourceLoading" role="status">กำลังโหลดข้อมูลนัดหมาย…</p>
-          <template v-else-if="sourceError">
-            <p role="alert">{{ sourceError }}</p>
-            <button type="button" class="secondary" @click="loadSourceAppointment">ลองใหม่</button>
-          </template>
-          <template v-else
-            ><strong>ลงทะเบียนจากนัดหมาย</strong>
-            <p>{{ appointmentSummary }}</p></template
-          >
-        </aside>
-        <form
-          ref="registrationForm"
-          v-registration-errors
-          class="form-card"
-          novalidate
-          @submit.prevent="requestSubmit"
-        >
+        <p v-if="sourceAppointment">ลงทะเบียนสำหรับนัดหมาย #{{ sourceAppointment.id }} — {{ sourceAppointment.contactName }}</p>
+        <form class="form-card" novalidate @submit.prevent="requestSubmit">
           <section class="registration-section">
             <h2>ข้อมูลส่วนตัว</h2>
             <fieldset class="patient-type">
@@ -545,38 +367,27 @@ async function submit() {
                   placeholder="ชื่อ"
                   @input="form.firstName = allowedName(form.firstName)"
                 />
-                <small v-if="submitted && !form.firstName" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                >
+                <small v-if="submitted && !form.firstName" class="required-error">กรุณากรอกข้อมูล</small>
                 <small
                   v-else-if="submitted && !personNameIsValid(form.firstName)"
                   class="required-error"
                   >รูปแบบชื่อไม่ถูกต้อง</small
-                >
-              </label>
-              <label>
-                ชื่อกลาง
-                <input
-                  v-model.trim="form.middleName"
-                  placeholder="ระบุชื่อกลาง (ถ้ามี)"
-                  @input="form.middleName = allowedName(form.middleName)"
-                />
-              </label>
-              <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.lastName) }">
-                นามสกุล <em>*</em>
-                <input
+                ></label
+              >
+              <label>ชื่อกลาง<input v-model.trim="form.middleName" placeholder="ชื่อกลาง" maxlength="100" /></label>
+              <label :class="{ 'invalid-field': submitted && !personNameIsValid(form.lastName) }"
+                >นามสกุล <em>*</em
+                ><input
+
                   v-model.trim="form.lastName"
                   placeholder="นามสกุล"
                   @input="form.lastName = allowedName(form.lastName)"
                 />
-                <small v-if="submitted && !form.lastName" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                >
+                <small v-if="submitted && !form.lastName" class="required-error">กรุณากรอกข้อมูล</small>
                 <small
                   v-else-if="submitted && !personNameIsValid(form.lastName)"
                   class="required-error"
-                  >รูปแบบนามสกุลไม่ถูกต้อง</small
-                >
+                >รูปแบบนามสกุลไม่ถูกต้อง</small>
               </label>
             </div>
             <div class="personal-details-grid">
@@ -594,25 +405,19 @@ async function submit() {
                 <small
                   v-if="submitted && form.nickname && !personNameIsValid(form.nickname)"
                   class="required-error"
-                  >รูปแบบชื่อเล่นไม่ถูกต้อง</small
-                >
+                >รูปแบบชื่อเล่นไม่ถูกต้อง</small>
               </label>
-              <label :class="{ 'invalid-field': birthDateErrorVisible }">
+              <label :class="{ 'invalid-field': submitted && !birthDateIsValid }">
                 วันเกิด <em v-if="!isForeign">*</em>
                 <ThaiDatePicker
                   v-model="form.birthDate"
-                  :invalid="birthDateErrorVisible"
-                  :max-date="clinicYesterday()"
+                  :invalid="submitted && !birthDateIsValid"
                   show-calendar-icon
                   numeric-month
                   hide-caret
                 />
-                <small v-if="submitted && !isForeign && !form.birthDate" class="required-error"
-                  >กรุณากรอกข้อมูล</small
-                >
-                <small v-else-if="birthDateErrorVisible" class="required-error" role="alert"
-                  >วันเกิดต้องเป็นวันก่อนวันนี้</small
-                >
+                <small v-if="submitted && !isForeign && !form.birthDate" class="required-error">กรุณากรอกข้อมูล</small>
+                <small v-else-if="submitted && !birthDateIsValid" class="required-error">วันเกิดต้องเป็นวันในอดีต</small>
               </label>
             </div>
             <div class="personal-details-grid">
@@ -628,7 +433,7 @@ async function submit() {
                 />
               </label>
               <label :class="{ 'invalid-field': identityErrorVisible }">
-                {{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }} <em>*</em>
+                {{ isForeign ? 'เลขพาสปอร์ต' : 'เลขบัตรประชาชน' }}
                 <input
                   v-model.trim="form.identityNumber"
                   :inputmode="isForeign ? 'text' : 'numeric'"
@@ -646,10 +451,6 @@ async function submit() {
                   isForeign ? 'รูปแบบเลขพาสปอร์ตไม่ถูกต้อง' : 'กรุณากรอกตัวเลข 13 หลัก'
                 }}</small>
               </label>
-              <p v-if="cardFilled" class="card-filled-note" role="status" style="grid-column: 1 / -1">
-                กรอกข้อมูลจากบัตรประชาชนให้แล้ว ตรวจสอบและแก้ไขได้ก่อนบันทึก
-                <small v-if="cardExpiredWarning" class="required-error">{{ cardExpiredWarning }}</small>
-              </p>
             </div>
           </section>
           <section class="registration-section">
@@ -659,28 +460,68 @@ async function submit() {
                 >เบอร์โทร <em v-if="!isForeign">*</em
                 ><input
                   v-model.trim="form.phone"
-                  type="tel"
                   inputmode="numeric"
-                  pattern="[0-9]*"
                   maxlength="10"
-                  placeholder="กรอกตัวเลขไม่เกิน 10 หลัก"
-                  @input="form.phone = limitPhoneDigits(form.phone)"
+                  placeholder="xxx-xxx-xxxx"
+                  @input="form.phone = digitsOnly(form.phone)"
                 /><small v-if="submitted && !isForeign && !form.phone" class="required-error"
                   >กรุณากรอกข้อมูล</small
                 ><small v-else-if="submitted && !phoneIsValid" class="required-error"
                   >กรุณากรอกตัวเลข 10 หลัก</small
                 ></label
               >
-              <label :class="{ 'invalid-field': emailErrorVisible }"
-                >อีเมล<input
-                  v-model.trim="form.email"
-                  type="text"
-                  inputmode="email"
-                  placeholder="example@gmail.com"
-                  @focus="emailFocused = true"
-                  @blur="emailFocused = false"
-                /><small v-if="emailErrorVisible" class="required-error"
-                  >รูปแบบอีเมลไม่ถูกต้อง</small
+              <label class="wide">ที่อยู่<textarea v-model.trim="form.address" rows="4" /></label>
+              <label :class="{ 'invalid-field': emailErrorVisible }">
+                อีเมล
+                <input v-model.trim="form.email" type="email" placeholder="example@gmail.com" @focus="emailFocused = true" @blur="emailFocused = false" />
+                <small v-if="emailErrorVisible" class="required-error">รูปแบบอีเมลไม่ถูกต้อง</small>
+              </label>
+            </div>
+          </section>
+          <section class="registration-section">
+            <h2>ข้อมูลยืนยันตัวตน</h2>
+            <p v-if="isForeign">หนังสือเดินทาง (ไม่บังคับ)</p>
+            <div class="form-grid">
+              <label :class="{ 'invalid-field': submitted && !form.identityDocumentType }"
+                >ประเภทเอกสารยืนยันตัวตน <em>*</em
+                ><FilterDropdown
+                  v-model="form.identityDocumentType"
+                  :options="identityDocumentOptions"
+                  default-label="เลือกประเภทเอกสาร"
+                  label="ประเภทเอกสารยืนยันตัวตน"
+                  :disabled="form.nationality === 'ต่างชาติ'"
+                  :clear-on-reselect="false"
+                  hide-default-option
+                /><small v-if="submitted && !form.identityDocumentType" class="required-error"
+                  >กรุณากรอกข้อมูล</small
+                ></label
+              >
+              <label :class="{ 'invalid-field': identityErrorVisible }"
+                >{{
+                  form.identityDocumentType === 'PASSPORT' ? 'เลขหนังสือเดินทาง' : 'เลขบัตรประชาชน'
+                }}
+                <em>*</em
+                ><input
+                  v-model.trim="form.identityNumber"
+                  :disabled="!form.identityDocumentType"
+                  inputmode="numeric"
+                  :maxlength="form.identityDocumentType === 'NATIONAL_ID' ? 13 : 10"
+                  :placeholder="
+                    !form.identityDocumentType
+                      ? 'กรุณาเลือกประเภทเอกสารก่อน'
+                      : form.identityDocumentType === 'NATIONAL_ID'
+                        ? 'กรอกเลขบัตรประชาชน 13 หลัก'
+                        : 'กรอกเลขหนังสือเดินทาง 10 หลัก'
+                  "
+                  @focus="identityFocused = true"
+                  @blur="identityFocused = false"
+                  @input="form.identityNumber = digitsOnly(form.identityNumber)"
+                /><small v-if="identityErrorVisible && !form.identityNumber" class="required-error"
+                  >กรุณากรอกข้อมูล</small
+                ><small v-else-if="identityErrorVisible" class="required-error"
+                  >กรุณากรอกตัวเลข
+                  {{ form.identityDocumentType === 'NATIONAL_ID' ? '13' : '10' }} หลัก</small
+
                 ></label
               >
               <label class="wide">ที่อยู่<textarea v-model.trim="form.address" rows="4" /></label>
@@ -696,8 +537,7 @@ async function submit() {
                   :options="branchOptions"
                   default-label="เลือกสาขา"
                   label="สาขาที่ลงทะเบียน"
-                  hide-chevron
-                  disabled
+                  :disabled="!branches.length"
                   :clear-on-reselect="false"
                   hide-default-option
               /></label>
@@ -714,17 +554,10 @@ async function submit() {
                 >ช่องทางแนะนำ<FilterDropdown
                   v-model="form.customerSource"
                   :options="referralChannelOptions"
-                  default-label="ไม่ระบุ"
+                  default-label="เลือกช่องทางแนะนำ"
                   label="ช่องทางแนะนำ"
                   :clear-on-reselect="false"
-              /></label>
-              <label
-                >ประเภทประกัน<FilterDropdown
-                  v-model="form.insuranceType"
-                  :options="insuranceTypeOptions"
-                  default-label="ไม่ระบุ"
-                  label="ประเภทประกัน"
-                  :clear-on-reselect="false"
+                  hide-default-option
               /></label>
               <label
                 >บริษัทประกัน<FilterDropdown
@@ -737,20 +570,8 @@ async function submit() {
             </div>
           </section>
           <div class="actions end">
-            <button
-              type="button"
-              class="secondary registration-cancel"
-              :disabled="submitting || continuingAppointment"
-              @click="router.push(registrationBackTarget)"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="submit"
-              class="primary"
-              :disabled="submitting || sourceLoading || Boolean(sourceError)"
-            >
-              {{ submitting ? 'กำลังบันทึก...' : route.query.appointmentId ? 'บันทึก' : 'บันทึก' }}
+            <button type="submit" class="primary" :disabled="submitting">
+              {{ submitting ? 'กำลังบันทึก...' : 'บันทึก' }}
             </button>
           </div>
           <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
@@ -759,33 +580,15 @@ async function submit() {
       <section v-else class="success-card">
         <span class="success-icon">✓</span>
         <h1>ลงทะเบียนสำเร็จ</h1>
-        <p>หมายเลข HN</p>
+        <p>เลขประจำตัวผู้ป่วย (HN)</p>
         <strong>{{ registeredHn }}</strong>
-        <template v-if="route.query.appointmentId">
-          <p v-if="!errorMessage" role="status">กำลังไปหน้าชำระเงิน…</p>
-          <template v-else>
-            <p role="alert">{{ errorMessage }}</p>
-            <div class="success-actions">
-              <RouterLink class="secondary" :to="registrationBackTarget"
-                >กลับไปหน้านัดหมาย</RouterLink
-              ><button
-                type="button"
-                class="primary"
-                :disabled="continuingAppointment"
-                @click="openRegisteredPatient"
-              >
-                ไปหน้าชำระเงินอีกครั้ง
-              </button>
-            </div>
-          </template>
-        </template>
-        <div v-else class="success-actions">
-          <RouterLink class="secondary" :to="registrationBackTarget">กลับไปรายชื่อผู้ป่วย</RouterLink
+        <div class="success-actions">
+          <RouterLink class="secondary" to="/staff/patients">กลับไปรายชื่อผู้ป่วย</RouterLink
           ><RouterLink
             v-if="registeredPatientId"
             class="primary"
             :to="`/staff/patients/${registeredPatientId}`"
-            >แสดงข้อมูลผู้ป่วย</RouterLink
+            >เปิดข้อมูลผู้ป่วย</RouterLink
           >
         </div>
       </section>
@@ -798,18 +601,16 @@ async function submit() {
       >
         <section
           class="registration-modal confirmation-modal"
-          v-modal-focus="{ close: () => (confirmationOpen = false), busy: submitting }"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="registration-confirmation-title"
         >
-          <h2 id="registration-confirmation-title">ยืนยันลงทะเบียนผู้ป่วย?</h2>
-          <p class="confirmation-patient-name">{{ registeredPatientName }}</p>
-          <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
+          <h2 id="registration-confirmation-title">ต้องการลงทะเบียนหรือไม่?</h2>
+          <div class="confirmation-modal-spacer" aria-hidden="true"></div>
           <div class="registration-modal-actions">
-            <button type="button" class="secondary" @click="confirmationOpen = false">ยกเลิก</button
+            <button type="button" class="secondary" @click="confirmationOpen = false">ไม่ใช่</button
             ><button type="button" class="primary" :disabled="submitting" @click="submit">
-              {{ submitting ? 'กำลังบันทึก...' : 'ยืนยัน' }}
+              {{ submitting ? 'กำลังบันทึก...' : 'ใช่' }}
             </button>
           </div>
         </section>
@@ -817,15 +618,9 @@ async function submit() {
     >
     <Teleport to="body">
       <div v-if="duplicateOpen" class="registration-modal-backdrop">
-        <section
-          class="registration-modal duplicate-modal"
-          v-modal-focus="{ close: () => (duplicateOpen = false), busy: continuingAppointment }"
-          aria-labelledby="registration-duplicate-title"
-          role="alertdialog"
-          aria-modal="true"
-        >
+        <section class="registration-modal duplicate-modal" role="alertdialog" aria-modal="true">
           <span class="duplicate-warning-icon" aria-hidden="true">!</span>
-          <h2 id="registration-duplicate-title">พบเลขบัตรประชาชน หรือ HN ซ้ำ</h2>
+          <h2>พบเลขบัตรประชาชน หรือ HN ซ้ำ</h2>
           <p>ระบบตรวจพบข้อมูลที่ตรงกับผู้ป่วยเดิม จึงไม่สามารถสร้างรายการใหม่ได้</p>
           <strong>ไม่สามารถบันทึกเป็นผู้ป่วยใหม่ได้</strong>
           <div v-if="duplicatePatient" class="duplicate-patient">
@@ -840,19 +635,8 @@ async function submit() {
             <button type="button" class="secondary" @click="duplicateOpen = false">
               กลับไปตรวจสอบข้อมูล
             </button>
-            <button
-              type="button"
-              class="primary"
-              :disabled="continuingAppointment"
-              @click="openExistingPatient"
-            >
-              {{
-                continuingAppointment
-                  ? 'กำลังไปหน้าชำระเงิน…'
-                  : route.query.appointmentId
-                    ? 'ใช้ผู้ป่วยนี้และไปชำระเงิน'
-                    : 'เปิดข้อมูลผู้ป่วยเดิม'
-              }}
+            <button type="button" class="primary" @click="openExistingPatient">
+              เปิดข้อมูลผู้ป่วยเดิม
             </button>
           </div>
         </section>
@@ -862,7 +646,6 @@ async function submit() {
       <div v-if="successOpen" class="registration-modal-backdrop">
         <section
           class="registration-modal registration-success-modal"
-          v-modal-focus="{ close: () => {}, busy: continuingAppointment }"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="registration-success-title"
@@ -877,50 +660,13 @@ async function submit() {
               {{ registeredIdentityNumber }}
             </span>
           </div>
-          <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
-          <p v-else-if="route.query.appointmentId" class="registration-redirect" role="status">
-            กำลังไปหน้าชำระเงิน<span class="redirect-dots" aria-hidden="true"></span>
-          </p>
-          <button
-            v-if="errorMessage || !route.query.appointmentId"
-            type="button"
-            class="primary"
-            :disabled="continuingAppointment"
-            @click="openRegisteredPatient"
-          >
-            {{
-              continuingAppointment
-                ? 'กำลังไปหน้าชำระเงิน…'
-                : route.query.appointmentId
-                  ? 'บริการและชำระเงิน'
-                  : 'เปิดข้อมูลผู้ป่วย'
-            }}
+          <button type="button" class="primary" @click="openRegisteredPatient">
+            เปิดข้อมูลผู้ป่วย
           </button>
         </section>
       </div>
     </Teleport>
   </div>
-    <Teleport to="body">
-      <div v-if="leaveDialogOpen" class="registration-modal-backdrop" @click.self="answerLeave(false)">
-        <section
-          class="registration-modal confirmation-modal"
-          v-modal-focus="{ close: () => answerLeave(false), busy: false }"
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="registration-leave-title"
-          aria-describedby="registration-leave-description"
-        >
-          <h2 id="registration-leave-title">ออกจากหน้านี้?</h2>
-          <p id="registration-leave-description">ข้อมูลที่กรอกยังไม่ได้บันทึก หากออกจากหน้านี้ ข้อมูลจะไม่ถูกบันทึก</p>
-          <div class="registration-modal-actions">
-            <button type="button" class="secondary" autofocus @click="answerLeave(false)">ยกเลิก</button>
-            <button type="button" class="primary" @click="answerLeave(true)">ตกลง</button>
-          </div>
-        </section>
-      </div>
-    </Teleport>
 </template>
 <style scoped src="../styles/patient-registration.css"></style>
-<style src="../styles/patient-workspace.css"></style>
-
-<style scoped src="../styles/registration-polish.css"></style>
+<style src="../styles/therapist.css"></style>

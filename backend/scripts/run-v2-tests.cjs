@@ -2,14 +2,10 @@ const { spawn, spawnSync } = require('node:child_process')
 const net = require('node:net')
 const path = require('node:path')
 const cypress = require('cypress')
-const testPort = Number(process.env.CLINIC_V2_TEST_PORT || 18080)
-if (![18080, 18082].includes(testPort)) {
-  throw new Error('CLINIC_V2_TEST_PORT must be an isolated test port (18080 or 18082)')
-}
 
 process.chdir(path.resolve(__dirname, '..'))
 
-// Starts the v2 application (mvn -Pcypress-v2) on the selected isolated loopback port against PostgreSQL given by
+// Starts the v2 application (mvn -Pcypress-v2) on 127.0.0.1:18080 against the PostgreSQL given by
 // DATABASE_URL / DATABASE_USERNAME / DATABASE_PASSWORD, runs the v2 Cypress specs, then stops it.
 function maven(goal) {
   const profile = process.env.CLINIC_TEST_COVERAGE === '1' ? '-Pcypress-v2,coverage' : '-Pcypress-v2'
@@ -38,7 +34,7 @@ async function main() {
     throw new Error('Usage: npm run test:v2 -- [--spec path] or npm run test:browser or npm run test:v2:open')
   }
   if (!process.env.DATABASE_URL) throw new Error('Set DATABASE_URL (jdbc:postgresql://...) for the v2 tests')
-  await requireFreePort(testPort)
+  await requireFreePort(18080)
   await requireFreePort(19001)
   if (frontend) await requireFreePort(5173)
   let vite
@@ -49,11 +45,11 @@ async function main() {
     const configFile = 'cypress.v2.config.cjs'
     if (frontend) {
       process.env.CYPRESS_BASE_URL = 'http://localhost:5173'
-      process.env.CYPRESS_API_URL = `http://127.0.0.1:${testPort}`
+      process.env.CYPRESS_API_URL = 'http://127.0.0.1:18080'
       vite = spawn(process.execPath, [path.join(project, 'node_modules/vite/bin/vite.js'),
         '--host', 'localhost', '--port', '5173', '--strictPort'], {
         cwd: project, stdio: 'inherit', windowsHide: true,
-        env: { ...process.env, VITE_API_PROXY_TARGET: `http://127.0.0.1:${testPort}` },
+        env: { ...process.env, VITE_API_PROXY_TARGET: 'http://127.0.0.1:18080' },
       })
       vite.once('error', error => { viteError = error })
       let ready = false
