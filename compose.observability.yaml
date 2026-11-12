@@ -1,0 +1,29 @@
+services:
+  postgres:
+    ports: !override []
+
+  backend:
+    ports: !override
+      - "127.0.0.1:${BACKEND_PORT:-18080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: "docker,v2,observability"
+      OBSERVABILITY_OTLP_URL: "http://observability:4318"
+      OBSERVABILITY_METRICS_STEP: "10s"
+      OBSERVABILITY_TRACE_SAMPLE_RATE: "1.0"
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:${FRONTEND_PORT:-18000}:80"
+
+  observability:
+    image: grafana/otel-lgtm:0.38.1
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_PASSWORD: "${OBS_GRAFANA_ADMIN_PASSWORD:?Set OBS_GRAFANA_ADMIN_PASSWORD in .env}"
+    ports:
+      - "127.0.0.1:${OBS_GRAFANA_PORT:-13000}:3000"
+    volumes:
+      - observability-data:/data
+
+volumes:
+  observability-data:
