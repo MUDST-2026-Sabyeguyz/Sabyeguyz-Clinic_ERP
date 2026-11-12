@@ -23,8 +23,13 @@ public class AuthController {
     private final AppUserService appUserService;
     private final UserRoleRepository userRoles;
     private final JwtTokenService tokenService;
+    private final LoginAttemptLimiter limiter;
+    private final CurrentActor actor;
 
-    public AuthController(AppUserService appUserService, UserRoleRepository userRoles, JwtTokenService tokenService) {
+    public AuthController(AppUserService appUserService, UserRoleRepository userRoles, JwtTokenService tokenService,
+                          LoginAttemptLimiter limiter, CurrentActor actor) {
+        this.actor = actor;
+        this.limiter = limiter;
         this.appUserService = appUserService;
         this.userRoles = userRoles;
         this.tokenService = tokenService;
@@ -32,13 +37,41 @@ public class AuthController {
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
     public record RegisterRequest(@NotBlank String username,@NotBlank @Size(max = 254) String email, @NotBlank String password) {}
+<<<<<<< HEAD
     public record AuthResponse(Long id, String username, String email, String role, String token, String branchCode, String branchName) {}
+=======
+    public record AuthResponse(Long id, String username, String email, String role, String token,
+                               String branchCode, String branchName, Long staffId) {}
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request) {
-        AppUser user = appUserService.login(request.username(), request.password());
+        if (limiter.isBlocked(request.username())) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "พยายามเข้าสู่ระบบผิดหลายครั้ง กรุณารอสักครู่แล้วลองใหม่");
+        }
+        AppUser user;
+        try {
+            user = appUserService.login(request.username(), request.password());
+        } catch (IllegalArgumentException failure) {
+            if (AppUserService.INVALID_CREDENTIALS.equals(failure.getMessage())) {
+                limiter.recordFailure(request.username());
+                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, failure.getMessage());
+            }
+            throw failure;
+        }
+        limiter.recordSuccess(request.username());
         appUserService.recordLogin(user.getId());
         return respond(user);
+    }
+
+    public record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank @Size(max = 100) String newPassword) {}
+
+    /** The caller's other tokens stop working; the response carries a fresh one. */
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    public AuthResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        return respond(appUserService.changeOwnPassword(actor.requireId(), request.currentPassword(), request.newPassword()));
     }
 
     @PostMapping("/register")
@@ -57,6 +90,7 @@ public class AuthController {
         String primaryRole = roleNames.isEmpty() ? null : roleNames.get(0);
         var branch = user.getStaff() == null ? null : user.getStaff().getBranch();
         return new AuthResponse(user.getId(), user.getUsername(), user.getEmail(), primaryRole, token,
-                branch == null ? null : branch.getBranchCode(), branch == null ? null : branch.getBranchName());
+                branch == null ? null : branch.getBranchCode(), branch == null ? null : branch.getBranchName(),
+                user.getStaff() == null ? null : user.getStaff().getId());
     }
 }

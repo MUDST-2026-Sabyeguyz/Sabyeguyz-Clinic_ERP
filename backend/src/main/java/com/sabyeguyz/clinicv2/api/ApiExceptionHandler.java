@@ -34,7 +34,25 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ApiErrorResponse> badRequest(IllegalArgumentException exception) {
-        return ResponseEntity.badRequest().body(new ApiErrorResponse(exception.getMessage()));
+        return ResponseEntity.badRequest().body(new ApiErrorResponse(safe(exception)));
+    }
+
+    /** Keeps the {"message"} body for status exceptions (403, 401, 429 ...) thrown by controllers and policies. */
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    ResponseEntity<ApiErrorResponse> status(org.springframework.web.server.ResponseStatusException exception) {
+        return ResponseEntity.status(exception.getStatusCode()).body(new ApiErrorResponse(
+                exception.getReason() == null ? "ไม่สามารถทำรายการได้" : exception.getReason()));
+    }
+
+    /** Rule messages are written for users; a message that names an internal class or enum is replaced. */
+    private static String safe(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (message == null || message.startsWith("No enum constant") || message.contains("com.sabyeguyz")
+                || message.contains("java.") || message.contains("org.springframework")) {
+            org.slf4j.LoggerFactory.getLogger(ApiExceptionHandler.class).warn("Rejected request: {}", message);
+            return "ข้อมูลที่ส่งมาไม่ถูกต้อง";
+        }
+        return message;
     }
 
     @ExceptionHandler({PatientNotFoundException.class, BranchNotFoundException.class, StaffNotFoundException.class,
@@ -45,7 +63,7 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     ResponseEntity<ApiErrorResponse> conflict(IllegalStateException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(safe(exception)));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

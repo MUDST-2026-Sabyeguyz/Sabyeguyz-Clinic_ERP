@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -7,6 +8,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+<<<<<<< HEAD
+=======
+import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 
 public interface SalesTransactionRepository extends JpaRepository<SalesTransaction, Long> {
@@ -44,4 +49,44 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
             @Param("from") Instant from,
             @Param("to") Instant to,
             @Param("type") TransactionType type);
+<<<<<<< HEAD
+=======
+
+    /**
+     * Returns all sale lines in document order, including voided lines.
+     * Historical receipt details must preserve each line's status.
+     */
+    @Query("""
+        select t
+        from SalesTransaction t
+        where t.receipt.id = :receiptId
+        order by t.lineNo asc, t.id asc
+    """)
+    List<SalesTransaction> findReceiptLines(
+            @Param("receiptId") Long receiptId
+    );
+
+    /**
+     * Returns net sales from effective sale lines on one receipt.
+     * Existing-course collection items do not create new sales.
+     */
+    default BigDecimal netSalesOfReceipt(Long receiptId) {
+        return sumNetSalesOfReceipt(receiptId, ReceiptStatus.Voided);
+    }
+
+    @Query("""
+        select coalesce(
+            sum(t.amount - t.allocatedBillDiscountAmount),
+            0
+        )
+        from SalesTransaction t
+        where t.receipt.id = :receiptId
+          and t.transactionStatus = true
+          and t.receipt.receiptStatus <> :voidedStatus
+        """)
+    BigDecimal sumNetSalesOfReceipt(
+            @Param("receiptId") Long receiptId,
+            @Param("voidedStatus") ReceiptStatus voidedStatus
+    );
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 }

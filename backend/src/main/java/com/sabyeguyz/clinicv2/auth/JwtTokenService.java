@@ -9,11 +9,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
-/**
- * Reuses the shared {@link JwtEncoder} bean from SecurityConfig (same
- * signing key as the v1 API) so both can coexist until cutover — the
- * subject is just the v2 app_user.user_id as a string.
- */
+/** สร้าง JWT สำหรับบัญชี v2 พร้อม role และ authVersion ปัจจุบัน */
 @Service
 public class JwtTokenService {
     private final JwtEncoder encoder;
@@ -27,9 +23,10 @@ public class JwtTokenService {
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim("username", user.getUsername())
+                .claim("auth_version", user.getAuthVersion())
                 .claim("roles", roleNames)
                 .issuedAt(now).expiresAt(now.plusSeconds(3600));
-        // A freshly registered account has no role yet; a null claim value is rejected by the encoder.
+        // ผู้ใช้ที่สมัครใหม่อาจยังไม่มี role จึงไม่ใส่ claim role เป็น null
         if (!roleNames.isEmpty()) {
             claims.claim("role", roleNames.get(0));
         }

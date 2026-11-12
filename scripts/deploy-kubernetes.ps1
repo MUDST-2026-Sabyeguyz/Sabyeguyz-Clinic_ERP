@@ -1,7 +1,9 @@
 param(
     [string]$Namespace = 'clinic-present',
     [string]$ImageTag,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    # Loads demo accounts with publicly known passwords. Never use outside a throwaway demo cluster.
+    [switch]$WithDemoData
 )
 
 $ErrorActionPreference = 'Stop'
@@ -81,7 +83,7 @@ if (-not $secret) {
 $manifest = Join-Path ([IO.Path]::GetTempPath()) ('clinic-deploy-' + [guid]::NewGuid().ToString('N') + '.yaml')
 try {
     $yaml = [IO.File]::ReadAllText((Join-Path $repoPath 'deploy/kubernetes/app.yaml'))
-    $yaml = $yaml.Replace('__BACKEND_IMAGE__', $backendImage).Replace('__FRONTEND_IMAGE__', $frontendImage)
+    $yaml = $yaml.Replace('__BACKEND_IMAGE__', $backendImage).Replace('__FRONTEND_IMAGE__', $frontendImage).Replace('__FLYWAY_EXTRA_LOCATIONS__', $(if ($WithDemoData) { ',classpath:db/seed_v2' } else { '' }))
     [IO.File]::WriteAllText($manifest, $yaml, (New-Object Text.UTF8Encoding($false)))
     Run-Kube apply -f $manifest
     Run-Kube rollout status statefulset/postgres --timeout=180s

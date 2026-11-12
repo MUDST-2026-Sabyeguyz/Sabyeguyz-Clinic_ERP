@@ -34,7 +34,7 @@ public class PaymentTransactionService {
         require(receipt.getReceiptStatus() == ReceiptStatus.Issued, "ใบเสร็จนี้ถูกยกเลิกแล้ว ไม่สามารถรับชำระได้");
         require(paymentMethod != null, "ต้องระบุช่องทางชำระเงิน");
         require(paymentMethod.isPaymentMethodStatus(), "ช่องทางการชำระเงินนี้ถูกปิดใช้งาน");
-        require(amount != null && amount.signum() > 0, "จำนวนเงินต้องมากกว่า 0");
+        require(amount != null && amount.signum() >= 0, "จำนวนเงินต้องไม่ติดลบ");
 
         PaymentMethod.canonicalName(paymentMethod.getMethodName());
 
