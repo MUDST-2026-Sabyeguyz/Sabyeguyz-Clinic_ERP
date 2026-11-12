@@ -1,12 +1,14 @@
 package com.sabyeguyz.clinic.patient;
 
-import com.sabyeguyz.clinic.branch.Branch;
-import com.sabyeguyz.clinic.branch.BranchRepository;
+import java.time.LocalDate;
+
 import jakarta.persistence.EntityManager;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.time.LocalDate;
+
+import com.sabyeguyz.clinic.branch.Branch;
+import com.sabyeguyz.clinic.branch.BranchRepository;
 
 @Service
 public class PatientRegistrationService {
@@ -16,7 +18,11 @@ public class PatientRegistrationService {
     private final HnGenerator hnGenerator;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public PatientRegistrationService(BranchRepository branchRepository, PatientRepository patientRepository, EntityManager entityManager, HnGenerator hnGenerator) {
+    public PatientRegistrationService(
+            BranchRepository branchRepository,
+            PatientRepository patientRepository,
+            EntityManager entityManager,
+            HnGenerator hnGenerator) {
         this.branchRepository = branchRepository;
         this.patientRepository = patientRepository;
         this.entityManager = entityManager;
@@ -27,12 +33,19 @@ public class PatientRegistrationService {
     public PatientResponse register(PatientRegistrationRequest request) {
         Branch branch = branchRepository.findByBranchCodeAndActiveTrue(request.branchCode().trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
-        if (patientRepository.existsByUsernameOrEmailOrIdentityNumber(request.username(), request.email(), request.identityNumber())) {
+
+        if (patientRepository.existsByUsernameOrEmailOrIdentityNumber(
+                request.username(), request.email(), request.identityNumber())) {
             throw new IllegalArgumentException("ชื่อผู้ใช้ อีเมล หรือเลขเอกสารยืนยันตัวตนถูกใช้งานแล้ว");
         }
-        Patient patient = patientRepository.save(new Patient(branch, request, passwordEncoder.encode(request.password())));
+
+        Patient patient = patientRepository.save(new Patient(
+                branch,
+                request,
+                passwordEncoder.encode(request.password())));
         entityManager.flush();
         patient.assignHn(hnGenerator.next(branch.getId(), branch.getBranchCode(), LocalDate.now()));
+
         return PatientResponse.from(patient);
     }
 }
