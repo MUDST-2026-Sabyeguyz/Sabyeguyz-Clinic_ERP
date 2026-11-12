@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.patient;
 
-import org.hibernate.type.SqlTypes;
-import org.hibernate.annotations.JdbcTypeCode;
-import com.sabyeguyz.clinicv2.branch.Branch;
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
 
 /** year_month format: YYMM (per data dictionary format column). */
 @Entity
@@ -32,7 +34,12 @@ public class HnSequence {
 
     public HnSequence() {}
 
-    public HnSequence(Branch branch, String yearMonth, int lastRunningNo, Instant lastRunningAt, Instant createdAt) {
+    public HnSequence(
+            Branch branch,
+            String yearMonth,
+            int lastRunningNo,
+            Instant lastRunningAt,
+            Instant createdAt) {
         this.branch = branch;
         this.yearMonth = yearMonth;
         this.lastRunningNo = lastRunningNo;
@@ -40,11 +47,29 @@ public class HnSequence {
         this.createdAt = createdAt;
     }
 
-    public Branch getBranch() { return branch; }
-    public String getYearMonth() { return yearMonth; }
-    public int getLastRunningNo() { return lastRunningNo; }
-    public void setLastRunningNo(int lastRunningNo) { this.lastRunningNo = lastRunningNo; }
-    public Instant getLastRunningAt() { return lastRunningAt; }
-    public void setLastRunningAt(Instant lastRunningAt) { this.lastRunningAt = lastRunningAt; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Branch getBranch() {
+        return branch;
+    }
+
+    public String getYearMonth() {
+        return yearMonth;
+    }
+
+    public int getLastRunningNo() {
+        return lastRunningNo;
+    }
+    public void setLastRunningNo(int lastRunningNo) {
+        this.lastRunningNo = lastRunningNo;
+    }
+
+    public Instant getLastRunningAt() {
+        return lastRunningAt;
+    }
+    public void setLastRunningAt(Instant lastRunningAt) {
+        this.lastRunningAt = lastRunningAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }
