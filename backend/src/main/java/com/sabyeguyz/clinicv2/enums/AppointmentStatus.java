@@ -4,7 +4,14 @@ import java.util.EnumSet;
 import java.util.Set;
 
 public enum AppointmentStatus {
-    Unconfirmed, Confirmed, Arrived, InService, Completed, Cancelled, Rescheduled, NoShow;
+    Unconfirmed,
+    Confirmed,
+    Arrived,
+    InService,
+    Completed,
+    Cancelled,
+    Rescheduled,
+    NoShow;
 
     /** Statuses that release the staff's time slot, so a new booking there is not a conflict. */
     public static Set<AppointmentStatus> slotReleasing() {
