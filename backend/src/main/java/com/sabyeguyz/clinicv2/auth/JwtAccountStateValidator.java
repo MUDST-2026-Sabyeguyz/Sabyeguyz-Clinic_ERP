@@ -16,6 +16,7 @@ public class JwtAccountStateValidator {
     public void requireCurrent(Jwt jwt) {
         // ตรวจบัญชีและเวอร์ชันปัจจุบันทุกครั้งที่ใช้ bearer token
         final long userId;
+
         try {
             userId = Long.parseLong(jwt.getSubject());
         } catch (NumberFormatException | NullPointerException exception) {
