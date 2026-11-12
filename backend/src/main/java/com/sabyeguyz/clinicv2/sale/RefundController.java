@@ -1,13 +1,9 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.auth.CurrentActor;
-import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
-import com.sabyeguyz.clinicv2.enums.AuditAction;
-import com.sabyeguyz.clinicv2.enums.ReasonCode;
-import com.sabyeguyz.clinicv2.role.PermissionService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +13,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
+import com.sabyeguyz.clinicv2.auth.CurrentActor;
+import com.sabyeguyz.clinicv2.enums.AuditAction;
+import com.sabyeguyz.clinicv2.enums.ReasonCode;
+import com.sabyeguyz.clinicv2.role.PermissionService;
 
 /**
  * Refunds of a payment (id taken from {@code payments[].id} of GET /api/receipts/{id}): a refund is
@@ -36,11 +38,15 @@ public class RefundController {
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
-    public RefundController(RefundService refundService, RefundTransactionRepository refunds,
-                             PaymentTransactionRepository payments, PaymentMethodRepository paymentMethods,
-                             PermissionService permissions, CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                     BranchAccessPolicy branchAccess) {
+    public RefundController(
+            RefundService refundService,
+            RefundTransactionRepository refunds,
+            PaymentTransactionRepository payments,
+            PaymentMethodRepository paymentMethods,
+            PermissionService permissions,
+            CurrentActor actor,
+            com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+            BranchAccessPolicy branchAccess) {
         this.refundService = refundService;
         this.refunds = refunds;
         this.payments = payments;
@@ -52,8 +58,12 @@ public class RefundController {
     }
 
     /** items: per course of a course receipt, the amount refunded and the unused sessions to cancel. */
-    public record RefundRequest(BigDecimal amount, String paymentMethodCode, String reason,
-                                 List<RefundService.ItemRequest> items, ReasonCode reasonCode) {}
+    public record RefundRequest(
+            BigDecimal amount,
+            String paymentMethodCode,
+            String reason,
+            List<RefundService.ItemRequest> items,
+            ReasonCode reasonCode) {}
 
     public record ItemResponse(
             Long courseId,
@@ -62,36 +72,68 @@ public class RefundController {
             Long courseRefundItemId,
             Long rightsCancellationItemId) {}
 
-    public record Response(Long id, Long paymentId, BigDecimal amount, String paymentMethodCode, String status,
-                            Instant requestedAt, Instant refundedAt, List<ItemResponse> items) {}
+    public record Response(
+            Long id,
+            Long paymentId,
+            BigDecimal amount,
+            String paymentMethodCode,
+            String status,
+            Instant requestedAt,
+            Instant refundedAt,
+            List<ItemResponse> items) {}
 
     @PostMapping("/api/payments/{paymentId}/refunds")
     @ResponseStatus(HttpStatus.CREATED)
-    public Response request(@PathVariable Long paymentId, @RequestBody RefundRequest request) {
-        if (request == null || request.reason() == null || request.reason().isBlank()
+    public Response request(
+            @PathVariable Long paymentId,
+            @RequestBody RefundRequest request) {
+        if (request == null
+                || request.reason() == null
+                || request.reason().isBlank()
                 || request.reason().trim().length() > 255) {
             throw new IllegalArgumentException("ต้องระบุเหตุผลความยาวไม่เกิน 255 ตัวอักษร");
         }
+
         PaymentTransaction payment = accessiblePayment(paymentId);
         PaymentMethod method = request.paymentMethodCode() == null ? null
                 : paymentMethods.findByMethodNameIgnoreCase(request.paymentMethodCode())
-                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "ไม่พบช่องทางชำระเงิน " + request.paymentMethodCode()));
         var permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
-        RefundTransaction refund = refundService.request(payment, request.amount(), method, permission,
-                request.reason().trim(), actor.currentId(), request.items());
+        RefundTransaction refund = refundService.request(
+                payment,
+                request.amount(),
+                method,
+                permission,
+                request.reason().trim(),
+                actor.currentId(),
+                request.items());
         ReasonCode reasonCode = request.reasonCode() == null ? ReasonCode.Other : request.reasonCode();
         refund.getCancellation().setReasonCode(reasonCode);
-        audit.recordChange("refund_transaction", String.valueOf(refund.getId()), AuditAction.INSERT, null,
+        audit.recordChange(
+                "refund_transaction",
+                String.valueOf(refund.getId()),
+                AuditAction.INSERT,
+                null,
                 com.sabyeguyz.clinicv2.audit.AuditLogService.fields(
-                        "status", "Pending", "amount", request.amount(), "payment_id", paymentId,
-                        "reason_code", reasonCode.name(), "reason", request.reason().trim()), actor.currentId());
+                        "status", "Pending",
+                        "amount", request.amount(),
+                        "payment_id", paymentId,
+                        "reason_code", reasonCode.name(),
+                        "reason", request.reason().trim()),
+                actor.currentId());
+
         return toResponse(refund);
     }
 
     @GetMapping("/api/payments/{paymentId}/refunds")
     public List<Response> forPayment(@PathVariable Long paymentId) {
         accessiblePayment(paymentId);
-        return refunds.findByOriginalPaymentId(paymentId).stream().map(this::toResponse).toList();
+
+        return refunds.findByOriginalPaymentId(paymentId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @PostMapping("/api/refunds/{id}/complete")
@@ -99,7 +141,14 @@ public class RefundController {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         requireRefundAccess(id);
         RefundTransaction refund = refundService.complete(id, actor.currentId());
-        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Completed", actor.currentId());
+        audit.record(
+                "refund_transaction",
+                String.valueOf(id),
+                com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                "Pending",
+                "Completed",
+                actor.currentId());
+
         return toResponse(refund);
     }
 
@@ -109,7 +158,14 @@ public class RefundController {
         requireRefundAccess(id);
         String previousStatus = refundService.lockStatusForUpdate(id).name();
         RefundTransaction refund = refundService.voidRequest(id, actor.currentId());
-        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, previousStatus, "Voided", actor.currentId());
+        audit.record(
+                "refund_transaction",
+                String.valueOf(id),
+                com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                previousStatus,
+                "Voided",
+                actor.currentId());
+
         return toResponse(refund);
     }
 
@@ -118,7 +174,14 @@ public class RefundController {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
         requireRefundAccess(id);
         RefundTransaction refund = refundService.fail(id);
-        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Failed", actor.currentId());
+        audit.record(
+                "refund_transaction",
+                String.valueOf(id),
+                com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                "Pending",
+                "Failed",
+                actor.currentId());
+
         return toResponse(refund);
     }
 
@@ -131,6 +194,7 @@ public class RefundController {
         audit.record("refund_transaction", String.valueOf(id),
                 com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
                 previousStatus, "Pending", actor.currentId());
+
         return toResponse(refund);
     }
 
@@ -139,6 +203,7 @@ public class RefundController {
         PaymentTransaction payment = payments.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการชำระเงิน"));
         branchAccess.requireAccess(payment.getReceipt().getBranch());
+
         return payment;
     }
 
@@ -159,8 +224,15 @@ public class RefundController {
                                 ? null
                                 : item.getRightsCancellationItem().getId()))
                 .toList();
-        return new Response(refund.getId(), refund.getOriginalPayment().getId(), refund.getRefundAmount(),
-                refund.getPaymentMethod().getMethodName(), refund.getRefundStatus().name(), refund.getRequestedAt(),
-                refund.getRefundedAt(), items);
+
+        return new Response(
+                refund.getId(),
+                refund.getOriginalPayment().getId(),
+                refund.getRefundAmount(),
+                refund.getPaymentMethod().getMethodName(),
+                refund.getRefundStatus().name(),
+                refund.getRequestedAt(),
+                refund.getRefundedAt(),
+                items);
     }
 }

@@ -16,8 +16,7 @@ public class PaymentLockService {
     public PaymentLockService(
             ReceiptRepository receipts,
             PaymentTransactionRepository payments,
-            EntityManager entityManager
-    ) {
+            EntityManager entityManager) {
         this.receipts = receipts;
         this.payments = payments;
         this.entityManager = entityManager;

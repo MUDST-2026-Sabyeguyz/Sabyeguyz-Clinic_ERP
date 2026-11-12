@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "payment_label")
@@ -40,20 +41,22 @@ public class PaymentLabelOption {
     protected PaymentLabelOption() {}
 
     public Long getId() { return id; }
-    public String getCode() { return code; }
-    public String getName() { return name; }
-    public boolean isEnabled() { return enabled; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Long getCreatedBy() { return createdBy; }
-    public Instant getUpdatedAt() { return updatedAt; }
-    public Long getUpdatedBy() { return updatedBy; }
 
+    public String getCode() { return code; }
+
+    public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-    public void setUpdatedBy(Long updatedBy) {
-        this.updatedBy = updatedBy;
-    }
+
+    public Instant getCreatedAt() { return createdAt; }
+
+    public Long getCreatedBy() { return createdBy; }
+
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public Long getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
 }

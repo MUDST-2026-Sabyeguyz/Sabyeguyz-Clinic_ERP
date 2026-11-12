@@ -1,14 +1,16 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
-import com.sabyeguyz.clinicv2.patient.Patient;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
+import com.sabyeguyz.clinicv2.patient.Patient;
 
 /**
  * A bill. Line items are Sales_transaction rows. subtotal_before_discount is
@@ -94,12 +96,8 @@ public class Receipt {
     public com.sabyeguyz.clinicv2.enums.PaymentLabel getPaymentLabel() { return paymentLabel; }
     public void setPaymentLabel(com.sabyeguyz.clinicv2.enums.PaymentLabel value) { paymentLabel = value; }
 
-    public PaymentLabelOption getPaymentLabelOption() {
-        return paymentLabelOption;
-    }
-    public void setPaymentLabelOption(PaymentLabelOption paymentLabelOption) {
-        this.paymentLabelOption = paymentLabelOption;
-    }
+    public PaymentLabelOption getPaymentLabelOption() { return paymentLabelOption; }
+    public void setPaymentLabelOption(PaymentLabelOption paymentLabelOption) { this.paymentLabelOption = paymentLabelOption; }
 
     public Receipt() {}
 
@@ -107,36 +105,52 @@ public class Receipt {
     public void setNote(String note) { this.note = note; }
 
     public Long getId() { return id; }
+
     public String getReceiptNo() { return receiptNo; }
     public void setReceiptNo(String receiptNo) { this.receiptNo = receiptNo; }
+
     public Patient getPatient() { return patient; }
     public void setPatient(Patient patient) { this.patient = patient; }
+
     public Branch getBranch() { return branch; }
     public void setBranch(Branch branch) { this.branch = branch; }
+
     public LocalDateTime getSaleDate() { return saleDate; }
     public void setSaleDate(LocalDateTime saleDate) { this.saleDate = saleDate; }
+
     public Instant getReceiptCreateAt() { return receiptCreateAt; }
     public void setReceiptCreateAt(Instant receiptCreateAt) { this.receiptCreateAt = receiptCreateAt; }
+
     public Long getReceiptCreateBy() { return receiptCreateBy; }
     public void setReceiptCreateBy(Long receiptCreateBy) { this.receiptCreateBy = receiptCreateBy; }
+
     public Instant getReceiptUpdateAt() { return receiptUpdateAt; }
     public void setReceiptUpdateAt(Instant receiptUpdateAt) { this.receiptUpdateAt = receiptUpdateAt; }
+
     public Long getReceiptUpdateBy() { return receiptUpdateBy; }
     public void setReceiptUpdateBy(Long receiptUpdateBy) { this.receiptUpdateBy = receiptUpdateBy; }
+
     public BigDecimal getSubtotalBeforeDiscount() { return subtotalBeforeDiscount; }
     public void setSubtotalBeforeDiscount(BigDecimal subtotalBeforeDiscount) { this.subtotalBeforeDiscount = subtotalBeforeDiscount; }
+
     public DiscountType getBillDiscountType() { return billDiscountType; }
     public void setBillDiscountType(DiscountType billDiscountType) { this.billDiscountType = billDiscountType; }
+
     public BigDecimal getBillDiscountValue() { return billDiscountValue; }
     public void setBillDiscountValue(BigDecimal billDiscountValue) { this.billDiscountValue = billDiscountValue; }
+
     public BigDecimal getBillDiscountAmount() { return billDiscountAmount; }
     public void setBillDiscountAmount(BigDecimal billDiscountAmount) { this.billDiscountAmount = billDiscountAmount; }
+
     public BigDecimal getTaxableAmount() { return taxableAmount; }
     public void setTaxableAmount(BigDecimal taxableAmount) { this.taxableAmount = taxableAmount; }
+
     public BigDecimal getTaxAmount() { return taxAmount; }
     public void setTaxAmount(BigDecimal taxAmount) { this.taxAmount = taxAmount; }
+
     public BigDecimal getNetAmount() { return netAmount; }
     public void setNetAmount(BigDecimal netAmount) { this.netAmount = netAmount; }
+
     public ReceiptStatus getReceiptStatus() { return receiptStatus; }
     public void setReceiptStatus(ReceiptStatus receiptStatus) { this.receiptStatus = receiptStatus; }
 }

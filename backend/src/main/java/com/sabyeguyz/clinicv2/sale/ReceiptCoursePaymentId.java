@@ -1,9 +1,10 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Embeddable;
 import java.io.Serializable;
 import java.util.Objects;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 
 @Embeddable
 public class ReceiptCoursePaymentId implements Serializable {
@@ -16,23 +17,23 @@ public class ReceiptCoursePaymentId implements Serializable {
 
     public ReceiptCoursePaymentId() {}
 
-    public ReceiptCoursePaymentId(Long receiptId, Long courseId) {
+    public ReceiptCoursePaymentId(
+            Long receiptId,
+            Long courseId) {
         this.receiptId = receiptId;
         this.courseId = courseId;
     }
 
-    public Long getReceiptId() {
-        return receiptId;
-    }
+    public Long getReceiptId() { return receiptId; }
 
-    public Long getCourseId() {
-        return courseId;
-    }
+    public Long getCourseId() { return courseId; }
 
     @Override
     public boolean equals(Object object) {
         if (this == object) return true;
+
         if (!(object instanceof ReceiptCoursePaymentId other)) return false;
+
         return Objects.equals(receiptId, other.receiptId)
                 && Objects.equals(courseId, other.courseId);
     }

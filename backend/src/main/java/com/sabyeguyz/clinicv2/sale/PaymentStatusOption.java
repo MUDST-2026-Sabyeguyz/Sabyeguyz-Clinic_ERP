@@ -21,7 +21,9 @@ public class PaymentStatusOption {
     protected PaymentStatusOption() {}
 
     public String getCode() { return code; }
+
     public String getLabel() { return label; }
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 }

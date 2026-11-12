@@ -1,9 +1,9 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.sabyeguyz.clinicv2.auth.CurrentActor;
+
 @Transactional
 @RestController
 @RequestMapping("/api/payment-statuses")
@@ -21,12 +23,16 @@ public class PaymentStatusOptionController {
     private final CurrentActor actor;
 
     public PaymentStatusOptionController(
-            PaymentLabelOptionRepository repository, CurrentActor actor) {
+            PaymentLabelOptionRepository repository,
+            CurrentActor actor) {
         this.repository = repository;
         this.actor = actor;
     }
 
-    public record Response(String code, String label, boolean enabled) {}           // ex {"enabled": false}
+    public record Response(
+            String code,
+            String label,
+            boolean enabled) {}           // ex {"enabled": false}
     public record UpdateRequest(boolean enabled) {}
 
     @GetMapping

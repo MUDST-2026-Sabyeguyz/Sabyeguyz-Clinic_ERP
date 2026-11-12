@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinicv2.sale;
 
 import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ReceiptCoursePaymentRepository
