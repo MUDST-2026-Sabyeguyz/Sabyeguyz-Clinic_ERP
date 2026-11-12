@@ -1,27 +1,5 @@
 package com.sabyeguyz.clinicv2.catalog;
 
-import com.sabyeguyz.clinicv2.config.ClinicTime;
-import com.sabyeguyz.clinicv2.commission.CommissionScheme;
-import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
-import com.sabyeguyz.clinicv2.commission.CommissionTier;
-import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
-import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
-import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingService;
-import com.sabyeguyz.clinicv2.course.CourseEntitlement;
-import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
-import com.sabyeguyz.clinicv2.course.CourseLedger;
-import com.sabyeguyz.clinicv2.course.CourseLedgerRepository;
-import com.sabyeguyz.clinicv2.course.CourseSharedMember;
-import com.sabyeguyz.clinicv2.course.CourseSharedMemberRepository;
-import com.sabyeguyz.clinicv2.enums.CommissionStatus;
-import com.sabyeguyz.clinicv2.enums.CourseMemberRole;
-import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
-import com.sabyeguyz.clinicv2.enums.CourseStatus;
-import com.sabyeguyz.clinicv2.enums.TransactionType;
-import com.sabyeguyz.clinicv2.patient.Patient;
-import com.sabyeguyz.clinicv2.sale.Receipt;
-import com.sabyeguyz.clinicv2.sale.SalesTransaction;
-import com.sabyeguyz.clinicv2.staff.Staff;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -31,7 +9,31 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingService;
+import com.sabyeguyz.clinicv2.commission.CommissionScheme;
+import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
+import com.sabyeguyz.clinicv2.commission.CommissionTier;
+import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
+import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
+import com.sabyeguyz.clinicv2.config.ClinicTime;
+import com.sabyeguyz.clinicv2.course.CourseEntitlement;
+import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
+import com.sabyeguyz.clinicv2.course.CourseLedger;
+import com.sabyeguyz.clinicv2.course.CourseLedgerRepository;
+import com.sabyeguyz.clinicv2.course.CourseSharedMember;
+import com.sabyeguyz.clinicv2.course.CourseSharedMemberRepository;
+import com.sabyeguyz.clinicv2.enums.CommissionStatus;
+import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
+import com.sabyeguyz.clinicv2.enums.CourseMemberRole;
+import com.sabyeguyz.clinicv2.enums.CourseStatus;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
+import com.sabyeguyz.clinicv2.patient.Patient;
+import com.sabyeguyz.clinicv2.sale.Receipt;
+import com.sabyeguyz.clinicv2.sale.SalesTransaction;
+import com.sabyeguyz.clinicv2.staff.Staff;
 
 /**
  * Sells a Course (Clinic ERP Workflow Brief §5, Commission_System_Requirement_Dev §§2-5).
@@ -59,10 +61,15 @@ public class CourseService {
     private final MonthlyTierSalesService tierSales;
     private final BranchMonthlyClosingService branchClosingService;
 
-    public CourseService(CourseRepository courses, CourseLedgerRepository ledger,
-                         CourseSharedMemberRepository sharedMembers, CourseEntitlementRepository entitlements,
-                         CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
-                         MonthlyTierSalesService tierSales, BranchMonthlyClosingService branchClosingService) {
+    public CourseService(
+            CourseRepository courses,
+            CourseLedgerRepository ledger,
+            CourseSharedMemberRepository sharedMembers,
+            CourseEntitlementRepository entitlements,
+            CommissionSchemeResolver schemeResolver,
+            CommissionTierResolver tierResolver,
+            MonthlyTierSalesService tierSales,
+            BranchMonthlyClosingService branchClosingService) {
         this.courses = courses;
         this.ledger = ledger;
         this.sharedMembers = sharedMembers;
@@ -78,8 +85,15 @@ public class CourseService {
      * seller is the Owner PT and gets the whole sale credit (Course.seller_staff_id is the single field for both).
      */
     @Transactional
-    public Course sell(Receipt receipt, SalesTransaction transaction, Service serviceTemplate, Staff sellerStaff,
-                        Integer totalVisitsOverride, Integer bonusVisitsOverride, LocalDate saleDate, Long actorId) {
+    public Course sell(
+            Receipt receipt,
+            SalesTransaction transaction,
+            Service serviceTemplate,
+            Staff sellerStaff,
+            Integer totalVisitsOverride,
+            Integer bonusVisitsOverride,
+            LocalDate saleDate,
+            Long actorId) {
         require(receipt != null, "ต้องระบุใบเสร็จ");
         require(transaction != null, "ต้องระบุรายการขาย");
         require(serviceTemplate != null, "ต้องระบุบริการ/คอร์สต้นแบบ");
@@ -158,8 +172,14 @@ public class CourseService {
         course.setTreatmentFeeBaseAmount(transaction.getAmount().subtract(transaction.getAllocatedBillDiscountAmount()));
         Course saved = courses.save(course);
 
-        sharedMembers.save(new CourseSharedMember(saved, purchaser, CourseMemberRole.Owner));
-        entitlements.save(new CourseEntitlement(saved, purchaser, totalUsableVisits));
+        sharedMembers.save(new CourseSharedMember(
+                saved,
+                purchaser,
+                CourseMemberRole.Owner));
+        entitlements.save(new CourseEntitlement(
+                saved,
+                purchaser,
+                totalUsableVisits));
 
         CourseLedger purchase = new CourseLedger();
         purchase.setCourse(saved);
@@ -175,15 +195,21 @@ public class CourseService {
         return saved;
     }
 
-    private static boolean samePatient(Patient a, Patient b) {
+    private static boolean samePatient(
+            Patient a,
+            Patient b) {
         return a == b || (a != null && b != null && a.getId() != null && a.getId().equals(b.getId()));
     }
 
-    private static boolean sameReceipt(Receipt a, Receipt b) {
+    private static boolean sameReceipt(
+            Receipt a,
+            Receipt b) {
         return a == b || (a != null && b != null && a.getId() != null && a.getId().equals(b.getId()));
     }
 
-    private static void require(boolean condition, String message) {
+    private static void require(
+            boolean condition,
+            String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
         }
