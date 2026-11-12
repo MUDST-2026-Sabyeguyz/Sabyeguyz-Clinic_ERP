@@ -284,7 +284,7 @@ function confirmClose() {
 .personnel-page {
   min-height: 100vh;
   background: #f9f4ee;
-  color: #25372e;
+  color: var(--color-ink);
 }
 .personnel-main {
   width: min(1500px, calc(100% - 72px));
@@ -298,21 +298,21 @@ function confirmClose() {
 }
 .personnel-main header p {
   margin: 5px 0 95px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 1.1rem;
 }
 .summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   margin: 38px 0 46px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 3px 8px #0002;
 }
 .summary article {
   padding: 13px 24px;
-  border-right: 1px solid #d9e1dc;
+  border-right: 1px solid var(--color-border-soft);
 }
 .summary article:last-child {
   border: 0;
@@ -322,7 +322,7 @@ function confirmClose() {
   display: block;
 }
 .summary span {
-  color: #56665d;
+  color: var(--color-muted);
 }
 .summary b {
   margin-top: 4px;
@@ -385,7 +385,7 @@ function confirmClose() {
   padding: 0 20px;
   border: 0;
   border-radius: 16px;
-  background: #1e807c;
+  background: var(--color-primary);
   color: #fff;
   font: inherit;
   cursor: pointer;
@@ -404,7 +404,7 @@ function confirmClose() {
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 3px 8px #0002;
-  scrollbar-color: #1e807c #e7efeb;
+  scrollbar-color: var(--color-primary) #e7efeb;
   scrollbar-width: thin;
 }
 .table-wrap::-webkit-scrollbar {
@@ -417,7 +417,7 @@ function confirmClose() {
 .table-wrap::-webkit-scrollbar-thumb {
   border: 2px solid #e7efeb;
   border-radius: 999px;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .table-wrap::-webkit-scrollbar-thumb:hover {
   background: #176b68;
@@ -470,7 +470,7 @@ function confirmClose() {
   padding: 9px 18px;
   border: 0;
   border-radius: 14px;
-  background: #1e807c;
+  background: var(--color-primary);
   color: #fff;
   cursor: pointer;
 }
@@ -517,7 +517,7 @@ function confirmClose() {
   cursor: pointer;
 }
 .confirm-modal .no {
-  border: 2px solid #1e807c;
+  border: 2px solid var(--color-primary);
   background: #fff;
 }
 .confirm-modal .yes {
@@ -533,7 +533,7 @@ function confirmClose() {
     border-right: 0;
   }
   .summary article:nth-child(-n + 2) {
-    border-bottom: 1px solid #d9e1dc;
+    border-bottom: 1px solid var(--color-border-soft);
   }
 }
 @media (max-width: 1200px) {
@@ -567,7 +567,7 @@ function confirmClose() {
   .summary article,
   .summary article:nth-child(2) {
     border-right: 0;
-    border-bottom: 1px solid #d9e1dc;
+    border-bottom: 1px solid var(--color-border-soft);
   }
   .summary article:last-child {
     border-bottom: 0;

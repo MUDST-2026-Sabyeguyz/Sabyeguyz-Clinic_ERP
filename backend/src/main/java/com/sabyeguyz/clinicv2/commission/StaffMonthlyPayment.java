@@ -7,6 +7,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import com.sabyeguyz.clinicv2.enums.PaymentStatus;
 import com.sabyeguyz.clinicv2.staff.Staff;
+import com.sabyeguyz.clinicv2.branch.Branch;
 
 /** Monthly payout summary of one staff member: owner commission, single-visit fees, substitute fees and applied adjustments. payment_month is the month of treatment, not the month the course was sold. */
 @Entity
@@ -20,6 +21,11 @@ public class StaffMonthlyPayment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "staff_id")
     private Staff staff;
+
+    /** Historical branch of this monthly record. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "branch_id", nullable = false)
+    private Branch branch;
 
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "payment_month", length = 7, nullable = false)
@@ -72,6 +78,8 @@ public class StaffMonthlyPayment {
     public Long getId() { return id; }
     public Staff getStaff() { return staff; }
     public void setStaff(Staff staff) { this.staff = staff; }
+    public Branch getBranch() { return branch; }
+    public void setBranch(Branch branch) { this.branch = branch; }
     public String getPaymentMonth() { return paymentMonth; }
     public void setPaymentMonth(String paymentMonth) { this.paymentMonth = paymentMonth; }
     public PaymentStatus getPaymentStatus() { return paymentStatus; }

@@ -7,15 +7,11 @@ import com.sabyeguyz.clinicv2.enums.Gender;
 import com.sabyeguyz.clinicv2.masterdata.MasterDataValue;
 import java.time.LocalDate;
 
-/**
- * Input for {@link PatientService#register}. Fields marked required below
- * follow the Clinic ERP Workflow Brief §3 "PatientProfile Required Information"
- * table; everything else is optional.
- */
+/** ข้อมูลสำหรับสร้างโปรไฟล์ผู้ป่วย; ช่องที่ไม่บังคับยังเป็น null ได้ */
 public record PatientRegistration(
         Branch branch,
         CustomerType customerType,
-        /** Canonical นาย, นางสาว, นาง, เด็กชาย, เด็กหญิง; the HTTP contract also accepts English aliases. */
+        /** คำนำหน้าที่ระบบรองรับ */
         String title,
         String patientFname,
         String patientLname,
@@ -33,6 +29,24 @@ public record PatientRegistration(
         MasterDataValue referralChannel,
         MasterDataValue insuranceType,
         MasterDataValue insuranceCompany,
-        String middleName
+        String middleName,
+        boolean drugAllergy,
+        boolean foodAllergy,
+        String chronicDisease,
+        String emergencyContactName,
+        String emergencyContactRelationship,
+        String emergencyContactPhone,
+        boolean privacyConsent
 ) {
+    /** รองรับ caller เดิมที่ยังไม่ส่งข้อมูลสุขภาพและผู้ติดต่อฉุกเฉิน */
+    public PatientRegistration(Branch branch, CustomerType customerType, String title, String patientFname,
+                               String patientLname, Gender gender, String phone, String genderDetail,
+                               String patientNickname, String nationalId, String passportNo, LocalDate birthdate,
+                               BloodGroup bloodGroup, String nationality, String address, MasterDataValue customerGroup,
+                               MasterDataValue referralChannel, MasterDataValue insuranceType,
+                               MasterDataValue insuranceCompany, String middleName) {
+        this(branch, customerType, title, patientFname, patientLname, gender, phone, genderDetail, patientNickname,
+                nationalId, passportNo, birthdate, bloodGroup, nationality, address, customerGroup, referralChannel,
+                insuranceType, insuranceCompany, middleName, false, false, null, null, null, null, false);
+    }
 }

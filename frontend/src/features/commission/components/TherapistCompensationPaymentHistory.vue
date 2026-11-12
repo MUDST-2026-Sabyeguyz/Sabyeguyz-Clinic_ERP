@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import type { StaffPayment, TherapistAdjustment } from '@/api/client'
 import { baht, currentMonth, longDate, monthLabel, signedBaht } from '../lib/therapistPay'
 
@@ -11,7 +12,6 @@ const props = defineProps<{
 
 const allPaid = computed(() => props.payments.filter((payment) => payment.status === 'PAID'))
 
-// the month and the year to look at, chosen apart; any month can be chosen, not only those already paid
 const monthNames = Array.from({ length: 12 }, (_, index) =>
   new Intl.DateTimeFormat('th-TH', { month: 'long' }).format(new Date(2026, index, 1)),
 )
@@ -20,7 +20,11 @@ watch(
   allPaid,
   (rows) => {
     if (chosen.value) return
-    chosen.value = rows.map((row) => row.month).sort().pop() ?? currentMonth()
+    chosen.value =
+      rows
+        .map((row) => row.month)
+        .sort()
+        .pop() ?? currentMonth()
   },
   { immediate: true },
 )
@@ -33,14 +37,14 @@ const years = computed(() => {
   const last = Math.max(thisYear, ...seen)
   return Array.from({ length: last - first + 1 }, (_, index) => last - index)
 })
-const chooseMonth = (event: Event) => {
-  chosen.value = `${chosenYear.value}-${(event.target as HTMLSelectElement).value}`
+const chooseYear = (value: string) => {
+  chosen.value = `${value}-${chosenMonth.value}`
 }
-const chooseYear = (event: Event) => {
-  chosen.value = `${(event.target as HTMLSelectElement).value}-${chosenMonth.value}`
+const moveMonth = (offset: number) => {
+  const date = new Date(chosenYear.value, Number(chosenMonth.value) - 1 + offset, 1)
+  chosen.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 const paid = computed(() => allPaid.value.filter((row) => row.month === chosen.value))
-// the adjustment worked off in the month being looked at, else the latest one
 const adjustmentOfMonth = computed(
   () =>
     props.adjustments.find(
@@ -63,14 +67,20 @@ const paidOn = (payment: StaffPayment) =>
   <section class="therapist-payment-filter">
     <label>รอบเดือน</label>
     <div class="therapist-payment-range">
-      <select aria-label="เดือน" :value="chosenMonth" @change="chooseMonth">
-        <option v-for="(name, index) in monthNames" :key="name" :value="String(index + 1).padStart(2, '0')">
-          {{ name }}
-        </option>
-      </select>
-      <select aria-label="ปี" :value="chosenYear" @change="chooseYear">
-        <option v-for="year in years" :key="year" :value="year">{{ year + 543 }}</option>
-      </select>
+      <div class="therapist-month-stepper" aria-label="เลือกเดือน">
+        <button type="button" aria-label="เดือนก่อน" @click="moveMonth(-1)">‹</button>
+        <strong>{{ monthNames[Number(chosenMonth) - 1] }}</strong>
+        <button type="button" aria-label="เดือนถัดไป" @click="moveMonth(1)">›</button>
+      </div>
+      <FilterDropdown
+        :model-value="String(chosenYear)"
+        :options="years.map((year) => ({ value: String(year), label: String(year + 543) }))"
+        label="ปี"
+        default-label="เลือกปี"
+        :clear-on-reselect="false"
+        hide-default-option
+        @update:model-value="chooseYear"
+      />
     </div>
   </section>
   <section class="therapist-payment-card">
@@ -101,7 +111,11 @@ const paidOn = (payment: StaffPayment) =>
         <span class="therapist-paid-status">จ่ายแล้ว · Paid</span>
       </div>
       <p v-if="paid.length === 0" class="therapist-line-empty" role="status">
-        {{ allPaid.length === 0 ? 'ยังไม่มีงวดที่จ่ายแล้ว ยอดจะแสดงที่นี่เมื่อ Manager ยืนยันการจ่าย' : 'ไม่มีงวดที่จ่ายแล้วในเดือนที่เลือก' }}
+        {{
+          allPaid.length === 0
+            ? 'ยังไม่มีงวดที่จ่ายแล้ว ยอดจะแสดงที่นี่เมื่อ Manager ยืนยันการจ่าย'
+            : 'ไม่มีงวดที่จ่ายแล้วในเดือนที่เลือก'
+        }}
       </p>
     </div>
     <p class="therapist-payment-formula">
@@ -110,12 +124,12 @@ const paidOn = (payment: StaffPayment) =>
     <RouterLink
       v-if="adjustmentOfMonth"
       class="therapist-primary-action"
-      :to="{ name: 'therapist-adjustment-detail', params: { id: String(adjustmentOfMonth.id) } }"
+      :to="{
+        name: 'therapist-adjustment-detail',
+        params: { id: String(adjustmentOfMonth.id) },
+      }"
       >ดู Adjustment เดือนนี้</RouterLink
     >
     <p v-else class="therapist-payment-formula">ยังไม่มี Adjustment</p>
   </section>
-  <p class="therapist-payment-note">
-    อ่านอย่างเดียว · ยอดที่จ่ายแล้วถูกล็อก หากพบข้อมูลไม่ถูกต้อง กรุณาแจ้ง Manager นอกระบบ
-  </p>
 </template>

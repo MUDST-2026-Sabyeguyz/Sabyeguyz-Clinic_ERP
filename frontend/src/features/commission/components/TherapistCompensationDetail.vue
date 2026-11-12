@@ -69,7 +69,9 @@ const treatmentRows = computed<Row[]>(() => {
   ]
 })
 
-const rows = computed(() => (props.kind === 'commission' ? commissionRows.value : treatmentRows.value))
+const rows = computed(() =>
+  props.kind === 'commission' ? commissionRows.value : treatmentRows.value,
+)
 const source = computed(() => ({
   name: props.kind === 'commission' ? 'therapist-commission-source' : 'therapist-treatment-source',
   params: { id: props.line ? lineKey(props.line) : '' },
@@ -79,7 +81,9 @@ const source = computed(() => ({
 
 <template>
   <section class="therapist-detail-card therapist-figma-detail-card">
-    <h2>{{ kind === 'commission' ? 'รายละเอียดค่าคอมมิชชัน' : 'รายละเอียดค่ามือ' }}</h2>
+    <h2>
+      {{ kind === 'commission' ? 'รายละเอียดค่าคอมมิชชัน' : 'รายละเอียดค่ามือ' }}
+    </h2>
     <p class="therapist-detail-period">
       {{
         kind === 'commission'
@@ -104,7 +108,7 @@ const source = computed(() => ({
     <RouterLink
       class="therapist-back-action"
       :to="{ name: 'therapist-compensation', query: { tab: kind, month } }"
-      >←&nbsp;&nbsp; กลับภาพรวม</RouterLink
+      >←&nbsp;&nbsp; กลับ</RouterLink
     >
     <RouterLink v-if="line" class="therapist-primary-action" :to="source">
       {{ kind === 'commission' ? 'ดูรายการขายต้นทาง' : 'ดูรายการรักษาต้นทาง' }}

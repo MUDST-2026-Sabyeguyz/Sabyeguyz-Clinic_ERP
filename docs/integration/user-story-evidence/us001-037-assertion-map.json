@@ -1,0 +1,3466 @@
+{
+  "scope": "US001–037",
+  "total_ac": 151,
+  "policy": "Assertion map, not test result. Full means the listed source scenario covers this Given/When/Then under stated fixture; run status must be bound separately. External-provider full integration is never inferred from local fake.",
+  "mapping_counts": {
+    "partial": 88,
+    "unmapped": 54,
+    "full": 9
+  },
+  "coverage": [
+    {
+      "ac_id": "001.01",
+      "given": "บัญชี Active มี username และรหัสผ่านถูกต้อง",
+      "when": "ผู้ใช้เข้าสู่ระบบด้วย username และรหัสผ่าน",
+      "then": "ระบบให้เข้าสู่ระบบตามบทบาทและสิทธิ์ของบัญชี และบันทึกเวลาเข้าสู่ระบบล่าสุด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/auth.cy.js",
+          "exact_test_title": "logs in a manager and returns a token and role",
+          "line": 2,
+          "assertions": [
+            "expect(status).to.equal(200)",
+            "expect(body.username).to.equal('manager')",
+            "expect(body.role).to.equal('MANAGER')",
+            "expect(body.token).to.be.a('string').and.not.empty"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "No last_login_at assertion or full role/individual-permission combination.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "001.02",
+      "given": "บัญชี Active มี email และรหัสผ่านถูกต้อง",
+      "when": "ผู้ใช้เข้าสู่ระบบด้วย email และรหัสผ่าน",
+      "then": "ระบบให้เข้าสู่บัญชีเดียวกับที่ใช้ username โดยตรวจ email แบบไม่แยกตัวพิมพ์ใหญ่–เล็ก และบันทึกเวลาเข้าสู่ระบบล่าสุด",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "001.03",
+      "given": "ผู้ใช้เข้าสู่ระบบแล้ว",
+      "when": "ผู้ใช้เรียกข้อมูลหรือทำรายการ",
+      "then": "ระบบตรวจบทบาท สิทธิ์รายบุคคล เจ้าของข้อมูล และขอบเขตสาขาที่เกี่ยวข้องก่อนอนุญาต หากไม่มีสิทธิ์ให้ปฏิเสธและไม่เปิดเผยข้อมูลหรือบันทึกรายการ แม้ส่งคำขอโดยตรง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/auth.cy.js",
+          "exact_test_title": "lets a therapist read branches but not manage users",
+          "line": 25,
+          "assertions": [
+            "cy.apiAs(body.token, 'GET', '/api/branches').its('status').should('equal', 200)",
+            "cy.apiAs(body.token, 'GET', '/api/users').its('status').should('equal', 403)",
+            "}).its('status').should('equal', 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Narrow role gate only; individual overrides, owners and all data branches are not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "001.04",
+      "given": "บัญชี Inactive หรือข้อมูลเข้าสู่ระบบไม่ถูกต้อง",
+      "when": "ผู้ใช้พยายามเข้าสู่ระบบ",
+      "then": "ระบบปฏิเสธการเข้าสู่ระบบและไม่เปิดสิทธิ์ใช้งาน",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/auth.cy.js",
+          "exact_test_title": "rejects a wrong password",
+          "line": 11,
+          "assertions": [
+            "expect([400, 401, 403]).to.include(status)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Wrong password only; not all inactive/incorrect cases.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "creates a user with staff, role and branch access, who can then log in",
+          "line": 43,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.role).to.equal('THERAPIST')",
+            "expect(body.branchCode).to.equal('01')",
+            "expect(body.email).to.equal('newpt01@example.test')",
+            "expect(login.status).to.equal(200)",
+            "expect(login.body.role).to.equal('THERAPIST')",
+            "cy.api('DELETE', `/api/users/${body.id}`).its('status').should('be.oneOf', [200, 204])",
+            "cy.login('newpt01', 'password12345').its('status').should('be.within', 400, 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Deleted new account cannot log in; failed response is asserted, all inactive variants not covered.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "002.01",
+      "given": "ผู้ใช้เข้าสู่ระบบอยู่",
+      "when": "ผู้ใช้เลือกออกจากระบบจากเมนูบัญชี",
+      "then": "ระบบออกจากการใช้งานบัญชีบนอุปกรณ์นั้นและกลับหน้าเข้าสู่ระบบ โดยไม่แก้ธุรกรรมที่บันทึกแล้ว",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "002.02",
+      "given": "ผู้ใช้ออกจากระบบแล้ว",
+      "when": "ผู้ใช้ย้อนกลับหรือเปิดหน้าที่ต้องเข้าสู่ระบบใหม่",
+      "then": "ระบบให้เข้าสู่ระบบก่อนเข้าถึงข้อมูลหรือทำรายการ ไม่เปิดหน้าข้อมูลจากสถานะเข้าสู่ระบบเดิม",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "003.01",
+      "given": "Manager เข้าสู่ระบบแล้วและมีสาขาเปิดใช้งาน",
+      "when": "Manager เลือกสาขาปฏิบัติงาน",
+      "then": "เลือกได้ทุกสาขาที่เปิดใช้งาน รวมสาขาที่เพิ่มใหม่",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "003.02",
+      "given": "Manager มีรายการเดิมในสาขาหนึ่ง",
+      "when": "Manager เปลี่ยนสาขาและบันทึกรายการใหม่",
+      "then": "รายการใหม่ใช้สาขาที่เลือก โดยไม่เปลี่ยนสาขาของรายการเก่า",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "003.03",
+      "given": "Manager เลือกเข้าสาขาปฏิบัติงาน B ซึ่งเปิดใช้งานอยู่ และมีสิทธิ์สร้างนัด",
+      "when": "Manager สร้างนัดโดยกรอกข้อมูลครบถ้วนและถูกต้อง",
+      "then": "ระบบสร้างนัดในสาขา B สำเร็จ โดยใช้นักกายภาพของสาขา B",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "allows Manager reads, filtering and writes across both branches",
+          "line": 165,
+          "assertions": [
+            "cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 2)",
+            "cy.api('GET', '/api/appointments?branchCode=02').its('body.items.0.id').should('equal', this.appointment02.id)",
+            ".its('status').should('equal', 200)",
+            ".its('status').should('equal', 200)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Manager creates two-branch appointments in beforeEach and filters/changes across branches; newly added/inactive branch UI choices not covered.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "004.01",
+      "given": "Therapist มีสาขาประจำและมีสิทธิ์สร้างนัด",
+      "when": "Therapist สร้างนัดในสาขาประจำโดยกรอกข้อมูลครบถ้วนและถูกต้อง",
+      "then": "ระบบสร้างนัดในสาขาประจำนั้นสำเร็จ",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "lets a therapist book their own time and confirms only after successful paid service",
+          "line": 88,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.status).to.equal('UNCONFIRMED')",
+            "cy.apiAs(this.staff01, 'POST', `/api/appointments/${body.id}/${action}`).its('status').should('equal', 403)",
+            "}).its('status').should('equal', 201)",
+            "cy.api('GET', `/api/appointments/${body.id}`).its('body.status').should('equal', 'CONFIRMED')",
+            "cy.apiAs(this.staff01, 'GET', `/api/patients/${this.patient02.id}`).its('status').should('equal', 200)",
+            ".should('satisfy', (items) => items.some((patient) => patient.id === this.patient02.id))"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "Own-branch appointment POST201; another-branch registered patient is allowed. Bind actual passing run before status upgrade.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "004.02",
+      "given": "Therapist มีสาขาประจำ",
+      "when": "Therapist ส่งคำสั่งสร้างนัดโดยระบุสาขาอื่น",
+      "then": "ระบบปฏิเสธคำสั่งและไม่สร้างนัด",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "rejects cross-branch CURRENT and NEW creation before accepting patient or therapist payloads",
+          "line": 58,
+          "assertions": [
+            "cy.apiAs(this.staff01, 'POST', '/api/appointments', payload).its('status').should('equal', 403)",
+            "}).its('status').should('equal', 403)",
+            "}).its('status').should('equal', 403)",
+            "cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 2)"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "POST403 for current/new/payload substitution and totalItems unchanged at2.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "004.03",
+      "given": "Therapist มีสิทธิ์ค้นหาผู้ป่วย และมีผู้ป่วยที่ลงทะเบียนในสาขาอื่น",
+      "when": "Therapist ค้นหาด้วย HN หรือชื่อที่ตรงกับผู้ป่วยคนนั้น",
+      "then": "ระบบแสดงผู้ป่วยคนนั้นในผลการค้นหา แม้ลงทะเบียนไว้ต่างสาขา",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "lets a therapist book their own time and confirms only after successful paid service",
+          "line": 88,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.status).to.equal('UNCONFIRMED')",
+            "cy.apiAs(this.staff01, 'POST', `/api/appointments/${body.id}/${action}`).its('status').should('equal', 403)",
+            "}).its('status').should('equal', 201)",
+            "cy.api('GET', `/api/appointments/${body.id}`).its('body.status').should('equal', 'CONFIRMED')",
+            "cy.apiAs(this.staff01, 'GET', `/api/patients/${this.patient02.id}`).its('status').should('equal', 200)",
+            ".should('satisfy', (items) => items.some((patient) => patient.id === this.patient02.id))"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "GET foreign-registered patient200 and HN search contains the same ID.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "004.04",
+      "given": "Therapist มีสิทธิ์แชร์คอร์ส และข้อมูลการแชร์ให้ผู้รับต่างสาขาครบถ้วนตามเงื่อนไข",
+      "when": "Therapist ยืนยันการแชร์คอร์ส",
+      "then": "ระบบบันทึกการแชร์และจัดสรรสิทธิ์ให้ผู้รับสำเร็จ โดยไม่ปฏิเสธเพียงเพราะผู้รับอยู่ต่างสาขา",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "004.05",
+      "given": "Therapist มีสิทธิ์ดูรายการและมีรายการในสาขาอื่น",
+      "when": "Therapist เปิดรายการของสาขาอื่น",
+      "then": "ระบบแสดงข้อมูลที่มีสิทธิ์ดู โดยไม่ให้แก้ ยกเลิก หรือ Void รายการนั้น และไม่เปิดเผยค่าตอบแทนของพนักงานคนอื่น",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "004.06",
+      "given": "Therapist มีสาขาประจำ",
+      "when": "Therapist ส่งคำสั่งแก้ ยกเลิก หรือ Void รายการต้นทางของสาขาอื่น",
+      "then": "ระบบปฏิเสธและคงรายการเดิม แม้ผู้ใช้มีสิทธิ์ทำฟังก์ชันนั้นในสาขาประจำ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "rejects cross-branch ${action} before state/payload processing and leaves the appointment unchanged",
+          "line": 74,
+          "assertions": [
+            "}).its('status').should('equal', 403)",
+            "cy.api('GET', `/api/appointments/${id}`).its('body').should('deep.equal', before)"
+          ],
+          "parameterized_title": true,
+          "coverage": "partial",
+          "remaining": "Parameterized actions include reschedule/cancel; response403 and GET deep-equal pre-state. Need other transaction types.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "005.01",
+      "given": "Manager มีสิทธิ์จัดการบัญชี และกรอก username, email, รหัสผ่าน และข้อมูลจำเป็นครบถ้วนถูกต้อง โดยข้อมูลบัญชีไม่ซ้ำ",
+      "when": "Manager ยืนยันสร้างบัญชี",
+      "then": "ระบบสร้างบัญชีพร้อมข้อมูลที่ระบุ และจัดเก็บรหัสผ่านเป็น hash",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "creates a user with staff, role and branch access, who can then log in",
+          "line": 43,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.role).to.equal('THERAPIST')",
+            "expect(body.branchCode).to.equal('01')",
+            "expect(body.email).to.equal('newpt01@example.test')",
+            "expect(login.status).to.equal(200)",
+            "expect(login.body.role).to.equal('THERAPIST')",
+            "cy.api('DELETE', `/api/users/${body.id}`).its('status').should('be.oneOf', [200, 204])",
+            "cy.login('newpt01', 'password12345').its('status').should('be.within', 400, 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Role/branch/email and login asserted; hash storage, full linked position consistency, all statuses not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "005.02",
+      "given": "มีบัญชีเชื่อมกับพนักงานแล้ว และ Manager มีสิทธิ์จัดการบัญชี",
+      "when": "Manager บันทึกการเปลี่ยนบทบาทหรือสถานะบัญชี",
+      "then": "ระบบบันทึกบทบาทเดียวเป็น Manager หรือ Therapist ซึ่งสอดคล้องกับตำแหน่งพนักงานที่เชื่อม และบันทึกสถานะเป็น Active หรือ Inactive ตามที่เลือก",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "creates a user with staff, role and branch access, who can then log in",
+          "line": 43,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.role).to.equal('THERAPIST')",
+            "expect(body.branchCode).to.equal('01')",
+            "expect(body.email).to.equal('newpt01@example.test')",
+            "expect(login.status).to.equal(200)",
+            "expect(login.body.role).to.equal('THERAPIST')",
+            "cy.api('DELETE', `/api/users/${body.id}`).its('status').should('be.oneOf', [200, 204])",
+            "cy.login('newpt01', 'password12345').its('status').should('be.within', 400, 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Role/branch/email and login asserted; hash storage, full linked position consistency, all statuses not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "005.03",
+      "given": "มีบัญชีใช้ username นั้นอยู่แล้ว",
+      "when": "Manager สร้างบัญชีหรือแก้ username ของอีกบัญชีให้ใช้ค่าเดียวกัน",
+      "then": "ระบบแจ้งว่า username ถูกใช้แล้วและไม่บันทึกการเปลี่ยนแปลง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "rejects a user with a short password or a duplicate username",
+          "line": 61,
+          "assertions": [
+            "cy.api('POST', '/api/users', { ...user, password: 'short' }).its('status').should('equal', 400)",
+            "cy.api('POST', '/api/users', user).its('status').should('equal', 201)",
+            ".its('status').should('be.within', 400, 409)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "4xx for short password and duplicate username; DB row count and field-specific message not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "005.04",
+      "given": "มีบัญชีใช้ email นั้นอยู่แล้ว",
+      "when": "Manager สร้างบัญชีหรือแก้ email ของอีกบัญชีให้ใช้ค่าเดียวกัน แม้ต่างกันเพียงตัวพิมพ์ใหญ่/เล็ก",
+      "then": "ระบบแจ้งว่า email ถูกใช้แล้วและไม่บันทึกการเปลี่ยนแปลง",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "005.05",
+      "given": "Manager กรอก email ที่มีรูปแบบไม่ถูกต้อง",
+      "when": "Manager ยืนยันสร้างหรือแก้ไขบัญชี",
+      "then": "ระบบแจ้งให้แก้ไข email และไม่บันทึกข้อมูล",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "005.06",
+      "given": "Manager มีสิทธิ์จัดการบัญชี และ username หรือ email ใหม่ถูกต้องและไม่ซ้ำกับบัญชีอื่น",
+      "when": "Manager ยืนยันแก้ไขข้อมูลบัญชี",
+      "then": "ระบบบันทึกข้อมูลใหม่โดยคง user_id และรายการเดิมที่อ้างอิงบัญชีนี้ไว้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/admin-misc.cy.js",
+          "exact_test_title": "edits a user: new username, new password, new name and branch",
+          "line": 10,
+          "assertions": [
+            "expect(updated.status, JSON.stringify(updated.body)).to.equal(200)",
+            "expect(updated.body.username).to.equal('edited01')",
+            "expect(updated.body.branchCode).to.equal('02')",
+            "cy.login('edited01', 'newpassword12345').its('status').should('equal', 200)",
+            "cy.login('editme01', 'password12345').its('status').should('be.within', 400, 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Updated login/name/branch covered, historical transaction references/editor timestamp not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/admin-misc.cy.js",
+          "exact_test_title": "keeps the old password when none is sent and refuses a taken username",
+          "line": 24,
+          "assertions": [
+            "cy.api('PUT', `/api/users/${body.id}`, { ...user, password: undefined, fullName: 'เปลี่ยนแต่ชื่อ' }).its('status').should('equal', 200)",
+            "cy.login('editme01', 'password12345').its('status').should('equal', 200)",
+            "cy.api('PUT', `/api/users/${body.id}`, { ...user, username: 'manager' }).its('status').should('be.within', 400, 409)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Omitted password retains login; existing user references not proved.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "005.07",
+      "given": "Manager กรอก username ที่มี @",
+      "when": "Manager ยืนยันสร้างหรือแก้ไขบัญชี",
+      "then": "ระบบแจ้งว่า username ห้ามมี @ และไม่บันทึกการเปลี่ยนแปลง",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "005.08",
+      "given": "Manager กรอกข้อมูลจำเป็นไม่ครบ หรือเลือกบทบาทไม่ตรงตำแหน่งพนักงานที่เชื่อม",
+      "when": "Manager ยืนยันสร้างหรือแก้ไขบัญชี",
+      "then": "ระบบแจ้งข้อมูลที่ผิดและไม่บันทึกบัญชีที่ไม่ผ่านเงื่อนไข",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "rejects a user with a short password or a duplicate username",
+          "line": 61,
+          "assertions": [
+            "cy.api('POST', '/api/users', { ...user, password: 'short' }).its('status').should('equal', 400)",
+            "cy.api('POST', '/api/users', user).its('status').should('equal', 201)",
+            ".its('status').should('be.within', 400, 409)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "4xx for short password and duplicate username; DB row count and field-specific message not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "006.01",
+      "given": "ผู้ใช้มีสิทธิ์ตามบทบาท และมีการกำหนดอนุญาตหรือปฏิเสธรายบุคคลสำหรับฟังก์ชันเดียวกัน",
+      "when": "ผู้ใช้เรียกใช้ฟังก์ชันนั้น",
+      "then": "ระบบใช้ค่าที่กำหนดรายบุคคลแทนค่าตามบทบาท โดยยังต้องผ่านข้อจำกัดเฉพาะของบทบาทและขอบเขตข้อมูล",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "006.02",
+      "given": "ผู้ใช้ไม่มีการกำหนดสิทธิ์รายบุคคลสำหรับฟังก์ชันนั้น",
+      "when": "ผู้ใช้เรียกใช้ฟังก์ชัน",
+      "then": "ระบบตรวจสิทธิ์ตามบทบาทของผู้ใช้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/auth.cy.js",
+          "exact_test_title": "lets a therapist read branches but not manage users",
+          "line": 25,
+          "assertions": [
+            "cy.apiAs(body.token, 'GET', '/api/branches').its('status').should('equal', 200)",
+            "cy.apiAs(body.token, 'GET', '/api/users').its('status').should('equal', 403)",
+            "}).its('status').should('equal', 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Narrow role gate only; individual overrides, owners and all data branches are not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "006.03",
+      "given": "Manager มีสิทธิ์กำหนดสิทธิ์รายบุคคลและเลือกผู้ใช้กับฟังก์ชันแล้ว",
+      "when": "Manager บันทึกค่าอนุญาตหรือปฏิเสธ",
+      "then": "ระบบบันทึกสิทธิ์ของผู้ใช้สำหรับฟังก์ชันนั้น พร้อมผู้กำหนดและเวลาที่บันทึก",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "006.04",
+      "given": "Therapist ได้รับสิทธิ์สร้างนัดรายบุคคล",
+      "when": "Therapist ส่งคำสั่งสร้างนัดในสาขาอื่นที่ไม่ใช่สาขาประจำ",
+      "then": "ระบบปฏิเสธและไม่สร้างนัด แม้ได้รับสิทธิ์สร้างนัดแล้ว",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "rejects cross-branch CURRENT and NEW creation before accepting patient or therapist payloads",
+          "line": 58,
+          "assertions": [
+            "cy.apiAs(this.staff01, 'POST', '/api/appointments', payload).its('status').should('equal', 403)",
+            "}).its('status').should('equal', 403)",
+            "}).its('status').should('equal', 403)",
+            "cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 2)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "No explicit per-user allow override in scenario.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "006.05",
+      "given": "Therapist ได้รับสิทธิ์ดูข้อมูลคอมมิชชัน",
+      "when": "Therapist ขอเรียกดูข้อมูลคอมมิชชันของพนักงานคนอื่น",
+      "then": "ระบบปฏิเสธและไม่ส่งคืนข้อมูลคอมมิชชันของพนักงานคนนั้น",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "006.06",
+      "given": "ผู้ใช้ได้รับสิทธิ์จัดการข้อมูลที่เกี่ยวข้องกับค่าตอบแทน",
+      "when": "ผู้ใช้ส่งคำสั่งแก้ยอดค่ามือหรือคอมมิชชันปลายทางโดยตรง",
+      "then": "ระบบปฏิเสธการแก้ยอดโดยตรง โดยการแก้ไขต้องผ่านข้อมูลต้นทางและ Recalculate ก่อน Finalize หรือใช้ Adjustment งวดถัดไปหลัง Finalize ตามกฎของระบบ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "006.07",
+      "given": "Therapist ได้รับสิทธิ์แก้ ยกเลิก หรือ Void รายการรายบุคคล",
+      "when": "Therapist ส่งคำสั่งดังกล่าวกับรายการต้นทางของสาขาอื่น",
+      "then": "ระบบปฏิเสธและคงรายการเดิม โดยยังดูข้อมูลที่ได้รับอนุญาตและแชร์คอร์สข้ามสาขาตามกฎได้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "rejects cross-branch ${action} before state/payload processing and leaves the appointment unchanged",
+          "line": 74,
+          "assertions": [
+            "}).its('status').should('equal', 403)",
+            "cy.api('GET', `/api/appointments/${id}`).its('body').should('deep.equal', before)"
+          ],
+          "parameterized_title": true,
+          "coverage": "partial",
+          "remaining": "No separate cross-branch read grant or sharing scenario in this case.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "006.08",
+      "given": "Therapist ได้รับสิทธิ์รายบุคคลเกี่ยวกับคอร์สหรือค่าตอบแทน",
+      "when": "Therapist ส่งคำสั่งอนุมัติต่ออายุคอร์สหรือ Reopen รอบค่าตอบแทน",
+      "then": "ระบบปฏิเสธ เพราะทั้งสองการอนุมัติเป็นหน้าที่ Manager เท่านั้น",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "007.01",
+      "given": "Therapist เข้าสู่ระบบและมีสิทธิ์ดูค่าตอบแทนของตนเอง",
+      "when": "Therapist เปิดรายงานค่าตอบแทน",
+      "then": "ระบบแสดงค่ามือ คอมมิชชัน และสถานะจ่ายเฉพาะของ Therapist ที่เข้าสู่ระบบ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "007.02",
+      "given": "Manager เข้าสู่ระบบและมีสิทธิ์ดูค่าตอบแทนพนักงาน",
+      "when": "Manager เปิดรายงานค่าตอบแทนแบบรายบุคคลหรือภาพรวม",
+      "then": "ระบบแสดงข้อมูลค่าตอบแทนตามพนักงานและช่วงเวลาที่เลือก ภายในขอบเขตสิทธิ์ของ Manager",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "007.03",
+      "given": "Therapist เข้าสู่ระบบด้วยบัญชีของตน",
+      "when": "Therapist ส่งคำขอเข้าถึงข้อมูลค่าตอบแทนโดยระบุพนักงานคนอื่น",
+      "then": "ระบบปฏิเสธคำขอและไม่เปิดเผยข้อมูลค่าตอบแทนของพนักงานคนนั้น",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "008.01",
+      "given": "Manager มีสิทธิ์จัดการสาขา และกรอกข้อมูลจำเป็นครบถ้วนถูกต้อง โดยรหัสสาขาไม่ซ้ำ",
+      "when": "Manager ยืนยันบันทึกสาขา",
+      "then": "ระบบบันทึกชื่อ ที่อยู่ เบอร์โทร รหัสสาขา 2 หลัก และสถานะ Active หรือ Inactive พร้อมอีเมลติดต่อและเลขใบอนุญาตหากระบุ โดยเลขใบอนุญาตคงศูนย์นำหน้าและเครื่องหมาย และหลายสาขาใช้อีเมลเดียวกันได้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "creates a branch, reads it back and lists it",
+          "line": 3,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.branchCode).to.equal('03')",
+            "expect(body.active).to.equal(true)",
+            "cy.api('GET', `/api/branches/${body.id}`).its('body.name').should('equal', 'สาขาทดสอบ')",
+            "cy.api('GET', '/api/branches').its('body').should('have.length', 3)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Minimal create omits email/license; no license-string preservation/shared-email cases.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "008.02",
+      "given": "รหัสสาขาถูกใช้สร้าง HN ของผู้ป่วยแล้ว",
+      "when": "Manager แก้ข้อมูลสาขา",
+      "then": "ระบบอนุญาตให้แก้ข้อมูลทั่วไปของสาขา แต่ไม่อนุญาตให้เปลี่ยนรหัสสาขา และ HN ของผู้ป่วยเดิมต้องไม่เปลี่ยน",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "updates name, address and phone but never the branch code (it is part of every HN)",
+          "line": 14,
+          "assertions": [
+            "expect(updated.status).to.equal(200)",
+            "expect(updated.body.name).to.equal('ใหม่')",
+            "expect(updated.body.phone).to.equal('02-111-1111')",
+            ".its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "General edit and rejected code change asserted; registered patient HN immutability not inspected here.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "008.03",
+      "given": "Manager กรอกรหัสสาขาซ้ำกับสาขาที่มีอยู่",
+      "when": "Manager ยืนยันบันทึกสาขา",
+      "then": "ระบบแจ้งรหัสซ้ำและไม่สร้างหรือเปลี่ยนสาขาเป็นรหัสนั้น",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "rejects a branch code that is not 2 digits or is already used",
+          "line": 28,
+          "assertions": [
+            "cy.api('POST', '/api/branches', { ...branch, branchCode: '3' }).its('status').should('equal', 400)",
+            "cy.api('POST', '/api/branches', { ...branch, branchCode: 'AB' }).its('status').should('equal', 400)",
+            "cy.api('POST', '/api/branches', { ...branch, branchCode: '01' }).its('status').should('be.within', 400, 409)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "POST duplicate4xx; error payload and persisted pre-state not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "008.04",
+      "given": "Manager กรอกข้อมูลจำเป็นของสาขาครบถ้วนถูกต้อง แต่ไม่ได้กรอกอีเมลติดต่อและเลขใบอนุญาต",
+      "when": "Manager ยืนยันบันทึกสาขา",
+      "then": "ระบบบันทึกสาขาสำเร็จ โดยเว้นสองข้อมูลนี้ว่างได้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "creates a branch, reads it back and lists it",
+          "line": 3,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.branchCode).to.equal('03')",
+            "expect(body.active).to.equal(true)",
+            "cy.api('GET', `/api/branches/${body.id}`).its('body.name').should('equal', 'สาขาทดสอบ')",
+            "cy.api('GET', '/api/branches').its('body').should('have.length', 3)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Minimal create omits email/license; no license-string preservation/shared-email cases.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "009.01",
+      "given": "Manager มีสิทธิ์จัดการพนักงาน และกรอกข้อมูลจำเป็นครบถ้วนถูกต้อง",
+      "when": "Manager ยืนยันสร้างข้อมูลพนักงาน",
+      "then": "ระบบบันทึกชื่อ นามสกุล ตำแหน่ง Manager หรือ Therapist สาขาประจำ วันเริ่มงาน และสถานะ Active หรือ Inactive",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "creates a staff member, lists and reads them",
+          "line": 56,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.employeeCode).to.equal('THP-777')",
+            "expect(body.position).to.equal('Therapist')",
+            "expect(body.branchCode).to.equal('01')",
+            "expect(body.active).to.equal(true)",
+            "cy.api('GET', '/api/staff').its('body').should('satisfy', (rows) => rows.some((row) => row.id === body.id))",
+            "cy.api('GET', `/api/staff/${body.id}`).its('body.fullName').should('contain', 'พนักงาน')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Position/branch/name/Active verified; hire date and inactive creation not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "009.02",
+      "given": "พนักงานมีรายการขายหรือการรักษาอ้างอิงอยู่แล้ว และ Manager มีสิทธิ์จัดการพนักงาน",
+      "when": "Manager ยืนยันเปลี่ยนสถานะพนักงานเป็น Inactive",
+      "then": "ระบบเปลี่ยนสถานะเป็น Inactive โดยไม่ลบข้อมูลพนักงาน และรายการขายหรือการรักษาเดิมยังอ้างอิงพนักงานคนเดิม ไม่ย้ายไปเป็นของพนักงานคนอื่น",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/frontend-contract.cy.js",
+          "exact_test_title": "deactivates a staff member and refuses a therapist doing it",
+          "line": 28,
+          "assertions": [
+            "cy.api('DELETE', `/api/staff/${this.fixtures.therapist2Id}`).its('status').should('equal', 204)",
+            "cy.api('GET', `/api/staff/${this.fixtures.therapist2Id}`).its('body.active').should('equal', false)",
+            "cy.apiAs(auth.token, 'DELETE', `/api/staff/${this.fixtures.therapistId}`).its('status').should('equal', 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Deactivation API and role rejection; no historical sales/treatment reference assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "009.03",
+      "given": "มีข้อมูลพนักงานและ Manager มีสิทธิ์แก้ไข",
+      "when": "Manager ยืนยันข้อมูลใหม่ที่ถูกต้อง",
+      "then": "ระบบบันทึกข้อมูลใหม่พร้อมผู้แก้และเวลา โดยคงรหัสอ้างอิงพนักงานและธุรกรรมเดิมไว้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "updates name and branch of a staff member",
+          "line": 68,
+          "assertions": [
+            "expect(updated.status).to.equal(200)",
+            "expect(updated.body.fullName).to.equal('ชื่อ ใหม่')",
+            "expect(updated.body.branchCode).to.equal('02')",
+            "expect(updated.body.position).to.equal('Manager')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Updated identity fields only; audit metadata and original transaction retention not proved.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "009.04",
+      "given": "พนักงานมีบัญชีผู้ใช้ที่เชื่อมอยู่",
+      "when": "Manager เปลี่ยนตำแหน่งพนักงาน",
+      "then": "ระบบตรวจให้ตำแหน่งใหม่สอดคล้องกับ Role ของบัญชีที่เชื่อม และไม่บันทึกการเปลี่ยนแปลงที่ทำให้สองข้อมูลขัดกัน",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "010.01",
+      "given": "Manager กรอกข้อมูลบริการรายครั้งครบ",
+      "when": "Manager บันทึกบริการ",
+      "then": "ระบบบันทึกบริการด้วยรหัสไม่ซ้ำ ชื่อ ราคาไม่ติดลบ หน่วยเริ่มต้นเป็นครั้ง และสถานะที่กำหนด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "creates, updates and deactivates a single-visit service",
+          "line": 2,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.code).to.equal('MASSAGE_45')",
+            "expect(Number(body.price)).to.equal(900)",
+            "expect(updated.status).to.equal(200)",
+            "expect(Number(updated.body.price)).to.equal(950)",
+            "cy.api('DELETE', `/api/services/${body.id}`).its('status').should('be.oneOf', [200, 204])"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Code/price/update status covered; default unit and negative-price combinations not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "010.02",
+      "given": "บริการเคยถูกขายแล้ว",
+      "when": "Manager เปลี่ยนข้อมูลหรือปิดใช้งานบริการ",
+      "then": "รายการที่ปิดใช้งานไม่ใช้ขายใหม่ การเปลี่ยนชื่อ ราคาหรือหน่วยภายหลังไม่เปลี่ยนข้อมูลที่บันทึกตอนขายเดิม",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "010.03",
+      "given": "Manager ระบุราคาติดลบหรือรหัสบริการซ้ำ",
+      "when": "Manager ยืนยันบันทึกบริการ",
+      "then": "ระบบปฏิเสธและไม่บันทึกค่าที่ไม่ถูกต้อง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "rejects a duplicate service code",
+          "line": 18,
+          "assertions": [
+            ".its('status').should('be.within', 400, 409)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Duplicate code only, not all invalid input classes/no-write readback.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "010.04",
+      "given": "รายการบริการเป็น SingleVisit",
+      "when": "Manager ตั้งค่าบริการรายครั้ง",
+      "then": "ระบบไม่กำหนดอายุคอร์สหรือครั้งแถมให้บริการรายครั้ง และไม่สร้างสิทธิ์คอร์สหลายครั้งจากจำนวนที่ขาย",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "010.05",
+      "given": "Manager ต้องการระบุระยะเวลานัดเริ่มต้นของบริการ",
+      "when": "Manager บันทึกระยะเวลาเป็นนาที",
+      "then": "ระบบให้เว้นได้ หากกรอกต้องเป็นจำนวนเต็มอย่างน้อย 1 และใช้ช่วยเสนอช่วงนัด ไม่ใช่อายุคอร์สหรือจำนวนสิทธิ์",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "keeps the optional appointment length of a single-visit service",
+          "line": 54,
+          "assertions": [
+            "send(45).its('body.defaultDurationMinutes').should('equal', 45)",
+            "send(null).its('body.defaultDurationMinutes').should('equal', 0)",
+            "send(1).its('body.defaultDurationMinutes').should('equal', 1)",
+            "send(600).its('body.defaultDurationMinutes').should('equal', 600)",
+            "send(0).its('status').should('equal', 400)",
+            "send(-1).its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Optional null and1/600 accept,0/-1 reject; UI validation, fractional values and no-rights side effects not all covered.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentDurationHttpTest.java",
+          "exact_test_title": "serviceAndCourseAcceptPositiveMinutesAndRejectNonpositiveExplicitValues",
+          "line": 33,
+          "assertions": [
+            "assertEquals(201, response.status(), response.body().toString());",
+            "assertEquals(minutes, response.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertEquals(minutes, db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(201, createdForUpdate.status(), createdForUpdate.body().toString());",
+            "assertEquals(200, updated.status(), updated.body().toString());",
+            "assertEquals(600, updated.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertEquals(600, db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(400, rejected.status(), rejected.body().toString());",
+            "assertEquals(600, db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(200, cleared.status(), cleared.body().toString());",
+            "assertEquals(0, cleared.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertNull(db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(400, response.status(), response.body().toString());",
+            "assertEquals(201, withoutDuration.status(), withoutDuration.body().toString());",
+            "assertEquals(0, withoutDuration.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertNull(db.queryForObject(\"select default_duration_minutes from service where service_id=?\","
+          ],
+          "coverage": "partial",
+          "remaining": "Optional service/course duration1/600 persisted on service.default_duration_minutes; invalid0/-1 preserves600; null clears toNULL. Full fallback/suggestion semantics not all tested.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "011.01",
+      "given": "Manager มีสิทธิ์จัดการบริการและกรอกข้อมูลแม่แบบคอร์สครบถ้วนถูกต้อง",
+      "when": "Manager ยืนยันบันทึกแม่แบบคอร์ส",
+      "then": "ระบบบันทึกประเภท Course รหัสบริการไม่ซ้ำ ชื่อ ราคาไม่ติดลบ หน่วยและสถานะ พร้อมจำนวนครั้งรวมเป็นจำนวนเต็มอย่างน้อย 1 และอายุเป็นจำนวนเต็มบวกในหน่วย Day, Month หรือ Year โดยไม่แยกครั้งซื้อกับโบนัส",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/management.cy.js",
+          "exact_test_title": "creates and deactivates a course template",
+          "line": 23,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.sessions).to.equal(8)",
+            "expect(body.validityDays).to.equal(120)",
+            "cy.api('GET', `/api/courses/${body.id}`).its('status').should('equal', 200)",
+            "cy.api('DELETE', `/api/courses/${body.id}`).its('status').should('be.oneOf', [200, 204])"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Legacy sessions+bonusSessions+validityDays case does not establish current single-total/DayMonthYear contract.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "011.02",
+      "given": "แม่แบบถูกใช้ขายคอร์สแล้ว",
+      "when": "Manager แก้แม่แบบภายหลัง",
+      "then": "เมื่อขายให้คัดลอกจำนวนครั้งและอายุไว้ในคอร์สที่ซื้อ การแก้แม่แบบจะไม่เปลี่ยนคอร์สเดิม",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/admin-misc.cy.js",
+          "exact_test_title": "does not change the price of a course that was already sold",
+          "line": 120,
+          "assertions": [
+            "expect(Number(purchase.price)).to.equal(9000)",
+            ".its('status').should('equal', 200)",
+            "expect(Number(price)).to.equal(9000)",
+            "expect(status).to.equal(200)",
+            "expect(service, 'service used by the appointment').to.exist",
+            "expect(status, JSON.stringify(body)).to.equal(201)",
+            "expect(status, JSON.stringify(body)).to.equal(201)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Frozen sold-course price only; total sessions and full expiry contract not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "011.03",
+      "given": "รหัสบริการซ้ำ ข้อมูลจำเป็นไม่ครบ ราคาติดลบ หรือจำนวนครั้งและอายุไม่ใช่จำนวนเต็มบวก",
+      "when": "Manager ยืนยันบันทึกแม่แบบคอร์ส",
+      "then": "ระบบแจ้งข้อมูลที่ผิดและไม่บันทึกแม่แบบที่ไม่ผ่านเงื่อนไข",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "011.04",
+      "given": "แม่แบบเป็นบริการ Course และ Manager ต้องการระบุระยะเวลานัดเริ่มต้น",
+      "when": "Manager บันทึกระยะเวลานัดเป็นนาที",
+      "then": "ระบบบันทึกค่าเป็นทางเลือกที่มากกว่าหรือเท่ากับ 1 แยกจากอายุคอร์สที่ใช้หน่วย Day, Month หรือ Year หากไม่ระบุให้ใช้ระยะเวลานัดเริ่มต้นของสาขา",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "sells a course whose validity is counted in months",
+          "line": 69,
+          "assertions": [
+            "expect(status).to.equal(200)",
+            "expect(body).to.include({ validityValue: 6, validityUnit: 'Month', defaultDurationMinutes: 45 })",
+            "expect(status).to.be.oneOf([200, 201])",
+            "expect(days).to.be.within(170, 190)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Month validity and45min separated; omitted Course duration fallback to branch still needs explicit case.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentDurationHttpTest.java",
+          "exact_test_title": "serviceAndCourseAcceptPositiveMinutesAndRejectNonpositiveExplicitValues",
+          "line": 33,
+          "assertions": [
+            "assertEquals(201, response.status(), response.body().toString());",
+            "assertEquals(minutes, response.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertEquals(minutes, db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(201, createdForUpdate.status(), createdForUpdate.body().toString());",
+            "assertEquals(200, updated.status(), updated.body().toString());",
+            "assertEquals(600, updated.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertEquals(600, db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(400, rejected.status(), rejected.body().toString());",
+            "assertEquals(600, db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(200, cleared.status(), cleared.body().toString());",
+            "assertEquals(0, cleared.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertNull(db.queryForObject(\"select default_duration_minutes from service where service_id=?\",",
+            "assertEquals(400, response.status(), response.body().toString());",
+            "assertEquals(201, withoutDuration.status(), withoutDuration.body().toString());",
+            "assertEquals(0, withoutDuration.body().path(\"defaultDurationMinutes\").asInt());",
+            "assertNull(db.queryForObject(\"select default_duration_minutes from service where service_id=?\","
+          ],
+          "coverage": "partial",
+          "remaining": "Optional service/course duration1/600 persisted on service.default_duration_minutes; invalid0/-1 preserves600; null clears toNULL. Full fallback/suggestion semantics not all tested.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "012.01",
+      "given": "Manager เปิดหน้าจัดการช่องทางชำระเงิน",
+      "when": "ระบบแสดงช่องทางที่รองรับ",
+      "then": "มีเฉพาะ CreditCard, PromptPay, และ BankTransfer",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "rejects a name outside the latest payment-method enum",
+          "line": 126,
+          "assertions": [
+            "cy.api('POST', '/api/payment-methods', { code: 'GIFT', name: 'บัตรของขวัญ' }).its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Rejects unknown enum; exact three allowed methods require full list assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "012.02",
+      "given": "ช่องทางเคยมีธุรกรรมแล้ว",
+      "when": "Manager ปิดใช้งานช่องทางนั้น",
+      "then": "หยุดใช้กับรายการใหม่แต่ยังแสดงช่องทางของธุรกรรมเก่าได้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "rejects duplicate seeded methods, updates, deactivates and re-activates a method",
+          "line": 89,
+          "assertions": [
+            "cy.api('POST', '/api/payment-methods', { code: 'CreditCard', name: 'CreditCard' }).its('status').should('equal', 409)",
+            "expect(status).to.equal(200)",
+            "expect(body.name).to.equal('CreditCard')",
+            "expect(body.active).to.equal(true)",
+            "cy.api('PUT', `/api/payment-methods/${body.id}`, { code: 'CreditCard', name: 'CreditCard' }).its('body.name').should('equal', 'CreditCard')",
+            "cy.api('DELETE', `/api/payment-methods/${body.id}`).its('status').should('equal', 204)",
+            "expect(rows.find((row) => row.id === body.id).active).to.equal(false)",
+            "cy.api('PATCH', `/api/payment-methods/${body.id}/activate`).its('body.active').should('equal', true)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Method Active toggles; no historical payment snapshot and disabled-new-payment rejection in this test.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "012.03",
+      "given": "Manager มีสิทธิ์ตั้งค่าช่องทางชำระเงิน และช่องทางที่เลือกมีสถานะ Inactive",
+      "when": "Manager เปลี่ยนสถานะช่องทางนั้นเป็น Active และยืนยันบันทึก",
+      "then": "ระบบแสดงช่องทางนั้นเป็นตัวเลือกในการบันทึกรับชำระเงินใหม่ โดยไม่เปลี่ยนช่องทางชำระเงินหรือยอดเงินในธุรกรรมเดิม",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "rejects duplicate seeded methods, updates, deactivates and re-activates a method",
+          "line": 89,
+          "assertions": [
+            "cy.api('POST', '/api/payment-methods', { code: 'CreditCard', name: 'CreditCard' }).its('status').should('equal', 409)",
+            "expect(status).to.equal(200)",
+            "expect(body.name).to.equal('CreditCard')",
+            "expect(body.active).to.equal(true)",
+            "cy.api('PUT', `/api/payment-methods/${body.id}`, { code: 'CreditCard', name: 'CreditCard' }).its('body.name').should('equal', 'CreditCard')",
+            "cy.api('DELETE', `/api/payment-methods/${body.id}`).its('status').should('equal', 204)",
+            "expect(rows.find((row) => row.id === body.id).active).to.equal(false)",
+            "cy.api('PATCH', `/api/payment-methods/${body.id}/activate`).its('body.active').should('equal', true)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Method Active toggles; no historical payment snapshot and disabled-new-payment rejection in this test.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "013.01",
+      "given": "Manager กรอกข้อมูลห้องหรือทรัพยากร",
+      "when": "Manager บันทึกข้อมูล",
+      "then": "บันทึกสาขา ชื่อ ประเภท และ Enabled หรือ Disabled",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "creates a room in a branch, renames, deactivates and re-activates it",
+          "line": 188,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.branchCode).to.equal('01')",
+            "expect(body.name).to.equal('ห้องใหม่')",
+            "expect(body.active).to.equal(true)",
+            "expect(updated.body.name).to.equal('ห้องเปลี่ยนชื่อ')",
+            "expect(updated.body.type).to.equal('Exercise')",
+            "cy.api('DELETE', `/api/resources/${body.id}`).its('status').should('equal', 204)",
+            "cy.api('PATCH', `/api/resources/${body.id}/activate`).its('body.active').should('equal', true)",
+            "cy.api('GET', '/api/resources').its('body').should('satisfy', (rows) => rows.some((row) => row.id === body.id))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Branch/name/type/Active toggles; no capacity or distinction from actual booking occupancy assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "013.02",
+      "given": "Manager ระบุความจุของห้องหรือทรัพยากร",
+      "when": "Manager บันทึกข้อมูล",
+      "then": "ระบบบันทึกความจุเป็นจำนวนเต็มอย่างน้อย 1 หรือเว้นว่างเมื่อไม่ได้กำหนด",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "013.03",
+      "given": "Manager มีสิทธิ์จัดการห้องและเลือกห้องหรือทรัพยากรที่มีอยู่",
+      "when": "Manager เปลี่ยนสถานะเปิดหรือปิดใช้งานและยืนยันบันทึก",
+      "then": "ระบบบันทึกสถานะเพื่อระบุว่ายังใช้ข้อมูลห้องหรือทรัพยากรนี้อยู่หรือไม่ สถานะนี้ไม่ใช่การระบุว่าห้องว่าง มีผู้ใช้งาน หรือถูกจอง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "creates a room in a branch, renames, deactivates and re-activates it",
+          "line": 188,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.branchCode).to.equal('01')",
+            "expect(body.name).to.equal('ห้องใหม่')",
+            "expect(body.active).to.equal(true)",
+            "expect(updated.body.name).to.equal('ห้องเปลี่ยนชื่อ')",
+            "expect(updated.body.type).to.equal('Exercise')",
+            "cy.api('DELETE', `/api/resources/${body.id}`).its('status').should('equal', 204)",
+            "cy.api('PATCH', `/api/resources/${body.id}/activate`).its('body.active').should('equal', true)",
+            "cy.api('GET', '/api/resources').its('body').should('satisfy', (rows) => rows.some((row) => row.id === body.id))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Branch/name/type/Active toggles; no capacity or distinction from actual booking occupancy assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "014.01",
+      "given": "Manager มีสิทธิ์จัดการ Master Data และระบุประเภทกับชื่อตัวเลือกครบถ้วน",
+      "when": "Manager ยืนยันเพิ่มหรือแก้ไขตัวเลือก",
+      "then": "ระบบบันทึกชื่อตัวเลือกและสถานะเปิดหรือปิดใช้งานไว้ภายใต้ประเภทที่ Manager เลือก โดยรองรับ Customer Group, Referral Channel และ Insurance Company",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "lists the seeded customer groups and referral channels",
+          "line": 152,
+          "assertions": [
+            "expect(status).to.equal(200)",
+            "expect(names).to.include('Customer Group:VIP')",
+            "expect(names).to.include('Referral Channel:Facebook')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "List includes two categories; InsuranceCompany plus category-specific create not all covered.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "014.02",
+      "given": "ตัวเลือกถูกอ้างในประวัติผู้ป่วยแล้ว",
+      "when": "Manager ปิดใช้งานตัวเลือก",
+      "then": "ระบบไม่ให้เลือกค่านั้นในข้อมูลใหม่ แต่ยังแสดงค่าที่อ้างอยู่ในประวัติเดิมได้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "creates a value in a new category, lists it, renames, deactivates and re-activates it",
+          "line": 136,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.category).to.equal('Hobby')",
+            "expect(body.name).to.equal('วิ่ง')",
+            "expect(body.active).to.equal(true)",
+            ".its('body.name').should('equal', 'วิ่งมาราธอน')",
+            "cy.api('DELETE', `/api/master-data/${body.id}`).its('status').should('equal', 204)",
+            "expect(rows.find((row) => row.id === body.id).active).to.equal(false)",
+            "cy.api('PATCH', `/api/master-data/${body.id}/activate`).its('body.active').should('equal', true)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Active toggles only; historical patient references/new-option exclusion not proved.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "014.03",
+      "given": "มีข้อมูลผู้ป่วยอ้างตัวเลือกประเภทเดิมอยู่",
+      "when": "Manager พยายามเปลี่ยนประเภทจนข้อมูลเดิมอ้างผิดประเภท",
+      "then": "ระบบปฏิเสธการเปลี่ยนประเภทและคงข้อมูลเดิม",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "014.04",
+      "given": "ข้อมูลจำเป็นของตัวเลือกไม่ครบ",
+      "when": "Manager ยืนยันบันทึก",
+      "then": "ระบบแจ้งข้อมูลที่ต้องแก้และไม่บันทึกตัวเลือกที่ไม่ครบ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/reference-data.cy.js",
+          "exact_test_title": "rejects a value without a category or a name",
+          "line": 161,
+          "assertions": [
+            "cy.api('POST', '/api/master-data', { category: '', name: 'x' }).its('status').should('equal', 400)",
+            "cy.api('POST', '/api/master-data', { category: 'Hobby', name: '' }).its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "4xx category/name required; no resulting list count and field message assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "015.01",
+      "given": "Manager มีสิทธิ์แก้การตั้งค่าและกรอกค่าที่ระบบรองรับถูกต้อง",
+      "when": "Manager ยืนยันบันทึกค่าที่เปลี่ยน",
+      "then": "ระบบบันทึกค่าใหม่พร้อมผู้แก้และเวลา และนำค่าไปใช้กับการทำรายการที่เกี่ยวข้อง",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "015.02",
+      "given": "Manager กรอกค่าการตั้งค่าไม่ตรงรูปแบบที่กำหนด หรืออยู่นอกช่วงที่อนุญาต",
+      "when": "Manager ยืนยันบันทึก",
+      "then": "ระบบระบุช่องและสาเหตุที่ข้อมูลไม่ถูกต้อง ไม่บันทึกการเปลี่ยนแปลง และคงค่าการตั้งค่าเดิม",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "refuses a half-set window, a reversed window, a bad email and a nonpositive length",
+          "line": 39,
+          "assertions": [
+            "putBranch(branch, { bookingOpenTime: '09:00' }).its('status').should('equal', 400)",
+            "putBranch(branch, { bookingOpenTime: '18:00', bookingCloseTime: '09:00' }).its('status').should('equal', 400)",
+            "putBranch(branch, { bookingOpenTime: '9am', bookingCloseTime: '18:00' }).its('status').should('equal', 400)",
+            "putBranch(branch, { email: 'not-an-email' }).its('status').should('equal', 400)",
+            "putBranch(branch, { defaultAppointmentMinutes: 0 }).its('status').should('equal', 400)",
+            "putBranch(branch, { defaultAppointmentMinutes: -1 }).its('status').should('equal', 400)",
+            "putBranch(branch, { defaultAppointmentMinutes: 1 }).its('body.defaultAppointmentMinutes').should('equal', 1)",
+            "putBranch(branch, { defaultAppointmentMinutes: 600 }).its('body.defaultAppointmentMinutes').should('equal', 600)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Invalid settings rejected but previous value persistence and field-specific UI message not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "015.03",
+      "given": "Manager มีสิทธิ์ตั้งค่าคอมมิชชันหรือค่ามือ",
+      "when": "Manager แก้ไขกฎการคำนวณ",
+      "then": "ระบบให้กำหนดช่วงยอดขายและเปอร์เซ็นต์คอมมิชชันของแต่ละ Tier หรือเลือกค่ามือเป็นจำนวนเงินคงที่หรือเปอร์เซ็นต์พร้อมระบุอัตรา โดยระบบสร้างข้อความอธิบายวิธีคำนวณจากกฎที่ตั้งไว้ และไม่เปิดให้เขียนหรือแก้สูตรเอง",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "016.01",
+      "given": "ข้อมูลหลัก เช่น บริการ ช่องทางชำระเงิน หรือข้อมูลพนักงาน ถูกใช้ในธุรกรรมแล้ว",
+      "when": "Manager ยืนยันลบข้อมูลนั้น",
+      "then": "ระบบไม่ลบข้อมูลและแจ้งว่ามีประวัติใช้งาน โดย Manager สามารถปิดใช้งานแทนเพื่อหยุดใช้กับรายการใหม่",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "016.02",
+      "given": "ข้อมูลหลักมีรายการที่ปิดใช้งานแล้ว",
+      "when": "ผู้ใช้สร้างรายการใหม่",
+      "then": "ระบบไม่ให้เลือกข้อมูลที่ปิดใช้งานสำหรับรายการใหม่",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "016.03",
+      "given": "ธุรกรรมเดิมอ้างข้อมูลหลักที่ภายหลังถูกแก้หรือปิดใช้งาน",
+      "when": "ผู้ใช้เปิดธุรกรรมเดิม",
+      "then": "ระบบยังเปิดธุรกรรมเดิมได้ และแสดงรายละเอียดที่เก็บไว้เมื่อทำรายการ ไม่เปลี่ยนเอกสารเก่าตามข้อมูลหลักที่แก้ภายหลัง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/receipt-history.cy.js",
+          "exact_test_title": "keeps the sold item name on a printed receipt after the catalogue name changes",
+          "line": 154,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "}).its('status').should('equal', 200)",
+            "expect(body.items[0].description).to.equal(service.name)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Frozen receipt item name only; broad all-master-data preservation not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "017.01",
+      "given": "ผู้ใช้มีสิทธิ์ค้นผู้ป่วย",
+      "when": "ผู้ใช้ค้นด้วย HN ชื่อ นามสกุล หรือเบอร์โทร",
+      "then": "ระบบแสดงผู้ป่วยที่ตรงคำค้นจากทุกสาขา พร้อม HN ชื่อ นามสกุล และข้อมูลที่ช่วยแยกบุคคล โดยไม่จำกัดเฉพาะสาขาประจำของ Therapist",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "searches by first name, last name, phone and HN",
+          "line": 40,
+          "assertions": [
+            "expect(status).to.equal(200)",
+            "expect(body.items.map((item) => item.id)).to.include(patient.id)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Name/phone/HN matching but profile disambiguation fields/all-branch role variants not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "lets a therapist book their own time and confirms only after successful paid service",
+          "line": 88,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.status).to.equal('UNCONFIRMED')",
+            "cy.apiAs(this.staff01, 'POST', `/api/appointments/${body.id}/${action}`).its('status').should('equal', 403)",
+            "}).its('status').should('equal', 201)",
+            "cy.api('GET', `/api/appointments/${body.id}`).its('body.status').should('equal', 'CONFIRMED')",
+            "cy.apiAs(this.staff01, 'GET', `/api/patients/${this.patient02.id}`).its('status').should('equal', 200)",
+            ".should('satisfy', (items) => items.some((patient) => patient.id === this.patient02.id))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Therapist finds foreign-registered patient by HN; full disambiguation presentation not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "017.02",
+      "given": "พบผู้ป่วยที่ลงทะเบียนต่างสาขา",
+      "when": "ผู้ใช้เลือกผู้ป่วยรายนั้น",
+      "then": "การเลือกผู้ป่วยจากสาขาอื่นไม่เปลี่ยนสาขาลงทะเบียนหรือ HN เดิม",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "017.03",
+      "given": "ผู้ใช้มีสิทธิ์ค้นผู้ป่วยแต่ไม่มีข้อมูลตรงเงื่อนไข",
+      "when": "ผู้ใช้ค้นหา",
+      "then": "ระบบแสดงว่าไม่พบผู้ป่วย โดยไม่สร้างประวัติใหม่อัตโนมัติ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "018.01",
+      "given": "ผู้ใช้กำลังลงทะเบียนผู้ป่วยไทย",
+      "when": "ผู้ใช้บันทึกข้อมูลผู้ป่วย",
+      "then": "ระบบบันทึกผู้ป่วยประเภทไทยเมื่อระบุคำนำหน้า ชื่อ นามสกุล เพศ วันเกิด เบอร์โทร และเลขบัตรประชาชน 13 หลักครบถ้วน โดยชื่อกลางและข้อมูลเสริมเว้นว่างได้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "registers a Thai patient and generates an HN of YY + branch + MM + running number",
+          "line": 4,
+          "assertions": [
+            "expect(patient.hn).to.match(/^\\d{2}01\\d{2}\\d{4}$/)",
+            "expect(patient.fullName).to.contain('สมชาย')",
+            "expect(patient.branchCode).to.equal('01')",
+            "expect(patient.active).to.equal(true)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Creation fixture carries required fields; not every saved field/default/missing variant verified.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "018.02",
+      "given": "ผู้ใช้เลือกลงทะเบียนผู้ป่วยไทย",
+      "when": "ผู้ใช้กรอกคำนำหน้า เพศ และเลขบัตรประชาชน",
+      "then": "ระบบให้เลือกคำนำหน้า นาย นางสาว นาง เด็กชาย หรือเด็กหญิง และเพศ ชาย หญิง หรือไม่ระบุ โดยไม่ยอมรับเลขบัตรประชาชนที่มีผู้ป่วยอื่นใช้แล้ว",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "stores canonical ${thai} for Thai/English title inputs and supports profile updates",
+          "line": 79,
+          "assertions": [
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.title').should('equal', thai)",
+            ".its('body.title').should('equal', thai)"
+          ],
+          "parameterized_title": true,
+          "coverage": "partial",
+          "remaining": "Parameterized5titles roundtrip; duplicate national ID rejection is a separate unbound requirement.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "round-trips gender ${input} as ${canonical} independently from the title",
+          "line": 89,
+          "assertions": [
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.gender').should('equal', canonical)",
+            ".its('body.gender').should('equal', canonical)"
+          ],
+          "parameterized_title": true,
+          "coverage": "partial",
+          "remaining": "All3gender values roundtrip; no duplicateID no-write case in this test.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "018.03",
+      "given": "เลขบัตรประชาชนถูกใช้แล้ว ไม่ใช่ตัวเลข 13 หลัก หรือข้อมูลจำเป็นของผู้ป่วยไทยไม่ครบ",
+      "when": "ผู้ใช้ยืนยันลงทะเบียนผู้ป่วยใหม่",
+      "then": "ระบบระบุข้อมูลที่ต้องแก้ และไม่สร้างประวัติผู้ป่วยหรือเลข HN ใหม่จนกว่าข้อมูลจะถูกต้อง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "requires phone and national id for a Thai patient",
+          "line": 21,
+          "assertions": [
+            "cy.api('POST', '/api/patients', patientPayload({ phone: '' })).its('status').should('equal', 400)",
+            "cy.api('POST', '/api/patients', patientPayload({ identityNumber: '' })).its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "400 for two missing fields; no HN allocation/patient count invariant assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "rejects a national id that is not 13 digits",
+          "line": 26,
+          "assertions": [
+            "cy.api('POST', '/api/patients', patientPayload({ identityNumber: '12345' })).its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Malformed ID400 only; required field matrix/no HN allocation not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "019.01",
+      "given": "ผู้ใช้เปิดแบบฟอร์มลงทะเบียนผู้ป่วยและเสียบบัตรประชาชน ",
+      "when": "ผู้ใช้สั่งอ่านบัตร",
+      "then": "ระบบเติมเฉพาะข้อมูลที่อ่านได้ลงในช่องที่ตรงกัน ให้ผู้ใช้ตรวจและกรอกข้อมูลที่ยังขาดก่อนบันทึก ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "019.02",
+      "given": "เลขบัตรที่อ่านได้ตรงกับผู้ป่วยในระบบ ",
+      "when": "ผู้ใช้พยายามลงทะเบียน ",
+      "then": "ระบบแจ้งว่ามีประวัติแล้ว เปิดให้ไปยังประวัติเดิม และไม่สร้างผู้ป่วยหรือ HN ซ้ำ ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "019.03",
+      "given": "เครื่องอ่านไม่พร้อม บัตรอ่านไม่ได้ หรือข้อมูลอ่านได้ไม่ครบ  ",
+      "when": "ผู้ใช้สั่งอ่านบัตร ",
+      "then": "ระบบแจ้งปัญหาและให้กรอกข้อมูลเองต่อได้ โดยไม่บันทึกผู้ป่วยจากข้อมูลที่ไม่ครบ ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "019.04",
+      "given": "ระบบเติมข้อมูลจากบัตรแล้ว ",
+      "when": "ผู้ใช้ตรวจและยืนยันแบบฟอร์ม ",
+      "then": "ระบบใช้ข้อมูลที่ผู้ใช้ยืนยันในการลงทะเบียน และใช้กฎตรวจข้อมูลจำเป็นกับข้อมูลซ้ำเช่นเดียวกับการกรอกเอง  ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "019.05",
+      "given": "ผู้ใช้เริ่มลงทะเบียนจากนัดของผู้ติดต่อที่ยังไม่มีประวัติผู้ป่วย  ",
+      "when": "ผู้ใช้ลงทะเบียนด้วยข้อมูลจากบัตรสำเร็จ ",
+      "then": "ระบบบันทึกผู้ป่วยใหม่และเปิดหน้าบริการของผู้ป่วยรายนั้นต่อได้โดยไม่ต้องค้นซ้ำ พร้อมคงข้อมูลนัดเดิมไว้   ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "020.01",
+      "given": "ผู้ใช้กำลังลงทะเบียนผู้ป่วยต่างชาติ",
+      "when": "ผู้ใช้บันทึกข้อมูลผู้ป่วย",
+      "then": "ระบบบันทึกผู้ป่วยประเภทต่างชาติเมื่อระบุคำนำหน้า ชื่อ นามสกุล และเพศครบถ้วน โดยเบอร์โทร หมายเลขหนังสือเดินทาง วันเกิด และชื่อกลางเว้นว่างได้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "preserves foreigner optional fields, optional address and existing Thai phone validation",
+          "line": 98,
+          "assertions": [
+            "expect(body.customerTypeCode).to.equal('Foreigner')",
+            "expect(body.middleName).to.equal('Foreign')",
+            "expect(body.phone).to.equal(null)",
+            "expect(body.birthDate).to.equal(null)",
+            "expect(body.identityNumber).to.equal(null)",
+            "expect(body.address).to.equal('')",
+            ".its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Foreigner phone/date/identity null persist; required title/name/gender checks need separate cases.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "accepts a foreigner without phone and national id",
+          "line": 30,
+          "assertions": [
+            "})).its('status').should('equal', 201)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Minimal optional ID/phone accepted201 only; saved fields not all inspected.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "020.02",
+      "given": "ผู้ใช้เลือกลงทะเบียนผู้ป่วยประเภทต่างชาติ",
+      "when": "ผู้ใช้กรอกคำนำหน้าและชื่อผู้ป่วย",
+      "then": "ระบบให้เลือกคำนำหน้า Mr., Miss, Mrs., Boy หรือ Girl และบันทึกชื่อภาษาไทยหรือภาษาอังกฤษตามที่กรอกได้ โดยไม่บังคับให้กรอกชื่อทั้งสองภาษา",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "020.03",
+      "given": "ผู้ใช้กรอกข้อมูลจำเป็นของผู้ป่วยต่างชาติไม่ครบ",
+      "when": "ผู้ใช้ยืนยันลงทะเบียน",
+      "then": "ระบบแจ้งช่องที่ต้องกรอก และไม่สร้างประวัติผู้ป่วยหรือเลข HN จนกว่าข้อมูลจะครบ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "021.01",
+      "given": "ผู้ใช้มีสิทธิ์แก้ไขและมีข้อมูลประกอบของผู้ป่วย",
+      "when": "ผู้ใช้ยืนยันบันทึกข้อมูลประกอบ",
+      "then": "ระบบบันทึกชื่อเล่น ชื่อกลาง วันเกิด กรุ๊ปเลือด สัญชาติ ที่อยู่ กลุ่มลูกค้า ช่องทางการมา และบริษัทประกันตามข้อมูลที่กรอก",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-update.cy.js",
+          "exact_test_title": "edits name, title, gender, birth date, phone, address and the other profile fields",
+          "line": 28,
+          "assertions": [
+            "expect(status, JSON.stringify(body)).to.equal(200)",
+            "expect(body.title).to.equal('นางสาว')",
+            "expect(body.fullName).to.equal('สมหญิง รักดี')",
+            "expect(body.gender).to.equal('Female')",
+            "expect(body.birthDate).to.equal('1992-02-02')",
+            "expect(body.phone).to.equal('0899999999')",
+            "expect(body.identityNumber).to.equal('1100000000102')",
+            "expect(body.address).to.equal('ที่อยู่ใหม่')",
+            "expect(body.nickname).to.equal('หญิง')",
+            "expect(body.bloodGroup).to.equal('AB')",
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.fullName').should('equal', 'สมหญิง รักดี')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Nickname/blood/address fields saved, but CustomerGroup/Referral/Insurance and audit not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "persists, updates, preserves omitted and clears middleName without changing first/last names",
+          "line": 39,
+          "assertions": [
+            "expect(body.firstName).to.equal('John Paul')",
+            "expect(body.lastName).to.equal('Smith Jones')",
+            "expect(body.middleName).to.equal('Middle')",
+            "expect(body.fullName).to.equal('John Paul Middle Smith Jones')",
+            ".its('body.middleName').should('equal', 'New')",
+            ".its('status').should('equal', 200)",
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.middleName').should('equal', 'New')",
+            ".its('status').should('equal', 200)",
+            "expect(body.middleName).to.equal(null)",
+            "expect(body.firstName).to.equal('John Paul')",
+            "expect(body.lastName).to.equal('Smith Jones')",
+            "expect(body.fullName).to.equal('John Paul Smith Jones')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Structured middleName only; not all optional profile fields.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "021.02",
+      "given": "ข้อมูลประกอบบางรายการเป็นทางเลือก",
+      "when": "ผู้ใช้เว้นข้อมูลที่ไม่มีและเลือก ตัวเลือกข้อมูลหลัก ที่เปิดใช้งานตรงประเภท",
+      "then": "ระบบบันทึกได้เมื่อเว้นข้อมูลทางเลือก โดยตัวเลือกกลุ่มลูกค้า ช่องทางการมา และบริษัทประกันต้องเป็นรายการที่เปิดใช้งานและตรงประเภทของช่องนั้น",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "preserves foreigner optional fields, optional address and existing Thai phone validation",
+          "line": 98,
+          "assertions": [
+            "expect(body.customerTypeCode).to.equal('Foreigner')",
+            "expect(body.middleName).to.equal('Foreign')",
+            "expect(body.phone).to.equal(null)",
+            "expect(body.birthDate).to.equal(null)",
+            "expect(body.identityNumber).to.equal(null)",
+            "expect(body.address).to.equal('')",
+            ".its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "No category/active option validation here.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "021.03",
+      "given": "ผู้ใช้มีอีเมลติดต่อของผู้ป่วยที่มีรูปแบบถูกต้อง",
+      "when": "ผู้ใช้ยืนยันบันทึก",
+      "then": "ระบบเก็บอีเมลเป็นข้อมูลติดต่อทางเลือก ไม่ใช้เป็นบัญชีเข้าสู่ระบบ และผู้ป่วยหลายคนใช้อีเมลเดียวกันได้",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "021.04",
+      "given": "ผู้ใช้กรอกอีเมลไม่ถูกรูปแบบ หรือเลือกข้อมูลคนละประเภทกับช่อง เช่น เลือกบริษัทประกันลงในช่องกลุ่มลูกค้า",
+      "when": "ผู้ใช้ยืนยันบันทึก",
+      "then": "ระบบแจ้งช่องและสาเหตุที่ผิด ไม่บันทึกการเปลี่ยนแปลงที่ไม่ถูกต้อง และคงข้อมูลเดิม",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "normalizes blank middleName to null and rejects overlength or non-string values without losing the previous name",
+          "line": 63,
+          "assertions": [
+            ".its('status').should('equal', 400)",
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.middleName').should('equal', 'Existing')",
+            ".its('body.middleName').should('be.null')",
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.middleName').should('be.null')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Invalid middleName rejected with previous name retained; other profile fields/structured error not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "022.01",
+      "given": "ผู้ใช้กรอกข้อมูลเพื่อลงทะเบียนผู้ป่วยใหม่",
+      "when": "ผู้ใช้ยืนยันลงทะเบียน",
+      "then": "ระบบตรวจเลขบัตรประชาชน หมายเลขหนังสือเดินทางเมื่อกรอก และชื่อร่วมกับข้อมูลระบุตัวบุคคล หากพบประวัติที่ตรงกันให้ผู้ใช้ตรวจสอบและเลือกประวัติเดิม โดยไม่สร้างประวัติซ้ำจากเลขบัตรประชาชนเดิม",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "finds only an exact national ID globally and returns a minimal summary, never passport/phone matches",
+          "line": 116,
+          "assertions": [
+            "expect(status).to.equal(200)",
+            "expect(body).to.deep.equal({ exists: true, patient: { id: patient.id, hn: patient.hn, fullName: 'สมชาย กลาง ใจดี' } })",
+            ".should('deep.equal', { exists: false, patient: null })",
+            ".should('deep.equal', { exists: false, patient: null })"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Global minimal identity lookup and no passport false-match; duplicate registration/interactive selection not covered.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "022.02",
+      "given": "มีคนละคนใช้ชื่อเหมือนกัน",
+      "when": "ผู้ใช้ลงทะเบียนหลังตรวจข้อมูลระบุตัวตน",
+      "then": "ชื่อซ้ำอย่างเดียวไม่เป็นเหตุห้ามสร้าง เพราะคนละคนอาจชื่อเหมือนกัน โดย ไม่รวมประวัติคนละคนอัตโนมัติ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "022.03",
+      "given": "มีผู้ติดต่อที่ชื่อหรือเบอร์โทรตรงกับข้อมูลผู้ป่วยเดิม",
+      "when": "ผู้ใช้ค้นหาประวัติก่อนลงทะเบียนหรือเลือกผู้ป่วยจากนัด",
+      "then": "ระบบแสดงผลที่ตรงคำค้นให้ผู้ใช้ตรวจสอบ แต่ไม่จับคู่ รวมประวัติหรือเลือกผู้ป่วยอัตโนมัติจากชื่อเล่นหรือเบอร์โทรเพียงอย่างเดียว",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "023.01",
+      "given": "ข้อมูลผู้ป่วยใหม่ผ่านการตรวจและมีเลขลำดับว่าง",
+      "when": "ผู้ใช้บันทึกการลงทะเบียน",
+      "then": "ระบบออก HN รูปแบบ YYBBMMNNN โดย YY เป็นปี ค.ศ. สองหลัก BB เป็นรหัสสาขาสองหลัก MM เป็นเดือนสองหลัก และ NNN เริ่มจาก 001 ถึง 999 แยกลำดับตามปี สาขา และเดือน",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "registers a Thai patient and generates an HN of YY + branch + MM + running number",
+          "line": 4,
+          "assertions": [
+            "expect(patient.hn).to.match(/^\\d{2}01\\d{2}\\d{4}$/)",
+            "expect(patient.fullName).to.contain('สมชาย')",
+            "expect(patient.branchCode).to.equal('01')",
+            "expect(patient.active).to.equal(true)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "User override keeps FOUR running digits for new HNs (chat4/requirement-decisions.md); source wording retained verbatim. Year/month/branch isolated sequence, ceiling, parallel uniqueness and preservation of old HNs still need exact assertions.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "gives consecutive running numbers to consecutive patients",
+          "line": 13,
+          "assertions": [
+            "expect(Number(second.hn.slice(-4))).to.equal(Number(first.hn.slice(-4)) + 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Four-digit sequence agrees with user override. Tests consecutive numbers only; no year/month/branch isolation or parallel uniqueness proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping.",
+      "requirement_override": {
+        "source": "explicit user decision relayed by root; chat4/requirement-decisions.md",
+        "accepted_format": "YYBBMMNNNN",
+        "preserve_existing_hn": true,
+        "note": "Four running digits for new HNs supersede the three-digit source wording; original Given/When/Then retained unchanged."
+      }
+    },
+    {
+      "ac_id": "023.02",
+      "given": "มีการลงทะเบียนพร้อมกันในสาขาและเดือนเดียวกัน",
+      "when": "ระบบจัดสรรเลข HN",
+      "then": "ผู้ป่วยแต่ละคนได้รับ HN ไม่ซ้ำกัน และ HN เดิมไม่เปลี่ยนเมื่อไปรับบริการต่างสาขา",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "registers a Thai patient and generates an HN of YY + branch + MM + running number",
+          "line": 4,
+          "assertions": [
+            "expect(patient.hn).to.match(/^\\d{2}01\\d{2}\\d{4}$/)",
+            "expect(patient.fullName).to.contain('สมชาย')",
+            "expect(patient.branchCode).to.equal('01')",
+            "expect(patient.active).to.equal(true)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "User override keeps FOUR running digits for new HNs (chat4/requirement-decisions.md); source wording retained verbatim. Year/month/branch isolated sequence, ceiling, parallel uniqueness and preservation of old HNs still need exact assertions.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/patients.cy.js",
+          "exact_test_title": "gives consecutive running numbers to consecutive patients",
+          "line": 13,
+          "assertions": [
+            "expect(Number(second.hn.slice(-4))).to.equal(Number(first.hn.slice(-4)) + 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Four-digit sequence agrees with user override. Tests consecutive numbers only; no year/month/branch isolation or parallel uniqueness proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "023.03",
+      "given": "เลขลำดับของสาขาและเดือนนั้นครบ 999 แล้ว",
+      "when": "ผู้ใช้ลงทะเบียนผู้ป่วยใหม่",
+      "then": "ระบบแจ้งว่าเลขลำดับเต็มและไม่วนเลขหรือสร้าง HN ซ้ำ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "024.01",
+      "given": "มีประวัติผู้ป่วยเดิมที่ไม่มีเลขบัตร",
+      "when": "ผู้ใช้เปิดด้วย HN เดิมและเพิ่มข้อมูล",
+      "then": "ระบบให้เพิ่มหรือแก้ข้อมูลในประวัติเดิมและคง HN เดิมไว้ โดยไม่บังคับออก HN ใหม่ให้ผู้ป่วยเก่า",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-update.cy.js",
+          "exact_test_title": "never changes the HN when a patient is edited",
+          "line": 50,
+          "assertions": [
+            "expect(body.hn).to.equal(patient.hn)"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "Existing patient PUT returns same HN; no forced new HN/profile creation.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "024.02",
+      "given": "ผู้ใช้มีสิทธิ์แก้ไขและเปิดประวัติผู้ป่วยเดิม",
+      "when": "ผู้ใช้ยืนยันข้อมูลใหม่ที่ถูกต้อง",
+      "then": "ระบบบันทึกข้อมูลที่แก้พร้อมผู้แก้และเวลา โดยคงประวัติผู้ป่วยคนเดิม HN และสาขาลงทะเบียน และคงข้อมูลของเอกสารธุรกรรมที่ออกแล้วไว้ตรวจย้อนหลัง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-update.cy.js",
+          "exact_test_title": "edits name, title, gender, birth date, phone, address and the other profile fields",
+          "line": 28,
+          "assertions": [
+            "expect(status, JSON.stringify(body)).to.equal(200)",
+            "expect(body.title).to.equal('นางสาว')",
+            "expect(body.fullName).to.equal('สมหญิง รักดี')",
+            "expect(body.gender).to.equal('Female')",
+            "expect(body.birthDate).to.equal('1992-02-02')",
+            "expect(body.phone).to.equal('0899999999')",
+            "expect(body.identityNumber).to.equal('1100000000102')",
+            "expect(body.address).to.equal('ที่อยู่ใหม่')",
+            "expect(body.nickname).to.equal('หญิง')",
+            "expect(body.bloodGroup).to.equal('AB')",
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.fullName').should('equal', 'สมหญิง รักดี')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Same patient ID GET reads new name; registration branch/editor/time/issued-document snapshot not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "024.03",
+      "given": "ผู้ใช้ระบุเลขบัตรที่ซ้ำกับผู้ป่วยอื่น หรือข้อมูลที่แก้ไม่ผ่านรูปแบบและประเภทที่กำหนด",
+      "when": "ผู้ใช้ยืนยันแก้ไขประวัติ",
+      "then": "ระบบแจ้งข้อมูลที่ผิดและคงประวัติเดิม ไม่สร้างผู้ป่วยใหม่แทนการแก้",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/patient-identity-lookup.cy.js",
+          "exact_test_title": "normalizes blank middleName to null and rejects overlength or non-string values without losing the previous name",
+          "line": 63,
+          "assertions": [
+            ".its('status').should('equal', 400)",
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.middleName').should('equal', 'Existing')",
+            ".its('body.middleName').should('be.null')",
+            "cy.api('GET', `/api/patients/${patient.id}`).its('body.middleName').should('be.null')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Invalid middleName rejected with previous name retained; other profile fields/structured error not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "025.01",
+      "given": "มีผู้ป่วยพร้อมประวัติที่เกี่ยวข้อง",
+      "when": "ผู้ใช้เปิดประวัติผู้ป่วย",
+      "then": "ระบบแสดงนัดหมาย รายการรับบริการ บริการที่ใช้ และคอร์สที่ผู้ป่วยซื้อหรือได้รับแชร์ โดยแสดงเฉพาะข้อมูลที่ผู้ใช้มีสิทธิ์ดู",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-progress.cy.js",
+          "exact_test_title": "returns all course usages and retains a reversed usage for review",
+          "line": 96,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "}).its('status').should('equal', 200)",
+            "expect(body.state).to.equal('FOUND')",
+            "expect(body.sales).to.have.length(0)",
+            "expect(body.usages).to.have.length(2)",
+            "expect(body.usages.every(",
+            ").its('status').should('equal', 200)",
+            "expect(body.state).to.equal('REVIEW_REQUIRED')",
+            "expect(body.usages).to.have.length(2)",
+            "expect(body.usages.map((row) => row.status).sort())"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Course usage and reversed history portion only; appointment/sharedcourse/permission matrix not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "025.02",
+      "given": "ผู้ป่วยเป็นผู้ซื้อหรือผู้รับแชร์คอร์ส",
+      "when": "ผู้ใช้ดูประวัติบริการและสิทธิ์",
+      "then": "แยกผู้ซื้อคอร์สกับผู้ใช้สิทธิ์จริง และแยกข้อมูลการรักษาจากค่าตอบแทนที่มีสิทธิ์ดู",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "025.03",
+      "given": "ผู้ป่วยยังไม่มีนัดหรือรายการรับบริการ",
+      "when": "ผู้ใช้เปิดประวัติผู้ป่วย",
+      "then": "ระบบแสดงว่าไม่มีประวัติในส่วนนั้น โดยยังเปิดข้อมูลผู้ป่วยและส่วนอื่นที่มีข้อมูลได้",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "026.01",
+      "given": "Manager เข้าสู่ระบบและมีสิทธิ์ดูนัด",
+      "when": "Manager เลือกสาขาและเปิดตารางนัด",
+      "then": "ระบบแสดงนัดของสาขาที่เลือก โดย Manager เลือกได้ทุกสาขาที่เปิดใช้งาน",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "allows Manager reads, filtering and writes across both branches",
+          "line": 165,
+          "assertions": [
+            "cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 2)",
+            "cy.api('GET', '/api/appointments?branchCode=02').its('body.items.0.id').should('equal', this.appointment02.id)",
+            ".its('status').should('equal', 200)",
+            ".its('status').should('equal', 200)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Two seeded branches read/filter; inactive/new branch UI selection not exercised.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "026.02",
+      "given": "Therapist มีสิทธิ์ดูนัด",
+      "when": "Therapist เปิดตารางนัดของสาขาที่เลือกดู",
+      "then": "ระบบแสดงนัดตามสิทธิ์ การดูต่างสาขาไม่ให้สิทธิ์สร้าง แก้ หรือยกเลิกนัดต่างสาขา",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "rejects explicit cross-branch queries and cannot bypass the implicit filter via therapist/date/status/page",
+          "line": 40,
+          "assertions": [
+            "cy.apiAs(this.staff01, 'GET', '/api/appointments?branchCode=02').its('status').should('equal', 403)",
+            "expect(status).to.equal(200)",
+            "expect(body.totalItems).to.equal(0)",
+            "expect(body.items).to.deep.equal([])",
+            "cy.apiAs(this.staff01, 'GET', '/api/appointments?page=1&size=1').its('body.items').should('have.length', 0)",
+            "cy.apiAs(this.staff02, 'GET', '/api/appointments?branchCode=01').its('status').should('equal', 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Currently homebranch-only; separate crossbranch-readgrant absent.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "026.03",
+      "given": "มีนัดในสาขาและช่วงเวลาที่เลือก",
+      "when": "ผู้ใช้เปลี่ยนมุมมองรายวันหรือรายสัปดาห์และกรองนักกายภาพ",
+      "then": "ระบบแสดงเฉพาะนัดที่ตรงวัน สาขา และนักกายภาพที่เลือก พร้อมประเภทผู้ป่วยใหม่หรือผู้ป่วยเดิม เวลาเริ่ม–จบ สถานะนัด และหมายเหตุ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "lists and filters appointments by date, therapist and status",
+          "line": 409,
+          "assertions": [
+            "book(this.fixtures, patient).its('status').should('equal', 201)",
+            "book(this.fixtures, patient, { branchCode: '02', therapistId: this.fixtures.therapist2Id }).its('status').should('equal', 201)",
+            "cy.api('GET', `/api/appointments?date=${this.fixtures.tomorrow}`).its('body.items').should('have.length', 2)",
+            ".its('body.items').should('have.length', 1)",
+            ".its('body.items').should('have.length', 0)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Filters date/staff/status; all list fields NEW/CURRENT/note combinations not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "026.04",
+      "given": "ไม่มีนัดตรงวัน สาขา หรือนักกายภาพที่เลือก",
+      "when": "ผู้ใช้เปิดตารางนัด",
+      "then": "ระบบแสดงว่าไม่มีนัดตามเงื่อนไข โดยไม่แสดงนัดของสาขาหรือนักกายภาพอื่นแทน",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "rejects explicit cross-branch queries and cannot bypass the implicit filter via therapist/date/status/page",
+          "line": 40,
+          "assertions": [
+            "cy.apiAs(this.staff01, 'GET', '/api/appointments?branchCode=02').its('status').should('equal', 403)",
+            "expect(status).to.equal(200)",
+            "expect(body.totalItems).to.equal(0)",
+            "expect(body.items).to.deep.equal([])",
+            "cy.apiAs(this.staff01, 'GET', '/api/appointments?page=1&size=1').its('body.items').should('have.length', 0)",
+            "cy.apiAs(this.staff02, 'GET', '/api/appointments?branchCode=01').its('status').should('equal', 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Filtered API items=[] and nextpage=[]; user-facing empty-state message not exercised.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "027.01",
+      "given": "ผู้ป่วยลงทะเบียนแล้วและผู้ใช้มีสิทธิ์สร้างนัด",
+      "when": "ผู้ใช้บันทึกนัด ผู้ป่วยที่ลงทะเบียนแล้ว",
+      "then": "ระบบสร้างนัดประเภทผู้ป่วยเดิมโดยเชื่อมกับประวัติที่เลือก พร้อมสาขา วันเวลาเริ่ม–จบ และนักกายภาพของสาขานัด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "books a registered patient as Unconfirmed with patient, therapist and service in the response",
+          "line": 20,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(body.status).to.equal('UNCONFIRMED')",
+            "expect(body.patientType).to.equal('CURRENT')",
+            "expect(body.patient.id).to.equal(patient.id)",
+            "expect(body.patient.hn).to.equal(patient.hn)",
+            "expect(body.therapist.id).to.equal(this.fixtures.therapistId)",
+            "expect(body.service.id).to.equal(this.fixtures.serviceId)",
+            "}).its('status').should('equal', 200)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "CURRENT ID/time/service/staff response checks; branch constraint in separate branch tests.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "027.02",
+      "given": "ข้อมูลจำเป็นของนัดครบแต่ไม่ได้เลือกบริการ",
+      "when": "ผู้ใช้ยืนยันสร้างนัด",
+      "then": "ระบบสร้างนัดได้โดยไม่ต้องเลือกบริการหรือประเภทบริการ และเว้นหมายเหตุได้ หากเลือกบริการต้องตรงกับประเภทบริการที่เลือก",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "books a registered patient before any service is chosen",
+          "line": 189,
+          "assertions": [
+            "}).its('status').should('equal', 200))",
+            "expect(status).to.equal(201)",
+            "expect(body.patientType).to.equal('CURRENT')",
+            "expect(body.service.id).to.equal(null)",
+            "}).its('status').should('equal', 200))",
+            "const connect = () => cy.api('PUT', '/api/calendar/branches/01', { googleCalendarId: CAL }).its('status').should('equal', 200)",
+            "}).its('status').should('equal', 200)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "No service accepted and service.id null; incompatible selected service-type variant not covered.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "027.03",
+      "given": "ผู้ใช้ยังไม่เลือกผู้ป่วย หรือเลือกนักกายภาพที่ไม่ได้อยู่ในสาขานัด",
+      "when": "ผู้ใช้ยืนยันบันทึกนัด",
+      "then": "ระบบแจ้งข้อมูลที่ต้องแก้และไม่สร้างนัดจนกว่าจะเลือกผู้ป่วยและนักกายภาพได้ถูกต้อง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "answers 404 for an unknown appointment and 400 for an unknown patient",
+          "line": 421,
+          "assertions": [
+            "cy.api('GET', '/api/appointments/999999').its('status').should('equal', 404)",
+            "}).its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Unknownpatient rejected; wrongbranch/staff handled by branch-access; full field message/no-write not exhaustive.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/branch-access.cy.js",
+          "exact_test_title": "rejects a therapist from another branch for CURRENT and NEW bookings, including Manager requests",
+          "line": 174,
+          "assertions": [
+            "cy.api('POST', '/api/appointments', payload).its('status').should('equal', 400)",
+            "cy.apiAs(this.staff01, 'POST', '/api/appointments', payload).its('status').should('equal', 400)",
+            "}).its('status').should('equal', 400)",
+            "cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 2)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Invalid staffbranch400 and totalItems unchanged; all invalid patient cases separate.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "027.04",
+      "given": "ผู้ป่วยมีสิทธิ์ในคอร์สที่ซื้อหรือได้รับแชร์",
+      "when": "ผู้ใช้เลือกคอร์สประกอบนัด ผู้ป่วยที่ลงทะเบียนแล้ว",
+      "then": "ระบบบันทึกคอร์สประกอบนัดได้โดยไม่บังคับเลือกคอร์ส หากเลือกบริการด้วยต้องตรงกับคอร์สนั้น การนัดยังไม่หักหรือกันจำนวนครั้ง และจะตรวจสิทธิ์ใหม่เมื่อใช้คอร์สจริง",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "027.05",
+      "given": "ผู้ใช้เลือกคอร์สที่ผู้ป่วยไม่มีสิทธิ์ หรือบริการไม่ตรงคอร์ส",
+      "when": "ผู้ใช้ยืนยันนัด",
+      "then": "ระบบแจ้งข้อมูลที่ผิดและไม่บันทึกนัดที่อ้างคอร์สไม่ถูกต้อง",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "027.06",
+      "given": "ผู้ใช้กรอกนัดครบแล้วแต่ยกเลิกก่อนยืนยันบันทึก",
+      "when": "ผู้ใช้ยกเลิกการสร้างนัด",
+      "then": "ระบบไม่สร้างนัด ไม่หักสิทธิ์คอร์ส และไม่ส่งนัดใหม่ไป Google Calendar",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "028.01",
+      "given": "ผู้ติดต่อยังไม่ได้ลงทะเบียนเป็นผู้ป่วย",
+      "when": "ผู้ใช้บันทึกนัด ผู้ติดต่อที่ยังไม่ลงทะเบียน",
+      "then": "ระบบสร้างนัดประเภทผู้ที่ยังไม่ลงทะเบียน โดยต้องมีชื่อเล่นผู้ติดต่อ เบอร์โทร สาขา วันเวลาเริ่ม-จบ และนักกายภาพของสาขา ส่วนชื่อจริง นามสกุล และบริการเว้นว่างได้ โดยยังไม่สร้างหรือเชื่อมประวัติผู้ป่วย",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-workflow.cy.js",
+          "exact_test_title": "requires NEW contact name and phone, therapist and time, but no room",
+          "line": 38,
+          "assertions": [
+            "cy.api('POST', '/api/appointments', newBooking(this.fixtures, overrides)).its('status').should('equal', 400)",
+            "cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 0)",
+            "cy.api('POST', '/api/appointments', newBooking(this.fixtures)).its('status').should('equal', 201)",
+            "cy.api('GET', '/api/patients').its('body.totalItems').should('equal', 0)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Four missing fields400/appointments0, valid201/patients0; persisted start/end/phone/contact values and optional service variants not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "028.02",
+      "given": "ผู้ใช้บันทึกนัดให้ผู้ที่ยังไม่ลงทะเบียนแล้ว",
+      "when": "ผู้ใช้เปิดรายละเอียดนัด",
+      "then": "ระบบแสดงข้อมูลผู้ติดต่อที่บันทึกไว้ และยังไม่ออก HN หรือถือว่าผู้ติดต่อเป็นผู้ป่วยที่ลงทะเบียนแล้ว",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "keeps a NEW appointment unlinked after patient registration",
+          "line": 106,
+          "assertions": [
+            "}).its('status').should('equal', 409)",
+            "expect(unchanged.patientType).to.equal('NEW')",
+            "expect(unchanged.patient.id).to.equal(null)",
+            "expect(unchanged.patient.hn).to.equal(null)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Registration leaves NEW original unlinked; HN counter absence before registration not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "028.03",
+      "given": "ชื่อผู้ติดต่อ เบอร์โทร สาขา วันเวลา หรือนักกายภาพที่จำเป็นยังไม่ครบ หรือเลือกนักกายภาพไม่ตรงสาขานัด",
+      "when": "ผู้ใช้ยืนยันบันทึก",
+      "then": "ระบบแจ้งข้อมูลที่ขาดหรือไม่ถูกต้องและไม่สร้างนัด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-workflow.cy.js",
+          "exact_test_title": "requires NEW contact name and phone, therapist and time, but no room",
+          "line": 38,
+          "assertions": [
+            "cy.api('POST', '/api/appointments', newBooking(this.fixtures, overrides)).its('status').should('equal', 400)",
+            "cy.api('GET', '/api/appointments').its('body.totalItems').should('equal', 0)",
+            "cy.api('POST', '/api/appointments', newBooking(this.fixtures)).its('status').should('equal', 201)",
+            "cy.api('GET', '/api/patients').its('body.totalItems').should('equal', 0)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Four missing fields400/appointments0, valid201/patients0; persisted start/end/phone/contact values and optional service variants not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "028.04",
+      "given": "ผู้ใช้กรอกข้อมูลติดต่อแล้วแต่ยังไม่บันทึกนัด",
+      "when": "ผู้ใช้ยกเลิกการสร้างนัด",
+      "then": "ระบบไม่สร้างนัด ประวัติผู้ป่วย หรือ HN จากข้อมูลที่ยังไม่ยืนยัน",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "029.01",
+      "given": "นัดยังไม่ยืนยันและอยู่ในสาขาที่ผู้ใช้มีสิทธิ์จัดการ",
+      "when": "ผู้ใช้กดเริ่มยืนยันนัด",
+      "then": "ระบบเปิดหน้าบริการของผู้ป่วยเดิม หรือเปิดหน้าลงทะเบียนสำหรับผู้ที่ยังไม่ลงทะเบียนแล้วไปหน้าบริการต่อ โดยยังไม่เปลี่ยนสถานะนัดเป็นยืนยันแล้ว",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "029.02",
+      "given": "สถานะนัดเปลี่ยนจากการดำเนินการของผู้ใช้",
+      "when": "ระบบบันทึกประวัติสถานะ",
+      "then": "ระบบบันทึกสถานะเดิม สถานะใหม่ ผู้ดำเนินการ และเวลา พร้อมเหตุผลเมื่อกรอก โดยไม่บังคับเหตุผลทุกการเปลี่ยนสถานะ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-workflow.cy.js",
+          "exact_test_title": "persists note and returns the cancellation reason from history on list and detail",
+          "line": 47,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "cy.api('GET', `/api/appointments/${body.id}`).its('body.note').should('equal', 'ตรวจอาการ\\nปวดหลัง')",
+            "cy.api('POST', `/api/appointments/${body.id}/cancel`, { reason: 'คนไข้ขอเลื่อนการรักษา' }).its('status').should('equal', 200)",
+            "cy.api('GET', `/api/appointments/${body.id}`).its('body.cancelReason').should('equal', 'คนไข้ขอเลื่อนการรักษา')",
+            "expect(page.items[0].note).to.equal('ตรวจอาการ\\nปวดหลัง')",
+            "expect(page.items[0].cancelReason).to.equal('คนไข้ขอเลื่อนการรักษา')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Cancel reason persisted/read; actor/time and all status-history entries not asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "029.03",
+      "given": "ผู้ใช้เริ่มรับบริการรายครั้งจากนัดและกรอกข้อมูลจำเป็นครบถ้วน",
+      "when": "ผู้ใช้บันทึกรายการบริการรายครั้งและรับชำระเงินสำเร็จ",
+      "then": "ระบบเปลี่ยนนัดเป็นยืนยันแล้วพร้อมบันทึกผลรับบริการ โดยไม่เปลี่ยนสถานะจากการเปิดหน้าบริการหรือกดเริ่มยืนยันเพียงอย่างเดียว",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "confirms a CURRENT appointment only after successful payment",
+          "line": 178,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(appointment.status).to.equal('UNCONFIRMED')",
+            "expect(paid.status).to.equal(201)",
+            "expect(paid.body.status).to.equal('PAID')",
+            "expect(Number(paid.body.paid)).to.equal(800)",
+            "expect(saved.status).to.equal(200)",
+            "expect(saved.body.status).to.equal('CONFIRMED')",
+            "expect(saved.body.patient.id).to.equal(patient.id)",
+            ".its('status').should('equal', 409)"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "Before payment UNCONFIRMED; valid paid800 receipt PAID; saved appointment CONFIRMED/samepatient; repeat payment409.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "029.04",
+      "given": "สถานะนัดถูกเปลี่ยนอัตโนมัติจาก Google Calendar",
+      "when": "ระบบบันทึกประวัติ",
+      "then": "ระบบเก็บว่าเป็นการเปลี่ยนจาก Google Calendar พร้อมรายละเอียดเหตุการณ์ โดยไม่แสดงเจ้าหน้าที่คนอื่นเป็นผู้เปลี่ยน ไม่ให้เจ้าหน้าที่กรอกเหตุผลแทนเหตุการณ์อัตโนมัติ และไม่สร้างรายการรับบริการหรือหักสิทธิ์คอร์สจากการเปลี่ยนสถานะใน Google Calendar",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "moves a confirmed appointment from Google without changing service or financial records",
+          "line": 281,
+          "assertions": [
+            "expect(before.visits).to.equal(1)",
+            "sync().then((result) => expect(result.movedFromGoogle).to.equal(1))",
+            "expect(body.status).to.equal('CONFIRMED')",
+            "expect(new Date(body.startAt).toISOString()).to.equal(new Date(at(this.fixtures, '16:00')).toISOString())",
+            "activitySnapshot().should('deep.equal', before)",
+            "cy.api('GET', `/api/receipts/${sale.id}`).its('body.status').should('equal', 'PAID')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake move keeps service/finance untouched; actual Google source actor attribution not fully proven.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "029.05",
+      "given": "ผู้ใช้เริ่มใช้คอร์สจากนัด และผู้ป่วยมีสิทธิ์ใช้คอร์สตามเงื่อนไข",
+      "when": "ผู้ใช้ยืนยันใช้คอร์สและระบบบันทึกการตัดจำนวนครั้งสำเร็จ",
+      "then": "ระบบเปลี่ยนนัดเป็นยืนยันแล้วพร้อมบันทึกผลใช้คอร์ส โดยไม่หักสิทธิ์ซ้ำจากการเปลี่ยนสถานะนัด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "confirms an appointment after deducting one course session",
+          "line": 289,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(status).to.equal(201)",
+            "expect(appointment.status).to.equal('UNCONFIRMED')",
+            "}).its('status').should('equal', 400)",
+            ".its('body.status').should('equal', 'UNCONFIRMED')",
+            "expect(saved.status).to.equal(200)",
+            "expect(saved.body.purchase.remaining).to.equal(purchase.remaining)",
+            "expect(saved.body.purchase.used).to.equal(purchase.used)",
+            "expect(used.status).to.equal(200)",
+            "expect(used.body.remaining).to.equal(purchase.remaining - 1)",
+            "expect(used.body.used).to.equal(purchase.used + 1)",
+            ".its('body.status').should('equal', 'CONFIRMED')",
+            ".its('status').should('equal', 409)",
+            "expect(saved.status).to.equal(200)",
+            "expect(saved.body.purchase.remaining).to.equal(purchase.remaining - 1)",
+            "expect(saved.body.purchase.used).to.equal(purchase.used + 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Course deduction confirms appointment; verify no duplicate-rights deduction and record history exact assertions before full classification.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "029.06",
+      "given": "ผู้ใช้เริ่มยืนยันนัดแล้ว แต่ยังบันทึกบริการรายครั้งและรับชำระ หรือใช้คอร์สและตัดสิทธิ์ไม่สำเร็จ",
+      "when": "ผู้ใช้ยกเลิกขั้นตอนหรือระบบบันทึกไม่สำเร็จ",
+      "then": "ระบบคงสถานะนัดเดิมและไม่แสดงว่านัดยืนยันแล้วจากขั้นตอนที่ยังไม่สำเร็จ",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "keeps the appointment Unconfirmed after failed payment and allows a retry",
+          "line": 216,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            ".its('status').should('equal', 400)",
+            ".its('body.status').should('equal', 'UNCONFIRMED')",
+            "expect(paid.status).to.equal(201)",
+            "expect(paid.body.status).to.equal('PAID')",
+            ".its('body.status').should('equal', 'CONFIRMED')"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "Payment799 mismatch400 leaves savedUNCONFIRMED; retry800 succeeds and then CONFIRMED.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "029.07",
+      "given": "นัดอยู่ในขอบเขตที่ผู้ใช้มีสิทธิ์ยกเลิก",
+      "when": "ผู้ใช้ยืนยันยกเลิกนัด",
+      "then": "ระบบเปลี่ยนนัดเป็นยกเลิกและเก็บประวัติเดิม โดยการยกเลิกนัดไม่ใช่การคืนเงินหรือย้อนรายการบริการที่บันทึกสำเร็จแล้ว สถานะนัดมีเพียงยังไม่ยืนยัน ยืนยันแล้ว และยกเลิก",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "rejects no-show and allows cancellation with a reason",
+          "line": 155,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            ".its('status').should('equal', 409)",
+            ".its('body.status').should('equal', 'UNCONFIRMED')",
+            "expect(cancelled.status).to.equal(200)",
+            "expect(cancelled.body.status).to.equal('CANCELLED')",
+            "expect(cancelled.body.cancelReason)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Cancelstatus/reason and no-show rejection; financial-ledger preservation handled separate calendar fake testcase.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "cancels a confirmed appointment from Google without reversing its paid service",
+          "line": 306,
+          "assertions": [
+            "expect(before.visits).to.equal(1)",
+            "sync().then((result) => expect(result.cancelledFromGoogle).to.equal(1))",
+            "expect(body.status).to.equal('CANCELLED')",
+            "expect(body.cancelReason).to.equal('ยกเลิกจาก Google Calendar')",
+            "activitySnapshot().should('deep.equal', before)",
+            "cy.api('GET', `/api/receipts/${sale.id}`).its('body.status').should('equal', 'PAID')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake cancel preserves paid service; no real provider integration proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "030.01",
+      "given": "มีนัดที่ผู้ใช้มีสิทธิ์แก้",
+      "when": "ผู้ใช้บันทึกวันเวลา ผู้ให้บริการ บริการ หรือหมายเหตุใหม่",
+      "then": "ระบบตรวจสิทธิ์และสาขาของนัดก่อนบันทึก พร้อมเก็บค่าเดิม ค่าใหม่ ผู้แก้ และเวลา",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-workflow.cy.js",
+          "exact_test_title": "preserves omitted notes and supports editing/clearing notes without a false conflict with its own slot",
+          "line": 61,
+          "assertions": [
+            ".its('body.note').should('equal', 'Original')",
+            "}).its('status').should('equal', 200)",
+            ".its('body.note').should('equal', 'Edited')",
+            "}).its('status').should('equal', 200)",
+            ".its('body.note').should('be.null')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Notes roundtrip and clears without false selfconflict; old/new audit actor/time not inspected.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "030.02",
+      "given": "มีนัดที่ยังไม่ยกเลิก ผู้ป่วยยังไม่ได้มารับบริการตามนัด และผู้ใช้มีสิทธิ์แก้ไข ",
+      "when": "ผู้ใช้เลือกวันเวลาใหม่และยืนยันบันทึก ",
+      "then": "ระบบตรวจเวลาว่าง หากช่วงใหม่ใช้ได้ให้เปลี่ยนวันเวลาในนัดเดิมและเก็บประวัติวันเวลาเดิม วันเวลาใหม่ ผู้แก้ไข และเวลาที่แก้ โดยคงสถานะนัดเดิม ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "reschedules to a new time",
+          "line": 391,
+          "assertions": [
+            "expect(r.status).to.equal(200)",
+            "expect(r.body.status).to.equal('UNCONFIRMED')",
+            "expect(new Date(r.body.startAt).toISOString())",
+            "expect(new Date(r.body.endAt).toISOString())"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Newtime API only; explicit oldstatus preservation and audit before/after metadata not all asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "030.03",
+      "given": "ผู้ใช้มีสิทธิ์แก้นัด แต่วันเวลาหรือนักกายภาพที่เลือกใหม่มีนัดซ้อน ติดช่วงไม่ว่าง หรืออยู่นอกเวลาทำการ ",
+      "when": "ผู้ใช้ยืนยันเปลี่ยนวันเวลาหรือนักกายภาพ ",
+      "then": "ระบบแจ้งว่าช่วงที่เลือกไม่สามารถรับนัดได้ ไม่บันทึกการเปลี่ยนแปลง และคงวันเวลา นักกายภาพ และสถานะของนัดเดิม ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "refuses a booking that overlaps or falls outside the window, and accepts a back-to-back one",
+          "line": 132,
+          "assertions": [
+            "book('10:00').its('status').should('equal', 201)",
+            "book('10:30').its('status').should('equal', 400)",
+            "book('09:30').its('status').should('equal', 400)",
+            "book('11:00').its('status').should('equal', 201)",
+            "book('08:00').its('status').should('equal', 400)",
+            "book('11:30').its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "CREATE overlapping/window failures; edit existing state/therapist preservation requires reschedule-specific cases.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "puts the time back in Google when the edited event overlaps a branch Busy block",
+          "line": 257,
+          "assertions": [
+            "}).its('status').should('equal', 200)",
+            "expect(result.movedFromGoogle).to.equal(0)",
+            "expect(result.revertedInGoogle).to.equal(1)",
+            "appointment(appointmentBody.id).its('startAt').should('contain', 'T02:00:00')",
+            "expect(event.start).to.equal(local(this.fixtures, '09:00'))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake remote reschedule Busy conflict regression; cannot claim real Google event reverted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "030.04",
+      "given": "ผู้ใช้เปลี่ยนข้อมูลนัดแล้วแต่ยังไม่ยืนยันบันทึก",
+      "when": "ผู้ใช้ยกเลิกการแก้ไข",
+      "then": "ระบบคงนัดเดิมและไม่ส่งค่าที่แก้แต่ยังไม่บันทึกไป Google Calendar",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "031.01",
+      "given": "ผู้ติดต่อมาตามนัด ผู้ติดต่อที่ยังไม่ลงทะเบียน ยังไม่มีข้อมูลผู้ป่วย",
+      "when": "ผู้ใช้เปิดลงทะเบียนจากนัดและบันทึกข้อมูลครบถ้วน",
+      "then": "ระบบสร้างประวัติผู้ป่วยและ HN แล้วส่งผู้ป่วยที่เพิ่งลงทะเบียนไปหน้าบริการโดยไม่ต้องค้นซ้ำ นัดที่จองก่อนลงทะเบียนยังเก็บเป็นประวัติผู้ติดต่อเดิมและไม่เชื่อมกลับเป็นนัดผู้ป่วยเดิม ส่วนรายการรับบริการครั้งนี้ไม่อ้างนัดดังกล่าว",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-workflow.cy.js",
+          "exact_test_title": "serves a registered patient without linking the original NEW appointment",
+          "line": 133,
+          "assertions": [
+            "}).its('status').should('equal', 409)",
+            "expect(status, JSON.stringify(sale)).to.equal(201)",
+            "expect(sale.patient.id).to.equal(patient.id)",
+            "expect(unchanged.status).to.equal('CONFIRMED')",
+            "expect(unchanged.patientType).to.equal('NEW')",
+            "expect(unchanged.patient.id).to.equal(null)",
+            "expect(unchanged.patient.hn).to.equal(null)",
+            ".its('body.totalItems').should('equal', 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Backend registration/NEW original unchanged; browser navigation without search not proved.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "031.02",
+      "given": "นัดถูกสร้างจากข้อมูลผู้ติดต่อโดยยังไม่ได้เลือกประวัติผู้ป่วย แต่เมื่อผู้มาตามนัดมาถึงพบว่ามีประวัติอยู่แล้ว ",
+      "when": "ผู้ใช้ตรวจสอบตัวบุคคลและเลือกประวัติผู้ป่วยเดิม ",
+      "then": "ระบบนำผู้ป่วยที่เลือกไปหน้าบริการโดยไม่สร้างประวัติหรือ HN ซ้ำ และคงข้อมูลนัดเดิมไว้ ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-workflow.cy.js",
+          "exact_test_title": "serves a registered patient without linking the original NEW appointment",
+          "line": 133,
+          "assertions": [
+            "}).its('status').should('equal', 409)",
+            "expect(status, JSON.stringify(sale)).to.equal(201)",
+            "expect(sale.patient.id).to.equal(patient.id)",
+            "expect(unchanged.status).to.equal('CONFIRMED')",
+            "expect(unchanged.patientType).to.equal('NEW')",
+            "expect(unchanged.patient.id).to.equal(null)",
+            "expect(unchanged.patient.hn).to.equal(null)",
+            ".its('body.totalItems').should('equal', 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Backend unlinked-original scenario; choosing an already registered person without duplicate profile creation not fully asserted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "031.03",
+      "given": "ผู้ใช้ต้องการระบุนัดประกอบรายการรับบริการ",
+      "when": "ผู้ใช้เลือกนัดอ้างอิง",
+      "then": "ระบบให้เลือกเฉพาะนัดของผู้ป่วยที่ลงทะเบียนแล้วและเป็นคนเดียวกับผู้มารับบริการ โดยไม่ให้เลือกนัดที่ยังเป็นข้อมูลผู้ติดต่อก่อนลงทะเบียน",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointments.cy.js",
+          "exact_test_title": "rejects course usage without an appointment and preserves remaining rights",
+          "line": 254,
+          "assertions": [
+            "expect(status).to.equal(201)",
+            "expect(rejected.status).to.equal(400)",
+            "expect(rejected.body.message).to.include('appointmentId')",
+            "expect(saved.status).to.equal(200)",
+            "expect(saved.body.purchase.remaining)",
+            "expect(saved.body.purchase.used)",
+            ".its('body.totalItems').should('equal', 0)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Appointment required here; no full NEW versus CURRENT/patientidentity reference matrix.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "032.01",
+      "given": "Manager มีสิทธิ์ตั้งค่าปฏิทินและบัญชี Google กลางของคลินิก",
+      "when": "Manager อนุญาตการเชื่อมต่อและเลือก Calendar ให้แต่ละสาขา",
+      "then": "ระบบผูก Calendar เฉพาะของแต่ละสาขากับบัญชีกลาง โดยบัญชีเดียวใช้ได้หลายสาขาแต่ไม่ใช้ Calendar เดียวซ้ำข้ามสาขา",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "reports the branches and their calendars, and clears a calendar with an empty value",
+          "line": 343,
+          "assertions": [
+            "expect(body.enabled).to.equal(true)",
+            "expect(body.defaultDurationMinutes).to.equal(60)",
+            "expect(body.branches.find((item) => item.branchCode === '01').googleCalendarId).to.equal(CAL)",
+            "expect(body.branches.find((item) => item.branchCode === '02').googleCalendarId).to.equal(null)",
+            "cy.api('PUT', '/api/calendar/branches/01', { googleCalendarId: '' }).then(({ body }) => expect(body.googleCalendarId).to.equal(null))",
+            "cy.api('PUT', '/api/calendar/branches/99', { googleCalendarId: CAL }).its('status').should('equal', 404)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake branch association/clear only; actual authorized Google account and duplicate calendar association need proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "032.02",
+      "given": "สาขามี Calendar ที่เชื่อมแล้ว",
+      "when": "ระบบสร้างหรือเชื่อมข้อมูลนัดของสาขา",
+      "then": "ระบบใช้ Calendar ของสาขานัด โดยไม่ต้องเชื่อมปฏิทินส่วนตัวของ Therapist เข้าระบบ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "reports the branches and their calendars, and clears a calendar with an empty value",
+          "line": 343,
+          "assertions": [
+            "expect(body.enabled).to.equal(true)",
+            "expect(body.defaultDurationMinutes).to.equal(60)",
+            "expect(body.branches.find((item) => item.branchCode === '01').googleCalendarId).to.equal(CAL)",
+            "expect(body.branches.find((item) => item.branchCode === '02').googleCalendarId).to.equal(null)",
+            "cy.api('PUT', '/api/calendar/branches/01', { googleCalendarId: '' }).then(({ body }) => expect(body.googleCalendarId).to.equal(null))",
+            "cy.api('PUT', '/api/calendar/branches/99', { googleCalendarId: CAL }).its('status').should('equal', 404)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake branch association/clear only; actual authorized Google account and duplicate calendar association need proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "032.03",
+      "given": "Therapist เปิด Calendar ที่ได้รับการแชร์จาก Google",
+      "when": "Therapist กลับมาทำรายการนัดในระบบคลินิก",
+      "then": "ระบบยังตรวจสิทธิ์ของระบบคลินิกและจำกัดการสร้าง แก้ หรือยกเลิกนัดไว้ที่สาขาประจำ ไม่ขยายสิทธิ์ตามสิทธิ์ Google",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "032.04",
+      "given": "Manager เลือก Calendar ที่ถูกผูกกับอีกสาขาแล้ว",
+      "when": "Manager ยืนยันการผูก",
+      "then": "ระบบปฏิเสธการผูกซ้ำและคงการเชื่อมต่อสาขาเดิม",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "reports the branches and their calendars, and clears a calendar with an empty value",
+          "line": 343,
+          "assertions": [
+            "expect(body.enabled).to.equal(true)",
+            "expect(body.defaultDurationMinutes).to.equal(60)",
+            "expect(body.branches.find((item) => item.branchCode === '01').googleCalendarId).to.equal(CAL)",
+            "expect(body.branches.find((item) => item.branchCode === '02').googleCalendarId).to.equal(null)",
+            "cy.api('PUT', '/api/calendar/branches/01', { googleCalendarId: '' }).then(({ body }) => expect(body.googleCalendarId).to.equal(null))",
+            "cy.api('PUT', '/api/calendar/branches/99', { googleCalendarId: CAL }).its('status').should('equal', 404)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake branch association/clear only; actual authorized Google account and duplicate calendar association need proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "032.05",
+      "given": "ผู้ใช้เป็น Therapist",
+      "when": "ผู้ใช้พยายามเปลี่ยนบัญชี Google กลางหรือการผูกปฏิทินของสาขา",
+      "then": "ระบบไม่อนุญาตให้บันทึกการเปลี่ยนแปลง และคงการเชื่อมต่อเดิมไว้ เพราะเป็นหน้าที่ Manager",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "is for the manager only",
+          "line": 330,
+          "assertions": [
+            "expect(status).to.equal(200)",
+            "expect(body.branches.map((row) => row.branchCode)).to.deep.equal(['01'])",
+            "expect(body.lastResult).to.equal(null)",
+            "cy.apiAs(auth.token, 'PUT', '/api/calendar/branches/01', { googleCalendarId: CAL }).its('status').should('equal', 403)",
+            "cy.apiAs(auth.token, 'POST', '/api/calendar/sync').its('status').should('equal', 403)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Local fake role boundary; check unchanged connection/readback for full no-mutation proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "033.01",
+      "given": "นัดในระบบอยู่ในสาขาที่เปิดการเชื่อมข้อมูล",
+      "when": "ผู้ใช้สร้างหรือแก้นัดสำเร็จ",
+      "then": "ระบบส่งข้อมูลนัดไปยัง Google Calendar ของสาขานัดและเชื่อมเป็นรายการเดียวกัน หากส่งข้อมูลเดิมอีกครั้งจะไม่สร้างกิจกรรมนัดซ้ำ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "writes a booked appointment to the branch calendar with little personal data",
+          "line": 100,
+          "assertions": [
+            "sync().then((result) => expect(result.pushed).to.equal(1))",
+            "expect(list).to.have.length(1)",
+            "expect(event.appointmentId).to.equal(appointmentBody.id)",
+            "expect(event.start).to.equal(local(this.fixtures, '09:00'))",
+            "expect(event.end).to.equal(local(this.fixtures, '10:00'))",
+            "expect(event.summary).to.contain(patient.hn).and.to.contain('สมชาย')",
+            "expect(everything).not.to.contain('ใจดี')",
+            "expect(everything).not.to.contain('0811111111')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake provider event correspondence; no live Google proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "does nothing for a branch without a calendar, and nothing twice (no echo)",
+          "line": 139,
+          "assertions": [
+            "sync().then((result) => expect(result.pushed).to.equal(0))",
+            "sync().then((result) => expect(result.pushed).to.equal(1))",
+            "expect(result.pushed).to.equal(0)",
+            "expect(result.movedFromGoogle).to.equal(0)",
+            "expect(result.cancelledFromGoogle).to.equal(0)",
+            "expect(result.revertedInGoogle).to.equal(0)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake no-echo/noconnected branch behavior; no live Google proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "033.02",
+      "given": "นัดในระบบเชื่อมกับกิจกรรมนัดใน Google Calendar แล้ว",
+      "when": "ผู้ใช้แก้ข้อมูลนัดที่เชื่อมกันใน Google Calendar",
+      "then": "ระบบปรับรายละเอียดนัดเดิมให้ตรงข้อมูลที่แก้ใน Google Calendar เช่น วันเวลาเริ่ม–จบและหมายเหตุ พร้อมเก็บแหล่งที่มาของการเปลี่ยนแปลง โดยไม่สร้างประวัติผู้ป่วยหรือรายการรับบริการอัตโนมัติ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "imports an end-only change and editable note without duplicating appointment or patient",
+          "line": 77,
+          "assertions": [
+            "expect(detail.id).to.equal(booked.id)",
+            "expect(detail.patient.id).to.equal(patient.id)",
+            "expect(detail.note).to.equal('Note changed in Google')",
+            "expect(new Date(detail.endAt).getTime()).to.equal(new Date(at(this.fixtures, '10:30')).getTime())",
+            "expect(new Date(detail.startAt).getTime()).to.equal(new Date(at(this.fixtures, '09:00')).getTime())",
+            "expect(result.movedFromGoogle).to.equal(0)",
+            "expect(result.pushed).to.equal(0)",
+            "events().should('have.length', 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake end/note edits preserve no duplicate appointment/patient; live provider and all audit metadata remain outside test.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "puts the time back in Google when the edited event overlaps a branch Busy block",
+          "line": 257,
+          "assertions": [
+            "}).its('status').should('equal', 200)",
+            "expect(result.movedFromGoogle).to.equal(0)",
+            "expect(result.revertedInGoogle).to.equal(1)",
+            "appointment(appointmentBody.id).its('startAt').should('contain', 'T02:00:00')",
+            "expect(event.start).to.equal(local(this.fixtures, '09:00'))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake remote reschedule Busy conflict regression; cannot claim real Google event reverted.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "moves the appointment when the event is moved in Google",
+          "line": 210,
+          "assertions": [
+            "sync().then((result) => expect(result.movedFromGoogle).to.equal(1))",
+            "appointment(appointmentBody.id).its('startAt').should('contain', 'T04:00:00')",
+            "sync().then((result) => expect(result.pushed + result.movedFromGoogle + result.revertedInGoogle).to.equal(0))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake remote change only; source metadata/real provider handling not complete.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "moves a confirmed appointment from Google without changing service or financial records",
+          "line": 281,
+          "assertions": [
+            "expect(before.visits).to.equal(1)",
+            "sync().then((result) => expect(result.movedFromGoogle).to.equal(1))",
+            "expect(body.status).to.equal('CONFIRMED')",
+            "expect(new Date(body.startAt).toISOString()).to.equal(new Date(at(this.fixtures, '16:00')).toISOString())",
+            "activitySnapshot().should('deep.equal', before)",
+            "cy.api('GET', `/api/receipts/${sale.id}`).its('body.status').should('equal', 'PAID')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake move keeps service/finance untouched; actual Google source actor attribution not fully proven.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "033.03",
+      "given": "กิจกรรมปฏิทิน ของนัดถูกจับคู่แล้ว",
+      "when": "ผู้ใช้ยกเลิกนัดในระบบ หรือลบ/ยกเลิก กิจกรรมปฏิทิน ใน Calendar",
+      "then": "ระบบแสดงการยกเลิกทั้งในคลินิกและ Google Calendar และเก็บนัดในคลินิกเป็นสถานะยกเลิกพร้อมประวัติ โดยไม่ลบหลักฐานนัดเดิม",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "cancels the appointment when the event is deleted in Google",
+          "line": 223,
+          "assertions": [
+            "sync().then((result) => expect(result.cancelledFromGoogle).to.equal(1))",
+            "appointment(appointmentBody.id).its('status').should('equal', 'CANCELLED')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake deleted event -> clinic cancel; live history/audit not fully exercised.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "cancels a confirmed appointment from Google without reversing its paid service",
+          "line": 306,
+          "assertions": [
+            "expect(before.visits).to.equal(1)",
+            "sync().then((result) => expect(result.cancelledFromGoogle).to.equal(1))",
+            "expect(body.status).to.equal('CANCELLED')",
+            "expect(body.cancelReason).to.equal('ยกเลิกจาก Google Calendar')",
+            "activitySnapshot().should('deep.equal', before)",
+            "cy.api('GET', `/api/receipts/${sale.id}`).its('body.status').should('equal', 'PAID')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake cancel preserves paid service; no real provider integration proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "033.04",
+      "given": "Google Calendar ส่งข้อมูลนัดเดิมมาซ้ำหลังการเชื่อมข้อมูล",
+      "when": "ระบบรับการเปลี่ยนแปลงนั้นอีกครั้ง",
+      "then": "ระบบปรับเฉพาะนัดเดิมที่ตรงกัน ไม่สร้างนัดซ้ำ และไม่ส่งการเปลี่ยนแปลงเดิมกลับไปกลับมาไม่สิ้นสุด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "does nothing for a branch without a calendar, and nothing twice (no echo)",
+          "line": 139,
+          "assertions": [
+            "sync().then((result) => expect(result.pushed).to.equal(0))",
+            "sync().then((result) => expect(result.pushed).to.equal(1))",
+            "expect(result.pushed).to.equal(0)",
+            "expect(result.movedFromGoogle).to.equal(0)",
+            "expect(result.cancelledFromGoogle).to.equal(0)",
+            "expect(result.revertedInGoogle).to.equal(0)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake no-echo/noconnected branch behavior; no live Google proof.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "034.01",
+      "given": "นัดหรือ Calendar สาขามีประวัติเชื่อมข้อมูล",
+      "when": "ผู้ใช้เปิดสถานะการเชื่อมต่อ",
+      "then": "ระบบแสดงว่าการเชื่อมข้อมูลสำเร็จหรือมีปัญหา พร้อมเวลาสำเร็จล่าสุด หากมีปัญหาให้แยกว่ากระทบเฉพาะนัด ปฏิทินสาขา หรือสิทธิ์บัญชี Google",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "keeps the booking when Google is down and writes it once Google is back",
+          "line": 152,
+          "assertions": [
+            "cy.api('POST', '/__cypress/calendar/fail?count=1').its('status').should('equal', 200)",
+            "sync().then((result) => expect(result.failed).to.equal(1))",
+            "expect(branch.failed).to.equal(1)",
+            "expect(branch.waiting).to.equal(1)",
+            "sync().then((result) => expect(result.pushed).to.equal(1))",
+            "events().should('have.length', 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake failure/retry no duplicate; provider auth scope/error classification/last-success retention incomplete.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "034.02",
+      "given": "การเชื่อมข้อมูลล้มเหลว",
+      "when": "ผู้ใช้เปิดรายละเอียดและลองเชื่อมข้อมูลใหม่ตามสิทธิ์",
+      "then": "ระบบแจ้งสาเหตุที่ตรวจพบและผลการลองใหม่ โดยคงนัดเดิมกับเวลาสำเร็จล่าสุดไว้ หากลองใหม่สำเร็จจะปรับนัดเดิมโดยไม่สร้างกิจกรรมซ้ำ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/calendar.cy.js",
+          "exact_test_title": "keeps the booking when Google is down and writes it once Google is back",
+          "line": 152,
+          "assertions": [
+            "cy.api('POST', '/__cypress/calendar/fail?count=1').its('status').should('equal', 200)",
+            "sync().then((result) => expect(result.failed).to.equal(1))",
+            "expect(branch.failed).to.equal(1)",
+            "expect(branch.waiting).to.equal(1)",
+            "sync().then((result) => expect(result.pushed).to.equal(1))",
+            "events().should('have.length', 1)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake failure/retry no duplicate; provider auth scope/error classification/last-success retention incomplete.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "034.03",
+      "given": "สิทธิ์บัญชี Google ใช้งานต่อไม่ได้",
+      "when": "Manager เชื่อมต่อและอนุญาตบัญชีกลางใหม่",
+      "then": "ระบบบันทึกผลการเชื่อมต่อและกลับมาเชื่อมข้อมูลเมื่อได้รับอนุญาต โดย Therapist ไม่เป็นผู้อนุญาตบัญชีกลางแทน",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "034.04",
+      "given": "มีผู้แก้นัดใน Google Calendar ระหว่างที่ระบบกำลังเชื่อมข้อมูลนัดนั้น",
+      "when": "ระบบรับการเปลี่ยนแปลงล่าสุด",
+      "then": "ระบบตรวจข้อมูลล่าสุดก่อนบันทึกและเก็บที่มาของการแก้ไข เพื่อไม่ให้ข้อมูลชุดเก่าทับการเปลี่ยนแปลงใหม่โดยไม่ตรวจสอบ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "035.01",
+      "given": "Manager มีสิทธิ์ตั้งค่าสาขา",
+      "when": "Manager บันทึกเวลาเปิด เวลาปิด และระยะเวลานัดเริ่มต้น",
+      "then": "ระบบบันทึกเวลาปิดที่มากกว่าเวลาเปิดและระยะเวลานัดเป็นนาทีอย่างน้อย 1 พร้อมผู้แก้และเวลา",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "refuses a half-set window, a reversed window, a bad email and a nonpositive length",
+          "line": 39,
+          "assertions": [
+            "putBranch(branch, { bookingOpenTime: '09:00' }).its('status').should('equal', 400)",
+            "putBranch(branch, { bookingOpenTime: '18:00', bookingCloseTime: '09:00' }).its('status').should('equal', 400)",
+            "putBranch(branch, { bookingOpenTime: '9am', bookingCloseTime: '18:00' }).its('status').should('equal', 400)",
+            "putBranch(branch, { email: 'not-an-email' }).its('status').should('equal', 400)",
+            "putBranch(branch, { defaultAppointmentMinutes: 0 }).its('status').should('equal', 400)",
+            "putBranch(branch, { defaultAppointmentMinutes: -1 }).its('status').should('equal', 400)",
+            "putBranch(branch, { defaultAppointmentMinutes: 1 }).its('body.defaultAppointmentMinutes').should('equal', 1)",
+            "putBranch(branch, { defaultAppointmentMinutes: 600 }).its('body.defaultAppointmentMinutes').should('equal', 600)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Window/durationvalidation asserted, editor/time and unchanged-settings readback missing.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentDurationHttpTest.java",
+          "exact_test_title": "branchAcceptsPositiveMinutesIncludingOneAndBeyondFormerCap",
+          "line": 12,
+          "assertions": [
+            "assertEquals(200, response.status(), response.body().toString());",
+            "assertEquals(minutes, response.body().path(\"defaultAppointmentMinutes\").asInt());",
+            "assertEquals(minutes, db.queryForObject(\"select default_appointment_minutes from branch where branch_id=?\",",
+            "assertEquals(400, response.status(), response.body().toString());",
+            "assertEquals(600, db.queryForObject(\"select default_appointment_minutes from branch where branch_id=?\","
+          ],
+          "coverage": "partial",
+          "remaining": "Branch1/4/481/600 persisted;0/-1 rejected retains600. Opening/closing/audit absent.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "035.02",
+      "given": "บริการมีระยะเวลาเริ่มต้น หรือสาขามีระยะเวลานัดเริ่มต้น",
+      "when": "ผู้ใช้เลือกวันและนักกายภาพเพื่อเตรียมนัด",
+      "then": "ระบบใช้ระยะเวลาของบริการเมื่อระบุไว้ มิฉะนั้นใช้ระยะเวลาเริ่มต้นของสาขา โดยยังไม่บังคับเลือกบริการ",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "uses the length of the chosen service instead of the branch default",
+          "line": 159,
+          "assertions": [
+            "}).its('status').should('equal', 200)",
+            "expect(result.durationMinutes).to.equal(30)",
+            "expect(result.slots.map((slot) => slot.time)).to.include('11:30')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Service30 override vs branch60 proven; same selectedservice-null fallback requires direct assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "lists the start times inside the booking window that still fit the appointment length",
+          "line": 106,
+          "assertions": [
+            "expect(result.windowConfigured).to.equal(true)",
+            "expect(result.durationMinutes).to.equal(60)",
+            "expect(result.slots.map((slot) => slot.time)).to.deep.equal(['09:00', '09:30', '10:00', '10:30', '11:00'])",
+            "expect(result.slots.every((slot) => slot.available)).to.equal(true)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Branchduration60 with no service proven. Combine with serviceoverride after full run; chosen-service-with-null duration not explicit.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "035.03",
+      "given": "สาขายังไม่ได้กำหนดช่วงเปิด–ปิดหรือระยะเวลาที่ต้องใช้ หรือกรอกค่าไม่ถูกต้อง",
+      "when": "ผู้ใช้ขอช่วงเวลานัด",
+      "then": "ระบบแจ้งข้อมูลตั้งค่าที่ต้องเติมหรือแก้ และไม่เสนอว่าช่วงที่ยังตรวจไม่ได้เป็นเวลาว่าง",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "offers no slots when the branch has no booking window",
+          "line": 173,
+          "assertions": [
+            "expect(result.windowConfigured).to.equal(false)",
+            "expect(result.openTime).to.equal(null)",
+            "expect(result.closeTime).to.equal(null)",
+            "expect(result.slots).to.deep.equal([])"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "windowConfiguredfalse, openTime/closeTimenull, slots=[]; no false available slots.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "035.04",
+      "given": "นัดเดิมมีเวลาเริ่ม–จบที่บันทึกไว้แล้ว",
+      "when": "Manager เปลี่ยนระยะเวลาเริ่มต้นภายหลัง",
+      "then": "ระบบคงช่วงเวลาของนัดเดิม ไม่เลื่อนหรือยืดนัดอัตโนมัติ",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "036.01",
+      "given": "สาขากำหนดเวลาทำการและข้อมูลตารางพร้อมใช้",
+      "when": "ผู้ใช้เลือกวัน นักกายภาพ และระยะเวลานัด",
+      "then": "ระบบแสดงช่วงว่างภายในเวลาทำการ โดยไม่นับช่วงที่นักกายภาพคนนั้นมีนัดที่ยังไม่ยกเลิก รวมถึงช่วงพัก ประชุม หรือหยุดที่มีผลกับคนนั้นหรือทั้งสาขา",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "marks the times that overlap an appointment of the therapist, not back-to-back ones nor other therapists",
+          "line": 116,
+          "assertions": [
+            "}).its('status').should('equal', 201)",
+            "expect(free).to.deep.equal({ '09:00': true, '09:30': false, '10:00': false, '10:30': false, '11:00': true })",
+            ".its('body.slots').should((all) => expect(all.every((slot) => slot.available)).to.equal(true))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Patientappointment therapist-scope/backtoback and distinctbranchtherapist; samebranchdifferenttherapist in JUnit below, Busy from fake only.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentCalendarScopeTest.java",
+          "exact_test_title": "therapistBusyDoesNotCloseOtherTherapistsButBranchBusyDoesAndBackToBackIsAllowed",
+          "line": 20,
+          "assertions": [
+            "assertFalse(firstSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(secondSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertFalse(secondSlots.stream().filter(s -> s.time().equals(\"10:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(firstSlots.stream().filter(s -> s.time().equals(\"11:00\")).findFirst().orElseThrow().available());",
+            "assertDoesNotThrow(() -> availability.requireNoGoogleBusy(branch, day.atTime(9, 0), day.atTime(10, 0), 12L));",
+            "assertThrows(IllegalArgumentException.class,",
+            "assertThrows(IllegalArgumentException.class,"
+          ],
+          "coverage": "partial",
+          "remaining": "Mockito provider: samebranchdifferenttherapist scope and branchBusy/backtoback. No realGoogle/no-mutation complete proof.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "036.02",
+      "given": "นักกายภาพ A มีนัดหรือ ช่วงไม่ว่าง เฉพาะตัว แต่ B ยังว่าง",
+      "when": "ผู้ใช้ตรวจเวลาของ B ในสาขาเดียวกัน",
+      "then": "ระบบไม่ปิดเวลาของ B เพียงเพราะ A ไม่ว่าง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "marks the times that overlap an appointment of the therapist, not back-to-back ones nor other therapists",
+          "line": 116,
+          "assertions": [
+            "}).its('status').should('equal', 201)",
+            "expect(free).to.deep.equal({ '09:00': true, '09:30': false, '10:00': false, '10:30': false, '11:00': true })",
+            ".its('body.slots').should((all) => expect(all.every((slot) => slot.available)).to.equal(true))"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Patientappointment therapist-scope/backtoback and distinctbranchtherapist; samebranchdifferenttherapist in JUnit below, Busy from fake only.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentCalendarScopeTest.java",
+          "exact_test_title": "therapistBusyDoesNotCloseOtherTherapistsButBranchBusyDoesAndBackToBackIsAllowed",
+          "line": 20,
+          "assertions": [
+            "assertFalse(firstSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(secondSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertFalse(secondSlots.stream().filter(s -> s.time().equals(\"10:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(firstSlots.stream().filter(s -> s.time().equals(\"11:00\")).findFirst().orElseThrow().available());",
+            "assertDoesNotThrow(() -> availability.requireNoGoogleBusy(branch, day.atTime(9, 0), day.atTime(10, 0), 12L));",
+            "assertThrows(IllegalArgumentException.class,",
+            "assertThrows(IllegalArgumentException.class,"
+          ],
+          "coverage": "partial",
+          "remaining": "Mockito provider: samebranchdifferenttherapist scope and branchBusy/backtoback. No realGoogle/no-mutation complete proof.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "036.03",
+      "given": "ช่วงก่อนหน้าจบตรงเวลาที่ช่วงใหม่เริ่มและไม่มีข้อขัดแย้งอื่น",
+      "when": "ผู้ใช้เลือกช่วงใหม่",
+      "then": "ระบบให้เลือกช่วงใหม่ได้ เช่น นัดก่อนจบ 10:00 น. สามารถเริ่มนัดใหม่ 10:00 น. ได้เมื่อช่วงใหม่ยาวพอและไม่ติดนัดหรือช่วงไม่ว่างอื่น",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "refuses a booking that overlaps or falls outside the window, and accepts a back-to-back one",
+          "line": 132,
+          "assertions": [
+            "book('10:00').its('status').should('equal', 201)",
+            "book('10:30').its('status').should('equal', 400)",
+            "book('09:30').its('status').should('equal', 400)",
+            "book('11:00').its('status').should('equal', 201)",
+            "book('08:00').its('status').should('equal', 400)",
+            "book('11:30').its('status').should('equal', 400)"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "10:00success;09:30/10:30overlap400;11:00backtoback201;08:00/11:30outside400.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentCalendarScopeTest.java",
+          "exact_test_title": "therapistBusyDoesNotCloseOtherTherapistsButBranchBusyDoesAndBackToBackIsAllowed",
+          "line": 20,
+          "assertions": [
+            "assertFalse(firstSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(secondSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertFalse(secondSlots.stream().filter(s -> s.time().equals(\"10:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(firstSlots.stream().filter(s -> s.time().equals(\"11:00\")).findFirst().orElseThrow().available());",
+            "assertDoesNotThrow(() -> availability.requireNoGoogleBusy(branch, day.atTime(9, 0), day.atTime(10, 0), 12L));",
+            "assertThrows(IllegalArgumentException.class,",
+            "assertThrows(IllegalArgumentException.class,"
+          ],
+          "coverage": "partial",
+          "remaining": "Mockito provider: samebranchdifferenttherapist scope and branchBusy/backtoback. No realGoogle/no-mutation complete proof.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "036.04",
+      "given": "ช่วงที่เลือกมีผู้อื่นจองเพิ่มแล้ว อยู่นอกเวลาทำการ หรือเวลาจบไม่หลังเวลาเริ่ม",
+      "when": "ผู้ใช้ยืนยันสร้างหรือแก้นัด",
+      "then": "ระบบตรวจตารางล่าสุดอีกครั้ง แจ้งช่วงที่ใช้ไม่ได้ และไม่บันทึกนัดทับช่วงที่ไม่ว่างหรือช่วงเวลาที่ผิด โดยคงนัดเดิมไว้เมื่อเป็นการแก้นัด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "refuses a booking on Busy time and accepts one right beside it",
+          "line": 237,
+          "assertions": [
+            "book(this.fixtures, patient, '10:00').then(({ status }) => expect(status).to.equal(400))",
+            "book(this.fixtures, patient, '09:30').its('status').should('equal', 400)",
+            "book(this.fixtures, patient, '09:00').its('status').should('equal', 201)",
+            "book(this.fixtures, patient, '11:00').its('status').should('equal', 201)"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Creation Busy rejection only; reschedule unchanged original tested separately with providerfake.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "036.05",
+      "given": "ข้อมูล Calendar เชื่อมข้อมูลไม่สำเร็จจนตรวจเวลาว่างไม่ได้ครบ",
+      "when": "ผู้ใช้ขอช่วงว่าง",
+      "then": "ระบบแจ้งสถานะข้อมูลไม่พร้อม ไม่แสดงทุกช่วงเป็นว่าง และไม่ยืนยันผลตรวจที่ยังทำไม่ได้",
+      "coverage": "full",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "offers no available slots and refuses booking when Google cannot be read",
+          "line": 249,
+          "assertions": [
+            ".its('status').should('equal', 200)",
+            "expect(result.googleCalendar).to.equal('UNAVAILABLE')",
+            "expect(result.slots.length).to.be.greaterThan(0)",
+            "expect(result.slots.every((slot) => !slot.available)).to.equal(true)",
+            ".its('status').should('equal', 200)",
+            ".its('status').should('equal', 409)"
+          ],
+          "parameterized_title": false,
+          "coverage": "full",
+          "remaining": "Fake readfail ->UNAVAILABLE, nonempty allunavailable slots; forcedsecondfail book409. No assertion of realGoogle network integration.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "037.01",
+      "given": "Google Calendar ของสาขามีช่วงพัก ประชุม หรือหยุดที่ระบุชัดว่าใช้กับนักกายภาพคนใดหรือทั้งสาขา",
+      "when": "ระบบนำข้อมูลปฏิทินมาแสดงในตารางนัด",
+      "then": "ระบบแสดงช่วงไม่ว่างตามคนหรือสาขาที่ระบุ โดยไม่สร้างประวัติผู้ป่วย นัดผู้ป่วย หรือรายการรับบริการจากช่วงดังกล่าว และไม่ตีความขอบเขตจากชื่อกิจกรรมเพียงอย่างเดียว",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/cypress/e2e-v2/appointment-availability.cy.js",
+          "exact_test_title": "takes a Busy event typed by hand in Google away from every therapist of the branch",
+          "line": 222,
+          "assertions": [
+            "expect(result.googleCalendar).to.equal('CHECKED')",
+            "expect(Object.fromEntries(Object.entries(bySlot).map(([time, slot]) => [time, slot.available])))",
+            "expect(bySlot['10:00'].reason).to.contain('Google Calendar')"
+          ],
+          "parameterized_title": false,
+          "coverage": "partial",
+          "remaining": "Fake branchBusy disables slots; no real event scope or no patient/visit creation assertion.",
+          "run_status": "unbound; source assertions only, root must bind actual XML"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/appointment/AppointmentCalendarScopeTest.java",
+          "exact_test_title": "therapistBusyDoesNotCloseOtherTherapistsButBranchBusyDoesAndBackToBackIsAllowed",
+          "line": 20,
+          "assertions": [
+            "assertFalse(firstSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(secondSlots.stream().filter(s -> s.time().equals(\"09:00\")).findFirst().orElseThrow().available());",
+            "assertFalse(secondSlots.stream().filter(s -> s.time().equals(\"10:00\")).findFirst().orElseThrow().available());",
+            "assertTrue(firstSlots.stream().filter(s -> s.time().equals(\"11:00\")).findFirst().orElseThrow().available());",
+            "assertDoesNotThrow(() -> availability.requireNoGoogleBusy(branch, day.atTime(9, 0), day.atTime(10, 0), 12L));",
+            "assertThrows(IllegalArgumentException.class,",
+            "assertThrows(IllegalArgumentException.class,"
+          ],
+          "coverage": "partial",
+          "remaining": "Mockito provider: samebranchdifferenttherapist scope and branchBusy/backtoback. No realGoogle/no-mutation complete proof.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        },
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/calendar/HttpGoogleCalendarClientTest.java",
+          "exact_test_title": "explicitBusyScopeTimezoneAllDayAndOwnEventFiltering",
+          "line": 8,
+          "assertions": [
+            "HttpBusyBlocksCheck.main(new String[0]);"
+          ],
+          "coverage": "partial",
+          "remaining": "Local HTTP parser fixture delegates to HttpBusyBlocksCheck. Explicit scope, timezone/all-day, own-event filtering. No real Google/complete duplicate-resync proof.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "037.02",
+      "given": "ช่วงไม่ว่างใน Google Calendar เป็นกิจกรรมซ้ำหรือเต็มวัน",
+      "when": "ผู้ใช้เปิดตารางนัดของวันที่เกี่ยวข้อง",
+      "then": "ระบบแสดงช่วงไม่ว่างที่ตรงกับวันนั้นตามเขตเวลาของสาขา โดยไม่แสดงซ้ำจากการเชื่อมข้อมูลเดิมหลายครั้ง",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/calendar/HttpGoogleCalendarClientTest.java",
+          "exact_test_title": "explicitBusyScopeTimezoneAllDayAndOwnEventFiltering",
+          "line": 8,
+          "assertions": [
+            "HttpBusyBlocksCheck.main(new String[0]);"
+          ],
+          "coverage": "partial",
+          "remaining": "Local HTTP parser fixture delegates to HttpBusyBlocksCheck. Explicit scope, timezone/all-day, own-event filtering. No real Google/complete duplicate-resync proof.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    },
+    {
+      "ac_id": "037.03",
+      "given": "กิจกรรมช่วงไม่ว่าง ถูกลบ ยกเลิก หรือเปลี่ยนเป็นช่วงว่าง",
+      "when": "ระบบเชื่อมข้อมูลการเปลี่ยนแปลง",
+      "then": "ระบบยกเลิกเฉพาะช่วงไม่ว่างนั้น และคำนวณช่วงว่างใหม่ โดยไม่ยกเลิกนัดผู้ป่วยรายการอื่น",
+      "coverage": "unmapped",
+      "tests": [],
+      "remaining": "No exact assertion mapped in reviewed Cypress/JUnit suites; author a scenario for the complete source criterion."
+    },
+    {
+      "ac_id": "037.04",
+      "given": "กิจกรรมปฏิทินถูกจับคู่เป็นนัดผู้ป่วยอยู่แล้ว",
+      "when": "ระบบรับกิจกรรมปฏิทินเดิมมาซ้ำ",
+      "then": "ระบบแสดงเป็นนัดผู้ป่วยเดิมเพียงรายการเดียว ไม่เพิ่มช่วงไม่ว่างซ้ำสำหรับนัดนั้นอีกชุด",
+      "coverage": "partial",
+      "tests": [
+        {
+          "testfile": "backend/src/test/java/com/sabyeguyz/clinicv2/calendar/HttpGoogleCalendarClientTest.java",
+          "exact_test_title": "explicitBusyScopeTimezoneAllDayAndOwnEventFiltering",
+          "line": 8,
+          "assertions": [
+            "HttpBusyBlocksCheck.main(new String[0]);"
+          ],
+          "coverage": "partial",
+          "remaining": "Local HTTP parser fixture delegates to HttpBusyBlocksCheck. Explicit scope, timezone/all-day, own-event filtering. No real Google/complete duplicate-resync proof.",
+          "run_status": "targeted XML exists; root must verify source snapshot and bind artifact"
+        }
+      ],
+      "remaining": "Bind real run artifacts; no status upgrade solely from source mapping."
+    }
+  ]
+}

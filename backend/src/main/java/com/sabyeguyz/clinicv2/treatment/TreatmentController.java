@@ -36,10 +36,12 @@ public class TreatmentController {
     private final StaffRepository staff;
     private final ServiceRepository services;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
     public TreatmentController(TreatmentRepository treatments, PatientRepository patients,
                                 PatientVisitRepository visits, StaffRepository staff, ServiceRepository services,
-                                CurrentActor actor) {
+                                CurrentActor actor, com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+        this.branchAccess = branchAccess;
         this.treatments = treatments;
         this.patients = patients;
         this.visits = visits;
@@ -83,6 +85,7 @@ public class TreatmentController {
         if (!visit.getPatient().getId().equals(patient.getId())) {
             throw new IllegalArgumentException("ผู้ป่วยไม่ตรงกับการเช็คอินของนัดหมายนี้");
         }
+        branchAccess.requireAccess(visit.getBranch(), "บันทึกการรักษาได้เฉพาะสาขาตัวเอง");
         Service service = services.findById(request.serviceId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
         Staff treatingStaff = request.staffId() == null ? null : staff.findById(request.staffId())
