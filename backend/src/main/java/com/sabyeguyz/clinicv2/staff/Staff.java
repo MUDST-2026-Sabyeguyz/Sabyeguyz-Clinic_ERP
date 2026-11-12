@@ -1,12 +1,14 @@
 package com.sabyeguyz.clinicv2.staff;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.enums.StaffPosition;
+import java.time.Instant;
+import java.time.LocalDate;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.Instant;
-import java.time.LocalDate;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.enums.StaffPosition;
 
 @Entity
 @Table(name = "staff")
@@ -58,28 +60,40 @@ public class Staff {
     public Staff() {}
 
     public Long getId() { return id; }
+
     public String getStaffCode() { return staffCode; }
     public void setStaffCode(String staffCode) { this.staffCode = staffCode; }
+
     public String getStaffFname() { return staffFname; }
     public void setStaffFname(String staffFname) { this.staffFname = staffFname; }
+
     public String getStaffLname() { return staffLname; }
     public void setStaffLname(String staffLname) { this.staffLname = staffLname; }
+
     public StaffPosition getPosition() { return position; }
     public void setPosition(StaffPosition position) { this.position = position; }
+
     public Branch getBranch() { return branch; }
     public void setBranch(Branch branch) { this.branch = branch; }
+
     public boolean isStaffStatus() { return staffStatus; }
     public void setStaffStatus(boolean staffStatus) { this.staffStatus = staffStatus; }
+
     public LocalDate getTerminationDate() { return terminationDate; }
     public void setTerminationDate(LocalDate terminationDate) { this.terminationDate = terminationDate; }
+
     public LocalDate getHireDate() { return hireDate; }
     public void setHireDate(LocalDate hireDate) { this.hireDate = hireDate; }
+
     public Instant getStaffCreateAt() { return staffCreateAt; }
     public void setStaffCreateAt(Instant staffCreateAt) { this.staffCreateAt = staffCreateAt; }
+
     public Long getStaffCreateBy() { return staffCreateBy; }
     public void setStaffCreateBy(Long staffCreateBy) { this.staffCreateBy = staffCreateBy; }
+
     public Instant getStaffUpdateAt() { return staffUpdateAt; }
     public void setStaffUpdateAt(Instant staffUpdateAt) { this.staffUpdateAt = staffUpdateAt; }
+
     public Long getStaffUpdateBy() { return staffUpdateBy; }
     public void setStaffUpdateBy(Long staffUpdateBy) { this.staffUpdateBy = staffUpdateBy; }
 }
