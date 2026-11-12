@@ -16,22 +16,32 @@ public final class CommissionAllocationCalculator {
     private CommissionAllocationCalculator() {}
 
     /** The nominal rate of one session. */
-    public static BigDecimal nominal(BigDecimal pool, int totalVisits) {
+    public static BigDecimal nominal(
+            BigDecimal pool,
+            int totalVisits) {
         requirePositive(totalVisits);
+
         return pool.divide(BigDecimal.valueOf(totalVisits), 2, RoundingMode.HALF_UP);
     }
 
     /** The rate of the session at {@code position} (1..totalVisits). */
-    public static BigDecimal forPosition(BigDecimal pool, int totalVisits, int position) {
+    public static BigDecimal forPosition(
+            BigDecimal pool,
+            int totalVisits,
+            int position) {
         requirePositive(totalVisits);
+
         if (position < 1 || position > totalVisits) {
             throw new IllegalArgumentException("usage_sequence ต้องอยู่ระหว่าง 1 ถึง " + totalVisits);
         }
+
         BigDecimal pool2 = pool.setScale(2, RoundingMode.HALF_UP);
         BigDecimal nominal = nominal(pool2, totalVisits);
-        BigDecimal before = nominal.multiply(BigDecimal.valueOf(position - 1)).min(pool2);
+        BigDecimal before = nominal.multiply(BigDecimal.valueOf(position - 1))
+                .min(pool2);
         BigDecimal left = pool2.subtract(before);
         BigDecimal amount = position == totalVisits ? left : nominal.min(left);
+
         return amount.max(BigDecimal.ZERO);
     }
 
