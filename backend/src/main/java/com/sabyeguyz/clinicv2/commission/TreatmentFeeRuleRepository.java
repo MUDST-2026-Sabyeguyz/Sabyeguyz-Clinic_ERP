@@ -7,13 +7,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TreatmentFeeRuleRepository extends JpaRepository<TreatmentFeeRule, Long> {
-    @Query("select r from TreatmentFeeRule r where r.treatmentFeeRuleStatus = true "
-            + "and r.effectiveFrom <= :date and (r.effectiveTo is null or :date <= r.effectiveTo)")
+    /** Finds rules whose effective date range includes the given date. */
+    @Query("select r from TreatmentFeeRule r "
+            + "where r.effectiveFrom <= :date "
+            + "and (r.effectiveTo is null or :date <= r.effectiveTo)")
     List<TreatmentFeeRule> findActiveOn(@Param("date") LocalDate date);
 
     List<TreatmentFeeRule> findAllByOrderByEffectiveFromDesc();
-
-    List<TreatmentFeeRule> findByTreatmentFeeRuleStatusTrue();
 
     @Query("select count(a) from CommissionAllocationLedger a where a.treatmentFeeRule.id = :id")
     long countAllocationUses(@Param("id") Long id);
@@ -36,4 +36,14 @@ public interface TreatmentFeeRuleRepository extends JpaRepository<TreatmentFeeRu
     default boolean isUsedAfter(Long id, LocalDate date) {
         return countAllocationUsesAfter(id, date) + countSingleVisitUsesAfter(id, date) > 0;
     }
+
+    // Serialize fee-rule creation, including when no rules exist yet.
+    // PostgreSQL releases this lock when the transaction ends.
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(1010, 1)",
+            nativeQuery = true)
+    Integer lockVersionAllocation();
+
+    // Return 0 when no rules exist.
+    @Query("select coalesce(max(r.ruleVersion), 0) from TreatmentFeeRule r")
+    Integer findMaxRuleVersion();
 }

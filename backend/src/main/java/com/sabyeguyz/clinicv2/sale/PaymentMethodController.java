@@ -65,6 +65,7 @@ public class PaymentMethodController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
         PaymentMethod method = find(id);
+        PaymentMethod.canonicalName(method.getMethodName());
         method.setPaymentMethodStatus(true);
         return toResponse(repository.save(method));
     }

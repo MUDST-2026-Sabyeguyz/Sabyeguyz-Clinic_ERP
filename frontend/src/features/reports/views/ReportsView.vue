@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { clinicToday } from '@/utils/clinicDate'
+import { useRoute } from 'vue-router'
+import TransactionReportView from './TransactionReportView.vue'
+import SalesPaymentReportView from './SalesPaymentReportView.vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import {
   branchApi,
   commissionApi,
@@ -12,10 +15,22 @@ import {
   type Branch,
   type CourseBalanceReport,
   type RevenueReport,
+  type StaffSalesReport,
   type TransferRecord,
 } from '@/api/client'
+import { clinicToday } from '@/utils/clinicDate'
+import { filterPaymentReportRows } from '../lib/paymentReport'
+import { buildReportCsv } from '../lib/reportCsv'
 
-type ReportKey = 'revenue' | 'balance' | 'transfer' | 'commission'
+type ReportKey =
+  | 'sales'
+  | 'revenue'
+  | 'balance'
+  | 'transfer'
+  | 'commission'
+  | 'salesTransaction'
+  | 'treatmentTransaction'
+  | 'payment'
 
 type CommissionReportRow = {
   staffId: number | null
@@ -28,64 +43,54 @@ type CommissionReportRow = {
   commission: number
 }
 
+type TreatmentTransactionRow = Awaited<ReturnType<typeof commissionApi.treatmentReport>>[number]
 type ReportData =
-  RevenueReport | CourseBalanceReport | CommissionReportRow[] | TransferRecord[] | null
+  | RevenueReport
+  | CourseBalanceReport
+  | CommissionReportRow[]
+  | TransferRecord[]
+  | StaffSalesReport
+  | TreatmentTransactionRow[]
+  | null
 
-const report = ref<ReportKey>('revenue')
-const filters = reactive({
-  patient: '',
-  staff: '',
-  course: 'ทั้งหมด',
-  branch: 'ทุกสาขา',
-  treatment: 'ทั้งหมด',
-  saleType: 'ทั้งหมด',
-  commissionType: 'ทั้งหมด',
-  from: `${new Date().getFullYear()}-08-01`,
-  to: clinicToday(),
-})
-
-// ── Pagination State ──────────────────────────────────────────────────────────
-const page = ref(1)
-const pageSize = 10
-
-const branches = ref<Branch[]>([])
-const courseOptions = ref<Array<{ id: number; name: string }>>([])
-const reportData = ref<ReportData>(null)
-const loadedReport = ref<ReportKey | null>(null)
-const currentReportData = computed(() => loadedReport.value === report.value ? reportData.value : null)
-let reportRequest = 0
-const loading = ref(false)
-const errorMessage = ref('')
-const lastUpdatedText = ref('')
+const REPORT_KEYS: readonly ReportKey[] = [
+  'sales',
+  'revenue',
+  'balance',
+  'transfer',
+  'commission',
+  'salesTransaction',
+  'treatmentTransaction',
+  'payment',
+]
 
 const REPORTS: Array<[ReportKey, string]> = [
-  ['revenue', 'รายงานยอดขาย'],
+  ['sales', 'รายงานยอดขาย'],
+  ['revenue', 'รายรับตามวันที่รับชำระ'],
   ['balance', 'ยอดคงเหลือคอร์ส'],
   ['transfer', 'ประวัติการโอนคอร์ส'],
   ['commission', 'ค่าคอมมิชชั่น'],
+  ['salesTransaction', 'Transaction'],
+  ['payment', 'รายงานยอดรับชำระ'],
 ]
-const reportSelection = computed({
-  get: () => report.value,
-  set: (value: string) => {
-    report.value = value as ReportKey
-  },
-})
-const reportOptions = computed(() => REPORTS.map(([value, label]) => ({ value, label })))
-const branchFilterOptions = computed(() =>
-  branches.value.map((branch) => ({
-    value: branch.branchCode,
-    label: `${branch.name} (${branch.branchCode})`,
-  })),
-)
-const courseFilterOptions = computed(() =>
-  courseOptions.value.map((course) => ({ value: course.name, label: course.name })),
-)
 
 const TABLE_HEADERS: Record<ReportKey, string[]> = {
-  revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่', 'รายได้รวม', 'สัดส่วน'],
-  balance: ['ผู้ป่วย', 'คอร์ส', 'สาขา', 'วันที่', 'ซื้อ', 'ใช้', 'โอน', 'คงเหลือ', 'หมดอายุ'],
-  transfer: ['เลขที่รายการ', 'ผู้โอน', 'ผู้รับ', 'สาขา', 'คอร์ส', 'ครั้ง', 'วันที่'],
-  commission: ['พนักงาน', 'สาขา', 'ประเภทงาน', 'วันที่', 'จำนวนรายการ', 'ค่าคอมมิชชั่น'],
+  sales: [],
+  revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระสุทธิ', 'สัดส่วน'],
+  balance: ['ผู้ป่วย', 'คอร์ส', 'สาขา', 'วันที่ซื้อ', 'ซื้อ', 'ใช้', 'โอน', 'คงเหลือ', 'หมดอายุ'],
+  transfer: ['เลขที่รายการ', 'ผู้โอน', 'ผู้รับ', 'สาขา', 'คอร์ส', 'ครั้ง', 'วันที่โอน'],
+  commission: ['พนักงาน', 'สาขา', 'ประเภทงาน', 'ช่วงงวดขาย', 'จำนวนรายการ', 'ค่าคอมมิชชั่น'],
+  salesTransaction: ['ผู้ขาย', 'จำนวนใบเสร็จ', 'ยอดขาย', 'ช่วงวันที่ขาย'],
+  treatmentTransaction: [
+    'วันที่ให้บริการ',
+    'สาขา',
+    'ผู้ป่วย',
+    'นักกายภาพบำบัด',
+    'คอร์ส',
+    'ค่ามือ',
+    'มูลค่าบริการ',
+  ],
+  payment: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระ', 'สัดส่วน'],
 }
 
 const RIGHT_ALIGNED: Partial<Record<ReportKey, number[]>> = {
@@ -93,6 +98,9 @@ const RIGHT_ALIGNED: Partial<Record<ReportKey, number[]>> = {
   balance: [4, 5, 6, 7, 8],
   transfer: [],
   commission: [4, 5],
+  salesTransaction: [1, 2],
+  treatmentTransaction: [5, 6],
+  payment: [4, 5],
 }
 
 const SALES_COMMISSION_TYPE = 'ค่าคอมมิชชันการขาย'
@@ -113,10 +121,76 @@ const TREATMENT_NAMES: Record<string, string> = {
   'Single Visit Sales': 'Exercise Therapy',
 }
 
+function isReportKey(value: string): value is ReportKey {
+  return REPORT_KEYS.includes(value as ReportKey)
+}
+
+function reportFromQuery(value: unknown): ReportKey {
+  const reportKey = String(value ?? 'sales')
+  return isReportKey(reportKey) ? reportKey : 'sales'
+}
+
+const route = useRoute()
+const report = ref<ReportKey>(reportFromQuery(route.query.report))
+const detailReportMode = computed(() => report.value === 'sales' || report.value === 'payment' ? report.value : null)
+watch(
+  () => route.query.report,
+  (value) => {
+    report.value = reportFromQuery(value)
+  },
+)
+
+const filters = reactive({
+  patient: '',
+  staff: '',
+  course: 'ทั้งหมด',
+  treatment: 'ทั้งหมด',
+  saleType: 'ทั้งหมด',
+  commissionType: 'ทั้งหมด',
+  from: `${clinicToday().slice(0, 7)}-01`,
+  to: clinicToday(),
+})
+
+const page = ref(1)
+const pageSize = 10
+
+const branches = ref<Branch[]>([])
+const courseOptions = ref<Array<{ id: number; name: string }>>([])
+const reportData = ref<ReportData>(null)
+const loading = ref(false)
+const errorMessage = ref('')
+const lastUpdatedText = ref('')
+
+const reportSelection = computed({
+  get: () => (report.value === 'treatmentTransaction' ? 'salesTransaction' : report.value),
+  set: (value: string) => {
+    report.value = value as ReportKey
+  },
+})
+const reportOptions = computed(() => REPORTS.map(([value, label]) => ({ value, label })))
+const courseFilterOptions = computed(() =>
+  courseOptions.value.map((course) => ({ value: course.name, label: course.name })),
+)
+const selectedHeaderBranchCode = computed(
+  () =>
+    selectedManagerBranch()?.code ??
+    JSON.parse(localStorage.getItem('authUser') ?? 'null')?.branchCode ??
+    '',
+)
+const canExport = computed(
+  () => JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER',
+)
+const supportsExport = computed(() => ['revenue', 'payment', 'salesTransaction'].includes(report.value))
+
 const currentReportTitle = computed(() => {
+  if (['salesTransaction', 'treatmentTransaction'].includes(report.value)) return 'Transaction'
   if (report.value === 'commission') return 'รายงานค่าคอมมิชชั่น'
   return REPORTS.find(([k]) => k === report.value)?.[1] ?? ''
 })
+
+const isTransactionReport = computed(() =>
+  ['salesTransaction', 'treatmentTransaction'].includes(report.value),
+)
 
 function getTreatmentName(type: string): string {
   if (filters.treatment !== 'ทั้งหมด') return filters.treatment
@@ -125,13 +199,13 @@ function getTreatmentName(type: string): string {
 
 function getBranchName(branchCode?: string): string {
   if (branchCode) {
-    const found = branches.value.find((b) => b.branchCode === branchCode || b.name === branchCode)
+    const found = branches.value.find((b) => b.code === branchCode || b.name === branchCode)
     if (found) return found.name
     return branchCode
   }
-  if (filters.branch !== 'ทุกสาขา') {
-    const found = branches.value.find((b) => b.branchCode === filters.branch)
-    return found ? found.name : filters.branch
+  if (selectedHeaderBranchCode.value) {
+    const found = branches.value.find((b) => b.code === selectedHeaderBranchCode.value)
+    return found ? found.name : selectedHeaderBranchCode.value
   }
   return 'ทุกสาขา'
 }
@@ -153,6 +227,7 @@ const formatDate = (value: string) => {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Bangkok',
   }).format(d)
 }
 
@@ -168,15 +243,15 @@ function updateTimestamp() {
     month: 'short',
     year: 'numeric',
   }).format(now)
-  const timeStr = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit' }).format(
-    now,
-  )
+  const timeStr = new Intl.DateTimeFormat('th-TH', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Bangkok',
+  }).format(now)
   lastUpdatedText.value = `${dateStr}, ${timeStr}`
 }
 
-// ── Dynamic Filtering ────────────────────────────────────────────────────────
-
-const revenueData = computed(() => currentReportData.value as RevenueReport | null)
+const revenueData = computed(() => reportData.value as RevenueReport | null)
 
 const filteredRevenueCategories = computed(() => {
   if (!revenueData.value?.byCategory) return []
@@ -186,13 +261,12 @@ const filteredRevenueCategories = computed(() => {
     list = list.filter((cat) => cat.type === 'COURSE' || cat.type === 'Course Sales')
   } else if (filters.saleType === 'Single Visit Sales') {
     list = list.filter((cat) => cat.type === 'SINGLE_VISIT' || cat.type === 'Single Visit Sales')
+  } else if (filters.saleType === 'Assessment') {
+    list = list.filter((cat) => cat.type === 'ASSESSMENT' || cat.type === 'Assessment')
   }
 
   if (filters.treatment !== 'ทั้งหมด') {
     list = list.filter((cat) => {
-      const typeName = CATEGORY_NAMES[cat.type] ?? cat.type
-      if (filters.treatment === 'Assessment')
-        return cat.type === 'ASSESSMENT' || typeName === 'Assessment'
       if (filters.treatment === 'Manual Therapy')
         return cat.type === 'COURSE' || cat.type === 'Course Sales'
       if (filters.treatment === 'Exercise Therapy')
@@ -204,7 +278,6 @@ const filteredRevenueCategories = computed(() => {
   return list
 })
 
-// KPI Items (Only active for Revenue report per Figma)
 const kpiItems = computed(() => {
   if (report.value !== 'revenue' || !revenueData.value) return []
   const list = filteredRevenueCategories.value
@@ -222,13 +295,40 @@ const kpiItems = computed(() => {
       }
     })
 
-  return [{ label: 'รายได้รวม', amount: formatMoney(total), share: '100%' }, ...items]
+  return [{ label: 'ยอดรับชำระ', amount: formatMoney(total), share: '100%' }, ...items]
 })
 
-const activeKpis = computed(() => (report.value === 'revenue' ? kpiItems.value : []))
+const activeKpis = computed(() => {
+  if (report.value === 'revenue') return kpiItems.value
+  if (report.value === 'payment') return paymentKpis.value
+  return []
+})
 
-// Filtered Course Balance Rows
-const balanceData = computed(() => currentReportData.value as CourseBalanceReport | null)
+const paymentRows = computed(() => {
+  const data = reportData.value as RevenueReport | null
+  return filterPaymentReportRows(data?.dailyByCategory ?? [], {
+    from: filters.from,
+    to: filters.to,
+    saleType: filters.saleType,
+    treatment: filters.treatment,
+  }).map((row) => ({ ...row, branch: getBranchName() }))
+})
+
+const paymentKpis = computed(() => {
+  const rows = paymentRows.value
+  const total = rows.reduce((sum, row) => sum + row.paid, 0)
+  const course = rows
+    .filter((row) => row.category === 'Course Sales')
+    .reduce((sum, row) => sum + row.paid, 0)
+  const visit = total - course
+  return [
+    { label: 'ยอดรับชำระ', amount: formatMoney(total), share: '' },
+    { label: 'รับชำระจากคอร์ส', amount: formatMoney(course), share: '' },
+    { label: 'รับชำระจากรายครั้ง', amount: formatMoney(visit), share: '' },
+  ]
+})
+
+const balanceData = computed(() => reportData.value as CourseBalanceReport | null)
 
 type ExtendedBalanceRow = {
   hn: string
@@ -259,24 +359,22 @@ const filteredBalanceRows = computed<ExtendedBalanceRow[]>(() => {
   return list
 })
 
-// Filtered Commission Rows
 const filteredCommissionRows = computed<CommissionReportRow[]>(() => {
-  const data = (currentReportData.value as CommissionReportRow[] | null) ?? []
+  const data = (reportData.value as CommissionReportRow[] | null) ?? []
 
   return data.filter((row) => {
     const qStaff = filters.staff.trim().toLowerCase()
     const matchStaff = !qStaff || (row.staffName && row.staffName.toLowerCase().includes(qStaff))
     const matchBranch =
-      filters.branch === 'ทุกสาขา' ||
-      row.branchCode === filters.branch ||
-      row.branchName === filters.branch
+      !selectedHeaderBranchCode.value ||
+      row.branchCode === selectedHeaderBranchCode.value ||
+      row.branchName === selectedHeaderBranchCode.value
     const matchType =
       filters.commissionType === 'ทั้งหมด' || filters.commissionType === SALES_COMMISSION_TYPE
     return matchStaff && matchBranch && matchType
   })
 })
 
-// All Table Rows
 const tableRows = computed<string[][]>(() => {
   if (report.value === 'revenue') {
     const list = filteredRevenueCategories.value
@@ -284,7 +382,7 @@ const tableRows = computed<string[][]>(() => {
     return list.map((row) => {
       const share = total > 0 ? Math.round((Number(row.amount) / total) * 100) : 0
       return [
-        CATEGORY_NAMES[row.type] ?? row.type,
+        row.type === 'ASSESSMENT' ? '—' : (CATEGORY_NAMES[row.type] ?? row.type),
         getTreatmentName(row.type),
         getBranchName(),
         formatPeriod(filters.from, filters.to),
@@ -309,7 +407,7 @@ const tableRows = computed<string[][]>(() => {
   }
 
   if (report.value === 'transfer') {
-    const data = (currentReportData.value as TransferRecord[] | null) ?? []
+    const data = (reportData.value as TransferRecord[] | null) ?? []
     return data
       .filter((row) => {
         const q = filters.patient.trim().toLowerCase()
@@ -318,7 +416,8 @@ const tableRows = computed<string[][]>(() => {
           `${row.sourcePatientName} ${row.sourcePatientHn} ${row.destinationPatientName} ${row.destinationPatientHn}`
             .toLowerCase()
             .includes(q)
-        const matchBranch = filters.branch === 'ทุกสาขา' || row.branchCode === filters.branch
+        const matchBranch =
+          !selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value
         const matchCourse =
           filters.course === 'ทั้งหมด' ||
           getCourseName(row.courseId).toLowerCase().includes(filters.course.toLowerCase())
@@ -350,10 +449,56 @@ const tableRows = computed<string[][]>(() => {
     ])
   }
 
+  if (report.value === 'salesTransaction') {
+    const data = reportData.value as StaffSalesReport | null
+    const keyword = filters.staff.trim().toLowerCase()
+    return (data?.rows ?? [])
+      .filter((row) => !keyword || row.fullName.toLowerCase().includes(keyword))
+      .map((row) => [
+        row.fullName,
+        `${row.receipts} ใบเสร็จ`,
+        formatMoney(row.amount),
+        formatPeriod(filters.from, filters.to),
+      ])
+  }
+
+  if (report.value === 'treatmentTransaction') {
+    const data = reportData.value as TreatmentTransactionRow[] | null
+    const keyword = filters.staff.trim().toLowerCase()
+    return (data ?? [])
+      .filter((row) => {
+        const matchBranch =
+          !selectedHeaderBranchCode.value || row.branchCode === selectedHeaderBranchCode.value
+        const searchable =
+          `${row.patientName} ${row.treatingStaffName} ${row.courseCode}`.toLowerCase()
+        return matchBranch && (!keyword || searchable.includes(keyword))
+      })
+      .map((row) => [
+        formatDate(row.visitDate),
+        row.branchName || getBranchName(row.branchCode),
+        row.patientName || row.patientHn,
+        row.treatingStaffName || 'ไม่ระบุ',
+        row.courseCode,
+        formatMoney(Number(row.treatmentFee)),
+        formatMoney(Number(row.gross)),
+      ])
+  }
+
+  if (report.value === 'payment') {
+    const total = paymentRows.value.reduce((sum, row) => sum + row.paid, 0)
+    return paymentRows.value.map((row) => [
+      row.category,
+      row.treatment,
+      row.branch,
+      formatDate(row.date),
+      formatMoney(row.paid),
+      `${total ? Math.round((row.paid / total) * 100) : 0}%`,
+    ])
+  }
+
   return []
 })
 
-// Pagination Calculations
 const totalPages = computed(() => Math.max(1, Math.ceil(tableRows.value.length / pageSize)))
 
 const paginatedRows = computed(() => {
@@ -361,7 +506,6 @@ const paginatedRows = computed(() => {
   return tableRows.value.slice(start, start + pageSize)
 })
 
-// Reset page to 1 when filters or report change
 watch(
   [report, filters],
   () => {
@@ -370,7 +514,6 @@ watch(
   { deep: true },
 )
 
-// Dynamic Total Row
 const totalRow = computed<string[] | null>(() => {
   if (!tableRows.value.length) return null
 
@@ -394,43 +537,93 @@ const totalRow = computed<string[] | null>(() => {
     return ['รวมทั้งหมด', '', '', '', `${totalCount} รายการ`, formatMoney(totalComm)]
   }
 
+  if (report.value === 'salesTransaction') {
+    const rows = reportData.value as StaffSalesReport | null
+    const totalReceipts = (rows?.rows ?? []).reduce((sum, row) => sum + row.receipts, 0)
+    const totalSales = (rows?.rows ?? []).reduce((sum, row) => sum + row.amount, 0)
+    return ['รวมทั้งหมด', `${totalReceipts} ใบเสร็จ`, formatMoney(totalSales), '']
+  }
+
+  if (report.value === 'treatmentTransaction') {
+    const rows = reportData.value as TreatmentTransactionRow[] | null
+    const totalFee = (rows ?? []).reduce((sum, row) => sum + Number(row.treatmentFee), 0)
+    const totalGross = (rows ?? []).reduce((sum, row) => sum + Number(row.gross), 0)
+    return ['รวมทั้งหมด', '', '', '', '', formatMoney(totalFee), formatMoney(totalGross)]
+  }
+
+  if (report.value === 'payment') {
+    const total = paymentRows.value.reduce((sum, row) => sum + row.paid, 0)
+    return ['รวมทั้งหมด', '', '', '', formatMoney(total), '100%']
+  }
+
   return null
 })
 
 async function fetchReport() {
-  const request = ++reportRequest
-  const requestedReport = report.value
+  if (isTransactionReport.value || report.value === 'sales' || report.value === 'payment') return
   loading.value = true
   errorMessage.value = ''
   reportData.value = null
-  loadedReport.value = null
   try {
-    const branchCode = filters.branch === 'ทุกสาขา' ? undefined : filters.branch
-    let data: ReportData = null
-    switch (requestedReport) {
+    const branchCode = selectedHeaderBranchCode.value || undefined
+    switch (report.value) {
       case 'revenue':
-        data = await reportApi.revenue(filters.from, filters.to, branchCode)
+        reportData.value = await reportApi.revenue(filters.from, filters.to, branchCode)
         break
       case 'balance':
-        data = await reportApi.balances(filters.from, filters.to, branchCode)
+        reportData.value = await reportApi.balances(filters.from, filters.to, branchCode)
         break
       case 'transfer':
-        data = await courseApi.transferHistory()
+        reportData.value = await courseApi.transferHistory()
         break
       case 'commission':
-        data = await commissionApi.report(filters.from, filters.to)
+        reportData.value = await commissionApi.report(filters.from, filters.to)
+        break
+      case 'salesTransaction':
+        reportData.value = await reportApi.staffSales(filters.from, filters.to, branchCode)
+        break
+      case 'treatmentTransaction':
+        reportData.value = await commissionApi.treatmentReport(filters.from, filters.to)
         break
     }
-    if (request !== reportRequest) return
-    reportData.value = data
-    loadedReport.value = requestedReport
     updateTimestamp()
   } catch (error) {
-    if (request !== reportRequest) return
     reportData.value = null
     errorMessage.value = error instanceof Error ? error.message : 'โหลดรายงานไม่สำเร็จ'
   } finally {
-    if (request === reportRequest) loading.value = false
+    loading.value = false
+  }
+}
+
+function exportReport() {
+  if (!canExport.value || loading.value || errorMessage.value || !supportsExport.value) return
+  try {
+    const csv = buildReportCsv({
+      title: currentReportTitle.value,
+      filters: {
+        สาขา: selectedHeaderBranchCode.value || 'ทั้งหมดที่มีสิทธิ์',
+        ตั้งแต่วันที่: filters.from,
+        ถึงวันที่: filters.to,
+        ประเภทการขาย: filters.saleType,
+        การรักษา: filters.treatment,
+        พนักงาน: filters.staff,
+      },
+      exportedAt: new Intl.DateTimeFormat('th-TH', {
+        dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok',
+      }).format(new Date()),
+      headers: TABLE_HEADERS[report.value],
+      rows: tableRows.value,
+      total: totalRow.value,
+    })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `sabyeguyz-${report.value}-${clinicToday()}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (cause) {
+    errorMessage.value = cause instanceof Error ? cause.message : 'สร้างหรือดาวน์โหลดไฟล์ไม่สำเร็จ'
   }
 }
 
@@ -440,34 +633,65 @@ function isRightAligned(colIndex: number) {
 
 onMounted(async () => {
   try {
-    const [branchList, courseList] = await Promise.all([branchApi.listActive(), courseApi.list()])
+    const [branchList, courseList] = await Promise.all([branchApi.list(), courseApi.list()])
     branches.value = branchList
-    courseOptions.value = courseList.filter((c) => c.active !== false).map((c) => ({ id: c.id, name: c.name }))
-  } catch (error) {
-    branches.value = []
-    courseOptions.value = []
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดตัวกรองรายงานไม่สำเร็จ'
-    return
+    courseOptions.value = courseList.map((c) => ({ id: c.id, name: c.name }))
+  } catch {
+    branches.value = [
+      { code: 'BR', name: 'แบริ่ง' } as Branch,
+      { code: 'R9', name: 'พระราม 9' } as Branch,
+    ]
+    courseOptions.value = [
+      { id: 1, name: 'Manual Therapy' },
+      { id: 2, name: 'Exercise Therapy' },
+    ]
   }
   await fetchReport()
 })
 
-watch([report, () => filters.branch, () => filters.from, () => filters.to], fetchReport)
+watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], fetchReport)
 </script>
 
 <template>
   <div class="reports-page-wrapper">
     <StaffHeader />
 
-    <main class="reports-page-container">
-      <!-- ── Header Section ──────────────────────────────────────────────── -->
+    <SalesPaymentReportView v-if="detailReportMode" :mode="detailReportMode" />
+    <TransactionReportView v-else-if="isTransactionReport" />
+    <main v-else class="reports-page-container">
       <section class="page-title-section">
-        <h1>รายงาน</h1>
-        <p>ตรวจสอบรายได้ คอร์ส ยอดขาย และค่าคอมมิชชั่น</p>
+        <div class="report-title-copy">
+          <h1>{{ currentReportTitle }}</h1>
+          <p>
+            {{
+              report === 'payment'
+                ? 'ตรวจสอบเงินที่รับจริงตามวันที่รับชำระและประเภทบริการ'
+                : ['revenue', 'payment'].includes(report)
+                  ? 'ยอดรับชำระและประเภทบริการตามวันที่รับเงินจริง'
+                  : 'ตรวจสอบรายงานคอร์ส ยอดขาย และค่าคอมมิชชั่น'
+            }}
+          </p>
+        </div>
+        <div class="report-select-group">
+          <label for="report-select">เลือกรายงาน</label>
+          <FilterDropdown
+            id="report-select"
+            v-model="reportSelection"
+            :options="reportOptions"
+            default-value="revenue"
+            default-label="รายรับตามวันที่รับชำระ"
+            label="เลือกรายงาน"
+            hide-default-option
+            :clear-on-reselect="false"
+          />
+        </div>
       </section>
 
-      <!-- ── KPI Summary Box (Only for Revenue Report per Figma) ──────────── -->
-      <section v-if="report === 'revenue' && activeKpis.length" class="kpi-summary-box">
+      <section
+        v-if="['revenue', 'payment'].includes(report) && activeKpis.length"
+        class="kpi-summary-box"
+        :class="{ 'kpi-summary-box--payment': report === 'payment' }"
+      >
         <div v-for="(kpi, idx) in activeKpis" :key="idx" class="kpi-col">
           <span class="kpi-label">{{ kpi.label }}</span>
           <div class="kpi-value-row">
@@ -477,34 +701,34 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
         </div>
       </section>
 
-      <!-- ── Filter Card Section ─────────────────────────────────────────── -->
       <section class="filter-card">
-        <!-- Top bar: Title left, Select dropdown right -->
-        <div class="filter-card-header">
-          <h2>{{ currentReportTitle }}</h2>
-          <div class="report-select-group">
-            <label for="report-select">เลือกรายงาน</label>
+        <div
+          class="filter-card-body"
+          :class="{
+            'filter-card-body--payment': report === 'payment',
+            'filter-card-body--commission': report === 'commission',
+          }"
+        >
+          <div
+            v-if="['salesTransaction', 'treatmentTransaction'].includes(report)"
+            class="field-group"
+          >
+            <label>ประเภทธุรกรรม</label>
             <FilterDropdown
-              id="report-select"
-              v-model="reportSelection"
-              :options="reportOptions"
-              default-value="revenue"
-              default-label="รายงานยอดขาย"
-              label="เลือกรายงาน"
+              v-model="report"
+              :options="[
+                { value: 'salesTransaction', label: 'ยอดขายร้าน' },
+                { value: 'treatmentTransaction', label: 'ค่ามือ' },
+              ]"
+              default-value="salesTransaction"
+              default-label="ยอดขายร้าน"
+              label="ประเภทธุรกรรม"
               hide-default-option
               :clear-on-reselect="false"
             />
           </div>
-        </div>
 
-        <!-- Filter Grid -->
-        <div class="filter-card-body">
-          <!-- ── Row 1 Filters ── -->
-          <div
-            class="filter-grid-row1"
-            :class="{ 'filter-grid-row1--revenue': report === 'revenue' }"
-          >
-            <!-- Balance / Transfer Report Filters -->
+          <div class="filter-grid-row1">
             <template v-if="['balance', 'transfer'].includes(report)">
               <div class="field-group">
                 <label>ผู้ป่วย</label>
@@ -522,38 +746,14 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                   :clear-on-reselect="false"
                 />
               </div>
-
-              <div class="field-group">
-                <label>ตั้งแต่วันที่</label>
-                <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
-              </div>
-
-              <div class="field-group">
-                <label>ถึงวันที่</label>
-                <ThaiDatePicker v-model="filters.to" numeric-month show-calendar-icon />
-              </div>
             </template>
 
-            <!-- Revenue Report Filters -->
-            <template v-else-if="report === 'revenue'">
-              <div class="field-group">
-                <label>สาขา</label>
-                <FilterDropdown
-                  v-model="filters.branch"
-                  :options="branchFilterOptions"
-                  default-value="ทุกสาขา"
-                  default-label="ทุกสาขา"
-                  label="กรองตามสาขา"
-                  :clear-on-reselect="false"
-                />
-              </div>
-
+            <template v-else-if="report === 'payment'">
               <div class="field-group">
                 <label>การรักษา</label>
                 <FilterDropdown
                   v-model="filters.treatment"
                   :options="[
-                    { value: 'Assessment', label: 'Assessment' },
                     { value: 'Manual Therapy', label: 'Manual Therapy' },
                     { value: 'Exercise Therapy', label: 'Exercise Therapy' },
                   ]"
@@ -563,7 +763,6 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                   :clear-on-reselect="false"
                 />
               </div>
-
               <div class="field-group">
                 <label>ประเภทการขาย</label>
                 <FilterDropdown
@@ -580,22 +779,64 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
               </div>
             </template>
 
-            <!-- Commission Report Filters -->
-            <template v-else-if="report === 'commission'">
+            <template v-else-if="report === 'revenue'">
               <div class="field-group">
-                <label>พนักงาน</label>
-                <input v-model="filters.staff" type="text" placeholder="ค้นหาชื่อพนักงาน" />
+                <label>การรักษา</label>
+                <FilterDropdown
+                  v-model="filters.treatment"
+                  :options="[
+                    { value: 'Manual Therapy', label: 'Manual Therapy' },
+                    { value: 'Exercise Therapy', label: 'Exercise Therapy' },
+                  ]"
+                  default-value="ทั้งหมด"
+                  default-label="ทั้งหมด"
+                  label="กรองตามการรักษา"
+                  :clear-on-reselect="false"
+                />
               </div>
 
               <div class="field-group">
-                <label>สาขา</label>
+                <label>ประเภทการขาย</label>
                 <FilterDropdown
-                  v-model="filters.branch"
-                  :options="branchFilterOptions"
-                  default-value="ทุกสาขา"
-                  default-label="ทุกสาขา"
-                  label="กรองตามสาขา"
+                  v-model="filters.saleType"
+                  :options="[
+                    { value: 'Assessment', label: 'Assessment' },
+                    { value: 'Course Sales', label: 'Course Sales' },
+                    { value: 'Single Visit Sales', label: 'Single Visit Sales' },
+                  ]"
+                  default-value="ทั้งหมด"
+                  default-label="ทั้งหมด"
+                  label="กรองตามประเภทการขาย"
                   :clear-on-reselect="false"
+                />
+              </div>
+
+              <div class="field-group">
+                <label>ตั้งแต่วันที่</label>
+                <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
+              </div>
+
+              <div class="field-group">
+                <label>ถึงวันที่</label>
+                <ThaiDatePicker v-model="filters.to" numeric-month show-calendar-icon />
+              </div>
+            </template>
+
+            <template
+              v-else-if="
+                ['commission', 'salesTransaction', 'treatmentTransaction'].includes(report)
+              "
+            >
+              <div class="field-group">
+                <label>{{ report === 'treatmentTransaction' ? 'ค้นหารายการ' : 'พนักงาน' }}</label>
+                <input
+                  v-model="filters.staff"
+                  type="text"
+                  :placeholder="
+                    report === 'treatmentTransaction'
+                      ? 'ค้นหาผู้ป่วย นักกายภาพ หรือคอร์ส'
+                      : 'ค้นหาชื่อพนักงาน'
+                  "
                 />
               </div>
 
@@ -611,25 +852,7 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
             </template>
           </div>
 
-          <!-- ── Row 2 Filters ── -->
           <div class="filter-grid-row2">
-            <!-- Branch for Balance / Transfer -->
-            <div
-              v-if="['balance', 'transfer'].includes(report)"
-              class="field-group field-group--short"
-            >
-              <label>สาขา</label>
-              <FilterDropdown
-                v-model="filters.branch"
-                :options="branchFilterOptions"
-                default-value="ทุกสาขา"
-                default-label="ทุกสาขา"
-                label="กรองตามสาขา"
-                :clear-on-reselect="false"
-              />
-            </div>
-
-            <!-- Commission Type Filter for Commission Report -->
             <div v-if="report === 'commission'" class="field-group field-group--short">
               <label>ประเภทค่าคอมมิชชั่น</label>
               <FilterDropdown
@@ -645,8 +868,7 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
               />
             </div>
 
-            <!-- Date Pickers for Revenue Report -->
-            <template v-if="report === 'revenue'">
+            <template v-if="report === 'payment'">
               <div class="field-group">
                 <label>ตั้งแต่วันที่</label>
                 <ThaiDatePicker v-model="filters.from" numeric-month show-calendar-icon />
@@ -661,12 +883,18 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
         </div>
       </section>
 
-      <!-- ── Data Table Section ─────────────────────────────────────────── -->
       <section class="table-card">
         <p v-if="errorMessage" class="report-error" role="alert">{{ errorMessage }}</p>
         <p v-else-if="loading" class="report-loading">กำลังโหลดรายงาน...</p>
+        <button
+          v-if="canExport && supportsExport"
+          type="button"
+          class="report-export-button"
+          :disabled="loading || Boolean(errorMessage) || tableRows.length === 0"
+          @click="exportReport"
+        >ส่งออกรายงาน CSV</button>
         <div class="table-scroll-wrapper">
-          <table class="report-figma-table">
+          <table :class="['report-figma-table', `report-figma-table--${report}`]">
             <thead>
               <tr>
                 <th
@@ -689,7 +917,6 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
                 </td>
               </tr>
 
-              <!-- Total Row -->
               <tr v-if="totalRow" class="total-row">
                 <td
                   v-for="(cell, cIdx) in totalRow"
@@ -709,13 +936,31 @@ watch([report, () => filters.branch, () => filters.from, () => filters.to], fetc
           </table>
         </div>
 
-        <!-- ── Pagination Bar & Last Updated ─────────────────────────────── -->
         <div class="table-card-footer">
           <nav v-if="tableRows.length > 0" class="report-pagination" aria-label="เปลี่ยนหน้ารายการ">
             <button type="button" class="btn-prev" :disabled="page === 1" @click="page -= 1">
               ← ก่อนหน้า
             </button>
-            <span class="pagination-info">หน้า {{ page }} จาก {{ totalPages }}</span>
+            <div class="pagination-center">
+              <span class="pagination-info">หน้า {{ page }} จาก {{ totalPages }}</span>
+              <div class="pagination-numbers">
+                <button
+                  v-for="number in Array.from(
+                    { length: Math.min(5, totalPages) },
+                    (_, index) => Math.max(1, Math.min(page - 2, totalPages - 4)) + index,
+                  )"
+                  :key="number"
+                  type="button"
+                  class="pagination-number"
+                  :class="{ active: page === number }"
+                  :aria-current="page === number ? 'page' : undefined"
+                  :aria-label="`หน้า ${number}`"
+                  @click="page = number"
+                >
+                  {{ number }}
+                </button>
+              </div>
+            </div>
             <button
               type="button"
               class="btn-next"

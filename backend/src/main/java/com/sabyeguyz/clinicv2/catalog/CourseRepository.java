@@ -3,6 +3,7 @@ package com.sabyeguyz.clinicv2.catalog;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
 import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.enums.RefundStatus;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -40,7 +41,30 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("select c.id from Course c where c.receipt.id = :receiptId order by c.id")
     List<Long> findIdsByReceiptId(@Param("receiptId") Long receiptId);
 
+    /**
+     * Returns courses linked through their original purchase receipt
+     * or a subsequent existing-course collection item.
+     * This identifies relationships only, not refund eligibility.
+     */
+    @Query("""
+    select c.id
+    from Course c
+    where c.receipt.id = :receiptId
+       or exists (
+           select p.course.id
+           from ReceiptCoursePayment p
+           where p.course.id = c.id
+             and p.receipt.id = :receiptId
+       )
+    order by c.id asc
+    """)
+    List<Long> findLinkedCourseIdsByReceiptId(
+            @Param("receiptId") Long receiptId
+    );
+
     long countByReceiptId(Long receiptId);
+
+    List<Course> findByReceiptIdOrderByCourseSequenceAsc(Long receiptId);
 
     Optional<Course> findBySaleTransactionId(Long saleTransactionId);
 
@@ -50,6 +74,17 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     @Query("select c.id from Course c where c.sellerStaff.id = :staffId and c.saleMonth = :saleMonth order by c.id")
     List<Long> findIdsBySellerStaffIdAndSaleMonth(@Param("staffId") Long staffId, @Param("saleMonth") String saleMonth);
+
+    /** Finds course IDs to lock for one seller, branch and sale month. */
+    @Query("select c.id from Course c "
+            + "where c.sellerStaff.id = :staffId "
+            + "and c.saleMonth = :saleMonth "
+            + "and c.branch.id = :branchId "
+            + "order by c.id")
+    List<Long> findIdsBySellerStaffIdAndSaleMonthAndBranchId(
+            @Param("staffId") Long staffId,
+            @Param("saleMonth") String saleMonth,
+            @Param("branchId") Long branchId);
 
     /**
      * Commissionable sales credited to the seller in a sale_month (yyyy-mm), for the Commission Tier: only course
@@ -84,6 +119,65 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
                           @Param("refundStatus") RefundStatus refundStatus, @Param("voided") ReceiptStatus voided,
                           @Param("cancelled") CourseStatus cancelled);
 
+    /** Sums valid course sales for one seller, branch and sale month. */
+    default BigDecimal sumCreditedSalesByStaffAndSaleMonthAndBranchId(
+            Long staffId, String saleMonth, Long branchId) {
+        return sumCreditedSalesForBranch(
+                staffId, saleMonth, branchId,
+                TransactionType.CoursePurchase,
+                ReceiptStatus.Voided, CourseStatus.Cancelled);
+    }
+
+    @Query("select coalesce(sum(c.coursePrice), 0) from Course c "
+            + "where c.sellerStaff.id = :staffId "
+            + "and c.saleMonth = :saleMonth "
+            + "and c.branch.id = :branchId "
+            + "and c.saleTransaction.salespersonStaff.id = :staffId "
+            + "and c.saleTransaction.branch.id = :branchId "
+            + "and c.saleTransaction.transactionStatus = true "
+            + "and c.saleTransaction.transactionType = :transactionType "
+            + "and c.receipt.receiptStatus <> :voided "
+            + "and c.courseStatus <> :cancelled")
+    BigDecimal sumCreditedSalesForBranch(
+            @Param("staffId") Long staffId,
+            @Param("saleMonth") String saleMonth,
+            @Param("branchId") Long branchId,
+            @Param("transactionType") TransactionType transactionType,
+            @Param("voided") ReceiptStatus voided,
+            @Param("cancelled") CourseStatus cancelled);
+
+    /** Sums completed refunds for one seller, branch and sale month. */
+    default BigDecimal sumCompletedRefundsByStaffAndSaleMonthAndBranchId(
+            Long staffId, String saleMonth, Long branchId) {
+        return sumRefundsForBranch(
+                staffId, saleMonth, branchId,
+                TransactionType.CoursePurchase,
+                RefundStatus.Completed,
+                ReceiptStatus.Voided,
+                CourseStatus.Cancelled);
+    }
+
+    @Query("select coalesce(sum(i.refundAmount), 0) "
+            + "from CourseRefundItem i join i.course c "
+            + "where c.sellerStaff.id = :staffId "
+            + "and c.saleMonth = :saleMonth "
+            + "and c.branch.id = :branchId "
+            + "and c.saleTransaction.salespersonStaff.id = :staffId "
+            + "and c.saleTransaction.branch.id = :branchId "
+            + "and i.refund.refundStatus = :refundStatus "
+            + "and c.saleTransaction.transactionStatus = true "
+            + "and c.saleTransaction.transactionType = :transactionType "
+            + "and c.receipt.receiptStatus <> :voided "
+            + "and c.courseStatus <> :cancelled")
+    BigDecimal sumRefundsForBranch(
+            @Param("staffId") Long staffId,
+            @Param("saleMonth") String saleMonth,
+            @Param("branchId") Long branchId,
+            @Param("transactionType") TransactionType transactionType,
+            @Param("refundStatus") RefundStatus refundStatus,
+            @Param("voided") ReceiptStatus voided,
+            @Param("cancelled") CourseStatus cancelled);
+
     boolean existsByCommissionSchemeId(Long commissionSchemeId);
 
     /** Whether a course of the scheme was sold after the given date (the scheme may not end before it). */
@@ -110,6 +204,31 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     List<Course> findValidSoldBetween(@Param("from") LocalDate from, @Param("to") LocalDate to,
                                       @Param("voided") ReceiptStatus voided, @Param("cancelled") CourseStatus cancelled);
 
+    /** Finds sellers with valid course sales in the selected branch and month. */
+    default List<Long> findDistinctCreditedStaffIdsBySaleMonthAndBranchId(
+            String saleMonth, Long branchId) {
+        return findDistinctCreditedStaffIdsForBranch(
+                saleMonth, branchId,
+                TransactionType.CoursePurchase,
+                ReceiptStatus.Voided, CourseStatus.Cancelled);
+    }
+
+    @Query("select distinct c.sellerStaff.id from Course c "
+            + "where c.saleMonth = :saleMonth "
+            + "and c.branch.id = :branchId "
+            + "and c.saleTransaction.salespersonStaff.id = c.sellerStaff.id "
+            + "and c.saleTransaction.branch.id = :branchId "
+            + "and c.saleTransaction.transactionStatus = true "
+            + "and c.saleTransaction.transactionType = :transactionType "
+            + "and c.receipt.receiptStatus <> :voided "
+            + "and c.courseStatus <> :cancelled")
+    List<Long> findDistinctCreditedStaffIdsForBranch(
+            @Param("saleMonth") String saleMonth,
+            @Param("branchId") Long branchId,
+            @Param("transactionType") TransactionType transactionType,
+            @Param("voided") ReceiptStatus voided,
+            @Param("cancelled") CourseStatus cancelled);
+
     default List<Long> findDistinctCreditedStaffIdsBySaleMonth(String saleMonth) {
         return findDistinctCreditedStaffIds(saleMonth, ReceiptStatus.Voided, CourseStatus.Cancelled);
     }
@@ -119,4 +238,11 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
             + "and c.receipt.receiptStatus <> :voided and c.courseStatus <> :cancelled")
     List<Long> findDistinctCreditedStaffIds(@Param("saleMonth") String saleMonth,
                                             @Param("voided") ReceiptStatus voided, @Param("cancelled") CourseStatus cancelled);
+
+    @Query("select count(u) > 0 from CourseVisitUsage u "
+            + "where u.course.id = :courseId "
+            + "and u.visit.id = :visitId")
+    boolean existsUsageForCourseAndVisit(
+            @Param("courseId") Long courseId,
+            @Param("visitId") Long visitId);
 }

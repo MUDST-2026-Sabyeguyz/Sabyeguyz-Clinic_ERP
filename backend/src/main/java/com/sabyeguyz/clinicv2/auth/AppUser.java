@@ -4,6 +4,7 @@ import com.sabyeguyz.clinicv2.staff.Staff;
 import jakarta.persistence.*;
 import java.time.Instant;
 
+/** บัญชีผู้ใช้ที่เชื่อมกับพนักงานและเก็บเวอร์ชันสำหรับเพิกถอน token */
 @Entity
 @Table(name = "app_user")
 public class AppUser {
@@ -15,7 +16,7 @@ public class AppUser {
     @Column(length = 50, nullable = false, unique = true)
     private String username;
 
-    @Column(length = 254)
+    @Column(length = 254, nullable = false)
     private String email;
 
     @Column(name = "password_hash", length = 255, nullable = false)
@@ -27,6 +28,10 @@ public class AppUser {
 
     @Column(name = "user_status", nullable = false)
     private boolean userStatus = true;
+
+    // เพิ่มค่าเมื่อเปลี่ยน role/บัญชี เพื่อทำให้ token เดิมใช้ต่อไม่ได้
+    @Column(name = "auth_version", nullable = false)
+    private int authVersion;
 
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
@@ -56,6 +61,8 @@ public class AppUser {
     public void setStaff(Staff staff) { this.staff = staff; }
     public boolean isUserStatus() { return userStatus; }
     public void setUserStatus(boolean userStatus) { this.userStatus = userStatus; }
+    public int getAuthVersion() { return authVersion; }
+    public void setAuthVersion(int authVersion) { this.authVersion = authVersion; }
     public Instant getLastLoginAt() { return lastLoginAt; }
     public void setLastLoginAt(Instant lastLoginAt) { this.lastLoginAt = lastLoginAt; }
     public Instant getUserCreateAt() { return userCreateAt; }

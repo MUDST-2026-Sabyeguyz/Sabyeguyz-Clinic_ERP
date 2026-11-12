@@ -12,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/** ข้อมูลผู้ป่วยที่บันทึกในฐานข้อมูล รวมข้อมูลสุขภาพและผู้ติดต่อฉุกเฉิน */
 @Entity
 @Table(name = "patient")
 public class Patient {
@@ -20,7 +21,7 @@ public class Patient {
     @Column(name = "patient_id")
     private Long id;
 
-    /** Format YYBBMMNNNN. */
+    /** รูปแบบ HN: YYBBMMNNNN */
     @Column(name = "patient_hn", length = 10, unique = true)
     private String patientHn;
 
@@ -29,10 +30,7 @@ public class Patient {
     @Column(name = "customer_type", nullable = false, columnDefinition = "customer_type_enum")
     private CustomerType customerType;
 
-    /**
-     * นาย, นางสาว, นาง, เด็กชาย, เด็กหญิง — a String since the values are not valid Java identifiers;
-     * the column is a PostgreSQL enum, so writes cast the parameter to it.
-     */
+    /** เก็บคำนำหน้าตาม PostgreSQL enum */
     @ColumnTransformer(write = "cast(? as title_enum)")
     @Column(length = 20, nullable = false)
     private String title;
@@ -89,6 +87,28 @@ public class Patient {
 
     @Column(length = 255)
     private String address;
+
+    // ข้อมูลสุขภาพและความยินยอมที่ต้องคงอยู่ในโปรไฟล์ผู้ป่วย
+    @Column(name = "drug_allergy", nullable = false)
+    private boolean drugAllergy;
+
+    @Column(name = "food_allergy", nullable = false)
+    private boolean foodAllergy;
+
+    @Column(name = "chronic_disease", length = 500)
+    private String chronicDisease;
+
+    @Column(name = "emergency_contact_name", length = 160)
+    private String emergencyContactName;
+
+    @Column(name = "emergency_contact_relationship", length = 80)
+    private String emergencyContactRelationship;
+
+    @Column(name = "emergency_contact_phone", length = 20)
+    private String emergencyContactPhone;
+
+    @Column(name = "privacy_consent", nullable = false)
+    private boolean privacyConsent;
 
     @Column(name = "registered_by", nullable = false, updatable = false)
     private Long registeredBy;
@@ -156,6 +176,20 @@ public class Patient {
     public void setNationality(String nationality) { this.nationality = nationality; }
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
+    public boolean isDrugAllergy() { return drugAllergy; }
+    public void setDrugAllergy(boolean drugAllergy) { this.drugAllergy = drugAllergy; }
+    public boolean isFoodAllergy() { return foodAllergy; }
+    public void setFoodAllergy(boolean foodAllergy) { this.foodAllergy = foodAllergy; }
+    public String getChronicDisease() { return chronicDisease; }
+    public void setChronicDisease(String chronicDisease) { this.chronicDisease = chronicDisease; }
+    public String getEmergencyContactName() { return emergencyContactName; }
+    public void setEmergencyContactName(String emergencyContactName) { this.emergencyContactName = emergencyContactName; }
+    public String getEmergencyContactRelationship() { return emergencyContactRelationship; }
+    public void setEmergencyContactRelationship(String emergencyContactRelationship) { this.emergencyContactRelationship = emergencyContactRelationship; }
+    public String getEmergencyContactPhone() { return emergencyContactPhone; }
+    public void setEmergencyContactPhone(String emergencyContactPhone) { this.emergencyContactPhone = emergencyContactPhone; }
+    public boolean isPrivacyConsent() { return privacyConsent; }
+    public void setPrivacyConsent(boolean privacyConsent) { this.privacyConsent = privacyConsent; }
     public Long getRegisteredBy() { return registeredBy; }
     public void setRegisteredBy(Long registeredBy) { this.registeredBy = registeredBy; }
     public Instant getPatientUpdateAt() { return patientUpdateAt; }

@@ -1,15 +1,14 @@
 import { patientApi, type Patient } from './client'
 
+// ข้อมูลลงทะเบียนผู้ป่วย รวมประวัติสุขภาพ ผู้ติดต่อฉุกเฉิน และความยินยอม
 export interface PatientRegistrationPayload {
   branchCode: string
-  username: string
-  password: string
   email: string
   title: string
   fullName: string
   firstName?: string
-  lastName?: string
   middleName?: string | null
+  lastName?: string
   birthDate: string
   gender: string
   phone: string
@@ -29,6 +28,7 @@ export interface PatientRegistrationPayload {
   bloodGroup?: string
   nationality?: string
   customerSource?: string
+  insuranceType?: string
   insuranceCompany?: string
   salesChannel?: string
   paymentType?: string

@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -50,6 +51,8 @@ public class CourseVisitUsageService {
     private final TransactionCancellationService cancellations;
     private final CourseCommissionService courseCommission;
     private final CourseUsagePrintService prints;
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     public CourseVisitUsageService(CourseVisitUsageRepository usages, CourseLedgerRepository ledger,
                                     CourseRepository courses, CommissionAllocationLedgerRepository allocationLedger,
@@ -79,7 +82,18 @@ public class CourseVisitUsageService {
      */
     @Transactional
     public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
-                                 LocalDate visitDate, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+                                LocalDate visitDate, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+        return use(
+                course, visit, usingPatient, treatingStaff,
+                visitDate == null ? null : visitDate.atStartOfDay(),
+                treatment, actorId);
+    }
+
+    @Transactional
+    public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
+                                LocalDateTime usedAt, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+        require(usedAt != null, "ต้องระบุวันเวลาที่ใช้บริการ");
+        LocalDate visitDate = usedAt.toLocalDate();
         require(course != null, "ต้องระบุคอร์ส");
         require(course.getCourseStatus() == com.sabyeguyz.clinicv2.enums.CourseStatus.Active,
                 "คอร์สนี้ไม่อยู่ในสถานะพร้อมใช้งาน");
@@ -129,7 +143,7 @@ public class CourseVisitUsageService {
         if (visit.getTreatingStaff() == null) {
             visit.setTreatingStaff(treatingStaff);
         }
-        usage.setVisitDate(visitDate.atStartOfDay());
+        usage.setVisitDate(usedAt);
         usage.setVisitQty(1);
         usage.setUsageStatus(UsageStatus.Completed);
         placeInCourse(usage, course);
@@ -227,9 +241,20 @@ public class CourseVisitUsageService {
      */
     @Transactional
     public CourseVisitUsage reverse(CourseVisitUsage usage, Permission permission, String reason, Long actorId) {
+        return reverse(usage, permission, com.sabyeguyz.clinicv2.enums.ReasonCode.Other, reason, actorId);
+    }
+
+    @Transactional
+    public CourseVisitUsage reverse(CourseVisitUsage usage, Permission permission,
+                                    com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode, String reason, Long actorId) {
         require(usage != null, "ต้องระบุรายการใช้สิทธิ์คอร์ส");
+        if (entityManager != null) {
+            // Serialize course balances, then refresh any snapshot loaded by the controller before it waited.
+            entityManager.refresh(usage.getCourse(), jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            entityManager.refresh(usage, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        }
         require(usage.getUsageStatus() == UsageStatus.Completed, "รายการใช้สิทธิ์นี้ถูกย้อนไปแล้ว");
-        cancellations.recordUsageReversal(usage, permission, reason, actorId);
+        cancellations.recordUsageReversal(usage, permission, reasonCode, reason, actorId);
         Course course = usage.getCourse();
         Patient patient = usage.getPatient();
 
@@ -240,10 +265,7 @@ public class CourseVisitUsageService {
         ledger.save(CourseLedgerEntries.reversalOf(treatment, balance, reason.trim(), actorId));
 
         // A session whose Owner commission is still unknown has no allocation yet, so there is nothing to reverse.
-        courseCommission.currentAllocation(usage).ifPresent(original -> {
-            CourseCommissionService.requireNotPaid(original);
-            allocationLedger.save(courseCommission.reversalOf(original, reason, actorId));
-        });
+        courseCommission.reverseUsageWithAdjustments(usage, reason, actorId);
 
         usage.setUsageStatus(UsageStatus.Reversed);
         usage.setUsageUpdateAt(Instant.now());

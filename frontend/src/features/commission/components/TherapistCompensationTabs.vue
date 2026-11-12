@@ -15,7 +15,10 @@ const route = useRoute()
       v-for="tab in THERAPIST_COMPENSATION_TABS"
       :key="tab.key"
       :class="{ active: activeTab === tab.key }"
-      :to="{ name: 'therapist-compensation', query: { ...route.query, tab: tab.key } }"
+      :to="{
+        name: 'therapist-compensation',
+        query: { ...route.query, tab: tab.key },
+      }"
     >
       {{ tab.label }}
     </RouterLink>

@@ -1,7 +1,7 @@
 .patient-history-page {
   min-height: 100vh;
   background: #faf6ef;
-  color: #25372e;
+  color: var(--color-ink);
 }
 .patient-history-page main {
   width: min(1200px, calc(100% - 48px));
@@ -34,7 +34,7 @@
   border: 0;
   border-radius: 0;
   background: #fff;
-  color: #25372e;
+  color: var(--color-ink);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -64,7 +64,7 @@
   border: 1px solid #d1dbd6;
   border-radius: 10px;
   background: #fff;
-  color: #25372e;
+  color: var(--color-ink);
   font: inherit;
 }
 .history-filters .filter-dropdown {
@@ -156,8 +156,12 @@
 .history-status.course-status {
   min-width: 0;
   background: #dbeafb;
-  color: #25372e;
+  color: var(--color-ink);
   font-weight: 500;
+}
+.history-status.course-status.is-cancelled {
+  background: #fde8e8;
+  color: #a52834;
 }
 .course-history-table th:nth-child(1) {
   width: 200px;
@@ -305,10 +309,9 @@
   white-space: nowrap;
 }
 .course-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  display: table-cell;
+  text-align: center;
+  vertical-align: middle;
   overflow: hidden;
 }
 .history-actions.course-actions > * + * {
@@ -316,6 +319,91 @@
 }
 .history-actions button + button {
   margin-left: 8px;
+}
+
+/* An opened course menu must expand its row instead of being clipped by the fixed table cell. */
+.history-table-wrap:has(.course-more-actions[open]) {
+  overflow: visible;
+}
+.history-table-wrap .course-history-table td:has(.course-more-actions[open]) {
+  height: auto;
+  overflow: visible;
+  vertical-align: top;
+  white-space: normal;
+}
+.course-actions:has(.course-more-actions[open]) {
+  align-items: flex-start;
+  overflow: visible;
+}
+.course-more-actions[open] {
+  position: relative;
+  z-index: 1;
+}
+.course-more-actions {
+  position: relative;
+  display: inline-block;
+  min-width: 156px;
+}
+.course-more-actions summary {
+  display: flex;
+  min-height: 40px;
+  padding: 8px 10px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  border: 1px solid #b7cecc;
+  border-radius: 8px;
+  color: var(--color-primary-strong);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.course-more-actions summary::marker {
+  content: '';
+}
+.course-more-actions summary::after {
+  margin-left: 8px;
+  content: '⌄';
+  color: #176c68;
+  font-size: 15px;
+  line-height: 1;
+}
+.course-more-actions[open] summary {
+  border-color: #176c68;
+  box-shadow: 0 0 0 3px #e1f0ec;
+}
+.course-more-actions[open] summary::after {
+  transform: rotate(180deg);
+}
+.course-more-actions-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  min-width: 188px;
+  padding: 6px;
+  border: 1px solid #d7e6e1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(24, 66, 61, 0.16);
+}
+.course-more-actions-menu .history-row-action {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 10px;
+  align-items: center;
+  border: 0;
+  border-radius: 7px;
+  color: #176c68;
+  background: transparent;
+  text-align: left;
+}
+.course-more-actions-menu .history-row-action:hover {
+  background: #eaf5f2;
 }
 .history-actions > * + * {
   margin-left: 8px;
@@ -392,12 +480,13 @@
 }
 .receipt-page-main {
   width: min(884px, calc(100% - 48px)) !important;
+  margin-inline: auto;
 }
 .receipt-document {
   min-height: 1080px;
   box-sizing: border-box;
   padding: 38px 40px 50px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   background: #fff;
   box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
 }
@@ -406,7 +495,7 @@
   justify-content: space-between;
   gap: 30px;
   padding-bottom: 18px;
-  border-bottom: 1px solid #25372e;
+  border-bottom: 1px solid var(--color-ink);
 }
 .receipt-heading h1 {
   margin: 0 0 12px;
@@ -423,7 +512,7 @@
 }
 .receipt-number h2 {
   margin: 8px 0 6px;
-  color: #1e807c;
+  color: var(--color-primary);
   font-size: 26px;
 }
 .receipt-customer {
@@ -445,7 +534,7 @@
   height: 34px;
   padding: 0 12px !important;
   background: #2fa4a0;
-  color: #25372e;
+  color: var(--color-ink);
   text-align: left;
 }
 .receipt-items th:first-child {
@@ -509,7 +598,7 @@
 }
 .receipt-actions button:last-child,
 .print-confirm-modal footer button:last-child {
-  background: #1e807c;
+  background: var(--color-primary);
   color: #fff;
 }
 .print-confirm-modal {
@@ -569,7 +658,7 @@
 .print-result-modal footer button:last-child {
   padding-inline: 22px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .receipt-page-main .printable-receipt {
   position: relative;
@@ -578,7 +667,7 @@
   box-sizing: border-box;
   margin: 0 auto;
   padding: 34px 36px 24px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   background: #fff;
   box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
 }
@@ -588,7 +677,7 @@
   gap: 24px;
   min-height: 140px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #25372e;
+  border-bottom: 1px solid var(--color-ink);
 }
 .receipt-page-main .printable-receipt h1,
 .receipt-page-main .printable-receipt h2,
@@ -617,7 +706,7 @@
 }
 .receipt-page-main .receipt-document h2 {
   margin: 0;
-  color: #1e807c;
+  color: var(--color-primary);
   font-size: 26px;
 }
 .receipt-page-main .receipt-customer {
@@ -628,7 +717,7 @@
 .receipt-page-main .printable-receipt table {
   width: 100%;
   border-collapse: collapse;
-  border-bottom: 1px solid #25372e;
+  border-bottom: 1px solid var(--color-ink);
   table-layout: auto;
 }
 .receipt-page-main .printable-receipt th,
@@ -638,7 +727,7 @@
   text-align: left;
 }
 .receipt-page-main .printable-receipt th {
-  color: #25372e;
+  color: var(--color-ink);
   background: #2fa4a0;
 }
 .receipt-page-main .printable-receipt tbody tr {
@@ -701,7 +790,7 @@
   position: absolute;
   right: 36px;
   bottom: 20px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 13px;
 }
 .receipt-page-main .receipt-print-actions {
@@ -717,7 +806,7 @@
   padding: 0 18px;
   border: 0;
   border-radius: 10px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #f1f4f1;
   font: inherit;
   font-size: 15px;
@@ -726,7 +815,7 @@
 }
 .receipt-page-main .receipt-print-actions button:last-child {
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 @media (max-width: 900px) {
   .patient-history-page main {

@@ -11,7 +11,7 @@
 - ต้องมีอินเทอร์เน็ตสำหรับดาวน์โหลด dependencies/images ครั้งแรก แนะนำให้ Docker มี RAM 6–8 GB เมื่อเปิด Jenkins/Compose พร้อมกัน
 
 ```powershell
-git clone --branch develop --single-branch https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
+git clone --branch codex/local-kubernetes https://github.com/MUDST-2026-Sabyeguyz/Sabyeguyz-Clinic_ERP.git
 cd Sabyeguyz-Clinic_ERP
 kubectl config get-contexts
 kubectl --context docker-desktop get nodes

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AppUserService {
+    public static final String INVALID_CREDENTIALS = "ชื่อผู้ใช้ อีเมล หรือรหัสผ่านไม่ถูกต้อง";
     private static final Pattern EMAIL_FORMAT = Pattern.compile("^[^@.\\s]+(\\.[^@.\\s]+)*@[^@.\\s]+(\\.[^@.\\s]+)+$");
     private final AppUserRepository users;
     private final RoleRepository roles;
@@ -32,12 +33,10 @@ public class AppUserService {
     }
 
     @Transactional
-    public AppUser register(String username, String rawPassword, Staff staff, Long actorId) {
-        return register(username, null, rawPassword, staff, actorId);
-    }
-
-    @Transactional
     public AppUser register(String username, String email, String rawPassword, Staff staff, Long actorId) {
+        if (staff != null && staff.getTerminationDate() != null) {
+            throw new IllegalArgumentException("ไม่สามารถสร้างบัญชีให้พนักงานที่มีวันลาออกแล้ว");
+        }
         String normalized = requireText(username, "username");
         if (normalized.contains("@")) throw new IllegalArgumentException("ชื่อผู้ใช้ห้ามมี @");
         if (users.findByUsername(normalized).isPresent()) {
@@ -47,8 +46,8 @@ public class AppUserService {
         if (normalizedEmail != null && users.findByEmailIgnoreCase(normalizedEmail).isPresent()) {
             throw new IllegalArgumentException("อีเมลนี้มีอยู่แล้ว");
         }
-        if (rawPassword == null || rawPassword.length() < 8) {
-            throw new IllegalArgumentException("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+        if (rawPassword == null || rawPassword.length() < 12 || rawPassword.length() > 100) {
+            throw new IllegalArgumentException("รหัสผ่านต้องมีความยาว 12-100 ตัวอักษร");
         }
         AppUser user = new AppUser();
         user.setUsername(normalized);
@@ -67,9 +66,9 @@ public class AppUserService {
     public AppUser login(String username, String rawPassword) {
         String login = requireText(username, "username");
         AppUser user = (login.contains("@") ? users.findByEmailIgnoreCase(login) : users.findByUsername(login))
-                .orElseThrow(() -> new IllegalArgumentException("ชื่อผู้ใช้ อีเมล หรือรหัสผ่านไม่ถูกต้อง"));
+                .orElseThrow(() -> new IllegalArgumentException(INVALID_CREDENTIALS));
         if (!user.isUserStatus() || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            throw new IllegalArgumentException("ชื่อผู้ใช้ อีเมล หรือรหัสผ่านไม่ถูกต้อง");
+            throw new IllegalArgumentException(INVALID_CREDENTIALS);
         }
         // staff of a closed branch cannot work at all until it is opened again; a Manager still gets in to open it
         com.sabyeguyz.clinicv2.branch.Branch home = user.getStaff() == null ? null : user.getStaff().getBranch();
@@ -79,6 +78,26 @@ public class AppUserService {
             throw new IllegalArgumentException("สาขา " + home.getBranchName() + " ปิดใช้งาน ไม่สามารถเข้าสู่ระบบได้");
         }
         return user;
+    }
+
+    /** A user changes their own password; every token issued before is invalidated through authVersion. */
+    @Transactional
+    public AppUser changeOwnPassword(Long userId, String currentPassword, String newPassword) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        if (currentPassword == null || !passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new IllegalArgumentException("รหัสผ่านปัจจุบันไม่ถูกต้อง");
+        }
+        if (newPassword == null || newPassword.length() < 12 || newPassword.length() > 100) {
+            throw new IllegalArgumentException("รหัสผ่านใหม่ต้องมีความยาว 12-100 ตัวอักษร");
+        }
+        if (newPassword.equals(currentPassword)) {
+            throw new IllegalArgumentException("รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setAuthVersion(user.getAuthVersion() + 1);
+        user.setUserUpdateAt(Instant.now());
+        user.setUserUpdateBy(userId);
+        return users.save(user);
     }
 
     @Transactional
@@ -99,12 +118,17 @@ public class AppUserService {
             userRoles.deleteAll(userRoles.findByUserId(userId));
             userRoles.flush();
             userRoles.save(new UserRole(user, role));
+            user.setAuthVersion(user.getAuthVersion() + 1);
+            users.save(user);
         }
     }
 
     @Transactional
     public void revokeRole(Long userId, Long roleId) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
         userRoles.deleteById(new UserRoleId(userId, roleId));
+        user.setAuthVersion(user.getAuthVersion() + 1);
+        users.save(user);
     }
 
     /** Idempotent: granting Branch access the user already has is a no-op. */
@@ -128,13 +152,21 @@ public class AppUserService {
     public AppUser deactivate(Long userId) {
         AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
         user.setUserStatus(false);
+        user.setAuthVersion(user.getAuthVersion() + 1);
         return users.save(user);
     }
 
     @Transactional
     public AppUser activate(Long userId) {
-        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        AppUser user = users.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
+        Staff staff = user.getStaff();
+        if (staff != null && staff.getTerminationDate() != null) {
+            throw new IllegalArgumentException(
+                    "ไม่สามารถเปิดบัญชีของพนักงานที่มีวันลาออกแล้ว");
+        }
         user.setUserStatus(true);
+        user.setAuthVersion(user.getAuthVersion() + 1);
         return users.save(user);
     }
 
@@ -158,11 +190,12 @@ public class AppUserService {
         }
         user.setEmail(normalizedEmail);
         if (rawPassword != null && !rawPassword.isBlank()) {
-            if (rawPassword.length() < 8) {
-                throw new IllegalArgumentException("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+            if (rawPassword.length() < 12 || rawPassword.length() > 100) {
+                throw new IllegalArgumentException("รหัสผ่านต้องมีความยาว 12-100 ตัวอักษร");
             }
             user.setPasswordHash(passwordEncoder.encode(rawPassword));
         }
+        user.setAuthVersion(user.getAuthVersion() + 1);
         user.setUserUpdateAt(Instant.now());
         user.setUserUpdateBy(actorId);
         return users.save(user);
@@ -176,9 +209,9 @@ public class AppUserService {
     }
 
     private static String normalizeEmail(String email) {
-        if (email == null || email.isBlank()) return null;
-        String normalized = email.trim();
-        if (normalized.length() > 254 || !EMAIL_FORMAT.matcher(normalized).matches()) {
+        String normalized = requireText(email, "email");
+        if (normalized.length() > 254
+                || !EMAIL_FORMAT.matcher(normalized).matches()) {
             throw new IllegalArgumentException("รูปแบบอีเมลไม่ถูกต้อง");
         }
         return normalized;
