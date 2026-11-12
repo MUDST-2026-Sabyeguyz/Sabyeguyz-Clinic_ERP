@@ -4,15 +4,21 @@ package com.sabyeguyz.clinicv2.calendar;
 public class CalendarApiException extends RuntimeException {
     private final int status;
 
-    public CalendarApiException(int status, String message) {
+    public CalendarApiException(
+            int status,
+            String message) {
         super(message);
         this.status = status;
     }
 
-    public CalendarApiException(String message, Throwable cause) {
+    public CalendarApiException(
+            String message,
+            Throwable cause) {
         super(message, cause);
         this.status = 0;
     }
 
-    public int getStatus() { return status; }
+    public int getStatus() {
+        return status;
+    }
 }
