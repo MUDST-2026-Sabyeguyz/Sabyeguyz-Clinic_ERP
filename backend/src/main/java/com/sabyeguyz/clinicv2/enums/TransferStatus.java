@@ -1,3 +1,6 @@
 package com.sabyeguyz.clinicv2.enums;
 
-public enum TransferStatus { Completed, Reversed }
+public enum TransferStatus {
+    Completed,
+    Reversed
+}

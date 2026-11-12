@@ -1,3 +1,6 @@
 package com.sabyeguyz.clinicv2.enums;
 
-public enum UsageStatus { Completed, Reversed }
+public enum UsageStatus {
+    Completed,
+    Reversed
+}
