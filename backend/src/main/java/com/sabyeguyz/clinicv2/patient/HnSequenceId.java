@@ -9,7 +9,9 @@ public class HnSequenceId implements Serializable {
 
     public HnSequenceId() {}
 
-    public HnSequenceId(Long branch, String yearMonth) {
+    public HnSequenceId(
+            Long branch,
+            String yearMonth) {
         this.branch = branch;
         this.yearMonth = yearMonth;
     }
@@ -18,9 +20,12 @@ public class HnSequenceId implements Serializable {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof HnSequenceId that)) return false;
+
         return Objects.equals(branch, that.branch) && Objects.equals(yearMonth, that.yearMonth);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(branch, yearMonth); }
+    public int hashCode() {
+        return Objects.hash(branch, yearMonth);
+    }
 }

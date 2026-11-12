@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.patient;
 
-import java.util.Optional;
 import java.time.Instant;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,7 +15,10 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
 
     @Query("select count(p) from Patient p where p.registeredAt >= :from and p.registeredAt < :to "
             + "and (:branchId is null or p.branch.id = :branchId)")
-    long countRegistrations(@Param("from") Instant from, @Param("to") Instant to, @Param("branchId") Long branchId);
+    long countRegistrations(
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("branchId") Long branchId);
 
     @Query("select p from Patient p where "
             + "(:query is null or :query = '' "
@@ -23,5 +27,8 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
             + " or p.patientHn like concat('%', :query, '%') "
             + " or p.phone like concat('%', :query, '%')) "
             + "and (:branchId is null or p.branch.id = :branchId)")
-    Page<Patient> search(@Param("query") String query, @Param("branchId") Long branchId, Pageable pageable);
+    Page<Patient> search(
+            @Param("query") String query,
+            @Param("branchId") Long branchId,
+            Pageable pageable);
 }
