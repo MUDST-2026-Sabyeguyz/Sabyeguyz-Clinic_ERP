@@ -1,26 +1,28 @@
 package com.sabyeguyz.clinic.appointment;
 
-import com.sabyeguyz.clinic.api.ApiErrorResponse;
+import java.net.URI;
+import java.time.LocalDate;
+
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.net.URI;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import io.swagger.v3.oas.annotations.Parameter;
-import java.time.LocalDate;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.sabyeguyz.clinic.api.ApiErrorResponse;
 
 @RestController
 @RequestMapping("/api/appointments")
@@ -43,10 +45,14 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Appointment created with status CONFIRMED"),
             @ApiResponse(responseCode = "400", description = "Request validation failed or referenced data is invalid",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Therapist already has an appointment in the selected period. "
                     + "Concurrent requests for the same slot are serialised, so exactly one of them is created and the rest get this status.",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ResponseEntity<AppointmentResponse> create(@Valid @RequestBody AppointmentCreateRequest request) {
         AppointmentResponse response = bookingService.create(request);
@@ -59,7 +65,9 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Paged results, including an empty page when nothing matches"),
             @ApiResponse(responseCode = "400", description = "Invalid filter, page, or size",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentSearchResponse search(
             @Parameter(description = "Branch code such as RP") @RequestParam(required = false) String branchCode,
@@ -78,7 +86,9 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment found"),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse getById(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
@@ -91,9 +101,13 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment marked as ARRIVED"),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Appointment is not in a state that allows check-in",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse checkIn(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
@@ -105,9 +119,13 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment moved to IN_SERVICE"),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Patient must be checked in first",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse startService(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
@@ -120,9 +138,13 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment marked as NO_SHOW"),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Appointments the patient already arrived for cannot be marked as no show",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse markNoShow(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
@@ -134,9 +156,13 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment completed"),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Service must be started first",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse complete(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id) {
@@ -148,11 +174,17 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment cancelled"),
             @ApiResponse(responseCode = "400", description = "Cancellation reason is missing",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Appointments that are already in service, completed, cancelled, or marked as no show cannot be cancelled",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse cancel(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id,
@@ -167,12 +199,18 @@ public class AppointmentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Appointment rescheduled"),
             @ApiResponse(responseCode = "400", description = "Validation failed or referenced therapist is invalid",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Appointment not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Appointment is not CONFIRMED or RESCHEDULED, the new slot overlaps another appointment, "
                     + "or the appointment was modified by another request in the meantime",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AppointmentResponse reschedule(
             @Parameter(description = "Appointment database identifier", required = true) @PathVariable long id,
