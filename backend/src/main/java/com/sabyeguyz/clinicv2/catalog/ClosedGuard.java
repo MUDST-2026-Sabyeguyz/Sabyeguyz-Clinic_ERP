@@ -14,6 +14,7 @@ public final class ClosedGuard {
         if (!service.isServiceStatus()) {
             throw new IllegalArgumentException("บริการ/คอร์ส " + service.getServiceName() + " ปิดใช้งาน ไม่สามารถใช้งานได้");
         }
+
         return service;
     }
 
@@ -21,6 +22,7 @@ public final class ClosedGuard {
         if (!branch.isBranchStatus()) {
             throw new IllegalArgumentException("สาขา " + branch.getBranchName() + " ปิดใช้งาน ไม่สามารถทำรายการที่สาขานี้ได้");
         }
+
         return branch;
     }
 
@@ -28,6 +30,7 @@ public final class ClosedGuard {
         if (!method.isPaymentMethodStatus()) {
             throw new IllegalArgumentException("ช่องทางชำระเงิน " + method.getMethodName() + " ปิดใช้งาน ไม่สามารถใช้งานได้");
         }
+
         return method;
     }
 }
