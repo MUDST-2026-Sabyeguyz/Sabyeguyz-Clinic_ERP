@@ -2,6 +2,8 @@ const { spawnSync } = require('node:child_process')
 const net = require('node:net')
 const path = require('node:path')
 const cypress = require('cypress')
+const testPort = Number(process.env.CLINIC_API_TEST_PORT || 18080)
+if (![18080, 18083].includes(testPort)) throw new Error('Only isolated API test ports 18080/18083 are supported')
 
 process.chdir(path.resolve(__dirname, '..'))
 
@@ -30,7 +32,7 @@ async function main() {
   if (args.length && !(interactive && args.length === 1) && !(args[0] === '--spec' && args.length === 2)) {
     throw new Error('Usage: npm run test:api -- [--spec cypress/e2e/patients.cy.js] or npm run test:api:open')
   }
-  await requireFreePort(18080)
+  await requireFreePort(testPort)
   await requireFreePort(19001)
   let started = false
   try {

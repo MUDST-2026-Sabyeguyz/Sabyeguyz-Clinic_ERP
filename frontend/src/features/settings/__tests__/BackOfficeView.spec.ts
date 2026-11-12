@@ -510,7 +510,8 @@ describe('BackOffice backend integration', () => {
     await save()
     expect(requests.some((r) => r.url.includes('/activate') || r.method === 'DELETE')).toBe(false)
     expect(wrapper.get('tbody').text()).toContain('New branch')
-    expect(wrapper.findAll('tbody .settings-status').at(-1)!.classes()).not.toContain('status-off')
+    const statuses = wrapper.findAll('tbody .settings-status')
+    expect(statuses[statuses.length - 1]!.classes()).not.toContain('status-off')
   })
   it('preserves phone validation and rejects invalid branch codes before sending', async () => {
     await start()
