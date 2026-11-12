@@ -1,9 +1,11 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.role.Permission;
-import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDate;
+
+import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.role.Permission;
 
 /**
  * A versioned commission tier scheme. Per Commission_System_Requirement_Dev,
@@ -51,22 +53,31 @@ public class CommissionScheme {
     public CommissionScheme() {}
 
     public Long getId() { return id; }
+
     public String getSchemeName() { return schemeName; }
     public void setSchemeName(String schemeName) { this.schemeName = schemeName; }
+
     public int getSchemeVersion() { return schemeVersion; }
     public void setSchemeVersion(int schemeVersion) { this.schemeVersion = schemeVersion; }
+
     public Permission getPermission() { return permission; }
     public void setPermission(Permission permission) { this.permission = permission; }
+
     public LocalDate getEffectiveFrom() { return effectiveFrom; }
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
+
     public LocalDate getEffectiveTo() { return effectiveTo; }
     public void setEffectiveTo(LocalDate effectiveTo) { this.effectiveTo = effectiveTo; }
+
     public Instant getSchemeCreateAt() { return schemeCreateAt; }
     public void setSchemeCreateAt(Instant schemeCreateAt) { this.schemeCreateAt = schemeCreateAt; }
+
     public Long getSchemeCreateBy() { return schemeCreateBy; }
     public void setSchemeCreateBy(Long schemeCreateBy) { this.schemeCreateBy = schemeCreateBy; }
+
     public Instant getSchemeUpdateAt() { return schemeUpdateAt; }
     public void setSchemeUpdateAt(Instant schemeUpdateAt) { this.schemeUpdateAt = schemeUpdateAt; }
+
     public Long getSchemeUpdateBy() { return schemeUpdateBy; }
     public void setSchemeUpdateBy(Long schemeUpdateBy) { this.schemeUpdateBy = schemeUpdateBy; }
 }

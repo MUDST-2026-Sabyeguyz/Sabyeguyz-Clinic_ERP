@@ -1,15 +1,17 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.enums.BranchClosingStatus;
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Optional;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.annotation.Propagation;
 
 @Service
 public class BranchMonthlyClosingService {
@@ -18,7 +20,9 @@ public class BranchMonthlyClosingService {
     private final CourseRepository courses;
 
     public BranchMonthlyClosingService(
-            BranchMonthlyClosingRepository branchClosings, MonthlyCommissionClosingRepository closings, CourseRepository courses) {
+            BranchMonthlyClosingRepository branchClosings,
+            MonthlyCommissionClosingRepository closings,
+            CourseRepository courses) {
         this.branchClosings = branchClosings;
         this.closings = closings;
         this.courses = courses;
@@ -26,7 +30,8 @@ public class BranchMonthlyClosingService {
 
     @Transactional(readOnly = true)
     public Optional<BranchMonthlyClosing> find(
-            Branch branch, String month) {
+            Branch branch,
+            String month) {
         requireBranchAndMonth(branch, month);
 
         return branchClosings.findByBranchIdAndClosingMonth(
@@ -36,7 +41,9 @@ public class BranchMonthlyClosingService {
     /** Confirms the branch only after all individual closings are complete. */
     @Transactional(propagation = Propagation.MANDATORY)
     public BranchMonthlyClosing confirmClosed(
-            Branch branch, String month, Long actorId) {
+            Branch branch,
+            String month,
+            Long actorId) {
         requireBranchAndMonth(branch, month);
 
         if (actorId == null) {
@@ -72,6 +79,7 @@ public class BranchMonthlyClosingService {
                                     new BranchMonthlyClosing();
                             created.setBranch(branch);
                             created.setClosingMonth(month);
+
                             return created;
                         });
 
@@ -92,7 +100,8 @@ public class BranchMonthlyClosingService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean markOpenAfterIndividualReopen(
-            Branch branch, String month) {
+            Branch branch,
+            String month) {
         requireBranchAndMonth(branch, month);
 
         closings.lockBranchMonth(branch.getId(), month);
@@ -111,18 +120,22 @@ public class BranchMonthlyClosingService {
         closing.setClosedBy(null);
 
         branchClosings.save(closing);
+
         return true;
     }
 
     /** Reopens only a branch round without individual closings or course sales. */
     @Transactional(propagation = Propagation.MANDATORY)
     public BranchMonthlyClosing reopenEmpty(
-            Branch branch, String month, String reason) {
+            Branch branch,
+            String month,
+            String reason) {
         requireBranchAndMonth(branch, month);
 
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("ต้องระบุเหตุผลที่ Reopen");
         }
+
         if (reason.trim().length() > 255) {
             throw new IllegalArgumentException(
                     "เหตุผลที่ Reopen ยาวเกิน 255 ตัวอักษร");
@@ -143,7 +156,8 @@ public class BranchMonthlyClosingService {
         }
 
         BranchMonthlyClosing closing =
-                branchClosings.findByBranchIdAndClosingMonth(branch.getId(), month).orElseThrow(() -> new IllegalStateException(
+                branchClosings.findByBranchIdAndClosingMonth(branch.getId(), month)
+                        .orElseThrow(() -> new IllegalStateException(
                                 "ยังไม่มีการยืนยันปิดรอบสาขานี้"));
 
         if (!closing.isClosed()) {
@@ -159,7 +173,10 @@ public class BranchMonthlyClosingService {
 
     /** Prevents new course sales from entering a closed branch or seller round. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void requireCourseSaleOpen(Branch branch, String month, Long sellerId) {
+    public void requireCourseSaleOpen(
+            Branch branch,
+            String month,
+            Long sellerId) {
         requireBranchAndMonth(branch, month);
 
         if (sellerId == null) {
@@ -188,7 +205,8 @@ public class BranchMonthlyClosingService {
     }
 
     private static void requireBranchAndMonth(
-            Branch branch, String month) {
+            Branch branch,
+            String month) {
         if (branch == null || branch.getId() == null) {
             throw new IllegalArgumentException("ต้องระบุสาขา");
         }
