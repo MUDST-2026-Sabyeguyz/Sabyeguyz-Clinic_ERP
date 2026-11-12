@@ -9,7 +9,9 @@ public class CourseSharedMemberId implements Serializable {
 
     public CourseSharedMemberId() {}
 
-    public CourseSharedMemberId(Long course, Long patient) {
+    public CourseSharedMemberId(
+            Long course,
+            Long patient) {
         this.course = course;
         this.patient = patient;
     }
@@ -17,10 +19,14 @@ public class CourseSharedMemberId implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
+
         if (!(o instanceof CourseSharedMemberId that)) return false;
+
         return Objects.equals(course, that.course) && Objects.equals(patient, that.patient);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(course, patient); }
+    public int hashCode() {
+        return Objects.hash(course, patient);
+    }
 }
