@@ -14,13 +14,14 @@ async function signIn() {
   try {
     clearSession()
     const result = await authApi.login(form.username, form.password)
+    // เก็บ token และ staffId จากผล login เพื่อใช้ระบุตัวพนักงานใน flow อื่น
     localStorage.setItem('authToken', result.token)
     localStorage.setItem('authUser', JSON.stringify(result))
     localStorage.removeItem('managerSelectedBranch')
     const managerHome = router.hasRoute('manager-branch-selection')
       ? '/staff/select-branch'
       : '/staff/dashboard'
-    await router.push(result.role === 'MANAGER' ? managerHome : '/staff/patients')
+    await router.push(result.role === 'MANAGER' ? managerHome : '/staff/appointments')
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : 'เข้าสู่ระบบไม่สำเร็จ'
   } finally {
@@ -32,12 +33,11 @@ async function signIn() {
   <main class="login-page">
     <section class="login-brand">
       <img :src="logo" alt="SaByeGuyz" />
-      <h2>ฟื้นฟูการเคลื่อนไหว เพื่อคุณภาพชีวิตที่ดีขึ้น</h2>
+      <p>ฟื้นฟูการเคลื่อนไหว<br />เพื่อคุณภาพชีวิตที่ดีขึ้น</p>
     </section>
     <section class="login-content">
       <form class="login-shell" @submit.prevent="signIn">
         <div class="intro">
-          <small>ยินดีต้อนรับกลับมา!</small>
           <h1>เข้าสู่ระบบ</h1>
         </div>
         <label

@@ -190,7 +190,11 @@ describe('appointment branch authorization (R1–R3)', () => {
     cy.api('POST', '/api/auth/register', {
       username: 'branchless',
       email: 'branchless@example.com',
+<<<<<<< HEAD
       password: 'password123',
+=======
+      password: 'password12345',
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     })
       .then(({ status, body }) => {
         expect(status).to.equal(201)
@@ -201,7 +205,11 @@ describe('appointment branch authorization (R1–R3)', () => {
 
   it('uses current database roles and home branch rather than stale token privileges or old branch grants', function () {
     const profile = {
+<<<<<<< HEAD
       username: 'branch-policy-user', email: 'branch-policy-user@example.com', password: 'password123', role: 'MANAGER', employeeCode: 'POLICY-01',
+=======
+      username: 'branch-policy-user', email: 'branch-policy-user@example.com', password: 'password12345', role: 'MANAGER', employeeCode: 'POLICY-01',
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
       fullName: 'Policy Actor', branchCode: '01',
     }
     cy.api('POST', '/api/users', profile).then(({ status, body: user }) => {

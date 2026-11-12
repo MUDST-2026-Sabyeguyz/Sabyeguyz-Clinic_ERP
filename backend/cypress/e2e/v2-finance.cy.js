@@ -42,7 +42,8 @@ describe('Clinic v2 commission and sale services', () => {
     'closing-malformed': 'rejectsAMalformedMonth',
     'fee-fixed': 'fixedFeeMatchesTheDocExample',
     'fee-percentage': 'percentageFeeMatchesTheDocExample',
-    'fee-specific': 'prefersAStaffSpecificRuleOverADefaultRule',
+    'fee-single-effective': 'selectsTheSingleClinicWideRuleEffectiveOnTheTreatmentDate',
+    'fee-overlap': 'rejectsOverlappingClinicWideTreatmentFeeRules',
     'payment-record': 'recordsAPaymentAgainstAnActiveTransaction',
     'payment-void': 'rejectsPaymentAgainstAVoidedReceipt',
     'payment-zero': 'rejectsZeroOrNegativeAmount',
@@ -113,7 +114,10 @@ describe('Clinic v2 commission and sale services', () => {
     ['schemecrud-satang-ok', { tiersSaved: 2, secondMin: '50000.01' }],
     ['schemecrud-referenced-rename', { name: 'Renamed', tiersDeleted: 0 }],
     ['feeadmin-create', { type: 'Percentage', value: 10, enabled: true }],
+<<<<<<< HEAD
     ['feeadmin-takes-over', { predecessorEnds: '2026-06-30', newStarts: '2026-07-01' }],
+=======
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     ['feeadmin-unused-editable', { type: 'Percentage', value: 12.5 }],
     ['tier-example', 0.07],
     ['tier-top', 0.10],
@@ -123,7 +127,7 @@ describe('Clinic v2 commission and sale services', () => {
     ['closing-reclose-same-rate', {auditCount: 0, rate: 0.07,}],
     ['fee-fixed', 45],
     ['fee-percentage', 30],
-    ['fee-specific', { present: true, fee: 45 }],
+    ['fee-single-effective', { present: true, fee: 45 }],
     ['payment-record', { amount: 1200, status: true }],
     ['receipt-create', { number: 'RE26000010', date: '2026-08-18T00:00:00' }],
     ['receipt-next-no', 'RE00000042'],
@@ -164,7 +168,27 @@ describe('Clinic v2 commission and sale services', () => {
       })
     })
   })
+  it(originalNames['feeadmin-takes-over'], () => {
+    // Use the clinic calendar, independently of the service's date calculations.
+    const parts = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Bangkok', year: 'numeric', month: 'numeric' })
+      .formatToParts(new Date())
+    const year = Number(parts.find(part => part.type === 'year').value)
+    const month = Number(parts.find(part => part.type === 'month').value)
+    const expected = {
+      predecessorEnds: new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+      newStarts: new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10),
+    }
+    cy.api('POST', '/__cypress/v2/finance/feeadmin-takes-over').then(({ status, body }) => {
+      expect(status).to.equal(200)
+      expect(body).not.to.have.property('error')
+      expect(body.value).to.deep.equal(expected)
+    })
+  })
   const failures = [
+<<<<<<< HEAD
+=======
+    ['fee-overlap', 'IllegalStateException'],
+>>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     ['override-applies', 'IllegalArgumentException'],
     ['override-reason', 'IllegalArgumentException'],
     ['override-unlocked', 'IllegalArgumentException'],

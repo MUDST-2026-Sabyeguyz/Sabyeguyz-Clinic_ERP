@@ -69,6 +69,7 @@ export const api = {
 }
 
 export type AuthResponse = {
+  staffId: number | null
   id: number
   username: string
   email?: string
@@ -160,7 +161,7 @@ export type Branch = {
   active: boolean
 }
 export type BranchRequest = {
-  branchCode: string
+  branchCode?: string
   name: string
   address?: string
   phone?: string
@@ -178,6 +179,7 @@ type BackendBranch = {
   phone?: string
   email?: string | null
   licenseNo?: string | null
+  taxId?: string | null
   bookingOpenTime?: string | null
   bookingCloseTime?: string | null
   defaultAppointmentMinutes?: number | null
@@ -196,6 +198,7 @@ function normalizeBranch(branch: BackendBranch): Branch {
     email: branch.email ?? undefined,
     licenseNumber: branch.licenseNo ?? undefined,
     licenseNo: branch.licenseNo,
+    taxId: branch.taxId ?? undefined,
     bookingOpenTime: branch.bookingOpenTime,
     bookingCloseTime: branch.bookingCloseTime,
     defaultAppointmentMinutes: branch.defaultAppointmentMinutes,
@@ -204,9 +207,12 @@ function normalizeBranch(branch: BackendBranch): Branch {
 }
 export type Staff = {
   id: number
-  userId: number
-  username: string
-  role: 'MANAGER' | 'THERAPIST'
+  branchCode?: string
+  branchName?: string
+  position?: string
+  userId?: number
+  username?: string
+  role?: 'MANAGER' | 'THERAPIST'
   employeeCode: string
   fullName: string
   phone?: string
@@ -244,13 +250,18 @@ export type PaymentMethod = {
   name: string
   active: boolean
 }
+export type PaymentLabelCode = 'FULL' | 'PAID' | 'INSTALLMENT' | 'DEPOSIT'
 export type PaymentStatusOption = {
-  code: 'INSTALLMENT' | 'DEPOSIT' | 'PAID'
+  code: PaymentLabelCode
   label: string
   enabled: boolean
 }
+// สถานะที่ฐานข้อมูลอนุญาตให้บันทึกได้ตาม migration ปัจจุบัน
 export type AppointmentStatus =
-  'UNCONFIRMED' | 'CONFIRMED' | 'ARRIVED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED' | 'NO_SHOW'
+  | 'UNCONFIRMED'
+  | 'CONFIRMED'
+  | 'CANCELLED'
+// endAt เก็บเวลาจบนัดจริง ไม่คำนวณซ้ำจากระยะเวลาบริการ
 export type Appointment = {
   id: number
   branchCode: string
@@ -265,6 +276,31 @@ export type Appointment = {
   patientType?: 'CURRENT' | 'NEW'
   contactName?: string | null
   contactPhone?: string | null
+  contactNickname?: string | null
+}
+// หลักฐานจากนัดใช้ตรวจรายการเดิมและกู้ผลหลังคำขอไม่ตอบกลับ
+export type AppointmentProgress = {
+  appointmentId: number
+  appointmentStatus: AppointmentStatus
+  patientType: 'CURRENT' | 'NEW'
+  state: 'FOUND' | 'NO_LINKED_RECORD' | 'REVIEW_REQUIRED'
+  reason: string | null
+  visitId: number | null
+  servedPatientId: number | null
+  completedAt: string | null
+  sales: {
+    saleId: number
+    receiptId: number
+    receiptNo: string
+    receiptStatus: string
+    active: boolean
+  }[]
+  usages: {
+    usageId: number
+    movementId: number
+    coursePurchaseId: number
+    status: string
+  }[]
 }
 export type AppointmentPage = Page<Appointment>
 export type AppointmentAvailability = {
@@ -277,8 +313,35 @@ export type AppointmentAvailability = {
   slots: Array<{ time: string; available: boolean; reason: string | null }>
   googleCalendar: 'NOT_CONNECTED' | 'CHECKED' | 'UNAVAILABLE'
 }
+// คำขอต่ออายุใช้ workflow แยกจากการแก้วันหมดอายุโดยตรง
+export type CourseExtensionPreview = { oldExpiry: string; newExpiry: string }
+
+export type DirectCourseExtension = {
+  courseId: number
+  requestedByPatientId: number
+  value: number
+  unit: CourseExtensionRequest['unit']
+  reason: string
+  ownerRequestConfirmed: boolean
+}
+
+export type CourseExtensionRequest = {
+  id: number
+  courseId: number
+  requestedPatientId: number
+  value: number
+  unit: 'Day' | 'Month' | 'Year'
+  reason: string | null
+  status: 'Pending' | 'Approved' | 'Rejected'
+  requestedAt: string
+  decidedAt: string | null
+  decisionNote: string | null
+  oldExpiry: string | null
+  newExpiry: string | null
+}
 export type CoursePurchase = {
   id: number
+  receiptId?: number | null
   patient: Patient
   purchaser?: { id: number; hn: string; fullName: string }
   branchCode: string
@@ -295,8 +358,23 @@ export type CoursePurchase = {
   usable: boolean
   status: string
 }
+export type SingleVisitEntitlement = {
+  id: number
+  saleTransactionId: number
+  patientId: number
+  branchCode: string
+  serviceId: number
+  serviceName: string
+  purchased: number
+  used: number
+  remaining: number
+  serviceActive: boolean
+  purchasedAt: string
+  receiptNo: string
+}
 export type SaleSummary = {
   id: number
+  receiptId?: number | null
   receiptNo: string
   patient: Patient
   branchCode: string
@@ -310,12 +388,45 @@ export type SaleSummary = {
   itemDescription?: string
 }
 export type SaleReceipt = SaleSummary & { note?: string }
+// Payload ขายรวมรายการชำระและการใช้คอร์สในคำขอเดียว
+export type SaleCreateRequest = {
+  requestKey?: string
+  appointmentId?: number
+  patientId: number
+  branchCode: string
+  salespersonStaffId: number
+  treatingStaffId?: number
+  note?: string
+  paymentLabelCode: PaymentLabelCode
+  items: Array<{
+    type: 'SERVICE' | 'COURSE'
+    referenceId: number
+    quantity: number
+    discountType?: 'PERCENT' | 'FIXED'
+    discountValue?: number
+  }>
+  billDiscountType?: 'PERCENT' | 'FIXED'
+  billDiscountValue?: number
+  courseUsages?: Array<{ coursePurchaseId: number; note?: string; treatmentId?: number }>
+  payments: Array<{ paymentMethodCode: string; amount: number }>
+}
 export type SaleDetail = SaleReceipt & {
+  paymentLabel: 'FullyPaid' | 'Installment' | 'Deposit'
+  subtotalBeforeDiscount: number
+  billDiscountAmount: number
+  netAmount: number
+  taxableAmount?: number
+  taxAmount?: number
+  branch?: { code: string; name: string; address: string; phone: string; email?: string; licenseNumber?: string }
   items: Array<{
     id: number
     type: string
     description: string
+    unitName?: string
     quantity: number
+    unitPrice?: number
+    lineDiscountAmount?: number
+    allocatedBillDiscountAmount?: number
     lineTotal: number
   }>
   payments: Array<{
@@ -323,10 +434,21 @@ export type SaleDetail = SaleReceipt & {
     type: string
     paymentMethodCode: string
     amount: number
+    paidAt?: string
   }>
 }
+export type CourseUseRequest = {
+  coursePurchaseId: number
+  appointmentId: number
+  patientId: number
+  treatingStaffId: number
+  note?: string
+  treatmentId?: number
+}
 export type CourseUsageTransaction = {
-  id: number
+  id: number | null
+  usageId?: number
+  therapistName?: string
   coursePurchaseId: number
   patientName: string
   patientHn: string
@@ -335,6 +457,16 @@ export type CourseUsageTransaction = {
   usedAt: string
   voidedAt?: string | null
   voidReason?: string | null
+}
+export type CourseUsagePrintDocument = {
+  id: number
+  courseId: number
+  usageId: number
+  version: number
+  issuedAt: string
+  issuedBy: string
+  documentSnapshot: string
+  events: Array<{ id: number; type: 'Issued' | 'Reprint'; printedAt: string; printedBy: string }>
 }
 export type DashboardResponse = {
   uniquePatients: number
@@ -346,6 +478,13 @@ export type DashboardResponse = {
   assessmentRevenue: number
   receiptsIssued: number
   receiptsVoided: number
+  newCustomers: number
+  returningCustomers: number
+  salesTotal: number
+  cashReceived: number
+  courseRenewals: number
+  packageUpdates: number
+  packageUpdatesScope: 'CLINIC' | string
 }
 export type AppointmentReport = {
   byStatus: Array<{ status: string; appointments: number }>
@@ -358,7 +497,7 @@ export type RevenueReport = {
   byCategory: Array<{ type: string; amount: number; share: number }>
   dailyByCategory: Array<{
     date: string
-    type: 'COURSE' | 'SINGLE_VISIT' | 'ASSESSMENT'
+    type: string
     amount: number
   }>
 }
@@ -413,17 +552,22 @@ export const authApi = {
 
 export const patientApi = {
   search: (query = '', page = 0, size = 20, branchCode = '', sort = 'nameAsc') =>
-    api.get<Page<Patient>>(`/api/patients?${new URLSearchParams({
-      query: /^hn[\s:#-]*/i.test(query.trim())
-        ? query.trim().replace(/^hn[\s:#-]*/i, '').replace(/[\s-]/g, '')
-        : /^\d[\d\s-]*$/.test(query.trim())
-          ? query.trim().replace(/\D/g, '')
-          : query,
-      page: String(page),
-      size: String(size),
-      sort,
-      ...(branchCode ? { branchCode } : {}),
-    })}`),
+    api.get<Page<Patient>>(
+      `/api/patients?${new URLSearchParams({
+        query: /^hn[\s:#-]*/i.test(query.trim())
+          ? query
+              .trim()
+              .replace(/^hn[\s:#-]*/i, '')
+              .replace(/[\s-]/g, '')
+          : /^\d[\d\s-]*$/.test(query.trim())
+            ? query.trim().replace(/\D/g, '')
+            : query,
+        page: String(page),
+        size: String(size),
+        sort,
+        ...(branchCode ? { branchCode } : {}),
+      })}`,
+    ),
   searchAll: async (query = '', branchCode = '') => {
     const first = await patientApi.search(query, 0, 100, branchCode)
     const rest = await Promise.all(
@@ -447,7 +591,7 @@ export const branchApi = {
     api
       .post<BackendBranch>('/api/branches', {
         ...body,
-        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
+        branchCode: 'code' in body ? body.code || body.numericCode : body.branchCode,
         name: body.name,
       })
       .then(normalizeBranch),
@@ -455,7 +599,7 @@ export const branchApi = {
     api
       .put<BackendBranch>(`/api/branches/${id}`, {
         ...body,
-        branchCode: 'branchCode' in body ? body.branchCode : body.code || body.numericCode,
+        branchCode: 'code' in body ? body.code || body.numericCode : body.branchCode,
         name: body.name,
       })
       .then(normalizeBranch),
@@ -499,13 +643,15 @@ export type ManagedService = {
   price: number
   active: boolean
 }
-export type ManagedServiceRequest = Omit<ManagedService, 'id' | 'active' | 'defaultDurationMinutes'> & {
+export type ManagedServiceRequest = Omit<
+  ManagedService,
+  'id' | 'active' | 'defaultDurationMinutes'
+> & {
   defaultDurationMinutes?: number | null
 }
 export const serviceManagementApi = {
   list: () => api.get<ManagedService[]>('/api/services'),
-  create: (body: ManagedServiceRequest) =>
-    api.post<ManagedService>('/api/services', body),
+  create: (body: ManagedServiceRequest) => api.post<ManagedService>('/api/services', body),
   update: (id: number, body: ManagedServiceRequest) =>
     api.put<ManagedService>(`/api/services/${id}`, body),
   deactivate: (id: number) => api.delete(`/api/services/${id}`),
@@ -515,7 +661,9 @@ export const serviceManagementApi = {
 }
 
 export const appointmentApi = {
-  search: (params: {
+  progress: (id: number) => api.get<unknown>(`/api/appointments/${id}/progress`),
+  search: (
+    params: {
       branchCode?: string
       date?: string
       startDate?: string
@@ -525,7 +673,8 @@ export const appointmentApi = {
       sortOrder?: 'newest' | 'oldest'
       page?: number
       size?: number
-  } = {}) => {
+    } = {},
+  ) => {
     const query = new URLSearchParams()
     Object.entries({ page: 0, size: 20, ...params }).forEach(([key, value]) => {
       if (value !== undefined && value !== '') query.set(key, String(value))
@@ -533,19 +682,25 @@ export const appointmentApi = {
     return api.get<AppointmentPage>(`/api/appointments?${query}`)
   },
   get: (id: number) => api.get<Appointment>(`/api/appointments/${id}`),
+  linkPatient: (id: number, patientId: number) =>
+    api.post<Appointment>(`/api/appointments/${id}/link-patient`, { patientId }),
   availability: (params: {
     branchCode: string
     therapistId: number
     date: string
     serviceId?: number
     excludeAppointmentId?: number
+    patientId?: number
   }) => {
     const query = new URLSearchParams({
       branchCode: params.branchCode,
       therapistId: String(params.therapistId),
       date: params.date,
       ...(params.serviceId ? { serviceId: String(params.serviceId) } : {}),
-      ...(params.excludeAppointmentId ? { excludeAppointmentId: String(params.excludeAppointmentId) } : {}),
+      ...(params.patientId ? { patientId: String(params.patientId) } : {}),
+      ...(params.excludeAppointmentId
+        ? { excludeAppointmentId: String(params.excludeAppointmentId) }
+        : {}),
     })
     return api.get<AppointmentAvailability>(`/api/appointments/availability?${query}`)
   },
@@ -555,12 +710,14 @@ export const appointmentApi = {
     therapistId: number
     serviceId?: number
     startAt: string
+    endAt: string
     note?: string
     patientType?: 'CURRENT' | 'NEW'
     contactName?: string
     contactPhone?: string
+    contactNickname?: string
     requestedServiceType?: 'SingleVisit' | 'Course'
-  }) => api.post<Appointment>('/api/appointments', body),
+  }) => api.post<Appointment>('/api/appointments', { ...body, status: 'UNCONFIRMED' }),
   confirm: (id: number) => api.post<Appointment>(`/api/appointments/${id}/confirm`, {}),
   checkIn: (id: number) => api.post<Appointment>(`/api/appointments/${id}/check-in`, {}),
   startService: (id: number) => api.post<Appointment>(`/api/appointments/${id}/start-service`, {}),
@@ -572,13 +729,13 @@ export const appointmentApi = {
     id: number,
     body: {
       startAt: string
+      endAt: string
       therapistId?: number
       serviceId?: number
       branchCode?: string
       note?: string | null
     },
-  ) =>
-    api.patch<Appointment>(`/api/appointments/${id}`, body),
+  ) => api.patch<Appointment>(`/api/appointments/${id}`, body),
 }
 
 export const treatmentApi = {
@@ -594,6 +751,39 @@ export const treatmentApi = {
 }
 
 export const courseApi = {
+  usagePrints: (courseId: number) =>
+    api.get<CourseUsagePrintDocument[]>(`/api/course-purchases/${courseId}/usage-prints`),
+  usagePrint: (printId: number) =>
+    api.get<CourseUsagePrintDocument>(`/api/course-usage-prints/${printId}`),
+  reprintUsage: (printId: number) =>
+    api.post<CourseUsagePrintDocument>(`/api/course-usage-prints/${printId}/reprints`, {}),
+  reviseUsagePrint: (usageId: number) =>
+    api.post<CourseUsagePrintDocument>(`/api/course-usages/${usageId}/print-revisions`, {}),
+  // ขอรายการต่ออายุหรือกรองตามคอร์ส/สถานะ
+  extensions: (params: { courseId?: number; status?: CourseExtensionRequest['status'] } = {}) => {
+    const query = new URLSearchParams()
+    if (params.courseId) query.set('courseId', String(params.courseId))
+    if (params.status) query.set('status', params.status)
+    return api.get<CourseExtensionRequest[]>(
+      `/api/course-extensions${query.size ? `?${query.toString()}` : ''}`,
+    )
+  },
+  // ส่งคำขอให้ Manager พิจารณาก่อนปรับวันหมดอายุ
+  requestExtension: (body: {
+    courseId: number
+    value: number
+    unit: CourseExtensionRequest['unit']
+    reason?: string
+    requestedByPatientId: number
+  }) => api.post<CourseExtensionRequest>('/api/course-extensions', body),
+  previewDirectExtension: (body: DirectCourseExtension) =>
+    api.post<CourseExtensionPreview>('/api/course-extensions/direct/preview', body),
+  extendDirect: (body: DirectCourseExtension & CourseExtensionPreview) =>
+    api.post<CourseExtensionPreview>('/api/course-extensions/direct', body),
+  approveExtension: (id: number, note?: string) =>
+    api.post<CourseExtensionRequest>(`/api/course-extensions/${id}/approve`, { note }),
+  rejectExtension: (id: number, note?: string) =>
+    api.post<CourseExtensionRequest>(`/api/course-extensions/${id}/reject`, { note }),
   usageTransactions: () => api.get<CourseUsageTransaction[]>('/api/course-usages'),
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
   get: (id: number) => api.get<Course>(`/api/courses/${id}`),
@@ -603,26 +793,26 @@ export const courseApi = {
   deactivate: (id: number) => api.delete(`/api/courses/${id}`),
   patientCourses: (patientId: number) =>
     api.get<CoursePurchase[]>(`/api/patients/${patientId}/courses`),
-  purchase: (body: { patientId: number; courseId: number; branchCode: string }) =>
+  purchase: (body: { patientId: number; courseId: number; branchCode: string; caseOwnerStaffId: number; paymentLabelCode: PaymentLabelCode; discountType?: string; discountValue?: number }) =>
     api.post<CoursePurchase>('/api/course-purchases', body),
   ledger: (id: number) =>
     api.get<{
       purchase: CoursePurchase & {
         commissionStatus?: string
-        lockedCommissionRate?: number
-        totalCourseCommissionPool?: number
-        commissionAllocationPerVisit?: number
+        lockedCommissionRate?: number | null
+        totalCourseCommissionPool?: number | null
+        commissionAllocationPerVisit?: number | null
       }
       movements: unknown[]
       allocations: Array<{
         visitDate: string
-        gross: number
-        fee: number
-        ownerNet: number
+        gross: number | null
+        fee: number | null
+        ownerNet: number | null
       }>
     }>(`/api/course-purchases/${id}`),
-  use: (body: { coursePurchaseId: number; appointmentId?: number; note?: string }) =>
-    api.post<CoursePurchase>('/api/course-usages', body),
+  use: (body: CourseUseRequest) => api.post<CoursePurchase>('/api/course-usages', body),
+  useBatch: (body: { usages: CourseUseRequest[] }) => api.post<CoursePurchase[]>('/api/course-usages/batch', body),
   reverse: (movementId: number, reason: string) =>
     api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, {
       reason,
@@ -639,6 +829,16 @@ export const courseApi = {
     api.get<TransferRecord[]>(`/api/course-transfers${patientId ? `?patientId=${patientId}` : ''}`),
 }
 
+export const singleVisitEntitlementApi = {
+  list: (patientId: number) =>
+    api.get<SingleVisitEntitlement[]>(`/api/patients/${patientId}/single-visit-entitlements`),
+  use: (entitlementId: number, body: { appointmentId: number; treatingStaffId: number }) =>
+    api.post<{ id: number; entitlementId: number; appointmentId: number; visitId: number; usedAt: string }>(
+      `/api/single-visit-entitlements/${entitlementId}/uses`, body),
+  reverse: (usageId: number, reason: string) =>
+    api.post(`/api/single-visit-entitlement-uses/${usageId}/reverse`, { reason }),
+}
+
 export const salesApi = {
   list: (
     params: {
@@ -646,6 +846,7 @@ export const salesApi = {
       branchCode?: string
       page?: number
       size?: number
+      receiptsOnly?: boolean
     } = {},
   ) => {
     const query = new URLSearchParams()
@@ -655,7 +856,9 @@ export const salesApi = {
     return api.get<Page<SaleSummary>>(`/api/payments?${query}`)
   },
   get: (id: number) => api.get<SaleDetail>('/api/receipts/' + id),
-  create: (body: unknown) => api.post<SaleReceipt>('/api/payments', body),
+  findReceipt: (receiptNo: string, branchCode: string) =>
+    api.get<SaleDetail>(`/api/receipts/search?${new URLSearchParams({ receiptNo, branchCode })}`),
+  create: (body: SaleCreateRequest) => api.post<SaleReceipt>('/api/payments', body),
   reverse: (id: number, reason: string) =>
     api.post<SaleDetail>(`/api/payments/${id}/reverse`, { reason }),
 }
@@ -696,7 +899,7 @@ export const staffApi = {
 export type ManagedUser = {
   id: number
   username: string
-  email?: string
+  email: string
   role: 'MANAGER' | 'THERAPIST'
   employeeCode: string
   fullName: string
@@ -705,11 +908,31 @@ export type ManagedUser = {
   branchName?: string
   active: boolean
 }
+// สิทธิ์เฉพาะผู้ใช้ที่เพิ่มหรือยกเว้นจาก role หลัก
+export type UserPermissionOverride = {
+  permissionId: number
+  permissionName: string
+  allowed: boolean
+  updatedBy: number
+  updatedAt: string
+}
+export type PermissionCatalogItem = {
+  id: number
+  permissionName: string
+  moduleName: string | null
+}
 export const userManagementApi = {
   list: () => api.get<ManagedUser[]>('/api/users'),
+  permissionCatalog: () => api.get<PermissionCatalogItem[]>('/api/permissions'),
+  permissionOverrides: (userId: number) =>
+    api.get<UserPermissionOverride[]>(`/api/users/${userId}/permissions`),
+  setPermissionOverride: (userId: number, permissionId: number, allowed: boolean) =>
+    api.put<UserPermissionOverride>(`/api/users/${userId}/permissions/${permissionId}`, { allowed }),
+  resetPermissionOverride: (userId: number, permissionId: number) =>
+    api.delete(`/api/users/${userId}/permissions/${permissionId}`),
   create: (body: {
     username: string
-    email?: string
+    email: string
     password: string
     role: 'MANAGER' | 'THERAPIST'
     employeeCode: string
@@ -721,7 +944,7 @@ export const userManagementApi = {
     id: number,
     body: {
       username: string
-      email?: string
+      email: string
       password?: string
       role: 'MANAGER' | 'THERAPIST'
       employeeCode: string
@@ -859,15 +1082,21 @@ export type ManagerAdjustment = {
   courseId: number | null
   visitId: number | null
   saleTransactionId: number | null
+  approvedBy?: number | null
+  approvedAt?: string | null
   applications: Array<{
     id: number
     adjustmentId: number
+    month?: string
     amount: number
     status: string
     approved: boolean
+    approvedBy?: number | null
+    approvedAt?: string | null
     approvalReference: string | null
   }>
 }
+// null หมายถึง API ยังไม่มีตัวเลข ไม่ใช่ยอดศูนย์
 export type StaffPayment = {
   id: number
   staffId: number
@@ -883,7 +1112,7 @@ export type StaffPayment = {
   paidDate?: string | null
   paymentReference?: string | null
   closingId: number | null
-  pendingSessions: number
+  pendingSessions: number | null
   applications: Array<{
     id: number
     adjustmentId: number
@@ -912,12 +1141,48 @@ export type TreatmentFeeInput = {
   feeValue: number
   effectiveFrom: string
   effectiveTo?: string | null
+  branchCode: string
 }
 
+export type CommissionPreviewParams = {
+  courseId: number
+  branchCode: string
+  sellerStaffId?: number
+  price?: number
+  discountType?: string
+  discountValue?: number
+}
+
+export type CommissionPreview = {
+  netPrice: number
+  commissionRate: number
+  commissionPool: number
+  commissionPerVisit: number
+  totalVisits: number
+  schemeVersion: number
+  monthlySalesToDate: number
+}
+
+// Endpoint ปิดยอดและจ่ายคอมมิชชันต้องระบุเดือนกับสาขาตาม contract
 export const commissionApi = {
+  preview: (params: CommissionPreviewParams) => {
+    const query = new URLSearchParams({
+      courseId: String(params.courseId),
+      branchCode: params.branchCode,
+    })
+    if (params.sellerStaffId != null) query.set('sellerStaffId', String(params.sellerStaffId))
+    if (params.price != null) query.set('price', String(params.price))
+    if (params.discountType) query.set('discountType', params.discountType)
+    if (params.discountValue != null) query.set('discountValue', String(params.discountValue))
+    return api.get<CommissionPreview>(`/api/commission/preview?${query.toString()}`)
+  },
+  payments: (month: string, branchCode: string) =>
+    api.get<StaffPayment[]>(`/api/commission/payments?${new URLSearchParams({ month, branchCode })}`),
   schemes: () => api.get('/api/commission/schemes'),
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
   createScheme: (body: unknown) => api.post('/api/commission/schemes', body),
+  createSchemeVersion: (id: number, body: unknown) =>
+    api.post(`/api/commission/schemes/${id}/versions`, body),
   updateScheme: (id: number, body: unknown) => api.put(`/api/commission/schemes/${id}`, body),
   activateScheme: (id: number) => api.patch(`/api/commission/schemes/${id}/activate`, {}),
   deactivateScheme: (id: number) => api.delete(`/api/commission/schemes/${id}`),
@@ -956,7 +1221,7 @@ export const commissionApi = {
         ownerNet: number
       }>
     >(`/api/commission/treatment-report?${new URLSearchParams({ from, to })}`),
-  closings: (month: string) =>
+  closings: (month: string, branchCode: string) =>
     api.get<
       Array<{
         id: number
@@ -968,27 +1233,56 @@ export const commissionApi = {
         rate: number
         status: string
       }>
-    >(`/api/commission/closings?month=${month}-01`),
-  closeMonth: (month: string) => api.post(`/api/commission/closings/${month}-01`, {}),
-  closeClosing: (id: number) => api.post(`/api/commission/closings/${id}/close`, {}),
+    >(`/api/commission/closings?${new URLSearchParams({ month, branchCode })}`),
+  branchClosing: (month: string, branchCode: string) =>
+    api.get<{ id: number | null; branchCode: string; month: string; status: 'OPEN' | 'CLOSED'; closedAt: string | null; closedBy: number | null }>(
+      `/api/commission/branch-closings?${new URLSearchParams({ month, branchCode })}`,
+    ),
+  reopenEmptyBranch: (month: string, branchCode: string, reason: string) =>
+    api.post(`/api/commission/branch-closings/${month}/reopen?${new URLSearchParams({ branchCode })}`, { reason }),
+  closeMonth: (month: string, branchCode: string) =>
+    api.post(`/api/commission/closings/${month}?${new URLSearchParams({ branchCode })}`, {}),
+  preparePayments: (month: string, branchCode: string) =>
+    api.post<StaffPayment[]>(`/api/commission/payments/prepare?${new URLSearchParams({ month, branchCode })}`, {}),
+  closePayments: (month: string, branchCode: string) =>
+    api.post<StaffPayment[]>(`/api/commission/payments/close?${new URLSearchParams({ month, branchCode })}`, {}),
+  reopenPayment: (id: number) => api.post<StaffPayment>(`/api/commission/payments/${id}/reopen`, {}),
+  pay: (id: number, paidDate: string, reference: string) =>
+    api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, { paidDate, reference }),
+  reopenClosing: (id: number, reason: string) =>
+    api.post(`/api/commission/closings/${id}/reopen`, { reason }),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
   createTreatmentFee: (body: TreatmentFeeInput) =>
     api.post<TreatmentFeeRule>('/api/commission/treatment-fees', body),
   updateTreatmentFee: (id: number, body: Partial<TreatmentFeeInput>) =>
     api.put<TreatmentFeeRule>(`/api/commission/treatment-fees/${id}`, body),
   setTreatmentFeeEnabled: (id: number, enabled: boolean) =>
-    api.patch<TreatmentFeeRule>(`/api/commission/treatment-fees/${id}/${enabled ? 'enable' : 'disable'}`, {}),
+    api.patch<TreatmentFeeRule>(
+      `/api/commission/treatment-fees/${id}/${enabled ? 'enable' : 'disable'}`,
+      {},
+    ),
   backfillSingleVisitFees: (from: string, to: string) =>
     api.post<{ recorded: number }>(
       `/api/commission/single-visit-fees/backfill?${new URLSearchParams({ from, to })}`,
       {},
     ),
-  myPayments: () => api.get<StaffPayment[]>('/api/commission/my-payments'),
+  myPayments: (month?: string) =>
+    api.get<StaffPayment[]>(`/api/commission/my-payments${month ? `?month=${encodeURIComponent(month)}` : ''}`),
   myLines: (month: string) =>
     api.get<TherapistLines>(`/api/commission/my-lines?month=${encodeURIComponent(month)}`),
   myAdjustments: () => api.get<TherapistAdjustment[]>('/api/commission/my-adjustments'),
   adjustments: () => api.get<ManagerAdjustment[]>('/api/commission/adjustments'),
   adjustment: (id: number) => api.get<ManagerAdjustment>(`/api/commission/adjustments/${id}`),
+  approveAdjustment: (id: number) =>
+    api.post<ManagerAdjustment>(`/api/commission/adjustments/${id}/approve`, {}),
+  cancelAdjustment: (id: number) =>
+    api.post<ManagerAdjustment>(`/api/commission/adjustments/${id}/cancel`, {}),
+  createAdjustmentApplication: (id: number, month: string, amount: number, branchCode: string) =>
+    api.post(`/api/commission/adjustments/${id}/applications`, { month, amount, branchCode }),
+  approveAdjustmentApplication: (id: number, reference?: string) =>
+    api.post(`/api/commission/adjustment-applications/${id}/approve`, { reference }),
+  cancelAdjustmentApplication: (id: number) =>
+    api.post(`/api/commission/adjustment-applications/${id}/cancel`, {}),
   createAdjustment: (body: {
     staffId: number
     originalMonth: string
@@ -1093,6 +1387,9 @@ export type CalendarStatus = {
   lastRunAt: string | null
   lastResult: CalendarSyncResult | null
   branches: CalendarBranchStatus[]
+  /** Where the Google key comes from: saved in the web UI, a key file / OAuth values on the server, or none yet. */
+  keySource?: 'ui' | 'file' | 'env' | 'none'
+  serviceAccountEmail?: string | null
 }
 export const calendarApi = {
   status: () => api.get<CalendarStatus>('/api/calendar/status'),
@@ -1101,4 +1398,66 @@ export const calendarApi = {
       googleCalendarId,
     }),
   syncNow: () => api.post<CalendarSyncResult>('/api/calendar/sync', {}),
+  saveCredentials: (keyJson: string) =>
+    api.put<CalendarStatus>('/api/calendar/credentials', { keyJson }),
+  removeCredentials: () =>
+    request<CalendarStatus>('/api/calendar/credentials', { method: 'DELETE' }),
+}
+
+export type IdCardData = {
+  nationalId: string
+  titleTh: string | null
+  firstNameTh: string | null
+  middleNameTh: string | null
+  lastNameTh: string | null
+  fullNameEn: string | null
+  birthDate: string | null
+  gender: 'M' | 'F' | null
+  address: string | null
+  issueDate: string | null
+  expiryDate: string | null
+  lifetime: boolean
+}
+
+export type IdCardWorkstation = {
+  id: number
+  name: string
+  branchCode: string
+  online: boolean
+  status: 'Active' | 'Revoked'
+}
+export type IdCardReadPurpose = 'REGISTER'
+export type IdCardLookup = {
+  exists: boolean
+  patient: { id: number; hn: string; fullName: string } | null
+}
+// DONE always has `lookup`; `card` is present only when the patient is not in the system yet.
+export type IdCardReadView = {
+  status: 'PENDING' | 'READING' | 'DONE' | 'FAILED'
+  outcome?: string
+  message?: string
+  card?: IdCardData
+  lookup?: IdCardLookup
+}
+export type IdCardWorkstationCreated = {
+  id: number
+  name: string
+  branchCode: string
+  pairingCode: string
+  pairingExpiresAt: string
+}
+
+export const idCardApi = {
+  workstations: (branchCode?: string) =>
+    api.get<IdCardWorkstation[]>(
+      `/api/id-card/workstations${branchCode ? `?branchCode=${encodeURIComponent(branchCode)}` : ''}`,
+    ),
+  start: (workstationId: number, purpose: IdCardReadPurpose) =>
+    api.post<{ id: string; expiresAt: string }>('/api/id-card/reads', { workstationId, purpose }),
+  result: (id: string) => api.get<IdCardReadView>(`/api/id-card/reads/${encodeURIComponent(id)}`),
+  createWorkstation: (name: string, branchCode: string) =>
+    api.post<IdCardWorkstationCreated>('/api/id-card/workstations', { name, branchCode }),
+  newPairingCode: (id: number) =>
+    api.post<IdCardWorkstationCreated>(`/api/id-card/workstations/${id}/pairing-code`, {}),
+  revokeWorkstation: (id: number) => api.post<void>(`/api/id-card/workstations/${id}/revoke`, {}),
 }

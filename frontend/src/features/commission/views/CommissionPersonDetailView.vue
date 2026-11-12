@@ -1,170 +1,208 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import CommissionTabs from './CommissionTabs.vue'
-import { commissionApi, staffApi } from '@/api/client'
-type TreatmentRow = Awaited<ReturnType<typeof commissionApi.treatmentReport>>[number]
-const route = useRoute(),
-  router = useRouter()
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import StaffHeader from "@/features/staff/components/StaffHeader.vue";
+import { commissionApi, staffApi } from "@/api/client";
+import { selectedManagerBranch } from "@/features/staff/data/managerBranch";
+import { clinicToday } from "@/utils/clinicDate";
+type TreatmentRow = Awaited<
+  ReturnType<typeof commissionApi.treatmentReport>
+>[number];
+const route = useRoute();
 const staffId = computed(() => {
-  const n = Number(String(route.params.staffId ?? '').replace(/^PT-0*/i, ''))
-  return Number.isFinite(n) ? n : 0
-})
+  const n = Number(String(route.params.staffId ?? "").replace(/^PT-0*/i, ""));
+  return Number.isFinite(n) ? n : 0;
+});
 const month = computed(() =>
-  String(route.query.month || new Date().toISOString().slice(0, 7)).slice(0, 7),
-)
-const from = computed(() => `${month.value}-01`)
+  String(route.query.month || clinicToday().slice(0, 7)).slice(0, 7),
+);
+const selectedBranchCode = computed(() => selectedManagerBranch()?.code ?? "");
+const overviewQuery = computed(() => ({
+  month: month.value,
+  ...(typeof route.query.search === "string" && route.query.search ? { search: route.query.search } : {}),
+  ...(route.query.status === "pending" || route.query.status === "approved" ? { status: route.query.status } : {}),
+}));
+const from = computed(() => `${month.value}-01`);
 const to = computed(() => {
-  const [y, m] = month.value.split('-').map(Number)
-  return `${month.value}-${String(new Date(y!, m!, 0).getDate()).padStart(2, '0')}`
-})
+  const [y, m] = month.value.split("-").map(Number);
+  return `${month.value}-${String(new Date(y!, m!, 0).getDate()).padStart(2, "0")}`;
+});
 const loading = ref(true),
-  errorMessage = ref(''),
-  name = ref(''),
-  branchName = ref('')
+  errorMessage = ref(""),
+  name = ref(""),
+  branchName = ref("");
 const base = ref(0),
   rate = ref(0),
   commission = ref(0),
-  saleCount = ref(0)
-type Tier = { minimum: number; maximum: number | null; rate: number; order: number }
-const tiers = ref<Tier[]>([])
-const employeeCode = ref('')
-const tierNotice = ref('')
+  saleCount = ref(0);
+type Tier = {
+  minimum: number;
+  maximum: number | null;
+  rate: number;
+  order: number;
+};
+const tiers = ref<Tier[]>([]);
+const employeeCode = ref("");
+const tierNotice = ref("");
 const currentTier = computed(() =>
   tiers.value.find(
     (t) =>
-      base.value >= Number(t.minimum) && (t.maximum === null || base.value <= Number(t.maximum)),
+      base.value >= Number(t.minimum) &&
+      (t.maximum === null || base.value <= Number(t.maximum)),
   ),
-)
-const nextTier = computed(() => tiers.value.find((t) => Number(t.minimum) > base.value))
+);
+const nextTier = computed(() =>
+  tiers.value.find((t) => Number(t.minimum) > base.value),
+);
 const tierProgress = computed(() =>
-  nextTier.value ? Math.min(100, (base.value / Number(nextTier.value.minimum)) * 100) : 100,
-)
+  nextTier.value
+    ? Math.min(100, (base.value / Number(nextTier.value.minimum)) * 100)
+    : 100,
+);
 const treatments = ref<TreatmentRow[]>([]),
   closingId = ref<number | null>(null),
-  approved = ref(false)
-const confirmOpen = ref(false),
-  validationMessage = ref(''),
-  saving = ref(false)
+  approved = ref(false),
+  finalized = ref(false);
+const validationMessage = ref(""),
+  saving = ref(false);
+const reopenReason = ref("");
 const treatmentTotal = computed(() =>
-  treatments.value.reduce((sum, item) => sum + Number(item.treatmentFee || 0), 0),
-)
-const netTotal = computed(() => commission.value + treatmentTotal.value)
+  treatments.value.reduce(
+    (sum, item) => sum + Number(item.treatmentFee || 0),
+    0,
+  ),
+);
+const netTotal = computed(() => commission.value + treatmentTotal.value);
 const money = (value: number) =>
-  `฿${value.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  `฿${value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const thaiDate = (value: string) =>
-  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(
-    new Date(`${value}T00:00:00`),
-  )
+  new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
 const monthLabel = computed(() =>
-  new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(
+  new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric" }).format(
     new Date(`${month.value}-01T00:00:00`),
   ),
-)
+);
 async function load() {
-  loading.value = true
-  errorMessage.value = ''
+  loading.value = true;
+  errorMessage.value = "";
   try {
-    const [report, treatmentReport, closings] = await Promise.all([
+    // อ่านข้อมูลรายงาน ปิดยอด และงวดจ่ายของพนักงานในเดือน/สาขาเดียวกัน
+    if (!selectedBranchCode.value) throw new Error("กรุณาเลือกสาขาก่อนดูรายละเอียดค่าตอบแทน");
+    const [report, treatmentReport, closings, payments] = await Promise.all([
       commissionApi.report(from.value, to.value),
       commissionApi.treatmentReport(from.value, to.value),
-      commissionApi.closings(month.value),
-    ])
-    const person = report.find((item) => item.staffId === staffId.value)
+      commissionApi.closings(month.value, selectedBranchCode.value),
+      commissionApi.payments(month.value, selectedBranchCode.value),
+    ]);
+    const person = report.find(
+      (item) => item.staffId === staffId.value && item.branchCode === selectedBranchCode.value,
+    );
     if (!person) {
-      errorMessage.value = 'ไม่พบข้อมูลค่าตอบแทนของบุคลากรรายนี้'
-      return
+      errorMessage.value = "ไม่พบข้อมูลค่าตอบแทนของบุคลากรรายนี้";
+      return;
     }
-    name.value = person.staffName
-    branchName.value = person.branchName
-    base.value = Number(person.base)
-    rate.value = Number(person.rate) * 100
-    commission.value = Number(person.commission)
-    saleCount.value = Number(person.saleCount)
+    name.value = person.staffName;
+    branchName.value = person.branchName;
+    base.value = Number(person.base);
+    rate.value = Number(person.rate) * 100;
+    commission.value = Number(person.commission);
+    saleCount.value = Number(person.saleCount);
     treatments.value = treatmentReport.filter(
       (item) =>
-        item.treatingStaffId === staffId.value && item.ownerStaffId !== item.treatingStaffId,
-    )
-    const closing = closings.find((item) => item.employeeId === staffId.value)
-    closingId.value = closing?.id ?? null
-    approved.value = closing?.status === 'CLOSED'
-    const staff = await staffApi.get(staffId.value).catch(() => null)
-    employeeCode.value = staff?.employeeCode ?? String(staffId.value)
-    tiers.value = []
-    tierNotice.value = ''
+        item.treatingStaffId === staffId.value &&
+        item.branchCode === selectedBranchCode.value &&
+        item.ownerStaffId !== item.treatingStaffId,
+    );
+    const closing = closings.find((item) => item.employeeId === staffId.value);
+    const payment = payments.find((item) => item.staffId === staffId.value);
+    // สถานะ PAID ถือว่าจ่ายครบ ส่วนยอดที่ API ไม่ส่งมาจะไม่แทนด้วยศูนย์
+    closingId.value = closing?.id ?? null;
+    finalized.value = closing?.status === "FINALIZED" || payment?.status === "PAID";
+    approved.value = closing?.status === "CLOSED" || finalized.value;
+    const staff = await staffApi.get(staffId.value).catch(() => null);
+    employeeCode.value = staff?.employeeCode ?? String(staffId.value);
+    tiers.value = [];
+    tierNotice.value = "";
     try {
       const schemes = (await commissionApi.schemes()) as Array<{
-        id: number
-        version: string
-        active: boolean
-        effectiveFrom: string
-        effectiveTo: string | null
-      }>
+        id: number;
+        version: number;
+        active: boolean;
+        effectiveFrom: string;
+        effectiveTo: string | null;
+      }>;
       const scheme = schemes.find((s) =>
         closing
-          ? s.version === closing.version
-          : s.active && s.effectiveFrom <= to.value && (!s.effectiveTo || s.effectiveTo > to.value),
-      )
+          ? String(s.version) === String(closing.version)
+          : s.active &&
+            s.effectiveFrom <= to.value &&
+            (!s.effectiveTo || s.effectiveTo > to.value),
+      );
       if (scheme)
         tiers.value = ((await commissionApi.tiers(scheme.id)) as Tier[]).sort(
           (a, b) => a.order - b.order,
-        )
-      if (!tiers.value.length) tierNotice.value = 'ยังไม่มีข้อมูลช่วง Tier ของรอบนี้'
+        );
+      if (!tiers.value.length)
+        tierNotice.value = "ยังไม่มีข้อมูลช่วง Tier ของรอบนี้";
     } catch {
-      tierNotice.value = 'โหลดข้อมูลช่วง Tier ไม่สำเร็จ'
+      tierNotice.value = "โหลดข้อมูลช่วง Tier ไม่สำเร็จ";
     }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลค่าตอบแทนไม่สำเร็จ'
+    errorMessage.value =
+      error instanceof Error ? error.message : "โหลดข้อมูลค่าตอบแทนไม่สำเร็จ";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
-function openConfirmation() {
-  validationMessage.value = ''
-  confirmOpen.value = true
-}
-async function confirm() {
-  if (closingId.value === null) {
-    validationMessage.value = 'ยังไม่มีรอบคอมมิชชันให้อนุมัติ'
-    return
-  }
-  saving.value = true
+async function reopen() {
+  const reason = reopenReason.value.trim();
+  if (closingId.value === null || finalized.value || !reason || reason.length > 255 || saving.value) return;
+  saving.value = true;
+  validationMessage.value = "";
   try {
-    await commissionApi.closeClosing(closingId.value)
-    approved.value = true
-    confirmOpen.value = false
-    await router.push({ path: '/staff/commission', query: { month: month.value } })
+    await commissionApi.reopenClosing(closingId.value, reason);
+    reopenReason.value = "";
+    await load();
   } catch (error) {
-    validationMessage.value = error instanceof Error ? error.message : 'อนุมัติยอดไม่สำเร็จ'
+    validationMessage.value = error instanceof Error ? error.message : "เปิดรอบรายบุคคลไม่สำเร็จ";
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
-onMounted(load)
-watch([staffId, month], load)
+onMounted(load);
+watch([staffId, month, selectedBranchCode], load);
 </script>
 <template>
   <div class="commission-manager-page">
     <StaffHeader />
     <main class="commission-manager-main">
+      <RouterLink class="detail-back" :to="{ path: '/staff/commission', query: overviewQuery }">← กลับไปภาพรวมค่าตอบแทน</RouterLink>
       <header class="detail-head">
         <div>
           <h1>รายละเอียดค่าตอบแทนรายบุคคล</h1>
-          <p v-if="name">{{ name }} · {{ employeeCode }} · {{ branchName }} · งวด{{ monthLabel }}</p>
+          <p v-if="name">
+            {{ name }} · {{ employeeCode }} · {{ branchName }} · งวด{{
+              monthLabel
+            }}
+          </p>
         </div>
         <span
           v-if="!loading && !errorMessage"
           class="commission-status"
           :class="{ ready: approved }"
-          >{{ approved ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}</span
+          >{{ approved ? "อนุมัติแล้ว" : "รอตรวจสอบ" }}</span
         >
       </header>
-      <CommissionTabs active="overview" />
       <p v-if="loading" class="state-card">กำลังโหลดข้อมูลจริง…</p>
-      <p v-else-if="errorMessage" class="state-card error">{{ errorMessage }}</p>
-      <template v-else
-        ><section class="commission-metrics">
+      <p v-else-if="errorMessage" class="state-card error">
+        {{ errorMessage }}
+      </p>
+      <template v-else>
+        <section class="commission-metrics">
           <article>
             <span>ฐานคำนวณ</span><b>{{ money(base) }}</b
             ><small>หลังส่วนลดรายรายการ · {{ saleCount }} รายการขาย</small>
@@ -172,8 +210,8 @@ watch([staffId, month], load)
           <article class="highlight">
             <span>ค่าคอมมิชชัน</span><b>{{ money(commission) }}</b
             ><small
-              >{{ currentTier ? `Tier ${currentTier.order} · ` : ''
-              }}{{ rate.toLocaleString('th-TH') }}%</small
+              >{{ currentTier ? `Tier ${currentTier.order} · ` : ""
+              }}{{ rate.toLocaleString("th-TH") }}%</small
             >
           </article>
           <article>
@@ -182,7 +220,7 @@ watch([staffId, month], load)
           </article>
           <article class="warning">
             <span>ยอดสุทธิ</span><b>{{ money(netTotal) }}</b
-            ><small>{{ approved ? 'อนุมัติแล้ว' : 'รออนุมัติ' }}</small>
+            ><small>{{ approved ? "อนุมัติแล้ว" : "รออนุมัติ" }}</small>
           </article>
         </section>
         <section class="detail-columns">
@@ -190,8 +228,8 @@ watch([staffId, month], load)
             <h2>Tier Commission</h2>
             <div class="tier-box">
               <b
-                >{{ currentTier ? `Tier ${currentTier.order}` : 'อัตราตามรอบ'
-                }}<em>{{ rate.toLocaleString('th-TH') }}%</em></b
+                >{{ currentTier ? `Tier ${currentTier.order}` : "อัตราตามรอบ"
+                }}<em>{{ rate.toLocaleString("th-TH") }}%</em></b
               >
               <small>ยอดขายเดือนนี้ {{ money(base) }}</small>
               <div
@@ -234,9 +272,18 @@ watch([staffId, month], load)
           </article>
           <article class="commission-card treatment-detail">
             <h2>รายละเอียดค่ามือ</h2>
-            <p>ค่าตอบแทนจากการรักษาที่ให้บริการจริง · {{ treatments.length }} รายการ</p>
-            <p v-if="!treatments.length" class="empty-treatment">ไม่มีรายการรักษาแทนในรอบนี้</p>
-            <div v-for="item in treatments" :key="item.id" class="treatment-row">
+            <p>
+              ค่าตอบแทนจากการรักษาที่ให้บริการจริง ·
+              {{ treatments.length }} รายการ
+            </p>
+            <p v-if="!treatments.length" class="empty-treatment">
+              ไม่มีรายการรักษาแทนในรอบนี้
+            </p>
+            <div
+              v-for="item in treatments"
+              :key="item.id"
+              class="treatment-row"
+            >
               <span>{{ thaiDate(item.visitDate) }} {{ item.courseCode }}</span
               ><b>{{ money(Number(item.treatmentFee)) }}</b>
             </div>
@@ -246,34 +293,43 @@ watch([staffId, month], load)
           </article>
         </section>
         <footer v-if="!approved" class="detail-actions">
-          <button class="commission-primary" :disabled="closingId === null" @click="openConfirmation">
-            อนุมัติยอด
-          </button>
+          <p>การปิดคอมมิชชันทำเป็นรอบระดับสาขาตามระบบหลัก</p>
+          <RouterLink
+            class="commission-primary"
+            :to="{ path: '/staff/commission/closing', query: { month: month } }"
+          >
+            ไปตรวจและปิดรอบสาขา
+          </RouterLink>
+          <p v-if="validationMessage" class="action-error" role="alert">{{ validationMessage }}</p>
         </footer>
-        <p v-else class="approved-note">✓ อนุมัติยอดเรียบร้อยแล้ว</p>
-      </template
-      >
-    </main>
-    <Teleport to="body"
-      ><div v-if="confirmOpen" class="action-backdrop" @click.self="confirmOpen = false">
-        <section class="action-modal" role="dialog" aria-modal="true">
-          <h2>ยืนยันอนุมัติยอดหรือไม่?</h2>
-          <p>ยอดสุทธิ {{ money(netTotal) }} จะถูกเปลี่ยนเป็นสถานะอนุมัติแล้ว</p>
-          <p v-if="validationMessage" class="action-error">{{ validationMessage }}</p>
-          <div>
-            <button class="commission-secondary" :disabled="saving" @click="confirmOpen = false">
-              ยกเลิก</button
-            ><button class="commission-primary" :disabled="saving" @click="confirm">
-              {{ saving ? 'กำลังบันทึก...' : 'ยืนยันอนุมัติ' }}
-            </button>
-          </div>
+        <section v-else class="approved-note">
+          <p>✓ ปิดยอดรายบุคคลแล้ว</p>
+          <template v-if="finalized">
+            <p>งวดนี้จ่ายแล้วและปิดแก้ไขถาวร หากต้องแก้ยอดให้สร้างรายการปรับยอดในงวดถัดไป</p>
+          </template>
+          <template v-else>
+            <label>เหตุผลที่เปิดยอดอีกครั้ง<textarea v-model="reopenReason" maxlength="255" rows="2" /></label>
+            <button class="commission-secondary" :disabled="saving || !reopenReason.trim()" @click="reopen">เปิดยอดรายบุคคลอีกครั้ง</button>
+          </template>
         </section>
-      </div></Teleport
-    >
+      </template>
+    </main>
   </div>
 </template>
 <style scoped>
-@import '../styles/commission-manager.css';
+@import "../styles/commission-manager.css";
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 20px;
+  color: #155f5c;
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 4px;
+  transition: color 160ms ease, transform 160ms ease;
+}
+.detail-back:hover { color: #0d4745; text-decoration: underline; transform: translateX(-3px); }
+.detail-back:focus-visible { outline: 3px solid #16877f; outline-offset: 4px; border-radius: 3px; }
 .detail-head {
   display: flex;
   justify-content: space-between;
@@ -311,7 +367,7 @@ watch([staffId, month], load)
   display: grid;
   gap: 12px;
   padding: 20px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 10px;
 }
 .tier-box b {
@@ -332,7 +388,7 @@ watch([staffId, month], load)
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .breakdown-note {
   font-size: 12px;
@@ -394,7 +450,7 @@ watch([staffId, month], load)
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin: -4px 0 0;
+  margin: 20px 0 24px;
 }
 .detail-actions button {
   min-width: 200px;
@@ -415,7 +471,7 @@ watch([staffId, month], load)
   padding: 12px;
   border-radius: 8px;
   background: #e7f4ef;
-  color: #1e807c !important;
+  color: var(--color-primary) !important;
   font-weight: 700;
 }
 .state-card {
@@ -446,7 +502,7 @@ watch([staffId, month], load)
   overflow-y: auto;
 }
 .action-modal {
-  width: min(430px, 100%);
+  width: min(460px, 100%);
   box-sizing: border-box;
   padding: 28px;
   border-radius: 16px;
@@ -455,13 +511,19 @@ watch([staffId, month], load)
 }
 .action-modal h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   text-align: center;
 }
 .action-modal > p {
   color: #667a72;
   text-align: center;
 }
+.approval-summary { margin: 20px 0 0; padding: 4px 16px; border-radius: 12px; background: #eef6f3; }
+.approval-summary div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 12px 0; }
+.approval-summary div + div { border-top: 1px solid #d6e6e0; }
+.approval-summary dt { color: #526e66; }
+.approval-summary dd { margin: 0; color: #243a33; font-weight: 700; text-align: right; }
+.approval-summary .approval-total dd { color: #116a64; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
 .action-modal > div {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -476,7 +538,9 @@ watch([staffId, month], load)
 }
 .action-modal button {
   justify-content: center;
+  min-height: 46px;
 }
+.action-modal button:focus-visible { outline: 3px solid #16877f; outline-offset: 3px; }
 .action-modal .commission-primary {
   border: 0;
 }

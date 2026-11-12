@@ -34,6 +34,18 @@ public class StaffService {
         return find(id);
     }
 
+    /** Next free auto-generated staff code by position, e.g. THP-001, MGR-001. */
+    @Transactional(readOnly = true)
+    public String nextStaffCode(StaffPosition position) {
+        String prefix = position == StaffPosition.Manager ? "MGR-" : "THP-";
+        long n = repository.countByStaffCodeStartingWith(prefix) + 1;
+        String code;
+        do {
+            code = String.format("%s%03d", prefix, n++);
+        } while (repository.findByStaffCode(code).isPresent());
+        return code;
+    }
+
     @Transactional
     public Staff create(String staffCode, String fname, String lname, StaffPosition position,
                          Branch branch, LocalDate hireDate, Long actorId) {

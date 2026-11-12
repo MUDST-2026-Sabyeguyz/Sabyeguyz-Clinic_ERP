@@ -17,6 +17,7 @@ export interface PatientRegistrationForm {
   bloodGroup: string
   nationality: string
   customerSource: string
+  insuranceType: string
   insuranceCompany: string
   salesChannel: string
   paymentType: string
