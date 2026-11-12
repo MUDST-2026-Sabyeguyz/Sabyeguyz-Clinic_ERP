@@ -3,6 +3,7 @@ package com.sabyeguyz.clinicv2.commission;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+import com.sabyeguyz.clinicv2.branch.Branch;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
@@ -23,6 +24,22 @@ public class StaffPayAdjustment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "staff_id")
     private Staff staff;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
+
+    @Column(name = "automatic", nullable = false)
+    private boolean automatic;
+
+    @Column(name = "approval_reference", length = 255)
+    private String approvalReference;
+
+    @Column(name = "cancellation_reason", length = 255)
+    private String cancellationReason;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
 
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "original_month", length = 7, nullable = false)
@@ -90,6 +107,16 @@ public class StaffPayAdjustment {
     public Long getId() { return id; }
     public Staff getStaff() { return staff; }
     public void setStaff(Staff staff) { this.staff = staff; }
+    public Branch getBranch() { return branch; }
+    public void setBranch(Branch branch) { this.branch = branch; }
+    public boolean isAutomatic() { return automatic; }
+    public void setAutomatic(boolean automatic) { this.automatic = automatic; }
+    public String getApprovalReference() { return approvalReference; }
+    public void setApprovalReference(String approvalReference) { this.approvalReference = approvalReference; }
+    public String getCancellationReason() { return cancellationReason; }
+    public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
+    public Instant getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
     public String getOriginalMonth() { return originalMonth; }
     public void setOriginalMonth(String originalMonth) { this.originalMonth = originalMonth; }
     public String getAppliedMonth() { return appliedMonth; }
