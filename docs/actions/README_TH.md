@@ -6,7 +6,7 @@ Workflow `Manual Kubernetes deployment` ใช้ Windows self-hosted runner ท
 
 เป้าหมายตายตัวคือ namespace `clinic-actions-demo`, ฐาน `clinic_actions_demo`, PVC `postgres-data` ใน namespace นี้ และ image `clinic-actions-backend/frontend:<SHA12>-<run>-<attempt>` แยกจาก Jenkins/clinic-present ทั้งหมด ใช้บัญชี Manager bootstrap สุ่ม ไม่ใช้ seed หรือข้อมูลผู้ป่วยจริง
 
-**Actions ระดับ repository ยังปิดอยู่** การสร้าง workflow และเปิด PR ไม่ได้แปลว่า deployment ผ่าน เงื่อนไข GitHub ต้องมีไฟล์ workflow บน default branch ก่อน manual dispatch จึงมี bootstrap PR แยกไป main แต่ห้าม merge จนผู้ดูแลอนุมัติ
+Actions ระดับ repository เปิดแล้วหลัง Bootstrap PR #112 เข้า main; workflows เก่าอื่นยังปิดอยู่ PR #111 ยังไม่ merge
 
 ## Pipeline
 
@@ -20,6 +20,16 @@ Workflow `Manual Kubernetes deployment` ใช้ Windows self-hosted runner ท
 8. Migration สำเร็จจึง apply backend/frontend โดยแอปปิด automatic Flyway; รอ rollout
 9. ตรวจ source annotation/image tag/resolved pod image ID และ frontend health, manager login, authenticated read, anonymous API 401
 10. บันทึก release/evidence เฉพาะเมื่อผ่านครบ หาก scan/test/migration ล้มจะไม่รายงาน deployment สำเร็จ ไม่มี no-op ที่รายงาน Ready แทนการ deploy
+
+## Dependency remediation และผลทดสอบ
+
+Baseline run 43311257876 พบ 11 Critical และ 33 High ใน Java dependencies รายงานครบและ dependency path อยู่ใน [ตาราง remediation](../actions-dependency-remediation.md) อัปเกรด Spring Boot BOM เป็น 4.1.2 เพื่อรับ Spring Framework 7 fixes ที่มีให้แบบ OSS พร้อมเพิ่ม Springdoc 3.2.0, Flyway starter และ Jackson 2 compatibility module สำหรับ API code เดิม; request models ที่ใช้ JsonNode เปลี่ยนเป็น Jackson 3 โดยตรงตาม module ปัจจุบัน ส่วน frontend อัปเกรด libxslt ใน nginx image
+
+ตรวจ dependency tree ที่ resolve แล้ว, frontend 153 tests/build/typecheck, legacy API Cypress 434/434 ผ่านบนพอร์ต 18083 และ Trivy local HIGH/CRITICAL ผ่านทั้งสอง images ใช้ฐาน vulnerability ปัจจุบันและ scanner digest ที่ pin ใน workflow รายงานก่อน/หลัง: [Trivy evidence](evidence/README.md). Maven พบ 0 JUnit tests จึงไม่นับ `BUILD SUCCESS` เป็น JUnit test pass
+
+V2 Cypress ผ่าน 299/309 ในรอบแรกก่อน JSON compatibility fix; หลังแก้ request JsonNode, appointment/patient targeted specs ผ่านครบ (15 patient tests, 7 appointment workflow tests). สองกรณี commission/audit ที่ยังล้มเกิดซ้ำเหมือนกันบน baseline SHA 660836a0 ใน PostgreSQL database แยก จึงเป็น known pre-existing failures ไม่ใช่ผลยืนยันว่า V2 suite ทั้งหมดผ่าน
+
+สถานะ migration/rollout/authenticated smoke จะอ้างเฉพาะ GitHub Actions run ที่กดจาก PR branch หลัง commit remediation นี้เท่านั้น
 
 ## เตรียมเครื่อง (ทำแยกจาก workflow)
 
