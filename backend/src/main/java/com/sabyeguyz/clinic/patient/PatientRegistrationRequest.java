@@ -1,12 +1,13 @@
 package com.sabyeguyz.clinic.patient;
 
+import java.time.LocalDate;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
 
 public record PatientRegistrationRequest(
         @NotBlank @Size(max = 2) String branchCode,
@@ -33,16 +34,52 @@ public record PatientRegistrationRequest(
         @Size(max = 80) String nationality,
         @Size(max = 80) String customerType,
         @Size(max = 80) String customerSource,
-        @Size(max = 160) String insuranceCompany
-) {
-    public PatientRegistrationRequest(String branchCode, String username, String email, String password,
-            String title, String fullName, LocalDate birthDate, String gender, String phone,
-            String identityDocumentType, String identityNumber, String address, boolean drugAllergy,
-            boolean foodAllergy, String chronicDisease, String emergencyContactName,
-            String emergencyContactRelationship, String emergencyContactPhone, boolean privacyConsent) {
-        this(branchCode, username, email, password, title, fullName, birthDate, gender, phone,
-                identityDocumentType, identityNumber, address, drugAllergy, foodAllergy, chronicDisease,
-                emergencyContactName, emergencyContactRelationship, emergencyContactPhone, privacyConsent,
-                null, null, null, null, null, null);
+        @Size(max = 160) String insuranceCompany) {
+    public PatientRegistrationRequest(
+            String branchCode,
+            String username,
+            String email,
+            String password,
+            String title,
+            String fullName,
+            LocalDate birthDate,
+            String gender,
+            String phone,
+            String identityDocumentType,
+            String identityNumber,
+            String address,
+            boolean drugAllergy,
+            boolean foodAllergy,
+            String chronicDisease,
+            String emergencyContactName,
+            String emergencyContactRelationship,
+            String emergencyContactPhone,
+            boolean privacyConsent) {
+        this(
+                branchCode,
+                username,
+                email,
+                password,
+                title,
+                fullName,
+                birthDate,
+                gender,
+                phone,
+                identityDocumentType,
+                identityNumber,
+                address,
+                drugAllergy,
+                foodAllergy,
+                chronicDisease,
+                emergencyContactName,
+                emergencyContactRelationship,
+                emergencyContactPhone,
+                privacyConsent,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }
