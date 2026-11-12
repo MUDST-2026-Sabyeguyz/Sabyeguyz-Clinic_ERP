@@ -12,3 +12,5 @@ state/
 /deploy/k8s/*.rendered.yaml
 **/__pycache__/
 /artifacts/
+/deployment-evidence.json
+/reports/
