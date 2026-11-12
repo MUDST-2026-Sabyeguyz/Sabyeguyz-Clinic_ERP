@@ -9,7 +9,9 @@ public class ServiceGroupMemberId implements Serializable {
 
     public ServiceGroupMemberId() {}
 
-    public ServiceGroupMemberId(Long serviceGroup, Long service) {
+    public ServiceGroupMemberId(
+            Long serviceGroup,
+            Long service) {
         this.serviceGroup = serviceGroup;
         this.service = service;
     }
@@ -18,9 +20,12 @@ public class ServiceGroupMemberId implements Serializable {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof ServiceGroupMemberId that)) return false;
+
         return Objects.equals(serviceGroup, that.serviceGroup) && Objects.equals(service, that.service);
     }
 
     @Override
-    public int hashCode() { return Objects.hash(serviceGroup, service); }
+    public int hashCode() {
+        return Objects.hash(serviceGroup, service);
+    }
 }

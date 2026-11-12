@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.catalog;
 
-import com.sabyeguyz.clinicv2.enums.ServiceType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.enums.ServiceType;
 
 /** Service/Course catalog management (Clinic ERP Workflow Brief §2 "Services/Courses"). */
 @Service
@@ -27,10 +29,15 @@ public class ServiceCatalogService {
     }
 
     @Transactional
-    public com.sabyeguyz.clinicv2.catalog.Service create(String serviceCode, String serviceName, ServiceType type,
-                                                           BigDecimal price, Integer defaultTotalVisits,
-                                                           Integer defaultBonusVisits, Integer defaultValidityDays,
-                                                           Long actorId) {
+    public com.sabyeguyz.clinicv2.catalog.Service create(
+            String serviceCode,
+            String serviceName,
+            ServiceType type,
+            BigDecimal price,
+            Integer defaultTotalVisits,
+            Integer defaultBonusVisits,
+            Integer defaultValidityDays,
+            Long actorId) {
         String code = requireText(serviceCode, "serviceCode");
         if (repository.findByServiceCode(code).isPresent()) {
             throw new IllegalArgumentException("รหัสบริการซ้ำ");
@@ -55,24 +62,31 @@ public class ServiceCatalogService {
         service.setDefaultValidityDays(defaultValidityDays);
         service.setServiceCreateAt(Instant.now());
         service.setServiceCreateBy(actorId);
+
         return repository.save(service);
     }
 
     @Transactional
-    public com.sabyeguyz.clinicv2.catalog.Service deactivate(Long id, Long actorId) {
+    public com.sabyeguyz.clinicv2.catalog.Service deactivate(
+            Long id,
+            Long actorId) {
         com.sabyeguyz.clinicv2.catalog.Service service = find(id);
         service.setServiceStatus(false);
         service.setServiceUpdateAt(Instant.now());
         service.setServiceUpdateBy(actorId);
+
         return repository.save(service);
     }
 
     @Transactional
-    public com.sabyeguyz.clinicv2.catalog.Service activate(Long id, Long actorId) {
+    public com.sabyeguyz.clinicv2.catalog.Service activate(
+            Long id,
+            Long actorId) {
         com.sabyeguyz.clinicv2.catalog.Service service = find(id);
         service.setServiceStatus(true);
         service.setServiceUpdateAt(Instant.now());
         service.setServiceUpdateBy(actorId);
+
         return repository.save(service);
     }
 
@@ -84,7 +98,10 @@ public class ServiceCatalogService {
      * sold, booked or used, its type is part of that history.
      */
     @Transactional
-    public com.sabyeguyz.clinicv2.catalog.Service changeType(Long id, ServiceType type, Long actorId) {
+    public com.sabyeguyz.clinicv2.catalog.Service changeType(
+            Long id,
+            ServiceType type,
+            Long actorId) {
         com.sabyeguyz.clinicv2.catalog.Service service = find(id);
         if (type != ServiceType.SingleVisit && type != ServiceType.Course) {
             throw new IllegalArgumentException("ประเภทต้องเป็น Single Visit หรือ Course");
@@ -117,6 +134,7 @@ public class ServiceCatalogService {
         }
         service.setServiceUpdateAt(Instant.now());
         service.setServiceUpdateBy(actorId);
+
         return repository.save(service);
     }
 
@@ -125,17 +143,23 @@ public class ServiceCatalogService {
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
     }
 
-    private static <T> T require(T value, String field) {
+    private static <T> T require(
+            T value,
+            String field) {
         if (value == null) {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
         }
+
         return value;
     }
 
-    private static String requireText(String value, String field) {
+    private static String requireText(
+            String value,
+            String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
         }
+
         return value.trim();
     }
 }
