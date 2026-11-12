@@ -1,16 +1,18 @@
 package com.sabyeguyz.clinicv2.appointment;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.audit.AuditLogService;
-import com.sabyeguyz.clinicv2.enums.AuditAction;
-import com.sabyeguyz.clinicv2.enums.VisitStatus;
-import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
-import com.sabyeguyz.clinicv2.patient.Patient;
-import com.sabyeguyz.clinicv2.staff.Staff;
 import java.time.Instant;
 import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.audit.AuditLogService;
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
+import com.sabyeguyz.clinicv2.enums.AuditAction;
+import com.sabyeguyz.clinicv2.enums.VisitStatus;
+import com.sabyeguyz.clinicv2.patient.Patient;
+import com.sabyeguyz.clinicv2.staff.Staff;
 
 /**
  * Actual clinic attendance (Clinic ERP Workflow Brief §4). Keeps
@@ -23,7 +25,10 @@ public class PatientVisitService {
     private final AppointmentService appointmentService;
     private final AuditLogService audit;
 
-    public PatientVisitService(PatientVisitRepository visits, AppointmentService appointmentService, AuditLogService audit) {
+    public PatientVisitService(
+            PatientVisitRepository visits,
+            AppointmentService appointmentService,
+            AuditLogService audit) {
         this.visits = visits;
         this.appointmentService = appointmentService;
         this.audit = audit;
@@ -40,8 +45,17 @@ public class PatientVisitService {
     }
 
     @Transactional
-    public PatientVisit createForService(Long appointmentId, Patient patient, Branch branch, Staff treatingStaff, Long actorId) {
-        Appointment appointment = appointmentService.requireServiceAppointment(appointmentId, patient, branch);
+    public PatientVisit createForService(
+            Long appointmentId,
+            Patient patient,
+            Branch branch,
+            Staff treatingStaff,
+            Long actorId) {
+        Appointment appointment = appointmentService.requireServiceAppointment(
+                appointmentId,
+                patient,
+                branch);
+
         require(treatingStaff != null
                         && treatingStaff.getBranch() != null
                         && branch.getId().equals(
@@ -49,6 +63,7 @@ public class PatientVisitService {
                 "ผู้รักษาต้องอยู่ในสาขารับบริการ");
 
         PatientVisit visit = new PatientVisit();
+
         visit.setPatient(patient);
         visit.setBranch(branch);
         visit.setAssignedStaff(appointment.getStaff());
@@ -73,38 +88,54 @@ public class PatientVisitService {
 
     /** Walk-in / Changing: no prior Appointment. */
     @Transactional
-    public PatientVisit checkInWalkIn(Patient patient, Branch branch, Staff assignedStaff, Long actorId) {
+    public PatientVisit checkInWalkIn(
+            Patient patient,
+            Branch branch,
+            Staff assignedStaff,
+            Long actorId) {
         require(patient != null, "ต้องระบุผู้ป่วย");
         require(branch != null, "ต้องระบุสาขา");
+
         PatientVisit visit = new PatientVisit();
+
         visit.setPatient(patient);
         visit.setBranch(branch);
         visit.setAssignedStaff(assignedStaff);
+
         return save(visit, actorId);
     }
 
     @Transactional
-    public PatientVisit startService(Long visitId, Long actorId) {
+    public PatientVisit startService(
+            Long visitId,
+            Long actorId) {
         PatientVisit visit = find(visitId);
         requireNotTerminal(visit);
         ensureTreatingStaff(visit);
         visit.setVisitStatus(VisitStatus.InService);
         touch(visit, actorId);
+
         if (visit.getAppointment() != null) {
             appointmentService.markInService(visit.getAppointment().getId(), actorId);
         }
+
         return visits.save(visit);
     }
 
     /** Called after payment or course usage succeeds. */
     @Transactional
-    public PatientVisit completeForService(Long visitId, Long appointmentId, Long actorId) {
+    public PatientVisit completeForService(
+            Long visitId,
+            Long appointmentId,
+            Long actorId) {
         PatientVisit visit = find(visitId);
         requireNotTerminal(visit);
         ensureTreatingStaff(visit);
 
         Appointment appointment = appointmentService.requireServiceAppointment(
-                        appointmentId, visit.getPatient(), visit.getBranch());
+                appointmentId,
+                visit.getPatient(),
+                visit.getBranch());
 
         if (appointment.getAppointmentPatientType() == AppointmentPatientType.CURRENT) {
             require(visit.getAppointment() != null
@@ -133,11 +164,16 @@ public class PatientVisitService {
                         "status", "Unconfirmed"),
                 AuditLogService.fields(
                         "event", "ServiceCompleted",
-                        "status", "Confirmed",
-                        "visitId", saved.getId(),
-                        "patientId", saved.getPatient().getId(),
-                        "branchId", saved.getBranch().getId(),
-                        "completedAt", completedAt),
+                        "status",
+                        "Confirmed",
+                        "visitId",
+                        saved.getId(),
+                        "patientId",
+                        saved.getPatient().getId(),
+                        "branchId",
+                        saved.getBranch().getId(),
+                        "completedAt",
+                        completedAt),
                 actorId);
 
         return saved;
@@ -151,18 +187,23 @@ public class PatientVisitService {
         visit.setVisitStatus(VisitStatus.Completed);
         visit.setCheckoutTime(Instant.now());
         touch(visit, actorId);
+
         if (visit.getAppointment() != null) {
             appointmentService.markCompleted(visit.getAppointment().getId(), actorId);
         }
+
         return visits.save(visit);
     }
 
     @Transactional
-    public PatientVisit cancel(Long visitId, Long actorId) {
+    public PatientVisit cancel(
+            Long visitId,
+            Long actorId) {
         PatientVisit visit = find(visitId);
         requireNotTerminal(visit);
         visit.setVisitStatus(VisitStatus.Cancelled);
         touch(visit, actorId);
+
         return visits.save(visit);
     }
 
@@ -176,15 +217,20 @@ public class PatientVisitService {
         }
     }
 
-    private PatientVisit save(PatientVisit visit, Long actorId) {
+    private PatientVisit save(
+            PatientVisit visit,
+            Long actorId) {
         visit.setVisitStatus(VisitStatus.Arrived);
         visit.setVisitDate(Instant.now());
         visit.setVisitCreateAt(Instant.now());
         visit.setVisitCreateBy(actorId);
+
         return visits.save(visit);
     }
 
-    private void touch(PatientVisit visit, Long actorId) {
+    private void touch(
+            PatientVisit visit,
+            Long actorId) {
         visit.setVisitUpdateAt(Instant.now());
         visit.setVisitUpdateBy(actorId);
     }
@@ -200,7 +246,9 @@ public class PatientVisitService {
         return visits.findById(id).orElseThrow(PatientVisitNotFoundException::new);
     }
 
-    private static void require(boolean condition, String message) {
+    private static void require(
+            boolean condition,
+            String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
         }
