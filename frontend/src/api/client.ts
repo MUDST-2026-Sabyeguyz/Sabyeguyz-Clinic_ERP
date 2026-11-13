@@ -134,7 +134,7 @@ export type PatientUpdatePayload = {
   bloodGroup: string
   nationality: string
   customerType: string
-  customerSource: string
+  customerSource?: string
   insuranceCompany: string
 }
 export type Page<T> = {
