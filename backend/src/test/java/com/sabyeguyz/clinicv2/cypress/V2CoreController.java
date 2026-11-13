@@ -1,4 +1,4 @@
-package com.sabyeguyz.clinic.cypress.v2;
+package com.sabyeguyz.clinicv2.cypress;
 
 import java.util.Map;
 import org.springframework.context.annotation.Profile;
@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 
 /** Test-only bridge. Each request executes an isolated original service scenario. */
 @RestController
-@Profile("cypress")
+@Profile("cypress-v2")
 @PreAuthorize("hasRole('MANAGER')")
 public class V2CoreController {
     @PostMapping("/__cypress/v2/core/{group}/{scenario}")

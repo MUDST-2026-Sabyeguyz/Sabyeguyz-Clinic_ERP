@@ -2,7 +2,7 @@ package com.sabyeguyz.clinicv2.catalog;
 
 import java.util.Map;
 import java.util.LinkedHashMap;
-import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 
 import com.sabyeguyz.clinicv2.commission.CommissionScheme;
 import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
