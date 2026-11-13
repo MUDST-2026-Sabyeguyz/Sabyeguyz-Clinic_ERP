@@ -621,7 +621,7 @@ onMounted(loadProfile)
 </template>
 
 <style scoped src="../styles/patients.css"></style>
-<style src="../styles/therapist.css"></style>
+<style src="../styles/patient-workspace.css"></style>
 <style scoped src="../styles/patient-profile.css"></style>
 
 <style src="../styles/profile-polish.css"></style>

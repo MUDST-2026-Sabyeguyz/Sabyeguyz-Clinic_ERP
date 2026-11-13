@@ -1,13 +1,15 @@
 package com.sabyeguyz.clinic.appointment;
 
-import com.sabyeguyz.clinic.branch.BranchRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinic.branch.BranchRepository;
 
 @Service
 public class AppointmentQueryService {

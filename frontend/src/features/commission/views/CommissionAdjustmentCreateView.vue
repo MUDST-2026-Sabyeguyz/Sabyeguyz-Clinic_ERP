@@ -229,7 +229,7 @@ onMounted(load)
 }
 .create-card {
   padding: 28px 24px 32px;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   background: #fff;
 }

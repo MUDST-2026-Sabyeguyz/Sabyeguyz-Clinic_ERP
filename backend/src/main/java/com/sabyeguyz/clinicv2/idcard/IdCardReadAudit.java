@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.idcard;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 
 /** Who read a card, when, where and why. It never holds anything read from the card. */
 @Entity
@@ -32,7 +33,12 @@ public class IdCardReadAudit {
 
     protected IdCardReadAudit() {}
 
-    public IdCardReadAudit(Long workstationId, Long userId, Long branchId, String purpose, String outcome) {
+    public IdCardReadAudit(
+            Long workstationId,
+            Long userId,
+            Long branchId,
+            String purpose,
+            String outcome) {
         this.workstationId = workstationId;
         this.userId = userId;
         this.branchId = branchId;
@@ -41,9 +47,14 @@ public class IdCardReadAudit {
     }
 
     public Long getId() { return id; }
+
     public Long getWorkstationId() { return workstationId; }
+
     public Long getUserId() { return userId; }
+
     public Long getBranchId() { return branchId; }
+
     public String getPurpose() { return purpose; }
+
     public String getOutcome() { return outcome; }
 }

@@ -1,8 +1,8 @@
 package com.sabyeguyz.clinic.sale;
 
-import com.sabyeguyz.clinic.catalog.Course;
-import com.sabyeguyz.clinic.catalog.ServiceItem;
-import com.sabyeguyz.clinic.course.CoursePurchase;
+import java.math.BigDecimal;
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,8 +15,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.time.Instant;
+
+import com.sabyeguyz.clinic.catalog.Course;
+import com.sabyeguyz.clinic.catalog.ServiceItem;
+import com.sabyeguyz.clinic.course.CoursePurchase;
 
 /**
  * บรรทัดหนึ่งในใบเสร็จ เก็บชื่อและราคาเป็น snapshot ณ วันที่ขาย
@@ -46,7 +48,9 @@ public class SaleItem {
     @JoinColumn(name = "course_id")
     private Course course;
 
-    /** ใบซื้อคอร์สที่บรรทัดนี้สร้าง ใช้ตามรอยกลับตอนยกเลิกใบเสร็จ */
+    /**
+     * ใบซื้อคอร์สที่บรรทัดนี้สร้าง ใช้ตามรอยกลับตอนยกเลิกใบเสร็จ
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_purchase_id")
     private CoursePurchase coursePurchase;
@@ -64,10 +68,17 @@ public class SaleItem {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    protected SaleItem() {}
+    protected SaleItem() {
+    }
 
-    private SaleItem(Sale sale, SaleItemType itemType, ServiceItem service, Course course,
-                     String description, BigDecimal unitPrice, int quantity) {
+    private SaleItem(
+            Sale sale,
+            SaleItemType itemType,
+            ServiceItem service,
+            Course course,
+            String description,
+            BigDecimal unitPrice,
+            int quantity) {
         this.sale = sale;
         this.itemType = itemType;
         this.service = service;
@@ -80,26 +91,72 @@ public class SaleItem {
     }
 
     public static SaleItem ofService(Sale sale, SaleItemType type, ServiceItem service, int quantity) {
-        return new SaleItem(sale, type, service, null, service.getName(), service.getPrice(), quantity);
+        return new SaleItem(
+                sale,
+                type,
+                service,
+                null,
+                service.getName(),
+                service.getPrice(),
+                quantity);
     }
 
     public static SaleItem ofCourse(Sale sale, Course course) {
-        return new SaleItem(sale, SaleItemType.COURSE, null, course, course.getName(), course.getPrice(), 1);
+        return new SaleItem(
+                sale,
+                SaleItemType.COURSE,
+                null,
+                course,
+                course.getName(),
+                course.getPrice(),
+                1);
     }
 
     public void linkCoursePurchase(CoursePurchase purchase) {
         this.coursePurchase = purchase;
     }
 
-    public Long getId() { return id; }
-    public Sale getSale() { return sale; }
-    public SaleItemType getItemType() { return itemType; }
-    public ServiceItem getService() { return service; }
-    public Course getCourse() { return course; }
-    public CoursePurchase getCoursePurchase() { return coursePurchase; }
-    public String getDescription() { return description; }
-    public BigDecimal getUnitPrice() { return unitPrice; }
-    public int getQuantity() { return quantity; }
-    public BigDecimal getLineTotal() { return lineTotal; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Sale getSale() {
+        return sale;
+    }
+
+    public SaleItemType getItemType() {
+        return itemType;
+    }
+
+    public ServiceItem getService() {
+        return service;
+    }
+
+    public Course getCourse() {
+        return course;
+    }
+
+    public CoursePurchase getCoursePurchase() {
+        return coursePurchase;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public BigDecimal getUnitPrice() {
+        return unitPrice;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public BigDecimal getLineTotal() {
+        return lineTotal;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

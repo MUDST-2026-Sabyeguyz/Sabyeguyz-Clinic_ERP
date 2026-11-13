@@ -1,10 +1,11 @@
 package com.sabyeguyz.clinic.report;
 
-import com.sabyeguyz.clinic.course.CoursePurchaseStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+
+import com.sabyeguyz.clinic.course.CoursePurchaseStatus;
 
 /**
  * Course Balance Report ตาม Workflow Brief V1 §8 — คอร์สของผู้ป่วยแต่ละราย ซื้อ ใช้ และคงเหลือกี่ครั้ง
@@ -20,8 +21,7 @@ public record CourseBalanceReportResponse(
         long totalUsedSessions,
         long totalRemainingSessions,
         BigDecimal totalValue,
-        List<Row> rows
-) {
+        List<Row> rows) {
     public record Row(
             Long coursePurchaseId,
             Long patientId,
@@ -37,6 +37,6 @@ public record CourseBalanceReportResponse(
             Instant purchasedAt,
             Instant expiresAt,
             boolean expired,
-            CoursePurchaseStatus status
-    ) {}
+            CoursePurchaseStatus status) {
+    }
 }

@@ -1,9 +1,9 @@
 package com.sabyeguyz.clinic.course;
 
-import com.sabyeguyz.clinic.branch.Branch;
-import com.sabyeguyz.clinic.catalog.Course;
-import com.sabyeguyz.clinic.patient.Patient;
-import com.sabyeguyz.clinic.staff.Staff;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,9 +16,11 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
+
+import com.sabyeguyz.clinic.branch.Branch;
+import com.sabyeguyz.clinic.catalog.Course;
+import com.sabyeguyz.clinic.patient.Patient;
+import com.sabyeguyz.clinic.staff.Staff;
 
 /**
  * ใบซื้อคอร์สหนึ่งใบ เก็บ snapshot ของ course master ณ วันที่ขาย
@@ -69,15 +71,41 @@ public class CoursePurchase {
 
     @Column(name = "created_at")
     private Instant createdAt;
-    @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="seller_employee_id") private Staff seller;
-    @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="case_owner_employee_id") private Staff caseOwner;
-    @Column(name="sale_month") private java.time.LocalDate saleMonth;
-    @Column(name="commission_status") private String commissionStatus="PROVISIONAL";
-    @Column(name="commission_scheme_id") private Long commissionSchemeId; @Column(name="commission_scheme_version") private String commissionSchemeVersion;
-    @Column(name="provisional_commission_rate") private BigDecimal provisionalCommissionRate; @Column(name="locked_commission_rate") private BigDecimal lockedCommissionRate;
-    @Column(name="total_course_commission_pool") private BigDecimal totalCourseCommissionPool; @Column(name="commission_allocation_per_visit") private BigDecimal commissionAllocationPerVisit;
 
-    protected CoursePurchase() {}
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "seller_employee_id")
+    private Staff seller;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "case_owner_employee_id")
+    private Staff caseOwner;
+
+    @Column(name = "sale_month")
+    private java.time.LocalDate saleMonth;
+
+    @Column(name = "commission_status")
+    private String commissionStatus = "PROVISIONAL";
+
+    @Column(name = "commission_scheme_id")
+    private Long commissionSchemeId;
+
+    @Column(name = "commission_scheme_version")
+    private String commissionSchemeVersion;
+
+    @Column(name = "provisional_commission_rate")
+    private BigDecimal provisionalCommissionRate;
+
+    @Column(name = "locked_commission_rate")
+    private BigDecimal lockedCommissionRate;
+
+    @Column(name = "total_course_commission_pool")
+    private BigDecimal totalCourseCommissionPool;
+
+    @Column(name = "commission_allocation_per_visit")
+    private BigDecimal commissionAllocationPerVisit;
+
+    protected CoursePurchase() {
+    }
 
     public CoursePurchase(Patient patient, Course course, Branch branch, Instant purchasedAt) {
         this.patient = patient;
@@ -112,7 +140,9 @@ public class CoursePurchase {
         return transfer;
     }
 
-    /** จำนวนครั้งทั้งหมดที่ซื้อ รวม Bonus */
+    /**
+     * จำนวนครั้งทั้งหมดที่ซื้อ รวม Bonus
+     */
     public int totalSessions() {
         return sessions + bonusSessions;
     }
@@ -124,20 +154,101 @@ public class CoursePurchase {
     public void cancel() {
         this.status = CoursePurchaseStatus.CANCELLED;
     }
-    public void lockCommission(Long schemeId,String version,BigDecimal rate){commissionSchemeId=schemeId;commissionSchemeVersion=version;lockedCommissionRate=rate;totalCourseCommissionPool=price.multiply(rate);commissionAllocationPerVisit=totalCourseCommissionPool.divide(BigDecimal.valueOf(totalSessions()),2,java.math.RoundingMode.HALF_UP);commissionStatus="LOCKED";}
-    public void assignSeller(Staff staff){seller=staff;caseOwner=staff;} public Staff getSeller(){return seller;} public Staff getCaseOwner(){return caseOwner;} public java.time.LocalDate getSaleMonth(){return saleMonth;} public String getCommissionStatus(){return commissionStatus;} public BigDecimal getLockedCommissionRate(){return lockedCommissionRate;} public BigDecimal getTotalCourseCommissionPool(){return totalCourseCommissionPool;} public BigDecimal getCommissionAllocationPerVisit(){return commissionAllocationPerVisit;}
 
-    public Long getId() { return id; }
-    public Patient getPatient() { return patient; }
-    public Course getCourse() { return course; }
-    public Branch getBranch() { return branch; }
-    public String getCourseCode() { return courseCode; }
-    public String getCourseName() { return courseName; }
-    public BigDecimal getPrice() { return price; }
-    public int getSessions() { return sessions; }
-    public int getBonusSessions() { return bonusSessions; }
-    public Instant getPurchasedAt() { return purchasedAt; }
-    public Instant getExpiresAt() { return expiresAt; }
-    public CoursePurchaseStatus getStatus() { return status; }
-    public Instant getCreatedAt() { return createdAt; }
+    public void lockCommission(Long schemeId, String version, BigDecimal rate) {
+        commissionSchemeId = schemeId;
+        commissionSchemeVersion = version;
+        lockedCommissionRate = rate;
+        totalCourseCommissionPool = price.multiply(rate);
+        commissionAllocationPerVisit = totalCourseCommissionPool.divide(
+                BigDecimal.valueOf(totalSessions()),
+                2,
+                java.math.RoundingMode.HALF_UP);
+        commissionStatus = "LOCKED";
+    }
+
+    public void assignSeller(Staff staff) {
+        seller = staff;
+        caseOwner = staff;
+    }
+
+    public Staff getSeller() {
+        return seller;
+    }
+
+    public Staff getCaseOwner() {
+        return caseOwner;
+    }
+
+    public java.time.LocalDate getSaleMonth() {
+        return saleMonth;
+    }
+
+    public String getCommissionStatus() {
+        return commissionStatus;
+    }
+
+    public BigDecimal getLockedCommissionRate() {
+        return lockedCommissionRate;
+    }
+
+    public BigDecimal getTotalCourseCommissionPool() {
+        return totalCourseCommissionPool;
+    }
+
+    public BigDecimal getCommissionAllocationPerVisit() {
+        return commissionAllocationPerVisit;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Patient getPatient() {
+        return patient;
+    }
+
+    public Course getCourse() {
+        return course;
+    }
+
+    public Branch getBranch() {
+        return branch;
+    }
+
+    public String getCourseCode() {
+        return courseCode;
+    }
+
+    public String getCourseName() {
+        return courseName;
+    }
+
+    public BigDecimal getPrice() {
+        return price;
+    }
+
+    public int getSessions() {
+        return sessions;
+    }
+
+    public int getBonusSessions() {
+        return bonusSessions;
+    }
+
+    public Instant getPurchasedAt() {
+        return purchasedAt;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public CoursePurchaseStatus getStatus() {
+        return status;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

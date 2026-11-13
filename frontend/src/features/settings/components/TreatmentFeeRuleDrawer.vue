@@ -263,13 +263,13 @@ async function save() {
 }
 .treatment-fee-branch {
   margin: 0;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 .treatment-fee-drawer footer {
   margin-top: 28px;
 }
 .treatment-fee-cancel {
-  border-color: #d9e1dc;
+  border-color: var(--color-border-soft);
   background: white;
   color: #25372f;
 }

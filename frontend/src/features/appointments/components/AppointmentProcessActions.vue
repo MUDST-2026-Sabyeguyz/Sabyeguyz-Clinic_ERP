@@ -94,14 +94,14 @@ watch(
 }
 span {
   font-size: 14px;
-  color: #56665d;
+  color: var(--color-muted);
 }
 a,
 button {
   display: inline-flex;
   align-items: center;
   min-height: 40px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-size: 14px;
   text-decoration: underline;
