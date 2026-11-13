@@ -51,9 +51,11 @@ pipeline {
             steps {
                 powershell '''
                     $ErrorActionPreference = 'Stop'
-                    $mount = (Join-Path $env:WORKSPACE 'frontend') + ':/work'
-                    docker run --rm --memory 2g --env NODE_OPTIONS=--max-old-space-size=1536 --volume $mount --workdir /work node:24.22-alpine sh -lc 'npm ci && npm run test:unit -- --run --maxWorkers=2 && npm run build'
-                    if ($LASTEXITCODE -ne 0) { throw 'Frontend tests/build failed' }
+                    $testImage = "clinic-presentation-frontend-tests:$env:SOURCE_SHA"
+                    docker build --tag $testImage --file frontend/Dockerfile.ci-tests frontend
+                    if ($LASTEXITCODE -ne 0) { throw 'Frontend test image build failed' }
+                    docker run --rm --memory 1g $testImage
+                    if ($LASTEXITCODE -ne 0) { throw 'Frontend unit tests failed' }
                 '''
             }
         }
