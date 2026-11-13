@@ -193,7 +193,7 @@ const draft = reactive({
   bloodGroup: 'ไม่ทราบ',
   nationality: 'ไทย',
   customerType: 'ลูกค้าทั่วไป',
-  customerSource: 'หน้าสาขา',
+  customerSource: '',
   insuranceCompany: '',
   firstName: '',
   middleName: '',
@@ -238,7 +238,7 @@ function normalizeProfile(profile: PatientProfile): UiPatientProfile {
     bloodGroup: profile.bloodGroup ?? 'ไม่ทราบ',
     nationality: profile.nationality ?? 'ไทย',
     customerType: profile.customerType ?? 'ลูกค้าทั่วไป',
-    customerSource: profile.customerSource ?? 'หน้าสาขา',
+    customerSource: profile.customerSource ?? '',
     insuranceCompany: profile.insuranceCompany ?? '',
   }
 }
@@ -304,7 +304,9 @@ async function saveEdit() {
       bloodGroup: draft.bloodGroup,
       nationality: draft.nationality,
       customerType: draft.customerType,
-      customerSource: draft.customerSource,
+      ...(draft.customerSource !== patient.value.customerSource
+        ? { customerSource: draft.customerSource }
+        : {}),
       insuranceCompany: draft.insuranceCompany,
     }
     const result = await patientApi.update(patient.value.id, payload)
