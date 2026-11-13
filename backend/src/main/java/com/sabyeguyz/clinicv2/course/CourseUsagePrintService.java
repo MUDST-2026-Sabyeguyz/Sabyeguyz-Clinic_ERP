@@ -117,6 +117,9 @@ public class CourseUsagePrintService {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("courseNo", usage.getCourse().getCourseNo());
         snapshot.put("courseName", usage.getCourse().getCourseName());
+        snapshot.put("purchaseDate", usage.getCourse().getCourseCreateAt().toString());
+        snapshot.put("expiryDate", usage.getCourse().getExpiryDate().toString());
+        snapshot.put("totalVisits", usage.getCourse().getTotalVisits());
         snapshot.put("visitDate", String.valueOf(usage.getVisitDate().toLocalDate()));
         snapshot.put("visitQty", usage.getVisitQty());
         snapshot.put("treatingStaffId", usage.getTreatingStaff() == null ? null : usage.getTreatingStaff().getId());
