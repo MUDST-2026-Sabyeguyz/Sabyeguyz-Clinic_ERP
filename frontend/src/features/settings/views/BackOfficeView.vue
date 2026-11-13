@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import TimeFilterPicker from '@/features/staff/components/TimeFilterPicker.vue'
 import MasterDataGroups from '../components/MasterDataGroups.vue'
 import SettingsNavIcon from '../components/SettingsNavIcon.vue'
@@ -36,6 +35,8 @@ type SettingsNavIconName = Exclude<
   'calendar' | 'settings'
 >
 
+// Section rows are heterogeneous (branches, users, services, ...) and read by dynamic key.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
 const sections: Array<{ key: SectionKey; label: string; hint: string; icon: SettingsNavIconName }> =
   [
@@ -528,49 +529,6 @@ async function loadPermissionOverrides(userId: number) {
       error instanceof Error ? error.message : 'โหลดสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
   } finally {
     permissionOverridesLoading.value = false
-  }
-}
-async function addPermissionOverride() {
-  const userId = Number(form.id)
-  const permissionId = Number(selectedPermissionId.value)
-  if (
-    !Number.isSafeInteger(userId) ||
-    userId <= 0 ||
-    !Number.isSafeInteger(permissionId) ||
-    permissionId <= 0
-  )
-    return
-  permissionOverridesError.value = ''
-  try {
-    await userManagementApi.setPermissionOverride(userId, permissionId, newOverrideAllowed.value)
-    await loadPermissionOverrides(userId)
-  } catch (error) {
-    permissionOverridesError.value =
-      error instanceof Error ? error.message : 'เพิ่มสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
-  }
-}
-async function updatePermissionOverride(override: UserPermissionOverride, allowed: boolean) {
-  const userId = Number(form.id)
-  if (!Number.isSafeInteger(userId) || userId <= 0) return
-  permissionOverridesError.value = ''
-  try {
-    await userManagementApi.setPermissionOverride(userId, override.permissionId, allowed)
-    await loadPermissionOverrides(userId)
-  } catch (error) {
-    permissionOverridesError.value =
-      error instanceof Error ? error.message : 'บันทึกสิทธิ์ไม่สำเร็จ'
-  }
-}
-async function resetPermissionOverride(override: UserPermissionOverride) {
-  const userId = Number(form.id)
-  if (!Number.isSafeInteger(userId) || userId <= 0) return
-  permissionOverridesError.value = ''
-  try {
-    await userManagementApi.resetPermissionOverride(userId, override.permissionId)
-    await loadPermissionOverrides(userId)
-  } catch (error) {
-    permissionOverridesError.value =
-      error instanceof Error ? error.message : 'คืนค่าสิทธิ์ตามบทบาทไม่สำเร็จ'
   }
 }
 const masterItems = computed(() =>

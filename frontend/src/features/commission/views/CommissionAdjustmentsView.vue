@@ -3,7 +3,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import { commissionApi, type ManagerAdjustment } from '@/api/client'
 import CommissionTabs from './CommissionTabs.vue'
 

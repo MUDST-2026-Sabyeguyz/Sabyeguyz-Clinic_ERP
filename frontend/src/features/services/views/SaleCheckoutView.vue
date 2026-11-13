@@ -4,7 +4,6 @@ import { useAppointmentProcess } from '@/features/appointments/useAppointmentPro
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  appointmentApi,
   ApiError,
   catalogApi,
   patientApi,

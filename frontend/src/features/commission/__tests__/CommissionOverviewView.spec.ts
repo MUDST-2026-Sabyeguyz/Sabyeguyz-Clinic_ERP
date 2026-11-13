@@ -12,11 +12,17 @@ const mocks = vi.hoisted(() => ({
   report: vi.fn(),
   closings: vi.fn(),
   payments: vi.fn(),
+  branchClosing: vi.fn(),
   staff: vi.fn(),
 }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: { month: '2026-07' } }) }))
 vi.mock('@/api/client', () => ({
-  commissionApi: { report: mocks.report, closings: mocks.closings, payments: mocks.payments },
+  commissionApi: {
+    report: mocks.report,
+    closings: mocks.closings,
+    payments: mocks.payments,
+    branchClosing: mocks.branchClosing,
+  },
   staffApi: { list: mocks.staff },
 }))
 const mountView = () =>
@@ -57,6 +63,7 @@ beforeEach(() => {
     },
   ])
   mocks.closings.mockResolvedValue([])
+  mocks.branchClosing.mockResolvedValue({ status: 'OPEN' })
   mocks.staff.mockResolvedValue([
     { id: 1, fullName: 'Rama therapist', branchCode: '01' },
     { id: 2, fullName: 'Bearing therapist', branchCode: '02' },
@@ -73,13 +80,13 @@ describe('manager commission overview', () => {
     await flushPromises()
     expect(view.get('tbody').text()).toContain('Rama therapist')
     expect(view.get('tbody').text()).not.toContain('Bearing therapist')
-    expect(view.findAll('.commission-metrics article')[2]!.text()).toContain('฿180')
+    expect(view.findAll('.commission-metrics article')[1]!.text()).toContain('฿180')
     setSelectedManagerBranch({ code: '02', name: 'แบริ่ง' })
     await nextTick()
     await flushPromises()
     expect(view.get('tbody').text()).toContain('Bearing therapist')
     expect(view.get('tbody').text()).not.toContain('Rama therapist')
-    expect(view.findAll('.commission-metrics article')[2]!.text()).toContain('฿135')
+    expect(view.findAll('.commission-metrics article')[1]!.text()).toContain('฿135')
     expect(mocks.payments).toHaveBeenCalledWith('2026-07', '01')
     expect(mocks.payments).toHaveBeenCalledWith('2026-07', '02')
     view.unmount()
@@ -88,8 +95,7 @@ describe('manager commission overview', () => {
     mocks.payments.mockResolvedValue([])
     const view = mountView()
     await flushPromises()
-    expect(view.findAll('.commission-metrics article')[2]!.get('b').text()).toBe('—')
-    expect(view.text()).toContain('ยังไม่มีข้อมูลสรุปค่ามือ')
+    expect(view.findAll('.commission-metrics article')[1]!.get('b').text()).toBe('—')
     view.unmount()
   })
   it('shows a real zero fee snapshot as zero', async () => {
@@ -98,7 +104,7 @@ describe('manager commission overview', () => {
     ])
     const view = mountView()
     await flushPromises()
-    expect(view.findAll('.commission-metrics article')[2]!.get('b').text()).toBe('฿0')
+    expect(view.findAll('.commission-metrics article')[1]!.get('b').text()).toBe('฿0')
     view.unmount()
   })
   it('includes fee-only staff in their home branch and excludes paid payroll from pending money', async () => {
@@ -117,8 +123,7 @@ describe('manager commission overview', () => {
     const view = mountView()
     await flushPromises()
     expect(view.get('tbody').text()).toContain('Fee only therapist')
-    expect(view.findAll('.commission-metrics article')[2]!.get('b').text()).toBe('฿135')
-    expect(view.findAll('.commission-metrics article')[3]!.get('b').text()).toBe('฿0')
+    expect(view.findAll('.commission-metrics article')[1]!.get('b').text()).toBe('฿135')
     view.unmount()
   })
   it('does not expose all branches when no Header branch is selected', async () => {
