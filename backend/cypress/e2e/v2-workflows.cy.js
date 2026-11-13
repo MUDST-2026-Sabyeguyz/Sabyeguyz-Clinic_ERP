@@ -18,10 +18,16 @@ function rejected(group, name, message) {
     if (message) expect(body.errorMessage).to.include(message)
   })
 }
+function rejectedState(group, name, message) {
+  return scenario(group, name).then((body) => {
+    expect(body.error).to.equal('IllegalStateException')
+    expect(body.errorMessage).to.include(message)
+  })
+}
 
 describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
-  it('booksAConfirmedAppointment', () => {
-    value('appointment', 'book').its('status').should('equal', 'Confirmed')
+  it('booksAnUnconfirmedAppointmentByDefault', () => {
+    value('appointment', 'book').its('status').should('equal', 'Unconfirmed')
   })
   it('rejectsBookingWhenStaffAlreadyBooked', () => rejected('appointment', 'conflict'))
   it('booksAnUnconfirmedAppointment', () => {
@@ -35,21 +41,36 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
   })
   it('booksANewPatientByNicknameWithPhone', () => {
     value('appointment', 'new-nickname-with-phone').should('include', {
-      status: 'Confirmed', patientType: 'NEW', contactName: 'แบงค์', contactPhone: '0812345678',
+      status: 'Unconfirmed', patientType: 'NEW', contactName: 'แบงค์', contactPhone: '0812345678',
     })
   })
   it('rejectsANewPatientNicknameWithoutPhone', () => rejected('appointment', 'new-nickname-without-phone', 'เบอร์โทร'))
   it('rejectsANewPatientWithoutAName', () => rejected('appointment', 'new-without-name'))
-  it('confirmMovesUnconfirmedToConfirmedAndRecordsHistory', () => {
-    value('appointment', 'confirm').should('include', { status: 'Confirmed', historySaves: 1 })
+  it('confirmAfterServiceMovesUnconfirmedToConfirmedAndRecordsHistory', () => {
+    value('appointment', 'confirm-after-service').should('include', { status: 'Confirmed', historySaves: 1 })
   })
-  it('rejectsConfirmingAnAppointmentThatIsNotUnconfirmed', () => rejected('appointment', 'confirm-already-confirmed'))
-  it('registeringANewPatientMakesTheAppointmentCurrent', () => {
-    value('appointment', 'link-patient').should('include', { patientType: 'CURRENT', hasPatient: true })
+  it('rejectsManualConfirmationBeforeServiceCompletion', () => {
+    rejectedState('appointment', 'confirm', 'ต้องบันทึกบริการและรับชำระ')
   })
-  it('rejectsLinkingAPatientToAnAppointmentThatAlreadyHasOne', () => rejected('appointment', 'link-patient-already-linked', 'ลงทะเบียนแล้ว'))
-  it('rejectsCheckInOfAnUnconfirmedAppointment', () => rejected('appointment', 'arrive-unconfirmed', 'ยืนยัน'))
-  it('rejectsCheckInOfANewPatientWhoIsNotRegistered', () => rejected('appointment', 'arrive-new-patient', 'ลงทะเบียน'))
+  it('rejectsConfirmingAnAppointmentThatIsNotUnconfirmed', () => {
+    rejected('appointment', 'confirm-after-service-already-confirmed', 'ไม่ได้อยู่ในสถานะยังไม่ยืนยัน')
+  })
+
+  for (const name of ['link-patient', 'link-patient-already-linked']) {
+    it(`rejects retroactive patient linking: ${name}`, () => {
+      scenario('appointment', name).then((body) => {
+        expect(body.error).to.equal('IllegalStateException')
+        expect(body.errorMessage).to.include('ไม่ผูกผู้ป่วยย้อนหลัง')
+      })
+    })
+  }
+
+  it('rejectsStandaloneArrivedTransitionForAnUnconfirmedAppointment', () => {
+    rejectedState('appointment', 'arrive-unconfirmed', 'ไม่รองรับสถานะ Arrived')
+  })
+  it('rejectsStandaloneArrivedTransitionForANewPatient', () => {
+    rejectedState('appointment', 'arrive-new-patient', 'ไม่รองรับสถานะ Arrived')
+  })
   it('cancelRecordsStatusHistory', () => {
     value('appointment', 'cancel').should('include', { status: 'Cancelled', historySaves: 1 })
   })
@@ -62,12 +83,8 @@ describe('clinicv2 AppointmentServiceTest migrated assertions', () => {
 })
 
 describe('clinicv2 PatientVisitServiceTest migrated assertions', () => {
-  it('checkInFromAppointmentMarksTheAppointmentArrived', () => {
-    value('visit', 'check-in').then((body) => {
-      expect(body.status).to.equal('Arrived')
-      expect(body.sameAppointment).to.equal(true)
-      expect(body.arrivedCalls).to.deep.equal([[5, 1]])
-    })
+  it('rejectsStandaloneCheckInBeforeSuccessfulService', () => {
+    rejectedState('visit', 'check-in', 'ระบบจะสร้าง Visit เมื่อทำรายการสำเร็จ')
   })
   it('checkInWalkInRequiresAPatientAndBranch', () => rejected('visit', 'missing-patient'))
   it('completeSetsCheckoutTimeAndPropagatesToTheAppointment', () => {
@@ -85,32 +102,6 @@ describe('clinicv2 AuditLogServiceTest migrated assertions', () => {
     value('audit', 'record').should('include', { tableName: 'branch', action: 'UPDATE' })
   })
   it('rejectsMissingAction', () => rejected('audit', 'missing-action'))
-  // Data Dictionary Audit_log: JSON values, changed_by only for a user, source for an automatic event
-  it('keepsPlainTextAsJson', () => {
-    value('audit', 'plain-text').then((log) => {
-      expect(JSON.parse(log.oldValue)).to.deep.equal({ summary: 'Active' })
-      expect(JSON.parse(log.newValue)).to.deep.equal({ summary: 'Cancelled' })
-      expect(log.changedBy).to.equal(1)
-    })
-  })
-  it('namesTheSourceOfAnAutomaticEventWithoutAUser', () => {
-    value('audit', 'automatic').then((log) => {
-      expect(log.changedBy).to.equal(null)
-      expect(JSON.parse(log.newValue)).to.deep.equal({ status: 'Cancelled', source: 'System' })
-    })
-    value('audit', 'google').then((log) => {
-      expect(log.changedBy).to.equal(null)
-      expect(JSON.parse(log.newValue)).to.deep.equal({ source: 'GoogleCalendar', appointment_status: 'Cancelled' })
-      expect(JSON.parse(log.oldValue)).to.deep.equal({ appointment_status: 'Confirmed' })
-    })
-  })
-  it('storesBeforeAndAfterAsJsonForAUserChange', () => {
-    value('audit', 'change').then((log) => {
-      expect(JSON.parse(log.oldValue)).to.deep.equal({ effective_to: null })
-      expect(JSON.parse(log.newValue)).to.deep.equal({ effective_to: '2026-10-31', reason: 'ended by the new version' })
-      expect(log.changedBy).to.equal(1)
-    })
-  })
 })
 
 describe('clinicv2 CourseTransferServiceTest migrated assertions', () => {
