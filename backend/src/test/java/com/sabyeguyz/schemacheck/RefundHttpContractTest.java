@@ -1,26 +1,34 @@
 package com.sabyeguyz.schemacheck;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.fasterxml.jackson.databind.JsonNode;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Real HTTP refund boundaries and shared cancellation contracts. */
 class RefundHttpContractTest extends CoursePaymentHttpTestSupport {
     private long originalPayment() {
-        return db.queryForObject("select p.payment_id from payment_transaction p join course c using(receipt_id) where c.course_id=?",
-                Long.class, courseId);
+        return db.queryForObject(
+                "select p.payment_id from payment_transaction p join course c using(receipt_id) where c.course_id=?",
+                Long.class,
+                courseId);
     }
 
     private long collectionPayment() {
-        return db.queryForObject("select p.payment_id from payment_transaction p join receipt_course_payment c using(receipt_id) where c.course_id=?",
-                Long.class, courseId);
+        return db.queryForObject(
+                "select p.payment_id from payment_transaction p join receipt_course_payment c using(receipt_id) where c.course_id=?",
+                Long.class,
+                courseId);
     }
 
     private Map<String, Object> request(long course, int visits, Long mainItem) {
@@ -52,13 +60,19 @@ class RefundHttpContractTest extends CoursePaymentHttpTestSupport {
         var payload = request(courseId, 2, null);
         payload.put("reasonCode", "PatientRequested");
         var selected = create(originalPayment(), payload);
-        assertEquals("PatientRequested", db.queryForObject("select c.reason_code::text from transaction_cancellation c join refund_transaction r using(cancellation_id) where r.refund_id=?",
-                String.class, selected.path("id").asLong()));
-        assertEquals(1, db.queryForObject("select count(*) from audit_log where table_name='refund_transaction' and record_id=? and new_value::jsonb->>'reason_code'='PatientRequested'",
-                Integer.class, selected.path("id").asText()));
+        assertEquals("PatientRequested", db.queryForObject(
+                "select c.reason_code::text from transaction_cancellation c join refund_transaction r using(cancellation_id) where r.refund_id=?",
+                String.class,
+                selected.path("id").asLong()));
+        assertEquals(1, db.queryForObject(
+                "select count(*) from audit_log where table_name='refund_transaction' and record_id=? and new_value::jsonb->>'reason_code'='PatientRequested'",
+                Integer.class,
+                selected.path("id").asText()));
         var legacy = create(collectionPayment(), request(courseId, 1, null));
-        assertEquals("Other", db.queryForObject("select c.reason_code::text from transaction_cancellation c join refund_transaction r using(cancellation_id) where r.refund_id=?",
-                String.class, legacy.path("id").asLong()));
+        assertEquals("Other", db.queryForObject(
+                "select c.reason_code::text from transaction_cancellation c join refund_transaction r using(cancellation_id) where r.refund_id=?",
+                String.class,
+                legacy.path("id").asLong()));
     }
 
     @Test
@@ -95,7 +109,10 @@ class RefundHttpContractTest extends CoursePaymentHttpTestSupport {
         for (String action : List.of("complete", "void", "fail", "retry")) {
             assertEquals(403, reply("POST", "/api/refunds/" + refund.path("id").asLong() + "/" + action, null).status());
         }
-        assertEquals("Pending", db.queryForObject("select refund_status::text from refund_transaction where refund_id=?", String.class, refund.path("id").asLong()));
+        assertEquals("Pending", db.queryForObject(
+                "select refund_status::text from refund_transaction where refund_id=?",
+                String.class,
+                refund.path("id").asLong()));
     }
 
     @Test
@@ -109,10 +126,16 @@ class RefundHttpContractTest extends CoursePaymentHttpTestSupport {
         assertEquals(8, remaining());
         assertEquals(200, reply("POST", "/api/refunds/" + main.path("id").asLong() + "/complete", null).status());
         assertEquals(8, remaining());
-        assertEquals(-2, db.queryForObject("select sum(qty_change) from course_ledger where course_refund_item_id=? and entry_type='Cancellation'", Integer.class, mainItem));
+        assertEquals(-2, db.queryForObject(
+                "select sum(qty_change) from course_ledger where course_refund_item_id=? and entry_type='Cancellation'",
+                Integer.class,
+                mainItem));
         assertEquals(0, db.queryForObject("select count(*) from course_ledger where course_refund_item_id=?", Integer.class,
                 child.path("items").get(0).path("courseRefundItemId").asLong()));
-        assertEquals(actorId, db.queryForObject("select approved_by from refund_transaction where refund_id=?", Long.class, child.path("id").asLong()));
+        assertEquals(actorId, db.queryForObject(
+                "select approved_by from refund_transaction where refund_id=?",
+                Long.class,
+                child.path("id").asLong()));
         assertEquals(400, reply("POST", "/api/refunds/" + child.path("id").asLong() + "/void", null).status());
     }
 
@@ -124,9 +147,15 @@ class RefundHttpContractTest extends CoursePaymentHttpTestSupport {
         assertEquals(200, reply("POST", "/api/refunds/" + main.path("id").asLong() + "/void", null).status());
         assertEquals(200, reply("POST", "/api/refunds/" + child.path("id").asLong() + "/complete", null).status());
         assertEquals(8, remaining());
-        assertEquals("Voided", db.queryForObject("select refund_status::text from refund_transaction where refund_id=?", String.class, main.path("id").asLong()));
+        assertEquals("Voided", db.queryForObject(
+                "select refund_status::text from refund_transaction where refund_id=?",
+                String.class,
+                main.path("id").asLong()));
         assertNull(db.queryForObject("select approved_by from refund_transaction where refund_id=?", Long.class, main.path("id").asLong()));
-        assertEquals(0, db.queryForObject("select count(*) from course_ledger where course_refund_item_id=? and entry_type='Reversal'", Integer.class, mainItem));
+        assertEquals(0, db.queryForObject(
+                "select count(*) from course_ledger where course_refund_item_id=? and entry_type='Reversal'",
+                Integer.class,
+                mainItem));
     }
 
     @Test
@@ -168,7 +197,10 @@ class RefundHttpContractTest extends CoursePaymentHttpTestSupport {
             workers.shutdownNow();
         }
         assertEquals(8, remaining());
-        assertEquals(-2, db.queryForObject("select sum(qty_change) from course_ledger where course_refund_item_id=? and entry_type='Cancellation'", Integer.class, mainItem));
+        assertEquals(-2, db.queryForObject(
+                "select sum(qty_change) from course_ledger where course_refund_item_id=? and entry_type='Cancellation'",
+                Integer.class,
+                mainItem));
     }
 
     @Test
@@ -184,6 +216,9 @@ class RefundHttpContractTest extends CoursePaymentHttpTestSupport {
         assertEquals(200, reply("POST", "/api/refunds/" + main.path("id").asLong() + "/void", null).status());
         assertEquals(200, reply("POST", "/api/refunds/" + child.path("id").asLong() + "/void", null).status());
         assertEquals(10, remaining());
-        assertEquals(0, db.queryForObject("select count(*) from course_ledger where course_refund_item_id=? and entry_type='Reversal'", Integer.class, mainItem));
+        assertEquals(0, db.queryForObject(
+                "select count(*) from course_ledger where course_refund_item_id=? and entry_type='Reversal'",
+                Integer.class,
+                mainItem));
     }
 }
