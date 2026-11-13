@@ -153,6 +153,8 @@ public class V2FinanceScenarios {
                 new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
 
         if (scenario.equals("schemecrud-branch-open")) {
+            var existing = schemeVersion(1, "2026-01-01", null);
+            schemesStub.on("findByOrderByEffectiveFromDesc", args -> List.of(existing));
             branchClosing.setClosingStatus(BranchClosingStatus.Open);
             branchClosing.setClosedAt(null);
             branchClosing.setClosedBy(null);
