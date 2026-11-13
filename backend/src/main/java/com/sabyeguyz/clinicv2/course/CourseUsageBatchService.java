@@ -41,7 +41,18 @@ public class CourseUsageBatchService {
         this.branchAccess = branchAccess;
     }
 
+    /** A course used by someone other than its buyer is a shared one; its sessions may be used at any branch. */
+    public static boolean isSharedTo(Course course, Long usingPatientId) {
+        return usingPatientId != null
+                && course.getPurchaserPatient() != null
+                && !usingPatientId.equals(course.getPurchaserPatient().getId());
+    }
+
     public Map<Long, Course> lockCourses(List<Item> items) {
+        return lockCourses(items, null);
+    }
+
+    public Map<Long, Course> lockCourses(List<Item> items, Long usingPatientId) {
         if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("ต้องระบุรายการใช้สิทธิ์คอร์ส");
         }
@@ -63,9 +74,12 @@ public class CourseUsageBatchService {
                             .orElseThrow(() ->
                                     new IllegalArgumentException("ไม่พบคอร์ส"));
 
-                    branchAccess.requireAccess(
-                            course.getBranch(),
-                            "ใช้สิทธิ์ได้เฉพาะรายการของสาขาตัวเอง");
+                    // a shared course may be used at the branch where the receiver is served (checked by the caller)
+                    if (!isSharedTo(course, usingPatientId)) {
+                        branchAccess.requireAccess(
+                                course.getBranch(),
+                                "ใช้สิทธิ์ได้เฉพาะรายการของสาขาตัวเอง");
+                    }
                     locked.put(id, course);
                 });
 
@@ -92,7 +106,8 @@ public class CourseUsageBatchService {
                 throw new IllegalArgumentException("คอร์สนี้ยังไม่ได้ล็อก");
             }
 
-            if (!visit.getBranch().getId().equals(course.getBranch().getId())) {
+            if (!isSharedTo(course, visit.getPatient().getId())
+                    && !visit.getBranch().getId().equals(course.getBranch().getId())) {
                 throw new IllegalArgumentException(
                         "คอร์สต้องอยู่สาขาเดียวกับ Visit");
             }

@@ -38,10 +38,12 @@ export function buildCourseUsages(
   }
   for (const [id, quantity] of totals) {
     const course = courses.find((item) => item.id === id)
+    // a course shared to this patient (bought by someone else) can be used at any branch
+    const sharedToPatient = !!course?.purchaser && course.purchaser.id !== context.patientId
     if (
       !course ||
       !course.usable ||
-      course.branchCode !== context.branchCode ||
+      (!sharedToPatient && course.branchCode !== context.branchCode) ||
       !Number.isFinite(course.remaining) ||
       course.remaining < quantity
     )
