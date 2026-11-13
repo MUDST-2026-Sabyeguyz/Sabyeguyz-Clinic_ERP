@@ -8,10 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-<<<<<<< HEAD
-=======
 import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 
 public interface SalesTransactionRepository extends JpaRepository<SalesTransaction, Long> {
@@ -49,8 +46,6 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
             @Param("from") Instant from,
             @Param("to") Instant to,
             @Param("type") TransactionType type);
-<<<<<<< HEAD
-=======
 
     /**
      * Returns all sale lines in document order, including voided lines.
@@ -88,5 +83,4 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
             @Param("receiptId") Long receiptId,
             @Param("voidedStatus") ReceiptStatus voidedStatus
     );
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 }

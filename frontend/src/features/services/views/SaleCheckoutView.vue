@@ -63,12 +63,12 @@ const uncertainSale = ref(false)
 const billDiscountType = ref<DiscountType>('NONE')
 const billDiscountValue = ref(0)
 const note = ref('')
-const stage = ref<'edit' | 'review' | 'success'>('edit')
+const stage = ref<'edit' | 'review'>('edit')
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
 const errorMessage = ref<HTMLElement | null>(null)
-const saved = ref<{ id: number; receiptNo: string; receiptId?: number | null } | null>(null)
+const saleDone = ref(false)
 const {
   appointmentId,
   sourceAppointment,
@@ -176,6 +176,25 @@ function paymentDisplay(code: string, name: string) {
   return { label: name, icon: '' }
 }
 
+// เติมบริการและผู้รักษาของนัดให้เป็นค่าเริ่มต้น เฉพาะแถวแรกที่ยังว่างและยังไม่ถูกแก้
+function applyAppointmentDefaults() {
+  if (!appointmentId.value) return
+  const appointment = sourceAppointment.value
+  const serviceId = appointment?.service?.id
+  const [first] = lines.value
+  if (serviceId && lines.value.length === 1 && first && !first.category && !first.catalogKey) {
+    if (services.value.some((item) => item.id === serviceId)) {
+      first.category = 'service'
+      first.catalogKey = `service:${serviceId}`
+    } else if (courses.value.some((item) => item.id === serviceId)) {
+      first.category = 'course'
+      first.catalogKey = `course:${serviceId}`
+    }
+  }
+  const therapistId = appointment?.therapist?.id
+  if (therapistId && !treatingId.value && staff.value.some((person) => person.id === therapistId))
+    treatingId.value = therapistId
+}
 let loadRequest = 0
 async function load() {
   const current = ++loadRequest
@@ -219,6 +238,7 @@ async function load() {
     sellerId.value =
       staff.value.find((person) => person.id === signedInUser?.staffId)?.id ?? staff.value[0]?.id ?? 0
     treatingId.value = 0
+    applyAppointmentDefaults()
     methodCode.value = ''
     uncertainSale.value = Boolean(sessionStorage.getItem(storageKey.value))
     paymentLabel.value = ''
@@ -319,7 +339,7 @@ function saleRequest() {
   })
 }
 async function save() {
-  if (saving.value || !patient.value || uncertainSale.value || stage.value === 'success') return
+  if (saving.value || !patient.value || uncertainSale.value || saleDone.value) return
   error.value = ''
   try {
     saving.value = true
@@ -340,12 +360,24 @@ async function save() {
     const result = await salesApi.create(request)
     if (appointmentId.value) finishAppointmentWrite(hasService.value)
     if (appointmentId.value) await refreshAppointmentProcess()
-    saved.value = { id: result.id, receiptNo: result.receiptNo, receiptId: result.receiptId }
+    saleDone.value = true
     sessionStorage.removeItem(storageKey.value)
     sessionStorage.removeItem(requestKeyStorageKey.value)
     uncertainSale.value = false
-    stage.value = 'success'
-    void router.push({ name: 'staff-receipt', params: { id: result.id } })
+    if (appointmentId.value && !hasService.value) {
+      // ซื้อคอร์สอย่างเดียวยังไม่ยืนยันนัด ต้องใช้สิทธิ์คอร์สต่อเพื่อยืนยันนัด
+      void router.push({
+        name: 'staff-courses',
+        query: {
+          patientId: String(patient.value.id),
+          appointmentId: String(appointmentId.value),
+          ...(result.receiptId ? { receiptId: String(result.receiptId) } : {}),
+          action: 'use',
+        },
+      })
+    } else {
+      void router.push({ name: 'staff-receipt', params: { id: result.id } })
+    }
   } catch (cause) {
     if (cause instanceof ApiError && [400, 401, 403, 422].includes(cause.status)) {
       sessionStorage.removeItem(storageKey.value)
@@ -406,8 +438,9 @@ watch(
         {{ processError
         }}<button type="button" @click="refreshAppointmentProcess">ลองอ่านใหม่</button>
       </div>
+      <p v-else-if="saleDone" role="status">กำลังเปิดใบเสร็จ…</p>
       <AppointmentProcessPanel
-        v-else-if="appointmentProgress && !canStartAppointment && stage !== 'success'"
+        v-else-if="appointmentProgress && !canStartAppointment"
         :progress="appointmentProgress"
         :block-reason="processBlockReason"
         :recovery-required="recoveryRequired"
@@ -421,47 +454,13 @@ watch(
         <header class="heading">
           <div>
             <h1>
-              {{
-                stage === 'success'
-                  ? 'บันทึกการขายสำเร็จ'
-                  : stage === 'review'
-                    ? 'ตรวจสอบและชำระเงิน'
-                    : 'รายละเอียดการชำระเงิน'
-              }}
+              {{ stage === 'review' ? 'ตรวจสอบและชำระเงิน' : 'รายละเอียดการชำระเงิน' }}
             </h1>
             <p>{{ patient.fullName }} · HN {{ patient.hn }}</p>
             <p v-if="hasService && !appointmentId" class="helper">บริการรายครั้งที่ซื้อในหน้านี้จะเก็บเป็นสิทธิ์ไว้ใช้เมื่อนัดหมายครั้งถัดไป</p>
           </div>
         </header>
-        <section v-if="stage === 'success' && saved" class="success-panel">
-          <h2>เลขใบเสร็จ {{ saved.receiptNo }}</h2>
-          <p>รับชำระ {{ money(netCents) }} และบันทึกรายการเรียบร้อยแล้ว</p>
-          <button
-            type="button"
-            @click="router.push({ name: 'staff-receipt', params: { id: saved.id } })"
-          >
-            ดูและพิมพ์ใบเสร็จ
-          </button>
-          <button
-            v-if="lines.some((line) => catalogItem(line)?.type === 'COURSE')"
-            type="button"
-            @click="
-              router.push({
-                name: 'staff-courses',
-                query: {
-                  patientId: patient.id,
-                  ...(saved.receiptId ? { receiptId: saved.receiptId } : {}),
-                  ...(appointmentId ? { appointmentId } : {}),
-                },
-              })
-            "
-          >
-            ดูคอร์สที่ซื้อ
-          </button>
-          <p v-if="hasService && !appointmentId">สิทธิ์บริการรายครั้งถูกบันทึกไว้ และเลือกใช้ได้เมื่อมารับบริการตามนัด</p>
-          <p v-else-if="!hasService">ซื้อคอร์สสำเร็จ การซื้ออย่างเดียวยังไม่สร้างรายการรับบริการ</p>
-        </section>
-        <div v-else class="checkout-layout">
+        <div class="checkout-layout">
           <div class="checkout-main">
             <section class="panel">
               <div class="section-heading">
@@ -746,8 +745,7 @@ h2 {
   display: grid;
   gap: 20px;
 }
-.panel,
-.success-panel {
+.panel {
   background: #fff;
   border: 1px solid #d5e3de;
   border-radius: 12px;
@@ -888,12 +886,6 @@ textarea {
 .error {
   color: #9c302a;
   margin-top: 20px;
-}
-.success-panel {
-  max-width: 640px;
-}
-.success-panel h2 {
-  margin-bottom: 10px;
 }
 @media (max-width: 900px) {
   .checkout-layout {

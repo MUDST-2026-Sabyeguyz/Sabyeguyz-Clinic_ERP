@@ -72,11 +72,7 @@ public class UserManagementController {
     public record Request(
             @NotBlank @Size(max = 50) String username,
             @NotBlank @Size(max = 254) String email,
-<<<<<<< HEAD
-            @Size(min = 8, max = 100) String password,
-=======
             @Size(min = 12, max = 100) String password,
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
             @NotNull String role,
             @Size(max = 20) String employeeCode, // optional: auto-generated on create when blank
             @NotBlank @Size(max = 160) String fullName,

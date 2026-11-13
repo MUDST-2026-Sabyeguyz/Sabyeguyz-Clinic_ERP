@@ -15,6 +15,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CourseRepository extends JpaRepository<Course, Long> {
+    List<Course> findTop100BySellerStaffIdAndBranchIdOrderByIdDesc(Long staffId, Long branchId);
     Optional<Course> findByCourseNo(String courseNo);
 
     /** Live courses sold in or before the month whose commission is not locked by a monthly close yet. */

@@ -114,10 +114,6 @@ describe('Clinic v2 commission and sale services', () => {
     ['schemecrud-satang-ok', { tiersSaved: 2, secondMin: '50000.01' }],
     ['schemecrud-referenced-rename', { name: 'Renamed', tiersDeleted: 0 }],
     ['feeadmin-create', { type: 'Percentage', value: 10, enabled: true }],
-<<<<<<< HEAD
-    ['feeadmin-takes-over', { predecessorEnds: '2026-06-30', newStarts: '2026-07-01' }],
-=======
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     ['feeadmin-unused-editable', { type: 'Percentage', value: 12.5 }],
     ['tier-example', 0.07],
     ['tier-top', 0.10],
@@ -185,10 +181,7 @@ describe('Clinic v2 commission and sale services', () => {
     })
   })
   const failures = [
-<<<<<<< HEAD
-=======
     ['fee-overlap', 'IllegalStateException'],
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     ['override-applies', 'IllegalArgumentException'],
     ['override-reason', 'IllegalArgumentException'],
     ['override-unlocked', 'IllegalArgumentException'],

@@ -6,4 +6,11 @@ public interface StaffPayAdjustmentRepository extends JpaRepository<StaffPayAdju
     java.util.List<StaffPayAdjustment> findAllByOrderByIdDesc();
 
     java.util.List<StaffPayAdjustment> findByStaffIdOrderByIdDesc(Long staffId);
+
+    java.util.List<StaffPayAdjustment> findByStaffIdAndAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqualOrderByIdAsc(
+            Long staffId, Long branchId, String month);
+
+    java.util.List<StaffPayAdjustment> findByAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqual(
+            Long branchId, String month);
+
 }

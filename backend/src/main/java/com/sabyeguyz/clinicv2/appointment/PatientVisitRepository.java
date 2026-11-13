@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PatientVisitRepository extends JpaRepository<PatientVisit, Long> {
+    List<PatientVisit> findTop100ByTreatingStaffIdAndBranchIdOrderByVisitDateDesc(
+            Long staffId, Long branchId);
     Optional<PatientVisit> findFirstByAppointmentIdOrderByIdDesc(Long appointmentId);
 
     @Query("select v from PatientVisit v where v.visitDate between :from and :to "

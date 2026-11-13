@@ -558,21 +558,14 @@ public class V2FinanceScenarios {
         var guard = new BranchClosingGuard(closingRepository.proxy(), courseRepository.proxy(), branchClosingRepository.proxy());
 
         var repository =
-<<<<<<< HEAD
-                new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
-=======
                 new V2RepositoryStub<>(TreatmentFeeRuleRepository.class)
                         .on("findMaxRuleVersion", args -> scenario.equals("feeadmin-create") ? 0 : 1);
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 
         var service = new TreatmentFeeRuleService(repository.proxy(), guard);
         var existing = new TreatmentFeeRule(); existing.setFeeType(FeeType.Fixed); existing.setFeeValue(decimal("45"));
         existing.setEffectiveFrom(LocalDate.of(2026,1,1));
         setId(existing, 1L);
-<<<<<<< HEAD
-=======
         existing.setRuleVersion(1);
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
         Permission permission = new Permission();
         LocalDate nextCycle = com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1);
         switch (scenario) {
@@ -598,21 +591,13 @@ public class V2FinanceScenarios {
             }
             case "feeadmin-takes-over" -> {
                 repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
-<<<<<<< HEAD
-                var created = service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, branch, permission, 1L);
-=======
                 var created = service.create(FeeType.Fixed, decimal("50"), nextCycle, null, branch, permission, 1L);
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
                 return Map.of("predecessorEnds", existing.getEffectiveTo().toString(), "newStarts", created.getEffectiveFrom().toString());
             }
             case "feeadmin-takeover-used" -> {
                 repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
                 repository.on("isUsedAfter", a -> true);
-<<<<<<< HEAD
-                return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,7,1), null, branch, permission, 1L));
-=======
                 return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), nextCycle, null, branch, permission, 1L));
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
             }
             case "feeadmin-used-immutable" -> {
                 repository.on("findById", a -> Optional.of(existing));

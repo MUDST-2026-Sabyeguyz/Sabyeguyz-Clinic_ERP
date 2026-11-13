@@ -66,6 +66,7 @@ public class SaleController {
     private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
 
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
+    private final SingleVisitEntitlementService singleVisitEntitlements;
 
     public SaleController(ReceiptService receiptService, SalesTransactionService salesTransactionService,
                           PaymentTransactionService paymentTransactionService,
@@ -79,9 +80,11 @@ public class SaleController {
                           com.sabyeguyz.clinicv2.auth.AppUserRepository users,
                           SingleVisitFeeAccrual singleVisitFees,
                           com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess,
-                          CourseUsageBatchService usageBatchService) {
+                          CourseUsageBatchService usageBatchService,
+                          SingleVisitEntitlementService singleVisitEntitlements) {
         this.usageBatchService = usageBatchService;
         this.branchAccess = branchAccess;
+        this.singleVisitEntitlements = singleVisitEntitlements;
         this.singleVisitFees = singleVisitFees;
         this.visitService = visitService;
         this.users = users;
@@ -130,7 +133,9 @@ public class SaleController {
 
     public record PatientSummary(Long id, String hn, String fullName) {}
     public record SalespersonSummary(Long id, String employeeCode, String fullName) {}
-    public record ItemResponse(Long id, String type, String description, int quantity, BigDecimal lineTotal) {}
+    public record ItemResponse(Long id, String type, String description, int quantity,
+                               BigDecimal unitPrice, String unitName, BigDecimal lineDiscountAmount,
+                               BigDecimal allocatedBillDiscountAmount, BigDecimal lineTotal) {}
     public record PaymentResponse(Long id, String type, String paymentMethodCode, BigDecimal amount) {}
 
     public record Summary(Long id, String receiptNo, PatientSummary patient, String branchCode,
@@ -194,6 +199,7 @@ public class SaleController {
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
         Branch branch = resolveBranch(request.branchCode());
+        branchAccess.requireAccess(branch);
         Staff salesperson = request.salespersonStaffId() == null ? null
                 : staff.findById(request.salespersonStaffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงานขาย"));
 
@@ -212,6 +218,7 @@ public class SaleController {
                 request.paymentLabelCode(), actor.currentId());
 
         List<SalesTransaction> lines = new java.util.ArrayList<>();
+        List<SalesTransaction> prepaidSingleVisitLines = new java.util.ArrayList<>();
         PatientVisit appointmentVisit = null;
         for (ItemRequest item : request.items()) {
             Service svc = services.findById(item.referenceId())
@@ -223,14 +230,20 @@ public class SaleController {
             } else {
                 TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
                         ? TransactionType.Assessment : TransactionType.SingleVisit;
-                // A single visit is treated by one PT, and the sale is tied to that visit.
-                Staff treating = singleVisitTreatingStaff(request, salesperson);
                 if (request.appointmentId() == null) {
-                    throw new IllegalArgumentException(
-                            "ต้องสร้างนัด NEW หรือ CURRENT ก่อนรับบริการ " + "และส่ง appointmentId มาด้วย");
+                    if (type != TransactionType.SingleVisit) {
+                        throw new IllegalArgumentException("ขายบริการประเมินล่วงหน้าไม่ได้");
+                    }
+                    // A service sold without an appointment is prepaid credit, not a treatment visit yet.
+                    SalesTransaction prepaid = salesTransactionService.recordVisitSale(receipt, patient, branch, svc,
+                            type, null, salesperson, Math.max(1, item.quantity()), null, null, discount,
+                            actor.currentId());
+                    lines.add(prepaid);
+                    prepaidSingleVisitLines.add(prepaid);
+                    continue;
                 }
 
-                branchAccess.requireAccess(branch);
+                Staff treating = singleVisitTreatingStaff(request, salesperson);
                 if (appointmentVisit == null) {
                     appointmentVisit = visitService.createForService(request.appointmentId(), patient, branch, treating, actor.currentId());
                 }
@@ -247,6 +260,12 @@ public class SaleController {
         receiptService.finalizeTotals(receipt, lines,
                 Discount.of(request.billDiscountType(), request.billDiscountValue()), actor.currentId());
 
+        if (!prepaidSingleVisitLines.isEmpty()
+                && (paymentRequest == null || paymentRequest.amount() == null
+                    || paymentRequest.amount().compareTo(receipt.getNetAmount()) < 0)) {
+            throw new IllegalArgumentException("ต้องชำระบริการรายครั้งล่วงหน้าเต็มจำนวนก่อนเก็บสิทธิ์ไว้ใช้ภายหลัง");
+        }
+
         if (paymentRequest != null) {
             String methodName = PaymentMethod.canonicalName(paymentRequest.paymentMethodCode());
             PaymentMethod method = paymentMethods
@@ -256,6 +275,10 @@ public class SaleController {
 
             paymentTransactionService.record(
                     patient, branch, receipt, paymentRequest.amount(), method, actor.currentId());
+
+            for (SalesTransaction line : prepaidSingleVisitLines) {
+                singleVisitEntitlements.recordPurchase(line, actor.currentId());
+            }
 
             if (appointmentVisit != null) {
                 if (!usageItems.isEmpty()) {
@@ -329,7 +352,8 @@ public class SaleController {
         List<SalesTransaction> lines = transactions.findByReceiptId(t.getReceipt().getId());
         Summary s = toSummary(t, t.getReceipt().getNetAmount());
         List<ItemResponse> items = lines.stream().map(l -> new ItemResponse(l.getId(), l.getTransactionType().name(),
-                l.getItemNameSnapshot(), l.getQuantity(), l.getAmount())).toList();
+                l.getItemNameSnapshot(), l.getQuantity(), l.getUnitPrice(), l.getUnitNameSnapshot(),
+                l.getLineDiscountAmount(), l.getAllocatedBillDiscountAmount(), l.getAmount())).toList();
         List<PaymentResponse> paymentList = payments.findByReceiptIdOrderByIdAsc(t.getReceipt().getId()).stream()
                 .map(p -> new PaymentResponse(p.getId(), p.isPaymentStatus() ? "PAYMENT" : "REFUND",
                         p.getPaymentMethod().getMethodName(), p.getAmount()))

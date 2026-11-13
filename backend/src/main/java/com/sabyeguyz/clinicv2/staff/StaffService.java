@@ -3,6 +3,7 @@ package com.sabyeguyz.clinicv2.staff;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
+import com.sabyeguyz.clinicv2.commission.StaffPayAdjustmentService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -18,10 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class StaffService {
     private final StaffRepository repository;
     private final AppUserRepository users;
+    private final StaffPayAdjustmentService adjustments;
 
-    public StaffService(StaffRepository repository, AppUserRepository users) {
+    public StaffService(StaffRepository repository, AppUserRepository users, StaffPayAdjustmentService adjustments) {
         this.repository = repository;
         this.users = users;
+        this.adjustments = adjustments;
     }
 
     @Transactional(readOnly = true)
@@ -118,7 +121,9 @@ public class StaffService {
             user.setUserUpdateBy(actorId);
         }
         users.saveAll(linkedUsers);
-        return repository.save(staff);
+        Staff saved = repository.save(staff);
+        adjustments.cancelOnTermination(id, actorId);
+        return saved;
     }
 
     private Staff find(Long id) {
