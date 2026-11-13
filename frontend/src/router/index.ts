@@ -1,4 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { defineAsyncComponent, defineComponent, h, type Component } from 'vue'
+
+type RoleViewLoader = () => Promise<{ default: Component }>
+function roleView(manager: RoleViewLoader, therapist: RoleViewLoader) {
+  const ManagerView = defineAsyncComponent(manager)
+  const TherapistView = defineAsyncComponent(therapist)
+
+  return defineComponent({
+    name: 'RoleSpecificView',
+    setup() {
+      const user = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
+        role?: string
+      } | null
+      const View = user?.role === 'MANAGER' ? ManagerView : TherapistView
+      return () => h(View)
+    },
+  })
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -13,21 +31,42 @@ const router = createRouter({
       redirect: '/',
     },
     {
+      path: '/staff/select-branch',
+      name: 'manager-branch-selection',
+      component: () => import('@/features/staff/views/ManagerBranchSelectionView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/patients/new',
       name: 'patient-registration',
-      component: () => import('@/features/patients/views/PatientRegistrationView.vue'),
+      component: roleView(
+        () => import('@/features/patients/views/ManagerPatientRegistrationView.vue'),
+        () => import('@/features/patients/views/PatientRegistrationView.vue'),
+      ),
       meta: { permission: 'Patient' },
     },
     {
       path: '/staff/patients',
       name: 'patient-search',
-      component: () => import('@/features/patients/views/PatientSearchView.vue'),
+      component: roleView(
+        () => import('@/features/patients/views/ManagerPatientSearchView.vue'),
+        () => import('@/features/patients/views/PatientSearchView.vue'),
+      ),
       meta: { permission: 'Patient' },
     },
     {
       path: '/staff/patients/:id/history',
       name: 'patient-history',
-      component: () => import('@/features/patients/views/PatientHistoryView.vue'),
+      component: roleView(
+        () => import('@/features/patients/views/ManagerPatientProfileView.vue'),
+        () => import('@/features/patients/views/PatientProfileView.vue'),
+      ),
+      meta: { permission: 'Patient' },
+    },
+    {
+      path: '/staff/patients/:patientId/receipts/:id',
+      name: 'patient-receipt',
+      component: () => import('@/features/transactions/views/ReceiptView.vue'),
       meta: { permission: 'Patient' },
     },
     {
@@ -37,45 +76,75 @@ const router = createRouter({
       meta: { permission: 'Patient' },
     },
     {
+      path: '/staff/patients/:patientId/course-payments',
+      name: 'patient-course-payments',
+      component: () => import('@/features/courses/views/CoursePaymentCollectionView.vue'),
+      meta: { permission: 'Treatment' },
+    },
+    {
       path: '/staff/patients/:id',
       name: 'patient-profile',
-      component: () => import('@/features/patients/views/PatientProfileView.vue'),
+      component: roleView(
+        () => import('@/features/patients/views/ManagerPatientProfileView.vue'),
+        () => import('@/features/patients/views/PatientProfileView.vue'),
+      ),
       meta: { permission: 'Patient' },
     },
     {
       path: '/staff/appointments',
       name: 'staff-appointments',
-      component: () => import('@/features/appointments/views/AppointmentView.vue'),
+      component: roleView(
+        () => import('@/features/appointments/views/ManagerAppointmentView.vue'),
+        () => import('@/features/appointments/views/AppointmentView.vue'),
+      ),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/appointments/calendar',
       name: 'staff-appointment-calendar',
-      component: () => import('@/features/appointments/views/AppointmentCalendarView.vue'),
+      component: roleView(
+        () => import('@/features/appointments/views/ManagerAppointmentCalendarView.vue'),
+        () => import('@/features/appointments/views/AppointmentCalendarView.vue'),
+      ),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/appointments/new',
       name: 'staff-appointment-create',
-      component: () => import('@/features/appointments/views/AppointmentView.vue'),
+      component: roleView(
+        () => import('@/features/appointments/views/ManagerAppointmentView.vue'),
+        () => import('@/features/appointments/views/AppointmentView.vue'),
+      ),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/appointments/:id/edit',
       name: 'staff-appointment-edit',
-      component: () => import('@/features/appointments/views/AppointmentView.vue'),
+      component: roleView(
+        () => import('@/features/appointments/views/ManagerAppointmentView.vue'),
+        () => import('@/features/appointments/views/AppointmentView.vue'),
+      ),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/services',
       name: 'staff-services',
-      component: () => import('@/features/services/views/servicesView.vue'),
+      component: roleView(
+        () => import('@/features/services/views/ManagerServicesView.vue'),
+        () => import('@/features/services/views/servicesView.vue'),
+      ),
       meta: { permission: 'Treatment' },
     },
     {
-      path: '/staff/receipts/:id',
-      name: 'staff-receipt',
-      component: () => import('@/features/receipts/views/ReceiptView.vue'),
+      path: '/staff/services/sale',
+      name: 'staff-sale-checkout',
+      component: () => import('@/features/services/views/SaleCheckoutView.vue'),
+      meta: { permission: 'Treatment' },
+    },
+    {
+      path: '/staff/services/use-single-visit',
+      name: 'staff-single-visit-use',
+      component: () => import('@/features/services/views/SingleVisitEntitlementUseView.vue'),
       meta: { permission: 'Treatment' },
     },
     {
@@ -89,21 +158,39 @@ const router = createRouter({
       meta: { permission: 'Course' },
     },
     {
+      path: '/staff/courses/extensions',
+      name: 'staff-course-extensions',
+      component: () => import('@/features/courses/views/CourseExtensionRequestsView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
       path: '/staff/transactions',
       name: 'staff-transactions',
       component: () => import('@/features/transactions/views/TransactionView.vue'),
       meta: { permission: 'Transaction' },
     },
     {
+      path: '/staff/receipts/:id',
+      name: 'staff-receipt',
+      component: () => import('@/features/transactions/views/ReceiptView.vue'),
+      meta: { permission: 'Transaction' },
+    },
+    {
+      path: '/staff/course-payment-receipts/:id',
+      name: 'staff-course-payment-receipt',
+      component: () => import('@/features/transactions/views/CoursePaymentReceiptView.vue'),
+      meta: { permission: 'Treatment' },
+    },
+    {
+      path: '/staff/course-prints/:courseId',
+      name: 'staff-course-prints',
+      component: () => import('@/features/courses/views/CourseUsagePrintView.vue'),
+      meta: { permission: 'Course' },
+    },
+    {
       path: '/staff/commission',
       name: 'staff-commission',
       component: () => import('@/features/commission/views/CommissionOverviewView.vue'),
-      meta: { permission: 'Commission' },
-    },
-    {
-      path: '/staff/commission/transactions',
-      name: 'commission-transactions',
-      component: () => import('@/features/commission/views/CommissionView.vue'),
       meta: { permission: 'Commission' },
     },
     {
@@ -149,7 +236,6 @@ const router = createRouter({
       meta: { roles: ['therapist'] },
     },
     {
-      // read only: how the pay is worked out, opened from "หลักการคำนวณ" on the therapist pay page
       path: '/staff/commission/formula',
       name: 'commission-formula',
       component: () => import('@/features/commission/views/CommissionFormulaView.vue'),
@@ -157,20 +243,12 @@ const router = createRouter({
     },
     {
       path: '/staff/commission/tiers',
-      name: 'commission-tiers',
-      component: () => import('@/features/commission/views/CommissionTierView.vue'),
-      meta: { roles: ['manager'] },
+      redirect: '/staff/settings/commission-tiers',
     },
     {
       path: '/staff/commission/closing',
       name: 'commission-closing',
       component: () => import('@/features/commission/views/CommissionClosingView.vue'),
-      meta: { roles: ['manager'] },
-    },
-    {
-      path: '/staff/commission/payments',
-      name: 'commission-payments',
-      component: () => import('@/features/commission/views/CommissionPaymentsView.vue'),
       meta: { roles: ['manager'] },
     },
     {
@@ -180,9 +258,75 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
-      path: '/staff/refunds',
-      name: 'staff-refunds',
-      component: () => import('@/features/refunds/views/RefundView.vue'),
+      path: '/staff/commission/adjustments/new',
+      name: 'commission-adjustment-create',
+      component: () => import('@/features/commission/views/CommissionAdjustmentCreateView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/success',
+      name: 'commission-adjustment-success',
+      redirect: (to) => ({ name: 'commission-adjustment-detail', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/schedule',
+      name: 'commission-adjustment-schedule',
+      component: () => import('@/features/commission/views/CommissionAdjustmentScheduleView.vue'),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/select-schedule',
+      name: 'commission-adjustment-select-schedule',
+      redirect: (to) => ({ name: 'commission-adjustment-schedule', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/closed',
+      name: 'commission-adjustment-closed',
+      redirect: (to) => ({ name: 'commission-adjustment-schedule', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/finalized',
+      name: 'commission-adjustment-finalized',
+      redirect: (to) => ({ name: 'commission-adjustment-schedule', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/reopen',
+      name: 'commission-adjustment-reopen',
+      redirect: (to) => ({ name: 'commission-adjustment-schedule', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/reopen-success',
+      name: 'commission-adjustment-reopen-success',
+      redirect: (to) => ({ name: 'commission-adjustment-schedule', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/reopen-history',
+      name: 'commission-adjustment-reopen-history',
+      redirect: (to) => ({ name: 'commission-adjustment-schedule', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/review',
+      name: 'commission-adjustment-review',
+      redirect: (to) => ({ name: 'commission-adjustment-schedule', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id/payment-success',
+      name: 'commission-adjustment-payment-success',
+      redirect: (to) => ({ name: 'commission-adjustment-detail', params: { id: to.params.id } }),
+      meta: { roles: ['manager'] },
+    },
+    {
+      path: '/staff/commission/adjustments/:id',
+      name: 'commission-adjustment-detail',
+      component: () => import('@/features/commission/views/CommissionAdjustmentDetailView.vue'),
       meta: { roles: ['manager'] },
     },
     {
@@ -194,7 +338,7 @@ const router = createRouter({
     {
       path: '/staff/commission/compensation-settings',
       name: 'commission-compensation-settings',
-      component: () => import('@/features/commission/views/CommissionCompensationSettingsView.vue'),
+      redirect: '/staff/settings?section=commission',
       meta: { roles: ['manager'] },
     },
     {
@@ -216,21 +360,33 @@ const router = createRouter({
       meta: { roles: ['manager'] },
     },
     {
-      path: '/staff/personnel',
-      name: 'staff-personnel',
-      component: () => import('@/features/commission/views/PersonnelTransactionsView.vue'),
-      meta: { roles: ['manager'] },
-    },
-    {
       path: '/staff/calendar',
       name: 'staff-calendar',
+      redirect: '/staff/settings/calendar',
+      meta: { roles: ['manager', 'therapist'] },
+    },
+    {
+      path: '/staff/settings/calendar',
+      name: 'staff-calendar-settings',
       component: () => import('@/features/settings/views/CalendarSettingsView.vue'),
+      meta: { roles: ['manager', 'therapist'] },
+    },
+    {
+      path: '/staff/settings/card-readers',
+      name: 'staff-card-readers',
+      component: () => import('@/features/settings/views/BackOfficeView.vue'),
       meta: { roles: ['manager'] },
     },
     {
       path: '/staff/settings',
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
+      meta: { permission: 'Setup' },
+    },
+    {
+      path: '/staff/settings/commission-tiers',
+      name: 'staff-settings-commission-tiers',
+      component: () => import('@/features/commission/views/CommissionTierView.vue'),
       meta: { permission: 'Setup' },
     },
     {
