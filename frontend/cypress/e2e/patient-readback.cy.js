@@ -19,7 +19,7 @@ describe('authenticated patient readback with real PostgreSQL backend', () => {
           method: 'POST', url: url('/api/patients'), log: false,
           headers: { Authorization: `Bearer ${token}` },
           body: {
-            branchCode: 'RP', username: `e2e-${suffix}`, email: `e2e-${suffix}@example.invalid`,
+            branchCode: '01', username: `e2e-${suffix}`, email: `e2e-${suffix}@example.invalid`,
             password: 'synthetic-test-password', title: 'นาย', fullName: 'ทดสอบ ระบบเบราว์เซอร์',
             birthDate: '1990-01-01', gender: 'ชาย', phone: '0800000000',
             identityDocumentType: 'PASSPORT', identityNumber: `E2E${suffix}`, address: 'Synthetic data',

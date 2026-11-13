@@ -63,7 +63,11 @@ jobs:
           export POSTGRES_PASSWORD="$(openssl rand -hex 32)"
           export JWT_SECRET="$(openssl rand -hex 32)"
           export POSTGRES_DB=clinic_erp_v2_ci
+          export CLINIC_DATABASE_KIND=local-demo
+          export CLINIC_SEED_MODE=minimal
           echo 'POSTGRES_DB=clinic_erp_v2_ci' >> "$GITHUB_ENV"
+          echo 'CLINIC_DATABASE_KIND=local-demo' >> "$GITHUB_ENV"
+          echo 'CLINIC_SEED_MODE=minimal' >> "$GITHUB_ENV"
           printf 'POSTGRES_PASSWORD=%s\nJWT_SECRET=%s\n' "$POSTGRES_PASSWORD" "$JWT_SECRET" >> "$GITHUB_ENV"
           docker compose up --build --wait -d postgres backend
 
@@ -82,11 +86,13 @@ jobs:
         uses: cypress-io/github-action@f790eee7a50d9505912f50c2095510be7de06aa7 # v6.10.9
         env:
           CYPRESS_BASE_URL: http://127.0.0.1:5173
+          CYPRESS_demoUsername: manager
+          CYPRESS_demoPassword: manager123
         with:
           working-directory: frontend
           install: false
           browser: chrome
-          command: npm run test:e2e -- --browser chrome
+          command: npm run test:e2e -- --browser chrome --reporter spec
 
       - name: Show backend logs on failure
         if: failure() && steps.start_backend.outcome != 'skipped'
