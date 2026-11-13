@@ -331,7 +331,7 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
     })
   })
 
-  it('never deducts more than was earned in the month: the rest is carried and a resigned PT goes to external review', function () {
+  it('never deducts more than was earned in the month: the rest is carried and the unpaid balance is cancelled on resignation', function () {
     template('ACC13', 10000, 13).then((courseId) => cy.registerPatient().then((patient) => buy(patient, courseId, this.fixtures.therapistId).then((course) => {
       use(course.id).its('status').should('equal', 200)
       closeMonth()
@@ -367,10 +367,15 @@ describe('v2 commission: adjustments after payment (test 06)', () => {
             expect(money(partly.remaining)).to.equal(461.54)
             expect(money(partly.applications[0].amount)).to.equal(-38.46)
           })
-          // not resigned yet: no external review; after the resignation the balance is handled outside the system
+          // Resignation cancels the unpaid balance under V1031; paid history remains unchanged.
           cy.api('POST', `/api/commission/adjustments/${body.id}/external-review`).its('status').should('equal', 400)
           cy.api('POST', `/api/staff/${this.fixtures.therapistId}/terminate`, { terminationDate: month + '-28' }).its('status').should('equal', 200)
-          cy.api('POST', `/api/commission/adjustments/${body.id}/external-review`).its('body.status').should('equal', 'ExternalReview')
+          cy.api('GET', `/api/commission/adjustments/${body.id}`).then(({ body: cancelled }) => {
+            expect(cancelled.status).to.equal('Cancelled')
+            expect(money(cancelled.processed)).to.equal(38.46)
+            expect(money(cancelled.remaining)).to.equal(461.54)
+          })
+          cy.api('POST', `/api/commission/adjustments/${body.id}/external-review`).its('status').should('equal', 400)
         })
       })
     })))
