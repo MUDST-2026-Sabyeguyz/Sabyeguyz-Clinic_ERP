@@ -7,7 +7,11 @@ import { ApiError } from '@/api/client'
 
 const mock = vi.hoisted(() => ({ create: vi.fn(), use: vi.fn(), push: vi.fn() }))
 const bookingId = ref<number | null>(55)
-const booking = ref<{ branchCode: string } | null>({ branchCode: '01' })
+const booking = ref<{
+  branchCode: string
+  service?: { id: number | null }
+  therapist?: { id: number }
+} | null>({ branchCode: '01' })
 const progressState = ref<Record<string, unknown> | null>(null)
 const canStart = ref(true)
 vi.mock('vue-router', () => ({
@@ -142,7 +146,7 @@ describe('checkout main payload', () => {
     await pending
     await flushPromises()
     expect(view.find('appointment-process-panel-stub').exists()).toBe(false)
-    expect(view.get('h1').text()).toBe('บันทึกการขายสำเร็จ')
+    expect(view.get('[role="status"]').text()).toBe('กำลังเปิดใบเสร็จ…')
     expect(mock.push).toHaveBeenCalledWith({ name: 'staff-receipt', params: { id: 77 } })
     view.unmount()
   })
@@ -167,7 +171,7 @@ describe('checkout main payload', () => {
     view.unmount()
   })
 
-  it('submits the sale from the payment button and shows the receipt action', async () => {
+  it('submits the sale from the payment button and goes straight to the receipt', async () => {
     const { view } = await render()
     await view.get('button.primary').trigger('click')
     await flushPromises()
@@ -176,8 +180,7 @@ describe('checkout main payload', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     )
     expect(mock.push).toHaveBeenCalledWith({ name: 'staff-receipt', params: { id: 77 } })
-    expect(view.find('h1').text()).toBe('บันทึกการขายสำเร็จ')
-    expect(view.text()).toContain('ดูและพิมพ์ใบเสร็จ')
+    expect(view.text()).not.toContain('บันทึกการขายสำเร็จ')
     view.unmount()
   })
   it('warns immediately and hides the net amount when the bill discount exceeds the subtotal', async () => {
@@ -204,7 +207,7 @@ describe('checkout main payload', () => {
     expect(mock.create.mock.calls[0]![0].salespersonStaffId).toBe(4)
     view.unmount()
   })
-  it('keeps the successful sale and receipt action visible after progress becomes FOUND', async () => {
+  it('goes to the receipt and blocks a second submit after progress becomes FOUND', async () => {
     const { view, state } = await render()
     mock.create.mockImplementationOnce(async () => {
       progressState.value = { paymentStatus: 'PAID', saleId: 77 }
@@ -213,10 +216,54 @@ describe('checkout main payload', () => {
     })
     await state.save()
     await flushPromises()
-    expect(view.find('h1').text()).toBe('บันทึกการขายสำเร็จ')
-    expect(view.text()).toContain('ดูและพิมพ์ใบเสร็จ')
+    expect(mock.push).toHaveBeenCalledWith({ name: 'staff-receipt', params: { id: 77 } })
+    expect(view.text()).not.toContain('รายการของนัดหมายนี้')
     await state.save()
     expect(mock.create).toHaveBeenCalledOnce()
+    view.unmount()
+  })
+  it('prefills the appointment service and therapist in the first empty line', async () => {
+    booking.value = { branchCode: '01', service: { id: 7 }, therapist: { id: 4 } }
+    const view = mount(View, {
+      global: { stubs: { StaffHeader: true, RouterLink: true, FilterDropdown: true, AppointmentProcessPanel: true } },
+    })
+    await flushPromises()
+    const state = view.vm as unknown as State
+    expect(state.lines).toHaveLength(1)
+    expect(state.lines[0]).toMatchObject({ category: 'service', catalogKey: 'service:7' })
+    expect(state.treatingId).toBe(4)
+    view.unmount()
+  })
+  it('prefills a course when the appointment service is a course', async () => {
+    booking.value = { branchCode: '01', service: { id: 12 } }
+    const view = mount(View, {
+      global: { stubs: { StaffHeader: true, RouterLink: true, FilterDropdown: true, AppointmentProcessPanel: true } },
+    })
+    await flushPromises()
+    const state = view.vm as unknown as State
+    expect(state.lines[0]).toMatchObject({ category: 'course', catalogKey: 'course:12' })
+    view.unmount()
+  })
+  it('leaves the line empty when the appointment has no service', async () => {
+    booking.value = { branchCode: '01', service: { id: null } }
+    const view = mount(View, {
+      global: { stubs: { StaffHeader: true, RouterLink: true, FilterDropdown: true, AppointmentProcessPanel: true } },
+    })
+    await flushPromises()
+    const state = view.vm as unknown as State
+    expect(state.lines[0]).toMatchObject({ category: '', catalogKey: '' })
+    expect(state.treatingId).toBe(0)
+    view.unmount()
+  })
+  it('sends a course-only sale from an appointment to the course use page', async () => {
+    const { view, state } = await render()
+    state.lines = [{ key: 'c', category: 'course', catalogKey: 'course:12', quantity: 1, discountType: 'NONE', discountValue: 0 }]
+    await state.save()
+    expect(mock.create).toHaveBeenCalledOnce()
+    expect(mock.push).toHaveBeenCalledWith({
+      name: 'staff-courses',
+      query: { patientId: '9', appointmentId: '55', receiptId: '88', action: 'use' },
+    })
     view.unmount()
   })
   it('allows course-only purchase without an appointment and creates one item per course', async () => {

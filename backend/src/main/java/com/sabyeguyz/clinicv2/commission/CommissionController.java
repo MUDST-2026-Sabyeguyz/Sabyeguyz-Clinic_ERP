@@ -49,6 +49,7 @@ public class CommissionController {
     private final CommissionSchemeResolver schemeResolver;
     private final MonthlyCommissionClosingRepository closings;
     private final CommissionAllocationLedgerRepository allocationLedger;
+    private final SingleVisitFeeLedgerRepository singleVisitFees;
     private final TreatmentFeeRuleRepository treatmentFeeRules;
     private final CourseRepository courses;
     private final StaffRepository staff;
@@ -58,29 +59,20 @@ public class CommissionController {
     private final CommissionRateOverrideService overrideService;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
-    public CommissionController(
-            CommissionSchemeService schemeService,
-            CommissionTierResolver tierResolver,
-            CommissionSchemeRepository schemes,
-            MonthlyCommissionClosingService closingService,
-            BranchMonthlyClosingService branchClosingService,
-            CommissionSchemeResolver schemeResolver,
-            MonthlyCommissionClosingRepository closings,
-            CommissionAllocationLedgerRepository allocationLedger,
-            TreatmentFeeRuleRepository treatmentFeeRules,
-            CourseRepository courses,
-            StaffRepository staff,
-            PermissionService permissions,
-            CurrentActor actor,
-            CommissionRateOverrideService overrideService,
-            com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-            TreatmentFeeRuleService treatmentFeeService,
-            MonthlyTierSalesService tierSales,
-            com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
-            com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
-            com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems,
-            com.sabyeguyz.clinicv2.auth.AppUserRepository users,
-            BranchAccessPolicy branchAccess) {
+    public CommissionController(CommissionSchemeService schemeService, CommissionTierResolver tierResolver,
+                                CommissionSchemeRepository schemes, MonthlyCommissionClosingService closingService,
+                                BranchMonthlyClosingService branchClosingService, CommissionSchemeResolver schemeResolver,
+                                MonthlyCommissionClosingRepository closings, CommissionAllocationLedgerRepository allocationLedger,
+                                SingleVisitFeeLedgerRepository singleVisitFees,
+                                TreatmentFeeRuleRepository treatmentFeeRules, CourseRepository courses, StaffRepository staff,
+                                PermissionService permissions, CurrentActor actor, CommissionRateOverrideService overrideService,
+                                com.sabyeguyz.clinicv2.audit.AuditLogService audit, TreatmentFeeRuleService treatmentFeeService,
+                                MonthlyTierSalesService tierSales,
+                                com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository usageRepository,
+                                com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
+                                com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems,
+                                com.sabyeguyz.clinicv2.auth.AppUserRepository users,
+                                BranchAccessPolicy branchAccess) {
         this.branchAccess = branchAccess;
         this.users = users;
         this.refundItems = refundItems;
@@ -96,6 +88,7 @@ public class CommissionController {
         this.schemeResolver = schemeResolver;
         this.closings = closings;
         this.allocationLedger = allocationLedger;
+        this.singleVisitFees = singleVisitFees;
         this.treatmentFeeRules = treatmentFeeRules;
         this.courses = courses;
         this.staff = staff;
@@ -120,88 +113,34 @@ public class CommissionController {
             String branchCode) {}
 
     /** createdBy is the name of the user who recorded the version (history of the commission rules). */
-    public record SchemeResponse(
-            Long id,
-            String name,
-            int version,
-            LocalDate effectiveFrom,
-            LocalDate effectiveTo,
-            boolean locked,
-            String createdBy,
-            java.time.Instant createdAt,
-            java.time.Instant updatedAt,
-            String updatedBy) {}
-
-    public record TierResponse(
-            Long id,
-            int order,
-            BigDecimal minimum,
-            BigDecimal maximum,
-            BigDecimal rate) {}
-
-    public record ReportRow(
-            Long staffId,
-            String staffName,
-            String branchCode,
-            String branchName,
-            int saleCount,
-            BigDecimal base,
-            BigDecimal rate,
-            BigDecimal commission) {}
-
+    public record SchemeResponse(Long id, String name, int version, LocalDate effectiveFrom, LocalDate effectiveTo,
+                                  boolean locked, String createdBy, java.time.Instant createdAt,
+                                  java.time.Instant updatedAt, String updatedBy) {}
+    public record TierResponse(Long id, int order, BigDecimal minimum, BigDecimal maximum, BigDecimal rate) {}
+    public record SaleDetail(Long id, LocalDate saleDate, String receiptNo, String courseNo,
+                                 String courseName, String patientName, String sellerName, BigDecimal gross,
+                                 BigDecimal lineDiscount, BigDecimal commissionableAmount,
+                                 BigDecimal completedRefund) {}
+    public record ReportRow(Long staffId, String staffName, String branchCode, String branchName, int saleCount,
+                             BigDecimal base, BigDecimal rate, BigDecimal commission, List<SaleDetail> sales) {}
     /** ownerNet and gross are null while the sale month is not closed (the Owner commission is not known yet). */
-    public record TreatmentReportRow(
-            Long id,
-            LocalDate visitDate,
-            Long coursePurchaseId,
-            String courseCode,
-            Long patientId,
-            String patientHn,
-            String patientName,
-            String branchCode,
-            String branchName,
-            Long treatingStaffId,
-            String treatingStaffName,
-            Long ownerStaffId,
-            String ownerStaffName,
-            BigDecimal gross,
-            BigDecimal treatmentFee,
-            BigDecimal ownerNet,
-            boolean ownerNetPending) {}
-
-    public record ClosingResponse(
-            Long id,
-            String month,
-            Long employeeId,
-            String employeeName,
-            BigDecimal sales,
-            String version,
-            BigDecimal rate,
-            String status,
-            String reopenReason,
-            java.time.Instant reopenedAt) {}
-
-    public record TreatmentFeeResponse(
-            Long id,
-            Long staffId,
-            String feeType,
-            BigDecimal feeValue,
-            String percentageBase,
-            LocalDate effectiveFrom,
-            LocalDate effectiveTo,
-            boolean enabled,
-            boolean used,
-            String name,
-            String lastEditedBy,
-            java.time.Instant lastEditedAt) {}
-
-    public record TreatmentFeeRequest(
-            String feeType,
-            BigDecimal feeValue,
-            LocalDate effectiveFrom,
-            LocalDate effectiveTo,
-            String name,
-            String branchCode) {}
+    public record TreatmentReportRow(Long id, LocalDate visitDate, Long coursePurchaseId, String courseCode,
+                                      Long patientId, String patientHn, String patientName, String branchCode,
+                                      String branchName, Long treatingStaffId, String treatingStaffName,
+                                      Long ownerStaffId, String ownerStaffName, BigDecimal gross,
+                                      BigDecimal treatmentFee, BigDecimal ownerNet, boolean ownerNetPending,
+                                      String serviceName, String feeRuleName) {}
+    public record SingleVisitFeeRow(Long id, LocalDate visitDate, String patientName,
+                                    String serviceName, String treatingStaffName, String feeRuleName,
+                                    BigDecimal treatmentFee) {}
+    public record ClosingResponse(Long id, String month, Long employeeId, String employeeName, BigDecimal sales,
+                                   String version, BigDecimal rate, String status, String reopenReason,
+                                   java.time.Instant reopenedAt) {}
+    public record TreatmentFeeResponse(Long id, Long staffId, String feeType, BigDecimal feeValue, String percentageBase,
+                                        LocalDate effectiveFrom, LocalDate effectiveTo, boolean enabled, boolean used,
+                                        String name, String lastEditedBy, java.time.Instant lastEditedAt) {}
+    public record TreatmentFeeRequest(String feeType, BigDecimal feeValue, LocalDate effectiveFrom, LocalDate effectiveTo,
+                                      String name, String branchCode) {}
 
     @GetMapping("/schemes")
     public List<SchemeResponse> schemes() {
@@ -283,16 +222,22 @@ public class CommissionController {
             @RequestParam LocalDate to) {
         if (to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
         // A course sale is credited entirely to its seller (the Owner PT).
-        Map<Long, List<Course>> bySeller = new LinkedHashMap<>();
+        record SellerBranch(Long sellerId, Long branchId) {}
+        Map<SellerBranch, List<Course>> bySellerBranch = new LinkedHashMap<>();
         // only sales still in effect count, less the Completed refunds against them (the same base as the monthly tier)
         for (Course course : courses.findValidByReceiptSaleDateBetween(from, to)) {
-            bySeller.computeIfAbsent(course.getSellerStaff().getId(), k -> new ArrayList<>())
-                    .add(course);
+            var transaction = course.getSaleTransaction();
+            if (transaction.getTransactionType() != com.sabyeguyz.clinicv2.enums.TransactionType.CoursePurchase
+                    || transaction.getSalespersonStaff() == null
+                    || !transaction.getSalespersonStaff().getId().equals(course.getSellerStaff().getId())
+                    || transaction.getBranch() == null
+                    || !transaction.getBranch().getId().equals(course.getBranch().getId())) continue;
+            bySellerBranch.computeIfAbsent(new SellerBranch(course.getSellerStaff().getId(), course.getBranch().getId()),
+                    k -> new ArrayList<>()).add(course);
         }
 
         List<ReportRow> rows = new ArrayList<>();
-
-        for (List<Course> group : bySeller.values()) {
+        for (List<Course> group : bySellerBranch.values()) {
             Course first = group.get(0);
             Staff seller = first.getSellerStaff();
             BigDecimal refunded = group.stream()
@@ -304,15 +249,21 @@ public class CommissionController {
                     .max(BigDecimal.ZERO);
             CommissionScheme scheme = first.getCommissionScheme();
             CommissionTier tier = tierResolver.resolve(scheme, base);
-            rows.add(new ReportRow(
-                    seller.getId(),
-                    seller.getStaffFname() + " " + seller.getStaffLname(),
-                    first.getReceipt().getBranch().getBranchCode(),
-                    first.getReceipt().getBranch().getBranchName(),
-                    group.size(),
-                    base,
-                    tier.getCommissionRate(),
-                    base.multiply(tier.getCommissionRate())));
+            List<SaleDetail> sales = group.stream().map(course -> {
+                var transaction = course.getSaleTransaction();
+                BigDecimal completedRefund = refundItems.sumRefundAmountOfCourse(course.getId(),
+                        List.of(com.sabyeguyz.clinicv2.enums.RefundStatus.Completed));
+                if (completedRefund == null) completedRefund = BigDecimal.ZERO;
+                return new SaleDetail(course.getId(), course.getReceipt().getSaleDate().toLocalDate(),
+                        course.getReceipt().getReceiptNo(), course.getCourseNo(), course.getCourseName(),
+                        course.getPurchaserPatient().getPatientFname() + " " + course.getPurchaserPatient().getPatientLname(),
+                        seller.getStaffFname() + " " + seller.getStaffLname(),
+                        transaction.getUnitPrice().multiply(BigDecimal.valueOf(transaction.getQuantity())),
+                        transaction.getLineDiscountAmount(), course.getCoursePrice(), completedRefund);
+            }).toList();
+            rows.add(new ReportRow(seller.getId(), seller.getStaffFname() + " " + seller.getStaffLname(),
+                    first.getBranch().getBranchCode(), first.getBranch().getBranchName(),
+                    group.size(), base, tier.getCommissionRate(), base.multiply(tier.getCommissionRate()), sales));
         }
 
         return rows;
@@ -331,25 +282,37 @@ public class CommissionController {
             Staff owner = course.getOwnerStaff();
             BigDecimal ownerNet = row.getOwnerNetCommission();
             BigDecimal fee = row.getSubstituteTreatmentFeeAmount();
-
-            return new TreatmentReportRow(
-                    row.getId(),
-                    row.getVisitDate().toLocalDate(),
-                    course.getId(),
-                    course.getCourseNo(),
-                    patient.getId(),
-                    patient.getPatientHn(),
-                    patient.getPatientFname() + " " + patient.getPatientLname(),
-                    course.getReceipt().getBranch().getBranchCode(),
-                    course.getReceipt().getBranch().getBranchName(),
+            String feeRuleName = allocationLedger.findByVisitUsageIdOrderByIdAsc(row.getId()).stream()
+                    .filter(entry -> entry.getTreatmentFeeAmount().signum() != 0 && entry.getTreatmentFeeRule() != null)
+                    .map(entry -> entry.getTreatmentFeeRule().getRuleName()).findFirst().orElse(null);
+            return new TreatmentReportRow(row.getId(), row.getVisitDate().toLocalDate(), course.getId(), course.getCourseNo(),
+                    patient.getId(), patient.getPatientHn(), patient.getPatientFname() + " " + patient.getPatientLname(),
+                    course.getReceipt().getBranch().getBranchCode(), course.getReceipt().getBranch().getBranchName(),
                     treating == null ? null : treating.getId(),
                     treating == null ? "ไม่ระบุ" : treating.getStaffFname() + " " + treating.getStaffLname(),
                     owner == null ? null : owner.getId(),
                     owner == null ? "ไม่ระบุ" : owner.getStaffFname() + " " + owner.getStaffLname(),
-                    ownerNet == null ? null : ownerNet.add(fee),
-                    fee,
-                    ownerNet,
-                    ownerNet == null);
+                    ownerNet == null ? null : ownerNet.add(fee), fee, ownerNet, ownerNet == null,
+                    course.getService() == null ? course.getCourseName() : course.getService().getServiceName(), feeRuleName);
+        }).toList();
+    }
+
+    @GetMapping("/single-visit-fees")
+    public List<SingleVisitFeeRow> singleVisitFees(@RequestParam Long staffId, @RequestParam String branchCode,
+                                                   @RequestParam LocalDate from, @RequestParam LocalDate to) {
+        if (to.isBefore(from)) throw new IllegalArgumentException("invalid report date range");
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) throw new IllegalArgumentException("ต้องเลือกสาขา");
+        return singleVisitFees.findStaffFeesForBranch(staffId, branch.getId(), from, to).stream().map(fee -> {
+            var visit = fee.getVisit();
+            var patient = visit.getPatient();
+            var service = visit.getAppointment() == null ? null : visit.getAppointment().getService();
+            return new SingleVisitFeeRow(fee.getId(), fee.getServiceDate(),
+                    patient.getPatientFname() + " " + patient.getPatientLname(),
+                    service == null ? "บริการรายครั้ง" : service.getServiceName(),
+                    fee.getStaff().getStaffFname() + " " + fee.getStaff().getStaffLname(),
+                    fee.getTreatmentFeeRule() == null ? null : fee.getTreatmentFeeRule().getRuleName(),
+                    fee.getFeeAmount());
         }).toList();
     }
 
@@ -430,7 +393,7 @@ public class CommissionController {
 
         String saleMonth = month.length() >= 7
                 ? month.substring(0, 7) : month;
-        StaffMonthlyPaymentService.requireMonth(saleMonth);
+        StaffMonthlyPaymentService.requireCompletedMonth(saleMonth);
 
         var branch = branchAccess.scope(branchCode);
 
