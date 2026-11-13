@@ -3,6 +3,8 @@ package com.sabyeguyz.clinicv2.cypress;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
+
+import com.sabyeguyz.clinicv2.calendar.FakeGoogleCalendarClient;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -12,8 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Fixture utilities for the v2 HTTP suite. They exist only in src/test, only under the cypress-v2
- * profile, and need a manager token. Reset empties every transactional table, keeps the seeded
+ * Fixture utilities for the v2 HTTP suite. They exist only in src/test, only
+ * under the cypress-v2 profile, and need a manager token. Reset empties every
+ * transactional table, keeps the seeded
  * reference data (users, branches, staff, services, commission scheme) and re-creates the
  * 9,000 THB test course (5 paid visits + 1 bonus, valid 60 days).
  */
@@ -24,19 +27,34 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional
 public class CypressV2FixturesController {
     private static final String TRANSACTIONAL_TABLES = String.join(", ",
-            "adjustment_application", "staff_pay_adjustment", "single_visit_fee_ledger", "staff_monthly_payment",
-            "course_refund_item", "refund_transaction", "transaction_cancellation", "payment_transaction", "course_usage_print_event",
-            "course_usage_print", "commission_allocation_ledger", "course_ledger", "course_visit_usage",
-            "course_transfer", "course_entitlement", "course_sale_staff_share", "course_shared_member",
+            "adjustment_application",
+            "staff_pay_adjustment",
+            "single_visit_fee_ledger",
+            "staff_monthly_payment",
+            "course_refund_item",
+            "refund_transaction",
+            "transaction_cancellation",
+            "payment_transaction",
+            "course_usage_print_event",
+            "course_usage_print",
+            "commission_allocation_ledger",
+            "course_ledger",
+            "course_visit_usage",
+            "course_transfer",
+            "course_entitlement",
+            "course_sale_staff_share",
+            "course_shared_member",
             "commission_rate_override_audit", "monthly_commission_closing",
             "branch_monthly_closing", "treatment", "sales_transaction",
             "course", "receipt", "receipt_sequence", "appointment_status_history", "appointment", "patient_visit", "hn_sequence",
             "patient", "audit_log");
 
     private final JdbcTemplate jdbc;
-    private final com.sabyeguyz.clinicv2.calendar.FakeGoogleCalendarClient fakeCalendar;
+    private final FakeGoogleCalendarClient fakeCalendar;
 
-    public CypressV2FixturesController(JdbcTemplate jdbc, com.sabyeguyz.clinicv2.calendar.FakeGoogleCalendarClient fakeCalendar) {
+    public CypressV2FixturesController(
+            JdbcTemplate jdbc,
+            FakeGoogleCalendarClient fakeCalendar) {
         this.jdbc = jdbc;
         this.fakeCalendar = fakeCalendar;
     }
@@ -59,6 +77,7 @@ public class CypressV2FixturesController {
                 SELECT 'Course'::service_type_enum, 'คอร์สทดสอบ API', 9000.00, 'CYPRESS', u.user_id, 5, 1, 60, 'Day'::validity_unit_enum
                 FROM app_user u WHERE u.username = 'system'
                 """);
+
         return Map.of(
                 "courseId", id("SELECT service_id FROM service WHERE service_code = 'CYPRESS'"),
                 "serviceId", id("SELECT service_id FROM service WHERE service_code = 'PHYSIO_60'"),
@@ -74,12 +93,19 @@ public class CypressV2FixturesController {
         String seedUsers = "('system', 'manager', 'therapist', 'therapist2')";
         String seedBranches = "('01', '02')";
         jdbc.update("DELETE FROM user_permission");
-        jdbc.update("DELETE FROM user_role WHERE user_id IN (SELECT user_id FROM app_user WHERE username NOT IN " + seedUsers + ")");
-        jdbc.update("DELETE FROM user_branch_access WHERE user_id IN (SELECT user_id FROM app_user WHERE username NOT IN " + seedUsers + ")");
+        jdbc.update(
+                "DELETE FROM user_role WHERE user_id IN "
+                        + "(SELECT user_id FROM app_user WHERE username NOT IN " + seedUsers + ")");
+        jdbc.update(
+                "DELETE FROM user_branch_access WHERE user_id IN "
+                        + "(SELECT user_id FROM app_user WHERE username NOT IN " + seedUsers + ")");
         jdbc.update("DELETE FROM app_user WHERE username NOT IN " + seedUsers);
         jdbc.update("DELETE FROM staff WHERE staff_code NOT IN ('MGR-001', 'THP-001', 'THP-002')");
-        jdbc.update("DELETE FROM user_branch_access WHERE branch_id IN (SELECT branch_id FROM branch WHERE branch_code NOT IN " + seedBranches + ")");
-        jdbc.update("DELETE FROM room WHERE room_name NOT LIKE 'ห้องกายภาพ%' OR branch_id IN (SELECT branch_id FROM branch WHERE branch_code NOT IN " + seedBranches + ")");
+        jdbc.update(
+                "DELETE FROM user_branch_access WHERE branch_id IN "
+                        + "(SELECT branch_id FROM branch WHERE branch_code NOT IN " + seedBranches + ")");
+        jdbc.update("DELETE FROM room WHERE room_name NOT LIKE 'ห้องกายภาพ%' OR branch_id IN "
+                + "(SELECT branch_id FROM branch WHERE branch_code NOT IN " + seedBranches + ")");
         jdbc.update("DELETE FROM branch WHERE branch_code NOT IN " + seedBranches);
         jdbc.update("DELETE FROM payment_method WHERE method_name NOT IN ('Cash', 'BankTransfer', 'PromptPay', 'CreditCard')");
         jdbc.update("DELETE FROM master_data_value WHERE value_name NOT IN ('General', 'VIP', 'Walk-in', 'Facebook', 'Friend', 'None')");
@@ -103,7 +129,8 @@ public class CypressV2FixturesController {
         jdbc.update("UPDATE staff SET staff_status = TRUE, termination_date = NULL");
         jdbc.update("UPDATE app_user SET user_status = TRUE WHERE username <> 'system'");
         jdbc.update("UPDATE branch SET branch_status = TRUE");
-        jdbc.update("UPDATE payment_method SET payment_method_status = " + "(method_name::text IN ('CreditCard', 'PromptPay', 'BankTransfer'))");
+        jdbc.update("UPDATE payment_method SET payment_method_status = "
+                + "(method_name::text IN ('CreditCard', 'PromptPay', 'BankTransfer'))");
         jdbc.update("UPDATE master_data_value SET value_status = TRUE");
         jdbc.update("UPDATE room SET room_status = TRUE");
         jdbc.update("UPDATE service SET service_status = TRUE");

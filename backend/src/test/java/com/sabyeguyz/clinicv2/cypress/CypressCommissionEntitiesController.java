@@ -21,10 +21,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Persistence checks of the commission tables (course refund items, single-visit fee ledger, monthly payments,
- * pay adjustments and their applications). The caller creates the real prerequisites (patient, visit, sale, course,
- * refund) through the public API and passes their ids; every attempt here runs in its own transaction so a row the
- * database rejects is reported ("rejected": reason) without spoiling the next attempt.
+ * Persistence checks of the commission tables (course refund items, single-visit
+ * fee ledger, monthly payments, pay adjustments and their applications). The
+ * caller creates the real prerequisites (patient, visit, sale, course, refund)
+ * through the public API and passes their ids; every attempt here runs in its
+ * own transaction so a row the database rejects is reported ("rejected": reason)
+ * without spoiling the next attempt.
  */
 @Profile("cypress-v2")
 @RestController
@@ -44,24 +46,49 @@ public class CypressCommissionEntitiesController {
     private final AdjustmentApplicationRepository applications;
     private final JdbcTemplate jdbc;
 
-    public CypressCommissionEntitiesController(JdbcTemplate jdbc, TransactionTemplate tx, CourseRefundItemRepository refundItems,
-            RefundTransactionRepository refunds, CourseRepository courses, PatientVisitRepository visits, StaffRepository staff,
-            TreatmentFeeRuleRepository rules, SingleVisitFeeLedgerRepository fees, StaffMonthlyPaymentRepository payments,
-            StaffPayAdjustmentRepository adjustments, AdjustmentApplicationRepository applications) {
-        this.tx = tx; this.refundItems = refundItems; this.refunds = refunds; this.courses = courses; this.visits = visits;
-        this.staff = staff; this.rules = rules; this.fees = fees; this.payments = payments; this.adjustments = adjustments;
+    public CypressCommissionEntitiesController(
+            JdbcTemplate jdbc,
+            TransactionTemplate tx,
+            CourseRefundItemRepository refundItems,
+            RefundTransactionRepository refunds,
+            CourseRepository courses,
+            PatientVisitRepository visits,
+            StaffRepository staff,
+            TreatmentFeeRuleRepository rules,
+            SingleVisitFeeLedgerRepository fees,
+            StaffMonthlyPaymentRepository payments,
+            StaffPayAdjustmentRepository adjustments,
+            AdjustmentApplicationRepository applications) {
+        this.tx = tx;
+        this.refundItems = refundItems;
+        this.refunds = refunds;
+        this.courses = courses;
+        this.visits = visits;
+        this.staff = staff;
+        this.rules = rules;
+        this.fees = fees;
+        this.payments = payments;
+        this.adjustments = adjustments;
         this.applications = applications;
         this.jdbc = jdbc;
     }
 
-    /** Ids of the newest rows that checks need as prerequisites (the visit made by a single-visit sale, the fee rule). */
+    /** Ids of the newest rows needed as prerequisites (the visit made by a
+     * single-visit sale and the fee rule). */
     @GetMapping("/latest")
     public Map<String, Object> latest() {
-        return map("visitId", jdbc.queryForObject("select max(visit_id) from patient_visit", Long.class),
+        return map(
+                "visitId", jdbc.queryForObject("select max(visit_id) from patient_visit", Long.class),
                 "ruleId", jdbc.queryForObject("select max(treatment_fee_rule_id) from treatment_fee_rule", Long.class));
     }
 
-    public record Ids(Long refundId, Long courseId, Long visitId, Long staffId, Long ruleId, Long userId) {}
+    public record Ids(
+            Long refundId,
+            Long courseId,
+            Long visitId,
+            Long staffId,
+            Long ruleId,
+            Long userId) {}
 
     /** Runs the attempt in a new transaction; a database/validation failure becomes {"rejected": reason}. */
     private Map<String, Object> attempt(Supplier<Map<String, Object>> work) {
@@ -69,21 +96,29 @@ public class CypressCommissionEntitiesController {
             return tx.execute(status -> work.get());
         } catch (RuntimeException failure) {
             Throwable root = failure;
-            while (root.getCause() != null) root = root.getCause();
+            while (root.getCause() != null) {
+                root = root.getCause();
+            }
             String message = root.getMessage() == null ? "" : root.getMessage();
             Map<String, Object> out = new LinkedHashMap<>();
+
             out.put("rejected", message.replaceAll("(?s)^ERROR: ", "").split("\n")[0]);
+
             return out;
         }
     }
 
     private static Map<String, Object> map(Object... keyValues) {
         Map<String, Object> out = new LinkedHashMap<>();
-        for (int i = 0; i < keyValues.length; i += 2) out.put((String) keyValues[i], keyValues[i + 1]);
+        for (int i = 0; i < keyValues.length; i += 2) {
+            out.put((String) keyValues[i], keyValues[i + 1]);
+        }
         return out;
     }
 
-    private static BigDecimal d(String value) { return new BigDecimal(value); }
+    private static BigDecimal d(String value) {
+        return new BigDecimal(value);
+    }
 
     @PostMapping("/refund-item")
     public Map<String, Object> refundItem(@RequestBody Ids ids) {
@@ -95,26 +130,32 @@ public class CypressCommissionEntitiesController {
             item.setCancelledVisits(2);
             Long id = refundItems.saveAndFlush(item).getId();
             var read = refundItems.findById(id).orElseThrow();
+
             return map("id", id, "refundId", read.getRefund().getId(), "courseId", read.getCourse().getId(),
                     "amount", read.getRefundAmount(), "cancelledVisits", read.getCancelledVisits());
         });
         Map<String, Object> out = new LinkedHashMap<>(saved);
+
         out.put("duplicate", attempt(() -> {
             CourseRefundItem again = new CourseRefundItem();
             again.setRefund(refunds.findById(ids.refundId()).orElseThrow());
             again.setCourse(courses.findById(ids.courseId()).orElseThrow());
             again.setRefundAmount(d("10.00"));
             again.setCancelledVisits(1);
+
             return map("id", refundItems.saveAndFlush(again).getId());
         }));
+
         out.put("zeroAmount", attempt(() -> {
             CourseRefundItem item = new CourseRefundItem();
             item.setRefund(refunds.findById(ids.refundId()).orElseThrow());
             item.setCourse(courses.findById(ids.courseId()).orElseThrow());
             item.setRefundAmount(BigDecimal.ZERO);
             item.setCancelledVisits(1);
+
             return map("id", refundItems.saveAndFlush(item).getId());
         }));
+
         return out;
     }
 
@@ -132,6 +173,7 @@ public class CypressCommissionEntitiesController {
         row.setFeeVersion(version);
         row.setCreatedAt(Instant.now());
         row.setCreatedBy(ids.userId());
+
         return row;
     }
 
@@ -139,32 +181,42 @@ public class CypressCommissionEntitiesController {
     public Map<String, Object> singleVisitFee(@RequestBody Ids ids) {
         Map<String, Object> out = new LinkedHashMap<>();
         Long[] allocationId = new Long[1];
+
         out.put("allocation", attempt(() -> {
             var saved = fees.saveAndFlush(fee(ids, AllocationEntryType.Allocation, "100.00", 11));
             allocationId[0] = saved.getId();
             var read = fees.findById(saved.getId()).orElseThrow();
+
             return map("id", read.getId(), "entryType", read.getEntryType().name(), "feeAmount", read.getFeeAmount(),
                     "feeType", read.getFeeType().name(), "version", read.getFeeVersion(), "month", read.getServiceDate().toString());
         }));
+
         out.put("reversalWithoutReason", attempt(() -> {
             var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 11);
             row.setReversesFee(fees.findById(allocationId[0]).orElseThrow());
+
             return map("id", fees.saveAndFlush(row).getId());
         }));
+
         out.put("reversal", attempt(() -> {
             var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 11);
             row.setReversesFee(fees.findById(allocationId[0]).orElseThrow());
             row.setReason("บันทึกผิด");
             var saved = fees.saveAndFlush(row);
+
             return map("id", saved.getId(), "reversesAllocation", saved.getReversesFee().getId().equals(allocationId[0]));
         }));
+
         out.put("secondReversalOfTheSameFee", attempt(() -> {
             var row = fee(ids, AllocationEntryType.Reversal, "-100.00", 12);
             row.setReversesFee(fees.findById(allocationId[0]).orElseThrow());
             row.setReason("ซ้ำ");
+
             return map("id", fees.saveAndFlush(row).getId());
         }));
+
         out.put("negativeAllocation", attempt(() -> map("id", fees.saveAndFlush(fee(ids, AllocationEntryType.Allocation, "-5.00", 13)).getId())));
+
         return out;
     }
 
@@ -176,6 +228,7 @@ public class CypressCommissionEntitiesController {
         row.setPaymentStatus(status);
         row.setStatusChangedBy(ids.userId());
         row.setStatusChangedAt(Instant.now());
+
         return row;
     }
 
@@ -198,43 +251,56 @@ public class CypressCommissionEntitiesController {
         row.setRemainingAmount(d(amount).abs());
         row.setCreatedAt(Instant.now());
         row.setCreatedBy(ids.userId());
+
         return row;
     }
 
     @PostMapping("/payments")
     public Map<String, Object> monthlyPayments(@RequestBody Ids ids) {
         Map<String, Object> out = new LinkedHashMap<>();
+
         out.put("open", attempt(() -> {
             var saved = payments.saveAndFlush(payment(ids, "2026-10", PaymentStatus.Open));
             var read = payments.findById(saved.getId()).orElseThrow();
+
             return map("id", read.getId(), "month", read.getPaymentMonth(), "status", read.getPaymentStatus().name(),
                     "net", read.getNetPaymentAmount());
         }));
+
         out.put("paidWithoutAmounts", attempt(() -> {
             var row = payment(ids, "2026-09", PaymentStatus.Paid);
             row.setPaidAt(Instant.now());
+
             return map("id", payments.saveAndFlush(row).getId());
         }));
+
         out.put("paidWithWrongNet", attempt(() -> {
             var row = payment(ids, "2026-09", PaymentStatus.Paid);
             row.setPaidAt(Instant.now());
             amounts(row, "2500.00", "0.00", "500.00", "-140.00", "2900.00");
+
             return map("id", payments.saveAndFlush(row).getId());
         }));
+
         out.put("paidWithoutPaidAt", attempt(() -> {
             var row = payment(ids, "2026-09", PaymentStatus.Paid);
             amounts(row, "2500.00", "0.00", "500.00", "-140.00", "2860.00");
+
             return map("id", payments.saveAndFlush(row).getId());
         }));
+
         out.put("paid", attempt(() -> {
             var row = payment(ids, "2026-09", PaymentStatus.Paid);
             row.setPaidAt(Instant.now());
             amounts(row, "2500.00", "0.00", "500.00", "-140.00", "2860.00");
             var saved = payments.saveAndFlush(row);
             var read = payments.findById(saved.getId()).orElseThrow();
+
             return map("id", read.getId(), "net", read.getNetPaymentAmount(), "status", read.getPaymentStatus().name());
         }));
+
         out.put("secondRowForTheSameStaffAndMonth", attempt(() -> map("id", payments.saveAndFlush(payment(ids, "2026-10", PaymentStatus.Open)).getId())));
+
         return out;
     }
 
@@ -244,43 +310,56 @@ public class CypressCommissionEntitiesController {
         Long[] adjustmentId = new Long[1];
         Long[] paymentId = new Long[1];
         attempt(() -> { paymentId[0] = payments.saveAndFlush(payment(ids, "2026-11", PaymentStatus.Open)).getId(); return map(); });
+
         out.put("minusFromSeptember", attempt(() -> {
             var row = adjustment(ids, "2026-09", "2026-10", "-140.00", "บันทึก Visit ซ้ำ");
             row.setCourse(courses.findById(ids.courseId()).orElseThrow());
             var saved = adjustments.saveAndFlush(row);
             adjustmentId[0] = saved.getId();
             var read = adjustments.findById(saved.getId()).orElseThrow();
+
             return map("id", read.getId(), "amount", read.getAmount(), "status", read.getAdjustmentStatus().name(),
                     "remaining", read.getRemainingAmount(), "originalMonth", read.getOriginalMonth(), "appliedMonth", read.getAppliedMonth());
         }));
+
         out.put("appliedMonthNotAfterOriginal", attempt(() -> {
             var row = adjustment(ids, "2026-09", "2026-09", "-10.00", "x");
             row.setCourse(courses.findById(ids.courseId()).orElseThrow());
+
             return map("id", adjustments.saveAndFlush(row).getId());
         }));
+
         out.put("zeroAmount", attempt(() -> {
             var row = adjustment(ids, "2026-09", "2026-10", "0.00", "x");
             row.setCourse(courses.findById(ids.courseId()).orElseThrow());
+
             return map("id", adjustments.saveAndFlush(row).getId());
         }));
+
         out.put("noSource", attempt(() -> map("id", adjustments.saveAndFlush(adjustment(ids, "2026-09", "2026-10", "-10.00", "x")).getId())));
         out.put("blankReason", attempt(() -> {
             var row = adjustment(ids, "2026-09", "2026-10", "-10.00", " ");
             row.setCourse(courses.findById(ids.courseId()).orElseThrow());
+
             return map("id", adjustments.saveAndFlush(row).getId());
         }));
+
         out.put("approvedStatusWithoutApprover", attempt(() -> {
             var row = adjustment(ids, "2026-09", "2026-10", "-10.00", "x");
             row.setCourse(courses.findById(ids.courseId()).orElseThrow());
             row.setAdjustmentStatus(AdjustmentStatus.Approved);
+
             return map("id", adjustments.saveAndFlush(row).getId());
         }));
+
         out.put("remainingNotMatchingBalance", attempt(() -> {
             var row = adjustment(ids, "2026-09", "2026-10", "-10.00", "x");
             row.setCourse(courses.findById(ids.courseId()).orElseThrow());
             row.setRemainingAmount(d("3.00"));
+
             return map("id", adjustments.saveAndFlush(row).getId());
         }));
+
         out.put("draftApplication", attempt(() -> {
             var row = new AdjustmentApplication();
             row.setAdjustment(adjustments.findById(adjustmentId[0]).orElseThrow());
@@ -290,8 +369,10 @@ public class CypressCommissionEntitiesController {
             row.setCreatedBy(ids.userId());
             var saved = applications.saveAndFlush(row);
             var read = applications.findById(saved.getId()).orElseThrow();
+
             return map("id", read.getId(), "status", read.getApplicationStatus().name(), "amount", read.getAmount());
         }));
+
         out.put("appliedWithoutApprover", attempt(() -> {
             var row = new AdjustmentApplication();
             row.setAdjustment(adjustments.findById(adjustmentId[0]).orElseThrow());
@@ -300,8 +381,10 @@ public class CypressCommissionEntitiesController {
             row.setApplicationStatus(ApplicationStatus.Applied);
             row.setCreatedAt(Instant.now());
             row.setCreatedBy(ids.userId());
+
             return map("id", applications.saveAndFlush(row).getId());
         }));
+
         out.put("appliedDeductionWithoutReference", attempt(() -> {
             var row = new AdjustmentApplication();
             row.setAdjustment(adjustments.findById(adjustmentId[0]).orElseThrow());
@@ -312,8 +395,10 @@ public class CypressCommissionEntitiesController {
             row.setApprovedAt(Instant.now());
             row.setCreatedAt(Instant.now());
             row.setCreatedBy(ids.userId());
+
             return map("id", applications.saveAndFlush(row).getId());
         }));
+
         out.put("appliedDeductionWithReference", attempt(() -> {
             var row = new AdjustmentApplication();
             row.setAdjustment(adjustments.findById(adjustmentId[0]).orElseThrow());
@@ -326,8 +411,10 @@ public class CypressCommissionEntitiesController {
             row.setCreatedAt(Instant.now());
             row.setCreatedBy(ids.userId());
             var saved = applications.saveAndFlush(row);
+
             return map("id", saved.getId(), "status", applications.findById(saved.getId()).orElseThrow().getApplicationStatus().name());
         }));
+
         return out;
     }
 }

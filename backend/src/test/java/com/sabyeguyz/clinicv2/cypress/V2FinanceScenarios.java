@@ -1,23 +1,51 @@
 package com.sabyeguyz.clinicv2.cypress;
 
-import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.catalog.CourseService;
 import com.sabyeguyz.clinicv2.catalog.Service;
+import com.sabyeguyz.clinicv2.commission.BranchClosingGuard;
+import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosing;
+import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingRepository;
+import com.sabyeguyz.clinicv2.commission.CommissionAllocationLedgerRepository;
+import com.sabyeguyz.clinicv2.commission.CommissionRateOverrideAuditRepository;
+import com.sabyeguyz.clinicv2.commission.CommissionRateOverrideService;
+import com.sabyeguyz.clinicv2.commission.CommissionScheme;
+import com.sabyeguyz.clinicv2.commission.CommissionSchemeRepository;
+import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
+import com.sabyeguyz.clinicv2.commission.CommissionSchemeService;
+import com.sabyeguyz.clinicv2.commission.CommissionTier;
+import com.sabyeguyz.clinicv2.commission.CommissionTierRepository;
+import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
+import com.sabyeguyz.clinicv2.commission.CourseCommissionService;
+import com.sabyeguyz.clinicv2.commission.MonthlyCommissionClosingRepository;
+import com.sabyeguyz.clinicv2.commission.TreatmentFeeRuleRepository;
+import com.sabyeguyz.clinicv2.commission.TreatmentFeeRuleResolver;
 import com.sabyeguyz.clinicv2.commission.*;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedgerRepository;
 import com.sabyeguyz.clinicv2.course.CourseSharedMemberRepository;
+import com.sabyeguyz.clinicv2.enums.CommissionStatus;
+import com.sabyeguyz.clinicv2.enums.CourseStatus;
 import com.sabyeguyz.clinicv2.enums.*;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.sale.Discount;
+import com.sabyeguyz.clinicv2.sale.PaymentMethod;
+import com.sabyeguyz.clinicv2.sale.PaymentTransactionRepository;
+import com.sabyeguyz.clinicv2.sale.ReceiptCoursePaymentService;
+import com.sabyeguyz.clinicv2.sale.SalesTransaction;
+import com.sabyeguyz.clinicv2.sale.SalesTransactionRepository;
 import com.sabyeguyz.clinicv2.sale.*;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -29,13 +57,16 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/__cypress/v2/finance")
 public class V2FinanceScenarios {
     @PostMapping("/{scenario}")
-    public Map<String, Object> run(@PathVariable String scenario) {
+    public Map<String, Object> run(
+            @PathVariable String scenario) {
         return V2RepositoryStub.outcome(() -> {
             if (scenario.startsWith("override-")) return override(scenario);
             if (scenario.startsWith("scheme-")) return scheme(scenario);
             if (scenario.startsWith("schemecrud-")) return schemeCrud(scenario);
             if (scenario.startsWith("tier-")) return tier(scenario);
-            if (scenario.startsWith("closing-reclose-")) {return reclosePreservesScheme(scenario);}
+            if (scenario.startsWith("closing-reclose-")) {
+                return reclosePreservesScheme(scenario);
+            }
             if (scenario.startsWith("closing-")) return closing(scenario);
             if (scenario.startsWith("alloc-")) return allocationRates(scenario);
             if (scenario.startsWith("fee-")) return fee(scenario);
@@ -53,73 +84,127 @@ public class V2FinanceScenarios {
         });
     }
 
-    private static BigDecimal decimal(String value) { return new BigDecimal(value); }
-    private static Course course() {
-        Course c = new Course(); c.setCoursePrice(decimal("10000.00")); c.setTotalVisits(10);
-        c.setTreatmentFeeBaseAmount(decimal("10000.00")); return c;
+    private static BigDecimal decimal(String value) {
+        return new BigDecimal(value);
     }
+
+    private static Course course() {
+        Course c = new Course();
+        c.setCoursePrice(decimal("10000.00"));
+        c.setTotalVisits(10);
+        c.setTreatmentFeeBaseAmount(decimal("10000.00"));
+
+        return c;
+    }
+
     private static Staff staff() {
         Staff s = new Staff();
-        try { var f = Staff.class.getDeclaredField("id"); f.setAccessible(true); f.set(s, 1L); }
-        catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+        try {
+            var f = Staff.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(s, 1L);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+
         return s;
     }
+
     private static void setId(Object entity, Long id) {
-        try { var f = entity.getClass().getDeclaredField("id"); f.setAccessible(true); f.set(entity, id); }
-        catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+        try {
+            var f = entity.getClass().getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(entity, id);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
+
     private static CommissionScheme schemeVersion(int version, String from, String to) {
-        CommissionScheme s = new CommissionScheme(); s.setSchemeVersion(version); setId(s, (long) version);
-        s.setEffectiveFrom(LocalDate.parse(from)); s.setEffectiveTo(to == null ? null : LocalDate.parse(to)); return s;
+        CommissionScheme s = new CommissionScheme();
+        s.setSchemeVersion(version);
+        setId(s, (long) version);
+        s.setEffectiveFrom(LocalDate.parse(from));
+        s.setEffectiveTo(to == null ? null : LocalDate.parse(to));
+
+        return s;
     }
+
     private static CommissionTier tierValue(int order, String min, String max, String rate) {
-        CommissionTier t = new CommissionTier(); t.setTierOrder(order); t.setMinimumMonthlySales(decimal(min));
-        t.setMaximumMonthlySales(max == null ? null : decimal(max)); t.setCommissionRate(decimal(rate)); return t;
+        CommissionTier t = new CommissionTier();
+        t.setTierOrder(order);
+        t.setMinimumMonthlySales(decimal(min));
+        t.setMaximumMonthlySales(max == null ? null : decimal(max));
+        t.setCommissionRate(decimal(rate));
+
+        return t;
     }
+
     private static List<CommissionTier> tiers() {
         return List.of(tierValue(1,"0.00","59999.99","0.05"), tierValue(2,"60000.00","69999.99","0.06"),
                 tierValue(3,"70000.00","79999.99","0.07"), tierValue(4,"80000.00","89999.99","0.08"), tierValue(5,"90000.00",null,"0.10"));
     }
+
     private static CommissionSchemeResolver schemeResolver() {
         return new CommissionSchemeResolver(new V2RepositoryStub<>(CommissionSchemeRepository.class)
                 .on("findByOrderByEffectiveFromDesc", a -> List.of(schemeVersion(1,"2026-01-01",null))).proxy());
     }
+
     private static CommissionTierResolver tierResolver() {
         return new CommissionTierResolver(new V2RepositoryStub<>(CommissionTierRepository.class)
                 .on("findByCommissionSchemeIdOrderByTierOrder", a -> tiers()).proxy());
     }
+
     private Object override(String scenario) {
         var audits = new V2RepositoryStub<>(CommissionRateOverrideAuditRepository.class);
         var courses = new V2RepositoryStub<>(CourseRepository.class);
-        Course c = course(); c.setRemainingVisits(10);
-        c.setCourseStatus(CourseStatus.Active); c.setSellerStaff(staff()); c.setSaleMonth("2026-08");
+
+        Course c = course();
+        c.setRemainingVisits(10);
+        c.setCourseStatus(CourseStatus.Active);
+        c.setSellerStaff(staff());
+        c.setSaleMonth("2026-08");
         c.setExpiryDate(LocalDate.now().plusYears(1));
+
         if (!scenario.equals("override-unlocked")) {
-            c.setLockedCommissionRate(decimal("0.07")); c.setCommissionStatus(CommissionStatus.Locked);
+            c.setLockedCommissionRate(decimal("0.07"));
+            c.setCommissionStatus(CommissionStatus.Locked);
         }
+
         var ledgerRows = new V2RepositoryStub<>(com.sabyeguyz.clinicv2.commission.CommissionAllocationLedgerRepository.class);
         var usageRows = new V2RepositoryStub<>(com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository.class);
         var commission = new CourseCommissionService(usageRows.proxy(), ledgerRows.proxy(), courses.proxy(),
                 new TreatmentFeeRuleResolver(new V2RepositoryStub<>(TreatmentFeeRuleRepository.class).proxy()));
+
         var audit = new CommissionRateOverrideService(audits.proxy(), courses.proxy(),
                 new V2RepositoryStub<>(MonthlyCommissionClosingRepository.class).proxy(), commission).override(c, decimal("0.10"),
                 new Permission(), scenario.equals("override-reason") ? " " : "แก้ตามคำสั่งผู้บริหาร", 1L);
-        return Map.of("oldRate",audit.getOldRate(),"newRate",audit.getNewRate(),"rate",c.getLockedCommissionRate(),
-                "pool",c.getTotalCourseCommissionPool(),"outstanding",c.getCommissionOutstanding());
+
+        return Map.of(
+                "oldRate", audit.getOldRate(),
+                "newRate", audit.getNewRate(),
+                "rate", c.getLockedCommissionRate(),
+                "pool", c.getTotalCourseCommissionPool(),
+                "outstanding", c.getCommissionOutstanding());
     }
+
     private Object scheme(String scenario) {
-        var v1 = schemeVersion(1,"2026-01-01","2026-12-31"); var v2 = schemeVersion(2,"2027-01-01",null);
+        var v1 = schemeVersion(1,"2026-01-01","2026-12-31");
+        var v2 = schemeVersion(2,"2027-01-01",null);
+
         if (scenario.equals("scheme-overlap")) {
             // v1 and v2 both cover 2026-12-31: the date must never find two schemes
             var clash = schemeVersion(2,"2026-12-31",null);
             var overlapping = new V2RepositoryStub<>(CommissionSchemeRepository.class)
                     .on("findByOrderByEffectiveFromDesc", a -> List.of(clash, v1));
+
             return new CommissionSchemeResolver(overlapping.proxy()).resolveEffective(LocalDate.parse("2026-12-31"));
         }
         var repository = new V2RepositoryStub<>(CommissionSchemeRepository.class).on("findByOrderByEffectiveFromDesc",
                 a -> scenario.equals("scheme-missing") ? List.of() : scenario.equals("scheme-newest") || scenario.equals("scheme-last-day") ? List.of(v2,v1) : List.of(v1));
         var resolved = new CommissionSchemeResolver(repository.proxy()).resolveEffective(
                 LocalDate.parse(scenario.equals("scheme-newest") ? "2027-06-01" : scenario.equals("scheme-last-day") ? "2026-12-31" : "2026-08-18"));
+
         return Map.of("sameV1",resolved == v1,"sameV2",resolved == v2);
     }
     /** Coverage for CommissionSchemeService (SS2 tier validation, SS24 Tier Versioning) - no prior Scenarios existed for this. */
@@ -190,6 +275,7 @@ public class V2FinanceScenarios {
             var created = service.create(
                     "Default", LocalDate.parse("2026-01-01"),
                     null, branch, new Permission(), validTiers, 1L);
+
             return Map.of("version", created.getSchemeVersion(), "tiersSaved", savedTiers.size(),
                     "firstRate", savedTiers.get(0).getCommissionRate());
         }
@@ -198,6 +284,7 @@ public class V2FinanceScenarios {
             existing.setSchemeName("Default");
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(existing));
             var created = service.create("Default", LocalDate.parse("2027-01-01"), null, branch, new Permission(), validTiers, 1L);
+
             return Map.of("version", created.getSchemeVersion(), "predecessorEnds", existing.getEffectiveTo().toString());
         }
         if (scenario.equals("schemecrud-different-name-version")) {
@@ -225,6 +312,7 @@ public class V2FinanceScenarios {
             // a bounded scheme inside the range of the open-ended one is not a take-over: refused
             var existing = schemeVersion(1, "2026-01-01", null);
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(existing));
+
             return V2RepositoryStub.outcome(() -> service.create(
                     "Other",
                     LocalDate.parse("2026-06-01"),
@@ -236,6 +324,7 @@ public class V2FinanceScenarios {
             var existing = schemeVersion(1, "2026-01-01", null);
             schemesStub.on("findByOrderByEffectiveFromDesc", a -> List.of(existing));
             coursesStub.on("existsBySchemeUsedAfter", a -> true);
+
             return V2RepositoryStub.outcome(() -> service.create(
                     "Default",
                     LocalDate.parse("2027-01-01"), null,
@@ -247,6 +336,7 @@ public class V2FinanceScenarios {
             var created = service.create("Satang", LocalDate.parse("2026-01-01"), null, branch, new Permission(), List.of(
                     new CommissionSchemeService.TierInput(decimal("0.00"), decimal("50000.00"), decimal("0.05"), 1),
                     new CommissionSchemeService.TierInput(decimal("50000.01"), null, decimal("0.06"), 2)), 1L);
+
             return Map.of("tiersSaved", savedTiers.size(), "secondMin", savedTiers.get(1).getMinimumMonthlySales().toPlainString());
         }
         if (scenario.startsWith("schemecrud-bad-")) {
@@ -271,6 +361,7 @@ public class V2FinanceScenarios {
                         new CommissionSchemeService.TierInput(decimal("0"), null, decimal("1.5"), 1));
                 default -> throw new IllegalArgumentException("Unknown schemecrud scenario: " + scenario);
             };
+
             return V2RepositoryStub.outcome(() -> service.create("Bad", LocalDate.parse("2026-01-01"), null,
                     branch, new Permission(), bad, 1L));
         }
@@ -290,6 +381,7 @@ public class V2FinanceScenarios {
                 return V2RepositoryStub.outcome(() -> { service.deactivate(1L); return "deactivated"; });
             }
             service.update(1L, "Renamed", null, null, branch, null, 9L);
+
             return Map.of("name", used.getSchemeName(), "tiersDeleted", tiersStub.calls("deleteAll"));
         }
         if (scenario.equals("schemecrud-overlap")) {
@@ -297,6 +389,7 @@ public class V2FinanceScenarios {
             List<CommissionSchemeService.TierInput> overlapping = List.of(
                     new CommissionSchemeService.TierInput(decimal("0"), decimal("59999.99"), decimal("0.05"), 1),
                     new CommissionSchemeService.TierInput(decimal("50000"), null, decimal("0.07"), 2));
+
             return V2RepositoryStub.outcome(() ->
                     service.create("Overlap", LocalDate.parse("2026-01-01"), null, branch, new Permission(), overlapping, 1L));
         }
@@ -304,6 +397,7 @@ public class V2FinanceScenarios {
             List<CommissionSchemeService.TierInput> gapped = List.of(
                     new CommissionSchemeService.TierInput(decimal("0"), decimal("49999"), decimal("0.05"), 1),
                     new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
+
             return V2RepositoryStub.outcome(() ->
                     service.create("Gap", LocalDate.parse("2026-01-01"), null, branch, new Permission(), gapped, 1L));
         }
@@ -311,16 +405,19 @@ public class V2FinanceScenarios {
             var existing = schemeVersion(1, "2026-01-01", null);
             schemesStub.on("findById", a -> Optional.of(existing));
             service.update(existing.getId(), "Renamed", null, null, branch, null, 9L);
+
             return Map.of("name", existing.getSchemeName(), "tiersSaveCallsDuringUpdate", tiersStub.calls("save"));
         }
         throw new IllegalArgumentException("Unknown schemecrud scenario: " + scenario);
     }
+
     private Object tier(String scenario) {
         if (scenario.equals("tier-satang-edges")) {
             var edges = new V2RepositoryStub<>(CommissionTierRepository.class)
                     .on("findByCommissionSchemeIdOrderByTierOrder", a -> tiers());
             var resolver = new CommissionTierResolver(edges.proxy());
             var scheme = new CommissionScheme();
+
             return Map.of("topOfTier1", resolver.resolve(scheme, decimal("59999.99")).getCommissionRate(),
                     "bottomOfTier2", resolver.resolve(scheme, decimal("60000.00")).getCommissionRate(),
                     "halfSatang", resolver.resolve(scheme, decimal("59999.995")).getCommissionRate(),
@@ -331,13 +428,16 @@ public class V2FinanceScenarios {
             var clash = new V2RepositoryStub<>(CommissionTierRepository.class)
                     .on("findByCommissionSchemeIdOrderByTierOrder",
                             a -> List.of(tierValue(1,"0.00","200.00","0.05"), tierValue(2,"100.00",null,"0.10")));
+
             return new CommissionTierResolver(clash.proxy()).resolve(new CommissionScheme(), decimal("100.00")).getCommissionRate();
         }
         var repository = new V2RepositoryStub<>(CommissionTierRepository.class)
                 .on("findByCommissionSchemeIdOrderByTierOrder", a -> scenario.equals("tier-missing") ? List.of() : tiers());
+
         return new CommissionTierResolver(repository.proxy()).resolve(new CommissionScheme(),
                 decimal(scenario.equals("tier-top") ? "500000" : scenario.equals("tier-missing") ? "1000" : "75000")).getCommissionRate();
     }
+
     private Object reclosePreservesScheme(String scenario) {
         Branch branch = new Branch();
         setId(branch, 1L);
@@ -439,6 +539,7 @@ public class V2FinanceScenarios {
                 "rate", result.getLockedCommissionRate(),
                 "status", result.getClosingStatus().name());
     }
+
     private Object closing(String scenario) {
         Branch branch = new Branch();
         setId(branch, 1L);
@@ -457,6 +558,7 @@ public class V2FinanceScenarios {
                 .closeMonth(
                         scenario.equals("closing-malformed") ? "August-2026" : "2026-08",
                         staff(), branch, null, 9L);
+
         return Map.of("rate",result.getLockedCommissionRate(),"status",result.isClosed(),
                 "courseStatus",c.getCommissionStatus(),"courseRate",c.getLockedCommissionRate(),
                 "pool",c.getTotalCourseCommissionPool(),"perVisit",c.getCommissionAllocationPerVisit());
@@ -482,12 +584,14 @@ public class V2FinanceScenarios {
         return Map.of("first", rates.get(0), "last", rates.get(total - 1), "sum", sum,
                 "nonNegative", rates.stream().allMatch(rate -> rate.signum() >= 0));
     }
+
     private static CourseCommissionService settlement(V2RepositoryStub<CourseRepository> courses) {
         return new CourseCommissionService(
                 new V2RepositoryStub<>(com.sabyeguyz.clinicv2.course.CourseVisitUsageRepository.class).proxy(),
                 new V2RepositoryStub<>(CommissionAllocationLedgerRepository.class).proxy(), courses.proxy(),
                 new TreatmentFeeRuleResolver(new V2RepositoryStub<>(TreatmentFeeRuleRepository.class).proxy()));
     }
+
     private Object fee(String scenario) {
         var repository = new V2RepositoryStub<>(TreatmentFeeRuleRepository.class);
         var rule = new TreatmentFeeRule(); rule.setFeeType(FeeType.Fixed); rule.setFeeValue(decimal("45"));
@@ -499,6 +603,7 @@ public class V2FinanceScenarios {
             rule.setEffectiveFrom(LocalDate.of(2026,6,1));
             repository.on("findActiveOn", a -> scenario.equals("fee-overlap") ? List.of(older,rule) : List.of(rule));
             var resolved = new TreatmentFeeRuleResolver(repository.proxy()).resolve(LocalDate.of(2026,8,20));
+
             return Map.of("present",resolved.isPresent(),"fee",resolved.map(TreatmentFeeRule::getFeeValue).orElse(BigDecimal.ZERO));
         }
         if (scenario.equals("fee-percentage")) {
@@ -519,6 +624,7 @@ public class V2FinanceScenarios {
             default -> throw new IllegalArgumentException("Unknown tiersales scenario: " + scenario);
         }
         var result = new MonthlyTierSalesService(courses.proxy()).of(1L, "2026-08");
+
         return Map.of("sales", result.sales(), "refunds", result.refunds(), "net", result.net(),
                 "rate", tierResolver().resolve(new CommissionScheme(), result.net()).getCommissionRate());
     }
@@ -571,6 +677,7 @@ public class V2FinanceScenarios {
         switch (scenario) {
             case "feeadmin-create" -> {
                 var created = service.create(FeeType.Percentage, decimal("10"), LocalDate.of(2026,1,1), null, branch, permission, 1L);
+
                 return Map.of("type", created.getFeeType().name(), "value", created.getFeeValue(), "enabled", true);
             }
             case "feeadmin-percent-over-100" -> {
@@ -587,21 +694,25 @@ public class V2FinanceScenarios {
             }
             case "feeadmin-overlap" -> {
                 repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
+
                 return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), LocalDate.of(2026,3,1), LocalDate.of(2026,3,31), branch, permission, 1L));
             }
             case "feeadmin-takes-over" -> {
                 repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
                 var created = service.create(FeeType.Fixed, decimal("50"), nextCycle, null, branch, permission, 1L);
+
                 return Map.of("predecessorEnds", existing.getEffectiveTo().toString(), "newStarts", created.getEffectiveFrom().toString());
             }
             case "feeadmin-takeover-used" -> {
                 repository.on("findAllByOrderByEffectiveFromDesc", a -> List.of(existing));
                 repository.on("isUsedAfter", a -> true);
+
                 return V2RepositoryStub.outcome(() -> service.create(FeeType.Fixed, decimal("50"), nextCycle, null, branch, permission, 1L));
             }
             case "feeadmin-used-immutable" -> {
                 repository.on("findById", a -> Optional.of(existing));
                 repository.on("isUsedByLedger", a -> true);
+
                 return V2RepositoryStub.outcome(() -> service.update(1L, null, decimal("60"), null, null, branch, 9L));
             }
             case "feeadmin-used-cannot-end" -> {
@@ -617,12 +728,14 @@ public class V2FinanceScenarios {
                 existing.setEffectiveFrom(com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1));
                 repository.on("findById", a -> Optional.of(existing));
                 var updated = service.update(1L, FeeType.Percentage, decimal("12.5"), null, null, branch, 9L);
+
                 return Map.of("type", updated.getFeeType().name(), "value", updated.getFeeValue());
             }
             case "feeadmin-started-unused-immutable" -> {
                 existing.setEffectiveFrom(com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1));
                 repository.on("findById", a -> Optional.of(existing));
                 repository.on("isUsedByLedger", a -> false);
+
                 return V2RepositoryStub.outcome(() ->
                         service.update(1L, null, decimal("60"), null, null, branch, 9L));
             }
@@ -630,12 +743,14 @@ public class V2FinanceScenarios {
                 existing.setEffectiveFrom(com.sabyeguyz.clinicv2.config.ClinicTime.today().withDayOfMonth(1).plusMonths(1));
                 repository.on("findById", a -> Optional.of(existing));
                 repository.on("isUsedByLedger", a -> true);
+
                 return V2RepositoryStub.outcome(() ->
                         service.update(1L, null, decimal("60"), null, null, branch, 9L));
             }
             default -> throw new IllegalArgumentException("Unknown feeadmin scenario: " + scenario);
         }
     }
+
     private Object payment(String scenario) {
         var repository = new V2RepositoryStub<>(PaymentTransactionRepository.class);
 
@@ -679,6 +794,7 @@ public class V2FinanceScenarios {
                 "amount", result.getAmount(),
                 "status", result.isPaymentStatus());
     }
+
     private Object receipt(String scenario) {
         var repository = new V2RepositoryStub<>(ReceiptRepository.class)
                 .on("findByReceiptNoAndBranchId",
@@ -703,6 +819,7 @@ public class V2FinanceScenarios {
 
         if (scenario.equals("receipt-next-no")) {
             repository.on("findMaxReceiptSequence", a -> 41);
+
             return service.nextReceiptNo();
         }
         if (scenario.equals("receipt-bad-format")) {
@@ -722,6 +839,7 @@ public class V2FinanceScenarios {
                 "number", result.getReceiptNo(),
                 "date", result.getSaleDate());
     }
+
     private Object receiptTotals(String scenario, ReceiptService service) {
         boolean rounding = scenario.equals("receipt-totals-rounding");
         List<SalesTransaction> lines = new ArrayList<>();
@@ -736,12 +854,14 @@ public class V2FinanceScenarios {
         if (scenario.equals("receipt-totals-no-lines")) lines.clear();
         var receipt = new Receipt();
         service.finalizeTotals(receipt,lines,rounding ? Discount.of("FIXED",decimal("100")) : Discount.of("BAHT",decimal("200")),1L);
+
         return Map.of("subtotal",receipt.getSubtotalBeforeDiscount(),"billDiscount",receipt.getBillDiscountAmount(),
                 "taxable",receipt.getTaxableAmount(),"tax",receipt.getTaxAmount(),"net",receipt.getNetAmount(),
                 "billType",receipt.getBillDiscountType(),
                 "allocated",lines.stream().map(SalesTransaction::getAllocatedBillDiscountAmount).toList(),
                 "commissionable",lines.stream().map(SalesTransaction::getCommissionableAmount).toList());
     }
+
     private Object sale(String scenario) {
         Branch branch = new Branch();
         setId(branch, 1L);
@@ -779,6 +899,7 @@ public class V2FinanceScenarios {
             var purchase = service.recordCoursePurchase(receipt,patient,branch,template,staff(),
                     decimal("10000.00"),null,null,Discount.none(),LocalDate.of(2026,8,18),1L);
             var transaction = purchase.transaction();
+
             return Map.of("sameCourse",purchase.course() == courses.arguments("save").get(0)[0],
                     "sameLine",purchase.course().getSaleTransaction() == transaction,
                     "amount",transaction.getAmount(),"type",transaction.getTransactionType(),"saveOrder",saveOrder);
@@ -786,6 +907,7 @@ public class V2FinanceScenarios {
         if (scenario.equals("sale-visit-discount")) {
             var discounted = service.recordVisitSale(new Receipt(),new Patient(),new Branch(),template,TransactionType.SingleVisit,
                     new Staff(),new Staff(),1,null,null,Discount.of("PERCENT",decimal("10")),1L);
+
             return Map.of("unitPrice",discounted.getUnitPrice(),"amount",discounted.getAmount(),
                     "lineDiscount",discounted.getLineDiscountAmount(),"lineDiscountType",discounted.getLineDiscountType(),
                     "commissionable",discounted.getCommissionableAmount(),"lineNo",discounted.getLineNo());
@@ -799,6 +921,7 @@ public class V2FinanceScenarios {
                     ? Discount.of("PERCENT",decimal("25")) : Discount.of("BAHT",decimal("500"));
             var purchase = service.recordCoursePurchase(receipt,patient,branch,template,staff(),null,null,null,
                     discount,LocalDate.of(2026,8,18),1L);
+
             return Map.of("unitPrice",purchase.transaction().getUnitPrice(),"amount",purchase.transaction().getAmount(),
                     "commissionable",purchase.transaction().getCommissionableAmount(),
                     "coursePrice",purchase.course().getCoursePrice());
@@ -807,11 +930,13 @@ public class V2FinanceScenarios {
                 scenario.equals("sale-wrong-type") ? TransactionType.CoursePurchase
                         : scenario.equals("sale-assessment-rejected") ? TransactionType.Assessment : TransactionType.SingleVisit,
                 new Staff(),new Staff(),1,null,null,Discount.none(),1L);
+
         return Map.of("amount",transaction.getAmount(),"status",transaction.isTransactionStatus());
     }
 
     private Object discount(String scenario) {
         BigDecimal price = decimal("2000.00");
+
         return switch (scenario) {
             case "discount-percent" -> Discount.of("PERCENT", decimal("25")).apply(price);
             case "discount-amount" -> Discount.of("BAHT", decimal("500")).apply(price);
@@ -823,6 +948,7 @@ public class V2FinanceScenarios {
             default -> throw new IllegalArgumentException("Unknown discount scenario: " + scenario);
         };
     }
+
     private Object preview(String scenario) {
         var courses = new V2RepositoryStub<>(CourseRepository.class).on("sumCreditedSalesByStaffAndSaleMonthAndBranchId",
                 a -> scenario.equals("preview-running-total") ? decimal("60000") : BigDecimal.ZERO);
@@ -832,9 +958,11 @@ public class V2FinanceScenarios {
         template.setServicePrice(decimal("2000.00")); template.setDefaultTotalVisits(10);
         if (scenario.equals("preview-invalid-template")) {
             template.setServiceType(ServiceType.SingleVisit);
+
             return service.previewCourse(template, staff(), null, Discount.none(), LocalDate.of(2026, 8, 18), 1L);
         }
         var result = service.previewCourse(template, staff(), null, Discount.of("BAHT", decimal("500")), LocalDate.of(2026, 8, 18), 1L);
+
         return Map.of("net",result.netPrice(),"rate",result.commissionRate(),"pool",result.commissionPool(),
                 "perVisit",result.commissionPerVisit(),"monthlySales",result.monthlySalesToDate());
     }
@@ -842,13 +970,17 @@ public class V2FinanceScenarios {
     private static PaymentTransaction payment(String amount, boolean active) {
         var payment = new PaymentTransaction(); payment.setAmount(decimal(amount)); payment.setPaymentStatus(active);
         payment.setReceipt(new Receipt());
+
         return payment;
     }
+
     private static SalesTransaction line(TransactionType type, String amount, String allocatedBill) {
         var line = new SalesTransaction(); line.setTransactionType(type); line.setAmount(decimal(amount));
         line.setAllocatedBillDiscountAmount(decimal(allocatedBill)); line.setTransactionStatus(true);
+
         return line;
     }
+
     private Object cancellation(String scenario) {
         var cancellations = new V2RepositoryStub<>(TransactionCancellationRepository.class);
         var salesRepo = new V2RepositoryStub<>(SalesTransactionRepository.class);
@@ -876,18 +1008,21 @@ public class V2FinanceScenarios {
         String reason = scenario.equals("cancel-requires-reason") ? "  " : "ลูกค้าขอยกเลิก";
         if (scenario.equals("cancel-void-payment")) {
             var result = service.voidPayment(paid, permission, reason, 9L);
+
             return Map.of("paymentStatus", paid.isPaymentStatus(), "type", result.getCancellationType(),
                     "targetsPayment", result.getPayment() == paid, "reason", result.getReason());
         }
         var result = service.voidSale(sale, permission, reason, 9L);
         List<TransactionCancellation> saved = cancellations.arguments("save").stream()
                 .map(a -> (TransactionCancellation) a[0]).toList();
+
         return Map.of("saleStatus", sale.isTransactionStatus(), "paymentStatus", paid.isPaymentStatus(),
                 "receiptStatus", receipt.getReceiptStatus(), "cancellations", saved.size(),
                 "types", saved.stream().map(c -> c.getCancellationType().name()).toList(),
                 "targets", saved.stream().map(c -> c.getPayment() != null ? "payment" : "transaction").toList(),
                 "cancelledBy", result.getCancelledBy());
     }
+
     private Object refund(String scenario) {
         var refunds = new V2RepositoryStub<>(RefundTransactionRepository.class);
         var cancellations =
@@ -958,18 +1093,22 @@ public class V2FinanceScenarios {
         refunds.on("findById", a -> Optional.of(pending));
         if (scenario.startsWith("refund-complete")) {
             var done = service.complete(1L, 9L);
+
             return Map.of("status", done.getRefundStatus(), "refundedBy", done.getRefundedBy(), "hasRefundedAt", done.getRefundedAt() != null);
         }
         if (scenario.equals("refund-fail")) {
             var failed = service.fail(1L);
+
             return Map.of("status", failed.getRefundStatus(), "hasRefundedAt", failed.getRefundedAt() != null);
         }
         var refund = service.request(paid, decimal("400.00"), new PaymentMethod(), new Permission(), "คืนเงินตามคำขอ", 9L, null);
         var cancellation = (TransactionCancellation) cancellations.arguments("save").get(0)[0];
+
         return Map.of("status", refund.getRefundStatus(), "amount", refund.getRefundAmount(),
                 "requestedBy", refund.getRequestedBy(), "hasRefundedAt", refund.getRefundedAt() != null,
                 "cancellationType", cancellation.getCancellationType(), "sameCancellation", refund.getCancellation() == cancellation);
     }
+
     private Object revenue(String scenario) {
         return switch (scenario) {
             case "revenue-single-line" -> com.sabyeguyz.clinicv2.report.RevenueSplit.split(decimal("1500.00"),

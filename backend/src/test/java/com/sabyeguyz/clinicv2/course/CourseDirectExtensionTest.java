@@ -1,7 +1,16 @@
 package com.sabyeguyz.clinicv2.course;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -9,21 +18,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authorization.method.AuthorizationManagerBeforeMethodInterceptor;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.web.server.ResponseStatusException;
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.audit.AuditLogService;
-import com.sabyeguyz.clinicv2.enums.AuditAction;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
 import com.sabyeguyz.clinicv2.patient.Patient;
 
@@ -35,7 +44,12 @@ class CourseDirectExtensionTest {
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final CurrentActor actor = mock(CurrentActor.class);
     private final AuditLogService audit = mock(AuditLogService.class);
-    private final CourseExtensionController controller = new CourseExtensionController(jdbc, courses, access, actor, audit);
+    private final CourseExtensionController controller = new CourseExtensionController(
+            jdbc,
+            courses,
+            access,
+            actor,
+            audit);
 
     @BeforeEach
     void setup() {
@@ -49,14 +63,19 @@ class CourseDirectExtensionTest {
         when(course.getExpiryDate()).thenReturn(ClinicTime.today().plusDays(10));
     }
 
-    private CourseExtensionController.DirectRequest request(int value, String unit, Long patientId,
-            LocalDate oldExpiry, LocalDate newExpiry) {
+    private CourseExtensionController.DirectRequest request(
+            int value,
+            String unit,
+            Long patientId,
+            LocalDate oldExpiry,
+            LocalDate newExpiry) {
         return new CourseExtensionController.DirectRequest(1L, patientId, value, unit, "", oldExpiry, newExpiry, true);
     }
 
     @Test
     void previewsWithoutChangingCourseOrCreatingARequest() {
         var preview = controller.previewDirect(request(1, "Month", 2L, null, null));
+
         assertEquals(course.getExpiryDate(), preview.oldExpiry());
         assertEquals(preview.oldExpiry().plusMonths(1), preview.newExpiry());
         verify(courses, never()).save(any());
@@ -67,20 +86,24 @@ class CourseDirectExtensionTest {
     @Test
     void expiredCourseStartsFromToday() {
         when(course.getExpiryDate()).thenReturn(ClinicTime.today().minusDays(5));
+
         assertEquals(ClinicTime.today().plusDays(10),
                 controller.previewDirect(request(10, "Day", 2L, null, null)).newExpiry());
     }
 
     @Test
     void sharedRecipientCannotExtendTheOwnersCourse() {
-        var failure = assertThrows(ResponseStatusException.class,
+        var failure = assertThrows(
+                ResponseStatusException.class,
                 () -> controller.previewDirect(request(1, "Month", 3L, null, null)));
+
         assertEquals(HttpStatus.FORBIDDEN, failure.getStatusCode());
     }
 
     @Test
     void rejectsCancelledCourse() {
         when(course.getCourseStatus()).thenReturn(CourseStatus.Cancelled);
+
         assertThrows(IllegalArgumentException.class,
                 () -> controller.previewDirect(request(1, "Month", 2L, null, null)));
     }
@@ -97,9 +120,15 @@ class CourseDirectExtensionTest {
 
     @Test
     void rejectsStalePreviewAndLocksBeforeCommitting() {
-        var failure = assertThrows(ResponseStatusException.class,
-                () -> controller.extendDirect(request(1, "Month", 2L,
-                        course.getExpiryDate().minusDays(1), course.getExpiryDate().plusMonths(1))));
+        var failure = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.extendDirect(request(
+                        1,
+                        "Month",
+                        2L,
+                        course.getExpiryDate().minusDays(1),
+                        course.getExpiryDate().plusMonths(1))));
+
         assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
         verify(courses).findByIdForUpdate(1L);
         verify(courses, never()).save(any());
@@ -118,11 +147,15 @@ class CourseDirectExtensionTest {
     void commitsDirectlyWithoutInsertingARequest() {
         LocalDate before = course.getExpiryDate();
         var result = controller.extendDirect(request(1, "Month", 2L, before, before.plusMonths(1)));
+
         assertEquals(before.plusMonths(1), result.newExpiry());
         verify(course).setExpiryDate(result.newExpiry());
         verify(courses).save(course);
         verify(jdbc).queryForObject(startsWith("INSERT INTO course_extension ("), eq(Long.class), any(Object[].class));
-        verify(jdbc, never()).queryForObject(startsWith("INSERT INTO course_extension_request"), eq(Long.class), any(Object[].class));
+        verify(jdbc, never()).queryForObject(
+                startsWith("INSERT INTO course_extension_request"),
+                eq(Long.class),
+                any(Object[].class));
         verify(audit).record(eq("course"), eq("1"), eq(AuditAction.UPDATE), anyString(), anyString(), eq(7L));
     }
 
@@ -132,6 +165,7 @@ class CourseDirectExtensionTest {
         LocalDate before = course.getExpiryDate();
         var failure = assertThrows(ResponseStatusException.class,
                 () -> controller.extendDirect(request(1, "Month", 2L, before, before.plusMonths(1))));
+
         assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
         verify(courses, never()).save(any());
         verifyNoInteractions(audit);
@@ -154,6 +188,7 @@ class CourseDirectExtensionTest {
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                     "3", "", java.util.List.of(new SimpleGrantedAuthority("ROLE_THERAPIST"))));
             var request = request(1, "Month", 2L, null, null);
+
             assertThrows(AccessDeniedException.class, () -> secured.previewDirect(request));
             assertThrows(AccessDeniedException.class, () -> secured.extendDirect(request));
             verifyNoInteractions(courses, jdbc, audit);

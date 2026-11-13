@@ -1,10 +1,10 @@
 package com.sabyeguyz.clinicv2.branch;
 
-import java.util.Map;
 import java.util.LinkedHashMap;
-import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
-
+import java.util.Map;
 import java.util.Optional;
+
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 
 public class BranchServiceScenarios {
     V2RepositoryStub<BranchRepository> repositoryStub = new V2RepositoryStub<>(BranchRepository.class);
@@ -19,27 +19,47 @@ public class BranchServiceScenarios {
         out.put("branchCode", branch.getBranchCode());
         out.put("branchStatus", branch.isBranchStatus());
         out.put("branchCreateBy", branch.getBranchCreateBy());
+
         return out;
     }
 
     public Map<String, Object> rejectsNonNumericBranchCode() {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.putAll(V2RepositoryStub.outcome(() -> { new BranchService(repository).create("RP", "ชื่อ", "ที่อยู่", "080", 1L); return null; }));
+
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            new BranchService(repository).create("RP", "ชื่อ", "ที่อยู่", "080", 1L);
+
+            return null;
+        }));
+
         out.put("repositorySaveCalls", repositoryStub.calls("save"));
+
         return out;
     }
 
     public Map<String, Object> rejectsDuplicateBranchCode() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findByBranchCode", args -> Optional.of(new Branch()));
-        out.putAll(V2RepositoryStub.outcome(() -> { new BranchService(repository).create("01", "ชื่อ", "ที่อยู่", "080", 1L); return null; }));
+
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            new BranchService(repository).create("01", "ชื่อ", "ที่อยู่", "080", 1L);
+
+            return null;
+        }));
+
         return out;
     }
 
     public Map<String, Object> rejectsBlankAddress() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findByBranchCode", args -> Optional.empty());
-        out.putAll(V2RepositoryStub.outcome(() -> { new BranchService(repository).create("03", "ชื่อ", "  ", "080", 1L); return null; }));
+
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            new BranchService(repository).create("03", "ชื่อ", "  ", "080", 1L);
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -54,13 +74,20 @@ public class BranchServiceScenarios {
         out.put("branchCode", updated.getBranchCode());
         out.put("branchName", updated.getBranchName());
         out.put("branchUpdateBy", updated.getBranchUpdateBy());
+
         return out;
     }
 
     public Map<String, Object> deactivateThrowsWhenBranchMissing() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findById", args -> Optional.empty());
-        out.putAll(V2RepositoryStub.outcome(() -> { new BranchService(repository).deactivate(999L, 1L); return null; }));
+
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            new BranchService(repository).deactivate(999L, 1L);
+
+            return null;
+        }));
+
         return out;
     }
 }
