@@ -210,6 +210,7 @@ body.therapist-ui .appointment-page .appointment-confirm-modal .primary {
   border-color: transparent;
   color: #fff;
   background: var(--color-primary);
+  box-shadow: none;
 }
 
 @media (max-width: 1180px) {

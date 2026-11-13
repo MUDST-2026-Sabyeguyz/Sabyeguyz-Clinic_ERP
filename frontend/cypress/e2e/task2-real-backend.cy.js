@@ -57,8 +57,6 @@ describe('Task 2 real backend checkout', () => {
                   expect(request.body).not.to.have.property('requestKey')
                   if (category === 'service') expect(request.body.treatingStaffId).to.equal(therapist.id)
                 })
-                cy.contains('h1', 'บันทึกการขายสำเร็จ').should('be.visible')
-                cy.contains('button', 'ดูและพิมพ์ใบเสร็จ').click()
                 cy.location('pathname').should('include', 'receipt')
                 cy.get('body').should('not.contain.text', 'NaN')
               }

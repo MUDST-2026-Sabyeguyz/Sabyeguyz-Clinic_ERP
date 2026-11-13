@@ -20,6 +20,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSp
     @Query("select distinct a.tableName from AuditLog a order by a.tableName")
     List<String> findDistinctTableNames();
 
+    List<AuditLog> findByTableNameAndRecordIdOrderByIdAsc(String tableName, String recordId);
+
     List<AuditLog> findByTableNameAndRecordIdAndActionOrderByIdAsc(
             String tableName,
             String recordId,

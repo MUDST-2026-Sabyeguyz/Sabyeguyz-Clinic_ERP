@@ -14,3 +14,11 @@ const showGradient = computed(
   <AnimatedGradient v-if="showGradient" />
   <RouterView />
 </template>
+
+<style>
+#app {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+}
+</style>

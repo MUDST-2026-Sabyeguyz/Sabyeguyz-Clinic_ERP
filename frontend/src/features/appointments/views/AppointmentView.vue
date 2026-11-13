@@ -4,7 +4,7 @@ import { displayAvailability } from '../availabilityDisplay'
 import { readAppointmentRange } from '../appointmentList'
 import { vModalFocus } from '../modalFocus'
 import { loadAppointmentTherapists } from '../therapists'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { slotLockLabel } from '@/features/appointments/slotLock'
 import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -345,13 +345,6 @@ const patientPhone = (item: Appointment) =>
   patients.value.find((patient) => patient.id === item.patient?.id)?.phone ||
   item.contactPhone ||
   '-'
-const appointmentRoom = (item: Appointment) => {
-  const appointmentWithRoom = item as Appointment & {
-    roomName?: string
-    room?: { name?: string }
-  }
-  return appointmentWithRoom.roomName || appointmentWithRoom.room?.name || '—'
-}
 const editingPatientPhone = computed(() =>
   editingAppointment.value ? patientPhone(editingAppointment.value) : '-',
 )
@@ -390,12 +383,6 @@ const formTherapistModel = computed({
     form.value.therapistId = Number(value) || 0
   },
 })
-const formBranchModel = computed({
-  get: () => form.value.branchCode,
-  set: (value: string) => {
-    form.value.branchCode = value
-  },
-})
 
 const courseDropdownOptions = computed(() =>
   catalogCourses.value.map((course) => ({ value: String(course.id), label: course.name })),
@@ -404,12 +391,6 @@ const courseDropdownModel = computed({
   get: () => String(form.value.serviceId || ''),
   set: (value: string) => {
     form.value.serviceId = Number(value) || 0
-  },
-})
-const selectedCourseModel = computed({
-  get: () => String(selectedCourseId.value || ''),
-  set: (value: string) => {
-    selectedCourseId.value = Number(value) || 0
   },
 })
 const formatThaiDate = (value: string) =>
@@ -601,6 +582,8 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   }
   viewMode.value = 'create'
   window.scrollTo({ top: 0, behavior: 'auto' })
+  // ฟอร์มเพิ่งแสดงหลังโหลดข้อมูล เลื่อนกลับบนสุดอีกครั้งเมื่อวาดเสร็จ เพื่อให้เริ่มกรอกได้ทันที
+  void nextTick(() => window.scrollTo({ top: 0, behavior: 'auto' }))
 }
 function openCalendarSlot(therapist: Therapist, time: string) {
   const item = calendarAppointment(therapist.id, time)
@@ -993,6 +976,11 @@ async function save() {
     savingAppointment.value = false
   }
 }
+watch(appointmentSuccessMessage, (message, _old, onCleanup) => {
+  if (!message) return
+  const timer = window.setTimeout(dismissAppointmentSuccess, 2000)
+  onCleanup(() => window.clearTimeout(timer))
+})
 function dismissAppointmentSuccess() {
   appointmentSuccessMessage.value = ''
   void router.replace({ name: 'staff-appointments' })
@@ -1196,7 +1184,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   {{ errorMessage }}
                 </p>
                 <p v-else-if="selectedFormPatient && !isEditing" class="appointment-patient-meta">
-                  {{ selectedFormPatient.hn }} · {{ selectedFormPatient.phone }}
+                  HN {{ selectedFormPatient.hn }}
                 </p>
               </div>
             </label>
@@ -1912,7 +1900,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
     >
       <section class="status-modal appointment-success-modal" role="status" aria-live="polite">
         <h2>{{ appointmentSuccessMessage }}</h2>
-        <button type="button" class="primary" @click="dismissAppointmentSuccess">ตกลง</button>
       </section>
     </div>
     <div
