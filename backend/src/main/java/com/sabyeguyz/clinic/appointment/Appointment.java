@@ -1,9 +1,8 @@
 package com.sabyeguyz.clinic.appointment;
 
-import com.sabyeguyz.clinic.branch.Branch;
-import com.sabyeguyz.clinic.patient.Patient;
-import com.sabyeguyz.clinic.catalog.ServiceItem;
-import com.sabyeguyz.clinic.therapist.Therapist;
+import java.time.Instant;
+import java.util.Arrays;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,9 +15,12 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import java.time.Instant;
-import java.util.Arrays;
 import jakarta.persistence.Version;
+
+import com.sabyeguyz.clinic.branch.Branch;
+import com.sabyeguyz.clinic.catalog.ServiceItem;
+import com.sabyeguyz.clinic.patient.Patient;
+import com.sabyeguyz.clinic.therapist.Therapist;
 
 @Entity
 @Table(name = "appointments")
@@ -69,7 +71,8 @@ public class Appointment {
     @Column(name = "version")
     private long version;
 
-    protected Appointment() {}
+    protected Appointment() {
+    }
 
     public Appointment(Branch branch, Patient patient, Therapist therapist, ServiceItem service,
                        Instant startAt, Instant endAt, String note) {
@@ -85,21 +88,27 @@ public class Appointment {
         this.updatedAt = this.createdAt;
     }
 
-    /** ผู้ป่วยมาถึงคลินิก: CONFIRMED หรือ RESCHEDULED -> ARRIVED */
+    /**
+     * ผู้ป่วยมาถึงคลินิก: CONFIRMED หรือ RESCHEDULED -> ARRIVED
+     */
     public void markArrived() {
         ensureCurrentStatusIsOneOf("เช็คอิน", AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED);
         this.status = AppointmentStatus.ARRIVED;
         this.updatedAt = Instant.now();
     }
 
-    /** เริ่มให้บริการ: ARRIVED -> IN_SERVICE */
+    /**
+     * เริ่มให้บริการ: ARRIVED -> IN_SERVICE
+     */
     public void startService() {
         ensureCurrentStatusIsOneOf("เริ่มให้บริการ", AppointmentStatus.ARRIVED);
         this.status = AppointmentStatus.IN_SERVICE;
         this.updatedAt = Instant.now();
     }
 
-    /** จบบริการ: IN_SERVICE -> COMPLETED */
+    /**
+     * จบบริการ: IN_SERVICE -> COMPLETED
+     */
     public void complete() {
         ensureCurrentStatusIsOneOf("ปิดงาน", AppointmentStatus.IN_SERVICE);
         this.status = AppointmentStatus.COMPLETED;
@@ -114,7 +123,9 @@ public class Appointment {
         this.updatedAt = Instant.now();
     }
 
-    /** ไม่มาตามนัด: ทำได้เฉพาะนัดที่ผู้ป่วยยังไม่เคยมาถึง */
+    /**
+     * ไม่มาตามนัด: ทำได้เฉพาะนัดที่ผู้ป่วยยังไม่เคยมาถึง
+     */
     public void markNoShow() {
         ensureCurrentStatusIsOneOf("บันทึกไม่มาตามนัด", AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED);
         this.status = AppointmentStatus.NO_SHOW;
@@ -137,18 +148,56 @@ public class Appointment {
         }
     }
 
-    public Long getId() { return id; }
-    public Branch getBranch() { return branch; }
-    public Patient getPatient() { return patient; }
-    public Therapist getTherapist() { return therapist; }
-    public ServiceItem getService() { return service; }
-    public Instant getStartAt() { return startAt; }
-    public Instant getEndAt() { return endAt; }
-    public AppointmentStatus getStatus() { return status; }
-    public String getNote() { return note; }
-    public String getCancelReason() { return cancelReason; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
-    public long getVersion() { return version; }
+    public Long getId() {
+        return id;
+    }
+
+    public Branch getBranch() {
+        return branch;
+    }
+
+    public Patient getPatient() {
+        return patient;
+    }
+
+    public Therapist getTherapist() {
+        return therapist;
+    }
+
+    public ServiceItem getService() {
+        return service;
+    }
+
+    public Instant getStartAt() {
+        return startAt;
+    }
+
+    public Instant getEndAt() {
+        return endAt;
+    }
+
+    public AppointmentStatus getStatus() {
+        return status;
+    }
+
+    public String getNote() {
+        return note;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public long getVersion() {
+        return version;
+    }
 
 }

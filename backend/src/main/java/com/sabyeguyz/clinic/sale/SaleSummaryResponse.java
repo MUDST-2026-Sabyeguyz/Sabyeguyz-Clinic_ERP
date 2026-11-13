@@ -19,8 +19,7 @@ public record SaleSummaryResponse(
         Instant soldAt,
         Instant voidedAt,
         String voidReason,
-        String itemDescription
-) {
+        String itemDescription) {
     static SaleSummaryResponse from(Sale sale, BigDecimal paid, String itemDescription) {
         return new SaleSummaryResponse(
                 sale.getId(),

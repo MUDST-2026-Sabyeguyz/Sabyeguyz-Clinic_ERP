@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.enums.ApplicationStatus;
 
 /** Part (or all) of an adjustment placed in one monthly payout. Draft reserves the amount; Applied is final and is confirmed together with the payout being Paid. */
@@ -51,22 +53,31 @@ public class AdjustmentApplication {
     public AdjustmentApplication() {}
 
     public Long getId() { return id; }
+
     public StaffPayAdjustment getAdjustment() { return adjustment; }
     public void setAdjustment(StaffPayAdjustment adjustment) { this.adjustment = adjustment; }
+
     public StaffMonthlyPayment getMonthlyPayment() { return monthlyPayment; }
     public void setMonthlyPayment(StaffMonthlyPayment monthlyPayment) { this.monthlyPayment = monthlyPayment; }
+
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
+
     public ApplicationStatus getApplicationStatus() { return applicationStatus; }
     public void setApplicationStatus(ApplicationStatus applicationStatus) { this.applicationStatus = applicationStatus; }
+
     public Long getApprovedBy() { return approvedBy; }
     public void setApprovedBy(Long approvedBy) { this.approvedBy = approvedBy; }
+
     public Instant getApprovedAt() { return approvedAt; }
     public void setApprovedAt(Instant approvedAt) { this.approvedAt = approvedAt; }
+
     public String getApprovalReference() { return approvalReference; }
     public void setApprovalReference(String approvalReference) { this.approvalReference = approvalReference; }
+
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
 }

@@ -1,14 +1,16 @@
 package com.sabyeguyz.clinic.api;
 
-import com.sabyeguyz.clinic.catalog.ServiceItemRepository;
-import com.sabyeguyz.clinic.therapist.TherapistRepository;
 import java.util.Comparator;
 import java.util.List;
+
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.sabyeguyz.clinic.catalog.ServiceItemRepository;
+import com.sabyeguyz.clinic.therapist.TherapistRepository;
 
 @RestController
 @RequestMapping("/api/lookups")
@@ -22,22 +24,47 @@ public class LookupController {
         this.therapists = therapists;
     }
 
-    public record ServiceOption(Long id, String code, String name, int defaultDurationMinutes, boolean active) {}
-    public record TherapistOption(Long id, String code, String fullName, String branchCode, boolean active) {}
+    public record ServiceOption(
+            Long id,
+            String code,
+            String name,
+            int defaultDurationMinutes,
+            boolean active) {
+    }
+
+    public record TherapistOption(
+            Long id,
+            String code,
+            String fullName,
+            String branchCode,
+            boolean active) {
+    }
 
     @GetMapping("/services")
     public List<ServiceOption> services() {
-        return services.findAll().stream().map(s -> new ServiceOption(s.getId(), s.getCode(),
-                s.getName(), s.getDefaultDurationMinutes(), s.isActive()))
-                .sorted(Comparator.comparing(ServiceOption::name)).toList();
+        return services.findAll().stream()
+                .map(s -> new ServiceOption(
+                        s.getId(),
+                        s.getCode(),
+                        s.getName(),
+                        s.getDefaultDurationMinutes(),
+                        s.isActive()))
+                .sorted(Comparator.comparing(ServiceOption::name))
+                .toList();
     }
 
     @GetMapping("/therapists")
     public List<TherapistOption> therapists(@RequestParam(required = false) String branchCode) {
         return therapists.findAll().stream()
-                .filter(t -> branchCode == null || t.getBranch().getBranchCode().equalsIgnoreCase(branchCode.trim()))
-                .map(t -> new TherapistOption(t.getId(), t.getCode(), t.getFullName(),
-                        t.getBranch().getBranchCode(), t.isActive()))
-                .sorted(Comparator.comparing(TherapistOption::fullName)).toList();
+                .filter(t -> branchCode == null
+                        || t.getBranch().getBranchCode().equalsIgnoreCase(branchCode.trim()))
+                .map(t -> new TherapistOption(
+                        t.getId(),
+                        t.getCode(),
+                        t.getFullName(),
+                        t.getBranch().getBranchCode(),
+                        t.isActive()))
+                .sorted(Comparator.comparing(TherapistOption::fullName))
+                .toList();
     }
 }

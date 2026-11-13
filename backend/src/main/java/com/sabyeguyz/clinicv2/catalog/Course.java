@@ -1,5 +1,13 @@
 package com.sabyeguyz.clinicv2.catalog;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.commission.CommissionScheme;
 import com.sabyeguyz.clinicv2.enums.CommissionStatus;
 import com.sabyeguyz.clinicv2.enums.CourseStatus;
@@ -7,12 +15,6 @@ import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.sale.Receipt;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
 
 /**
  * Commission fields follow Commission_System_Requirement_Dev: the rate is
@@ -34,12 +36,27 @@ public class Course {
     @Column(name = "validity_unit", nullable = false, columnDefinition = "validity_unit_enum")
     private com.sabyeguyz.clinicv2.enums.ValidityUnit validityUnit;
 
-    public com.sabyeguyz.clinicv2.branch.Branch getBranch() { return branch; }
-    public void setBranch(com.sabyeguyz.clinicv2.branch.Branch value) { branch = value; }
-    public Integer getValidityValue() { return validityValue; }
-    public void setValidityValue(Integer value) { validityValue = value; }
-    public com.sabyeguyz.clinicv2.enums.ValidityUnit getValidityUnit() { return validityUnit; }
-    public void setValidityUnit(com.sabyeguyz.clinicv2.enums.ValidityUnit value) { validityUnit = value; }
+    public com.sabyeguyz.clinicv2.branch.Branch getBranch() {
+        return branch;
+    }
+    public void setBranch(com.sabyeguyz.clinicv2.branch.Branch value) {
+        branch = value;
+    }
+
+    public Integer getValidityValue() {
+        return validityValue;
+    }
+    public void setValidityValue(Integer value) {
+        validityValue = value;
+    }
+
+    public com.sabyeguyz.clinicv2.enums.ValidityUnit getValidityUnit() {
+        return validityUnit;
+    }
+    public void setValidityUnit(com.sabyeguyz.clinicv2.enums.ValidityUnit value) {
+        validityUnit = value;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "course_id")
@@ -173,72 +190,239 @@ public class Course {
                 : commissionAllocationPerVisit.multiply(BigDecimal.valueOf(Math.max(remainingVisits, 0)));
     }
 
-    public Long getId() { return id; }
-    public String getCourseNo() { return courseNo; }
-    public void setCourseNo(String courseNo) { this.courseNo = courseNo; }
-    public int getCourseSequence() { return courseSequence; }
-    public void setCourseSequence(int courseSequence) { this.courseSequence = courseSequence; }
-    public String getCourseName() { return courseName; }
-    public void setCourseName(String courseName) { this.courseName = courseName; }
-    public BigDecimal getCoursePrice() { return coursePrice; }
-    public void setCoursePrice(BigDecimal coursePrice) { this.coursePrice = coursePrice; }
-    public int getTotalVisits() { return totalVisits; }
-    public int getPaidVisits() { return totalVisits - (bonusVisits == null ? 0 : bonusVisits); }
-    public void setTotalVisits(int totalVisits) { this.totalVisits = totalVisits; }
-    public Integer getBonusVisits() { return bonusVisits; }
-    public void setBonusVisits(Integer bonusVisits) { this.bonusVisits = bonusVisits; }
-    public LocalDate getExpiryDate() { return expiryDate; }
-    public void setExpiryDate(LocalDate expiryDate) { this.expiryDate = expiryDate; }
-    public CourseStatus getCourseStatus() { return courseStatus; }
-    public void setCourseStatus(CourseStatus courseStatus) { this.courseStatus = courseStatus; }
-    public Service getService() { return service; }
-    public void setService(Service service) { this.service = service; }
-    public Instant getCourseCreateAt() { return courseCreateAt; }
-    public void setCourseCreateAt(Instant courseCreateAt) { this.courseCreateAt = courseCreateAt; }
-    public Long getCourseCreateBy() { return courseCreateBy; }
-    public void setCourseCreateBy(Long courseCreateBy) { this.courseCreateBy = courseCreateBy; }
-    public Instant getCourseUpdateAt() { return courseUpdateAt; }
-    public void setCourseUpdateAt(Instant courseUpdateAt) { this.courseUpdateAt = courseUpdateAt; }
-    public Long getCourseUpdateBy() { return courseUpdateBy; }
-    public void setCourseUpdateBy(Long courseUpdateBy) { this.courseUpdateBy = courseUpdateBy; }
-    public Receipt getReceipt() { return receipt; }
-    public void setReceipt(Receipt receipt) { this.receipt = receipt; }
-    public String getSaleMonth() { return saleMonth; }
-    public void setSaleMonth(String saleMonth) { this.saleMonth = saleMonth; }
-    public Staff getSellerStaff() { return sellerStaff; }
-    public void setSellerStaff(Staff sellerStaff) { this.sellerStaff = sellerStaff; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getCourseNo() {
+        return courseNo;
+    }
+    public void setCourseNo(String courseNo) {
+        this.courseNo = courseNo;
+    }
+
+    public int getCourseSequence() {
+        return courseSequence;
+    }
+    public void setCourseSequence(int courseSequence) {
+        this.courseSequence = courseSequence;
+    }
+
+    public String getCourseName() {
+        return courseName;
+    }
+    public void setCourseName(String courseName) {
+        this.courseName = courseName;
+    }
+
+    public BigDecimal getCoursePrice() {
+        return coursePrice;
+    }
+    public void setCoursePrice(BigDecimal coursePrice) {
+        this.coursePrice = coursePrice;
+    }
+
+    public int getTotalVisits() {
+        return totalVisits;
+    }
+
+    public int getPaidVisits() {
+        return totalVisits - (bonusVisits == null ? 0 : bonusVisits);
+    }
+    public void setTotalVisits(int totalVisits) {
+        this.totalVisits = totalVisits;
+    }
+
+    public Integer getBonusVisits() {
+        return bonusVisits;
+    }
+    public void setBonusVisits(Integer bonusVisits) {
+        this.bonusVisits = bonusVisits;
+    }
+
+    public LocalDate getExpiryDate() {
+        return expiryDate;
+    }
+    public void setExpiryDate(LocalDate expiryDate) {
+        this.expiryDate = expiryDate;
+    }
+
+    public CourseStatus getCourseStatus() {
+        return courseStatus;
+    }
+    public void setCourseStatus(CourseStatus courseStatus) {
+        this.courseStatus = courseStatus;
+    }
+
+    public Service getService() {
+        return service;
+    }
+    public void setService(Service service) {
+        this.service = service;
+    }
+
+    public Instant getCourseCreateAt() {
+        return courseCreateAt;
+    }
+    public void setCourseCreateAt(Instant courseCreateAt) {
+        this.courseCreateAt = courseCreateAt;
+    }
+
+    public Long getCourseCreateBy() {
+        return courseCreateBy;
+    }
+    public void setCourseCreateBy(Long courseCreateBy) {
+        this.courseCreateBy = courseCreateBy;
+    }
+
+    public Instant getCourseUpdateAt() {
+        return courseUpdateAt;
+    }
+    public void setCourseUpdateAt(Instant courseUpdateAt) {
+        this.courseUpdateAt = courseUpdateAt;
+    }
+
+    public Long getCourseUpdateBy() {
+        return courseUpdateBy;
+    }
+    public void setCourseUpdateBy(Long courseUpdateBy) {
+        this.courseUpdateBy = courseUpdateBy;
+    }
+
+    public Receipt getReceipt() {
+        return receipt;
+    }
+    public void setReceipt(Receipt receipt) {
+        this.receipt = receipt;
+    }
+
+    public String getSaleMonth() {
+        return saleMonth;
+    }
+    public void setSaleMonth(String saleMonth) {
+        this.saleMonth = saleMonth;
+    }
+
+    public Staff getSellerStaff() {
+        return sellerStaff;
+    }
+    public void setSellerStaff(Staff sellerStaff) {
+        this.sellerStaff = sellerStaff;
+    }
     /** The Owner PT of the course is its seller (Course.seller_staff_id is the single field for both). */
-    public Staff getOwnerStaff() { return sellerStaff; }
-    public CommissionStatus getCommissionStatus() { return commissionStatus; }
-    public void setCommissionStatus(CommissionStatus commissionStatus) { this.commissionStatus = commissionStatus; }
-    public CommissionScheme getCommissionScheme() { return commissionScheme; }
-    public void setCommissionScheme(CommissionScheme commissionScheme) { this.commissionScheme = commissionScheme; }
-    public int getCommissionSchemeVersion() { return commissionSchemeVersion; }
-    public void setCommissionSchemeVersion(int commissionSchemeVersion) { this.commissionSchemeVersion = commissionSchemeVersion; }
-    public BigDecimal getProvisionalCommissionRate() { return provisionalCommissionRate; }
-    public void setProvisionalCommissionRate(BigDecimal provisionalCommissionRate) { this.provisionalCommissionRate = provisionalCommissionRate; }
-    public BigDecimal getLockedCommissionRate() { return lockedCommissionRate; }
-    public void setLockedCommissionRate(BigDecimal lockedCommissionRate) { this.lockedCommissionRate = lockedCommissionRate; }
-    public BigDecimal getTotalCourseCommissionPool() { return totalCourseCommissionPool; }
-    public void setTotalCourseCommissionPool(BigDecimal totalCourseCommissionPool) { this.totalCourseCommissionPool = totalCourseCommissionPool; }
-    public BigDecimal getCommissionAllocationPerVisit() { return commissionAllocationPerVisit; }
-    public void setCommissionAllocationPerVisit(BigDecimal commissionAllocationPerVisit) { this.commissionAllocationPerVisit = commissionAllocationPerVisit; }
-    public LocalDate getCommissionGeneratedDate() { return commissionGeneratedDate; }
-    public void setCommissionGeneratedDate(LocalDate commissionGeneratedDate) { this.commissionGeneratedDate = commissionGeneratedDate; }
-    public int getVisitsUsed() { return visitsUsed; }
-    public void setVisitsUsed(int visitsUsed) { this.visitsUsed = visitsUsed; }
-    public int getRemainingVisits() { return remainingVisits; }
-    public void setRemainingVisits(int remainingVisits) { this.remainingVisits = remainingVisits; }
-    public BigDecimal getTreatmentFeeBaseAmount() { return treatmentFeeBaseAmount; }
-    public void setTreatmentFeeBaseAmount(BigDecimal treatmentFeeBaseAmount) { this.treatmentFeeBaseAmount = treatmentFeeBaseAmount; }
-    public BigDecimal getOwnerNetCommissionReleasedTotal() { return ownerNetCommissionReleasedTotal; }
-    public void setOwnerNetCommissionReleasedTotal(BigDecimal ownerNetCommissionReleasedTotal) { this.ownerNetCommissionReleasedTotal = ownerNetCommissionReleasedTotal; }
-    public BigDecimal getSubstituteTreatmentFeeTotal() { return substituteTreatmentFeeTotal; }
-    public void setSubstituteTreatmentFeeTotal(BigDecimal substituteTreatmentFeeTotal) { this.substituteTreatmentFeeTotal = substituteTreatmentFeeTotal; }
-    public BigDecimal getCommissionOutstanding() { return commissionOutstanding; }
-    public void setCommissionOutstanding(BigDecimal commissionOutstanding) { this.commissionOutstanding = commissionOutstanding; }
-    public Patient getPurchaserPatient() { return purchaserPatient; }
-    public void setPurchaserPatient(Patient purchaserPatient) { this.purchaserPatient = purchaserPatient; }
-    public SalesTransaction getSaleTransaction() { return saleTransaction; }
-    public void setSaleTransaction(SalesTransaction saleTransaction) { this.saleTransaction = saleTransaction; }
+    public Staff getOwnerStaff() {
+        return sellerStaff;
+    }
+
+    public CommissionStatus getCommissionStatus() {
+        return commissionStatus;
+    }
+    public void setCommissionStatus(CommissionStatus commissionStatus) {
+        this.commissionStatus = commissionStatus;
+    }
+
+    public CommissionScheme getCommissionScheme() {
+        return commissionScheme;
+    }
+    public void setCommissionScheme(CommissionScheme commissionScheme) {
+        this.commissionScheme = commissionScheme;
+    }
+
+    public int getCommissionSchemeVersion() {
+        return commissionSchemeVersion;
+    }
+    public void setCommissionSchemeVersion(int commissionSchemeVersion) {
+        this.commissionSchemeVersion = commissionSchemeVersion;
+    }
+
+    public BigDecimal getProvisionalCommissionRate() {
+        return provisionalCommissionRate;
+    }
+    public void setProvisionalCommissionRate(BigDecimal provisionalCommissionRate) {
+        this.provisionalCommissionRate = provisionalCommissionRate;
+    }
+
+    public BigDecimal getLockedCommissionRate() {
+        return lockedCommissionRate;
+    }
+    public void setLockedCommissionRate(BigDecimal lockedCommissionRate) {
+        this.lockedCommissionRate = lockedCommissionRate;
+    }
+
+    public BigDecimal getTotalCourseCommissionPool() {
+        return totalCourseCommissionPool;
+    }
+    public void setTotalCourseCommissionPool(BigDecimal totalCourseCommissionPool) {
+        this.totalCourseCommissionPool = totalCourseCommissionPool;
+    }
+
+    public BigDecimal getCommissionAllocationPerVisit() {
+        return commissionAllocationPerVisit;
+    }
+    public void setCommissionAllocationPerVisit(BigDecimal commissionAllocationPerVisit) {
+        this.commissionAllocationPerVisit = commissionAllocationPerVisit;
+    }
+
+    public LocalDate getCommissionGeneratedDate() {
+        return commissionGeneratedDate;
+    }
+    public void setCommissionGeneratedDate(LocalDate commissionGeneratedDate) {
+        this.commissionGeneratedDate = commissionGeneratedDate;
+    }
+
+    public int getVisitsUsed() {
+        return visitsUsed;
+    }
+    public void setVisitsUsed(int visitsUsed) {
+        this.visitsUsed = visitsUsed;
+    }
+
+    public int getRemainingVisits() {
+        return remainingVisits;
+    }
+    public void setRemainingVisits(int remainingVisits) {
+        this.remainingVisits = remainingVisits;
+    }
+
+    public BigDecimal getTreatmentFeeBaseAmount() {
+        return treatmentFeeBaseAmount;
+    }
+    public void setTreatmentFeeBaseAmount(BigDecimal treatmentFeeBaseAmount) {
+        this.treatmentFeeBaseAmount = treatmentFeeBaseAmount;
+    }
+
+    public BigDecimal getOwnerNetCommissionReleasedTotal() {
+        return ownerNetCommissionReleasedTotal;
+    }
+    public void setOwnerNetCommissionReleasedTotal(BigDecimal ownerNetCommissionReleasedTotal) {
+        this.ownerNetCommissionReleasedTotal = ownerNetCommissionReleasedTotal;
+    }
+
+    public BigDecimal getSubstituteTreatmentFeeTotal() {
+        return substituteTreatmentFeeTotal;
+    }
+    public void setSubstituteTreatmentFeeTotal(BigDecimal substituteTreatmentFeeTotal) {
+        this.substituteTreatmentFeeTotal = substituteTreatmentFeeTotal;
+    }
+
+    public BigDecimal getCommissionOutstanding() {
+        return commissionOutstanding;
+    }
+    public void setCommissionOutstanding(BigDecimal commissionOutstanding) {
+        this.commissionOutstanding = commissionOutstanding;
+    }
+
+    public Patient getPurchaserPatient() {
+        return purchaserPatient;
+    }
+    public void setPurchaserPatient(Patient purchaserPatient) {
+        this.purchaserPatient = purchaserPatient;
+    }
+
+    public SalesTransaction getSaleTransaction() {
+        return saleTransaction;
+    }
+    public void setSaleTransaction(SalesTransaction saleTransaction) {
+        this.saleTransaction = saleTransaction;
+    }
 }

@@ -75,7 +75,7 @@ const appointmentStatusLabel = (status: AppointmentProgress['appointmentStatus']
   margin: 32px auto;
   padding: 32px;
   background: #fff;
-  color: #25372e;
+  color: var(--color-ink);
   border: 1px solid #e6e1dc;
   border-radius: 12px;
 }
@@ -163,7 +163,7 @@ select {
   border: 1px solid #8fb5ae;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   text-decoration: none;
 }
@@ -175,7 +175,7 @@ button:disabled {
   cursor: not-allowed;
 }
 :is(button, a, select):focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 </style>

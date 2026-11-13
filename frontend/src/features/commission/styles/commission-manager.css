@@ -18,7 +18,7 @@
   color: #667a72;
 }
 .commission-card {
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   background: #fff;
 }
@@ -32,7 +32,7 @@
   min-height: 132px;
   padding: 21px 24px;
   box-sizing: border-box;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 10px;
   background: #fff;
 }
@@ -70,13 +70,13 @@
   color: #fff;
 }
 .commission-secondary {
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   background: #fff;
   color: #25372f;
 }
 .commission-table-wrap {
   overflow-x: auto;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 11px;
   background: #fff;
   scrollbar-width: thin;
@@ -179,7 +179,7 @@
 
 .rule-drawer h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 1.65rem;
 }
 .rule-drawer header p {

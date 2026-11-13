@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.appointment;
 
-import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
+import java.time.Instant;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.Instant;
+
+import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
 
 @Entity
 @Table(name = "appointment_status_history")
@@ -39,17 +41,49 @@ public class AppointmentStatusHistory {
 
     public AppointmentStatusHistory() {}
 
-    public Long getId() { return id; }
-    public Appointment getAppointment() { return appointment; }
-    public void setAppointment(Appointment appointment) { this.appointment = appointment; }
-    public AppointmentStatus getFromStatus() { return fromStatus; }
-    public void setFromStatus(AppointmentStatus fromStatus) { this.fromStatus = fromStatus; }
-    public AppointmentStatus getToStatus() { return toStatus; }
-    public void setToStatus(AppointmentStatus toStatus) { this.toStatus = toStatus; }
-    public Long getChangedBy() { return changedBy; }
-    public void setChangedBy(Long changedBy) { this.changedBy = changedBy; }
-    public Instant getChangedAt() { return changedAt; }
-    public void setChangedAt(Instant changedAt) { this.changedAt = changedAt; }
-    public String getReason() { return reason; }
-    public void setReason(String reason) { this.reason = reason; }
+    public Long getId() {
+        return id;
+    }
+
+    public Appointment getAppointment() {
+        return appointment;
+    }
+    public void setAppointment(Appointment appointment) {
+        this.appointment = appointment;
+    }
+
+    public AppointmentStatus getFromStatus() {
+        return fromStatus;
+    }
+    public void setFromStatus(AppointmentStatus fromStatus) {
+        this.fromStatus = fromStatus;
+    }
+
+    public AppointmentStatus getToStatus() {
+        return toStatus;
+    }
+    public void setToStatus(AppointmentStatus toStatus) {
+        this.toStatus = toStatus;
+    }
+
+    public Long getChangedBy() {
+        return changedBy;
+    }
+    public void setChangedBy(Long changedBy) {
+        this.changedBy = changedBy;
+    }
+
+    public Instant getChangedAt() {
+        return changedAt;
+    }
+    public void setChangedAt(Instant changedAt) {
+        this.changedAt = changedAt;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
 }

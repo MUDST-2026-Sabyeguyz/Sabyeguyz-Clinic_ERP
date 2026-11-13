@@ -13,9 +13,11 @@ import java.time.ZoneId;
  * ยอดขายช่วงหัวค่ำจะไปโผล่ผิดวัน จึงแปลงเป็นวันที่ในโซนคลินิกเสมอ</p>
  *
  * @param from วันแรกของช่วง นับรวม
- * @param to วันสุดท้ายของช่วง นับรวม
+ * @param to   วันสุดท้ายของช่วง นับรวม
  */
-public record ReportPeriod(LocalDate from, LocalDate to) {
+public record ReportPeriod(
+        LocalDate from,
+        LocalDate to) {
     public static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
     private static final int MAX_DAYS = 732;
 
@@ -31,12 +33,16 @@ public record ReportPeriod(LocalDate from, LocalDate to) {
         }
     }
 
-    /** ต้นช่วง นับรวม */
+    /**
+     * ต้นช่วง นับรวม
+     */
     public Instant startInstant() {
         return from.atStartOfDay(CLINIC_ZONE).toInstant();
     }
 
-    /** ท้ายช่วง ไม่นับรวม จึงบวกไปหนึ่งวันเพื่อให้ครอบคลุมทั้งวันสุดท้าย */
+    /**
+     * ท้ายช่วง ไม่นับรวม จึงบวกไปหนึ่งวันเพื่อให้ครอบคลุมทั้งวันสุดท้าย
+     */
     public Instant endInstantExclusive() {
         return to.plusDays(1).atStartOfDay(CLINIC_ZONE).toInstant();
     }

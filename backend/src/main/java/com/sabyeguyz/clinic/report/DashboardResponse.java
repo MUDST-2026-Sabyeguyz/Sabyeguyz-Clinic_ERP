@@ -8,8 +8,8 @@ import java.util.List;
  * ตัวเลขหน้า Dashboard ตาม Workflow Brief V1 §8
  *
  * @param uniquePatients ผู้ป่วยที่ไม่ซ้ำซึ่ง "มาถึงคลินิกจริง" ในช่วงนี้ ไม่ใช่ผู้ป่วยที่ลงทะเบียนทั้งหมด
- * @param visits จำนวนครั้งที่มารับบริการ ผู้ป่วยคนเดียวมาสามครั้งนับเป็น 3
- * @param totalRevenue เงินที่รับจริงหักคืนเงินแล้ว
+ * @param visits         จำนวนครั้งที่มารับบริการ ผู้ป่วยคนเดียวมาสามครั้งนับเป็น 3
+ * @param totalRevenue   เงินที่รับจริงหักคืนเงินแล้ว
  */
 public record DashboardResponse(
         LocalDate from,
@@ -23,7 +23,9 @@ public record DashboardResponse(
         BigDecimal singleVisitRevenue,
         BigDecimal assessmentRevenue,
         long receiptsIssued,
-        long receiptsVoided
-) {
-    public record GenderBreakdown(String gender, long patients) {}
+        long receiptsVoided) {
+    public record GenderBreakdown(
+            String gender,
+            long patients) {
+    }
 }

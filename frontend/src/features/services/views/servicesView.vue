@@ -1145,9 +1145,9 @@ watch(appointmentAlreadyProcessed, (done) => {
 .service-menu .service-menu-actions .service-menu-action--entitlement { border: 1px solid #d7e4df; background: #fff; }
 .service-menu .service-menu-actions .service-menu-action:hover { transform: translateY(-3px); box-shadow: 0 14px 28px rgb(33 67 59 / 10%); }
 .service-menu-action-title { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.service-menu-action-heading { color: #25372e; font-size: 26px; font-weight: 700; }
+.service-menu-action-heading { color: var(--color-ink); font-size: 26px; font-weight: 700; }
 .service-menu-action-next { color: #176c68; font-size: 15px; font-weight: 600; line-height: 1.4; }
-.service-menu-action-description { color: #56665d; font-size: 16px; line-height: 1.55; }
+.service-menu-action-description { color: var(--color-muted); font-size: 16px; line-height: 1.55; }
 .service-menu-course-status { margin-top: auto; min-height: 24px; color: #176c68; font-size: 14px; font-weight: 700; }
 .service-menu-action-title .service-menu-course-status { margin-top: 0; min-height: 0; }
 .service-menu-course-status.is-loading, .service-menu-course-status.is-unavailable { color: #667a72; }

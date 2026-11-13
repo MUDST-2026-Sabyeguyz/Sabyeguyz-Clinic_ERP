@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.auth;
 
-import com.sabyeguyz.clinicv2.role.Role;
 import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.role.Role;
 
 @Entity
 @Table(name = "user_role")
@@ -19,11 +20,18 @@ public class UserRole {
 
     public UserRole() {}
 
-    public UserRole(AppUser user, Role role) {
+    public UserRole(
+            AppUser user,
+            Role role) {
         this.user = user;
         this.role = role;
     }
 
-    public AppUser getUser() { return user; }
-    public Role getRole() { return role; }
+    public AppUser getUser() {
+        return user;
+    }
+
+    public Role getRole() {
+        return role;
+    }
 }

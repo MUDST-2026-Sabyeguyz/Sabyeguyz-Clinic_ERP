@@ -1,5 +1,14 @@
 package com.sabyeguyz.clinicv2.appointment;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.enums.AppointmentPatientType;
@@ -9,13 +18,6 @@ import com.sabyeguyz.clinicv2.enums.RequestedServiceType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.resource.Room;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.LocalDateTime;
 
 /**
  * A booked slot. A NEW patient is not registered yet, so patient and service
@@ -122,40 +124,121 @@ public class Appointment {
 
     public Appointment() {}
 
-    public Long getId() { return id; }
-    public Patient getPatient() { return patient; }
-    public void setPatient(Patient patient) { this.patient = patient; }
-    public Branch getBranch() { return branch; }
-    public void setBranch(Branch branch) { this.branch = branch; }
-    public Staff getStaff() { return staff; }
-    public void setStaff(Staff staff) { this.staff = staff; }
-    public Service getService() { return service; }
-    public void setService(Service service) { this.service = service; }
-    public AppointmentStatus getAppointmentStatus() { return appointmentStatus; }
-    public void setAppointmentStatus(AppointmentStatus appointmentStatus) { this.appointmentStatus = appointmentStatus; }
-    public Room getRoom() { return room; }
-    public void setRoom(Room room) { this.room = room; }
-    public LocalDate getAppointmentDate() { return appointmentDate; }
-    public void setAppointmentDate(LocalDate appointmentDate) { this.appointmentDate = appointmentDate; }
-    public LocalTime getAppointmentTime() { return appointmentTime; }
-    public void setAppointmentTime(LocalTime appointmentTime) { this.appointmentTime = appointmentTime; }
-    public LocalDateTime getAppointmentEndAt() { return appointmentEndAt; }
-    public void setAppointmentEndAt(LocalDateTime appointmentEndAt) { this.appointmentEndAt = appointmentEndAt; }
-    public Instant getAppointmentCreateAt() { return appointmentCreateAt; }
-    public void setAppointmentCreateAt(Instant appointmentCreateAt) { this.appointmentCreateAt = appointmentCreateAt; }
-    public Long getAppointmentCreateBy() { return appointmentCreateBy; }
-    public void setAppointmentCreateBy(Long appointmentCreateBy) { this.appointmentCreateBy = appointmentCreateBy; }
-    public Instant getAppointmentUpdateAt() { return appointmentUpdateAt; }
-    public void setAppointmentUpdateAt(Instant appointmentUpdateAt) { this.appointmentUpdateAt = appointmentUpdateAt; }
-    public Long getAppointmentUpdateBy() { return appointmentUpdateBy; }
-    public void setAppointmentUpdateBy(Long appointmentUpdateBy) { this.appointmentUpdateBy = appointmentUpdateBy; }
-    public AppointmentPatientType getAppointmentPatientType() { return appointmentPatientType; }
-    public void setAppointmentPatientType(AppointmentPatientType appointmentPatientType) { this.appointmentPatientType = appointmentPatientType; }
-    public String getContactName() { return contactName; }
-    public void setContactName(String contactName) { this.contactName = contactName; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getContactNickname() { return contactNickname; }
-    public void setContactNickname(String contactNickname) { this.contactNickname = contactNickname; }
+    public Patient getPatient() {
+        return patient;
+    }
+    public void setPatient(Patient patient) {
+        this.patient = patient;
+    }
+
+    public Branch getBranch() {
+        return branch;
+    }
+    public void setBranch(Branch branch) {
+        this.branch = branch;
+    }
+
+    public Staff getStaff() {
+        return staff;
+    }
+    public void setStaff(Staff staff) {
+        this.staff = staff;
+    }
+
+    public Service getService() {
+        return service;
+    }
+    public void setService(Service service) {
+        this.service = service;
+    }
+
+    public AppointmentStatus getAppointmentStatus() {
+        return appointmentStatus;
+    }
+    public void setAppointmentStatus(AppointmentStatus appointmentStatus) {
+        this.appointmentStatus = appointmentStatus;
+    }
+
+    public Room getRoom() {
+        return room;
+    }
+    public void setRoom(Room room) {
+        this.room = room;
+    }
+
+    public LocalDate getAppointmentDate() {
+        return appointmentDate;
+    }
+    public void setAppointmentDate(LocalDate appointmentDate) {
+        this.appointmentDate = appointmentDate;
+    }
+
+    public LocalTime getAppointmentTime() {
+        return appointmentTime;
+    }
+    public void setAppointmentTime(LocalTime appointmentTime) {
+        this.appointmentTime = appointmentTime;
+    }
+
+    public LocalDateTime getAppointmentEndAt() {
+        return appointmentEndAt;
+    }
+    public void setAppointmentEndAt(LocalDateTime appointmentEndAt) {
+        this.appointmentEndAt = appointmentEndAt;
+    }
+
+    public Instant getAppointmentCreateAt() {
+        return appointmentCreateAt;
+    }
+    public void setAppointmentCreateAt(Instant appointmentCreateAt) {
+        this.appointmentCreateAt = appointmentCreateAt;
+    }
+
+    public Long getAppointmentCreateBy() {
+        return appointmentCreateBy;
+    }
+    public void setAppointmentCreateBy(Long appointmentCreateBy) {
+        this.appointmentCreateBy = appointmentCreateBy;
+    }
+
+    public Instant getAppointmentUpdateAt() {
+        return appointmentUpdateAt;
+    }
+    public void setAppointmentUpdateAt(Instant appointmentUpdateAt) {
+        this.appointmentUpdateAt = appointmentUpdateAt;
+    }
+
+    public Long getAppointmentUpdateBy() {
+        return appointmentUpdateBy;
+    }
+    public void setAppointmentUpdateBy(Long appointmentUpdateBy) {
+        this.appointmentUpdateBy = appointmentUpdateBy;
+    }
+
+    public AppointmentPatientType getAppointmentPatientType() {
+        return appointmentPatientType;
+    }
+    public void setAppointmentPatientType(AppointmentPatientType appointmentPatientType) {
+        this.appointmentPatientType = appointmentPatientType;
+    }
+
+    public String getContactName() {
+        return contactName;
+    }
+    public void setContactName(String contactName) {
+        this.contactName = contactName;
+    }
+
+    public String getContactNickname() {
+        return contactNickname;
+    }
+    public void setContactNickname(String contactNickname) {
+        this.contactNickname = contactNickname;
+    }
 
     public String getContactMiddleName() {
         return contactMiddleName;
@@ -164,19 +247,52 @@ public class Appointment {
         this.contactMiddleName = contactMiddleName;
     }
 
+    public String getContactPhone() {
+        return contactPhone;
+    }
+    public void setContactPhone(String contactPhone) {
+        this.contactPhone = contactPhone;
+    }
 
-    public String getContactPhone() { return contactPhone; }
-    public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
-    public RequestedServiceType getRequestedServiceType() { return requestedServiceType; }
-    public void setRequestedServiceType(RequestedServiceType requestedServiceType) { this.requestedServiceType = requestedServiceType; }
-    public String getExternalCalendarEventId() { return externalCalendarEventId; }
-    public void setExternalCalendarEventId(String externalCalendarEventId) { this.externalCalendarEventId = externalCalendarEventId; }
-    public CalendarSyncStatus getCalendarSyncStatus() { return calendarSyncStatus; }
-    public void setCalendarSyncStatus(CalendarSyncStatus calendarSyncStatus) { this.calendarSyncStatus = calendarSyncStatus; }
-    public Instant getCalendarLastSyncedAt() { return calendarLastSyncedAt; }
-    public void setCalendarLastSyncedAt(Instant calendarLastSyncedAt) { this.calendarLastSyncedAt = calendarLastSyncedAt; }
-    public String getCalendarEventEtag() { return calendarEventEtag; }
-    public void setCalendarEventEtag(String calendarEventEtag) { this.calendarEventEtag = calendarEventEtag; }
+    public String getNotes() {
+        return notes;
+    }
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public RequestedServiceType getRequestedServiceType() {
+        return requestedServiceType;
+    }
+    public void setRequestedServiceType(RequestedServiceType requestedServiceType) {
+        this.requestedServiceType = requestedServiceType;
+    }
+
+    public String getExternalCalendarEventId() {
+        return externalCalendarEventId;
+    }
+    public void setExternalCalendarEventId(String externalCalendarEventId) {
+        this.externalCalendarEventId = externalCalendarEventId;
+    }
+
+    public CalendarSyncStatus getCalendarSyncStatus() {
+        return calendarSyncStatus;
+    }
+    public void setCalendarSyncStatus(CalendarSyncStatus calendarSyncStatus) {
+        this.calendarSyncStatus = calendarSyncStatus;
+    }
+
+    public Instant getCalendarLastSyncedAt() {
+        return calendarLastSyncedAt;
+    }
+    public void setCalendarLastSyncedAt(Instant calendarLastSyncedAt) {
+        this.calendarLastSyncedAt = calendarLastSyncedAt;
+    }
+
+    public String getCalendarEventEtag() {
+        return calendarEventEtag;
+    }
+    public void setCalendarEventEtag(String calendarEventEtag) {
+        this.calendarEventEtag = calendarEventEtag;
+    }
 }

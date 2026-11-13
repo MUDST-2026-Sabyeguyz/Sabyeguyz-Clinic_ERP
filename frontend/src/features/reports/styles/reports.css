@@ -32,7 +32,7 @@
   font-size: clamp(28px, 2.4vw, 36px);
   font-weight: 800;
   line-height: 1.4;
-  color: #145c59;
+  color: var(--color-primary-strong);
   letter-spacing: normal;
 }
 
@@ -40,7 +40,7 @@
   margin: 8px 0 0;
   font-size: 16px;
   line-height: 1.5;
-  color: #56665d;
+  color: var(--color-muted);
 }
 
 .kpi-summary-box {
@@ -328,7 +328,7 @@
 .table-scroll-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-color: #1e807c #eff4ed;
+  scrollbar-color: var(--color-primary) #eff4ed;
   scrollbar-width: thin;
 }
 
@@ -344,7 +344,7 @@
 .table-scroll-wrapper::-webkit-scrollbar-thumb {
   border: 2px solid #eff4ed;
   border-radius: 999px;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 
 .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
@@ -523,7 +523,7 @@
   border: 1px solid #dfe9e5;
   border-radius: 8px;
   background: white;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   cursor: pointer;
 }
@@ -534,7 +534,7 @@
   box-shadow: 0 2px 4px #145c5920;
 }
 .pagination-number:focus-visible {
-  outline: 2px solid #1e807c;
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
