@@ -45,19 +45,20 @@ const appointmentNeedsReview = computed(() =>
     appointmentId.value &&
       appointmentProgress.value &&
       action.value !== 'history' &&
+      !usageSubmitting.value &&
       !usageSuccess.value &&
       !canStartAppointment.value,
   ),
 )
 const router = useRouter()
 // นัดที่ใช้สิทธิ์คอร์สสำเร็จแล้ว (ไม่มีอะไรต้องตรวจสอบ) ให้ข้ามหน้า "รายการของนัดหมาย" ไปประวัติคอร์สเลย
-watch(appointmentNeedsReview, (needsReview) => {
+const completedUsageRedirect = computed(() => {
   const progress = appointmentProgress.value
-  if (!needsReview || !progress || recoveryRequired.value) return
+  if (!appointmentNeedsReview.value || !progress || recoveryRequired.value) return
   if (progress.state !== 'FOUND' || route.query.action === 'history') return
   const usage = progress.usages.find((item) => item.status === 'Completed')
   if (!usage) return
-  void router.replace({
+  return {
     name: 'staff-courses',
     query: {
       patientId: progress.servedPatientId ? String(progress.servedPatientId) : route.query.patientId,
@@ -65,7 +66,10 @@ watch(appointmentNeedsReview, (needsReview) => {
       action: 'history',
       appointmentId: String(progress.appointmentId),
     },
-  })
+  }
+})
+watch(completedUsageRedirect, (target) => {
+  if (target) void router.replace(target)
 })
 const canReviewCourseExtensions = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const action = ref<CourseAction>('manage')
@@ -655,23 +659,6 @@ function startAnotherTransfer() {
   transferReceiptId.value = null
   transferStep.value = 'form'
 }
-async function openLatestTransfer(course: UiCourse) {
-  selectedCourse.value = course
-  selectedRecipient.value = owners.value.find((patient) => patient.id !== owner.value?.id) ?? null
-  transferReceiptId.value ||= 1
-  transferStep.value = 'success'
-  action.value = 'transfer'
-  await router.replace({
-    path: '/staff/courses',
-    query: {
-      patientId: owner.value?.id,
-      view: 'after-transfer',
-      action: 'transfer-success',
-      courseId: course.id,
-      balance: course.balance,
-    },
-  })
-}
 function confirmPrintHistory() {
   printDialog.value = null
   try {
@@ -689,7 +676,8 @@ function closePrintSuccess() {
 <template>
   <div class="staff-page course-page">
     <StaffHeader />
-    <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
+    <p v-if="usageSubmitting" role="status">กำลังบันทึกรายการ…</p>
+    <p v-else-if="processLoading || completedUsageRedirect" role="status">กำลังตรวจสอบนัดหมาย…</p>
     <div v-else-if="processError" role="alert">
       <p>{{ processError }}</p>
       <button type="button" @click="refreshAppointmentProcess">ลองใหม่</button>
@@ -1166,6 +1154,7 @@ function closePrintSuccess() {
           </div>
           <div class="course-transfer-success-actions">
             <button type="button" @click="startAnotherTransfer">แชร์คอร์สอีกครั้ง</button>
+            <button type="button" @click="returnToCourseManager">กลับหน้าคอร์ส</button>
           </div>
         </section>
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
@@ -1607,14 +1596,6 @@ function closePrintSuccess() {
                   :to="{ name: 'staff-appointment-create', query: { patientId: owner?.id } }"
                 >สร้างนัดหมาย →</RouterLink>
               </div>
-              <button
-                v-if="courseStatusTab === 'active' && transferReceiptId && course.id === selectedCourse.id"
-                class="course-manager-latest-transfer"
-                type="button"
-                @click="openLatestTransfer(course)"
-              >
-                ← ดูรายการแชร์ล่าสุด
-              </button>
             </section></template
           >
         </section>
@@ -3433,17 +3414,6 @@ function closePrintSuccess() {
 .course-manager-metrics.transferred {
   grid-template-columns: repeat(4, minmax(0, 190px));
 }
-.course-manager-latest-transfer {
-  justify-self: start;
-  margin-top: 10px;
-  padding: 0;
-  border: 0;
-  color: #25372f;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
 .course-manager-metrics article {
   display: grid;
   gap: 7px;
@@ -4884,9 +4854,6 @@ function closePrintSuccess() {
   font-weight: 700;
 }
 .course-after-actions button:not(:disabled),
-.course-manager-latest-transfer {
-  cursor: pointer;
-}
 
 .course-use-main.after-transfer {
   display: grid;
