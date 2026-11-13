@@ -103,10 +103,8 @@ public class CourseUsagePrintService {
             line.put("visitDate", String.valueOf(entry.getVisitDate().toLocalDate()));
             line.put("patientId", entry.getPatient() == null ? null : entry.getPatient().getId());
             line.put("treatingStaffId", entry.getTreatingStaff() == null ? null : entry.getTreatingStaff().getId());
-            line.put("patientName", entry.getPatient() == null ? null
-                    : entry.getPatient().getPatientFname() + " " + entry.getPatient().getPatientLname());
-            line.put("therapistName", entry.getTreatingStaff() == null ? null
-                    : entry.getTreatingStaff().getStaffFname() + " " + entry.getTreatingStaff().getStaffLname());
+            line.put("patientName", CoursePurchaseController.patientName(entry.getPatient()));
+            line.put("therapistName", CoursePurchaseController.staffName(entry.getTreatingStaff()));
             history.add(line);
         }
 
