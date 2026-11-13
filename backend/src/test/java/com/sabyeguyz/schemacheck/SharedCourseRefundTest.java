@@ -1,31 +1,34 @@
 package com.sabyeguyz.schemacheck;
 
-import com.sabyeguyz.clinicv2.ClinicV2Application;
-import com.sabyeguyz.clinicv2.course.*;
-import com.sabyeguyz.clinicv2.role.Permission;
-import com.sabyeguyz.clinicv2.sale.*;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
-import org.springframework.boot.SpringApplication;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import static org.junit.jupiter.api.Assertions.*;
+import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.orm.jpa.EntityManagerFactoryUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import com.sabyeguyz.clinicv2.ClinicV2Application;
+import com.sabyeguyz.clinicv2.course.*;
+import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.sale.*;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Run with mvn test and Docker. PostgreSQL, migrations and fixture data are isolated
@@ -45,55 +48,92 @@ class SharedCourseRefundTest {
     private static CourseRightsService rights;
     private static CourseRefundItemRepository items;
     private static PaymentTransactionRepository payments;
-    private static Long courseId, actorId, permissionId, paymentA, paymentB;
+    private static Long courseId;
+    private static Long actorId;
+    private static Long permissionId;
+    private static Long paymentA;
+    private static Long paymentB;
 
-    private record Group(Long mainRefund, Long relatedRefund, Long mainItem, Long relatedItem) {}
+    private record Group(Long mainRefund, Long relatedRefund, Long mainItem, Long relatedItem) {
+    }
 
-    private static BigDecimal amount(String value) { return new BigDecimal(value); }
+    private static BigDecimal amount(String value) {
+        return new BigDecimal(value);
+    }
+
     private static void check(boolean condition, String label) {
         assertTrue(condition, label);
     }
+
     private static EntityManager em() {
         return EntityManagerFactoryUtils.getTransactionalEntityManager(
                 context.getBean(EntityManagerFactory.class));
     }
-    private static RefundTransaction request(Long paymentId, List<RefundService.ItemRequest> requested) {
+
+    private static RefundTransaction request(
+            Long paymentId,
+            List<RefundService.ItemRequest> requested) {
         PaymentTransaction payment = payments.findById(paymentId).orElseThrow();
-        BigDecimal total = requested.stream().map(RefundService.ItemRequest::refundAmount)
+        BigDecimal total = requested.stream()
+                .map(RefundService.ItemRequest::refundAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return refunds.request(payment, total, payment.getPaymentMethod(),
-                em().find(Permission.class, permissionId), "Shared refund integration check", actorId, requested);
+
+        return refunds.request(
+                payment,
+                total,
+                payment.getPaymentMethod(),
+                em().find(Permission.class, permissionId),
+                "Shared refund integration check",
+                actorId,
+                requested);
     }
-    private static CourseRefundItem main(Long selectedCourse, Long payment, int visits, String money) {
+
+    private static CourseRefundItem main(
+            Long selectedCourse,
+            Long payment,
+            int visits,
+            String money) {
         RefundTransaction refund = request(payment, List.of(
                 new RefundService.ItemRequest(selectedCourse, amount(money), visits)));
         em().flush();
+
         return items.findByRefundIdOrderByIdAsc(refund.getId()).get(0);
     }
+
     private static Group group() {
         CourseRefundItem main = main(courseId, paymentA, 2, "20");
         RefundTransaction related = request(paymentB, List.of(
                 new RefundService.ItemRequest(courseId, amount("20"), null, main.getId())));
         em().flush();
         Long relatedId = items.findByRefundIdOrderByIdAsc(related.getId()).get(0).getId();
+
         return new Group(main.getRefund().getId(), related.getId(), main.getId(), relatedId);
     }
+
     private static int remaining(Long id) {
         return db.queryForObject("select remaining_visits from course where course_id=?", Integer.class, id);
     }
+
     private static long ledgerRows(Long mainId, String type) {
         em().flush();
+
         return db.queryForObject("select count(*) from course_ledger where course_refund_item_id=? "
                 + "and entry_type::text=?", Long.class, mainId, type);
     }
+
     private static void rollback(Runnable body) {
-        tx.executeWithoutResult(status -> { status.setRollbackOnly(); body.run(); });
+        tx.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            body.run();
+        });
     }
+
     private static void rejected(String expected, Runnable body) {
         IllegalArgumentException failure = assertThrows(
                 IllegalArgumentException.class, () -> rollback(body));
         assertTrue(failure.getMessage().contains(expected), failure.getMessage());
     }
+
     private static void sequential() {
         for (boolean relatedFirst : List.of(false, true)) rollback(() -> {
             int before = remaining(courseId);
@@ -110,8 +150,10 @@ class SharedCourseRefundTest {
         rollback(() -> {
             int before = remaining(courseId);
             Group g = group();
-            refunds.fail(g.relatedRefund()); em().flush();
-            refunds.retry(g.relatedRefund()); em().flush();
+            refunds.fail(g.relatedRefund());
+            em().flush();
+            refunds.retry(g.relatedRefund());
+            em().flush();
             check(items.findByRefundIdOrderByIdAsc(g.relatedRefund()).get(0)
                     .getRightsCancellationItem().getId().equals(g.mainItem()), "retry retains original group");
             refunds.complete(g.relatedRefund(), actorId);
@@ -124,7 +166,8 @@ class SharedCourseRefundTest {
             int before = remaining(courseId);
             Group g = group();
             rights.cutForRefund(items.findById(g.relatedItem()).orElseThrow(), actorId);
-            refunds.fail(g.relatedRefund()); em().flush();
+            refunds.fail(g.relatedRefund());
+            em().flush();
             refunds.voidRequest(g.mainRefund(), actorId);
             em().flush();
             check(remaining(courseId) == before - 2, "failed related prevents early restoration");
@@ -147,8 +190,10 @@ class SharedCourseRefundTest {
             int before = remaining(courseId);
             Group g = group();
             refunds.complete(g.mainRefund(), actorId);
-            refunds.fail(g.relatedRefund()); em().flush();
-            refunds.retry(g.relatedRefund()); em().flush();
+            refunds.fail(g.relatedRefund());
+            em().flush();
+            refunds.retry(g.relatedRefund());
+            em().flush();
             refunds.complete(g.relatedRefund(), actorId);
             em().flush();
             check(remaining(courseId) == before - 2, "retry after group cut does not cut again");
@@ -202,41 +247,65 @@ class SharedCourseRefundTest {
         });
         rejected("ลองใหม่ได้เฉพาะ", () -> refunds.retry(group().mainRefund()));
         rejected("ยกเลิกได้เฉพาะ", () -> {
-            Group g = group(); refunds.complete(g.mainRefund(), actorId); em().flush();
+            Group g = group();
+            refunds.complete(g.mainRefund(), actorId);
+            em().flush();
             refunds.voidRequest(g.mainRefund(), actorId);
         });
         rejected("ต้องไม่เกินยอดที่ชำระ", () -> {
-            Group g = group(); refunds.fail(g.relatedRefund()); em().flush();
+            Group g = group();
+            refunds.fail(g.relatedRefund());
+            em().flush();
             db.update("update payment_transaction set amount=1 where payment_id=?", paymentB);
-            em().clear(); refunds.retry(g.relatedRefund()); em().flush();
+            em().clear();
+            refunds.retry(g.relatedRefund());
+            em().flush();
         });
         rejected("เกินยอดรับสุทธิ", () -> {
-            Group g = group(); refunds.fail(g.relatedRefund()); em().flush();
+            Group g = group();
+            refunds.fail(g.relatedRefund());
+            em().flush();
             db.update("update receipt_course_payment set amount=allocated_bill_discount_amount+1 "
                     + "where course_id=? and receipt_id=(select receipt_id from payment_transaction where payment_id=?)",
                     courseId, paymentB);
-            em().clear(); refunds.retry(g.relatedRefund()); em().flush();
+            em().clear();
+            refunds.retry(g.relatedRefund());
+            em().flush();
         });
         rejected("สิทธิ์คงเหลือ", () -> {
-            Group g = group(); refunds.fail(g.mainRefund()); em().flush(); refunds.fail(g.relatedRefund()); em().flush();
+            Group g = group();
+            refunds.fail(g.mainRefund());
+            em().flush();
+            refunds.fail(g.relatedRefund());
+            em().flush();
             db.update("update course set remaining_visits=1 where course_id=?", courseId);
-            em().clear(); refunds.retry(g.mainRefund()); em().flush();
+            em().clear();
+            refunds.retry(g.mainRefund());
+            em().flush();
         });
         rejected("สิทธิ์คงเหลือ", () -> {
             Group g = group();
             db.update("update course set remaining_visits=1 where course_id=?", courseId);
-            em().clear(); refunds.complete(g.mainRefund(), actorId);
+            em().clear();
+            refunds.complete(g.mainRefund(), actorId);
         });
     }
     /** Copies fixture data without assuming the table's non-key column list. */
-    private static Long copy(String table, String key, Long source, Map<String, String> overrides) {
+    private static Long copy(
+            String table,
+            String key,
+            Long source,
+            Map<String, String> overrides) {
         List<String> columns = db.queryForList("select column_name from information_schema.columns "
                 + "where table_schema='public' and table_name=? and column_name<>? and is_generated='NEVER' "
                 + "order by ordinal_position", String.class, table, key);
         String expressions = String.join(",", columns.stream()
                 .map(column -> overrides.getOrDefault(column, "s." + column)).toList());
-        return db.queryForObject("insert into " + table + "(" + String.join(",", columns) + ") select "
-                + expressions + " from " + table + " s where s." + key + "=? returning " + key, Long.class, source);
+        return db.queryForObject(
+                "insert into " + table + "(" + String.join(",", columns) + ") select "
+                        + expressions + " from " + table + " s where s." + key + "=? returning " + key,
+                Long.class,
+                source);
     }
     private static Long secondCourse() {
         Long sale = db.queryForObject("select sale_transaction_id from course where course_id=?", Long.class, courseId);
@@ -261,6 +330,7 @@ class SharedCourseRefundTest {
                 + "bill_discount_amount=bill_discount_amount+100,net_amount=net_amount+900,"
                 + "taxable_amount=taxable_amount+900 where receipt_id=?", collectionReceipt);
         db.update("update payment_transaction set amount=amount+900 where payment_id=?", paymentB);
+
         return second;
     }
     private static void multipleCourses() {
@@ -272,12 +342,19 @@ class SharedCourseRefundTest {
                     new RefundService.ItemRequest(courseId, amount("20"), 1)));
             em().flush();
             var roots = items.findByRefundIdOrderByIdAsc(main.getId());
-            CourseRefundItem firstRoot = roots.stream().filter(i -> i.getCourse().getId().equals(courseId)).findFirst().orElseThrow();
-            CourseRefundItem secondRoot = roots.stream().filter(i -> i.getCourse().getId().equals(second)).findFirst().orElseThrow();
+            CourseRefundItem firstRoot = roots.stream()
+                    .filter(i -> i.getCourse().getId().equals(courseId))
+                    .findFirst()
+                    .orElseThrow();
+            CourseRefundItem secondRoot = roots.stream()
+                    .filter(i -> i.getCourse().getId().equals(second))
+                    .findFirst()
+                    .orElseThrow();
             RefundTransaction related = request(paymentB, List.of(
                     new RefundService.ItemRequest(courseId, amount("20"), null, firstRoot.getId())));
             em().flush();
-            rights.cutForRefund(firstRoot, actorId); rights.cutForRefund(secondRoot, actorId);
+            rights.cutForRefund(firstRoot, actorId);
+            rights.cutForRefund(secondRoot, actorId);
             refunds.complete(related.getId(), actorId);
             refunds.voidRequest(main.getId(), actorId);
             em().flush();
@@ -321,7 +398,8 @@ class SharedCourseRefundTest {
             Group g = group();
             rights.cutForRefund(items.findById(g.mainItem()).orElseThrow(), actorId);
             check(ledgerRows(g.mainItem(), "Cancellation") == 2, "shared cancellation cuts two holders");
-            refunds.voidRequest(g.mainRefund(), actorId); refunds.voidRequest(g.relatedRefund(), actorId);
+            refunds.voidRequest(g.mainRefund(), actorId);
+            refunds.voidRequest(g.relatedRefund(), actorId);
             em().flush();
             check(before.equals(db.queryForList("select patient_id,allocated_visits,used_visits,remaining_visits "
                     + "from course_entitlement where course_id=? order by patient_id", courseId)),
@@ -330,7 +408,9 @@ class SharedCourseRefundTest {
             check(remaining(courseId) == total, "shared course total restored");
         });
     }
-    private static void action(String action, Long id) {
+    private static void action(
+            String action,
+            Long id) {
         switch (action) {
             case "complete" -> refunds.complete(id, actorId);
             case "fail" -> refunds.fail(id);
@@ -341,68 +421,103 @@ class SharedCourseRefundTest {
             default -> throw new IllegalArgumentException(action);
         }
     }
-    private static void race(String firstAction, String secondAction) throws Exception {
+    private static void race(
+            String firstAction,
+            String secondAction) throws Exception {
         Group g = tx.execute(status -> group());
-        if (secondAction.equals("retry")) tx.executeWithoutResult(status -> {
-            refunds.fail(g.relatedRefund());
-        });
+        if (secondAction.equals("retry")) {
+            tx.executeWithoutResult(status -> refunds.fail(g.relatedRefund()));
+        }
         int before = remaining(courseId);
-        CountDownLatch held = new CountDownLatch(1), release = new CountDownLatch(1), entered = new CountDownLatch(1);
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch entered = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         String label = firstAction + "/" + secondAction;
+
         try {
             Future<?> first = pool.submit(() -> tx.executeWithoutResult(status -> {
-                action(firstAction, g.mainRefund()); em().flush(); held.countDown();
+                action(firstAction, g.mainRefund());
+                em().flush();
+                held.countDown();
                 try {
-                    if (!release.await(15, TimeUnit.SECONDS)) throw new AssertionError("Release timeout");
-                } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new RuntimeException(e); }
+                    if (!release.await(15, TimeUnit.SECONDS)) {
+                        throw new AssertionError("Release timeout");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
             }));
-            if (!held.await(15, TimeUnit.SECONDS)) { first.get(1, TimeUnit.SECONDS); throw new AssertionError("First action not ready"); }
+            if (!held.await(15, TimeUnit.SECONDS)) {
+                first.get(1, TimeUnit.SECONDS);
+                throw new AssertionError("First action not ready");
+            }
             Future<?> second = pool.submit(() -> tx.executeWithoutResult(status -> {
                 db.execute("SET LOCAL application_name='shared_course_refund_check'");
                 entered.countDown();
                 action(secondAction, secondAction.equals("related") ? g.mainItem() : g.relatedRefund());
             }));
-            if (!entered.await(10, TimeUnit.SECONDS)) throw new AssertionError("Second action not ready");
+            if (!entered.await(10, TimeUnit.SECONDS)) {
+                throw new AssertionError("Second action not ready");
+            }
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             boolean waiting = false;
             while (System.nanoTime() < deadline) {
                 Long count = db.queryForObject("select count(*) from pg_stat_activity where "
                         + "application_name='shared_course_refund_check' and wait_event_type='Lock'", Long.class);
-                if (count > 0) { waiting = true; break; }
-                if (second.isDone()) break;
+                if (count > 0) {
+                    waiting = true;
+                    break;
+                }
+                if (second.isDone()) {
+                    break;
+                }
                 Thread.sleep(25);
             }
             check(waiting && !second.isDone(), "concurrent " + label + " waits for lock");
             release.countDown();
-            first.get(30, TimeUnit.SECONDS); second.get(30, TimeUnit.SECONDS);
-            check(remaining(courseId) == before - (firstAction.equals("complete") || secondAction.equals("complete") ? 2 : 0),
+            first.get(30, TimeUnit.SECONDS);
+            second.get(30, TimeUnit.SECONDS);
+            check(remaining(courseId) == before
+                            - (firstAction.equals("complete") || secondAction.equals("complete") ? 2 : 0),
                     "concurrent " + label + " preserves rights");
-        } finally { release.countDown(); pool.shutdownNow(); }
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
     }
     @BeforeAll
     static void startApplication() {
         String[] locations = {"classpath:db/migration", "classpath:db/seed_v2"};
         // The fixture needs V1023 receipt collections, before V1024 adds shared refund rights.
-        Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations(locations).outOfOrder(true).target("1023").load().migrate();
         DriverManagerDataSource source = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(),
+                POSTGRES.getPassword());
         JdbcTemplate beforeUpgrade = new JdbcTemplate(source);
         loadFixture(source);
         var originalItems = beforeUpgrade.queryForList(
                 "select course_refund_item_id,refund_id,course_id,refund_amount,cancelled_visits "
                         + "from course_refund_item order by course_refund_item_id");
         assertFalse(originalItems.isEmpty(), "legacy upgrade must exercise an existing refund item");
-        Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+
+        Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations(locations).outOfOrder(true).load().migrate();
         legacyPreserved = originalItems.equals(beforeUpgrade.queryForList(
                 "select course_refund_item_id,refund_id,course_id,refund_amount,cancelled_visits "
                         + "from course_refund_item order by course_refund_item_id"))
                 && beforeUpgrade.queryForObject("select count(*) from course_refund_item "
                         + "where rights_cancellation_item_id is not null", Long.class) == 0;
-        context = SpringApplication.run(ClinicV2Application.class,
-                "--spring.profiles.active=v2", "--server.port=0", "--server.address=127.0.0.1",
+        context = SpringApplication.run(
+                ClinicV2Application.class,
+                "--spring.profiles.active=v2",
+                "--server.port=0",
+                "--server.address=127.0.0.1",
                 "--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
                 "--spring.datasource.username=" + POSTGRES.getUsername(),
                 "--spring.datasource.password=" + POSTGRES.getPassword(),
@@ -410,7 +525,9 @@ class SharedCourseRefundTest {
                 "--spring.flyway.locations=classpath:db/migration,classpath:db/seed_v2",
                 "--spring.jpa.hibernate.ddl-auto=validate",
                 "--app.jwt.secret=shared-refund-test-only-secret-at-least-32-characters",
-                "--app.calendar.enabled=false", "--logging.level.root=WARN");
+                "--app.calendar.enabled=false",
+                "--logging.level.root=WARN");
+
         db = context.getBean(JdbcTemplate.class);
         tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
         refunds = context.getBean(RefundService.class);
@@ -431,6 +548,7 @@ class SharedCourseRefundTest {
     void resetFixture() {
         db.execute("TRUNCATE TABLE receipt RESTART IDENTITY CASCADE");
         loadFixture(context.getBean(javax.sql.DataSource.class));
+
         courseId = db.queryForObject("select course_id from course order by course_id limit 1", Long.class);
         actorId = db.queryForObject("select user_id from app_user where username='manager'", Long.class);
         permissionId = db.queryForObject("select permission_id from permission where permission_name='SALE_CANCEL'", Long.class);
@@ -442,7 +560,9 @@ class SharedCourseRefundTest {
 
     @AfterAll
     static void stopApplication() {
-        if (context != null) context.close();
+        if (context != null) {
+            context.close();
+        }
     }
 
     @Test

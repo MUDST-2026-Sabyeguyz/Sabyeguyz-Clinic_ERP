@@ -1,21 +1,12 @@
 package com.sabyeguyz.schemacheck;
 
-import com.sabyeguyz.clinicv2.ClinicV2Application;
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.catalog.Course;
-import com.sabyeguyz.clinicv2.catalog.Service;
-import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
-import com.sabyeguyz.clinicv2.config.ClinicTime;
-import com.sabyeguyz.clinicv2.enums.ReasonCode;
-import com.sabyeguyz.clinicv2.patient.Patient;
-import com.sabyeguyz.clinicv2.sale.*;
-import com.sabyeguyz.clinicv2.staff.Staff;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Supplier;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -36,6 +27,17 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.sabyeguyz.clinicv2.ClinicV2Application;
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.catalog.Course;
+import com.sabyeguyz.clinicv2.catalog.Service;
+import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
+import com.sabyeguyz.clinicv2.config.ClinicTime;
+import com.sabyeguyz.clinicv2.enums.ReasonCode;
+import com.sabyeguyz.clinicv2.patient.Patient;
+import com.sabyeguyz.clinicv2.sale.*;
+import com.sabyeguyz.clinicv2.staff.Staff;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Database-facing course collection contracts; run with mvn test and Docker. */
@@ -48,17 +50,29 @@ class CoursePaymentDatabaseTest {
     private static ConfigurableApplicationContext context;
     private static JdbcTemplate db;
     private static TransactionTemplate tx;
-    private Long actorId, patientId, branchId, courseId, methodId;
+    private Long actorId;
+    private Long patientId;
+    private Long branchId;
+    private Long courseId;
+    private Long methodId;
     private static final BigDecimal ZERO = new BigDecimal("0.00");
 
-    private static <T> T bean(Class<T> type) { return context.getBean(type); }
-    private static BigDecimal money(String value) { return new BigDecimal(value); }
+    private static <T> T bean(Class<T> type) {
+        return context.getBean(type);
+    }
+
+    private static BigDecimal money(String value) {
+        return new BigDecimal(value);
+    }
+
     private static EntityManager em() {
         return EntityManagerFactoryUtils.getTransactionalEntityManager(bean(EntityManagerFactory.class));
     }
+
     private static <T> T transaction(Supplier<T> body) {
         return tx.execute(status -> body.get());
     }
+
     private static void assertMoney(String expected, BigDecimal actual) {
         assertNotNull(actual);
         assertEquals(0, money(expected).compareTo(actual), "expected " + expected + ", got " + actual);
@@ -66,16 +80,22 @@ class CoursePaymentDatabaseTest {
 
     @BeforeAll
     static void startApplication() {
-        context = SpringApplication.run(ClinicV2Application.class,
-                "--spring.profiles.active=v2", "--server.port=0", "--server.address=127.0.0.1",
+        context = SpringApplication.run(
+                ClinicV2Application.class,
+                "--spring.profiles.active=v2",
+                "--server.port=0",
+                "--server.address=127.0.0.1",
                 "--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
                 "--spring.datasource.username=" + POSTGRES.getUsername(),
                 "--spring.datasource.password=" + POSTGRES.getPassword(),
                 "--spring.datasource.hikari.data-source-properties.options=-c lock_timeout=5000",
                 "--spring.flyway.locations=classpath:db/migration,classpath:db/seed_v2",
-                "--spring.jpa.hibernate.ddl-auto=validate", "--spring.jpa.open-in-view=false",
+                "--spring.jpa.hibernate.ddl-auto=validate",
+                "--spring.jpa.open-in-view=false",
                 "--app.jwt.secret=course-payment-test-only-secret-at-least-32-characters",
-                "--app.calendar.enabled=false", "--logging.level.root=WARN");
+                "--app.calendar.enabled=false",
+                "--logging.level.root=WARN");
+
         db = bean(JdbcTemplate.class);
         tx = new TransactionTemplate(bean(PlatformTransactionManager.class));
     }
@@ -87,10 +107,12 @@ class CoursePaymentDatabaseTest {
         db.update("update payment_label set payment_label_status=true");
         db.update("update payment_method set payment_method_status=true where method_name='PromptPay'");
         db.update("update branch set branch_status=true where branch_code in ('01','02')");
+
         ResourceDatabasePopulator fixture = new ResourceDatabasePopulator(
                 new ClassPathResource("fixtures/shared-course-refund.sql"));
         fixture.setSeparator(ScriptUtils.EOF_STATEMENT_SEPARATOR);
         fixture.execute(bean(javax.sql.DataSource.class));
+
         actorId = id("select user_id from app_user where username='manager'");
         patientId = id("select purchaser_patient_id from course order by course_id limit 1");
         branchId = id("select branch_id from branch where branch_code='01'");
@@ -100,45 +122,69 @@ class CoursePaymentDatabaseTest {
     }
 
     @AfterEach
-    void clearAuthentication() { SecurityContextHolder.clearContext(); }
+    void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
 
     @AfterAll
     static void closeApplication() {
-        if (context != null) context.close();
+        if (context != null) {
+            context.close();
+        }
     }
 
     private static Long id(String sql, Object... parameters) {
         return db.queryForObject(sql, Long.class, parameters);
     }
+
     private void authenticate(String username) {
         Long userId = id("select user_id from app_user where username=?", username);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(userId.toString(), "test", List.of()));
     }
+
     private List<ReceiptCoursePaymentService.ItemRequest> one(String amount) {
         return List.of(new ReceiptCoursePaymentService.ItemRequest(courseId, money(amount)));
     }
+
     private CoursePaymentCollectionService.Result collect(
-            Long patient, Long branch, List<ReceiptCoursePaymentService.ItemRequest> requested,
-            Discount discount, String label, String paid) {
+            Long patient,
+            Long branch,
+            List<ReceiptCoursePaymentService.ItemRequest> requested,
+            Discount discount,
+            String label,
+            String paid) {
         return transaction(() -> bean(CoursePaymentCollectionService.class).collect(
-                em().find(Patient.class, patient), em().find(Branch.class, branch), requested,
-                discount, label, em().find(PaymentMethod.class, methodId), money(paid)));
+                em().find(Patient.class, patient),
+                em().find(Branch.class, branch),
+                requested,
+                discount,
+                label,
+                em().find(PaymentMethod.class, methodId),
+                money(paid)));
     }
-    private CoursePaymentCollectionService.Result collect(String before, Discount discount, String label, String paid) {
+
+    private CoursePaymentCollectionService.Result collect(
+            String before,
+            Discount discount,
+            String label,
+            String paid) {
         return collect(patientId, branchId, one(before), discount, label, paid);
     }
-    private Map<String,Object> counts() {
+
+    private Map<String, Object> counts() {
         return db.queryForMap("select (select count(*) from receipt) as receipts,"
                 + "(select count(*) from payment_transaction) as payments,"
                 + "(select count(*) from receipt_course_payment) as items,"
                 + "(select count(*) from transaction_cancellation) as cancellations,"
                 + "(select count(*) from audit_log) as audit");
     }
+
     private String courseSnapshot() {
         return db.queryForObject("select row_to_json(c)::text from course c where course_id=?", String.class, courseId);
     }
-    private List<Map<String,Object>> entitlements() {
+
+    private List<Map<String, Object>> entitlements() {
         return db.queryForList("select * from course_entitlement where course_id=? order by patient_id", courseId);
     }
 
@@ -437,7 +483,9 @@ class CoursePaymentDatabaseTest {
     @Test
     void paymentQueryUsesInclusiveStartExclusiveEndAndBranchAndStatusFilters() {
         Long originalPayment = id("select p.payment_id from payment_transaction p join course c using(receipt_id) where c.course_id=?", courseId);
-        Long fixtureCollection = id("select p.payment_id from payment_transaction p join receipt_course_payment i using(receipt_id) where i.course_id=?", courseId);
+        Long fixtureCollection = id(
+                "select p.payment_id from payment_transaction p join receipt_course_payment i using(receipt_id) where i.course_id=?",
+                courseId);
         var lastInside = collect("1", Discount.none(), "FULL", "1");
         var beforeStart = collect("1", Discount.none(), "FULL", "1");
         var afterEnd = collect("1", Discount.none(), "FULL", "1");
