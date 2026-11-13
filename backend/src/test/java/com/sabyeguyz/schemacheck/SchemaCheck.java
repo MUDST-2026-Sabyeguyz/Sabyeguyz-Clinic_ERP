@@ -140,9 +140,7 @@ public class SchemaCheck {
     }
 
     private static String normalize(String type) {
-        if (type == null) return "";
-        String normalized = type.toLowerCase(Locale.ROOT).trim().replaceAll("\\s*\\(\\d+\\)", "");
-        return normalized.equals("timestamp with time zone") ? "timestamptz" : normalized;
+        return type == null ? "" : type.toLowerCase(Locale.ROOT).trim();
     }
 
     private static boolean validateAndWire() {

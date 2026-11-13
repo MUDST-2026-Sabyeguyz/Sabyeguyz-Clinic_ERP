@@ -5,6 +5,7 @@ import TherapistCompensationEmptyState from '../components/TherapistCompensation
 import TherapistCompensationShell from '../components/TherapistCompensationShell.vue'
 import { monthLabel, signedBaht, useTherapistPay } from '../lib/therapistPay'
 
+// A correction of a month that was already paid, worked off in later months. Read only: the Manager creates and approves it.
 const route = useRoute()
 const { adjustments, loading, errorMessage } = useTherapistPay()
 const adjustment = computed(
@@ -15,15 +16,12 @@ const adjustment = computed(
 const total = computed(() => adjustment.value?.amount ?? 0)
 const progress = computed(() => {
   const all = Math.abs(total.value)
-  return all === 0
-    ? 0
-    : Math.min(100, Math.round((Math.abs(adjustment.value?.processed ?? 0) / all) * 100))
+  return all === 0 ? 0 : Math.min(100, Math.round((Math.abs(adjustment.value?.processed ?? 0) / all) * 100))
 })
 const statusText = computed(() => {
   const row = adjustment.value
   if (!row) return ''
-  if (row.status === 'Applied')
-    return `ดำเนินการครบแล้ว นำไปใช้ในเดือน${monthLabel(row.appliedMonth)}`
+  if (row.status === 'Applied') return `ดำเนินการครบแล้ว นำไปใช้ในเดือน${monthLabel(row.appliedMonth)}`
   if (row.status === 'PartiallyApplied') return 'ดำเนินการบางส่วน ส่วนที่เหลือยกไปงวดถัดไป'
   if (row.status === 'Approved') return 'อนุมัติแล้ว รอนำไปใช้ในงวดถัดไป'
   if (row.status === 'ExternalReview') return 'ส่วนที่เหลือดำเนินการนอกระบบ'
@@ -61,21 +59,11 @@ const thisMonth = computed(() => {
         </article>
         <article>
           <span>ยอดยกไปงวดถัดไป</span>
-          <b>{{
-            signedBaht(
-              adjustment.status === 'Applied' ? 0 : adjustment.remaining * Math.sign(total),
-            )
-          }}</b>
+          <b>{{ signedBaht(adjustment.status === 'Applied' ? 0 : adjustment.remaining * Math.sign(total)) }}</b>
         </article>
       </div>
       <p class="therapist-adjustment-status">ความคืบหน้า: ดำเนินการแล้ว {{ progress }}%</p>
-      <div
-        class="therapist-progress"
-        role="progressbar"
-        :aria-valuenow="progress"
-        aria-valuemin="0"
-        aria-valuemax="100"
-      >
+      <div class="therapist-progress" role="progressbar" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100">
         <i :style="{ width: progress + '%' }"></i>
       </div>
       <p>
@@ -88,8 +76,7 @@ const thisMonth = computed(() => {
       <h2>ประวัติการดำเนินการรายเดือน</h2>
       <div class="therapist-adjustment-history" role="table">
         <div class="therapist-adjustment-history-head" role="row">
-          <span>งวดที่ดำเนินการ</span><span>ผู้ยืนยัน</span><span>ยอดดำเนินการ</span
-          ><span>ยอดคงเหลือ</span>
+          <span>งวดที่ดำเนินการ</span><span>ผู้ยืนยัน</span><span>ยอดดำเนินการ</span><span>ยอดคงเหลือ</span>
         </div>
         <div
           v-for="application in adjustment.applications"
@@ -99,28 +86,17 @@ const thisMonth = computed(() => {
         >
           <span>{{ application.month ? monthLabel(application.month) : '—' }}</span>
           <span>{{ application.approvedBy ?? '—' }}</span>
-          <span :class="{ negative: application.amount < 0 }">{{
-            signedBaht(application.amount)
-          }}</span>
-          <span>{{
-            signedBaht(
-              adjustment.status === 'Applied' ? 0 : adjustment.remaining * Math.sign(total),
-            )
-          }}</span>
+          <span :class="{ negative: application.amount < 0 }">{{ signedBaht(application.amount) }}</span>
+          <span>{{ signedBaht(adjustment.status === 'Applied' ? 0 : adjustment.remaining * Math.sign(total)) }}</span>
         </div>
-        <p v-if="adjustment.applications.length === 0" class="therapist-line-empty">
-          ยังไม่มีการดำเนินการ
-        </p>
+        <p v-if="adjustment.applications.length === 0" class="therapist-line-empty">ยังไม่มีการดำเนินการ</p>
       </div>
       <p class="therapist-adjustment-note">
         ยอดและ Tier ของงวดที่ Finalized แล้วคงเดิม ระบบไม่หักเงินจริงโดยอัตโนมัติ
       </p>
       <RouterLink
         class="therapist-primary-action"
-        :to="{
-          name: 'therapist-compensation',
-          query: { month: adjustment.appliedMonth },
-        }"
+        :to="{ name: 'therapist-compensation', query: { month: adjustment.appliedMonth } }"
       >
         กลับค่าตอบแทนของฉัน
       </RouterLink>

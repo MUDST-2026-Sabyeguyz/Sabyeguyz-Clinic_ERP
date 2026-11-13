@@ -1,5 +1,6 @@
 package com.sabyeguyz.clinicv2.course;
 
+import com.sabyeguyz.clinicv2.catalog.ClosedGuard;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.appointment.PatientVisitRepository;
@@ -71,7 +72,6 @@ public class CoursePurchaseController {
     private final CourseLedgerRepository ledger;
     private final CourseVisitUsageRepository usages;
     private final CourseVisitUsageService usageService;
-    private final CourseUsageBatchService usageBatchService;
     private final CourseTransferService transferService;
     private final PermissionService permissions;
     private final CommissionAllocationLedgerRepository allocationLedger;
@@ -87,24 +87,25 @@ public class CoursePurchaseController {
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
     private final com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations;
+    private final com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments;
 
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
     public CoursePurchaseController(CourseRepository courses, CourseLedgerRepository ledger,
-                                    CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
-                                    CourseTransferService transferService, PermissionService permissions,
-                                    CommissionAllocationLedgerRepository allocationLedger, ReceiptService receiptService,
-                                    SalesTransactionService salesTransactionService,
-                                    PatientRepository patients, BranchRepository branches, ServiceRepository services,
-                                    PatientVisitRepository visits, PatientVisitService visitService,
-                                    AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
-                                    CurrentActor actor,
-                                    com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                    com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
-                                    com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess,
-                                    CourseUsageBatchService usageBatchService) {
-        this.usageBatchService = usageBatchService;
+                                     CourseVisitUsageRepository usages, CourseVisitUsageService usageService,
+                                     CourseTransferService transferService, PermissionService permissions,
+                                     CommissionAllocationLedgerRepository allocationLedger, ReceiptService receiptService,
+                                     SalesTransactionService salesTransactionService,
+                                     PatientRepository patients, BranchRepository branches, ServiceRepository services,
+                                     PatientVisitRepository visits, PatientVisitService visitService,
+                                     AppUserRepository users, com.sabyeguyz.clinicv2.staff.StaffRepository staffRepository,
+                                     CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit,
+                                     com.sabyeguyz.clinicv2.sale.TransactionCancellationService cancellations,
+                                     com.sabyeguyz.clinicv2.treatment.TreatmentRepository treatments,
+                                     com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
         this.branchAccess = branchAccess;
+        this.treatments = treatments;
         this.cancellations = cancellations;
         this.courses = courses;
         this.ledger = ledger;
@@ -135,19 +136,16 @@ public class CoursePurchaseController {
      * (optional) names the PT who owns the course's commission, the seller by default.
      */
     public record PurchaseRequest(Long patientId, Long courseId, String branchCode, String discountType,
-                                   BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares, String paymentLabelCode) {}
+                                   BigDecimal discountValue, Long caseOwnerStaffId, List<ShareRequest> shares) {}
     /** treatingStaffId (optional): the PT who treats the session, the Owner PT by default; patientId (optional): who uses the entitlement. */
     public record UseRequest(Long coursePurchaseId, Long appointmentId, String note, Long treatingStaffId, Long patientId,
                               Long treatmentId) {}
-    public record BatchUseRequest(List<UseRequest> usages) {}
-    public record ReasonRequest(String reason, com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode) {
-        public ReasonRequest(String reason) { this(reason, com.sabyeguyz.clinicv2.enums.ReasonCode.Other); }
-    }
+    public record ReasonRequest(String reason) {}
 
     public record PatientSummary(Long id, String hn, String fullName) {}
     public record CourseSummary(Long id, String code, String name) {}
 
-    public record Response(Long id, PatientSummary patient, PatientSummary purchaser, String branchCode, CourseSummary course,
+    public record Response(Long id, PatientSummary patient, String branchCode, CourseSummary course,
                             BigDecimal price, int sessions, int bonusSessions, int purchased, int used, int remaining,
                             Instant purchasedAt, Instant expiresAt, boolean expired, boolean usable, String status,
                             String commissionStatus, BigDecimal lockedCommissionRate,
@@ -168,11 +166,10 @@ public class CoursePurchaseController {
     public Response purchase(@RequestBody PurchaseRequest request) {
         Patient patient = patients.findById(request.patientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"));
-        Branch branch = branches.findByBranchCode(request.branchCode().trim())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
-        branchAccess.requireAccess(branch, "ขายคอร์สได้เฉพาะสาขาตัวเอง");
-        Service courseTemplate = services.findById(request.courseId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        Branch branch = ClosedGuard.open(branches.findByBranchCode(request.branchCode().trim())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode())));
+        Service courseTemplate = ClosedGuard.open(services.findById(request.courseId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส")));
         if (request.shares() != null && !request.shares().isEmpty()) {
             throw new IllegalArgumentException("ไม่รองรับการแบ่งเครดิตยอดขายแล้ว เจ้าของคอร์สคือผู้ขายคนเดียว");
         }
@@ -180,10 +177,8 @@ public class CoursePurchaseController {
         // user's own staff record is the default.
         Staff seller = request.caseOwnerStaffId() == null ? resolveActorStaff() : staffById(request.caseOwnerStaffId());
 
-        Receipt receipt = receiptService.create(
-                receiptService.nextReceiptNo(branch, ClinicTime.today()),
-                patient, branch, ClinicTime.today(),
-                request.paymentLabelCode(), actor.currentId());
+        Receipt receipt = receiptService.create(receiptService.nextReceiptNo(branch, ClinicTime.today()), patient, branch, ClinicTime.today(),
+                actor.currentId());
         var purchase = salesTransactionService.recordCoursePurchase(receipt, patient, branch, courseTemplate,
                 seller, null, null, null, Discount.of(request.discountType(), request.discountValue()),
                 ClinicTime.today(), actor.currentId());
@@ -196,55 +191,27 @@ public class CoursePurchaseController {
     @GetMapping("/api/course-purchases/{id}")
     public LedgerResponse ledger(@PathVariable Long id) {
         Course course = findCourse(id);
-        branchAccess.requireReadAccess(course.getBranch());
-        boolean manager = branchAccess.isManager();
-        Long currentStaffId = branchAccess.currentStaffId();
         Long ownerPatientId = course.getPurchaserPatient().getId();
         List<MovementResponse> movements = ledger.findByCourseIdOrderByIdDesc(id).stream()
                 .map(l -> new MovementResponse(l.getId(), apiMovementType(l.getEntryType()), l.getQtyChange(), l.getRemark(),
                         l.getLedgerCreateAt()))
                 .toList();
         List<AllocationResponse> allocations = allocationLedger.findByCourseIdOrderByIdDesc(id).stream()
-                .map(a -> new AllocationResponse(a.getVisitDate(), manager ? a.getOwnerNetCommission().add(a.getTreatmentFeeAmount()) : null,
-                        manager || (currentStaffId != null && a.getTreatingStaff() != null
-                                && currentStaffId.equals(a.getTreatingStaff().getId())) ? a.getTreatmentFeeAmount() : null,
-                        manager ? a.getOwnerNetCommission() : null))
+                .map(a -> new AllocationResponse(a.getVisitDate(), a.getOwnerNetCommission().add(a.getTreatmentFeeAmount()),
+                        a.getTreatmentFeeAmount(), a.getOwnerNetCommission()))
                 .toList();
         return new LedgerResponse(toResponse(course, ownerPatientId), movements, allocations);
     }
 
-    public record UsageTransactionResponse(Long id, Long coursePurchaseId, String courseNo, String patientName,
-                                            String patientHn, String courseName, String branchCode,
-                                            java.time.LocalDate visitDate, Instant usedAt, String usageStatus,
-                                            String usingPatientName, String usingPatientHn, String therapistName,
-                                            int quantity, BigDecimal commissionAllocationPerVisit,
-                                            BigDecimal treatmentFeeAmount, BigDecimal ownerNetCommission,
-                                            Instant voidedAt, String voidReason) {}
+    public record UsageTransactionResponse(Long id, Long coursePurchaseId, String patientName, String patientHn,
+                                            String courseName, String branchCode, Instant usedAt, Instant voidedAt,
+                                            String voidReason, String therapistName) {}
 
     /** Every visit taken from a course (newest first) with its reversal status; id is the Treatment movement. */
     @GetMapping("/api/course-usages")
-    public List<UsageTransactionResponse> usageTransactions(
-            @RequestParam(required = false) String branchCode,
-            @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to,
-            @RequestParam(name = "patient", required = false) String patientFilter) {
-        if (from != null && to != null && from.isAfter(to)) {
-            throw new IllegalArgumentException("วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด");
-        }
-        Branch scopedBranch = branchAccess.readScope(branchCode);
-        String patientTerm = patientFilter == null ? "" : patientFilter.trim().toLowerCase(java.util.Locale.ROOT);
-        Long currentStaffId = branchAccess.currentStaffId();
-        boolean manager = branchAccess.isManager();
+    public List<UsageTransactionResponse> usageTransactions() {
         return usages.findAll(org.springframework.data.domain.Sort.by(
-                org.springframework.data.domain.Sort.Direction.DESC, "id")).stream()
-                .filter(usage -> scopedBranch == null || usage.getCourse().getBranch().getId().equals(scopedBranch.getId()))
-                .filter(usage -> from == null || !usage.getVisitDate().toLocalDate().isBefore(from))
-                .filter(usage -> to == null || !usage.getVisitDate().toLocalDate().isAfter(to))
-                .filter(usage -> patientTerm.isEmpty()
-                        || (usage.getPatient().getPatientFname() + " " + usage.getPatient().getPatientLname())
-                                .toLowerCase(java.util.Locale.ROOT).contains(patientTerm)
-                        || usage.getPatient().getPatientHn().toLowerCase(java.util.Locale.ROOT).contains(patientTerm))
-                .map(usage -> {
+                org.springframework.data.domain.Sort.Direction.DESC, "id")).stream().map(usage -> {
             List<com.sabyeguyz.clinicv2.course.CourseLedger> movements = ledger.findByVisitUsageId(usage.getId());
             Long movementId = movements.stream().filter(l -> l.getEntryType() == CourseLedgerEntryType.Treatment)
                     .map(com.sabyeguyz.clinicv2.course.CourseLedger::getId).findFirst().orElse(usage.getId());
@@ -255,92 +222,35 @@ public class CoursePurchaseController {
                             && l.getReversesLedger().getId().equals(movementId))
                     .findFirst();
             Patient patient = usage.getPatient();
-            boolean maySeeTreatingCompensation = manager || (currentStaffId != null && usage.getTreatingStaff() != null
-                    && currentStaffId.equals(usage.getTreatingStaff().getId()));
-            return new UsageTransactionResponse(movementId, course.getId(), course.getCourseNo(),
+            return new UsageTransactionResponse(movementId, course.getId(),
                     patient.getPatientFname() + " " + patient.getPatientLname(), patient.getPatientHn(),
                     course.getCourseName(), course.getReceipt().getBranch().getBranchCode(),
-                    usage.getVisitDate().toLocalDate(), usage.getUsageCreateAt(), usage.getUsageStatus().name(),
-                    patient.getPatientFname() + " " + patient.getPatientLname(), patient.getPatientHn(),
-                    staffName(usage.getTreatingStaff()), usage.getVisitQty(),
-                    manager ? usage.getCommissionAllocationPerVisit() : null,
-                    maySeeTreatingCompensation ? usage.getSubstituteTreatmentFeeAmount() : null,
-                    manager ? usage.getOwnerNetCommission() : null,
-                    reversal.map(l -> l.getLedgerCreateAt()).orElse(null), reversal.map(l -> l.getRemark()).orElse(null));
+                    usage.getUsageCreateAt(), reversal.map(l -> l.getLedgerCreateAt()).orElse(null),
+                    reversal.map(l -> l.getRemark()).orElse(null), staffName(usage.getTreatingStaff()));
         }).toList();
     }
 
     @PostMapping("/api/course-usages")
     @Transactional
     public Response use(@RequestBody UseRequest request) {
-        return useTogether(java.util.Collections.singletonList(request)).get(0);
-    }
-
-    @PostMapping("/api/course-usages/batch")
-    @Transactional
-    public List<Response> useBatch(@RequestBody BatchUseRequest request) {
-        return useTogether(request.usages());
-    }
-
-    private List<Response> useTogether(List<UseRequest> requests) {
-        if (requests == null || requests.isEmpty()) {
-            throw new IllegalArgumentException("ต้องระบุรายการใช้สิทธิ์คอร์ส");
+        // Row-lock first: two parallel usages must not both see the last remaining visit.
+        Course course = courses.findByIdForUpdate(request.coursePurchaseId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
+        Staff treating = request.treatingStaffId() == null ? course.getOwnerStaff() : staffById(request.treatingStaffId());
+        PatientVisit appointmentVisit = request.appointmentId() == null ? null
+                : visits.findFirstByAppointmentIdOrderByIdDesc(request.appointmentId())
+                        .orElseThrow(() -> new IllegalArgumentException("ยังไม่มีการเช็คอินสำหรับนัดหมายนี้"));
+        Patient usingPatient = request.patientId() != null
+                ? patients.findById(request.patientId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วย"))
+                : appointmentVisit != null ? appointmentVisit.getPatient() : course.getPurchaserPatient();
+        if (appointmentVisit != null && !appointmentVisit.getPatient().getId().equals(usingPatient.getId())) {
+            throw new IllegalArgumentException("ผู้ใช้สิทธิ์ต้องเป็นผู้ป่วยคนเดียวกับของ Visit");
         }
-
-        UseRequest first = requests.get(0);
-        if (first == null || first.appointmentId() == null) {
-            throw new IllegalArgumentException("ต้องสร้างนัด NEW หรือ CURRENT ก่อนใช้สิทธิ์คอร์ส และส่ง appointmentId มาด้วย");
-        }
-
-        for (UseRequest item : requests) {
-            if (item == null || item.coursePurchaseId() == null) {
-                throw new IllegalArgumentException("ต้องระบุคอร์สทุกรายการ");
-            }
-            if (!java.util.Objects.equals(first.appointmentId(), item.appointmentId())
-                    || !java.util.Objects.equals(first.patientId(), item.patientId())
-                    || !java.util.Objects.equals(first.treatingStaffId(), item.treatingStaffId())) {
-                throw new IllegalArgumentException("รายการใน Visit เดียวกันต้องระบุนัด ผู้ป่วย และผู้รักษาตรงกัน");
-            }
-        }
-
-        List<CourseUsageBatchService.Item> items = requests.stream()
-                .map(item -> new CourseUsageBatchService.Item(
-                        item.coursePurchaseId(),
-                        item.note(),
-                        item.treatmentId()))
-                .toList();
-
-        var lockedCourses = usageBatchService.lockCourses(items);
-        Course firstCourse = lockedCourses.get(first.coursePurchaseId());
-        Branch branch = firstCourse.getBranch();
-        branchAccess.requireAccess(branch, "ใช้สิทธิ์คอร์สได้เฉพาะสาขาตัวเอง รายการต่างสาขาดูได้อย่างเดียว");
-
-        for (Course course : lockedCourses.values()) {
-            if (!branch.getId().equals(course.getBranch().getId())) {
-                throw new IllegalArgumentException("คอร์สใน Visit เดียวกันต้องอยู่สาขาเดียวกัน");
-            }
-        }
-
-        Staff treating = first.treatingStaffId() == null
-                ? firstCourse.getOwnerStaff()
-                : staffById(first.treatingStaffId());
-
-        Patient usingPatient = first.patientId() == null
-                ? firstCourse.getPurchaserPatient()
-                : patients.findById(first.patientId())
-                .orElseThrow(() ->
-                        new IllegalArgumentException("ไม่พบผู้ป่วย"));
-
-        PatientVisit visit = visitService.createForService(
-                first.appointmentId(), usingPatient, branch,
-                treating, actor.currentId());
-
-        usageBatchService.recordForVisit(lockedCourses, items, visit, ClinicTime.now(), actor.currentId());
-        visitService.completeForService(visit.getId(), first.appointmentId(), actor.currentId());
-
-        return lockedCourses.values().stream()
-                .map(course -> toResponse(course, usingPatient.getId()))
-                .toList();
+        PatientVisit visit = appointmentVisit != null ? appointmentVisit : walkInVisit(course, usingPatient, treating);
+        var treatment = request.treatmentId() == null ? null : treatments.findById(request.treatmentId())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบ Treatment"));
+        usageService.use(course, visit, usingPatient, treating, ClinicTime.today(), treatment, actor.currentId());
+        return toResponse(courses.findById(course.getId()).orElseThrow(), usingPatient.getId());
     }
 
     @PostMapping("/api/course-movements/{movementId}/reverse")
@@ -348,15 +258,11 @@ public class CoursePurchaseController {
         CourseLedger original = ledger.findById(movementId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการ"));
         branchAccess.requireAccess(original.getCourse().getBranch(), "ยกเลิกได้เฉพาะรายการของสาขาตัวเอง รายการต่างสาขาดูรายละเอียดได้อย่างเดียว");
-        Permission permission = permissions.requireAllowed("COURSE_REVERSE", actor.currentId());
+        Permission permission = permissions.getOrCreate("COURSE_REVERSE", "Course", actor.currentId());
         switch (original.getEntryType()) {
-            case Treatment -> usageService.reverse(original.getVisitUsage(), permission,
-                    request.reasonCode() == null ? com.sabyeguyz.clinicv2.enums.ReasonCode.Other : request.reasonCode(),
-                    request.reason(), actor.currentId());
+            case Treatment -> usageService.reverse(original.getVisitUsage(), permission, request.reason(), actor.currentId());
             case TransferOut, TransferIn ->
-                    transferService.reverse(original.getTransfer(), permission,
-                            request.reasonCode() == null ? com.sabyeguyz.clinicv2.enums.ReasonCode.Other : request.reasonCode(),
-                            request.reason(), actor.currentId());
+                    transferService.reverse(original.getTransfer(), permission, request.reason(), actor.currentId());
             default -> throw new IllegalArgumentException("ไม่รองรับการย้อนรายการประเภท " + original.getEntryType());
         }
         Course course = findCourse(original.getCourse().getId());
@@ -373,11 +279,9 @@ public class CoursePurchaseController {
         if (request.reason() == null || request.reason().isBlank()) {
             throw new IllegalArgumentException("ต้องระบุเหตุผลที่ยกเลิก");
         }
-        Permission permission = permissions.requireAllowed("SALE_CANCEL", actor.currentId());
+        Permission permission = permissions.getOrCreate("SALE_CANCEL", "Sale", actor.currentId());
         // voids the sale line, cuts the unused rights and marks the course Cancelled
-        cancellations.voidSale(course.getSaleTransaction(), permission,
-                request.reasonCode() == null ? com.sabyeguyz.clinicv2.enums.ReasonCode.Other : request.reasonCode(),
-                request.reason(), actor.currentId());
+        cancellations.voidSale(course.getSaleTransaction(), permission, request.reason(), actor.currentId());
         Course saved = findCourse(id);
         if (saved.getCourseStatus() != CourseStatus.Cancelled) {
             saved.setCourseStatus(CourseStatus.Cancelled); // every right was already used: nothing to cut, but the sale is void
@@ -385,9 +289,17 @@ public class CoursePurchaseController {
             saved.setCourseUpdateBy(actor.currentId());
             saved = courses.save(saved);
         }
-        audit.record("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Active", "Cancelled: " + request.reason(),
+        audit.recordChange("course", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("course_status", "Active"),
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("course_status", "Cancelled", "reason", request.reason()),
                 actor.currentId());
         return toResponse(saved, saved.getPurchaserPatient().getId());
+    }
+
+    private PatientVisit walkInVisit(Course course, Patient usingPatient, Staff treating) {
+        PatientVisit visit = visitService.checkInWalkIn(usingPatient, course.getReceipt().getBranch(),
+                treating, actor.currentId());
+        return visitService.complete(visit.getId(), actor.currentId());
     }
 
     private static String apiMovementType(CourseLedgerEntryType type) {
@@ -427,18 +339,16 @@ public class CoursePurchaseController {
         boolean expired = course.getExpiryDate().isBefore(ClinicTime.today());
         boolean usable = !expired && course.getCourseStatus() == CourseStatus.Active && remaining > 0;
         Patient patient = course.getPurchaserPatient();
-        PatientSummary purchaser = new PatientSummary(patient.getId(), patient.getPatientHn(),
-                patient.getPatientFname() + " " + patient.getPatientLname());
-        boolean manager = branchAccess.isManager();
-        return new Response(course.getId(), purchaser, purchaser,
+        return new Response(course.getId(), new PatientSummary(patient.getId(), patient.getPatientHn(),
+                patient.getPatientFname() + " " + patient.getPatientLname()),
                 course.getReceipt().getBranch().getBranchCode(),
                 new CourseSummary(course.getService().getId(), course.getCourseNo(), course.getCourseName()),
-                course.getCoursePrice(), course.getTotalVisits(), 0,
+                course.getCoursePrice(), course.getPaidVisits(), course.getBonusVisits() == null ? 0 : course.getBonusVisits(),
                 course.getTotalVisits(),
                 course.getVisitsUsed(), (int) remaining,
                 course.getCourseCreateAt(), course.getExpiryDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
                 expired, usable, course.getCourseStatus().name().toUpperCase(java.util.Locale.ROOT), course.getCommissionStatus().name().toUpperCase(java.util.Locale.ROOT),
-                manager ? course.getLockedCommissionRate() : null, manager ? course.getTotalCourseCommissionPool() : null,
-                manager ? course.getCommissionAllocationPerVisit() : null, course.getReceipt().getId());
+                course.getLockedCommissionRate(), course.getTotalCourseCommissionPool(),
+                course.getCommissionAllocationPerVisit(), course.getReceipt().getId());
     }
 }

@@ -1,37 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import drawerLogo from '@/assets/sabyeguyz-logo-clean.png'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { branchApi, clearSession } from '@/api/client'
-import {
-  managerBranches,
-  selectedManagerBranch,
-  setManagerBranches,
-  setSelectedManagerBranch,
-} from '@/features/staff/data/managerBranch'
+import logo from '@/assets/sabyeguyz-logo.png'
+import drawerLogo from '@/assets/sabyeguyz-logo2.png'
+import { clearSession } from '@/api/client'
 const profileOpen = ref(false)
-const profileRef = ref<HTMLElement | null>(null)
-const profileTrigger = ref<HTMLButtonElement | null>(null)
-function closeProfileOutside(event: Event) {
-  if (event.target instanceof Node && !profileRef.value?.contains(event.target))
-    profileOpen.value = false
-}
-function closeProfileOnEscape(event: KeyboardEvent) {
-  if (event.key === 'Escape' && profileOpen.value) {
-    profileOpen.value = false
-    profileTrigger.value?.focus()
-  }
-}
 const menuOpen = ref(false)
 const route = useRoute()
 const navRef = ref<HTMLElement | null>(null)
 const pillReady = ref(false)
-const pillStyle = ref({
-  width: '0px',
-  transform: 'translateX(0px)',
-  opacity: '0',
-})
+const pillStyle = ref({ width: '0px', transform: 'translateX(0px)', opacity: '0' })
 let readyFrame: number | undefined
 let routeFrame: number | undefined
 let settleFrame: number | undefined
@@ -41,59 +19,52 @@ const storedUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
 } | null
 const role = ref(storedUser?.role === 'THERAPIST' ? 'therapist' : 'manager')
 const isManager = computed(() => role.value === 'manager')
-const activeManagerBranch = computed(() => selectedManagerBranch())
-const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/appointments'))
+const homePath = computed(() => (isManager.value ? '/staff/dashboard' : '/staff/patients'))
 const roleLabel = computed(() => (isManager.value ? 'Manager' : 'นักกายภาพบำบัด'))
-const profileBranchLabel = computed(() => storedUser?.branchName || 'สาขาที่ได้รับมอบหมาย')
+const branchLabel = computed(() =>
+  isManager.value ? 'เข้าถึงทุกสาขา' : (storedUser?.branchName ?? 'ยังไม่ได้กำหนดสาขา'),
+)
 const navItems = computed(() =>
   isManager.value
     ? [
         { to: '/staff/dashboard', label: 'แดชบอร์ด' },
-        { to: '/staff/appointments', label: 'นัดหมาย' },
-        { to: '/staff/services', label: 'ชำระเงิน' },
         { to: '/staff/patients', label: 'ผู้ป่วย' },
-        { to: '/staff/transactions', label: 'รายการธุรกรรม' },
-        { to: '/staff/commission', label: 'คอมมิชชั่น' },
+        { to: '/staff/appointments', label: 'นัดหมาย' },
+        { to: '/staff/services', label: 'บริการ' },
+        { to: '/staff/transactions', label: 'ธุรกรรม' },
+        { to: '/staff/refunds', label: 'คืนเงิน' },
+        { to: '/staff/commission', label: 'คอมมิชชัน' },
+        { to: '/staff/personnel', label: 'บุคลากร' },
         { to: '/staff/reports', label: 'รายงาน' },
-        { to: '/staff/settings', label: 'การตั้งค่า' },
+        { to: '/staff/calendar', label: 'ปฏิทิน Google' },
+        { to: '/staff/settings', label: 'ตั้งค่า' },
       ]
     : [
-        { to: '/staff/appointments', label: 'นัดหมาย' },
-        { to: '/staff/services', label: 'ชำระเงิน' },
         { to: '/staff/patients', label: 'ผู้ป่วย' },
+        { to: '/staff/appointments', label: 'นัดหมาย' },
+        { to: '/staff/services', label: 'บริการ' },
         { to: '/staff/transactions', label: 'ธุรกรรม' },
         { to: '/staff/compensation', label: 'คอมมิชชัน' },
       ],
 )
-const hasMatchingNavItem = computed(() =>
-  navItems.value.some((item) => route.path === item.to || route.path.startsWith(`${item.to}/`)),
-)
 function movePill(target: HTMLElement | null) {
   if (!target || !navRef.value) return
+  const targetBox = target.getBoundingClientRect()
   navRef.value.querySelectorAll<HTMLElement>('a').forEach((link) => {
     link.classList.remove('pill-target')
   })
   target.classList.add('pill-target')
-  const targetBox = target.getBoundingClientRect()
-  const navBox = navRef.value.getBoundingClientRect()
-  const pillPadding = 6
-  const pillLeft = targetBox.left - navBox.left + navRef.value.scrollLeft - navRef.value.clientLeft
   pillStyle.value = {
-    width: `${targetBox.width + pillPadding * 2}px`,
-    transform: `translateX(${pillLeft - pillPadding}px)`,
+    width: `${targetBox.width}px`,
+    // The pill is an absolutely positioned child of the scrollable nav. Its
+    // offset is already in that same coordinate space, unlike viewport rects
+    // which can be stale while the centered menu is settling after a refresh.
+    transform: `translateX(${target.offsetLeft}px)`,
     opacity: '1',
   }
 }
-let navResizeObserver: ResizeObserver | null = null
 function movePillToActive() {
   if (!navRef.value) return
-  if (!hasMatchingNavItem.value) {
-    navRef.value.querySelectorAll<HTMLElement>('a').forEach((link) => {
-      link.classList.remove('pill-target')
-    })
-    pillStyle.value = { ...pillStyle.value, opacity: '0' }
-    return
-  }
   const links = [...navRef.value.querySelectorAll<HTMLAnchorElement>('a')]
   const activePath = route.path.startsWith('/staff/courses') ? '/staff/services' : route.path
   const matchingLink = links
@@ -113,27 +84,17 @@ function positionPillWithoutAnimation() {
   })
 }
 onMounted(() => {
-  document.addEventListener('pointerdown', closeProfileOutside)
-  document.addEventListener('focusin', closeProfileOutside)
-  document.addEventListener('keydown', closeProfileOnEscape)
   positionPillWithoutAnimation()
+  // Centered Manager tabs move slightly after the browser applies loaded fonts.
+  // Measure again after layout settles so the pill never remains at its
+  // pre-refresh position.
   requestAnimationFrame(() => {
     settleFrame = requestAnimationFrame(positionPillWithoutAnimation)
   })
   document.fonts?.ready.then(positionPillWithoutAnimation)
-  if (typeof ResizeObserver !== 'undefined' && navRef.value) {
-    navResizeObserver = new ResizeObserver(positionPillWithoutAnimation)
-    navResizeObserver.observe(navRef.value)
-    navRef.value.querySelectorAll('a').forEach((link) => navResizeObserver?.observe(link))
-  }
   window.addEventListener('resize', positionPillWithoutAnimation)
-  if (isManager.value) void loadManagerBranches()
 })
 onBeforeUnmount(() => {
-  navResizeObserver?.disconnect()
-  document.removeEventListener('pointerdown', closeProfileOutside)
-  document.removeEventListener('focusin', closeProfileOutside)
-  document.removeEventListener('keydown', closeProfileOnEscape)
   window.removeEventListener('resize', positionPillWithoutAnimation)
   if (readyFrame) cancelAnimationFrame(readyFrame)
   if (routeFrame) cancelAnimationFrame(routeFrame)
@@ -143,7 +104,6 @@ watch(
   () => route.fullPath,
   () => {
     menuOpen.value = false
-    profileOpen.value = false
     nextTick(() => {
       if (routeFrame) cancelAnimationFrame(routeFrame)
       routeFrame = requestAnimationFrame(movePillToActive)
@@ -154,48 +114,12 @@ function signOut() {
   clearSession()
   localStorage.removeItem('staffRole')
   localStorage.removeItem('staffUsername')
-  localStorage.removeItem('managerSelectedBranch')
-  document.body.classList.remove('therapist-ui')
-}
-async function loadManagerBranches() {
-  try {
-    const branches = (await branchApi.list())
-      .filter((branch) => branch.active)
-      .sort((first, second) =>
-        first.code.localeCompare(second.code, 'th-TH', {
-          numeric: true,
-          sensitivity: 'base',
-        }),
-      )
-      .map((branch) => ({
-        code: branch.code,
-        name: branch.name,
-        address: branch.address,
-      }))
-    setManagerBranches(branches)
-    window.dispatchEvent(new CustomEvent('manager-branch-changed'))
-  } catch {}
-}
-function switchManagerBranch(code: string) {
-  const branch = managerBranches.value.find((item) => item.code === code)
-  if (!branch) return
-  setSelectedManagerBranch(branch)
-  window.dispatchEvent(new CustomEvent('manager-branch-changed'))
-}
-function branchLabel(name: string) {
-  return name.replace(/^สาขา\s*/, '')
 }
 </script>
 
 <template>
-  <header
-    class="staff-header"
-    :class="{
-      'manager-header': isManager,
-      'formula-route': route.path === '/staff/commission/formula',
-    }"
-  >
-    <RouterLink class="brand" :to="homePath"><img :src="drawerLogo" alt="SaByeGuyz" /></RouterLink>
+  <header class="staff-header" :class="{ 'manager-header': isManager }">
+    <RouterLink class="brand" :to="homePath"><img :src="logo" alt="SaByeGuyz" /></RouterLink>
     <button
       class="menu-toggle"
       type="button"
@@ -220,27 +144,8 @@ function branchLabel(name: string) {
         {{ item.label }}
       </RouterLink>
     </nav>
-    <div v-if="isManager" class="branch-switcher">
-      <FilterDropdown
-        class="manager-branch-filter"
-        :model-value="activeManagerBranch?.code ?? ''"
-        :options="
-          managerBranches.map((branch) => ({
-            value: branch.code,
-            label: branchLabel(branch.name),
-          }))
-        "
-        default-label="เลือกสาขา"
-        label="เลือกสาขา"
-        :clear-on-reselect="false"
-        hide-default-option
-        @update:model-value="switchManagerBranch"
-      />
-    </div>
-    <div ref="profileRef" class="profile-wrap">
+    <div class="profile-wrap">
       <button
-        ref="profileTrigger"
-        type="button"
         class="profile-trigger"
         aria-label="เปิดเมนูโปรไฟล์"
         :aria-expanded="profileOpen"
@@ -254,7 +159,7 @@ function branchLabel(name: string) {
       <div v-if="profileOpen" class="profile-menu">
         <div>
           <small>โปรไฟล์ผู้ใช้งาน</small><b>{{ roleLabel }}</b
-          ><span>{{ isManager ? 'เข้าถึงทุกสาขา' : profileBranchLabel }}</span>
+          ><span>{{ branchLabel }}</span>
         </div>
         <RouterLink to="/" @click="signOut">ออกจากระบบ</RouterLink>
       </div>
@@ -270,4 +175,4 @@ function branchLabel(name: string) {
 </template>
 
 <style scoped src="../styles/staff-header.css"></style>
-<style src="../styles/staff-header-theme.css"></style>
+<style src="../styles/therapist.css"></style>

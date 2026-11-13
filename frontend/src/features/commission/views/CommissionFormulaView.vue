@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { commissionApi, type CommissionFormula } from '@/api/client'
 
+// How the commission and the treatment fee are worked out, for anyone to read. The way the pay is calculated is fixed by the
+// system; the Manager sets only the ranges and the rates of the tiers (on the "ตั้งค่า Tier" page).
 const formula = ref<CommissionFormula | null>(null)
 const loading = ref(true)
 const errorMessage = ref('')
@@ -11,11 +13,9 @@ const baht = (value: number) =>
   `฿${Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const percent = (rate: number) => `${Math.round(rate * 10000) / 100}%`
 const thaiDate = (value: string) =>
-  new Intl.DateTimeFormat('th-TH', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(`${value}T12:00:00`))
+  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+    new Date(`${value}T12:00:00`),
+  )
 const feeText = computed(() => {
   const fee = formula.value?.treatmentFee
   if (!fee) return null
@@ -42,41 +42,35 @@ onMounted(async () => {
       <header class="formula-title">
         <h1>สูตรคำนวณค่าตอบแทน</h1>
         <p>
-          วิธีคำนวณค่าคอมมิชชันคอร์สและค่ามือที่ใช้อยู่ตอนนี้ วิธีคำนวณกำหนดโดยระบบ
-          ส่วนช่วงยอดขายและอัตราของ Tier Manager เป็นผู้กำหนด
+          วิธีคำนวณค่าคอมมิชชันคอร์สและค่ามือที่ใช้อยู่ตอนนี้ วิธีคำนวณกำหนดโดยระบบ ส่วนช่วงยอดขายและอัตราของ Tier Manager เป็นผู้กำหนด
         </p>
       </header>
 
-      <p v-if="errorMessage" role="alert" class="formula-error">
-        {{ errorMessage }}
-      </p>
+      <p v-if="errorMessage" role="alert" class="formula-error">{{ errorMessage }}</p>
       <p v-else-if="loading">กำลังโหลดสูตรคำนวณ...</p>
 
       <template v-else-if="formula">
         <section class="formula-card" aria-labelledby="formula-owner">
           <h2 id="formula-owner">1. ค่าคอมมิชชันของคอร์ส (เจ้าของคอร์ส)</h2>
           <ul>
+            <li>เจ้าของคอร์สคือนักกายภาพผู้ขายคอร์ส ค่าคอมมิชชันของคอร์สเป็นของเจ้าของคอร์สเท่านั้น</li>
             <li>
-              เจ้าของคอร์สคือนักกายภาพผู้ขายคอร์ส ค่าคอมมิชชันของคอร์สเป็นของเจ้าของคอร์สเท่านั้น
-            </li>
-            <li>
-              อัตราดูจาก
-              <b>ยอดขายคอร์สสุทธิรวมของเจ้าของคอร์สในเดือนที่ขาย</b>
-              (หักคืนเงินที่คืนแล้วออก) ตกอยู่ในช่วง Tier ไหนใช้อัตราของ Tier นั้น
+              อัตราดูจาก <b>ยอดขายคอร์สสุทธิรวมของเจ้าของคอร์สในเดือนที่ขาย</b> (หักคืนเงินที่คืนแล้วออก)
+              ตกอยู่ในช่วง Tier ไหนใช้อัตราของ Tier นั้น
             </li>
             <li>
               <b>อัตราถูกล็อกเมื่อปิดยอดเดือนที่ขาย</b> ก่อนปิดยอดจะแสดงเป็น “รอคำนวณ” ไม่นับเป็น 0
             </li>
             <li>
-              ค่าคอมมิชชันรวมของคอร์ส (pool) = ราคาคอร์สสุทธิ × อัตรา แบ่งให้แต่ละครั้งที่ใช้เท่าๆ
-              กัน เศษสตางค์ไปรวมที่ครั้งสุดท้าย
+              ค่าคอมมิชชันรวมของคอร์ส (pool) = ราคาคอร์สสุทธิ × อัตรา แบ่งให้แต่ละครั้งที่ใช้เท่าๆ กัน
+              เศษสตางค์ไปรวมที่ครั้งสุดท้าย
             </li>
           </ul>
 
           <template v-if="formula.scheme">
             <h3>
-              Tier ที่ใช้อยู่ ({{ formula.scheme.name }} เวอร์ชัน
-              {{ formula.scheme.version }} ตั้งแต่ {{ thaiDate(formula.scheme.effectiveFrom) }})
+              Tier ที่ใช้อยู่ ({{ formula.scheme.name }} เวอร์ชัน {{ formula.scheme.version }}
+              ตั้งแต่ {{ thaiDate(formula.scheme.effectiveFrom) }})
             </h3>
             <table class="formula-table">
               <thead>
@@ -122,8 +116,7 @@ onMounted(async () => {
             <li>ค่ามือไม่ขึ้นกับ Tier และไม่ต้องรอปิดยอดเดือน</li>
           </ul>
           <p v-if="feeText" class="formula-fee">
-            กฎค่ามือที่ใช้อยู่: <b>{{ feeText }}</b> (ตั้งแต่
-            {{ thaiDate(formula.treatmentFee!.effectiveFrom) }})
+            กฎค่ามือที่ใช้อยู่: <b>{{ feeText }}</b> (ตั้งแต่ {{ thaiDate(formula.treatmentFee!.effectiveFrom) }})
           </p>
           <p v-else class="formula-empty">ยังไม่มีกฎค่ามือที่ใช้อยู่ในวันนี้</p>
         </section>
@@ -131,12 +124,8 @@ onMounted(async () => {
         <section class="formula-card" aria-labelledby="formula-payout">
           <h2 id="formula-payout">3. การจ่าย</h2>
           <ul>
-            <li>
-              ยอดรวมของแต่ละเดือน = ค่าคอมมิชชันคอร์ส + ค่ามือรายครั้ง + ค่ามือรักษาแทน ± ใบปรับยอด
-            </li>
-            <li>
-              งวดจ่ายต้องปิดงวดก่อน แล้ว Manager จึงยืนยันจ่าย (บันทึกวันที่จ่ายและเลขที่อ้างอิง)
-            </li>
+            <li>ยอดรวมของแต่ละเดือน = ค่าคอมมิชชันคอร์ส + ค่ามือรายครั้ง + ค่ามือรักษาแทน ± ใบปรับยอด</li>
+            <li>งวดจ่ายต้องปิดงวดก่อน แล้ว Manager จึงยืนยันจ่าย (บันทึกวันที่จ่ายและเลขที่อ้างอิง)</li>
             <li>
               เมื่อจ่ายแล้วแก้ย้อนหลังไม่ได้ หากต้องแก้ ให้ทำใบปรับยอดในงวดถัดไป
               การหักไม่เกินค่าตอบแทนที่ได้ในงวด ส่วนที่เหลือยกไปงวดถัดไป

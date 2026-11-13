@@ -28,12 +28,8 @@ public class CourseRefundItem {
     @Column(name = "refund_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal refundAmount;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "rights_cancellation_item_id")
-    private CourseRefundItem rightsCancellationItem;
-
-    @Column(name = "cancelled_visits")
-    private Integer cancelledVisits;
+    @Column(name = "cancelled_visits", nullable = false)
+    private int cancelledVisits;
 
     public CourseRefundItem() {}
 
@@ -44,14 +40,6 @@ public class CourseRefundItem {
     public void setCourse(Course course) { this.course = course; }
     public BigDecimal getRefundAmount() { return refundAmount; }
     public void setRefundAmount(BigDecimal refundAmount) { this.refundAmount = refundAmount; }
-    public Integer getCancelledVisits() { return cancelledVisits; }
-    public void setCancelledVisits(Integer cancelledVisits) { this.cancelledVisits = cancelledVisits; }
-
-    public CourseRefundItem getRightsCancellationItem() {
-        return rightsCancellationItem;
-    }
-
-    public void setRightsCancellationItem(CourseRefundItem item) {
-        this.rightsCancellationItem = item;
-    }
+    public int getCancelledVisits() { return cancelledVisits; }
+    public void setCancelledVisits(int cancelledVisits) { this.cancelledVisits = cancelledVisits; }
 }

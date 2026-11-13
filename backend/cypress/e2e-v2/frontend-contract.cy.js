@@ -3,12 +3,9 @@ describe('v2 frontend contract gaps', () => {
   it('lists course usage transactions with their reversal status', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/course-purchases', {
-        patientId: patient.id,
-        courseId: this.fixtures.courseId,
-        branchCode: '01',
-        paymentLabelCode: 'FULL',
+        patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01',
       }).then(({ body: purchase }) => {
-        cy.useCourseSession(purchase.id).its('status').should('equal', 200)
+        cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('equal', 200)
         cy.api('GET', '/api/course-usages').then(({ status, body }) => {
           expect(status).to.equal(200)
           expect(body).to.have.length(1)

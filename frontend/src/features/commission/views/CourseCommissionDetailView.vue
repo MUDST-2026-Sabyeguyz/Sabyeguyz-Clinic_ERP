@@ -11,9 +11,9 @@ const ledger = ref<
     patient: string
     owner: string
     treating: string
-    gross: number | null
-    fee: number | null
-    net: number | null
+    gross: number
+    fee: number
+    net: number
   }>
 >([])
 const purchase = ref<{
@@ -24,15 +24,14 @@ const purchase = ref<{
   used: number
   remaining: number
   commissionStatus?: string
-  lockedCommissionRate?: number | null
-  totalCourseCommissionPool?: number | null
-  commissionAllocationPerVisit?: number | null
+  lockedCommissionRate?: number
+  totalCourseCommissionPool?: number
+  commissionAllocationPerVisit?: number
 } | null>(null)
 onMounted(async () => {
   const id = Number(courseId.value)
   if (!Number.isNaN(id)) {
     try {
-      // โหลด ledger ของคอร์สเพื่อดูการจัดสรรราย Visit และยอดคงค้าง
       const data = await courseApi.ledger(id)
       purchase.value = data.purchase
       ledger.value = (data.allocations || []).map((item) => ({
@@ -40,40 +39,21 @@ onMounted(async () => {
         patient: data.purchase.patient.fullName,
         owner: '—',
         treating: '—',
-        gross: item.gross ?? null,
-        fee: item.fee ?? null,
-        net: item.ownerNet ?? null,
+        gross: item.gross,
+        fee: item.fee,
+        net: item.ownerNet,
       }))
     } catch {
-      /* ข้าม ID เก่าที่ไม่ใช่เลขคอร์ส */
+      /* invalid legacy display id */
     }
   }
 })
-// ถ้ามีแถวใดไม่ทราบยอด จะไม่สรุปยอดรวมเป็นตัวเลขที่ทำให้เข้าใจผิด
-const grossAllocated = computed(() =>
-  ledger.value.some((item) => item.gross === null)
-    ? null
-    : ledger.value.reduce((sum, item) => sum + (item.gross ?? 0), 0),
+const grossAllocated = computed(() => ledger.value.reduce((sum, item) => sum + item.gross, 0))
+const treatmentFees = computed(() => ledger.value.reduce((sum, item) => sum + item.fee, 0))
+const ownerNetReleased = computed(() => ledger.value.reduce((sum, item) => sum + item.net, 0))
+const outstandingPool = computed(() =>
+  Math.max(0, Number(purchase.value?.totalCourseCommissionPool || 0) - grossAllocated.value),
 )
-const treatmentFees = computed(() =>
-  ledger.value.some((item) => item.fee === null)
-    ? null
-    : ledger.value.reduce((sum, item) => sum + (item.fee ?? 0), 0),
-)
-const ownerNetReleased = computed(() =>
-  ledger.value.some((item) => item.net === null)
-    ? null
-    : ledger.value.reduce((sum, item) => sum + (item.net ?? 0), 0),
-)
-const outstandingPool = computed(() => {
-  const pool = purchase.value?.totalCourseCommissionPool
-  if (pool == null || grossAllocated.value == null) return null
-  return Math.max(0, Number(pool) - grossAllocated.value)
-})
-const money = (value: number | null | undefined) =>
-  value == null || !Number.isFinite(Number(value))
-    ? '—'
-    : `฿${Number(value).toLocaleString('th-TH')}`
 </script>
 
 <template>
@@ -87,7 +67,7 @@ const money = (value: number | null | undefined) =>
       </section>
       <nav class="commission-nav">
         <RouterLink to="/staff/commission">ภาพรวม</RouterLink
-        ><RouterLink to="/staff/settings/commission-tiers">กฎค่าคอมมิชชัน</RouterLink
+        ><RouterLink to="/staff/commission/tiers">Commission Tier</RouterLink
         ><RouterLink to="/staff/commission/closing">ปิดรอบรายเดือน</RouterLink>
       </nav>
       <section class="staff-panel commission-page-panel">
@@ -97,7 +77,7 @@ const money = (value: number | null | undefined) =>
             <h2>{{ courseId }}</h2>
             <p class="muted-copy">วันที่ซื้อ {{ purchase?.purchasedAt || '—' }}</p>
           </div>
-          <span class="status locked">{{ purchase?.lockedCommissionRate == null ? 'รอปิดยอดเดือนที่ขาย' : 'ล็อกอัตราแล้ว' }}</span>
+          <span class="status locked">ล็อกอัตราแล้ว</span>
         </header>
         <div class="detail-grid">
           <article>
@@ -107,7 +87,7 @@ const money = (value: number | null | undefined) =>
             <span>แพ็กเกจ</span><b>{{ purchase?.course.name || '—' }}</b>
           </article>
           <article>
-            <span>ราคาคอร์ส</span><b>{{ money(purchase?.price) }}</b>
+            <span>ราคาคอร์ส</span><b>฿{{ Number(purchase?.price || 0).toLocaleString('th-TH') }}</b>
           </article>
           <article>
             <span>อัตราที่ล็อก</span
@@ -119,12 +99,12 @@ const money = (value: number | null | undefined) =>
           </article>
           <article>
             <span>Commission Pool</span
-            ><b>{{ money(purchase?.totalCourseCommissionPool) }}</b>
+            ><b>฿{{ Number(purchase?.totalCourseCommissionPool || 0).toLocaleString('th-TH') }}</b>
           </article>
           <article>
             <span>คอมมิชชันต่อ Visit</span
             ><b
-              >{{ money(purchase?.commissionAllocationPerVisit) }}</b
+              >฿{{ Number(purchase?.commissionAllocationPerVisit || 0).toLocaleString('th-TH') }}</b
             >
           </article>
           <article>
@@ -132,16 +112,16 @@ const money = (value: number | null | undefined) =>
             ><b>{{ purchase?.used || 0 }} / {{ purchase?.remaining || 0 }} Visits</b>
           </article>
           <article>
-            <span>Gross Allocated</span><b>{{ money(grossAllocated) }}</b>
+            <span>Gross Allocated</span><b>฿{{ grossAllocated.toLocaleString('th-TH') }}</b>
           </article>
           <article>
-            <span>ค่ารักษาแทน</span><b>{{ money(treatmentFees) }}</b>
+            <span>ค่ารักษาแทน</span><b>฿{{ treatmentFees.toLocaleString('th-TH') }}</b>
           </article>
           <article>
-            <span>Owner Net Released</span><b>{{ money(ownerNetReleased) }}</b>
+            <span>Owner Net Released</span><b>฿{{ ownerNetReleased.toLocaleString('th-TH') }}</b>
           </article>
           <article>
-            <span>Outstanding Pool</span><b>{{ money(outstandingPool) }}</b>
+            <span>Outstanding Pool</span><b>฿{{ outstandingPool.toLocaleString('th-TH') }}</b>
           </article>
         </div>
       </section>
@@ -172,10 +152,10 @@ const money = (value: number | null | undefined) =>
               <td>
                 <b>{{ item.treating }}</b>
               </td>
-              <td>{{ money(item.gross) }}</td>
-              <td>{{ money(item.fee) }}</td>
+              <td>฿{{ item.gross }}</td>
+              <td>฿{{ item.fee }}</td>
               <td>
-                <b>{{ money(item.net) }}</b>
+                <b>฿{{ item.net }}</b>
               </td>
             </tr>
           </tbody>

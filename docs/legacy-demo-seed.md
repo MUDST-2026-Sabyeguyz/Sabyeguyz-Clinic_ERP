@@ -1,7 +1,5 @@
 # Seed ข้อมูลตัวอย่างเดิม (develop) บน schema v2 ล่าสุด
 
-การโหลด seed ต้องเลือกโหมดชัดเจนบนฐานข้อมูล local/demo ที่แยกไว้เท่านั้น: กำหนด `CLINIC_DATABASE_KIND=local-demo` และเลือก `CLINIC_SEED_MODE=full` (หรือ `minimal`) ก่อนเริ่มระบบ. ค่าเริ่มต้น/ค่าที่ไม่ระบุคือ `none`; profile `prod` และ `production` ไม่อนุญาต demo seed. ห้ามใช้ seed mode กับฐานข้อมูลจริง. การเลือก `none` ไม่ลบข้อมูลตัวอย่างที่เคยโหลดแล้ว และฐานที่มี seed history ต้องเริ่มด้วย mode เดิม.
-
 ไฟล์: `backend/src/main/resources/db/seed_v2_legacy/V1100__legacy_demo_data.sql`
 
 ข้อมูลตัวอย่างเดิมคือ `clinic_erp_demo.sql` บน `develop` (ผู้ป่วย 160 ราย นัดหมาย 60 รายการ ใบเสร็จ 41 ใบ ฯลฯ)

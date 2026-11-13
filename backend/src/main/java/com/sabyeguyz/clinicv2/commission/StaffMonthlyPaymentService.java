@@ -6,7 +6,6 @@ import com.sabyeguyz.clinicv2.enums.ApplicationStatus;
 import com.sabyeguyz.clinicv2.enums.ClosingStatus;
 import com.sabyeguyz.clinicv2.enums.PaymentStatus;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -39,10 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class StaffMonthlyPaymentService {
-
-    @jakarta.persistence.PersistenceContext
-    private jakarta.persistence.EntityManager entityManager;
-
     private final StaffMonthlyPaymentRepository payments;
     private final CommissionAllocationLedgerRepository allocations;
     private final SingleVisitFeeLedgerRepository singleVisitFees;
@@ -95,49 +90,6 @@ public class StaffMonthlyPaymentService {
         return new Totals(pending > 0 ? null : owner, single, substitute, pending, ownerRows, feeRows, singleRows);
     }
 
-    /** Calculates monthly earnings assigned to the selected branch. */
-    @Transactional(readOnly = true)
-    public Totals totals(Long staffId, String month, Long branchId) {
-        if (branchId == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขาสำหรับคำนวณงวดจ่าย");
-        }
-
-        LocalDate from = first(month);
-        LocalDate to = YearMonth.parse(month).atEndOfMonth();
-
-        List<CommissionAllocationLedger> ownerRows =
-                allocations.findOwnerRowsForBranch(
-                        staffId, branchId, from, to);
-
-        List<CommissionAllocationLedger> feeRows =
-                allocations.findTreatingFeeRowsForBranch(
-                        staffId, branchId, from, to);
-
-        List<SingleVisitFeeLedger> singleRows =
-                singleVisitFees.findStaffFeesForBranch(
-                        staffId, branchId, from, to);
-
-        BigDecimal owner = ownerRows.stream()
-                .map(CommissionAllocationLedger::getOwnerNetCommission)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal substitute = feeRows.stream()
-                .map(CommissionAllocationLedger::getTreatmentFeeAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal single = singleRows.stream()
-                .map(SingleVisitFeeLedger::getFeeAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long pending = usages.countPendingOwnerNetForBranch(
-                staffId, branchId, from, to);
-
-        return new Totals(
-                pending > 0 ? null : owner,
-                single, substitute, pending,
-                ownerRows, feeRows, singleRows);
-    }
-
     /** Staff who have something to pay (or a payment already) in the month. */
     @Transactional(readOnly = true)
     public Set<Long> staffWithActivity(String month) {
@@ -161,19 +113,6 @@ public class StaffMonthlyPaymentService {
         return payments.findByPaymentMonthOrderByIdAsc(month);
     }
 
-    /** Lists payments for the selected branch and month. */
-    @Transactional(readOnly = true)
-    public List<StaffMonthlyPayment> ofMonth(String month, Long branchId) {
-        requireMonth(month);
-
-        if (branchId == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขา");
-        }
-
-        return payments.findByPaymentMonthAndBranchIdOrderByIdAsc(
-                month, branchId);
-    }
-
     @Transactional(readOnly = true)
     public List<StaffMonthlyPayment> ofStaff(Long staffId) {
         return payments.findByStaffIdOrderByPaymentMonthDesc(staffId);
@@ -184,86 +123,18 @@ public class StaffMonthlyPaymentService {
         return payments.findById(id).orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการสรุปจ่าย"));
     }
 
-    /** Locks the branch/month and reloads the latest payment state. */
-    private StaffMonthlyPayment findForUpdate(Long id) {
-        StaffMonthlyPayment payment = find(id);
-
-        if (payment.getBranch() == null) {
-            throw new IllegalStateException(
-                    "งวดจ่ายนี้ยังไม่มีสาขา ต้องตรวจข้อมูลก่อนทำรายการ");
-        }
-
-        closings.lockBranchMonth(
-                payment.getBranch().getId(),
-                payment.getPaymentMonth());
-
-        entityManager.refresh(
-                payment,
-                jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
-
-        return payment;
-    }
-
     @Transactional(readOnly = true)
     public List<AdjustmentApplication> applicationsOf(Long paymentId) {
         return applications.findByMonthlyPaymentIdOrderByIdAsc(paymentId);
     }
 
-    /** Finds staff with earnings, pending commission or payments in the branch. */
-    @Transactional(readOnly = true)
-    public Set<Long> staffWithActivity(String month, Long branchId) {
-        if (branchId == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขา");
-        }
-
-        LocalDate from = first(month);
-        LocalDate to = YearMonth.parse(month).atEndOfMonth();
-        Set<Long> ids = new TreeSet<>();
-
-        for (CommissionAllocationLedger row :
-                allocations.findActivityRowsForBranch(branchId, from, to)) {
-
-            if (branchId.equals(row.getCourse().getBranch().getId())) {
-                ids.add(row.getOwnerStaff().getId());
-            }
-
-            if (row.getTreatmentFeeAmount().signum() != 0
-                    && branchId.equals(
-                    row.getVisitUsage().getVisit().getBranch().getId())) {
-                ids.add(row.getTreatingStaff().getId());
-            }
-        }
-
-        singleVisitFees.findBranchFeesBetween(branchId, from, to)
-                .forEach(row -> ids.add(row.getStaff().getId()));
-
-        ids.addAll(usages.findPendingOwnerStaffIdsForBranch(
-                branchId, from, to));
-
-        payments.findByPaymentMonthAndBranchIdOrderByIdAsc(month, branchId)
-                .forEach(payment -> ids.add(payment.getStaff().getId()));
-
-        return ids;
-    }
-
-    /** Creates or finds a payment for one staff member, branch and month. */
+    /** The payment row of the staff and month, created Open when it does not exist. */
     @Transactional
-    public StaffMonthlyPayment openFor(
-            Staff person, String month, Branch branch, Long actorId) {
+    public StaffMonthlyPayment openFor(Staff person, String month, Long actorId) {
         requireMonth(month);
-
-        if (person == null) {
-            throw new IllegalArgumentException("ต้องระบุพนักงาน");
-        }
-        if (branch == null || branch.getId() == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขาของงวดจ่าย");
-        }
-
-        return payments.findByStaffIdAndPaymentMonthAndBranchId(
-                person.getId(), month, branch.getId()).orElseGet(() -> {
+        return payments.findByStaffIdAndPaymentMonth(person.getId(), month).orElseGet(() -> {
             StaffMonthlyPayment payment = new StaffMonthlyPayment();
             payment.setStaff(person);
-            payment.setBranch(branch);
             payment.setPaymentMonth(month);
             payment.setPaymentStatus(PaymentStatus.Open);
             payment.setStatusChangedBy(actorId);
@@ -272,36 +143,20 @@ public class StaffMonthlyPaymentService {
         });
     }
 
-    /** Creates or refreshes payments only for the selected branch and month. */
+    /** Creates or refreshes the Open payment of every staff member with something to pay in the month. */
     @Transactional
-    public List<StaffMonthlyPayment> prepare(
-            String month, Branch branch, Long actorId) {
+    public List<StaffMonthlyPayment> prepare(String month, Long actorId) {
         requireMonth(month);
-
-        if (branch == null || branch.getId() == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขาของงวดจ่าย");
-        }
-
-        closings.lockBranchMonth(branch.getId(), month);
-
-        Set<Long> ids = new LinkedHashSet<>(
-                staffWithActivity(month, branch.getId()));
-
+        Set<Long> ids = new LinkedHashSet<>(staffWithActivity(month));
         List<StaffMonthlyPayment> result = new ArrayList<>();
-
         for (Long id : ids) {
             Staff person = staff.findById(id).orElseThrow();
-
-            StaffMonthlyPayment payment =
-                    openFor(person, month, branch, actorId);
-
+            StaffMonthlyPayment payment = openFor(person, month, actorId);
             if (payment.getPaymentStatus() == PaymentStatus.Open) {
                 refresh(payment);
             }
-
             result.add(payment);
         }
-
         return result;
     }
 
@@ -309,25 +164,9 @@ public class StaffMonthlyPaymentService {
     @Transactional
     public StaffMonthlyPayment refresh(StaffMonthlyPayment payment) {
         requireStatus(payment, PaymentStatus.Open, "แก้ไข/คำนวณใหม่ได้เฉพาะงวดที่ยังเป็น Open");
-
-        Branch branch = payment.getBranch();
-        if (branch == null || branch.getId() == null) {
-            throw new IllegalStateException(
-                    "งวดจ่ายนี้ยังไม่มีสาขา ต้องตรวจข้อมูลก่อนคำนวณ");
-        }
-
-        Totals totals = totals(
-                payment.getStaff().getId(),
-                payment.getPaymentMonth(),
-                branch.getId());
+        Totals totals = totals(payment.getStaff().getId(), payment.getPaymentMonth());
         link(payment, totals);
-
-        payment.setClosing(
-                closings.findByClosingMonthAndStaffIdAndBranchId(
-                        payment.getPaymentMonth(),
-                        payment.getStaff().getId(),
-                        branch.getId()).orElse(null));
-
+        payment.setClosing(closings.findByClosingMonthAndStaffId(payment.getPaymentMonth(), payment.getStaff().getId()).orElse(null));
         payment.setCourseCommissionAmount(totals.courseCommission());
         payment.setSingleVisitFeeAmount(totals.singleVisitFee());
         payment.setSubstituteFeeAmount(totals.substituteFee());
@@ -342,15 +181,10 @@ public class StaffMonthlyPaymentService {
     /** Open -> Closed: needs every amount to be known; the deductions are limited to what was earned. */
     @Transactional
     public StaffMonthlyPayment close(Long paymentId, Long actorId) {
-        StaffMonthlyPayment payment = findForUpdate(paymentId);
+        StaffMonthlyPayment payment = find(paymentId);
         requireStatus(payment, PaymentStatus.Open, "ปิดงวดได้เฉพาะงวดที่เป็น Open");
         refresh(payment);
-
-        Totals totals = totals(
-                payment.getStaff().getId(),
-                payment.getPaymentMonth(),
-                payment.getBranch().getId());
-
+        Totals totals = totals(payment.getStaff().getId(), payment.getPaymentMonth());
         if (totals.courseCommission() == null) {
             throw new IllegalStateException("ยังปิดงวดไม่ได้: มี " + totals.pendingSessions()
                     + " ครั้งที่ยังไม่ทราบค่าคอมมิชชันเพราะเดือนขายคอร์สยังไม่ถูกปิดยอด ห้ามนับเป็น 0");
@@ -363,33 +197,10 @@ public class StaffMonthlyPaymentService {
         return payments.save(payment);
     }
 
-    /** Closes all Open payments for one branch and month atomically. */
-    @Transactional
-    public List<StaffMonthlyPayment> closeBranchMonth(
-            String month, Branch branch, Long actorId) {
-        requireMonth(month);
-
-        if (branch == null || branch.getId() == null) {
-            throw new IllegalArgumentException("ต้องระบุสาขาที่ต้องการปิดงวด");
-        }
-
-        List<StaffMonthlyPayment> branchPayments =
-                prepare(month, branch, actorId);
-
-        for (StaffMonthlyPayment payment : branchPayments) {
-            if (payment.getPaymentStatus() == PaymentStatus.Open) {
-                close(payment.getId(), actorId);
-            }
-        }
-
-        return payments.findByPaymentMonthAndBranchIdOrderByIdAsc(
-                month, branch.getId());
-    }
-
     /** Closed -> Open (before payment): the amounts are calculated again from the ledgers. */
     @Transactional
     public StaffMonthlyPayment reopen(Long paymentId, Long actorId) {
-        StaffMonthlyPayment payment = findForUpdate(paymentId);
+        StaffMonthlyPayment payment = find(paymentId);
         requireStatus(payment, PaymentStatus.Closed, "Reopen ได้เฉพาะงวดที่เป็น Closed (งวด Paid แล้วใช้ Adjustment)");
         payment.setPaymentStatus(PaymentStatus.Open);
         stamp(payment, actorId);
@@ -414,14 +225,9 @@ public class StaffMonthlyPaymentService {
         if (date.isAfter(today)) throw new IllegalArgumentException("วันที่จ่ายต้องไม่เป็นวันในอนาคต");
         String ref = reference == null || reference.isBlank() ? null : reference.trim();
         if (ref != null && ref.length() > 100) throw new IllegalArgumentException("เลขที่อ้างอิงยาวเกิน 100 ตัวอักษร");
-        StaffMonthlyPayment payment = findForUpdate(paymentId);
+        StaffMonthlyPayment payment = find(paymentId);
         requireStatus(payment, PaymentStatus.Closed, "ยืนยันจ่ายได้เฉพาะงวดที่เป็น Closed");
-        Branch branch = payment.getBranch();
-        if (branch == null || branch.getId() == null) {
-            throw new IllegalStateException(
-                    "งวดจ่ายนี้ยังไม่มีสาขา ต้องตรวจข้อมูลก่อนยืนยันจ่าย");
-        }
-        Totals totals = totals(payment.getStaff().getId(), payment.getPaymentMonth(), branch.getId());
+        Totals totals = totals(payment.getStaff().getId(), payment.getPaymentMonth());
         if (totals.courseCommission() == null) {
             throw new IllegalStateException("ยืนยันจ่ายไม่ได้: ยังมีค่าคอมมิชชันที่ไม่ทราบอัตรา ห้ามนับเป็น 0");
         }
@@ -437,7 +243,7 @@ public class StaffMonthlyPaymentService {
             if (row.getOwnerNetCommission().signum() != 0) saleMonths.add(row.getCourse().getSaleMonth());
         }
         for (String saleMonth : saleMonths) {
-            MonthlyCommissionClosing closing = closings.findByClosingMonthAndStaffIdAndBranchId(saleMonth, payment.getStaff().getId(), branch.getId())
+            MonthlyCommissionClosing closing = closings.findByClosingMonthAndStaffId(saleMonth, payment.getStaff().getId())
                     .orElseThrow(() -> new IllegalStateException("ไม่พบการปิดยอดของเดือนขาย " + saleMonth));
             closingService.finalizeClosing(closing, actorId);
         }
@@ -450,8 +256,7 @@ public class StaffMonthlyPaymentService {
                 settle(application.getAdjustment());
             }
         }
-        payment.setClosing(
-                closings.findByClosingMonthAndStaffIdAndBranchId(payment.getPaymentMonth(), payment.getStaff().getId(), branch.getId()).orElse(null));
+        payment.setClosing(closings.findByClosingMonthAndStaffId(payment.getPaymentMonth(), payment.getStaff().getId()).orElse(null));
         payment.setAdjustmentAmount(adjustment);
         payment.setNetPaymentAmount(earned.add(adjustment));
         payment.setPaymentStatus(PaymentStatus.Paid);
@@ -479,36 +284,18 @@ public class StaffMonthlyPaymentService {
 
     private void link(StaffMonthlyPayment payment, Totals totals) {
         for (CommissionAllocationLedger row : totals.ownerRows()) {
-            if (row.getOwnerMonthlyPayment() != null
-                    && !payment.getId().equals(
-                    row.getOwnerMonthlyPayment().getId())) {
-                throw new IllegalStateException(
-                        "คอม Owner ต้นทางผูกกับงวดจ่ายอื่นแล้ว ต้องตรวจข้อมูลก่อนจ่าย");
-            }
             if (row.getOwnerMonthlyPayment() == null) {
                 row.setOwnerMonthlyPayment(payment);
                 allocations.save(row);
             }
         }
         for (CommissionAllocationLedger row : totals.feeRows()) {
-            if (row.getTreatingMonthlyPayment() != null
-                    && !payment.getId().equals(
-                    row.getTreatingMonthlyPayment().getId())) {
-                throw new IllegalStateException(
-                        "ค่ามือรักษาแทนต้นทางผูกกับงวดจ่ายอื่นแล้ว ต้องตรวจข้อมูลก่อนจ่าย");
-            }
             if (row.getTreatingMonthlyPayment() == null) {
                 row.setTreatingMonthlyPayment(payment);
                 allocations.save(row);
             }
         }
         for (SingleVisitFeeLedger row : totals.singleRows()) {
-            if (row.getMonthlyPayment() != null
-                    && !payment.getId().equals(
-                    row.getMonthlyPayment().getId())) {
-                throw new IllegalStateException(
-                        "ค่ามือรายครั้งต้นทางผูกกับงวดจ่ายอื่นแล้ว ต้องตรวจข้อมูลก่อนจ่าย");
-            }
             if (row.getMonthlyPayment() == null) {
                 row.setMonthlyPayment(payment);
                 singleVisitFees.save(row);
