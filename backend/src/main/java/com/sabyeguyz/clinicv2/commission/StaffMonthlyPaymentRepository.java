@@ -7,10 +7,13 @@ public interface StaffMonthlyPaymentRepository extends JpaRepository<StaffMonthl
             Long branchId, com.sabyeguyz.clinicv2.enums.PaymentStatus status);
     java.util.List<StaffMonthlyPayment> findByBranchIdOrderByPaymentMonthDesc(Long branchId);
     java.util.Optional<StaffMonthlyPayment> findByStaffIdAndPaymentMonthAndBranchId(
-            Long staffId, String paymentMonth, Long branchId);
+            Long staffId,
+            String paymentMonth,
+            Long branchId);
 
     java.util.List<StaffMonthlyPayment> findByPaymentMonthAndBranchIdOrderByIdAsc(
-            String paymentMonth, Long branchId);
+            String paymentMonth,
+            Long branchId);
 
     java.util.List<StaffMonthlyPayment> findByPaymentMonthOrderByIdAsc(String paymentMonth);
 

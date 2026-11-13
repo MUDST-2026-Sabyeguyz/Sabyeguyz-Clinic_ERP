@@ -1,5 +1,9 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import static com.sabyeguyz.clinicv2.audit.AuditLogService.fields;
+
 import com.sabyeguyz.clinicv2.audit.AuditLogService;
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
@@ -7,10 +11,6 @@ import com.sabyeguyz.clinicv2.enums.AuditAction;
 import com.sabyeguyz.clinicv2.enums.ReasonCode;
 import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.role.PermissionService;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import static com.sabyeguyz.clinicv2.audit.AuditLogService.fields;
 
 @Service
 public class CoursePaymentVoidService {
@@ -40,8 +40,7 @@ public class CoursePaymentVoidService {
             PermissionService permissions,
             CurrentActor actor,
             AuditLogService audit,
-            PaymentLockService paymentLocks
-    ) {
+            PaymentLockService paymentLocks) {
         this.receipts = receipts;
         this.coursePayments = coursePayments;
         this.sales = sales;
@@ -59,15 +58,13 @@ public class CoursePaymentVoidService {
     public record Result(
             Long receiptId,
             Long paymentId,
-            Long cancellationId
-    ) {}
+            Long cancellationId) {}
 
     @Transactional
     public Result voidReceipt(
             Long receiptId,
             ReasonCode reasonCode,
-            String reason
-    ) {
+            String reason) {
         Long actorId = actor.requireId();
 
         if (receiptId == null) {
@@ -190,7 +187,6 @@ public class CoursePaymentVoidService {
         return new Result(
                 receiptId,
                 payment.getId(),
-                cancellation.getId()
-        );
+                cancellation.getId());
     }
 }

@@ -1,17 +1,19 @@
 package com.sabyeguyz.clinicv2.commission;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
 import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
 import com.sabyeguyz.clinicv2.enums.FeeType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
 
 /** Appendix A of Commission_System_Requirement_Dev: the audit trail of how each visit's gross allocation was split. */
 @Entity
@@ -109,48 +111,70 @@ public class CommissionAllocationLedger {
     public CommissionAllocationLedger() {}
 
     public Long getId() { return id; }
+
     public CourseVisitUsage getVisitUsage() { return visitUsage; }
     public void setVisitUsage(CourseVisitUsage visitUsage) { this.visitUsage = visitUsage; }
+
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+
     public Patient getPatient() { return patient; }
     public void setPatient(Patient patient) { this.patient = patient; }
+
     public Staff getOwnerStaff() { return ownerStaff; }
     public void setOwnerStaff(Staff ownerStaff) { this.ownerStaff = ownerStaff; }
+
     public Staff getTreatingStaff() { return treatingStaff; }
     public void setTreatingStaff(Staff treatingStaff) { this.treatingStaff = treatingStaff; }
+
     public LocalDate getVisitDate() { return visitDate; }
     public void setVisitDate(LocalDate visitDate) { this.visitDate = visitDate; }
+
     public TreatmentFeeRule getTreatmentFeeRule() { return treatmentFeeRule; }
     public void setTreatmentFeeRule(TreatmentFeeRule treatmentFeeRule) { this.treatmentFeeRule = treatmentFeeRule; }
+
     public FeeType getTreatmentFeeType() { return treatmentFeeType; }
     public void setTreatmentFeeType(FeeType treatmentFeeType) { this.treatmentFeeType = treatmentFeeType; }
+
     public BigDecimal getTreatmentFeeRateOrAmount() { return treatmentFeeRateOrAmount; }
     public void setTreatmentFeeRateOrAmount(BigDecimal treatmentFeeRateOrAmount) { this.treatmentFeeRateOrAmount = treatmentFeeRateOrAmount; }
+
     public BigDecimal getTreatmentFeeCalculationBase() { return treatmentFeeCalculationBase; }
     public void setTreatmentFeeCalculationBase(BigDecimal treatmentFeeCalculationBase) { this.treatmentFeeCalculationBase = treatmentFeeCalculationBase; }
+
     public BigDecimal getTreatmentFeeAmount() { return treatmentFeeAmount; }
     public void setTreatmentFeeAmount(BigDecimal treatmentFeeAmount) { this.treatmentFeeAmount = treatmentFeeAmount; }
+
     public BigDecimal getOwnerNetCommission() { return ownerNetCommission; }
     public void setOwnerNetCommission(BigDecimal ownerNetCommission) { this.ownerNetCommission = ownerNetCommission; }
+
     public CommissionAllocationLedger getReversesAllocation() { return reversesAllocation; }
     public void setReversesAllocation(CommissionAllocationLedger reversesAllocation) { this.reversesAllocation = reversesAllocation; }
+
     public int getAllocationVersion() { return allocationVersion; }
     public void setAllocationVersion(int allocationVersion) { this.allocationVersion = allocationVersion; }
+
     public Instant getAllocationCreateAt() { return allocationCreateAt; }
     public void setAllocationCreateAt(Instant allocationCreateAt) { this.allocationCreateAt = allocationCreateAt; }
+
     public Long getAllocationCreateBy() { return allocationCreateBy; }
     public void setAllocationCreateBy(Long allocationCreateBy) { this.allocationCreateBy = allocationCreateBy; }
+
     public Instant getAllocationUpdateAt() { return allocationUpdateAt; }
     public void setAllocationUpdateAt(Instant allocationUpdateAt) { this.allocationUpdateAt = allocationUpdateAt; }
+
     public Long getAllocationUpdateBy() { return allocationUpdateBy; }
     public void setAllocationUpdateBy(Long allocationUpdateBy) { this.allocationUpdateBy = allocationUpdateBy; }
+
     public AllocationEntryType getEntryType() { return entryType; }
     public void setEntryType(AllocationEntryType entryType) { this.entryType = entryType; }
+
     public StaffMonthlyPayment getOwnerMonthlyPayment() { return ownerMonthlyPayment; }
     public void setOwnerMonthlyPayment(StaffMonthlyPayment ownerMonthlyPayment) { this.ownerMonthlyPayment = ownerMonthlyPayment; }
+
     public StaffMonthlyPayment getTreatingMonthlyPayment() { return treatingMonthlyPayment; }
     public void setTreatingMonthlyPayment(StaffMonthlyPayment treatingMonthlyPayment) { this.treatingMonthlyPayment = treatingMonthlyPayment; }
+
     public String getReversalReason() { return reversalReason; }
     public void setReversalReason(String reversalReason) { this.reversalReason = reversalReason; }
 }

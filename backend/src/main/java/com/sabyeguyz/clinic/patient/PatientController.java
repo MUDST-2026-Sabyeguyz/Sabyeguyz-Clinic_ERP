@@ -1,15 +1,15 @@
 package com.sabyeguyz.clinic.patient;
 
-import com.sabyeguyz.clinic.api.ApiErrorResponse;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
+import java.net.URI;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.net.URI;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.sabyeguyz.clinic.api.ApiErrorResponse;
 
 @RestController
 @RequestMapping("/api/patients")
@@ -37,7 +39,9 @@ public class PatientController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Patient registered"),
             @ApiResponse(responseCode = "400", description = "Request validation failed or patient data conflicts",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ResponseEntity<PatientResponse> register(@Valid @RequestBody PatientRegistrationRequest request) {
         PatientResponse response = registrationService.register(request);
@@ -49,7 +53,9 @@ public class PatientController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Paged search results, including an empty page when no patient matches"),
             @ApiResponse(responseCode = "400", description = "Invalid page or size",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public PatientSearchResponse search(
             @Parameter(description = "Text matched against HN, full name, phone, and identity number")
@@ -66,7 +72,9 @@ public class PatientController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Patient profile"),
             @ApiResponse(responseCode = "404", description = "Patient not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public PatientProfileResponse getProfile(
             @Parameter(description = "Patient database identifier", required = true) @PathVariable long id) {

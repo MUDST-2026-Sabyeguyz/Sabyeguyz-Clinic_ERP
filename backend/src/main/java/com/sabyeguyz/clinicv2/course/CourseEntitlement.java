@@ -1,9 +1,11 @@
 package com.sabyeguyz.clinicv2.course;
 
+import java.time.Instant;
+
+import jakarta.persistence.*;
+
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.patient.Patient;
-import jakarta.persistence.*;
-import java.time.Instant;
 
 /**
  * Per-member session balance of a course (cache of Course_ledger; the ledger
@@ -37,7 +39,10 @@ public class CourseEntitlement {
 
     public CourseEntitlement() {}
 
-    public CourseEntitlement(Course course, Patient patient, int allocatedVisits) {
+    public CourseEntitlement(
+            Course course,
+            Patient patient,
+            int allocatedVisits) {
         this.course = course;
         this.patient = patient;
         this.allocatedVisits = allocatedVisits;
@@ -61,9 +66,14 @@ public class CourseEntitlement {
     }
 
     public Course getCourse() { return course; }
+
     public Patient getPatient() { return patient; }
+
     public int getAllocatedVisits() { return allocatedVisits; }
+
     public int getUsedVisits() { return usedVisits; }
+
     public int getRemainingVisits() { return remainingVisits; }
+
     public Instant getUpdatedAt() { return updatedAt; }
 }

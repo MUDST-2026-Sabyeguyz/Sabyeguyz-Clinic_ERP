@@ -17,13 +17,12 @@ public record StaffSalesReportResponse(
         BigDecimal branchTotal,
         long receipts,
         List<Row> rows,
-        Row unassigned
-) {
+        Row unassigned) {
     public record Row(
             Long staffId,
             String employeeCode,
             String fullName,
             long receipts,
-            BigDecimal amount
-    ) {}
+            BigDecimal amount) {
+    }
 }

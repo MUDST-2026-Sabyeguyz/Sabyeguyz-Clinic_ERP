@@ -163,34 +163,58 @@ async function disconnect() {
   }
 }
 
-const keyText = ref('')
+const keyText = ref('') // เนื้อหาที่วางเอง
+const keyFileText = ref('') // เนื้อหาจากไฟล์ที่เลือก/ลากมาวาง (ไม่แสดงให้เห็น)
 const keyFileName = ref('')
+const effectiveKey = computed(() => keyFileText.value || keyText.value)
 const keyTouched = ref(false)
 const keyDialog = ref<HTMLDialogElement | null>(null)
 const keyLooksValid = computed(() => {
   try {
-    const key = JSON.parse(keyText.value) as { client_email?: string; private_key?: string }
+    const key = JSON.parse(effectiveKey.value) as { client_email?: string; private_key?: string }
     return !!key.client_email && !!key.private_key
   } catch {
     return false
   }
 })
 const keyInvalid = computed(
-  () => keyTouched.value && keyText.value.trim().length > 0 && !keyLooksValid.value,
+  () => keyTouched.value && effectiveKey.value.trim().length > 0 && !keyLooksValid.value,
 )
 const canManageKey = computed(() => isManager.value && status.value?.keySource !== 'file')
 
-async function onKeyFile(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+// ไฟล์ที่เลือกจะแสดงในกรอบอัปโหลด (ชื่อไฟล์ + อีเมลบัญชี) ไม่เอาเนื้อหา key ไปใส่ช่องวางข้อความ
+const keyFromFile = computed(() => keyFileText.value !== '')
+const draggingKey = ref(false)
+
+async function readKeyFile(file: File | undefined) {
   if (!file) return
+  if (!/\.json$/i.test(file.name) && file.type !== 'application/json') {
+    error.value = 'ต้องเป็นไฟล์ .json ของ Service Account'
+    return
+  }
   if (file.size > 20_000) {
     error.value = 'ไฟล์ใหญ่เกินไป ไม่ใช่ไฟล์ key ของ Google'
     return
   }
-  keyText.value = await file.text()
+  keyFileText.value = await file.text()
   keyFileName.value = file.name
+  keyText.value = ''
   keyTouched.value = true
   error.value = ''
+}
+async function onKeyFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  await readKeyFile(input.files?.[0])
+  input.value = '' // เลือกไฟล์เดิมซ้ำได้
+}
+async function onKeyDrop(event: DragEvent) {
+  draggingKey.value = false
+  await readKeyFile(event.dataTransfer?.files?.[0])
+}
+function clearKeyFile() {
+  keyFileText.value = ''
+  keyFileName.value = ''
+  keyTouched.value = false
 }
 
 async function saveKey() {
@@ -204,8 +228,9 @@ async function saveKey() {
   error.value = ''
   message.value = ''
   try {
-    status.value = await calendarApi.saveCredentials(keyText.value.trim())
+    status.value = await calendarApi.saveCredentials(effectiveKey.value.trim())
     keyText.value = ''
+    keyFileText.value = ''
     keyFileName.value = ''
     keyTouched.value = false
     message.value = 'เชื่อมต่อ Google แล้ว ขั้นต่อไป: แชร์ปฏิทินให้อีเมลด้านล่าง แล้วกรอก Calendar ID ของสาขา'
@@ -372,14 +397,28 @@ onMounted(load)
                   <div class="google-key-inputs">
                   <div class="google-key-upload-group">
                   <label for="google-key-file">อัปโหลดไฟล์</label>
-                  <div class="google-key-upload">
-                    <label class="google-key-file">
-                      <span class="google-key-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m-4 4 4-4 4 4M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" /></svg></span>
-                      <small>เลือกไฟล์ Service Account นามสกุล .json</small>
+                  <div
+                    class="google-key-upload"
+                    :class="{ dragging: draggingKey }"
+                    @dragenter.prevent="draggingKey = true"
+                    @dragover.prevent="draggingKey = true"
+                    @dragleave.prevent="draggingKey = false"
+                    @drop.prevent="onKeyDrop"
+                  >
+                    <label class="google-key-file" :class="{ done: keyFromFile }">
+                      <span class="google-key-file-icon" aria-hidden="true">
+                        <svg v-if="keyFromFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m-4 4 4-4 4 4M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" /></svg>
+                      </span>
+                      <small v-if="!keyFromFile">เลือกไฟล์ Service Account นามสกุล .json หรือลากไฟล์มาวางตรงนี้</small>
+                      <small v-else class="google-key-ready">เลือกไฟล์แล้ว พร้อมเชื่อมต่อ</small>
                       <input id="google-key-file" type="file" accept=".json,application/json" @change="onKeyFile" />
-                      <span class="google-key-choose" aria-hidden="true">เลือกไฟล์</span>
-                      <span class="google-key-selected">{{ keyFileName || 'ยังไม่ได้เลือกไฟล์' }}</span>
+                      <span class="google-key-choose" aria-hidden="true">{{ keyFromFile ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์' }}</span>
                     </label>
+                    <span v-if="keyFromFile" class="google-key-chip">
+                      <span class="google-key-chip-name">{{ keyFileName }}</span>
+                      <button type="button" class="google-key-chip-remove" aria-label="ล้างไฟล์" @click="clearKeyFile">×</button>
+                    </span>
                   </div>
                   </div>
                   <div class="google-key-paste">
@@ -387,6 +426,7 @@ onMounted(load)
                   <textarea
                     id="google-key-json"
                     v-model="keyText"
+                    :disabled="keyFromFile"
                     rows="5"
                     spellcheck="false"
                     autocomplete="off"
@@ -406,7 +446,7 @@ onMounted(load)
                   <button
                     type="button"
                     class="calendar-save"
-                    :disabled="!!busy || !keyText.trim()"
+                    :disabled="!!busy || !effectiveKey.trim()"
                     data-cy="save-google-key"
                     @click="saveKey"
                   >
@@ -978,6 +1018,46 @@ button:disabled {
   border-radius: 12px;
   background: #fff;
 }
+.google-key-upload.dragging {
+  border-style: solid;
+  border-color: #187d78;
+  background: #eaf5f1;
+}
+.google-key-upload { position: relative; }
+.google-key-file.done { margin-bottom: 34px; }
+.google-key-file.done .google-key-file-icon { background: #187d78; color: #fff; }
+.google-key-ready { color: #187d78; font-weight: 600; }
+.google-key-chip {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px 4px 12px;
+  border-radius: 999px;
+  background: #eaf5f1;
+  color: #28564e;
+  font-size: 0.85rem;
+}
+.google-key-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.google-key-chip-remove {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #28564e;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.google-key-chip-remove:hover { background: #cfe6df; }
 .google-key-upload .google-key-file {
   justify-items: center;
   gap: 12px;

@@ -247,7 +247,14 @@ onBeforeUnmount(() => {
   border-color: #1e8883;
   box-shadow: 0 0 0 1px #1e8883;
 }
+.filter-dropdown__button > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .filter-dropdown__chevron {
+  flex-shrink: 0;
   width: 8px;
   height: 8px;
   margin-left: 14px;

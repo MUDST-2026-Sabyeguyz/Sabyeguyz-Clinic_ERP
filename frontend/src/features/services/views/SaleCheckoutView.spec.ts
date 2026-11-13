@@ -129,6 +129,48 @@ async function render() {
   return { view, state }
 }
 describe('checkout main payload', () => {
+  it('shows saving instead of recovery while the sale request is pending', async () => {
+    const { view, state } = await render()
+    let completeSale!: (value: { id: number; receiptId: number; receiptNo: string }) => void
+    mock.create.mockImplementationOnce(() => new Promise((resolve) => { completeSale = resolve }))
+    const pending = state.save()
+    await flushPromises()
+    progressState.value = { state: 'NO_LINKED_RECORD', sales: [], usages: [] }
+    canStart.value = false
+    await view.vm.$nextTick()
+    expect(view.get('[role="status"]').text()).toBe('กำลังบันทึก…')
+    expect(view.find('appointment-process-panel-stub').exists()).toBe(false)
+    await state.save()
+    expect(mock.create).toHaveBeenCalledOnce()
+    completeSale({ id: 77, receiptId: 88, receiptNo: 'TEST88' })
+    await pending
+    await flushPromises()
+    expect(view.find('appointment-process-panel-stub').exists()).toBe(false)
+    expect(view.get('[role="status"]').text()).toBe('กำลังเปิดใบเสร็จ…')
+    expect(mock.push).toHaveBeenCalledWith({ name: 'staff-receipt', params: { id: 77 } })
+    view.unmount()
+  })
+
+  it('keeps recovery protection when the pending sale fails with an uncertain result', async () => {
+    const { view, state } = await render()
+    let failSale!: (reason: unknown) => void
+    mock.create.mockImplementationOnce(() => new Promise((_, reject) => { failSale = reject }))
+    const pending = state.save()
+    await flushPromises()
+    progressState.value = { state: 'NO_LINKED_RECORD', sales: [], usages: [] }
+    canStart.value = false
+    failSale(new ApiError('ยังตรวจสอบผลไม่ได้', 409))
+    await pending
+    await flushPromises()
+    expect(view.find('appointment-process-panel-stub').exists()).toBe(true)
+    expect(view.get('[role="alert"]').text()).toBe('ยังตรวจสอบผลไม่ได้')
+    expect(state.uncertainSale).toBe(true)
+    expect(mock.push).not.toHaveBeenCalled()
+    await state.save()
+    expect(mock.create).toHaveBeenCalledOnce()
+    view.unmount()
+  })
+
   it('submits the sale from the payment button and goes straight to the receipt', async () => {
     const { view } = await render()
     await view.get('button.primary').trigger('click')

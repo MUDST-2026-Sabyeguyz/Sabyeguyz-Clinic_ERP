@@ -276,7 +276,9 @@ watch(appointmentAlreadyProcessed, (done) => {
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <p v-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
+      <p v-if="errorMessage && recoveryRequired && !loading" class="error" role="alert">{{ errorMessage }}</p>
+      <p v-if="loading" role="status" aria-live="polite">กำลังบันทึก…</p>
+      <p v-else-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         <p>{{ processError }}</p>
         <button type="button" @click="refreshAppointmentProcess">ลองใหม่</button
@@ -286,7 +288,7 @@ watch(appointmentAlreadyProcessed, (done) => {
       </div>
       <AppointmentProcessPanel
         v-else-if="
-          appointmentProgress && !canStartAppointment && !appointmentAlreadyProcessed
+          appointmentProgress && !canStartAppointment && !appointmentAlreadyProcessed && !confirmed
         "
         :progress="appointmentProgress"
         :block-reason="processBlockReason" :recovery-required="recoveryRequired"
@@ -374,8 +376,8 @@ watch(appointmentAlreadyProcessed, (done) => {
             <span class="service-menu-action-title"><span class="service-menu-action-heading">ชำระเงิน</span></span>
             <span class="service-menu-action-next">ถัดไป →</span>
           </button>
-          <button v-if="appointmentId && canStartAppointment" type="button" class="service-menu-action service-menu-action--entitlement" @click="openPatientCourses">
-            <span class="service-menu-action-title"><span class="service-menu-action-heading">ใช้สิทธิ์คอร์สที่มีอยู่</span><span class="service-menu-course-status" :class="{ 'is-loading': patientCourseLoading, 'is-unavailable': patientCourseError }" aria-live="polite">{{ patientCourseSummary }}</span></span>
+          <button type="button" class="service-menu-action service-menu-action--entitlement" @click="openPatientCourses">
+            <span class="service-menu-action-title"><span class="service-menu-action-heading">{{ appointmentId ? 'ใช้สิทธิ์คอร์สที่มีอยู่' : 'ดูคอร์สของผู้ป่วย' }}</span><span class="service-menu-course-status" :class="{ 'is-loading': patientCourseLoading, 'is-unavailable': patientCourseError }" aria-live="polite">{{ patientCourseSummary }}</span></span>
             <span class="service-menu-action-next">ถัดไป →</span>
           </button>
           <button v-if="appointmentId && canStartAppointment && prepaidServiceBalance > 0" type="button" class="service-menu-action service-menu-action--entitlement" @click="openPrepaidServiceUse">

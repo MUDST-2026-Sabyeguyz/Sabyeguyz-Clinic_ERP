@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.patient;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
 import java.time.Instant;
 import java.time.LocalDate;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
 
 /**
  * HN format per the Patient data dictionary: YYBBMMNNNN
@@ -27,21 +29,35 @@ public class HnGeneratorService {
     }
 
     @Transactional
-    public String next(Branch branch, LocalDate registrationDate) {
+    public String next(
+            Branch branch,
+            LocalDate registrationDate) {
         if (branch == null || branch.getBranchCode() == null) {
             throw new IllegalArgumentException("ต้องระบุสาขาที่มี branchCode ก่อนออก HN");
         }
-        String yearMonth = "%02d%02d".formatted(registrationDate.getYear() % 100, registrationDate.getMonthValue());
+
+        String yearMonth = "%02d%02d".formatted(
+                registrationDate.getYear() % 100,
+                registrationDate.getMonthValue());
+
         HnSequenceId id = new HnSequenceId(branch.getId(), yearMonth);
         HnSequence sequence = sequences.findById(id).orElseGet(() -> {
-            HnSequence created = new HnSequence(branch, yearMonth, 0, Instant.now(), Instant.now());
+            HnSequence created = new HnSequence(
+                    branch,
+                    yearMonth,
+                    0,
+                    Instant.now(),
+                    Instant.now());
+
             return sequences.save(created);
         });
 
         int nextRunningNo = sequence.getLastRunningNo() + 1;
+
         if (nextRunningNo > 9999) {
             throw new IllegalStateException("HN running number เต็มสำหรับสาขาและเดือนนี้");
         }
+
         sequence.setLastRunningNo(nextRunningNo);
         sequence.setLastRunningAt(Instant.now());
         sequences.save(sequence);
@@ -49,8 +65,14 @@ public class HnGeneratorService {
         return format(registrationDate, branch.getBranchCode(), nextRunningNo);
     }
 
-    static String format(LocalDate registrationDate, String branchCode, int runningNumber) {
+    static String format(
+            LocalDate registrationDate,
+            String branchCode,
+            int runningNumber) {
         return "%02d%s%02d%04d".formatted(
-                registrationDate.getYear() % 100, branchCode, registrationDate.getMonthValue(), runningNumber);
+                registrationDate.getYear() % 100,
+                branchCode,
+                registrationDate.getMonthValue(),
+                runningNumber);
     }
 }

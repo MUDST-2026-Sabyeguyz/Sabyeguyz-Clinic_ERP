@@ -1,14 +1,16 @@
 package com.sabyeguyz.clinicv2.audit;
 
-import com.sabyeguyz.clinicv2.enums.AuditAction;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 
 /**
  * Generic row-level audit trail (Clinic ERP Workflow Brief §9 "System
@@ -35,9 +37,11 @@ public class AuditLogService {
     /** Builds the field map of a before/after value: {@code fields("status", "Open", "reason", text)}; nulls are kept. */
     public static Map<String, Object> fields(Object... keysAndValues) {
         Map<String, Object> map = new LinkedHashMap<>();
+
         for (int i = 0; i + 1 < keysAndValues.length; i += 2) {
             map.put(String.valueOf(keysAndValues[i]), keysAndValues[i + 1]);
         }
+
         return map;
     }
 
@@ -47,24 +51,52 @@ public class AuditLogService {
      * attributed to a staff user.
      */
     @Transactional
-    public AuditLog recordChange(String tableName, String recordId, AuditAction action, Map<String, ?> oldValue,
-                                  Map<String, ?> newValue, Long actorId) {
-        return record(tableName, recordId, action, toJson(oldValue), toJson(newValue), actorId);
+    public AuditLog recordChange(
+            String tableName,
+            String recordId,
+            AuditAction action,
+            Map<String, ?> oldValue,
+            Map<String, ?> newValue,
+            Long actorId) {
+        return record(
+                tableName,
+                recordId,
+                action,
+                toJson(oldValue),
+                toJson(newValue),
+                actorId);
     }
 
     /** An automatic event: no user, the source is part of the new value. */
     @Transactional
-    public AuditLog recordAutomatic(String tableName, String recordId, AuditAction action, Map<String, ?> oldValue,
-                                     Map<String, ?> newValue, String source) {
+    public AuditLog recordAutomatic(
+            String tableName,
+            String recordId,
+            AuditAction action,
+            Map<String, ?> oldValue,
+            Map<String, ?> newValue,
+            String source) {
         Map<String, Object> value = new LinkedHashMap<>();
         value.put("source", source);
+
         if (newValue != null) value.putAll(newValue);
-        return record(tableName, recordId, action, toJson(oldValue), toJson(value), null);
+        return record(
+                tableName,
+                recordId,
+                action,
+                toJson(oldValue),
+                toJson(value),
+                null);
     }
 
     @Transactional
-    public AuditLog record(String tableName, String recordId, AuditAction action, String oldValue,
-                            String newValue, Long actorId) {
+    public AuditLog record(
+            String tableName,
+            String recordId,
+            AuditAction action,
+            String oldValue,
+            String newValue,
+            Long actorId) {
         if (tableName == null || tableName.isBlank()) {
             throw new IllegalArgumentException("tableName ห้ามว่าง");
         }
@@ -75,6 +107,7 @@ public class AuditLogService {
             throw new IllegalArgumentException("ต้องระบุ action");
         }
         AuditLog log = new AuditLog();
+
         log.setTableName(tableName);
         log.setRecordId(recordId);
         log.setAction(action);
@@ -82,7 +115,31 @@ public class AuditLogService {
         log.setNewValue(actorId == null ? withSource(asJson(newValue)) : asJson(newValue));
         log.setChangedBy(actorId);
         log.setChangedAt(Instant.now());
+        log.setBranchId(branchOf(tableName, recordId, log.getNewValue(), log.getOldValue()));
         return repository.save(log);
+    }
+
+    /** A branch's own change belongs to it; any other row names its branch as "branch_id" in its after (or before) value. */
+    private static Long branchOf(String tableName, String recordId, String newValue, String oldValue) {
+        if ("branch".equals(tableName)) return parseId(recordId);
+        for (String json : new String[] {newValue, oldValue}) {
+            if (json == null || json.isBlank()) continue;
+            try {
+                JsonNode node = JSON.readTree(json).get("branch_id");
+                if (node != null && node.canConvertToLong()) return node.asLong();
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+                // not JSON: no branch to read
+            }
+        }
+        return null;
+    }
+
+    private static Long parseId(String text) {
+        try {
+            return Long.valueOf(text.trim());
+        } catch (NumberFormatException invalid) {
+            return null;
+        }
     }
 
     private static String toJson(Map<String, ?> value) {
@@ -98,7 +155,11 @@ public class AuditLogService {
     static String asJson(String value) {
         if (value == null) return null;
         String trimmed = value.trim();
-        if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+
+        if ((trimmed.startsWith("{")
+                && trimmed.endsWith("}"))
+                || (trimmed.startsWith("[")
+                && trimmed.endsWith("]"))) {
             try {
                 JSON.readTree(trimmed);
                 return trimmed;
@@ -113,10 +174,19 @@ public class AuditLogService {
     private static String withSource(String json) {
         try {
             JsonNode node = json == null ? JSON.createObjectNode() : JSON.readTree(json);
-            if (!node.isObject()) node = JSON.createObjectNode().set("value", node);
+
+            if (!node.isObject()) {
+                node = JSON.createObjectNode().set("value", node);
+            }
+
             ObjectNode object = (ObjectNode) node;
-            if (!object.hasNonNull("source")) object.put("source", DEFAULT_SOURCE);
+
+            if (!object.hasNonNull("source")) {
+                object.put("source", DEFAULT_SOURCE);
+            }
+
             return JSON.writeValueAsString(object);
+
         } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
             throw new IllegalArgumentException("audit value is not JSON: " + invalid.getOriginalMessage());
         }
