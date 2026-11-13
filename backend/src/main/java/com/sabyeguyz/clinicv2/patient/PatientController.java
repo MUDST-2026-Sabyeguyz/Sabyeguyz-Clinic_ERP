@@ -43,7 +43,7 @@ public class PatientController {
             String branchCode, String customerType, String title, String firstName, String lastName,
             String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
             String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
-            String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email,
+            String fullName, tools.jackson.databind.JsonNode middleName, String email,
             String customerSource, String insuranceCompany, Boolean drugAllergy, Boolean foodAllergy,
             String chronicDisease, String emergencyContactName, String emergencyContactRelationship,
             String emergencyContactPhone, Boolean privacyConsent) {}
