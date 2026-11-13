@@ -128,4 +128,12 @@ describe('main care transactions', () => {
       ),
     ).toThrow()
   })
+
+  it('allows a course shared from another patient to be used at a different branch', () => {
+    const ctx = { appointmentId: 55, patientId: 9, treatingStaffId: 4, branchCode: '01' }
+    const shared = { ...course, branchCode: '02', purchaser: { id: 1 } } as CoursePurchase
+    expect(buildCourseUsages(ctx, [{ coursePurchaseId: 101, quantity: 1 }], [shared])).toHaveLength(1)
+    const own = { ...shared, purchaser: { id: 9 } } as CoursePurchase
+    expect(() => buildCourseUsages(ctx, [{ coursePurchaseId: 101, quantity: 1 }], [own])).toThrow()
+  })
 })
