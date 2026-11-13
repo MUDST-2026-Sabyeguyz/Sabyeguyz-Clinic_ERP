@@ -1,5 +1,7 @@
 package com.sabyeguyz.clinic.branch;
 
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -7,7 +9,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import java.time.Instant;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -48,7 +49,8 @@ public class Branch {
     @Column(name = "branch_update_by")
     private Long updatedBy;
 
-    protected Branch() {}
+    protected Branch() {
+    }
 
     public Branch(String branchCode, String name, String address, String phone, Long createdBy) {
         this.branchCode = branchCode;
@@ -60,7 +62,9 @@ public class Branch {
         this.createdBy = createdBy;
     }
 
-    /** branchCode is intentionally not editable here: patients already carry it in their HN. */
+    /**
+     * branchCode is intentionally not editable here: patients already carry it in their HN.
+     */
     public void update(String name, String address, String phone, Long updatedBy) {
         this.name = name;
         this.address = address;
@@ -75,14 +79,43 @@ public class Branch {
         this.updatedBy = updatedBy;
     }
 
-    public Long getId() { return id; }
-    public String getBranchCode() { return branchCode; }
-    public String getName() { return name; }
-    public String getAddress() { return address; }
-    public String getPhone() { return phone; }
-    public boolean isActive() { return active; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Long getCreatedBy() { return createdBy; }
-    public Instant getUpdatedAt() { return updatedAt; }
-    public Long getUpdatedBy() { return updatedBy; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getBranchCode() {
+        return branchCode;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public Long getUpdatedBy() {
+        return updatedBy;
+    }
 }

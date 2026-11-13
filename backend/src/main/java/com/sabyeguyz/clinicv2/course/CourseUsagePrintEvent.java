@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.course;
 
-import com.sabyeguyz.clinicv2.enums.PrintEventType;
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
+import com.sabyeguyz.clinicv2.enums.PrintEventType;
 
 /** Issued happens once per print; every later paper copy is a Reprint. */
 @Entity
@@ -33,12 +35,16 @@ public class CourseUsagePrintEvent {
     public CourseUsagePrintEvent() {}
 
     public Long getId() { return id; }
+
     public CourseUsagePrint getPrint() { return print; }
     public void setPrint(CourseUsagePrint print) { this.print = print; }
+
     public Instant getPrintedAt() { return printedAt; }
     public void setPrintedAt(Instant printedAt) { this.printedAt = printedAt; }
+
     public Long getPrintedBy() { return printedBy; }
     public void setPrintedBy(Long printedBy) { this.printedBy = printedBy; }
+
     public PrintEventType getEventType() { return eventType; }
     public void setEventType(PrintEventType eventType) { this.eventType = eventType; }
 }

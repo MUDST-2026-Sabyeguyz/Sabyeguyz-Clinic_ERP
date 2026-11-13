@@ -2,7 +2,9 @@ package com.sabyeguyz.clinic.course;
 
 import java.time.Instant;
 
-/** Read-only transaction view of a course usage and its optional reversal. */
+/**
+ * Read-only transaction view of a course usage and its optional reversal.
+ */
 public record CourseUsageTransactionResponse(
         Long id,
         Long coursePurchaseId,
@@ -12,8 +14,7 @@ public record CourseUsageTransactionResponse(
         String branchCode,
         Instant usedAt,
         Instant voidedAt,
-        String voidReason
-) {
+        String voidReason) {
     static CourseUsageTransactionResponse from(CourseMovement usage, CourseMovement reversal) {
         CoursePurchase purchase = usage.getCoursePurchase();
         return new CourseUsageTransactionResponse(

@@ -12,4 +12,7 @@ interface CardSource {
     }
 
     ReadOutcome readWhenPresent(Duration wait, Runnable onCardPresent);
+
+    /** True when a card reader is plugged in (a card does not have to be in it). */
+    default boolean readerPresent() { return true; }
 }

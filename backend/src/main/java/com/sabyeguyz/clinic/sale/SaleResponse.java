@@ -20,11 +20,18 @@ public record SaleResponse(
         Instant voidedAt,
         String voidReason,
         List<SaleItemResponse> items,
-        List<SalePaymentResponse> payments
-) {
-    public record PatientSummary(Long id, String hn, String fullName) {}
+        List<SalePaymentResponse> payments) {
+    public record PatientSummary(
+            Long id,
+            String hn,
+            String fullName) {
+    }
 
-    public record SalespersonSummary(Long id, String employeeCode, String fullName) {}
+    public record SalespersonSummary(
+            Long id,
+            String employeeCode,
+            String fullName) {
+    }
 
     public record SaleItemResponse(
             Long id,
@@ -34,11 +41,15 @@ public record SaleResponse(
             int quantity,
             BigDecimal lineTotal,
             /** ใบซื้อคอร์สที่บรรทัดนี้สร้างขึ้น เป็น null สำหรับรายการที่ไม่ใช่คอร์ส */
-            Long coursePurchaseId
-    ) {
+            Long coursePurchaseId) {
         static SaleItemResponse from(SaleItem item) {
-            return new SaleItemResponse(item.getId(), item.getItemType(), item.getDescription(),
-                    item.getUnitPrice(), item.getQuantity(), item.getLineTotal(),
+            return new SaleItemResponse(
+                    item.getId(),
+                    item.getItemType(),
+                    item.getDescription(),
+                    item.getUnitPrice(),
+                    item.getQuantity(),
+                    item.getLineTotal(),
                     item.getCoursePurchase() == null ? null : item.getCoursePurchase().getId());
         }
     }
@@ -50,25 +61,36 @@ public record SaleResponse(
             BigDecimal amount,
             String reason,
             Long reversesPaymentId,
-            Instant createdAt
-    ) {
+            Instant createdAt) {
         static SalePaymentResponse from(SalePayment payment) {
-            return new SalePaymentResponse(payment.getId(), payment.getType(), payment.getPaymentMethodCode(),
-                    payment.getAmount(), payment.getReason(),
+            return new SalePaymentResponse(
+                    payment.getId(),
+                    payment.getType(),
+                    payment.getPaymentMethodCode(),
+                    payment.getAmount(),
+                    payment.getReason(),
                     payment.getReversesPayment() == null ? null : payment.getReversesPayment().getId(),
                     payment.getCreatedAt());
         }
     }
 
-    public static SaleResponse from(Sale sale, BigDecimal paid, List<SaleItem> items, List<SalePayment> payments) {
+    public static SaleResponse from(
+            Sale sale,
+            BigDecimal paid,
+            List<SaleItem> items,
+            List<SalePayment> payments) {
         return new SaleResponse(
                 sale.getId(),
                 sale.getReceiptNo(),
-                new PatientSummary(sale.getPatient().getId(), sale.getPatient().getHn(),
+                new PatientSummary(
+                        sale.getPatient().getId(),
+                        sale.getPatient().getHn(),
                         sale.getPatient().getFullName()),
                 sale.getBranch().getBranchCode(),
-                sale.getSalesperson() == null ? null : new SalespersonSummary(sale.getSalesperson().getId(),
-                        sale.getSalesperson().getEmployeeCode(), sale.getSalesperson().getFullName()),
+                sale.getSalesperson() == null ? null : new SalespersonSummary(
+                        sale.getSalesperson().getId(),
+                        sale.getSalesperson().getEmployeeCode(),
+                        sale.getSalesperson().getFullName()),
                 sale.getTotal(),
                 paid,
                 sale.getStatus(),

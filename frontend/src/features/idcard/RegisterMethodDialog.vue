@@ -28,7 +28,7 @@ const choices = computed(() => reader.workstations.value.filter(
 ))
 const loadingReaders = ref(false)
 const canRead = computed(() => !loadingReaders.value && choices.value.some(
-  (w) => w.id === reader.selectedId.value && w.online,
+  (w) => w.id === reader.selectedId.value && w.online && w.readerConnected !== false,
 ))
 const failureMessage = computed(() => /[\u0E00-\u0E7F]/.test(reader.message.value) ? reader.message.value : '')
 let statusTimer: ReturnType<typeof setInterval> | undefined
@@ -150,8 +150,8 @@ function chooseReader(event: Event) {
           @change="chooseReader"
         >
           <option value="" disabled>เลือกเครื่องอ่านบัตร</option>
-          <option v-for="w in choices" :key="w.id" :value="w.id" :disabled="!w.online">
-            {{ w.name }}{{ w.online ? '' : ' (ออฟไลน์)' }}
+          <option v-for="w in choices" :key="w.id" :value="w.id" :disabled="!w.online || w.readerConnected === false">
+            {{ w.name }}{{ !w.online ? ' (ออฟไลน์)' : w.readerConnected === false ? ' (ไม่ได้เสียบเครื่องอ่าน)' : '' }}
           </option>
         </select>
         <small v-if="choices.length === 0" class="id-card-hint">
@@ -167,6 +167,9 @@ function chooseReader(event: Event) {
         </small>
         <small v-else-if="!choices.some((w) => w.online)" class="id-card-hint">
           เครื่องอ่านบัตรยังไม่เชื่อมต่อ
+        </small>
+        <small v-else-if="!canRead" class="id-card-hint">
+          ยังไม่ได้เสียบเครื่องอ่านบัตร เสียบเครื่องอ่านแล้วปุ่มจะกดได้
         </small>
       </template>
 

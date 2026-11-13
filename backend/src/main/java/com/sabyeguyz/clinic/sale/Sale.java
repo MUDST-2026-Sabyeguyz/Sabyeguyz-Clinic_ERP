@@ -1,8 +1,8 @@
 package com.sabyeguyz.clinic.sale;
 
-import com.sabyeguyz.clinic.branch.Branch;
-import com.sabyeguyz.clinic.patient.Patient;
-import com.sabyeguyz.clinic.staff.Staff;
+import java.math.BigDecimal;
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,8 +15,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.time.Instant;
+
+import com.sabyeguyz.clinic.branch.Branch;
+import com.sabyeguyz.clinic.patient.Patient;
+import com.sabyeguyz.clinic.staff.Staff;
 
 /**
  * หัวใบเสร็จหนึ่งใบ ยอดรวมคำนวณจากราคาใน master ตอนขาย ไม่ได้รับมาจากผู้เรียก
@@ -41,7 +43,9 @@ public class Sale {
     @JoinColumn(name = "branch_id")
     private Branch branch;
 
-    /** ผู้ขาย อาจไม่ใช่คนเดียวกับผู้รักษา จึงเก็บแยกจาก treatments */
+    /**
+     * ผู้ขาย อาจไม่ใช่คนเดียวกับผู้รักษา จึงเก็บแยกจาก treatments
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "salesperson_staff_id")
     private Staff salesperson;
@@ -66,10 +70,17 @@ public class Sale {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    protected Sale() {}
+    protected Sale() {
+    }
 
-    public Sale(String receiptNo, Patient patient, Branch branch, Staff salesperson,
-                BigDecimal total, String note, Instant soldAt) {
+    public Sale(
+            String receiptNo,
+            Patient patient,
+            Branch branch,
+            Staff salesperson,
+            BigDecimal total,
+            String note,
+            Instant soldAt) {
         this.receiptNo = receiptNo;
         this.patient = patient;
         this.branch = branch;
@@ -91,16 +102,51 @@ public class Sale {
         this.voidedAt = when;
     }
 
-    public Long getId() { return id; }
-    public String getReceiptNo() { return receiptNo; }
-    public Patient getPatient() { return patient; }
-    public Branch getBranch() { return branch; }
-    public Staff getSalesperson() { return salesperson; }
-    public BigDecimal getTotal() { return total; }
-    public SaleStatus getStatus() { return status; }
-    public String getNote() { return note; }
-    public Instant getSoldAt() { return soldAt; }
-    public Instant getVoidedAt() { return voidedAt; }
-    public String getVoidReason() { return voidReason; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getReceiptNo() {
+        return receiptNo;
+    }
+
+    public Patient getPatient() {
+        return patient;
+    }
+
+    public Branch getBranch() {
+        return branch;
+    }
+
+    public Staff getSalesperson() {
+        return salesperson;
+    }
+
+    public BigDecimal getTotal() {
+        return total;
+    }
+
+    public SaleStatus getStatus() {
+        return status;
+    }
+
+    public String getNote() {
+        return note;
+    }
+
+    public Instant getSoldAt() {
+        return soldAt;
+    }
+
+    public Instant getVoidedAt() {
+        return voidedAt;
+    }
+
+    public String getVoidReason() {
+        return voidReason;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

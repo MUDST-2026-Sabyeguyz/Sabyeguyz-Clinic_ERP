@@ -1,8 +1,10 @@
 package com.sabyeguyz.clinicv2.auth;
 
-import com.sabyeguyz.clinicv2.staff.Staff;
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.staff.Staff;
 
 /** บัญชีผู้ใช้ที่เชื่อมกับพนักงานและเก็บเวอร์ชันสำหรับเพิกถอน token */
 @Entity
@@ -50,27 +52,84 @@ public class AppUser {
 
     public AppUser() {}
 
-    public Long getId() { return id; }
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-    public String getPasswordHash() { return passwordHash; }
-    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
-    public Staff getStaff() { return staff; }
-    public void setStaff(Staff staff) { this.staff = staff; }
-    public boolean isUserStatus() { return userStatus; }
-    public void setUserStatus(boolean userStatus) { this.userStatus = userStatus; }
-    public int getAuthVersion() { return authVersion; }
-    public void setAuthVersion(int authVersion) { this.authVersion = authVersion; }
-    public Instant getLastLoginAt() { return lastLoginAt; }
-    public void setLastLoginAt(Instant lastLoginAt) { this.lastLoginAt = lastLoginAt; }
-    public Instant getUserCreateAt() { return userCreateAt; }
-    public void setUserCreateAt(Instant userCreateAt) { this.userCreateAt = userCreateAt; }
-    public Long getUserCreateBy() { return userCreateBy; }
-    public void setUserCreateBy(Long userCreateBy) { this.userCreateBy = userCreateBy; }
-    public Instant getUserUpdateAt() { return userUpdateAt; }
-    public void setUserUpdateAt(Instant userUpdateAt) { this.userUpdateAt = userUpdateAt; }
-    public Long getUserUpdateBy() { return userUpdateBy; }
-    public void setUserUpdateBy(Long userUpdateBy) { this.userUpdateBy = userUpdateBy; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public Staff getStaff() {
+        return staff;
+    }
+    public void setStaff(Staff staff) {
+        this.staff = staff;
+    }
+
+    public boolean isUserStatus() {
+        return userStatus;
+    }
+    public void setUserStatus(boolean userStatus) {
+        this.userStatus = userStatus;
+    }
+
+    public int getAuthVersion() {
+        return authVersion;
+    }
+    public void setAuthVersion(int authVersion) {
+        this.authVersion = authVersion;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+    public void setLastLoginAt(Instant lastLoginAt) {
+        this.lastLoginAt = lastLoginAt;
+    }
+
+    public Instant getUserCreateAt() {
+        return userCreateAt;
+    }
+    public void setUserCreateAt(Instant userCreateAt) {
+        this.userCreateAt = userCreateAt;
+    }
+
+    public Long getUserCreateBy() {
+        return userCreateBy;
+    }
+    public void setUserCreateBy(Long userCreateBy) {
+        this.userCreateBy = userCreateBy;
+    }
+
+    public Instant getUserUpdateAt() {
+        return userUpdateAt;
+    }
+    public void setUserUpdateAt(Instant userUpdateAt) {
+        this.userUpdateAt = userUpdateAt;
+    }
+
+    public Long getUserUpdateBy() {
+        return userUpdateBy;
+    }
+    public void setUserUpdateBy(Long userUpdateBy) {
+        this.userUpdateBy = userUpdateBy;
+    }
 }

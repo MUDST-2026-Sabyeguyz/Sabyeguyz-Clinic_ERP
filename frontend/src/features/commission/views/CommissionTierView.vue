@@ -80,7 +80,7 @@ function openSchemeEditor() {
   error.value = ''
   Object.assign(schemeForm, {
     name: scheme.name,
-    effectiveFrom: nextSchemeEffectiveFrom(scheme.effectiveTo),
+    effectiveFrom: nextSchemeEffectiveFrom(scheme.effectiveTo, clinicToday(), !scheme.effectiveFrom),
   })
   schemeTiers.splice(0, schemeTiers.length, ...tiers.map((tier) => ({ ...tier })))
   editorOpen.value = true
@@ -172,7 +172,7 @@ async function saveSchemeVersion() {
     }
     const branchCode = selectedManagerBranch()?.code
     if (!branchCode) throw new Error('กรุณาเลือกสาขาก่อนบันทึกกฎ')
-    const created = (await commissionApi.createSchemeVersion(scheme.id, {
+    const payload = {
       name: schemeForm.name,
       effectiveFrom: schemeForm.effectiveFrom,
       branchCode,
@@ -183,7 +183,11 @@ async function saveSchemeVersion() {
         rate: t.rate / 100,
         order: index + 1,
       })),
-    })) as {
+    }
+    // ยังไม่มี Scheme ในระบบ (id = 0) ให้สร้าง Scheme แรก แทนการสร้าง Version จาก Scheme ที่ไม่มีอยู่
+    const created = (await (scheme.id
+      ? commissionApi.createSchemeVersion(scheme.id, payload)
+      : commissionApi.createScheme(payload))) as {
       id: number
       name: string
       version: number
@@ -214,16 +218,6 @@ async function saveTier() {
     error.value = 'ตรวจสอบยอดขายขั้นต่ำ ยอดขายสูงสุด และอัตราคอมมิชชันอีกครั้ง'
     return
   }
-  const overlaps = tiers.some((tier, index) => {
-    if (index === editingIndex.value || !tier.active || !form.active) return false
-    const aMax = maximum ?? Number.POSITIVE_INFINITY
-    const bMax = tier.max ?? Number.POSITIVE_INFINITY
-    return form.min <= bMax && tier.min <= aMax
-  })
-  if (overlaps) {
-    error.value = 'บันทึกไม่ได้ เนื่องจากช่วงยอดขายซ้อนกับ Tier ที่มีอยู่'
-    return
-  }
   const record: Tier = {
     order: editingIndex.value >= 0 ? tiers[editingIndex.value]!.order : tiers.length + 1,
     min: Number(form.min),
@@ -231,8 +225,36 @@ async function saveTier() {
     rate: Number(form.rate),
     active: form.active,
   }
-  if (editingIndex.value >= 0) tiers[editingIndex.value] = record
-  else tiers.push(record)
+  const next = tiers.map((tier) => ({ ...tier }))
+  if (editingIndex.value >= 0) next[editingIndex.value] = record
+  else next.push(record)
+  // แก้ Tier ที่มีอยู่: Tier ถัดไปต้องเริ่มต่อจากยอดสูงสุดใหม่ (+0.01) และคงความกว้างช่วงเดิมไว้ ไล่ต่อเนื่องไปจนสุด
+  if (editingIndex.value >= 0 && record.active) {
+    let previous: Tier = record
+    for (let i = editingIndex.value + 1; i < next.length; i++) {
+      const tier = next[i]!
+      if (!tier.active) continue
+      if (previous.max === null) break
+      const start = roundMoney(previous.max + moneyStep)
+      if (tier.min !== start) {
+        const width = tier.max === null ? null : tier.max - tier.min
+        tier.min = start
+        if (width !== null) tier.max = roundMoney(start + width)
+      }
+      previous = tier
+    }
+  }
+  const overlaps = next.some((tier, index) => {
+    if (index === editingIndex.value || !tier.active || !record.active) return false
+    const aMax = record.max ?? Number.POSITIVE_INFINITY
+    const bMax = tier.max ?? Number.POSITIVE_INFINITY
+    return record.min <= bMax && tier.min <= aMax
+  })
+  if (overlaps) {
+    error.value = 'บันทึกไม่ได้ เนื่องจากช่วงยอดขายซ้อนกับ Tier ที่มีอยู่'
+    return
+  }
+  tiers.splice(0, tiers.length, ...next)
   try {
     await commissionApi.updateScheme(scheme.id, {
       name: scheme.name,

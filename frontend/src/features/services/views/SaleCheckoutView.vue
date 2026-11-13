@@ -29,6 +29,12 @@ import paymentQrIcon from '@/assets/payment-qr.svg'
 import paymentCardIcon from '@/assets/payment-card.svg'
 
 type DiscountType = 'NONE' | 'FIXED' | 'PERCENT'
+
+const discountOptions = [
+  { value: 'NONE', label: 'ไม่มี' },
+  { value: 'FIXED', label: 'บาท' },
+  { value: 'PERCENT', label: 'เปอร์เซ็นต์' },
+]
 type SaleLine = {
   key: string
   category: '' | 'service' | 'course'
@@ -433,7 +439,9 @@ watch(
       >
         ← กลับหน้าบริการ
       </button>
-      <p v-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
+      <p v-if="error && patient" ref="errorMessage" class="error" role="alert">{{ error }}</p>
+      <p v-if="saving" role="status" aria-live="polite">กำลังบันทึก…</p>
+      <p v-else-if="processLoading" role="status">กำลังตรวจสอบนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         {{ processError
         }}<button type="button" @click="refreshAppointmentProcess">ลองอ่านใหม่</button>
@@ -472,15 +480,19 @@ watch(
               <div v-for="(line, index) in lines" :key="line.key" class="line-row">
                 <div class="item-picker" @focusin="refreshCatalog">
                   <label
-                    >ประเภท<select
-                      v-model="line.category"
+                    >ประเภท<FilterDropdown
+                      :model-value="line.category"
+                      :options="[
+                        { value: 'service', label: 'รายครั้ง' },
+                        { value: 'course', label: 'รายคอร์ส' },
+                      ]"
+                      default-label="เลือกประเภท"
+                      label="ประเภทการชำระ"
+                      :menu-min-width="180"
+                      :clear-on-reselect="false"
                       :disabled="stage === 'review'"
-                      @change="resetLine(line)"
-                    >
-                      <option value="">เลือกประเภท</option>
-                      <option value="service">รายครั้ง</option>
-                      <option value="course">รายคอร์ส</option>
-                    </select></label
+                      @update:model-value="line.category = $event as SaleLine['category']; resetLine(line)"
+                    /></label
                   >
                   <label
                     >รายการที่ {{ index + 1
@@ -504,15 +516,17 @@ watch(
                     :disabled="stage === 'review'"
                 /></label>
                 <label
-                  >ส่วนลด<select
-                    v-model="line.discountType"
+                  >ส่วนลด<FilterDropdown
+                    :model-value="line.discountType"
+                    :options="discountOptions"
+                    default-label="ไม่มี"
+                    label="ส่วนลดรายการ"
+                    :menu-min-width="180"
+                    hide-default-option
+                    :clear-on-reselect="false"
                     :disabled="stage === 'review'"
-                    @change="line.discountValue = 0"
-                  >
-                    <option value="NONE">ไม่มี</option>
-                    <option value="FIXED">บาท</option>
-                    <option value="PERCENT">เปอร์เซ็นต์</option>
-                  </select></label
+                    @update:model-value="line.discountType = $event as DiscountType; line.discountValue = 0"
+                  /></label
                 >
                 <label v-if="line.discountType !== 'NONE'"
                   >{{ line.discountType === 'FIXED' ? 'ระบุจำนวนบาท' : 'ระบุเปอร์เซ็นต์' }}<input
@@ -600,15 +614,17 @@ watch(
               <span>ยอดหลังส่วนลดรายการ</span><strong>{{ money(subtotalCents) }}</strong>
             </p>
             <label
-              >ส่วนลดท้ายบิล<select
-                v-model="billDiscountType"
+              >ส่วนลดท้ายบิล<FilterDropdown
+                :model-value="billDiscountType"
+                :options="discountOptions"
+                default-label="ไม่มี"
+                label="ส่วนลดท้ายบิล"
+                :menu-min-width="180"
+                hide-default-option
+                :clear-on-reselect="false"
                 :disabled="stage === 'review'"
-                @change="billDiscountValue = 0"
-              >
-                <option value="NONE">ไม่มี</option>
-                <option value="FIXED">บาท</option>
-                <option value="PERCENT">เปอร์เซ็นต์</option>
-              </select></label
+                @update:model-value="billDiscountType = $event as DiscountType; billDiscountValue = 0"
+              /></label
             >
             <label v-if="billDiscountType !== 'NONE'"
               >{{ billDiscountType === 'FIXED' ? 'ระบุจำนวนบาท' : 'ระบุเปอร์เซ็นต์' }}<input
@@ -653,7 +669,6 @@ watch(
               </button>
             </div>
           </aside>
-          <p v-if="error" ref="errorMessage" class="error" role="alert">{{ error }}</p>
           </div>
         </div>
       </template>
@@ -759,7 +774,7 @@ h2 {
 }
 .line-row {
   display: grid;
-  grid-template-columns: minmax(210px, 2fr) 75px 110px 85px 110px auto;
+  grid-template-columns: minmax(210px, 2fr) 75px 150px 85px 110px auto;
   gap: 10px;
   align-items: end;
   border-top: 1px solid #e1ebe7;
@@ -775,9 +790,12 @@ h2 {
 }
 .item-picker {
   display: grid;
-  grid-template-columns: 125px minmax(0, 1fr);
+  grid-template-columns: 160px minmax(0, 1fr);
   gap: 10px;
   min-width: 0;
+}
+.item-picker :deep(.filter-dropdown__button) {
+  white-space: nowrap;
 }
 .payment-group {
   margin: 18px 0;
@@ -897,11 +915,17 @@ textarea {
   .line-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .item-picker {
+    grid-column: 1 / -1;
+  }
   .line-row label:first-child {
     grid-column: 1 / -1;
   }
 }
 @media (max-width: 520px) {
+  .item-picker {
+    grid-template-columns: 1fr;
+  }
   .heading {
     display: block;
   }

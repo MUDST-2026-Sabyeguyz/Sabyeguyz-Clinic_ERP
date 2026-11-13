@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.audit;
 
-import com.sabyeguyz.clinicv2.enums.AuditAction;
+import java.time.Instant;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.Instant;
+
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 
 @Entity
 @Table(name = "audit_log")
@@ -37,6 +39,10 @@ public class AuditLog {
     @Column(name = "changed_at", nullable = false)
     private Instant changedAt;
 
+    /** The branch this change belongs to; empty for a change that is not tied to one (users, commission schemes). */
+    @Column(name = "branch_id")
+    private Long branchId;
+
     public AuditLog() {}
 
     public Long getId() { return id; }
@@ -54,4 +60,6 @@ public class AuditLog {
     public void setChangedBy(Long changedBy) { this.changedBy = changedBy; }
     public Instant getChangedAt() { return changedAt; }
     public void setChangedAt(Instant changedAt) { this.changedAt = changedAt; }
+    public Long getBranchId() { return branchId; }
+    public void setBranchId(Long branchId) { this.branchId = branchId; }
 }
