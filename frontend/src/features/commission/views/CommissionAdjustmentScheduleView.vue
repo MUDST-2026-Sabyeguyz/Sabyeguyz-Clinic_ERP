@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { commissionApi, type ManagerAdjustment } from '@/api/client'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
-import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 
 const route = useRoute()
 const row = ref<ManagerAdjustment | null>(null)

@@ -39,9 +39,6 @@ const amount = ref('')
 const reason = ref('')
 const loading = ref(true)
 const errorMessage = ref('')
-const creator = computed(
-  () => JSON.parse(localStorage.getItem('authUser') ?? 'null')?.fullName ?? 'Manager',
-)
 const saving = ref(false)
 
 watch(branchCode, async (code, _previous, onCleanup) => {
