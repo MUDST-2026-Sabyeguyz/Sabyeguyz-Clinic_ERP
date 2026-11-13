@@ -538,11 +538,11 @@ public class CoursePurchaseController {
     }
 
     /** The treating PT as recorded on the usage (never re-chosen here); null when none was recorded. */
-    private static String staffName(Staff staff) {
+    static String staffName(Staff staff) {
         return staff == null ? null : staff.getStaffFname() + " " + staff.getStaffLname();
     }
 
-    private static String patientName(Patient patient) {
+    static String patientName(Patient patient) {
         return patient == null ? null : patient.getPatientFname() + " " + patient.getPatientLname();
     }
 
