@@ -92,7 +92,17 @@ async function positionMenu() {
   if (!triggerElement || !menuElement) return
 
   const rect = triggerElement.getBoundingClientRect()
-  const width = Math.min(Math.max(rect.width, props.menuMinWidth), window.innerWidth - 16)
+  // เมนูกว้างอย่างน้อยเท่าปุ่ม แต่ขยายตามข้อความที่ยาวที่สุดเพื่อให้เห็นครบทุกตัว
+  menuElement.style.width = 'max-content'
+  // วัดจากความกว้างจริงของข้อความในแต่ละตัวเลือก (scrollWidth) + ขอบเมนู (padding 6px x2 + border 1px x2)
+  const optionWidths = Array.from(
+    menuElement.querySelectorAll<HTMLElement>('.filter-dropdown__option'),
+  ).map((option) => option.scrollWidth)
+  const naturalWidth = Math.max(menuElement.offsetWidth, ...optionWidths.map((w) => w + 14))
+  const width = Math.min(
+    Math.max(rect.width, props.menuMinWidth, naturalWidth),
+    window.innerWidth - 16,
+  )
   menuElement.style.width = `${width}px`
   const menuHeight = menuElement.offsetHeight
   const gap = 5
@@ -247,7 +257,15 @@ onBeforeUnmount(() => {
   border-color: #1e8883;
   box-shadow: 0 0 0 1px #1e8883;
 }
+/* ข้อความยาวต้องตัดด้วย … ไม่ให้ดันลูกศรชิดขอบ */
+.filter-dropdown__button > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .filter-dropdown__chevron {
+  flex: none;
   width: 8px;
   height: 8px;
   margin-left: 14px;
@@ -293,8 +311,8 @@ onBeforeUnmount(() => {
   color: inherit;
   font: inherit;
   text-align: left;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  /* ตัวเลือกต้องอยู่บรรทัดเดียว ไม่ให้คำฉีก (เมนูกว้างตามข้อความอยู่แล้ว) */
+  white-space: nowrap;
   cursor: pointer;
 }
 .filter-dropdown__option:hover,

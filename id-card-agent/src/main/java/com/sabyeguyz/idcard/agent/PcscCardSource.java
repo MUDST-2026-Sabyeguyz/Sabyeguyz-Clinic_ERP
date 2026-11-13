@@ -16,6 +16,15 @@ final class PcscCardSource implements CardSource {
     private final ThaiIdCardReader reader = new ThaiIdCardReader();
 
     @Override
+    public boolean readerPresent() {
+        try {
+            return !TerminalFactory.getDefault().terminals().list().isEmpty();
+        } catch (CardException | RuntimeException noService) {
+            return false;
+        }
+    }
+
+    @Override
     public ReadOutcome readWhenPresent(Duration wait, Runnable onCardPresent) {
         List<CardTerminal> terminals;
         try {

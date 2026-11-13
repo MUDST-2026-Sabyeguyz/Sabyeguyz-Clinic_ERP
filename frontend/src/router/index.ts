@@ -370,6 +370,22 @@ const router = createRouter({
       name: 'staff-settings',
       component: () => import('@/features/settings/views/BackOfficeView.vue'),
       meta: { permission: 'Setup' },
+      // ลิงก์เก่า /staff/settings?section=xxx ไปที่ path ของหมวดนั้นแทน
+      beforeEnter: (to) => {
+        const section = typeof to.query.section === 'string' ? to.query.section : ''
+        if (!section) return true
+        const { section: _drop, ...rest } = to.query
+        return /^(branches|users|services|payments|rooms|commission|tiers|master)$/.test(section)
+          ? { path: `/staff/settings/${section}`, query: rest, replace: true }
+          : { path: '/staff/settings', query: rest, replace: true }
+      },
+    },
+    {
+      // แต่ละหมวดการตั้งค่ามี path ของตัวเอง เพื่อให้ refresh แล้วยังอยู่หมวดเดิม
+      path: '/staff/settings/:section(branches|users|services|payments|rooms|commission|tiers|master)',
+      name: 'staff-settings-section',
+      component: () => import('@/features/settings/views/BackOfficeView.vue'),
+      meta: { permission: 'Setup' },
     },
     {
       path: '/staff/settings/commission-tiers',
