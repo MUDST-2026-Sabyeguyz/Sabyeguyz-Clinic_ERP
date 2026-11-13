@@ -26,6 +26,16 @@ existing tests are restored from the same snapshot. Examples include:
 | Reader setup and patient registration | Workstation management and ID-card read APIs |
 | Manager compensation screens | Branch-scoped closings, adjustment lifecycle, commission rules and manual single-visit fee backfill |
 
+Integration corrections on top of the restored backend:
+
+- Register the existing BCrypt algorithm as a Spring `PasswordEncoder`
+  bean and inject it into account operations.
+- Persist successful-login timestamps through a targeted repository
+  update, including when the account was loaded read-only during login.
+- Give the branch read-grant fixture a locked commission rate so its
+  existing pay-redaction assertions inspect an actual allocation row.
+  The original permission and redaction assertions remain in place.
+
 The frontend dependency lockfile and build configuration remain on the
 develop baseline. The restored source uses dependencies already declared
 there. Backend test dependencies and coverage configuration come from the
@@ -48,6 +58,24 @@ new migrations before upgrading an existing environment. The migrations
 include payment/commission structures, required email and appointment
 fields, course payment collections, calendar credentials, patient consent
 fields, and reader registration.
+
+In particular, migrations V1017, V1018 and V1019 deliberately stop an
+upgrade if real users lack an email, appointments lack an end time, or
+receipts lack a payment label. Review these rows on the existing V1008
+database before starting the restored backend; do not invent historical
+values just to make migration pass:
+
+```sql
+SELECT user_id, username FROM app_user WHERE email IS NULL AND username <> 'system';
+SELECT appointment_id FROM appointment WHERE appointment_end_at IS NULL;
+SELECT receipt_id FROM receipt
+WHERE payment_label IS NULL
+   OR payment_label::text NOT IN ('FullyPaid', 'Installment', 'Deposit');
+```
+
+V1012.1 maps those historical receipt labels to `payment_label_id` before
+V1019 enforces the new column. On a partially upgraded database where
+V1012.1 has already run, also check for null `receipt.payment_label_id`.
 
 The ID-card screens require the separately installed reader agent and
 hardware for a real card read. No physical-reader or live Google Calendar
