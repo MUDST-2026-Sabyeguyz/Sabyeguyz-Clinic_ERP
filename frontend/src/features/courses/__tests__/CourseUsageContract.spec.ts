@@ -2,18 +2,20 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import View from '../views/CourseActionView.vue'
-const mock = vi.hoisted(() => ({ use: vi.fn(), batch: vi.fn(), push: vi.fn() }))
+const mock = vi.hoisted(() => ({ use: vi.fn(), batch: vi.fn(), push: vi.fn(), hasAppointment: true }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({
     path: '/staff/courses',
     params: {},
-    query: { patientId: '9', appointmentId: '55', courseId: '101', action: 'use' },
+    query: mock.hasAppointment
+      ? { patientId: '9', appointmentId: '55', courseId: '101', action: 'use' }
+      : { patientId: '9' },
   }),
   useRouter: () => ({ push: mock.push, replace: mock.push }),
 }))
 vi.mock('@/features/appointments/useAppointmentProcess', () => ({
   useAppointmentProcess: () => ({
-    appointmentId: ref(55),
+    appointmentId: ref(mock.hasAppointment ? 55 : undefined),
     sourceAppointment: ref({ branchCode: '01', therapist: { id: 4, fullName: 'Treating PT' } }),
     appointmentProgress: ref(null),
     processLoading: ref(false),
@@ -66,11 +68,13 @@ type State = {
   errorMessage: string
   usageSuccess: boolean
   usageReview: boolean
+  action: string
   confirm: () => Promise<void>
   patientCourses: Array<{ id: number; remaining: number }>
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  mock.hasAppointment = true
   localStorage.setItem('authUser', JSON.stringify({ role: 'MANAGER' }))
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   mock.use.mockResolvedValue(purchase(101, 2))
@@ -92,6 +96,42 @@ async function render() {
   return { view, state }
 }
 describe('course usage main contract', () => {
+  it('returns from usage history to course management without the completed appointment context', async () => {
+    const { view, state } = await render()
+    state.action = 'history'
+    await nextTick()
+    await view.get('.course-history-back').trigger('click')
+    await flushPromises()
+    expect(mock.push).toHaveBeenCalledWith({
+      path: '/staff/courses',
+      query: { patientId: 9, courseId: 101 },
+    })
+    expect(state.action).toBe('manage')
+    expect(view.find('.course-history-main').exists()).toBe(false)
+    view.unmount()
+  })
+  it('stays on the course list and explains the appointment requirement', async () => {
+    mock.hasAppointment = false
+    const { view } = await render()
+    const useButton = view.findAll('button').find((button) => button.text() === 'ใช้สิทธิ์คอร์ส')
+    expect(useButton).toBeDefined()
+    await useButton!.trigger('click')
+    expect(mock.push).not.toHaveBeenCalled()
+    expect(view.get('.course-appointment-notice').text()).toContain('ต้องมีนัดหมายก่อนใช้สิทธิ์คอร์ส')
+    expect(mock.use).not.toHaveBeenCalled()
+    view.unmount()
+  })
+  it('opens the new review directly without rendering the old usage form', async () => {
+    const { view } = await render()
+    expect(view.find('.course-use-main > .course-use-form').exists()).toBe(false)
+    expect(view.find('.course-use-columns').exists()).toBe(false)
+    expect(view.find('.course-use-review').exists()).toBe(true)
+    expect(view.text()).not.toContain('ผู้รับบริการจริง')
+    expect(view.text()).not.toContain('เพิ่มคอร์สที่ใช้สิทธิ์')
+    expect(view.find('button[aria-label="แก้ไขนักกายภาพ"]').exists()).toBe(true)
+    view.unmount()
+  })
+
   it('defaults the treating therapist from the appointment', async () => {
     const { view, state } = await render()
     expect(state.treatingStaffId).toBe(4)
