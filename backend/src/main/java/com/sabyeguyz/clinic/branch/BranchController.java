@@ -1,14 +1,16 @@
 package com.sabyeguyz.clinic.branch;
 
-import com.sabyeguyz.clinic.audit.TransactionActor;
+import java.time.Instant;
+import java.util.List;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.time.Instant;
-import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import com.sabyeguyz.clinic.audit.TransactionActor;
 
 @RestController
 @RequestMapping("/api/branches")
@@ -22,20 +24,40 @@ public class BranchController {
     }
 
     public record Request(
-            @NotBlank @Pattern(regexp = "\\d{2}", message = "branchCode ต้องเป็นตัวเลข 2 หลัก") String branchCode,
-            @NotBlank @Size(max = 100) String name,
-            @NotBlank @Size(max = 255) String address,
-            @NotBlank @Size(max = 20) String phone) {}
+            @NotBlank
+            @Pattern(regexp = "\\d{2}", message = "branchCode ต้องเป็นตัวเลข 2 หลัก") String branchCode,
+            @NotBlank
+            @Size(max = 100) String name,
+            @NotBlank
+            @Size(max = 255) String address,
+            @NotBlank
+            @Size(max = 20) String phone) {
+    }
 
     public record Response(
-            Long id, String branchCode, String name, String address, String phone, boolean active,
-            Instant createdAt, Long createdBy, Instant updatedAt, Long updatedBy) {}
+            Long id,
+            String branchCode,
+            String name,
+            String address,
+            String phone,
+            boolean active,
+            Instant createdAt,
+            Long createdBy,
+            Instant updatedAt,
+            Long updatedBy) {
+    }
 
     @GetMapping
-    List<Response> list() { return repository.findAllByOrderByName().stream().map(BranchController::toResponse).toList(); }
+    List<Response> list() {
+        return repository.findAllByOrderByName().stream()
+                .map(BranchController::toResponse)
+                .toList();
+    }
 
     @GetMapping("/{id}")
-    Response get(@PathVariable Long id) { return toResponse(find(id)); }
+    Response get(@PathVariable Long id) {
+        return toResponse(find(id));
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -43,8 +65,12 @@ public class BranchController {
         String branchCode = request.branchCode().trim();
         if (repository.findByBranchCode(branchCode).isPresent())
             throw new IllegalArgumentException("รหัสสาขาซ้ำ");
-        Branch branch = new Branch(branchCode, request.name().trim(), request.address().trim(),
-                request.phone().trim(), actor.currentId());
+        Branch branch = new Branch(
+                branchCode,
+                request.name().trim(),
+                request.address().trim(),
+                request.phone().trim(),
+                actor.currentId());
         return toResponse(repository.save(branch));
     }
 
@@ -66,11 +92,21 @@ public class BranchController {
         repository.save(branch);
     }
 
-    private Branch find(Long id) { return repository.findById(id).orElseThrow(BranchNotFoundException::new); }
+    private Branch find(Long id) {
+        return repository.findById(id).orElseThrow(BranchNotFoundException::new);
+    }
 
     private static Response toResponse(Branch branch) {
-        return new Response(branch.getId(), branch.getBranchCode(), branch.getName(), branch.getAddress(),
-                branch.getPhone(), branch.isActive(), branch.getCreatedAt(), branch.getCreatedBy(),
-                branch.getUpdatedAt(), branch.getUpdatedBy());
+        return new Response(
+                branch.getId(),
+                branch.getBranchCode(),
+                branch.getName(),
+                branch.getAddress(),
+                branch.getPhone(),
+                branch.isActive(),
+                branch.getCreatedAt(),
+                branch.getCreatedBy(),
+                branch.getUpdatedAt(),
+                branch.getUpdatedBy());
     }
 }

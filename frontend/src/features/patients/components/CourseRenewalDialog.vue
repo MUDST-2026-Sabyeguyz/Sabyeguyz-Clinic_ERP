@@ -281,7 +281,7 @@ footer {
 h2 {
   margin: 0;
   font-size: 24px;
-  color: #145c59;
+  color: var(--color-primary-strong);
 }
 button {
   min-height: 44px;
@@ -289,7 +289,7 @@ button {
   border: 1px solid #b7cecc;
   border-radius: 8px;
   background: white;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   cursor: pointer;
 }
@@ -298,8 +298,7 @@ button:disabled {
   cursor: not-allowed;
 }
 .course-renewal-primary {
-  background: #187d78;
-  border-color: #187d78;
+  background: var(--color-primary-strong);
   color: white;
 }
 .course-renewal-overview {
@@ -353,7 +352,7 @@ footer {
   flex-wrap: wrap;
 }
 small {
-  color: #56665d;
+  color: var(--color-muted);
 }
 .course-renewal-error {
   color: #b42318;
@@ -378,7 +377,7 @@ small {
   padding: 0;
 }
 :is(button, input, textarea):focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 @media (max-width: 380px) {

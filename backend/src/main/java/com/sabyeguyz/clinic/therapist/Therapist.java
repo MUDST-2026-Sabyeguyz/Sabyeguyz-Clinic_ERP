@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.therapist;
 
-import com.sabyeguyz.clinic.branch.Branch;
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -11,7 +12,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import java.time.Instant;
+
+import com.sabyeguyz.clinic.branch.Branch;
 
 @Entity
 @Table(name = "therapists")
@@ -35,12 +37,30 @@ public class Therapist {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    protected Therapist() {}
+    protected Therapist() {
+    }
 
-    public Long getId() { return id; }
-    public Branch getBranch() { return branch; }
-    public String getCode() { return code; }
-    public String getFullName() { return fullName; }
-    public boolean isActive() { return active; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Branch getBranch() {
+        return branch;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

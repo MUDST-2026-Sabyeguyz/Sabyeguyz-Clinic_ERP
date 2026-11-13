@@ -119,7 +119,7 @@ onMounted(load)
   padding: 9px 16px;
   border: 0;
   border-radius: 8px;
-  background: #1e807c;
+  background: var(--color-primary);
   color: #fff;
   font: inherit;
   cursor: pointer;

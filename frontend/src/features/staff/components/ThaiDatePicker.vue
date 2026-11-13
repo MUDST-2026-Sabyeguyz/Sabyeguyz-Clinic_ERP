@@ -432,7 +432,7 @@ function isSelected(day: number) {
 .days button:hover,
 .days button.selected {
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 
 .days button.disabled,

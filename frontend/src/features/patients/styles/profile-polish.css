@@ -16,7 +16,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > .back
   border: 1px solid #b7cecc;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 16px;
   font-weight: 600;
   line-height: 1.5;
@@ -24,12 +24,12 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > .back
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > .back-link:hover {
   background: #edf5f1;
-  border-color: #145c59;
+  border-color: var(--color-primary-strong);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-title h1 {
   font-size: 32px;
   line-height: 1.4;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-weight: 800;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-edit {
@@ -37,7 +37,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profi
   padding: 10px 16px;
   font-size: 16px;
   line-height: 1.5;
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: #fff;
   border-color: #b7cecc;
 }
@@ -76,7 +76,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profi
   color: #52665e;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a.active {
-  color: #145c59;
+  color: var(--color-primary-strong);
   background: #edf5f1;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-tabs a:hover {
@@ -89,7 +89,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profi
   margin-bottom: 20px;
   font-size: 20px;
   line-height: 1.5;
-  color: #25372e;
+  color: var(--color-ink);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid {
   gap: 20px 24px;
@@ -100,17 +100,17 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profi
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid dt {
   font-size: 14px;
   line-height: 1.5;
-  color: #56665d;
+  color: var(--color-muted);
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .patient-profile-grid dd {
   margin-top: 6px;
   font-size: 16px;
   line-height: 1.5;
-  color: #25372e;
+  color: var(--color-ink);
   overflow-wrap: anywhere;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page :is(button, a):focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 @media (max-width: 700px) {
@@ -226,7 +226,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page > main > a.bac
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 16px;
   font-weight: 600;
   text-decoration: none;
@@ -362,14 +362,14 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overvi
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview span {
   display: block;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
   line-height: 1.5;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-overview strong {
   display: block;
   margin-top: 6px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 22px;
   line-height: 1.5;
 }
@@ -387,7 +387,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   min-width: 0;
   gap: 8px;
   margin: 0;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-search-field {
@@ -408,7 +408,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .history-clear
   background: #fff;
   border: 1px solid #b7cecc;
   border-radius: 8px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   cursor: pointer;
 }
@@ -476,7 +476,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-purchase-date {
   display: block;
   margin-top: 4px;
-  color: #56665d;
+  color: var(--color-muted);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -495,7 +495,7 @@ body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page .course-more-a
   cursor: pointer;
   border: 1px solid #b7cecc;
   border-radius: 8px;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   background: #fff;
 }
@@ -578,7 +578,7 @@ body:is(.therapist-ui, :not(.therapist-ui))
   background: #eaf5f2;
 }
 body:is(.therapist-ui, :not(.therapist-ui)) .patient-profile-page summary:focus-visible {
-  outline: 3px solid #145c59;
+  outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 @media (max-width: 700px) {

@@ -15,7 +15,8 @@ public class CalendarScheduler {
         this.sync = sync;
     }
 
-    @Scheduled(initialDelayString = "${app.calendar.push-interval-ms:30000}", fixedDelayString = "${app.calendar.push-interval-ms:30000}")
+    @Scheduled(initialDelayString = "${app.calendar.push-interval-ms:30000}",
+            fixedDelayString = "${app.calendar.push-interval-ms:30000}")
     public void push() {
         try {
             sync.push();
@@ -24,7 +25,8 @@ public class CalendarScheduler {
         }
     }
 
-    @Scheduled(initialDelayString = "${app.calendar.pull-interval-ms:60000}", fixedDelayString = "${app.calendar.pull-interval-ms:60000}")
+    @Scheduled(initialDelayString = "${app.calendar.pull-interval-ms:60000}",
+            fixedDelayString = "${app.calendar.pull-interval-ms:60000}")
     public void pull() {
         try {
             sync.pull();

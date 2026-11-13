@@ -1,5 +1,13 @@
 package com.sabyeguyz.clinic.appointment;
 
+import java.time.Duration;
+import java.time.Instant;
+
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinic.branch.Branch;
 import com.sabyeguyz.clinic.branch.BranchRepository;
 import com.sabyeguyz.clinic.catalog.ServiceItem;
@@ -8,12 +16,6 @@ import com.sabyeguyz.clinic.patient.Patient;
 import com.sabyeguyz.clinic.patient.PatientRepository;
 import com.sabyeguyz.clinic.therapist.Therapist;
 import com.sabyeguyz.clinic.therapist.TherapistRepository;
-import java.time.Duration;
-import java.time.Instant;
-import org.springframework.core.NestedExceptionUtils;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AppointmentBookingService {
@@ -73,7 +75,14 @@ public class AppointmentBookingService {
             throw new AppointmentConflictException(OVERLAP_MESSAGE);
         }
 
-        Appointment appointment = new Appointment(branch, patient, therapist, service, startAt, endAt, request.note());
+        Appointment appointment = new Appointment(
+                branch,
+                patient,
+                therapist,
+                service,
+                startAt,
+                endAt,
+                request.note());
         try {
             appointmentRepository.saveAndFlush(appointment);
         } catch (DataIntegrityViolationException exception) {

@@ -7,7 +7,9 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/id-card/reads")
 public class IdCardReadController {
-    public record StartRequest(Long workstationId, String purpose) {}
+    public record StartRequest(
+            Long workstationId,
+            String purpose) {}
 
     private final IdCardService service;
 

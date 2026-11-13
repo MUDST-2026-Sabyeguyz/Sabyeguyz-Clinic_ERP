@@ -28,19 +28,42 @@ public record PatientProfileResponse(
         String nationality,
         String customerType,
         String customerSource,
-        String insuranceCompany
-) {
-    public record BranchSummary(Long id, String branchCode, String name, boolean active) {}
+        String insuranceCompany) {
+    public record BranchSummary(
+            Long id,
+            String branchCode,
+            String name,
+            boolean active) {
+    }
 
     static PatientProfileResponse from(Patient patient) {
         var branch = patient.getBranch();
-        return new PatientProfileResponse(patient.getId(), patient.getHn(),
+        return new PatientProfileResponse(
+                patient.getId(),
+                patient.getHn(),
                 new BranchSummary(branch.getId(), branch.getBranchCode(), branch.getName(), branch.isActive()),
-                patient.getTitle(), patient.getFullName(), patient.getBirthDate(), patient.getGender(), patient.getPhone(),
-                patient.getIdentityDocumentType(), patient.getIdentityNumber(), patient.getAddress(), patient.isDrugAllergy(),
-                patient.isFoodAllergy(), patient.getChronicDisease(), patient.getEmergencyContactName(),
-                patient.getEmergencyContactRelationship(), patient.getEmergencyContactPhone(), patient.isPrivacyConsent(),
-                patient.isActive(), patient.getNickname(), patient.getEmail(), patient.getBloodGroup(), patient.getNationality(),
-                patient.getCustomerType(), patient.getCustomerSource(), patient.getInsuranceCompany());
+                patient.getTitle(),
+                patient.getFullName(),
+                patient.getBirthDate(),
+                patient.getGender(),
+                patient.getPhone(),
+                patient.getIdentityDocumentType(),
+                patient.getIdentityNumber(),
+                patient.getAddress(),
+                patient.isDrugAllergy(),
+                patient.isFoodAllergy(),
+                patient.getChronicDisease(),
+                patient.getEmergencyContactName(),
+                patient.getEmergencyContactRelationship(),
+                patient.getEmergencyContactPhone(),
+                patient.isPrivacyConsent(),
+                patient.isActive(),
+                patient.getNickname(),
+                patient.getEmail(),
+                patient.getBloodGroup(),
+                patient.getNationality(),
+                patient.getCustomerType(),
+                patient.getCustomerSource(),
+                patient.getInsuranceCompany());
     }
 }

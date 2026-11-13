@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.setting;
 
-import com.sabyeguyz.clinicv2.role.Permission;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.role.Permission;
 
 /**
  * Admin-editable system settings (e.g. TREATMENT_FEE_OVERFLOW_POLICY),
@@ -33,20 +35,31 @@ public class SystemSettingService {
     }
 
     @Transactional
-    public SystemSetting set(String settingKey, Permission permission, String settingValue, String description,
-                              Long actorId) {
+    public SystemSetting set(
+            String settingKey,
+            Permission permission,
+            String settingValue,
+            String description,
+            Long actorId) {
         String key = requireText(settingKey, "settingKey");
         SystemSetting setting = repository.findById(key)
-                .orElseGet(() -> new SystemSetting(key, permission, requireText(settingValue, "settingValue")));
+                .orElseGet(() -> new SystemSetting(
+                        key,
+                        permission,
+                        requireText(settingValue, "settingValue")));
         setting.setPermission(permission);
         setting.setSettingValue(requireText(settingValue, "settingValue"));
         setting.setDescription(description);
+
         setting.setSettingUpdateAt(Instant.now());
         setting.setSettingUpdateBy(actorId);
+
         return repository.save(setting);
     }
 
-    private static String requireText(String value, String field) {
+    private static String requireText(
+            String value,
+            String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
         }

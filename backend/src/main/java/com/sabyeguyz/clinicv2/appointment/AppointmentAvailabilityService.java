@@ -1,5 +1,13 @@
 package com.sabyeguyz.clinicv2.appointment;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.calendar.CalendarProperties;
 import com.sabyeguyz.clinicv2.calendar.GoogleCalendarClient;
@@ -7,12 +15,6 @@ import com.sabyeguyz.clinicv2.catalog.Service;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.enums.AppointmentStatus;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Free times a therapist can be booked on a day: inside the branch's booking window, not in the past and not
@@ -26,21 +28,34 @@ public class AppointmentAvailabilityService {
     static final LocalTime FALLBACK_OPEN = LocalTime.of(9, 0);
     static final LocalTime FALLBACK_CLOSE = LocalTime.of(18, 0);
 
-    public record Slot(String time, boolean available, String reason) {}
+    public record Slot(
+            String time,
+            boolean available,
+            String reason) {}
 
     /** googleCalendar: NOT_CONNECTED (the branch has none), CHECKED (Busy read) or UNAVAILABLE (could not be read). */
-    public record Availability(LocalDate date, String openTime, String closeTime, boolean windowConfigured,
-                               Integer durationMinutes, int stepMinutes, List<Slot> slots, String googleCalendar) {}
+    public record Availability(
+            LocalDate date,
+            String openTime,
+            String closeTime,
+            boolean windowConfigured,
+            Integer durationMinutes,
+            int stepMinutes,
+            List<Slot> slots,
+            String googleCalendar) {}
 
-    private record GoogleBusy(String state, List<GoogleCalendarClient.BusyBlock> blocks) {}
+    private record GoogleBusy(
+            String state,
+            List<GoogleCalendarClient.BusyBlock> blocks) {}
 
     private final AppointmentRepository appointments;
     private final ObjectProvider<GoogleCalendarClient> googleClient;
     private final CalendarProperties calendarProperties;
 
-    public AppointmentAvailabilityService(AppointmentRepository appointments,
-                                          ObjectProvider<GoogleCalendarClient> googleClient,
-                                          CalendarProperties calendarProperties) {
+    public AppointmentAvailabilityService(
+            AppointmentRepository appointments,
+            ObjectProvider<GoogleCalendarClient> googleClient,
+            CalendarProperties calendarProperties) {
         this.appointments = appointments;
         this.googleClient = googleClient;
         this.calendarProperties = calendarProperties;
@@ -49,22 +64,51 @@ public class AppointmentAvailabilityService {
     private GoogleBusy googleBusy(Branch branch, LocalDate date) {
         GoogleCalendarClient client = googleClient.getIfAvailable();
         String calendarId = branch.getGoogleCalendarId();
-        if (!calendarProperties.isEnabled() || client == null || calendarId == null || calendarId.isBlank()) {
-            return new GoogleBusy("NOT_CONNECTED", List.of());
+
+        if (!calendarProperties.isEnabled()
+                || client == null
+                || calendarId == null
+                || calendarId.isBlank()) {
+            return new GoogleBusy(
+                    "NOT_CONNECTED",
+                    List.of());
         }
+
         try {
-            return new GoogleBusy("CHECKED", client.busyBlocks(calendarId, date.atStartOfDay(), date.plusDays(1).atStartOfDay()));
+            return new GoogleBusy(
+                    "CHECKED",
+                    client.busyBlocks(
+                            calendarId,
+                            date.atStartOfDay(),
+                            date.plusDays(1).atStartOfDay()));
         } catch (RuntimeException unreachable) {
-            return new GoogleBusy("UNAVAILABLE", List.of()); // never block a booking because Google is down
+            return new GoogleBusy(
+                    "UNAVAILABLE",
+                    List.of()); // never block a booking because Google is down
         }
     }
 
-    private static boolean touchesBusy(List<GoogleCalendarClient.BusyBlock> blocks, LocalDate date, int startMinute, int length) {
+    private static boolean touchesBusy(
+            List<GoogleCalendarClient.BusyBlock> blocks,
+            LocalDate date,
+            int startMinute,
+            int length) {
         for (GoogleCalendarClient.BusyBlock block : blocks) {
-            int blockStart = (int) java.time.Duration.between(date.atStartOfDay(), block.start()).toMinutes();
-            int blockEnd = (int) java.time.Duration.between(date.atStartOfDay(), block.end()).toMinutes();
-            if (AppointmentService.overlaps(startMinute, length, blockStart, blockEnd - blockStart)) return true;
+            int blockStart = (int) java.time.Duration
+                    .between(date.atStartOfDay(), block.start())
+                    .toMinutes();
+            int blockEnd = (int) java.time.Duration
+                    .between(date.atStartOfDay(), block.end())
+                    .toMinutes();
+            if (AppointmentService.overlaps(
+                    startMinute,
+                    length,
+                    blockStart,
+                    blockEnd - blockStart)) {
+                return true;
+            }
         }
+
         return false;
     }
 
@@ -77,10 +121,12 @@ public class AppointmentAvailabilityService {
         if (start == null || end == null || !end.isAfter(start)) {
             throw new IllegalArgumentException("ต้องระบุเวลาเริ่มและเวลาจบนัดให้ถูกต้อง");
         }
+
         for (LocalDate date = start.toLocalDate();
              !date.isAfter(end.toLocalDate());
              date = date.plusDays(1)) {
             GoogleBusy busy = googleBusy(branch, date);
+
             if ("UNAVAILABLE".equals(busy.state())) {
                 throw new IllegalStateException("ตรวจเวลาว่างจาก Google Calendar ไม่สำเร็จ กรุณาลองใหม่");
             }
@@ -95,22 +141,27 @@ public class AppointmentAvailabilityService {
 
     @Transactional(readOnly = true)
     public Availability availability(
-            Branch branch, Staff therapist, Service service,
-            LocalDate date, Long excludingAppointmentId) {
+            Branch branch,
+            Staff therapist,
+            Service service,
+            LocalDate date,
+            Long excludingAppointmentId) {
         LocalTime open = branch.getBookingOpenTime();
         LocalTime close = branch.getBookingCloseTime();
         Integer minutes = AppointmentService.effectiveMinutes(service, branch);
 
-        boolean configured = open != null && close != null
-                && open.isBefore(close);
+        boolean configured = open != null && close != null && open.isBefore(close);
 
         if (!configured || minutes == null || minutes < 1) {
             return new Availability(
                     date,
                     open == null ? null : open.toString(),
                     close == null ? null : close.toString(),
-                    configured, minutes, STEP_MINUTES,
-                    List.of(), "NOT_CHECKED");
+                    configured,
+                    minutes,
+                    STEP_MINUTES,
+                    List.of(),
+                    "NOT_CHECKED");
         }
 
         List<Appointment> busy = appointments.activeOfStaffForInterval(
@@ -140,11 +191,13 @@ public class AppointmentAvailabilityService {
                 }
                 if (reason == null) {
                     for (Appointment other : busy) {
-                        if (other.getId() != null && other.getId().equals(excludingAppointmentId)) {
+                        if (other.getId() != null
+                                && other.getId().equals(excludingAppointmentId)) {
                             continue;
                         }
                         java.time.LocalDateTime otherStart = other.getAppointmentDate().atTime(other.getAppointmentTime());
-                        if (otherStart.isBefore(end) && start.isBefore(other.getAppointmentEndAt())) {
+                        if (otherStart.isBefore(end)
+                                && start.isBefore(other.getAppointmentEndAt())) {
                             reason = "มีนัดอื่นของนักกายภาพ";
                             break;
                         }
@@ -154,6 +207,14 @@ public class AppointmentAvailabilityService {
             slots.add(new Slot(start.toLocalTime().toString().substring(0, 5), reason == null, reason));
         }
 
-        return new Availability(date, open.toString(), close.toString(), configured, minutes, STEP_MINUTES, slots, google.state());
+        return new Availability(
+                date,
+                open.toString(),
+                close.toString(),
+                configured,
+                minutes,
+                STEP_MINUTES,
+                slots,
+                google.state());
     }
 }

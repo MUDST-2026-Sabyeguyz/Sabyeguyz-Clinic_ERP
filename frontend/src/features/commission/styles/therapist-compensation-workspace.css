@@ -361,7 +361,7 @@
   border: 1px solid #dce4df;
   border-radius: 8px;
   background: #fff;
-  color: #25372e;
+  color: var(--color-ink);
   text-align: left;
 }
 .therapist-payment-card {
@@ -547,7 +547,7 @@
 .therapist-line-row {
   margin-bottom: 8px;
   border: 1px solid #d3e3e0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 14px;
   text-decoration: none;
 }

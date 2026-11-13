@@ -307,7 +307,7 @@ onMounted(load)
 .empty-clear {
   border: 0;
   background: transparent;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -363,7 +363,7 @@ onMounted(load)
   border: 1px solid #b7cecc;
   border-radius: 8px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -373,13 +373,13 @@ onMounted(load)
   cursor: not-allowed;
 }
 .adjustment-pagination button:focus-visible {
-  outline: 2px solid #145c59;
+  outline: 2px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 .clear-filters:focus-visible,
 .empty-clear:focus-visible,
 .detail-button:focus-visible {
-  outline: 2px solid #145c59;
+  outline: 2px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
 .adjustment-filters input {
@@ -410,7 +410,7 @@ onMounted(load)
 }
 .directory-results h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 18px;
 }
 .directory-results p {
@@ -419,7 +419,7 @@ onMounted(load)
   font-size: 13px;
 }
 .directory-results > span {
-  color: #145c59;
+  color: var(--color-primary-strong);
   font-size: 14px;
   font-weight: 700;
 }
@@ -444,7 +444,7 @@ th {
 td {
   padding: 16px 18px;
   border-bottom: 1px solid #e7ede9;
-  color: #25372e;
+  color: var(--color-ink);
   vertical-align: middle;
 }
 tbody td:first-child {
@@ -482,14 +482,14 @@ tbody tr:hover td {
   border-radius: 8px;
   padding: 0 14px;
   background: #fff;
-  color: #145c59;
+  color: var(--color-primary-strong);
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
   text-decoration: none;
 }
 .detail-button:hover {
-  border-color: #145c59;
+  border-color: var(--color-primary-strong);
   background: #edf5f1;
 }
 .empty-row {

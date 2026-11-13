@@ -1,3 +1,6 @@
 package com.sabyeguyz.clinicv2.enums;
 
-public enum CourseMemberRole { Owner, SharedMember }
+public enum CourseMemberRole {
+    Owner,
+    SharedMember
+}
