@@ -2,6 +2,7 @@ package com.sabyeguyz.clinicv2.staff;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
+import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -16,9 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StaffService {
     private final StaffRepository repository;
+    private final AppUserRepository users;
 
-    public StaffService(StaffRepository repository) {
+    public StaffService(StaffRepository repository, AppUserRepository users) {
         this.repository = repository;
+        this.users = users;
     }
 
     @Transactional(readOnly = true)
@@ -29,6 +32,18 @@ public class StaffService {
     @Transactional(readOnly = true)
     public Staff get(Long id) {
         return find(id);
+    }
+
+    /** Next free auto-generated staff code by position, e.g. THP-001, MGR-001. */
+    @Transactional(readOnly = true)
+    public String nextStaffCode(StaffPosition position) {
+        String prefix = position == StaffPosition.Manager ? "MGR-" : "THP-";
+        long n = repository.countByStaffCodeStartingWith(prefix) + 1;
+        String code;
+        do {
+            code = String.format("%s%03d", prefix, n++);
+        } while (repository.findByStaffCode(code).isPresent());
+        return code;
     }
 
     @Transactional
@@ -94,6 +109,15 @@ public class StaffService {
         staff.setTerminationDate(terminationDate);
         staff.setStaffUpdateAt(Instant.now());
         staff.setStaffUpdateBy(actorId);
+        var linkedUsers = users.findByStaffId(staff.getId());
+        Instant updatedAt = Instant.now();
+
+        for (var user : linkedUsers) {
+            user.setUserStatus(false);
+            user.setUserUpdateAt(updatedAt);
+            user.setUserUpdateBy(actorId);
+        }
+        users.saveAll(linkedUsers);
         return repository.save(staff);
     }
 

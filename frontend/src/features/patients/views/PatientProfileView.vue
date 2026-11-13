@@ -2,13 +2,25 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import PatientSummary from '../components/PatientSummary.vue'
+import PatientHistory from './PatientHistoryView.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import { patientApi, type PatientProfile, type PatientUpdatePayload } from '@/api/client'
+import {
+  masterDataApi,
+  patientApi,
+  type PatientProfile,
+  type PatientUpdatePayload,
+} from '@/api/client'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
-import { patientTitleOptions, patientGenderOptions } from '../data/patientRegistration'
+import { clinicYesterday } from '@/utils/clinicDate'
+import { isOptionalPhoneValid, limitPhoneDigits } from '@/utils/phone'
 
 const route = useRoute()
+const showingHistory = computed(() => route.name === 'patient-history')
 type UiPatientProfile = PatientProfile & {
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
   nickname: string
   email: string
   bloodGroup: string
@@ -18,7 +30,28 @@ type UiPatientProfile = PatientProfile & {
   insuranceCompany: string
 }
 const patient = ref<UiPatientProfile | null>(null)
-const profileName = computed(() => splitFullName(patient.value?.fullName ?? ''))
+const profileName = computed(() => {
+  const p = patient.value
+  if (p && (p.firstName != null || p.lastName != null))
+    return {
+      firstName: p.firstName || '',
+      middleName: p.middleName || '',
+      lastName: p.lastName || '',
+    }
+  return { ...splitFullName(p?.fullName ?? ''), middleName: '' }
+})
+const profileGender = computed(() => {
+  const value = patient.value?.gender || ''
+  const labels: Record<string, string> = {
+    Male: 'ชาย',
+    Female: 'หญิง',
+    NotSpecified: '-',
+    ชาย: 'ชาย',
+    หญิง: 'หญิง',
+    ไม่ระบุ: '-',
+  }
+  return labels[value] || '-'
+})
 const profileInitials = computed(
   () =>
     patient.value?.fullName
@@ -55,9 +88,10 @@ const profileSections = computed(() => {
       fields: [
         { label: 'คำนำหน้า', value: p.title },
         { label: 'ชื่อ', value: profileName.value.firstName },
+        { label: 'ชื่อกลาง', value: profileName.value.middleName },
         { label: 'นามสกุล', value: profileName.value.lastName },
         { label: 'ชื่อเล่น', value: p.nickname },
-        { label: 'เพศ', value: p.gender },
+        { label: 'เพศ', value: profileGender.value },
         { label: 'วันเกิด', value: profileBirthDate.value },
         { label: 'กรุ๊ปเลือด', value: p.bloodGroup },
         { label: 'สัญชาติ', value: p.nationality },
@@ -74,7 +108,7 @@ const profileSections = computed(() => {
       ],
     },
     {
-      title: 'ข้อมูลคลินิก',
+      title: 'ข้อมูลเพิ่มเติม',
       columns: 'contact-grid',
       fields: [
         { label: 'สาขาที่ลงทะเบียน', value: profileBranch.value },
@@ -90,32 +124,11 @@ const errorMessage = ref('')
 const editing = ref(false)
 const saved = ref(false)
 const confirmationOpen = ref(false)
-const titleOptions = patientTitleOptions
-const genderOptions = patientGenderOptions
-const titleOptionValues: Record<string, string> = {
-  นาย: 'นาย',
-  mr: 'นาย',
-  'mr.': 'นาย',
-  นางสาว: 'นางสาว',
-  miss: 'นางสาว',
-  นาง: 'นาง',
-  mrs: 'นาง',
-  'mrs.': 'นาง',
-  เด็กชาย: 'เด็กชาย',
-  boy: 'เด็กชาย',
-  เด็กหญิง: 'เด็กหญิง',
-  girl: 'เด็กหญิง',
-}
-const titleOptionValue = (title: string | null | undefined) => {
-  const normalized = title?.trim().toLocaleLowerCase('en-US')
-  return normalized ? (titleOptionValues[normalized] ?? title ?? '') : ''
-}
+const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
+const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
-const customerSourceOptions = ['ลูกค้าแนะนำ', 'Facebook', 'หน้าสาขา'].map((value) => ({
-  value,
-  label: value,
-}))
-const insuranceOptions = [{ value: 'AIA', label: 'AIA' }]
+const customerSourceOptions = ref<Array<{ value: string; label: string }>>([])
+const insuranceOptions = ref<Array<{ value: string; label: string }>>([])
 function splitFullName(fullName: string) {
   const [firstName = '', ...lastName] = fullName.trim().split(/\s+/)
   return { firstName, lastName: lastName.join(' ') }
@@ -182,6 +195,9 @@ const isForeignNationalityValue = (value: string) =>
   ['ต่างชาติ', 'FOREIGN', 'FOREIGNER', 'NON_THAI'].includes(value.trim().toUpperCase())
 const isForeignNationality = computed(() => isForeignNationalityValue(draft.nationality))
 const digitsOnly = (value: string) => value.replace(/\D/g, '')
+const phoneIsValid = computed(() =>
+  isForeignNationality.value ? isOptionalPhoneValid(draft.phone) : /^[0-9]{10}$/.test(draft.phone),
+)
 watch(
   () => draft.nationality,
   (nationality) => {
@@ -189,6 +205,20 @@ watch(
       ? 'หนังสือเดินทาง'
       : 'บัตรประจำตัวประชาชน'
     draft.identityNumber = ''
+  },
+)
+watch(
+  () => draft.title,
+  (title) => {
+    if (title === 'นาย') draft.gender = 'ชาย'
+    else if (title === 'นาง' || title === 'นางสาว') draft.gender = 'หญิง'
+  },
+)
+watch(
+  () => draft.gender,
+  (gender) => {
+    if (gender === 'ชาย') draft.title = 'นาย'
+    else if (gender === 'หญิง') draft.title = 'นางสาว'
   },
 )
 function normalizeProfile(profile: PatientProfile): UiPatientProfile {
@@ -205,13 +235,15 @@ function normalizeProfile(profile: PatientProfile): UiPatientProfile {
 }
 function assignDraft(profile: UiPatientProfile) {
   const foreignPatient = isForeignNationalityValue(profile.nationality)
-  const nameParts = splitEditFullName(profile.fullName)
-  Object.assign(draft, profile, nameParts, {
-    title: titleOptionValue(profile.title),
-    firstName: profile.firstName ?? nameParts.firstName,
-    lastName: profile.lastName ?? nameParts.lastName,
-    middleName: profile.middleName ?? nameParts.middleName,
-
+  const names =
+    profile.firstName != null || profile.lastName != null
+      ? {
+          firstName: profile.firstName || '',
+          middleName: profile.middleName || '',
+          lastName: profile.lastName || '',
+        }
+      : splitEditFullName(profile.fullName)
+  Object.assign(draft, profile, names, {
     nationality: foreignPatient ? 'ต่างชาติ' : profile.nationality,
     identityDocumentType:
       foreignPatient || profile.identityDocumentType === 'PASSPORT'
@@ -232,14 +264,18 @@ function cancelEdit() {
 async function saveEdit() {
   if (!patient.value) return
   errorMessage.value = ''
+  if (!phoneIsValid.value) {
+    errorMessage.value = isForeignNationality.value
+      ? 'เบอร์โทรต้องไม่เกิน 10 หลัก'
+      : 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก'
+    return
+  }
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
-      firstName: draft.firstName,
-      lastName: draft.lastName,
-      middleName: draft.middleName || null,
-      fullName: [draft.firstName, draft.middleName, draft.lastName].filter(Boolean).join(' '),
-
+      fullName: `${draft.firstName} ${draft.middleName} ${draft.lastName}`
+        .replace(/\s+/g, ' ')
+        .trim(),
       birthDate: draft.birthDateInput,
       gender: draft.gender,
       phone: draft.phone,
@@ -274,7 +310,9 @@ async function saveEdit() {
     errorMessage.value = error instanceof Error ? error.message : 'Request failed'
   }
 }
-onMounted(async () => {
+async function loadProfile() {
+  loading.value = true
+  errorMessage.value = ''
   const id = Number(route.params.id)
   if (!Number.isInteger(id)) {
     errorMessage.value = 'รหัสผู้ป่วยไม่ถูกต้อง'
@@ -282,48 +320,90 @@ onMounted(async () => {
     return
   }
   try {
-    patient.value = normalizeProfile(await patientApi.get(id))
+    const [profile, masterData] = await Promise.all([
+      patientApi.get(id),
+      masterDataApi.list().catch(() => []),
+    ])
+    patient.value = normalizeProfile(profile)
+    const optionsFor = (category: string, currentValue: string) => {
+      const values = masterData
+        .filter((item) => item.active && item.category === category)
+        .map((item) => item.name)
+      if (currentValue && !values.includes(currentValue)) values.unshift(currentValue)
+      return values.map((value) => ({ value, label: value }))
+    }
+    customerSourceOptions.value = optionsFor('Referral Channel', patient.value.customerSource)
+    insuranceOptions.value = optionsFor('Insurance Company', patient.value.insuranceCompany)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ'
   } finally {
     loading.value = false
   }
-})
+}
+onMounted(loadProfile)
 </script>
 
 <template>
-  <div class="patient-workspace patient-profile-page" :class="{ 'is-editing': editing }">
+  <div
+    class="patient-workspace patient-profile-page"
+    :class="{ 'is-editing': editing, 'patient-profile-history': showingHistory }"
+  >
     <StaffHeader />
     <main>
       <button v-if="editing" type="button" class="back-link back-link-button" @click="cancelEdit">
         ← กลับข้อมูลผู้ป่วย
       </button>
       <RouterLink v-else class="back-link" to="/staff/patients">← กลับไปค้นหาผู้ป่วย</RouterLink>
-      <p v-if="loading" class="status-feedback">กำลังโหลดข้อมูลผู้ป่วย...</p>
-      <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+      <p v-if="loading" class="status-feedback" role="status">กำลังโหลดข้อมูลผู้ป่วย...</p>
+      <div v-if="errorMessage" class="error" role="alert">
+        <p>{{ errorMessage }}</p>
+        <button
+          v-if="!patient"
+          type="button"
+          class="patient-profile-edit"
+          :disabled="loading"
+          @click="loadProfile"
+        >
+          ลองใหม่
+        </button>
+      </div>
       <template v-if="patient && !editing">
         <div class="patient-profile-title">
           <h1>ข้อมูลผู้ป่วย</h1>
-          <button class="patient-profile-edit" type="button" @click="openEdit">แก้ไขข้อมูล</button>
+          <RouterLink
+            v-if="showingHistory"
+            class="patient-profile-edit profile-service-action"
+            :to="{ path: '/staff/services/sale', query: { patientId: patient.id } }"
+            >ซื้อบริการ / คอร์ส</RouterLink
+          >
+          <button
+            v-if="!showingHistory"
+            class="patient-profile-edit"
+            type="button"
+            @click="openEdit"
+          >
+            แก้ไขข้อมูล
+          </button>
         </div>
-        <section class="patient-profile-summary" aria-label="สรุปข้อมูลผู้ป่วย">
-          <div class="patient-profile-avatar" aria-hidden="true">{{ profileInitials }}</div>
-          <div class="patient-profile-info">
-            <h2>{{ patient.title }}{{ patient.fullName }}</h2>
-            <p>
-              <span>HN {{ patient.hn }}</span
-              ><span>{{ patient.phone || '-' }}</span>
-            </p>
-          </div>
-          <span class="patient-profile-branch">{{ profileBranch }}</span>
-        </section>
+        <PatientSummary
+          :name="patient.fullName"
+          :title="patient.title"
+          :hn="patient.hn"
+          :phone="patient.phone"
+          :branch="profileBranch"
+        />
         <nav class="patient-profile-tabs" aria-label="ข้อมูลผู้ป่วย">
-          <RouterLink :to="`/staff/patients/${patient.id}`" aria-current="page" class="active"
+          <RouterLink
+            :to="`/staff/patients/${patient.id}`"
+            :aria-current="!showingHistory ? 'page' : undefined"
+            :class="{ active: !showingHistory }"
             >ข้อมูลส่วนตัว</RouterLink
           >
-          <RouterLink :to="`/staff/patients/${patient.id}/history`">ประวัติการรักษา</RouterLink>
-          <RouterLink :to="{ path: `/staff/patients/${patient.id}/history`, query: { tab: 'courses' } }"
-            >คอร์ส</RouterLink
+          <RouterLink
+            :to="`/staff/patients/${patient.id}/history`"
+            :aria-current="showingHistory ? 'page' : undefined"
+            :class="{ active: showingHistory }"
+            >บริการและคอร์ส</RouterLink
           >
         </nav>
       </template>
@@ -332,7 +412,6 @@ onMounted(async () => {
         <h1 class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
         <section class="patient-edit-summary" aria-label="สรุปผู้ป่วยที่กำลังแก้ไข">
           <div class="patient-edit-avatar" aria-hidden="true">{{ profileInitials }}</div>
-
           <div>
             <h2>{{ patient.title }}{{ patient.fullName }}</h2>
             <p>
@@ -388,7 +467,12 @@ onMounted(async () => {
               <label>ชื่อเล่น<input v-model.trim="draft.nickname" /></label>
               <label>
                 วันเกิด <em v-if="!isForeignNationality">*</em>
-                <ThaiDatePicker v-model="draft.birthDateInput" show-calendar-icon hide-caret />
+                <ThaiDatePicker
+                  v-model="draft.birthDateInput"
+                  :max-date="clinicYesterday()"
+                  show-calendar-icon
+                  hide-caret
+                />
               </label>
             </div>
             <div class="patient-edit-two-column-grid">
@@ -412,6 +496,7 @@ onMounted(async () => {
                   :maxlength="isForeignNationality ? 20 : 13"
                   :placeholder="isForeignNationality ? 'กรอกเลขพาสปอร์ต' : 'x-xxxx-xxxxx-xx-x'"
                   :required="!isForeignNationality"
+                  autocomplete="tel"
                   @input="
                     draft.identityNumber = isForeignNationality
                       ? draft.identityNumber.replace(/[^A-Za-z0-9]/g, '')
@@ -426,8 +511,23 @@ onMounted(async () => {
             <div class="patient-edit-two-column-grid">
               <label>
                 เบอร์โทร <em v-if="!isForeignNationality">*</em>
-                <input v-model.trim="draft.phone" type="tel" :required="!isForeignNationality" />
+                <input
+                  v-model.trim="draft.phone"
+                  type="tel"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  maxlength="10"
+                  :required="!isForeignNationality"
+                  @input="draft.phone = limitPhoneDigits(draft.phone)"
+                />
               </label>
+              <small v-if="draft.phone && !phoneIsValid" class="required-error">
+                {{
+                  isForeignNationality
+                    ? 'เบอร์โทรต้องไม่เกิน 10 หลัก'
+                    : 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก'
+                }}
+              </small>
               <label>อีเมล<input v-model.trim="draft.email" type="text" inputmode="email" /></label>
               <label class="wide"
                 >ที่อยู่<textarea v-model.trim="draft.address" rows="4" required />
@@ -473,7 +573,7 @@ onMounted(async () => {
         </form>
       </template>
       <section
-        v-else-if="patient"
+        v-else-if="patient && !showingHistory"
         class="patient-profile-details"
         aria-label="ข้อมูลส่วนตัวผู้ป่วย"
       >
@@ -494,8 +594,8 @@ onMounted(async () => {
             </div>
           </dl>
         </section>
-
       </section>
+      <PatientHistory v-if="patient && showingHistory" :key="patient.id" embedded />
       <Teleport to="body">
         <Transition name="save-success">
           <div v-if="saved && !editing" class="patient-save-success-backdrop" role="status">
@@ -521,5 +621,7 @@ onMounted(async () => {
 </template>
 
 <style scoped src="../styles/patients.css"></style>
-<style src="../styles/therapist.css"></style>
+<style src="../styles/patient-workspace.css"></style>
 <style scoped src="../styles/patient-profile.css"></style>
+
+<style src="../styles/profile-polish.css"></style>

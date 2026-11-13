@@ -25,7 +25,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.util.List;
 import org.springframework.core.annotation.Order;
 
-
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
@@ -50,7 +49,7 @@ public class SecurityConfig {
     @Bean
     @Order(0)
     SecurityFilterChain authEndpoints(HttpSecurity http) throws Exception {
-        return http.securityMatcher("/api/auth/login")
+        return http.securityMatcher(request -> "/api/auth/login".equals(request.getServletPath()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .build();
