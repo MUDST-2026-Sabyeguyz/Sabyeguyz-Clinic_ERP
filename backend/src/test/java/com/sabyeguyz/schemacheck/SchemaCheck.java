@@ -90,7 +90,9 @@ public class SchemaCheck {
         int columns = 0;
         try (Connection connection = DriverManager.getConnection(url, env("DB_USER"), env("DB_PASSWORD"))) {
             for (Table table : metadata.collectTableMappings()) {
-                if (!table.isPhysicalTable()) continue;
+                if (!table.isPhysicalTable()) {
+                    continue;
+                }
                 Map<String, int[]> codes = new HashMap<>();
                 Map<String, String> names = new HashMap<>();
                 var requiredColumns = new java.util.HashSet<String>();
@@ -102,7 +104,9 @@ public class SchemaCheck {
                             names.put(column, rs.getString("TYPE_NAME"));
                             if (rs.getInt("NULLABLE") == java.sql.DatabaseMetaData.columnNoNulls
                                     && rs.getString("COLUMN_DEF") == null
-                                    && !"YES".equals(rs.getString("IS_AUTOINCREMENT"))) requiredColumns.add(column);
+                                    && !"YES".equals(rs.getString("IS_AUTOINCREMENT"))) {
+                                requiredColumns.add(column);
+                            }
                         }
                     }
                 }
@@ -153,7 +157,9 @@ public class SchemaCheck {
             return true;
         } catch (Exception e) {
             Throwable root = e;
-            while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+            while (root.getCause() != null && root.getCause() != root) {
+                root = root.getCause();
+            }
             System.out.println("Hibernate validate / wiring FAILED: " + root);
             e.printStackTrace(System.out);
             return false;
