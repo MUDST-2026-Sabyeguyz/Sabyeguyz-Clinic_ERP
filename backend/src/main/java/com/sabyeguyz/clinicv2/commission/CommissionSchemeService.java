@@ -34,6 +34,7 @@ public class CommissionSchemeService {
     private final CommissionTierRepository tiers;
     private final CourseRepository courses;
     private final MonthlyCommissionClosingRepository closings;
+    private final BranchClosingGuard branchClosingGuard;
 
     private com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
@@ -43,11 +44,12 @@ public class CommissionSchemeService {
     }
 
     public CommissionSchemeService(CommissionSchemeRepository schemes, CommissionTierRepository tiers,
-                                    CourseRepository courses, MonthlyCommissionClosingRepository closings) {
+                                    CourseRepository courses, MonthlyCommissionClosingRepository closings, BranchClosingGuard branchClosingGuard) {
         this.schemes = schemes;
         this.tiers = tiers;
         this.courses = courses;
         this.closings = closings;
+        this.branchClosingGuard = branchClosingGuard;
     }
 
     @Transactional(readOnly = true)
@@ -70,15 +72,23 @@ public class CommissionSchemeService {
 
     @Transactional
     public CommissionScheme create(String schemeName, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                    Permission permission, List<TierInput> tierInputs, Long actorId) {
+                                   com.sabyeguyz.clinicv2.branch.Branch branch, Permission permission,
+                                   List<TierInput> tierInputs, Long actorId) {
         validate(schemeName, effectiveFrom, effectiveTo, tierInputs);
         validateTiers(tierInputs);
+        schemes.lockVersionAllocation();
+        requireSelectedBranch(branch);
+        if (!schemes.findByOrderByEffectiveFromDesc().isEmpty()) {
+            branchClosingGuard.requireCurrentMonthClosed(branch);
+        }
+        if (effectiveFrom.getDayOfMonth() != 1) {
+            throw new IllegalArgumentException("กฎต้องเริ่มวันที่ 1 ของเดือน");
+        }
         requireNoOtherPending(null, effectiveFrom);
         retireOverlapping(effectiveFrom, effectiveTo, actorId);
 
         String name = schemeName.trim();
         int nextVersion = schemes.findByOrderByEffectiveFromDesc().stream()
-                .filter(s -> s.getSchemeName().equalsIgnoreCase(name))
                 .mapToInt(CommissionScheme::getSchemeVersion).max().orElse(0) + 1;
 
         CommissionScheme scheme = new CommissionScheme();
@@ -100,15 +110,27 @@ public class CommissionSchemeService {
      */
     @Transactional
     public CommissionScheme update(Long id, String schemeName, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                    List<TierInput> tierInputs, Long actorId) {
+                                   com.sabyeguyz.clinicv2.branch.Branch branch, List<TierInput> tierInputs, Long actorId) {
+        requireSelectedBranch(branch);
+        schemes.lockVersionAllocation();
         CommissionScheme scheme = find(id);
         if (tierInputs != null && tierInputs.isEmpty()) {
             tierInputs = null; // an empty list means "tiers unchanged"
         }
         boolean referenced = isReferenced(id);
+        boolean pendingUnused = !referenced
+                && scheme.getEffectiveFrom().isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today());
+        if (!pendingUnused) {
+            branchClosingGuard.requireCurrentMonthClosed(branch);
+        }
         LocalDate newFrom = effectiveFrom != null ? effectiveFrom : scheme.getEffectiveFrom();
         // an omitted end date keeps the current one; a scheme is reopened by creating a new version
         LocalDate newTo = effectiveTo != null ? effectiveTo : scheme.getEffectiveTo();
+        if (!scheme.getEffectiveFrom().isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today())
+                && (tierInputs != null || !newFrom.equals(scheme.getEffectiveFrom())
+                || !java.util.Objects.equals(newTo, scheme.getEffectiveTo()))) {
+            throw new IllegalStateException("กฎนี้เริ่มมีผลแล้ว ห้ามแก้ข้อมูลคำนวณ ให้สร้างเวอร์ชันอนาคต");
+        }
         if (referenced) {
             if (tierInputs != null) {
                 throw new IllegalStateException("Scheme นี้ถูกใช้งานแล้ว ห้ามแก้ Tier ให้สร้าง Scheme เวอร์ชันใหม่");
@@ -176,23 +198,29 @@ public class CommissionSchemeService {
     /** A new version of an existing scheme with new tiers; it takes over from {@code effectiveFrom}. */
     @Transactional
     public CommissionScheme createVersion(Long id, LocalDate effectiveFrom, LocalDate effectiveTo,
-                                           List<TierInput> tierInputs, Long actorId) {
+                                          com.sabyeguyz.clinicv2.branch.Branch branch,
+                                          List<TierInput> tierInputs, Long actorId) {
         CommissionScheme base = find(id);
-        return create(base.getSchemeName(), effectiveFrom, effectiveTo, base.getPermission(), tierInputs, actorId);
+        return create(base.getSchemeName(), effectiveFrom, effectiveTo, branch, base.getPermission(), tierInputs, actorId);
+    }
+
+    /** Removes an unused scheme; a scheme already referenced by a course or closing must remain immutable. */
+    @Transactional
+    public void deactivate(Long id) {
+        CommissionScheme scheme = find(id);
+        if (isReferenced(id)) {
+            throw new IllegalStateException("Scheme นี้ถูกใช้งานแล้ว ปิดใช้งานไม่ได้ ให้สร้างเวอร์ชันใหม่แทน");
+        }
+        tiers.deleteAll(tiers.findByCommissionSchemeIdOrderByTierOrder(id));
+        schemes.delete(scheme);
     }
 
     /**
-     * New tiers are a new cycle's rules: they start on the first day of a month after the current one, and only once the
-     * commission of the current cycle (and any earlier one) has been closed, so no course is priced under two rule sets.
+     * Validates the effective date.
+     * The selected branch closing is checked by create/update.
      */
     private void requireNextCycle(LocalDate effectiveFrom) {
         requireFutureCycleStart(effectiveFrom);
-        java.time.YearMonth current = java.time.YearMonth.from(com.sabyeguyz.clinicv2.config.ClinicTime.today());
-        long open = courses.countOpenCommissionUpToMonth(current.toString());
-        if (open > 0) {
-            throw new IllegalStateException("ต้องปิดยอดคอมมิชชันของรอบปัจจุบันก่อน (ยังมี " + open
-                    + " คอร์สที่ยังไม่ปิดยอดถึงเดือน " + current + ") จึงจะสร้างเวอร์ชันใหม่ได้");
-        }
     }
 
     private void saveTiers(CommissionScheme scheme, Permission permission, List<TierInput> inputs, Long actorId) {
@@ -213,6 +241,12 @@ public class CommissionSchemeService {
     }
 
     /** A version starts on the 1st of a month after the current one: the rules never change in the middle of a month. */
+    private static void requireSelectedBranch(com.sabyeguyz.clinicv2.branch.Branch branch) {
+        if (branch == null || branch.getId() == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขา");
+        }
+    }
+
     private static void requireFutureCycleStart(LocalDate effectiveFrom) {
         if (effectiveFrom == null) throw new IllegalArgumentException("ต้องระบุ effective_from");
         if (effectiveFrom.getDayOfMonth() != 1) {

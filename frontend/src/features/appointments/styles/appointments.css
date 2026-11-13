@@ -57,23 +57,32 @@
   width: min(940px, calc(100% - 48px));
   margin: 16px auto 0;
 }
-.appointment-back {
+.appointment-back-link {
+  appearance: none;
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
-  padding: 7px 15px;
-  border: 1px solid #87aaa7;
-  border-radius: 9px;
-  color: #285e69;
-  background: rgb(255 255 255 / 72%);
-  font-size: 18px;
+  min-height: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  color: #0e5d58;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-decoration: none;
   transition: 0.2s ease;
   cursor: pointer;
 }
-.appointment-back:hover {
-  border-color: #1d7c78;
-  background: white;
+.appointment-back-link:hover {
+  color: #176c68;
   transform: translateX(-2px);
+}
+.appointment-back-link:focus-visible {
+  outline: 2px solid rgb(30 128 124 / 38%);
+  outline-offset: 4px;
 }
 .create-card > h1 {
   margin: 0 0 26px;
@@ -126,7 +135,7 @@
   padding: 8px 14px;
   border: 1px solid #c7d1cc;
   border-radius: 9px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   font-weight: 500;
   cursor: pointer;
@@ -141,7 +150,7 @@
   height: 20px;
   margin: 0;
   padding: 0;
-  accent-color: #1e807c;
+  accent-color: var(--color-primary);
 }
 .appointment-patient-field,
 .appointment-therapist-field,
@@ -218,7 +227,7 @@
   border-radius: 11px;
   background: #fff;
   box-shadow: 0 8px 18px rgb(34 67 59 / 18%);
-  scrollbar-color: #1e807c #dcecea;
+  scrollbar-color: var(--color-primary) #dcecea;
   scrollbar-width: thin;
 }
 .create-card .patient-search-results::-webkit-scrollbar {
@@ -313,10 +322,6 @@
   opacity: 0.72;
   white-space: nowrap;
 }
-.status-notice-cell {
-  min-width: 125px;
-  text-align: right;
-}
 .status-modal-backdrop {
   position: fixed;
   z-index: 20;
@@ -406,30 +411,86 @@
 .appointment-confirm-modal .primary {
   border: 2px solid transparent;
   color: #fff;
-  background: #749b6c;
+  background: var(--color-primary);
+}
+.appointment-confirm-modal .primary:hover:not(:disabled) {
+  background: #176c68;
 }
 .appointment-confirm-modal .secondary {
-  border: 2px solid #1e807c;
+  border: 2px solid var(--color-primary);
   color: #1f2937;
   background: #faf6f0;
+}
+.appointment-confirm-modal .secondary:hover:not(:disabled) {
+  background: #eef6f0;
 }
 .appointment-success-modal {
   display: grid;
   width: min(396px, calc(100vw - 40px));
-  min-height: 144px;
-  padding: 33px;
+  min-height: 0;
+  padding: 28px 32px 30px;
   place-items: center;
-  border: 1px solid #e9e4dc;
+  border: 1px solid #dce8e4;
   border-radius: 16px;
   box-shadow:
-    0 20px 40px -10px rgb(42 54 40 / 18%),
-    0 8px 16px -6px rgb(42 54 40 / 10%);
+    0 20px 40px -10px rgb(23 63 68 / 22%),
+    0 8px 16px -6px rgb(23 63 68 / 12%);
+  animation: appointment-success-enter 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.appointment-success-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 14px;
+  place-items: center;
+  border-radius: 50%;
+  color: #176c68;
+  background: #e1f0ec;
+}
+.appointment-success-icon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
 }
 .appointment-success-modal h2 {
   margin: 0;
-  color: #2a3628;
+  color: #173f44;
   font-size: 22px;
   text-align: center;
+}
+.appointment-success-modal p {
+  margin: 6px 0 20px;
+  color: #667a72;
+  font-size: 15px;
+  text-align: center;
+}
+.appointment-success-modal .primary {
+  min-width: 120px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--color-primary);
+  font: inherit;
+  font-weight: 700;
+}
+.appointment-success-modal .primary:hover {
+  background: #176c68;
+}
+@keyframes appointment-success-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .appointment-success-modal {
+    animation: none;
+  }
 }
 .branch-label {
   color: #526b73;
@@ -446,7 +507,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scrollbar-color: #1e807c #dcecea;
+  scrollbar-color: var(--color-primary) #dcecea;
   scrollbar-width: thin;
 }
 .appointment-table-scroll::-webkit-scrollbar {
@@ -457,7 +518,7 @@
   border-radius: 999px;
 }
 .appointment-table-scroll::-webkit-scrollbar-thumb {
-  background: #1e807c;
+  background: var(--color-primary);
   border-radius: 999px;
 }
 .appointment-panel .staff-table th,
@@ -526,10 +587,10 @@
 .appointment-pagination button {
   min-width: 104px;
   padding: 9px 14px;
-  border: 1px solid #1e807c;
+  border: 1px solid var(--color-primary);
   border-radius: 8px;
   color: #fff;
-  background: #1e807c;
+  background: var(--color-primary);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -640,7 +701,6 @@
   }
 }
 
-/* Therapist appointment list — Figma 5:503 */
 .appointment-page {
   width: 100%;
   max-width: 100vw;
@@ -661,7 +721,7 @@
 }
 .appointment-page .staff-hero h1 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 55px;
   line-height: 1.3;
 }
@@ -714,14 +774,15 @@
 .appointment-list-controls {
   display: flex;
   align-items: end;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 32px;
+  gap: 16px 24px;
   padding: 0 0 20px;
 }
 .appointment-panel .appointment-list-filters {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 252px));
-  gap: 40px;
+  grid-template-columns: minmax(260px, 1.6fr) repeat(2, minmax(150px, 1fr));
+  gap: 12px;
   align-items: end;
   margin-left: auto;
   padding: 0;
@@ -733,19 +794,30 @@
   height: 46px;
   border: 1px solid #c2ccc9;
   border-radius: 9px;
-  color: #25372e;
+  color: var(--color-ink);
   background: #fff;
   box-sizing: border-box;
 }
 .appointment-date-range {
   display: grid;
-  grid-template-columns: auto minmax(140px, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
   align-items: center;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+}
+.appointment-date-range input[type='month'] {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  padding: 0 12px;
+  border: 1px solid #cbdad7;
+  border-radius: 8px;
+  background: #fff;
+  color: #26433e;
+  font: inherit;
 }
 .appointment-date-range :deep(.thai-date-picker) {
   margin: 0;
@@ -787,6 +859,23 @@
   background: #0e7d78;
   font-size: 14px;
   font-weight: 600;
+}
+.appointment-service-filter :deep(.filter-dropdown__button) {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0b5f5b;
+  font: inherit;
+  font-weight: 600;
+}
+.appointment-service-filter {
+  display: flex;
+  justify-content: center;
+}
+.appointment-service-filter :deep(.filter-dropdown__chevron) {
+  margin-left: 8px;
 }
 .appointment-panel .staff-table th:first-child {
   border-radius: 9px 0 0;
@@ -842,7 +931,7 @@
 .appointment-status-filter :deep(.filter-dropdown__button) {
   min-height: 36px;
   padding: 6px 13px;
-  border-color: #d9e1dc;
+  border-color: var(--color-border-soft);
   border-radius: 999px;
   background: #dbeafe;
 }
@@ -854,11 +943,13 @@
 }
 .appointment-status-filter :deep(.filter-dropdown__menu) {
   min-width: 150px;
+  top: auto;
+  bottom: calc(100% + 5px);
   font-size: 14px;
 }
 .appointment-edit {
   border: 0;
-  color: #25372e;
+  color: var(--color-ink);
   background: transparent;
   font: inherit;
   font-weight: 700;
@@ -883,6 +974,7 @@
   .appointment-panel .appointment-list-filters {
     grid-template-columns: 1fr;
     margin-left: 0;
+    width: 100%;
   }
 }
 .appointment-view-switch {
@@ -895,7 +987,7 @@
   border: 0;
   border-radius: 9px;
   background: #edf2ed;
-  color: #25372e;
+  color: var(--color-ink);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -1092,7 +1184,6 @@
   }
 }
 
-/* Daily appointment calendar — Figma 934:5271 */
 .appointment-calendar {
   overflow: visible;
   border: 0;
@@ -1227,7 +1318,7 @@
 .calendar-grid-scroll {
   overflow-x: auto;
   padding-bottom: 8px;
-  scrollbar-color: #1e807c #dcecea;
+  scrollbar-color: var(--color-primary) #dcecea;
   scrollbar-width: thin;
 }
 .calendar-grid-scroll::-webkit-scrollbar {
@@ -1239,7 +1330,7 @@
 }
 .calendar-grid-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #1e807c;
+  background: var(--color-primary);
 }
 .appointment-calendar .calendar-time,
 .appointment-calendar .calendar-column {
@@ -1359,50 +1450,7 @@
     margin-inline: 8px;
   }
 }
-.calendar-sync-modal .calendar-sync-branches {
-  margin: 8px 0 0;
-  padding-left: 20px;
-}
-.calendar-sync-modal .calendar-sync-actions a.secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-}
-.calendar-sync-modal .calendar-sync-actions {
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-}
-.calendar-sync-modal .calendar-sync-actions a.secondary {
-  min-height: 46px;
-  padding: 10px 18px;
-  border: 1px solid #d1d6d1;
-  border-radius: 10px;
-  color: #1a241f;
-  background: #fff;
-  font-size: 13px;
-  font-weight: 600;
-}
-.calendar-sync-modal .calendar-sync-description p {
-  white-space: normal;
-  line-height: 1.7;
-}
-.calendar-sync-modal .calendar-sync-description {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-a.calendar-google {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  text-decoration: none;
-  white-space: nowrap;
 
-
-}
-
-/* Therapist create appointment — Figma 1527:8352, 1527:8396, 1527:8440, 1527:8484 */
 .appointment-form-page {
   width: min(1342px, 100%);
   padding-inline: 0;
@@ -1434,10 +1482,13 @@ a.calendar-google {
   display: grid;
   grid-template-columns: minmax(0, 500px) minmax(0, 520px);
   grid-template-areas:
-    'patient-type selection'
-    'service-mode therapist'
-    'patient date'
-    'phone time'
+    'patient-type service-mode'
+    'patient selection'
+    'phone therapist'
+    '. date'
+    '. time'
+    '. end-date'
+    '. end-time'
     '. note'
     '. summary';
   justify-content: space-between;
@@ -1445,10 +1496,13 @@ a.calendar-google {
 }
 .appointment-create-card .appointment-create-grid.is-new-patient {
   grid-template-areas:
-    'patient-type selection'
-    'service-mode therapist'
+    'patient-type service-mode'
+    'new-patient selection'
+    'new-patient therapist'
     'new-patient date'
     'new-patient time'
+    'new-patient end-date'
+    'new-patient end-time'
     'new-patient note'
     '. summary';
 }
@@ -1458,6 +1512,8 @@ a.calendar-google {
     'phone date'
     'service-mode time'
     'selection note'
+    '. end-date'
+    '. end-time'
     'summary summary';
 }
 .appointment-create-card.is-editing {
@@ -1482,24 +1538,82 @@ a.calendar-google {
     'patient service'
     'therapist date'
     'time branch'
+    'end-date end-time'
     'note note';
   justify-content: space-between;
   gap: 24px 76px;
 }
-.reschedule-patient-field { grid-area: patient; }
-.reschedule-service-field { grid-area: service; }
-.reschedule-therapist-field { grid-area: therapist; }
-.reschedule-date-field { grid-area: date; }
-.reschedule-time-field { grid-area: time; }
-.reschedule-branch-field { grid-area: branch; }
-.reschedule-note-field { grid-area: note; }
-.appointment-reschedule-grid > label {
+.reschedule-patient-field {
+  grid-area: patient;
+}
+.reschedule-service-field {
+  grid-area: service;
+}
+.reschedule-therapist-field {
+  grid-area: therapist;
+}
+.reschedule-date-field {
+  grid-area: date;
+}
+.reschedule-time-field {
+  grid-area: time;
+}
+.reschedule-end-date-field {
+  grid-area: end-date;
+}
+.reschedule-end-time-field {
+  grid-area: end-time;
+}
+.reschedule-branch-field {
+  grid-area: branch;
+}
+.reschedule-note-field {
+  grid-area: note;
+}
+.appointment-reschedule-grid .reschedule-section-fields > label {
   display: grid;
   align-content: start;
   gap: 8px;
   color: #1f2937;
   font-size: 18px;
   font-weight: 600;
+}
+.appointment-reschedule-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: none;
+  gap: 20px;
+}
+.reschedule-section {
+  min-width: 0;
+}
+.reschedule-section > h2 {
+  margin: 0 0 14px;
+  color: #243832;
+  font-size: 20px;
+}
+.reschedule-section-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+}
+.appointment-reschedule-grid .reschedule-section-fields > label {
+  grid-area: auto;
+}
+.appointment-reschedule-grid .reschedule-readonly-field {
+  border-color: #d7e0dd !important;
+  color: #526762 !important;
+  background: #edf3f1 !important;
+  cursor: default;
+}
+.appointment-reschedule-grid em {
+  color: #c33f3f;
+  font-style: normal;
+}
+.appointment-reschedule-grid .appointment-input-error {
+  margin: -2px 0 0;
+  color: #b42318;
+  font-size: 13px;
+  font-weight: 500;
 }
 .appointment-reschedule-grid input,
 .appointment-reschedule-grid textarea,
@@ -1510,7 +1624,7 @@ a.calendar-google {
   box-sizing: border-box;
   border: 1px solid #8e8e8e;
   border-radius: 7px;
-  color: #56665d;
+  color: var(--color-muted);
   background: #f7f7f7;
   box-shadow: 0 1px 3.5px rgb(119 119 119 / 25%);
   font: inherit;
@@ -1553,9 +1667,15 @@ a.calendar-google {
 .appointment-create-card.is-editing .appointment-save {
   margin-top: 56px;
 }
-.appointment-patient-type-field { grid-area: patient-type; }
-.appointment-patient-field { grid-area: patient; }
-.appointment-phone-field { grid-area: phone; }
+.appointment-patient-type-field {
+  grid-area: patient-type;
+}
+.appointment-patient-field {
+  grid-area: patient;
+}
+.appointment-phone-field {
+  grid-area: phone;
+}
 .appointment-new-patient-fields {
   display: grid;
   grid-area: new-patient;
@@ -1566,23 +1686,59 @@ a.calendar-google {
   display: grid;
   gap: 8px;
 }
+.appointment-new-patient-fields small {
+  color: #718783;
+  font-size: 12px;
+  font-weight: 400;
+}
 .appointment-new-patient-fields em {
   color: #c33f3f;
   font-style: normal;
 }
-.appointment-service-mode-field { grid-area: service-mode; }
+.appointment-new-patient-fields p {
+  margin: 8px 0 0;
+  color: #718783;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.appointment-service-mode-field {
+  grid-area: service-mode;
+}
 .appointment-service-field,
-.appointment-course-field { grid-area: selection; }
-.appointment-therapist-field { grid-area: therapist; }
-.appointment-date-field { grid-area: date; }
-.appointment-time-field { grid-area: time; }
-.appointment-note-field { grid-area: note; }
-.appointment-course-summary { grid-area: summary; }
+.appointment-course-field {
+  grid-area: selection;
+}
+.appointment-therapist-field {
+  grid-area: therapist;
+}
+.appointment-date-field {
+  grid-area: date;
+}
+.appointment-time-field {
+  grid-area: time;
+}
+.appointment-end-date-field {
+  grid-area: end-date;
+}
+.appointment-end-time-field {
+  grid-area: end-time;
+}
+.appointment-note-field {
+  grid-area: note;
+}
+.appointment-course-summary {
+  grid-area: summary;
+}
 .appointment-create-card .form-grid label,
 .appointment-create-card .form-grid legend {
   color: #243832;
   font-size: 14px;
   font-weight: 600;
+}
+.appointment-create-card .form-grid em {
+  color: #c33f3f;
+  font-style: normal;
 }
 .appointment-create-card .form-grid input,
 .appointment-create-card .form-grid textarea,
@@ -1597,6 +1753,20 @@ a.calendar-google {
 .appointment-create-card .form-grid input[readonly] {
   background: #fff;
 }
+.appointment-create-card :deep(.appointment-form-filter.is-invalid .filter-dropdown__button),
+.appointment-time-picker.is-invalid {
+  border-color: #d84b4b;
+  box-shadow: 0 0 0 3px rgb(216 75 75 / 14%);
+}
+.appointment-create-card .appointment-form-error {
+  color: #c63b3b;
+  margin: 10px 0;
+}
+.appointment-create-card .reschedule-time-trigger.is-invalid,
+.appointment-create-card .form-grid input.is-invalid {
+  border-color: #d84b4b;
+  box-shadow: 0 0 0 3px rgb(216 75 75 / 14%);
+}
 .appointment-service-mode-field {
   margin: 0;
   padding: 0;
@@ -1604,6 +1774,11 @@ a.calendar-google {
 }
 .appointment-service-mode-field legend {
   margin-bottom: 8px;
+}
+.appointment-service-mode-field legend small {
+  color: #718783;
+  font-size: 12px;
+  font-weight: 400;
 }
 .appointment-service-mode-options {
   display: grid;
@@ -1760,18 +1935,31 @@ a.calendar-google {
   top: 0;
   right: 0;
   display: flex;
+  box-sizing: border-box;
   width: min(700px, 100%);
-  min-height: 100%;
+  height: 100dvh;
   flex-direction: column;
-  justify-content: space-between;
+  overflow: hidden;
   padding: 64px 72px 70px;
   background: #fff;
   box-shadow: -16px 0 40px rgb(36 56 50 / 12%);
   animation: appointment-drawer-in 180ms ease-out;
 }
+.appointment-time-drawer-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
 @keyframes appointment-drawer-in {
-  from { transform: translateX(32px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 .appointment-time-drawer h2 {
   margin: 0;
@@ -1824,6 +2012,12 @@ a.calendar-google {
   background: #e7f6f2;
   font-weight: 600;
 }
+.appointment-time-slots button:disabled {
+  border-color: #d4d9d7;
+  color: #7b8582;
+  background: #eef0ef;
+  cursor: not-allowed;
+}
 .appointment-time-help {
   margin-top: 36px !important;
   padding: 22px 18px;
@@ -1833,8 +2027,11 @@ a.calendar-google {
 }
 .appointment-time-drawer footer {
   display: flex;
+  flex-shrink: 0;
   justify-content: flex-end;
   gap: 16px;
+  padding-top: 24px;
+  background: #fff;
 }
 .appointment-time-drawer footer button {
   min-width: 145px;
@@ -1863,14 +2060,14 @@ a.calendar-google {
   .appointment-create-card .appointment-create-grid {
     grid-template-columns: 1fr;
     grid-template-areas:
-      'patient-type' 'patient' 'phone' 'service-mode' 'selection'
-      'therapist' 'date' 'time' 'note' 'summary';
+      'patient-type' 'summary' 'patient' 'phone' 'service-mode' 'selection'
+      'therapist' 'date' 'time' 'end-date' 'end-time' 'note';
     gap: 18px;
   }
   .appointment-create-card .appointment-create-grid.is-editing {
     grid-template-areas:
       'patient' 'phone' 'service-mode' 'selection'
-      'therapist' 'date' 'time' 'note' 'summary';
+      'therapist' 'date' 'time' 'end-date' 'end-time' 'note' 'summary';
   }
   .appointment-create-card .appointment-create-grid.is-new-patient {
     grid-template-areas:
@@ -1886,8 +2083,11 @@ a.calendar-google {
   }
   .appointment-reschedule-grid {
     grid-template-columns: 1fr;
-    grid-template-areas:
-      'patient' 'service' 'therapist' 'date' 'time' 'branch' 'note';
+    grid-template-areas: none;
+    gap: 18px;
+  }
+  .reschedule-section-fields {
+    grid-template-columns: 1fr;
     gap: 18px;
   }
   .appointment-create-card.is-editing .appointment-save {
@@ -1899,24 +2099,88 @@ a.calendar-google {
 }
 
 @media (max-width: 600px) {
-  .appointment-back-row { width: 100%; }
-  .appointment-create-card { padding: 26px 18px; }
-  .appointment-create-card.is-editing { padding: 26px 18px; }
-  .appointment-create-card > h1 { font-size: 26px; }
-  .appointment-service-mode-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .appointment-back-row {
+    width: 100%;
+  }
+  .appointment-create-card {
+    padding: 26px 18px;
+  }
+  .appointment-create-card.is-editing {
+    padding: 26px 18px;
+  }
+  .appointment-create-card.is-editing .appointment-save {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 22px -18px -26px;
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid #d7e0dd;
+    background: #fff;
+    box-shadow: 0 -8px 18px rgb(23 63 68 / 8%);
+  }
+  .appointment-create-card > h1 {
+    font-size: 26px;
+  }
+  .appointment-service-mode-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .appointment-list-mode-toggle {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .appointment-time-picker { align-items: stretch; flex-direction: column; padding: 10px; }
-  .appointment-time-picker > span { padding: 6px; }
-  .appointment-time-picker button { width: 100%; min-width: 0; }
-  .reschedule-time-trigger { align-items: stretch; flex-direction: column; }
-  .appointment-create-card .appointment-save { flex-direction: column-reverse; }
+  .appointment-time-picker {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 10px;
+  }
+  .appointment-time-picker > span {
+    padding: 6px;
+  }
+  .appointment-time-picker button {
+    width: 100%;
+    min-width: 0;
+  }
+  .reschedule-time-trigger {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .appointment-create-card .appointment-save {
+    flex-direction: column-reverse;
+  }
   .appointment-create-card .appointment-save button,
-  .appointment-create-card .appointment-save .primary { width: 100%; min-width: 0; }
-  .appointment-time-drawer { padding: 34px 20px 28px; }
-  .appointment-time-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .appointment-time-drawer footer { display: grid; grid-template-columns: 1fr 1fr; margin-top: 32px; }
-  .appointment-time-drawer footer button { min-width: 0; }
+  .appointment-create-card .appointment-save .primary {
+    width: 100%;
+    min-width: 0;
+  }
+  .appointment-time-drawer {
+    padding: 34px 20px 28px;
+  }
+  .appointment-time-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .appointment-time-drawer footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 32px;
+  }
+  .appointment-time-drawer footer button {
+    min-width: 0;
+  }
+}
 
+/* a time that is taken stays locked and says why */
+.appointment-time-slots button:disabled {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: line-through;
+}
+.appointment-time-slots button .slot-lock {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #a4503f;
+  text-decoration: none;
 }

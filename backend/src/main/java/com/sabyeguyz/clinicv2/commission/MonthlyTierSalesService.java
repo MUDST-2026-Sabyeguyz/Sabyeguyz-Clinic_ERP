@@ -34,6 +34,34 @@ public class MonthlyTierSalesService {
         return of(staffId, saleMonth).net();
     }
 
+    /** Calculates the tier base for one seller, branch and sale month. */
+    @Transactional(readOnly = true)
+    public TierSales of(Long staffId, String saleMonth, Long branchId) {
+        if (branchId == null) {
+            throw new IllegalArgumentException("ต้องระบุสาขาสำหรับคำนวณยอดขาย");
+        }
+
+        BigDecimal sales = nz(
+                courses.sumCreditedSalesByStaffAndSaleMonthAndBranchId(
+                        staffId, saleMonth, branchId));
+
+        BigDecimal refunds = nz(
+                courses.sumCompletedRefundsByStaffAndSaleMonthAndBranchId(
+                        staffId, saleMonth, branchId));
+
+        return new TierSales(
+                sales,
+                refunds,
+                sales.subtract(refunds).max(BigDecimal.ZERO));
+    }
+
+    /** Returns the net tier base for the selected branch. */
+    @Transactional(readOnly = true)
+    public BigDecimal netSales(
+            Long staffId, String saleMonth, Long branchId) {
+        return of(staffId, saleMonth, branchId).net();
+    }
+
     private static BigDecimal nz(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
