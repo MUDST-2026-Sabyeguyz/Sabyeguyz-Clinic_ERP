@@ -435,8 +435,8 @@ watch(
           </button>
         </div>
       </section>
-      <fieldset class="therapist-filter">
-        <legend>นักกายภาพ</legend>
+      <div class="therapist-filter" role="group" aria-labelledby="calendar-therapist-filter-title">
+        <p id="calendar-therapist-filter-title" class="therapist-filter-title">นักกายภาพ</p>
         <button
           type="button"
           class="filter-all"
@@ -454,7 +454,7 @@ watch(
             @change="toggle(person.id, ($event.target as HTMLInputElement).checked)"
           /><span class="person-dot"></span>{{ person.fullName }}</label
         >
-      </fieldset>
+      </div>
       <p v-if="syncMessage" class="calendar-note" role="status">{{ syncMessage }}</p>
       <section v-if="route.query.googleCalendar === 'status'" class="google-status">
         <h2>สถานะ Google Calendar</h2>
