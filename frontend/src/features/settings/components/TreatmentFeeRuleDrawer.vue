@@ -39,7 +39,8 @@ function open() {
 async function save() {
   error.value = ''
   Object.keys(errors).forEach((key) => delete errors[key])
-  const text = form.feeValue.trim()
+  // <input type="number"> makes v-model yield a number (or '' when empty), so coerce before trimming.
+  const text = String(form.feeValue ?? '').trim()
   const value = Number(text)
   if (!branchCode.value) {
     error.value = 'กรุณาเลือกสาขาก่อนบันทึกกฎค่ามือ'

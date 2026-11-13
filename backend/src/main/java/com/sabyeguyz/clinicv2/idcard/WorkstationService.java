@@ -95,6 +95,19 @@ public class WorkstationService {
         require(id).setLastSeenAt(Instant.now());
     }
 
+    /** The agent reports whether a reader is plugged in; null (an older agent) leaves the last known value. */
+    @Transactional
+    public void touch(Long id, Boolean readerPresent) {
+        CardReaderWorkstation workstation = require(id);
+        workstation.setLastSeenAt(Instant.now());
+        if (readerPresent != null) workstation.setReaderPresent(readerPresent);
+    }
+
+    @Transactional
+    public void reportReader(Long id, boolean present) {
+        touch(id, present);
+    }
+
     public boolean isOnline(CardReaderWorkstation workstation) {
         return workstation.getLastSeenAt() != null
                 && workstation.getLastSeenAt().isAfter(Instant.now().minus(ONLINE_WINDOW));

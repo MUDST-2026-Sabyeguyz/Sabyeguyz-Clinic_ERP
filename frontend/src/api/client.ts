@@ -1352,6 +1352,7 @@ export type AuditFilter = {
   recordId?: string
   action?: string
   changedBy?: number
+  branchCode?: string
   from?: string
   to?: string
 }
@@ -1425,6 +1426,8 @@ export type IdCardWorkstation = {
   branchCode: string
   online: boolean
   status: 'Active' | 'Revoked'
+  /** เสียบเครื่องอ่านบัตรจริงอยู่หรือไม่ (null/ไม่มี = ตัวกลางรุ่นเก่าที่ไม่รายงาน) */
+  readerConnected?: boolean | null
 }
 export type IdCardReadPurpose = 'REGISTER'
 export type IdCardLookup = {

@@ -37,7 +37,7 @@ final class AgentLoop {
 
     /** One poll cycle (used by the loop and by tests). True when a command was handled. */
     boolean runOnce() throws IOException {
-        Optional<BackendClient.Command> command = client.next(POLL_SECONDS);
+        Optional<BackendClient.Command> command = client.next(POLL_SECONDS, source.readerPresent());
         onStatus.accept("เชื่อมต่อแล้ว");
         if (command.isEmpty()) return false;
         onStatus.accept("กำลังอ่านบัตร");
@@ -47,7 +47,26 @@ final class AgentLoop {
         return true;
     }
 
+    /** Reports a reader being plugged in or removed within a few seconds, without waiting for the long poll to end. */
+    private Thread startReaderWatcher() {
+        Thread watcher = new Thread(() -> {
+            Boolean last = null;
+            while (running) {
+                boolean present = source.readerPresent();
+                if (last == null || last != present) {
+                    if (last != null) client.sendReaderState(present);
+                    last = present;
+                }
+                sleep(3_000);
+            }
+        }, "reader-watcher");
+        watcher.setDaemon(true);
+        watcher.start();
+        return watcher;
+    }
+
     void run() {
+        startReaderWatcher();
         long backoffMillis = 1_000;
         while (running) {
             try {

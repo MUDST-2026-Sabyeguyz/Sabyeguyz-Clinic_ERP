@@ -82,7 +82,31 @@ public class AuditLogService {
         log.setNewValue(actorId == null ? withSource(asJson(newValue)) : asJson(newValue));
         log.setChangedBy(actorId);
         log.setChangedAt(Instant.now());
+        log.setBranchId(branchOf(tableName, recordId, log.getNewValue(), log.getOldValue()));
         return repository.save(log);
+    }
+
+    /** A branch's own change belongs to it; any other row names its branch as "branch_id" in its after (or before) value. */
+    private static Long branchOf(String tableName, String recordId, String newValue, String oldValue) {
+        if ("branch".equals(tableName)) return parseId(recordId);
+        for (String json : new String[] {newValue, oldValue}) {
+            if (json == null || json.isBlank()) continue;
+            try {
+                JsonNode node = JSON.readTree(json).get("branch_id");
+                if (node != null && node.canConvertToLong()) return node.asLong();
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+                // not JSON: no branch to read
+            }
+        }
+        return null;
+    }
+
+    private static Long parseId(String text) {
+        try {
+            return Long.valueOf(text.trim());
+        } catch (NumberFormatException invalid) {
+            return null;
+        }
     }
 
     private static String toJson(Map<String, ?> value) {

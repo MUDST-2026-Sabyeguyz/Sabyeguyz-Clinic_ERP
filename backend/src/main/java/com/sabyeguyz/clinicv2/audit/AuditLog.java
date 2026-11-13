@@ -37,6 +37,10 @@ public class AuditLog {
     @Column(name = "changed_at", nullable = false)
     private Instant changedAt;
 
+    /** The branch this change belongs to; empty for a change that is not tied to one (users, commission schemes). */
+    @Column(name = "branch_id")
+    private Long branchId;
+
     public AuditLog() {}
 
     public Long getId() { return id; }
@@ -54,4 +58,6 @@ public class AuditLog {
     public void setChangedBy(Long changedBy) { this.changedBy = changedBy; }
     public Instant getChangedAt() { return changedAt; }
     public void setChangedAt(Instant changedAt) { this.changedAt = changedAt; }
+    public Long getBranchId() { return branchId; }
+    public void setBranchId(Long branchId) { this.branchId = branchId; }
 }

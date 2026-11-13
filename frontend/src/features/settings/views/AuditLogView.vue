@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import { RouterLink } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
@@ -9,6 +10,10 @@ import { auditApi, type AuditEntry } from '@/api/client'
 // The audit trail (Data Dictionary Audit_log): who changed what and when, with the value before and after.
 const PAGE_SIZE = 20
 const tableLabels: Record<string, string> = {
+  branch: 'สาขา',
+  branch_monthly_closing: 'ปิดรอบสาขา',
+  single_visit_fee_ledger: 'บัญชีค่ามือเข้าครั้งเดียว',
+  single_visit_entitlement_usage: 'การใช้สิทธิ์เข้าครั้งเดียว',
   commission_scheme: 'Scheme ค่าคอมมิชชัน',
   treatment_fee_rule: 'กฎค่ามือ',
   monthly_commission_closing: 'ปิดยอดรายเดือน',
@@ -51,6 +56,16 @@ const fieldLabels: Record<string, string> = {
   appointment_date: 'วันที่นัด',
   appointment_time: 'เวลานัด',
   tiers: 'Tier',
+  branch_code: 'รหัสสาขา',
+  branch_name: 'ชื่อสาขา',
+  address: 'ที่อยู่',
+  phone: 'เบอร์ติดต่อ',
+  email: 'อีเมล',
+  license_no: 'เลขใบอนุญาต',
+  booking_open_time: 'เวลาเริ่มรับนัด',
+  booking_close_time: 'เวลาสิ้นสุดรับนัด',
+  default_appointment_minutes: 'ระยะเวลานัดเริ่มต้น (นาที)',
+  branch_status: 'สถานะใช้งาน',
 }
 
 const filter = reactive({ tableName: '', action: '', recordId: '', from: '', to: '' })
@@ -136,6 +151,8 @@ async function load(next = 0) {
       tableName: filter.tableName,
       action: filter.action,
       recordId: filter.recordId.trim(),
+      // ประวัติของสาขาที่เลือกอยู่ (รวมรายการส่วนกลางที่ไม่ผูกสาขา)
+      branchCode: selectedManagerBranch()?.code,
       from: filter.from,
       to: filter.to,
     })
@@ -149,6 +166,11 @@ async function load(next = 0) {
     loading.value = false
   }
 }
+// เปลี่ยนสาขาที่หัวหน้าเพจแล้วโหลดประวัติของสาขานั้นใหม่
+watch(
+  () => selectedManagerBranch()?.code,
+  () => void load(0),
+)
 function clear() {
   Object.assign(filter, { tableName: '', action: '', recordId: '', from: '', to: '' })
   void load(0)
