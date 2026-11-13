@@ -32,8 +32,8 @@ import com.sabyeguyz.clinicv2.staff.StaffRepository;
  *       the allocation rows, reversals included); it is unknown (NULL, never 0) while a session of the person's courses
  *       treated in the month still waits for the sale month to be closed.</li>
  *   <li>Single-visit fee and substitute treatment fee come from their ledgers.</li>
- *   <li>Adjustment = approved adjustment applications reserved (Draft) for the month; a deduction never exceeds what was earned,
- *       the rest is carried to a later month.</li>
+ *   <li>Adjustment = approved applications for the month; new adjustments are scheduled automatically. A deduction
+ *       never exceeds what was earned, and the rest is carried to a later month.</li>
  *   <li>Open (editable, recalculated) -> Closed (amounts frozen, waiting for payment, Manager can reopen) -> Paid (locked).
  *       Paying also finalizes the sale-month closings the Owner commission depends on and turns the applied adjustments
  *       into Applied, all in one transaction.</li>
@@ -255,6 +255,47 @@ public class StaffMonthlyPaymentService {
         return applications.findByMonthlyPaymentIdOrderByIdAsc(paymentId);
     }
 
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> latestOpenMonth(Long branchId) {
+        var open = payments.findByBranchIdAndPaymentStatusOrderByPaymentMonthDesc(branchId, PaymentStatus.Open)
+                .stream().map(StaffMonthlyPayment::getPaymentMonth).findFirst();
+        if (open.isPresent()) return open;
+        String current = YearMonth.now(com.sabyeguyz.clinicv2.config.ClinicTime.ZONE).toString();
+        return java.util.Optional.of(payments.findByBranchIdOrderByPaymentMonthDesc(branchId).stream()
+                .map(payment -> YearMonth.parse(payment.getPaymentMonth()).plusMonths(1).toString())
+                .findFirst().map(month -> month.compareTo(current) > 0 ? month : current).orElse(current));
+    }
+
+    public void lockAdjustmentMonth(Long branchId, String month) {
+        closings.lockBranchMonth(branchId, month);
+    }
+
+    void scheduleAutomaticAdjustments(StaffMonthlyPayment payment) {
+        Staff person = payment.getStaff();
+        for (StaffPayAdjustment adjustment : adjustments
+                .findByStaffIdAndAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqualOrderByIdAsc(
+                        person.getId(), payment.getBranch().getId(), payment.getPaymentMonth())) {
+            if (adjustment.getAdjustmentStatus() != AdjustmentStatus.Approved
+                    && adjustment.getAdjustmentStatus() != AdjustmentStatus.PartiallyApplied) continue;
+            if (adjustment.getRemainingAmount().signum() <= 0) continue;
+            if (!person.isStaffStatus() || person.getTerminationDate() != null) continue;
+            if (applications.findByAdjustmentIdOrderByIdAsc(adjustment.getId()).stream()
+                    .anyMatch(row -> row.getApplicationStatus() == ApplicationStatus.Draft)) continue;
+            AdjustmentApplication application = new AdjustmentApplication();
+            application.setAdjustment(adjustment);
+            application.setMonthlyPayment(payment);
+            application.setAmount(adjustment.getAmount().signum() < 0
+                    ? adjustment.getRemainingAmount().negate() : adjustment.getRemainingAmount());
+            application.setApplicationStatus(ApplicationStatus.Draft);
+            application.setApprovalReference(adjustment.getApprovalReference());
+            application.setApprovedBy(adjustment.getApprovedBy());
+            application.setApprovedAt(Instant.now());
+            application.setCreatedBy(adjustment.getCreatedBy());
+            application.setCreatedAt(Instant.now());
+            applications.save(application);
+        }
+    }
+
     /** Finds staff with earnings, pending commission or payments in the branch. */
     @Transactional(readOnly = true)
     public Set<Long> staffWithActivity(
@@ -291,7 +332,44 @@ public class StaffMonthlyPaymentService {
         payments.findByPaymentMonthAndBranchIdOrderByIdAsc(month, branchId)
                 .forEach(payment -> ids.add(payment.getStaff().getId()));
 
+        adjustments.findByAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqual(branchId, month)
+                .stream()
+                .filter(row -> row.getRemainingAmount().signum() > 0)
+                .filter(row -> row.getAdjustmentStatus() == AdjustmentStatus.Approved
+                        || row.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied)
+                .forEach(row -> ids.add(row.getStaff().getId()));
+
         return ids;
+    }
+
+    /** Treatment fees (ค่ามือ) already earned by someone who has no payment row yet, read live from the ledgers. */
+    public record FeePreview(Long staffId, String staffName, BigDecimal singleVisitFee, BigDecimal substituteFee) {}
+
+    /**
+     * ค่ามือของคนที่ยังไม่มีงวดจ่ายในสาขา/เดือนนี้ (งวดจ่ายเกิดตอนปิดรอบ) เพื่อให้หน้าภาพรวมเห็นค่ามือก่อนปิดรอบ
+     * คนที่มีงวดจ่ายแล้วไม่ถูกรวม เพราะยอดอยู่ในงวดจ่ายนั้น
+     */
+    @Transactional(readOnly = true)
+    public List<FeePreview> feePreview(String month, Long branchId) {
+        requireMonth(month);
+        if (branchId == null) {
+            throw new IllegalArgumentException("ต้องระบุสาขา");
+        }
+        Set<Long> hasPayment = new TreeSet<>();
+        payments.findByPaymentMonthAndBranchIdOrderByIdAsc(month, branchId)
+                .forEach(payment -> hasPayment.add(payment.getStaff().getId()));
+
+        List<FeePreview> result = new ArrayList<>();
+        for (Long staffId : staffWithActivity(month, branchId)) {
+            if (hasPayment.contains(staffId)) continue;
+            Totals totals = totals(staffId, month, branchId);
+            if (totals.singleVisitFee().signum() == 0 && totals.substituteFee().signum() == 0) continue;
+            Staff person = staff.findById(staffId).orElse(null);
+            if (person == null) continue;
+            result.add(new FeePreview(staffId, person.getStaffFname() + " " + person.getStaffLname(),
+                    totals.singleVisitFee(), totals.substituteFee()));
+        }
+        return result;
     }
 
     /** Creates or finds a payment for one staff member, branch and month. */
@@ -351,7 +429,6 @@ public class StaffMonthlyPaymentService {
                     openFor(person, month, branch, actorId);
 
             if (payment.getPaymentStatus() == PaymentStatus.Open) {
-                scheduleAutomaticAdjustments(payment);
                 refresh(payment);
             }
 
@@ -365,6 +442,7 @@ public class StaffMonthlyPaymentService {
     @Transactional
     public StaffMonthlyPayment refresh(StaffMonthlyPayment payment) {
         requireStatus(payment, PaymentStatus.Open, "แก้ไข/คำนวณใหม่ได้เฉพาะงวดที่ยังเป็น Open");
+        scheduleAutomaticAdjustments(payment);
 
         Branch branch = payment.getBranch();
 
@@ -395,38 +473,6 @@ public class StaffMonthlyPaymentService {
         payment.setNetPaymentAmount(earned == null ? null : earned.add(adjustment));
 
         return payments.save(payment);
-    }
-
-    /** Reserve each due automatic adjustment once on this staff member's branch-scoped payment. */
-    @Transactional
-    public void scheduleAutomaticAdjustments(StaffMonthlyPayment payment) {
-        Long staffId = payment.getStaff().getId();
-        Long branchId = payment.getBranch().getId();
-        for (StaffPayAdjustment adjustment : adjustments
-                .findByStaffIdAndAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqualOrderByIdAsc(
-                        staffId, branchId, payment.getPaymentMonth())) {
-            if (adjustment.getRemainingAmount() == null || adjustment.getRemainingAmount().signum() <= 0
-                    || (adjustment.getAdjustmentStatus() != AdjustmentStatus.Approved
-                    && adjustment.getAdjustmentStatus() != AdjustmentStatus.PartiallyApplied)) {
-                continue;
-            }
-            boolean alreadyReserved = applications.findByAdjustmentIdOrderByIdAsc(adjustment.getId()).stream()
-                    .anyMatch(application -> application.getMonthlyPayment().getId().equals(payment.getId()));
-            if (alreadyReserved) continue;
-
-            AdjustmentApplication application = new AdjustmentApplication();
-            application.setAdjustment(adjustment);
-            application.setMonthlyPayment(payment);
-            application.setAmount(adjustment.getAmount().signum() < 0
-                    ? adjustment.getRemainingAmount().negate() : adjustment.getRemainingAmount());
-            application.setApprovedBy(adjustment.getApprovedBy());
-            application.setApprovedAt(adjustment.getApprovedAt());
-            application.setApprovalReference(adjustment.getApprovalReference());
-            application.setApplicationStatus(ApplicationStatus.Draft);
-            application.setCreatedAt(Instant.now());
-            application.setCreatedBy(adjustment.getCreatedBy());
-            applications.save(application);
-        }
     }
 
     /** Open -> Closed: needs every amount to be known; the deductions are limited to what was earned. */
@@ -482,13 +528,30 @@ public class StaffMonthlyPaymentService {
                 month, branch.getId());
     }
 
+    /**
+     * Once any staff member of the branch is Paid for the month, nothing of that month can be reopened any more
+     * (a correction is a pay adjustment in a later month).
+     */
+    @Transactional(readOnly = true)
+    public void requireNoPaidPayment(Long branchId, String month) {
+        if (branchId != null && payments.existsByPaymentMonthAndBranchIdAndPaymentStatus(month, branchId, PaymentStatus.Paid)) {
+            throw new IllegalStateException(PAID_MONTH_LOCKED);
+        }
+    }
+
+    public static final String PAID_MONTH_LOCKED =
+            "มีการจ่ายค่าตอบแทนของเดือนนี้แล้ว ห้ามเปิดรอบอีกครั้งให้บันทึกเป็นรายการปรับค่าตอบแทนในงวดถัดไป";
+
     /** Closed -> Open (before payment): the amounts are calculated again from the ledgers. */
     @Transactional
     public StaffMonthlyPayment reopen(
             Long paymentId,
             Long actorId) {
         StaffMonthlyPayment payment = findForUpdate(paymentId);
-        requireStatus(payment, PaymentStatus.Closed, "Reopen ได้เฉพาะงวดที่เป็น Closed (งวด Paid แล้วใช้ Adjustment)");
+        requireStatus(payment, PaymentStatus.Closed, "เปิดรอบอีกครั้งได้เฉพาะงวดที่เป็น Closed (งวด Paid แล้วใช้รายการปรับค่าตอบแทน)");
+        if (payment.getBranch() != null) {
+            requireNoPaidPayment(payment.getBranch().getId(), payment.getPaymentMonth());
+        }
         payment.setPaymentStatus(PaymentStatus.Open);
         stamp(payment, actorId);
 
@@ -523,6 +586,12 @@ public class StaffMonthlyPaymentService {
         if (ref != null && ref.length() > 100) throw new IllegalArgumentException("เลขที่อ้างอิงยาวเกิน 100 ตัวอักษร");
         StaffMonthlyPayment payment = findForUpdate(paymentId);
         requireStatus(payment, PaymentStatus.Closed, "ยืนยันจ่ายได้เฉพาะงวดที่เป็น Closed");
+        if (payment.getStaff().getTerminationDate() != null
+                && applications.findByMonthlyPaymentIdOrderByIdAsc(payment.getId()).stream()
+                .anyMatch(row -> row.getApplicationStatus() == ApplicationStatus.Draft
+                        && row.getAdjustment().isAutomatic())) {
+            throw new IllegalStateException("นักกายภาพลาออกแล้ว ต้องยกเลิกยอดปรับคงเหลือก่อนจ่ายงวด");
+        }
         Branch branch = payment.getBranch();
 
         if (branch == null || branch.getId() == null) {
@@ -542,7 +611,7 @@ public class StaffMonthlyPaymentService {
                 || payment.getCourseCommissionAmount().compareTo(totals.courseCommission()) != 0
                 || payment.getSingleVisitFeeAmount().compareTo(totals.singleVisitFee()) != 0
                 || payment.getSubstituteFeeAmount().compareTo(totals.substituteFee()) != 0) {
-            throw new IllegalStateException("ข้อมูลค่าตอบแทนของเดือนนี้เปลี่ยนไปหลังปิดงวด ให้ Reopen งวดแล้วปิดงวดใหม่");
+            throw new IllegalStateException("ข้อมูลค่าตอบแทนของเดือนนี้เปลี่ยนไปหลังปิดงวด ให้เปิดรอบอีกครั้งงวดแล้วปิดงวดใหม่");
         }
         // the sale months whose rate the Owner commission uses must be finalized together with the payment
         Set<String> saleMonths = new TreeSet<>();
@@ -738,6 +807,15 @@ public class StaffMonthlyPaymentService {
     static void requireMonth(String month) {
         if (month == null || !month.matches("\\d{4}-(0[1-9]|1[0-2])")) {
             throw new IllegalArgumentException("เดือนต้องเป็นรูปแบบ yyyy-mm");
+        }
+    }
+
+    static void requireCompletedMonth(String month) {
+        requireMonth(month);
+        YearMonth requested = YearMonth.parse(month);
+        YearMonth current = YearMonth.now(com.sabyeguyz.clinicv2.config.ClinicTime.ZONE);
+        if (!requested.isBefore(current)) {
+            throw new IllegalArgumentException("ปิดรอบได้เฉพาะเดือนที่สิ้นสุดแล้ว");
         }
     }
 }

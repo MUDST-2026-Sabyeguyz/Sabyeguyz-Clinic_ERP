@@ -52,7 +52,7 @@ public final class AgentMain {
             System.exit(0);
         }, () -> holder[0].settingsUrl(configured));
         AgentRuntime runtime = new AgentRuntime(AgentConfig.defaultPath(),
-                config -> new AgentLoop(new BackendClient(config.backendUrl(), config.token()), new PcscCardSource(), Duration.ofSeconds(30)),
+                config -> new AgentLoop(new BackendClient(config.backendUrl(), config.token()), new IsolatedCardSource(), Duration.ofSeconds(30)),
                 tray::status);
         holder[0] = runtime;
         try {

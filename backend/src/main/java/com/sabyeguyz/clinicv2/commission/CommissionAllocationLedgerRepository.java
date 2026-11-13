@@ -9,6 +9,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
 
 public interface CommissionAllocationLedgerRepository extends JpaRepository<CommissionAllocationLedger, Long> {
+    @org.springframework.data.jpa.repository.Query(
+            "select a from CommissionAllocationLedger a where "
+                    + "(a.ownerStaff.id = :staffId and a.course.branch.id = :branchId) "
+                    + "or (a.treatingStaff.id = :staffId and a.visitUsage.visit.branch.id = :branchId) "
+                    + "order by a.id desc")
+    List<CommissionAllocationLedger> findAdjustmentSources(Long staffId, Long branchId,
+            org.springframework.data.domain.Pageable page);
     List<CommissionAllocationLedger> findByCourseIdOrderByIdDesc(Long courseId);
     /** Finds ledger activity involving the branch as seller or treatment location. */
     @org.springframework.data.jpa.repository.Query(

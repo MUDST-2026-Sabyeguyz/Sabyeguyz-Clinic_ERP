@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import TimeFilterPicker from '@/features/staff/components/TimeFilterPicker.vue'
 import MasterDataGroups from '../components/MasterDataGroups.vue'
 import SettingsNavIcon from '../components/SettingsNavIcon.vue'
@@ -35,6 +35,8 @@ type SettingsNavIconName = Exclude<
   'calendar' | 'settings'
 >
 
+// Section rows are heterogeneous (branches, users, services, ...) and read by dynamic key.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
 const sections: Array<{ key: SectionKey; label: string; hint: string; icon: SettingsNavIconName }> =
   [
@@ -48,16 +50,36 @@ const sections: Array<{ key: SectionKey; label: string; hint: string; icon: Sett
     { key: 'master', label: 'Master Data', hint: 'ข้อมูลพื้นฐานระบบ', icon: 'master' },
   ]
 
-function initialSection(): SectionKey {
-  const wanted = new URLSearchParams(window.location.search).get('section')
+const route = useRoute()
+const router = useRouter()
+// หมวดที่เปิดอยู่มาจาก path (/staff/settings/:section) ส่วน /staff/settings เฉย ๆ คือหมวดสาขา
+function sectionFromRoute(): SectionKey {
+  const wanted = typeof route.params.section === 'string' ? route.params.section : null
   return sections.find((item) => item.key === wanted)?.key ?? 'branches'
 }
-const section = ref<SectionKey>(initialSection()),
+const section = ref<SectionKey>(sectionFromRoute()),
   drawerOpen = ref(false),
   editingIndex = ref<number | null>(null),
   savedMessage = ref(''),
   saveModalOpen = ref(false)
-const showingCardReaders = ref(window.location.pathname === '/staff/settings/card-readers')
+const showingCardReaders = ref(route.path === '/staff/settings/card-readers')
+// ปุ่มย้อนกลับ/ไปข้างหน้าของเบราว์เซอร์ต้องเปลี่ยนหมวดตาม path ด้วย
+watch(
+  () => route.fullPath,
+  () => {
+    showingCardReaders.value = route.path === '/staff/settings/card-readers'
+    section.value = sectionFromRoute()
+  },
+)
+function openSection(key: SectionKey) {
+  section.value = key
+  showingCardReaders.value = false
+  void router.push(`/staff/settings/${key}`)
+}
+function openCardReaders() {
+  showingCardReaders.value = true
+  void router.push('/staff/settings/card-readers')
+}
 const fieldErrors = reactive<Record<string, boolean>>({})
 const fieldHints = reactive<Record<string, string>>({})
 const validationMessage = ref('')
@@ -507,49 +529,6 @@ async function loadPermissionOverrides(userId: number) {
       error instanceof Error ? error.message : 'โหลดสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
   } finally {
     permissionOverridesLoading.value = false
-  }
-}
-async function addPermissionOverride() {
-  const userId = Number(form.id)
-  const permissionId = Number(selectedPermissionId.value)
-  if (
-    !Number.isSafeInteger(userId) ||
-    userId <= 0 ||
-    !Number.isSafeInteger(permissionId) ||
-    permissionId <= 0
-  )
-    return
-  permissionOverridesError.value = ''
-  try {
-    await userManagementApi.setPermissionOverride(userId, permissionId, newOverrideAllowed.value)
-    await loadPermissionOverrides(userId)
-  } catch (error) {
-    permissionOverridesError.value =
-      error instanceof Error ? error.message : 'เพิ่มสิทธิ์เฉพาะผู้ใช้ไม่สำเร็จ'
-  }
-}
-async function updatePermissionOverride(override: UserPermissionOverride, allowed: boolean) {
-  const userId = Number(form.id)
-  if (!Number.isSafeInteger(userId) || userId <= 0) return
-  permissionOverridesError.value = ''
-  try {
-    await userManagementApi.setPermissionOverride(userId, override.permissionId, allowed)
-    await loadPermissionOverrides(userId)
-  } catch (error) {
-    permissionOverridesError.value =
-      error instanceof Error ? error.message : 'บันทึกสิทธิ์ไม่สำเร็จ'
-  }
-}
-async function resetPermissionOverride(override: UserPermissionOverride) {
-  const userId = Number(form.id)
-  if (!Number.isSafeInteger(userId) || userId <= 0) return
-  permissionOverridesError.value = ''
-  try {
-    await userManagementApi.resetPermissionOverride(userId, override.permissionId)
-    await loadPermissionOverrides(userId)
-  } catch (error) {
-    permissionOverridesError.value =
-      error instanceof Error ? error.message : 'คืนค่าสิทธิ์ตามบทบาทไม่สำเร็จ'
   }
 }
 const masterItems = computed(() =>
@@ -1024,7 +1003,7 @@ const drawerTitle = computed(() => {
               v-for="item in sections"
               :key="item.key"
               :class="{ active: !showingCardReaders && section === item.key }"
-              @click="section = item.key; showingCardReaders = false"
+              @click="openSection(item.key)"
             >
               <span class="settings-nav-icon" aria-hidden="true"
                 ><SettingsNavIcon :name="item.icon"
@@ -1037,7 +1016,7 @@ const drawerTitle = computed(() => {
             </button>
           </nav>
           <div class="settings-nav-footer">
-            <button :class="{ active: showingCardReaders }" @click="showingCardReaders = true">
+            <button :class="{ active: showingCardReaders }" @click="openCardReaders()">
               <span class="settings-nav-icon" aria-hidden="true"><SettingsNavIcon name="payments" /></span>
               <span><b>เครื่องอ่านบัตรประชาชน</b><small>อุปกรณ์และการจับคู่</small></span>
               <span class="settings-nav-arrow" aria-hidden="true">›</span>
@@ -1069,7 +1048,10 @@ const drawerTitle = computed(() => {
             <div v-else-if="section === 'commission'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/fee-history"
                 >ประวัติเวอร์ชัน</RouterLink
-              ><TreatmentFeeRuleDrawer @saved="loadBackendSettings" />
+              ><TreatmentFeeRuleDrawer
+                :first-rule="data.commission.length === 0"
+                @saved="loadBackendSettings"
+              />
             </div>
             <div v-else-if="section === 'tiers'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/commission-history"

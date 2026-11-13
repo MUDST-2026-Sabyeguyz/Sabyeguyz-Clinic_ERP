@@ -34,6 +34,7 @@ const signedMoney = (value: number) =>
 const source = computed(() => {
   const row = adjustment.value
   if (!row) return '—'
+  if (row.referenceLabel) return row.referenceLabel
   if (row.saleTransactionId) return `SALE-${String(row.saleTransactionId).padStart(5, '0')}`
   if (row.singleVisitFeeId) return `FEE-${String(row.singleVisitFeeId).padStart(5, '0')}`
   if (row.visitId) return `VIS-${String(row.visitId).padStart(4, '0')}`
@@ -48,7 +49,12 @@ const monthLabel = (value: string) => {
     new Date(year, number - 1, 1),
   )
 }
-const status = computed(() => adjustmentStep(adjustment.value?.status || 'Pending'))
+// รายการที่ระบบนำยอดเข้าคำนวณอัตโนมัติไม่มีขั้นอนุมัติ จึงไม่แสดงคำว่า "อนุมัติ"
+const status = computed(() =>
+  adjustment.value?.automatic && adjustment.value.status === 'Approved'
+    ? 'บันทึกแล้ว'
+    : adjustmentStep(adjustment.value?.status || 'Pending'),
+)
 const remaining = computed(() => {
   const row = adjustment.value
   return row ? Math.sign(row.amount) * row.remaining : 0
@@ -62,7 +68,7 @@ const reserved = computed(
 const available = computed(() => Math.max(0, (adjustment.value?.remaining ?? 0) - reserved.value))
 const canSchedule = computed(() => {
   const row = adjustment.value
-  return !!row && row.remaining > 0 && ['Approved', 'PartiallyApplied'].includes(row.status)
+  return !!row && !row.automatic && row.remaining > 0 && ['Approved', 'PartiallyApplied'].includes(row.status)
 })
 async function load() {
   errorMessage.value = ''
@@ -71,7 +77,7 @@ async function load() {
     adjustment.value = await commissionApi.adjustment(Number(route.params.id))
   } catch (error) {
     errorMessage.value =
-      error instanceof Error ? error.message : 'โหลดรายการปรับปรุงไม่สำเร็จ กรุณาลองอีกครั้ง'
+      error instanceof Error ? error.message : 'โหลดรายการปรับค่าตอบแทนไม่สำเร็จ กรุณาลองอีกครั้ง'
   } finally {
     loading.value = false
   }
@@ -108,11 +114,11 @@ async function confirmDecision() {
     <StaffHeader />
     <main class="commission-manager-main detail-main">
       <RouterLink class="back-link" to="/staff/commission/adjustments"
-        >← กลับรายการปรับปรุง</RouterLink
+        >← กลับรายการปรับค่าตอบแทน</RouterLink
       >
       <header class="detail-title">
         <div>
-          <h1>รายละเอียดการปรับปรุงค่าตอบแทน</h1>
+          <h1>รายละเอียดการปรับค่าตอบแทน</h1>
           <p v-if="adjustment">ADJ-{{ String(adjustment.id).padStart(5, '0') }}</p>
         </div>
         <span
@@ -123,11 +129,11 @@ async function confirmDecision() {
             'is-cancelled': adjustment.status === 'Cancelled',
             'is-review': adjustment.status === 'ExternalReview',
           }"
-          >{{ status }}</span
+          >{{ adjustment.cancellationReason || status }}</span
         >
       </header>
       <p v-if="route.query.created === '1' && adjustment" class="creation-notice" role="status">
-        สร้างรายการแล้ว · รออนุมัติรายการก่อนกำหนดยอดที่จะนำไปใช้
+        บันทึกรายการแล้ว · ระบบจะนำยอดไปคำนวณตั้งแต่งวดที่เลือก
       </p>
       <p v-if="loading" class="state-card">กำลังโหลดรายละเอียด...</p>
       <div v-else-if="errorMessage" class="state-card error" role="alert">
@@ -140,7 +146,7 @@ async function confirmDecision() {
           ยอดหักคงเหลือนี้แสดงไว้เพื่ออ้างอิง
         </section>
         <section
-          v-else-if="['Approved', 'PartiallyApplied'].includes(adjustment.status)"
+          v-else-if="!adjustment.automatic && ['Approved', 'PartiallyApplied'].includes(adjustment.status)"
           class="status-guidance"
         >
           {{ adjustment.status === 'Approved' ? 'อนุมัติแล้ว' : 'นำยอดไปใช้บางส่วนแล้ว' }}
@@ -151,24 +157,28 @@ async function confirmDecision() {
             <h2>ข้อมูลการปรับปรุง</h2>
             <dl>
               <div>
-                <dt>งวดต้นทาง</dt>
-                <dd>{{ monthLabel(adjustment.originalMonth) }}</dd>
-              </div>
-              <div>
-                <dt>งวดที่เสนอ</dt>
-                <dd>{{ monthLabel(adjustment.appliedMonth) }}</dd>
-              </div>
-              <div>
-                <dt>ผู้รับค่าตอบแทน</dt>
+                <dt>นักกายภาพ</dt>
                 <dd>{{ adjustment.staffName || '-' }}</dd>
               </div>
               <div>
                 <dt>รายการอ้างอิง</dt>
                 <dd>{{ source }}</dd>
               </div>
+              <div>
+                <dt>งวดต้นทาง</dt>
+                <dd>{{ monthLabel(adjustment.originalMonth) }}</dd>
+              </div>
+              <div>
+                <dt>{{ adjustment.automatic ? 'งวดเริ่มนำไปใช้' : 'งวดที่เสนอ' }}</dt>
+                <dd>{{ monthLabel(adjustment.appliedMonth) }}</dd>
+              </div>
               <div class="wide">
                 <dt>เหตุผล</dt>
                 <dd>{{ adjustment.reason }}</dd>
+              </div>
+              <div v-if="adjustment.cancellationReason" class="wide">
+                <dt>เหตุผลที่ยกเลิก</dt>
+                <dd>{{ adjustment.cancellationReason }}<span v-if="adjustment.cancelledAt"> · {{ new Date(adjustment.cancelledAt).toLocaleString('th-TH') }}</span></dd>
               </div>
               <div v-if="adjustment.approvedAt">
                 <dt>ผู้อนุมัติรายการ</dt>
@@ -201,7 +211,7 @@ async function confirmDecision() {
                 <strong>{{ signedMoney(item.amount) }}</strong>
                 <span>{{
                   item.status === 'Draft' && item.approved
-                    ? 'อนุมัติให้นำไปใช้แล้ว · รอจ่ายจริง'
+                    ? adjustment.automatic ? 'รอจ่ายจริง' : 'อนุมัติให้นำไปใช้แล้ว · รอจ่ายจริง'
                     : applicationStatus(item.status)
                 }}</span>
               </div>
@@ -230,7 +240,7 @@ async function confirmDecision() {
               </button>
             </div>
             <p v-if="showInfo" id="adjustment-info" class="summary-warning">
-              ระบบไม่แก้ไขงวดเดิมโดยอัตโนมัติ ผู้จัดการกำหนดงวดที่จะนำไปใช้
+              ระบบไม่แก้ไขงวดที่จ่ายแล้ว ยอดคงเหลือจะนำไปคำนวณในงวดถัดไปโดยอัตโนมัติ
             </p>
             <div class="summary-metrics">
               <div>
@@ -243,26 +253,20 @@ async function confirmDecision() {
                 <span>นำไปใช้แล้ว</span
                 ><b>{{ signedMoney(Math.sign(adjustment.amount) * adjustment.processed) }}</b>
               </div>
-              <div v-if="reserved > 0">
+              <div v-if="!adjustment.automatic && reserved > 0">
                 <span>กันไว้ในยอดร่าง</span
                 ><b>{{ signedMoney(Math.sign(adjustment.amount) * reserved) }}</b>
               </div>
-              <div v-if="reserved > 0">
+              <div v-if="!adjustment.automatic && reserved > 0">
                 <span>ยังจัดสรรได้</span
                 ><b>{{ signedMoney(Math.sign(adjustment.amount) * available) }}</b>
               </div>
             </div>
             <p v-if="adjustment.status === 'Cancelled'" class="completion" role="status">
-              รายการนี้ยกเลิกแล้ว ไม่สามารถนำยอดไปใช้ในงวดถัดไป
+              {{ adjustment.cancellationReason || 'รายการนี้ยกเลิกแล้ว ไม่สามารถนำยอดไปใช้ในงวดถัดไป' }}
             </p>
             <p v-else class="remaining">
               <span>ยอดคงเหลือ</span><b>{{ signedMoney(remaining) }}</b>
-            </p>
-            <p
-              v-if="adjustment.status === 'Pending' && adjustment.remaining > 0"
-              class="pending-balance-note"
-            >
-              รออนุมัติก่อน จึงจะนำยอดนี้ไปใช้ในงวดได้
             </p>
             <p
               v-if="adjustment.status !== 'Cancelled' && adjustment.remaining === 0"
@@ -278,15 +282,9 @@ async function confirmDecision() {
               >จัดการยอดร่างและงวดจ่าย</RouterLink
             >
             <section
-              v-if="
-                adjustment.status === 'Pending' ||
-                (adjustment.status === 'Approved' && adjustment.processed === 0)
-              "
+              v-if="adjustment.status === 'Pending' || (['Approved', 'PartiallyApplied'].includes(adjustment.status) && adjustment.remaining > 0)"
               class="summary-actions"
             >
-              <p v-if="adjustment.status === 'Pending'">
-                ตรวจสอบผู้รับค่าตอบแทน เหตุผล และยอดก่อนอนุมัติ
-              </p>
               <button
                 v-if="adjustment.status === 'Pending'"
                 type="button"

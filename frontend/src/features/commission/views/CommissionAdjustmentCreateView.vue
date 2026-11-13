@@ -1,28 +1,80 @@
 <script setup lang="ts">
 // สร้างคำขอเพิ่มหรือลดยอดค่าตอบแทนพร้อมเหตุผล
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
-import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
+import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import { commissionApi, staffApi, type Staff } from '@/api/client'
+import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 
 const router = useRouter()
 const staff = ref<Staff[]>([])
 const staffId = ref('')
 const referenceType = ref('visit')
 const referenceId = ref('')
+const sourceOptions = ref<Array<{ id: number; label: string; month: string }>>([])
 const originalMonth = ref('')
 const appliedMonth = ref('')
+const allowedMonths = ref<string[]>([])
+const monthChoices = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1).padStart(2, '0'),
+  label: new Intl.DateTimeFormat('th-TH', { month: 'long' }).format(new Date(2026, i, 1)),
+}))
+const yearChoices = Array.from({ length: 7 }, (_, i) => String(new Date().getFullYear() - 3 + i))
+const appliedMonthPart = computed({
+  get: () => appliedMonth.value.slice(5, 7),
+  set: (value: string) => { appliedMonth.value = value ? `${appliedYearPart.value}-${value}` : '' },
+})
+const appliedYearPart = computed({
+  get: () => appliedMonth.value.slice(0, 4),
+  set: (value: string) => { appliedMonth.value = value && appliedMonthPart.value ? `${value}-${appliedMonthPart.value}` : '' },
+})
+const branchCode = computed(() => selectedManagerBranch()?.code ?? '')
+const activeTherapists = computed(() =>
+  staff.value.filter((item) => item.active && item.position?.toLowerCase() === 'therapist'),
+)
 const adjustmentType = ref<'add' | 'deduct'>('deduct')
 const amount = ref('')
 const reason = ref('')
 const loading = ref(true)
 const errorMessage = ref('')
-const creator = computed(
-  () => JSON.parse(localStorage.getItem('authUser') ?? 'null')?.fullName ?? 'Manager',
-)
 const saving = ref(false)
+
+watch(branchCode, async (code, _previous, onCleanup) => {
+  staffId.value = ''
+  appliedMonth.value = ''
+  allowedMonths.value = []
+  if (!code) return
+  let cancelled = false
+  onCleanup(() => { cancelled = true })
+  try {
+    const months = await commissionApi.adjustmentAllowedMonths(code)
+    if (!cancelled) {
+      allowedMonths.value = months
+      appliedMonth.value = months[0] ?? ''
+    }
+  } catch (error) {
+    if (!cancelled) errorMessage.value = error instanceof Error ? error.message : 'โหลดงวดจ่ายไม่สำเร็จ'
+  }
+}, { immediate: true })
+watch([staffId, referenceType, branchCode], async ([personId, type, code], _old, onCleanup) => {
+  referenceId.value = ''
+  sourceOptions.value = []
+  if (!personId || !code) return
+  let cancelled = false
+  onCleanup(() => { cancelled = true })
+  try {
+    const result = await commissionApi.adjustmentSources(Number(personId), type, code)
+    if (!cancelled) sourceOptions.value = result
+  } catch (error) {
+    if (!cancelled) errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการอ้างอิงไม่สำเร็จ'
+  }
+})
+watch(referenceId, (id) => {
+  const selected = sourceOptions.value.find((item) => String(item.id) === id)
+  if (selected) originalMonth.value = selected.month
+})
 
 async function load() {
   try {
@@ -42,16 +94,21 @@ async function review() {
     !appliedMonth.value ||
     !amount.value ||
     !reason.value.trim()
+    || !branchCode.value
   ) {
     errorMessage.value = 'กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบถ้วนก่อนตรวจสอบ'
     return
   }
-  if (appliedMonth.value.slice(0, 7) <= originalMonth.value.slice(0, 7)) {
-    errorMessage.value = 'งวดที่เสนอให้นำไปใช้ต้องอยู่หลังงวดต้นทาง'
+  if (appliedMonth.value <= originalMonth.value) {
+    errorMessage.value = 'งวดที่นำไปใช้ต้องอยู่หลังงวดต้นทาง'
+    return
+  }
+  if (!allowedMonths.value.includes(appliedMonth.value)) {
+    errorMessage.value = 'กรุณาเลือกงวดเปิดล่าสุดหรือเดือนถัดไป'
     return
   }
   if (!Number.isSafeInteger(Number(referenceId.value)) || Number(referenceId.value) <= 0) {
-    errorMessage.value = 'รหัสรายการอ้างอิงต้องเป็นตัวเลขมากกว่า 0'
+    errorMessage.value = 'รหัสรายการอ้างอิงต้องเป็นตัวเลขที่มากกว่า 0'
     return
   }
   const numericAmount = Number(amount.value)
@@ -66,17 +123,14 @@ async function review() {
   saving.value = true
   try {
     const referenceKey =
-      referenceType.value === 'visit'
-        ? 'visitId'
-        : referenceType.value === 'course'
-          ? 'courseId'
-          : 'allocationId'
+      referenceType.value === 'course' ? 'courseId' : 'visitId'
     const created = await commissionApi.createAdjustment({
       staffId: Number(staffId.value),
       originalMonth: originalMonth.value.slice(0, 7),
       appliedMonth: appliedMonth.value.slice(0, 7),
       amount: (adjustmentType.value === 'deduct' ? -1 : 1) * Number(amount.value),
       reason: reason.value.trim(),
+      branchCode: branchCode.value,
       [referenceKey]: Number(referenceId.value),
     })
     await router.push({
@@ -85,7 +139,7 @@ async function review() {
       query: { created: '1' },
     })
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการปรับปรุงไม่สำเร็จ'
+    errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการปรับค่าตอบแทนไม่สำเร็จ'
   } finally {
     saving.value = false
   }
@@ -98,11 +152,11 @@ onMounted(load)
     <StaffHeader />
     <main class="commission-manager-main create-main">
       <RouterLink class="back-link" to="/staff/commission/adjustments"
-        >← กลับรายการ Adjustment</RouterLink
+        >← กลับรายการปรับค่าตอบแทน</RouterLink
       >
       <header class="create-title">
-        <h1>สร้างรายการปรับปรุงค่าตอบแทน</h1>
-        <p>ระบุยอดเพิ่มหรือหักเพื่อแก้ข้อผิดพลาดของงวดเดิม รายการใหม่จะรออนุมัติก่อนนำยอดไปใช้</p>
+        <h1>สร้างรายการปรับค่าตอบแทน</h1>
+        <p>ระบุยอดปรับและงวดเริ่มต้น ระบบจะนำยอดเข้าการคำนวณให้อัตโนมัติ</p>
       </header>
 
       <p
@@ -115,14 +169,14 @@ onMounted(load)
       <section class="create-card">
         <div class="form-grid">
           <label
-            >พนักงาน *
+            >นักกายภาพ *
             <FilterDropdown
               v-model="staffId"
               label="พนักงาน"
               default-label="เลือกพนักงาน"
               :disabled="loading"
               :options="
-                staff.map((item) => ({
+                activeTherapists.map((item) => ({
                   value: String(item.id),
                   label: `${item.fullName} · ${item.employeeCode}`,
                 }))
@@ -139,33 +193,19 @@ onMounted(load)
                 :options="[
                   { value: 'visit', label: 'Visit' },
                   { value: 'course', label: 'Course' },
-                  { value: 'commission', label: 'Commission' },
                 ]"
                 :clear-on-reselect="false"
                 hide-default-option
               />
-              <input v-model="referenceId" placeholder="ระบุรหัสรายการอ้างอิง" />
+              <FilterDropdown v-model="referenceId" label="รายการอ้างอิง" default-label="ค้นหาและเลือกรายการ" searchable :options="sourceOptions.map((item) => ({ value: String(item.id), label: item.label }))" />
             </div>
-            <small>ระบุรหัสจริงของรายการต้นทาง ระบบจะตรวจสอบว่าเป็นของพนักงานที่เลือก</small>
+            <small v-if="staffId && sourceOptions.length === 0" class="source-empty-hint">
+              ไม่พบรายการในงวดที่จ่ายแล้ว
+            </small>
           </label>
           <label
-            >งวดต้นทาง
-            <ThaiDatePicker
-              v-model="originalMonth"
-              numeric-month
-              show-calendar-icon
-              placeholder="เลือกงวดต้นทาง"
-            />
-          </label>
-          <label
-            >งวดที่เสนอให้นำไปใช้ *
-            <ThaiDatePicker
-              v-model="appliedMonth"
-              numeric-month
-              show-calendar-icon
-              :min-date="originalMonth"
-              placeholder="เลือกงวดที่จะนำไปใช้"
-            />
+            >งวดต้นทาง *
+            <MonthFilterPicker v-model="originalMonth" :past-years="3" :future-years="3" />
           </label>
           <label
             >ประเภทผลต่าง *
@@ -180,27 +220,29 @@ onMounted(load)
               :clear-on-reselect="false"
               hide-default-option
             />
-            <small>เพิ่ม (+) หรือลด (-)</small>
           </label>
           <label
             >จำนวนเงิน *
             <input v-model="amount" type="number" min="0.01" step="0.01" placeholder="0.00" />
-            <small>กรอกจำนวนบวก ระบบแสดงเครื่องหมายตามประเภท</small>
+          </label>
+          <label
+            >งวดเริ่มนำไปใช้ *
+            <div class="reference-field">
+              <FilterDropdown v-model="appliedMonthPart" label="เดือนที่นำไปใช้" default-label="เลือกเดือน" :options="monthChoices" />
+              <FilterDropdown v-model="appliedYearPart" label="ปีที่นำไปใช้" default-label="เลือกปี" :options="yearChoices.map((year) => ({ value: year, label: String(Number(year) + 543) }))" />
+            </div>
           </label>
         </div>
         <label class="reason-field"
-          >เหตุผล *<input v-model="reason" placeholder="ระบุเหตุผลของการปรับปรุง" /><small
-            >บันทึกเหตุผลไว้ใน Audit Log</small
-          ></label
+          >เหตุผล *<input v-model="reason" placeholder="ระบุเหตุผลของการปรับปรุง" /></label
         >
-        <p class="creator">ผู้สร้าง: {{ creator }} (Manager) · วันเวลาบันทึกจากระบบ</p>
       </section>
       <footer class="create-actions">
         <RouterLink class="commission-secondary cancel" to="/staff/commission/adjustments"
           >ยกเลิก</RouterLink
         >
         <button class="commission-primary" type="button" :disabled="saving" @click="review">
-          {{ saving ? 'กำลังบันทึก...' : 'สร้างรายการปรับยอด' }}
+          {{ saving ? 'กำลังบันทึก...' : 'บันทึกรายการปรับยอด' }}
         </button>
       </footer>
     </main>
@@ -229,7 +271,7 @@ onMounted(load)
 }
 .create-card {
   padding: 28px 24px 32px;
-  border: 1px solid var(--color-border-soft);
+  border: 1px solid #d9e1dc;
   border-radius: 12px;
   background: #fff;
 }
@@ -241,9 +283,18 @@ onMounted(load)
 .form-grid label,
 .reason-field {
   display: grid;
-  gap: 10px;
+  gap: 6px;
   color: #25372f;
   font-weight: 700;
+}
+.form-grid > label:first-child {
+  gap: 4px;
+}
+.source-empty-hint {
+  margin-top: -4px;
+  color: #526b63;
+  font-size: 0.76rem;
+  font-weight: 600;
 }
 .form-grid input,
 .reason-field input {
@@ -264,15 +315,9 @@ onMounted(load)
   border-color: #b7cecc;
   border-radius: 10px;
 }
-.form-grid small,
-.reason-field small {
-  color: #687a72;
-  font-size: 0.82rem;
-  font-weight: 400;
-}
 .reference-field {
   display: grid;
-  grid-template-columns: 145px 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: 8px;
 }
 .reason-field {
@@ -280,10 +325,6 @@ onMounted(load)
 }
 .reason-field input {
   min-height: 46px;
-}
-.creator {
-  margin: 0;
-  color: #52635b;
 }
 .create-actions {
   display: flex;

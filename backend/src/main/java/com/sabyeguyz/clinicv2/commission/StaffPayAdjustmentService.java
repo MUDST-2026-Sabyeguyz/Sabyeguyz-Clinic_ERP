@@ -28,13 +28,12 @@ import com.sabyeguyz.clinicv2.staff.StaffRepository;
  * later month.
  *
  * <ul>
- *   <li>An adjustment (+ pays more, - proposes a deduction) names at least one source record of the same staff member and
- *       a reason, and is approved by a Manager. It is applied in one or more applications, each reserved (Draft) on the
- *       payment of a month and approved separately; a deduction also needs the reference of the consent. The total of the
- *       applications never exceeds the amount.</li>
+ *   <li>New Manager adjustments name a paid source, a reason and a starting month. They enter payout calculation
+ *       immediately; deductions carry their consent reference and any remainder is scheduled automatically.
+ *       Historic manually scheduled adjustments retain their original approval flow.</li>
  *   <li>An application becomes Applied only when the payment it sits on is paid; then it can no longer be changed.
  *       What a payment could not deduct stays on the adjustment (remaining) for a later month.</li>
- *   <li>A negative balance left when the person resigns is marked ExternalReview and handled outside the system.</li>
+ *   <li>Termination cancels the unpaid balance while preserving already paid applications.</li>
  * </ul>
  */
 @Service
@@ -73,17 +72,42 @@ public class StaffPayAdjustmentService {
         this.sales = sales;
     }
 
-    public record CreateRequest(
-            Long staffId,
-            String originalMonth,
-            String appliedMonth,
-            BigDecimal amount,
-            String reason,
-            Long allocationId,
-            Long singleVisitFeeId,
-            Long courseId,
-            Long visitId,
-            Long saleTransactionId) {}
+    public record CreateRequest(Long staffId, String originalMonth, String appliedMonth, BigDecimal amount, String reason,
+                                 Long allocationId, Long singleVisitFeeId, Long courseId, Long visitId, Long saleTransactionId,
+                                 String branchCode, String approvalReference) {}
+
+    public record SourceOption(Long id, String label, String month) {}
+
+    @Transactional(readOnly = true)
+    public List<SourceOption> sources(Long staffId, Long branchId, String type) {
+        require(staffId != null && branchId != null, "ต้องเลือกนักกายภาพและสาขา");
+        java.util.Set<String> paidMonths = payments.findByStaffIdOrderByPaymentMonthDesc(staffId)
+                .stream().filter(payment -> payment.getBranch() != null
+                        && branchId.equals(payment.getBranch().getId())
+                        && payment.getPaymentStatus() == PaymentStatus.Paid)
+                .map(StaffMonthlyPayment::getPaymentMonth).collect(java.util.stream.Collectors.toSet());
+        List<SourceOption> options = switch (type) {
+            case "visit" -> visits.findTop100ByTreatingStaffIdAndBranchIdOrderByVisitDateDesc(staffId, branchId)
+                    .stream().map(row -> new SourceOption(row.getId(),
+                            "VIS-" + row.getId() + " · " + row.getPatient().getPatientFname() + " "
+                                    + row.getPatient().getPatientLname() + " · " + row.getVisitDate(),
+                            row.getVisitDate().atZone(java.time.ZoneId.of("Asia/Bangkok")).toLocalDate().toString().substring(0, 7)))
+                    .toList();
+            case "course" -> courses.findTop100BySellerStaffIdAndBranchIdOrderByIdDesc(staffId, branchId)
+                    .stream().map(row -> new SourceOption(row.getId(),
+                            row.getCourseNo() + " · " + row.getCourseName(), row.getSaleMonth()))
+                    .toList();
+            case "commission" -> allocations.findAdjustmentSources(staffId, branchId,
+                            org.springframework.data.domain.PageRequest.of(0, 100))
+                    .stream().map(row -> new SourceOption(row.getId(),
+                            "COM-" + row.getId() + " · " + row.getPatient().getPatientFname() + " "
+                                    + row.getPatient().getPatientLname() + " · " + row.getVisitDate(),
+                            row.getVisitDate().toString().substring(0, 7)))
+                    .toList();
+            default -> throw new IllegalArgumentException("ไม่รู้จักประเภทรายการอ้างอิง");
+        };
+        return options.stream().filter(option -> paidMonths.contains(option.month())).toList();
+    }
 
     @Transactional(readOnly = true)
     public List<StaffPayAdjustment> list(Long staffId) {
@@ -102,16 +126,19 @@ public class StaffPayAdjustmentService {
     }
 
     @Transactional
-    public StaffPayAdjustment create(
-            CreateRequest request,
-            Long actorId) {
+    public StaffPayAdjustment create(CreateRequest request, com.sabyeguyz.clinicv2.branch.Branch branch, Long actorId) {
         require(request.staffId() != null, "ต้องระบุพนักงาน");
-        Staff person = staff.findById(request.staffId())
-                .orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงาน"));
+        Staff person = staff.findById(request.staffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงาน"));
+        require(person.isStaffStatus() && person.getTerminationDate() == null
+                && person.getPosition() == com.sabyeguyz.clinicv2.enums.StaffPosition.Therapist,
+                "เลือกได้เฉพาะนักกายภาพที่ยังใช้งานอยู่");
+        require(branch != null && branch.getId() != null, "ต้องระบุสาขา");
         require(request.amount() != null && request.amount().signum() != 0, "ยอดปรับต้องไม่เป็น 0");
         require(request.amount().stripTrailingZeros().scale() <= 2, "ยอดปรับมีทศนิยมได้ไม่เกิน 2 ตำแหน่ง");
         require(request.reason() != null && !request.reason().isBlank(), "ต้องระบุเหตุผล");
         require(request.reason().trim().length() <= 255, "เหตุผลยาวเกินไป");
+        require(request.approvalReference() == null || request.approvalReference().trim().length() <= 255,
+                "เลขอ้างอิงหลักฐานยาวเกินไป");
 
         CommissionAllocationLedger allocation = request.allocationId() == null ? null : allocations.findById(request.allocationId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการ allocation"));
@@ -136,12 +163,39 @@ public class StaffPayAdjustmentService {
 
         require(original != null, "ต้องระบุเดือนที่เกิดข้อผิดพลาด (originalMonth)");
         StaffMonthlyPaymentService.requireMonth(original);
+        String sourceMonth = allocation != null ? allocation.getVisitDate().toString().substring(0, 7)
+                : fee != null ? fee.getServiceDate().toString().substring(0, 7)
+                : visit != null ? visit.getVisitDate().atZone(java.time.ZoneId.of("Asia/Bangkok"))
+                        .toLocalDate().toString().substring(0, 7)
+                : course != null ? course.getSaleMonth() : null;
+        require(sourceMonth == null || sourceMonth.equals(original), "งวดต้นทางต้องตรงกับรายการอ้างอิง");
+        boolean allocationBranchMatches = allocation == null
+                || (allocation.getOwnerStaff().getId().equals(person.getId())
+                    && branch.getId().equals(allocation.getCourse().getBranch().getId()))
+                || (allocation.getTreatingStaff().getId().equals(person.getId())
+                    && branch.getId().equals(allocation.getVisitUsage().getVisit().getBranch().getId()));
+        Long sourceBranch = fee != null ? fee.getVisit().getBranch().getId()
+                : visit != null ? visit.getBranch().getId()
+                : course != null ? course.getBranch().getId() : null;
+        require(allocationBranchMatches && (sourceBranch == null || sourceBranch.equals(branch.getId())),
+                "รายการอ้างอิงต้องอยู่ในสาขาที่เลือก");
+        require(payments.findByStaffIdAndPaymentMonthAndBranchId(person.getId(), original, branch.getId())
+                .filter(payment -> payment.getPaymentStatus() == PaymentStatus.Paid).isPresent(),
+                "งวดต้นทางยังไม่จ่าย กรุณาแก้ข้อมูลรายการรักษาและคำนวณค่ามือใหม่");
         String applied = request.appliedMonth() != null ? request.appliedMonth() : defaultAppliedMonth(person, original);
         StaffMonthlyPaymentService.requireMonth(applied);
         require(applied.compareTo(original) > 0, "เดือนที่นำไปใช้ต้องอยู่หลังเดือนที่เกิดข้อผิดพลาด");
+        paymentService.lockAdjustmentMonth(branch.getId(), applied);
+        var openMonth = paymentService.latestOpenMonth(branch.getId());
+        require(openMonth.isPresent(), "ยังไม่มีงวดจ่ายที่เปิดอยู่ของสาขานี้");
+        require(applied.equals(openMonth.get()) || applied.equals(YearMonth.parse(openMonth.get()).plusMonths(1).toString()),
+                "เลือกได้เฉพาะงวดเปิดล่าสุดของสาขาหรือเดือนถัดไป");
 
         StaffPayAdjustment adjustment = new StaffPayAdjustment();
         adjustment.setStaff(person);
+        adjustment.setBranch(branch);
+        adjustment.setAutomatic(true);
+        adjustment.setApprovalReference(request.approvalReference() == null ? null : request.approvalReference().trim());
         adjustment.setOriginalMonth(original);
         adjustment.setAppliedMonth(applied);
         adjustment.setAmount(request.amount());
@@ -153,11 +207,18 @@ public class StaffPayAdjustmentService {
         adjustment.setReason(request.reason().trim());
         adjustment.setProcessedAmount(BigDecimal.ZERO);
         adjustment.setRemainingAmount(request.amount().abs());
-        adjustment.setAdjustmentStatus(AdjustmentStatus.Pending);
+        adjustment.setAdjustmentStatus(AdjustmentStatus.Approved);
+        adjustment.setApprovedAt(Instant.now());
+        adjustment.setApprovedBy(actorId);
         adjustment.setCreatedAt(Instant.now());
         adjustment.setCreatedBy(actorId);
-
-        return adjustments.save(adjustment);
+        StaffPayAdjustment saved = adjustments.save(adjustment);
+        if (applied.equals(openMonth.get())) {
+            StaffMonthlyPayment payment = paymentService.openFor(person, applied, branch, actorId);
+            require(payment.getPaymentStatus() == PaymentStatus.Open, "งวดที่เลือกต้องยังเปิดอยู่");
+            paymentService.refresh(payment);
+        }
+        return saved;
     }
 
     /** The month after the original one, and after the last month already paid to the person. */
@@ -314,6 +375,7 @@ public class StaffPayAdjustmentService {
             Long id,
             Long actorId) {
         StaffPayAdjustment adjustment = find(id);
+        require(!adjustment.isAutomatic(), "รายการนี้พร้อมนำไปคำนวณแล้ว ไม่ต้องอนุมัติซ้ำ");
         require(adjustment.getAdjustmentStatus() == AdjustmentStatus.Pending, "อนุมัติได้เฉพาะใบปรับยอดที่รออนุมัติ");
         adjustment.setApprovedBy(actorId);
         adjustment.setApprovedAt(Instant.now());
@@ -326,18 +388,46 @@ public class StaffPayAdjustmentService {
     @Transactional
     public StaffPayAdjustment cancel(Long id) {
         StaffPayAdjustment adjustment = find(id);
-        require(adjustment.getAdjustmentStatus() == AdjustmentStatus.Pending || adjustment.getAdjustmentStatus() == AdjustmentStatus.Approved,
+        require(adjustment.getAdjustmentStatus() == AdjustmentStatus.Pending || adjustment.getAdjustmentStatus() == AdjustmentStatus.Approved
+                        || (adjustment.isAutomatic() && adjustment.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied),
                 "ยกเลิกได้เฉพาะใบปรับยอดที่ยังไม่มีการนำไปใช้จริง (ที่ใช้แล้วให้สร้างใบใหม่อ้างต้นทางเดิม)");
         cancelDrafts(adjustment);
         adjustment.setAdjustmentStatus(AdjustmentStatus.Cancelled);
-
+        adjustment.setCancelledAt(Instant.now());
         return adjustments.save(adjustment);
+    }
+
+    @Transactional
+    public void cancelOnTermination(Long staffId, Long actorId) {
+        for (StaffPayAdjustment adjustment : adjustments.findByStaffIdOrderByIdDesc(staffId)) {
+            if (adjustment.getRemainingAmount().signum() <= 0
+                    || adjustment.getAdjustmentStatus() == AdjustmentStatus.Cancelled) continue;
+            java.util.Set<StaffMonthlyPayment> affectedPayments = new java.util.LinkedHashSet<>();
+            for (AdjustmentApplication application : applications.findByAdjustmentIdOrderByIdAsc(adjustment.getId())) {
+                if (application.getApplicationStatus() != ApplicationStatus.Draft) continue;
+                application.setApplicationStatus(ApplicationStatus.Cancelled);
+                applications.save(application);
+                affectedPayments.add(application.getMonthlyPayment());
+            }
+            adjustment.setAdjustmentStatus(AdjustmentStatus.Cancelled);
+            adjustment.setCancellationReason("นักกายภาพลาออก");
+            adjustment.setCancelledAt(Instant.now());
+            adjustments.save(adjustment);
+            for (StaffMonthlyPayment payment : affectedPayments) {
+                if (payment.getPaymentStatus() == PaymentStatus.Closed) {
+                    paymentService.reopen(payment.getId(), actorId);
+                } else if (payment.getPaymentStatus() == PaymentStatus.Open) {
+                    paymentService.refresh(payment);
+                }
+            }
+        }
     }
 
     /** A deduction left over when the person has resigned is handled by the Manager outside the system. */
     @Transactional
     public StaffPayAdjustment externalReview(Long id) {
         StaffPayAdjustment adjustment = find(id);
+        require(!adjustment.isAutomatic(), "รายการอัตโนมัติยกเลิกยอดคงเหลือเมื่อพนักงานลาออก");
         require(adjustment.getAmount().signum() < 0, "ส่งตรวจนอกระบบได้เฉพาะยอดหัก");
         require(adjustment.getAdjustmentStatus() == AdjustmentStatus.Approved
                 || adjustment.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied, "ใบปรับยอดต้องได้รับอนุมัติและยังไม่ครบ");
@@ -347,28 +437,6 @@ public class StaffPayAdjustmentService {
         adjustment.setAdjustmentStatus(AdjustmentStatus.ExternalReview);
 
         return adjustments.save(adjustment);
-    }
-
-    /** Cancel all unpaid adjustment balances when a staff member resigns. */
-    @Transactional
-    public void cancelOnTermination(Long staffId, Long actorId) {
-        for (StaffPayAdjustment adjustment : adjustments.findByStaffIdOrderByIdDesc(staffId)) {
-            if (adjustment.getRemainingAmount() == null || adjustment.getRemainingAmount().signum() <= 0
-                    || adjustment.getAdjustmentStatus() == AdjustmentStatus.Applied
-                    || adjustment.getAdjustmentStatus() == AdjustmentStatus.Cancelled) {
-                continue;
-            }
-            cancelDrafts(adjustment);
-            adjustment.setAdjustmentStatus(AdjustmentStatus.Cancelled);
-            adjustment.setCancellationReason("นักกายภาพลาออก");
-            adjustment.setCancelledAt(Instant.now());
-            adjustments.save(adjustment);
-        }
-        for (StaffMonthlyPayment payment : payments.findByStaffIdOrderByPaymentMonthDesc(staffId)) {
-            if (payment.getPaymentStatus() == PaymentStatus.Open) {
-                paymentService.refresh(payment);
-            }
-        }
     }
 
     /**
@@ -383,8 +451,9 @@ public class StaffPayAdjustmentService {
             Branch branch,
             Long actorId) {
         require(branch != null && branch.getId() != null,
-                "ต้องระบุสาขาของงวดจ่ายที่จะนำ Adjustment ไปใช้");
+                "ต้องระบุสาขาของงวดจ่ายที่จะนำรายการปรับค่าตอบแทนไปใช้");
         StaffPayAdjustment adjustment = find(adjustmentId);
+        require(!adjustment.isAutomatic(), "รายการนี้ระบบจัดสรรยอดให้อัตโนมัติ");
         checkSources(
                 adjustment.getStaff(),
                 adjustment.getAllocation(),
@@ -420,7 +489,7 @@ public class StaffPayAdjustmentService {
             boolean treating = staffId.equals(allocation.getTreatingStaff().getId());
 
             require(owner || treating,
-                    "พนักงานของ Adjustment ไม่ตรงกับ allocation ต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนไม่ตรงกับ allocation ต้นทาง");
             Branch sourceBranch = owner
                     ? allocation.getCourse().getBranch()
                     : allocation.getVisitUsage().getVisit().getBranch();
@@ -452,7 +521,7 @@ public class StaffPayAdjustmentService {
                     sourceVisit.getTreatingStaff() != null
                             && adjustment.getStaff().getId().equals(
                             sourceVisit.getTreatingStaff().getId()),
-                    "พนักงานของ Adjustment ต้องตรงกับผู้รักษาใน Visit ต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนต้องตรงกับผู้รักษาใน Visit ต้นทาง");
             Branch sourceBranch = sourceVisit.getBranch();
             require(
                     sourceBranch != null
@@ -468,7 +537,7 @@ public class StaffPayAdjustmentService {
             require(
                     adjustment.getStaff().getId().equals(
                             payoutCourse.getSellerStaff().getId()),
-                    "พนักงานของ Adjustment ต้องตรงกับ Owner ของคอร์สต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนต้องตรงกับ Owner ของคอร์สต้นทาง");
         }
 
         if (adjustment.getAllocation() == null
@@ -495,7 +564,7 @@ public class StaffPayAdjustmentService {
                     sourceVisit.getTreatingStaff() != null
                             && adjustment.getStaff().getId().equals(
                             sourceVisit.getTreatingStaff().getId()),
-                    "พนักงานของ Adjustment ต้องตรงกับผู้รักษาใน Visit ต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนต้องตรงกับผู้รักษาใน Visit ต้นทาง");
 
             Branch sourceBranch = sourceVisit.getBranch();
 

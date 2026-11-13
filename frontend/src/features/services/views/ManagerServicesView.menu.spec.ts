@@ -4,7 +4,7 @@ import source from './ManagerServicesView.vue?raw'
 describe('manager services patient menu', () => {
   it('keeps the two care workflows distinct and action-led', () => {
     expect(source).toContain('>ชำระเงิน<')
-    expect(source).toContain('>ใช้สิทธิ์คอร์สที่มีอยู่<')
+    expect(source).toContain("appointmentId ? 'ใช้สิทธิ์คอร์สที่มีอยู่' : 'ดูคอร์สของผู้ป่วย'")
   })
 
   it('makes each workflow card its own full-surface button without a nested action button', () => {
@@ -24,7 +24,7 @@ describe('manager services patient menu', () => {
   })
 
   it('uses the phone icon only when a phone number exists', () => {
-    expect(source).toContain('<PhoneIcon v-if="patient.phone"')
-    expect(source).toContain("patient.phone || '-'")
+    expect(source).toContain('v-if="patient.phone" class="service-menu-phone"')
+    expect(source).toContain('<PhoneIcon aria-hidden="true" />{{ patient.phone }}')
   })
 })

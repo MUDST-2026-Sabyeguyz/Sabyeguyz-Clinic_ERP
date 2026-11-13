@@ -87,8 +87,7 @@ const money = (value: number | null | undefined) =>
       </section>
       <nav class="commission-nav">
         <RouterLink to="/staff/commission">ภาพรวม</RouterLink
-        ><RouterLink to="/staff/settings/commission-tiers">กฎค่าคอมมิชชัน</RouterLink
-        ><RouterLink to="/staff/commission/closing">ปิดรอบรายเดือน</RouterLink>
+        ><RouterLink to="/staff/settings/commission-tiers">กฎค่าคอมมิชชัน</RouterLink>
       </nav>
       <section class="staff-panel commission-page-panel">
         <header>

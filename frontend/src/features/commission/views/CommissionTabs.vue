@@ -2,8 +2,7 @@
 defineProps<{ active: 'overview' | 'closing' | 'tiers' | 'compensation' | 'adjustments' }>()
 const tabs = [
   { key: 'overview', label: 'ภาพรวม', to: '/staff/commission' },
-  { key: 'closing', label: 'ปิดรอบรายเดือน', to: '/staff/commission/closing' },
-  { key: 'adjustments', label: 'รายการปรับปรุงค่าตอบแทน', to: '/staff/commission/adjustments' },
+  { key: 'adjustments', label: 'รายการปรับค่าตอบแทน', to: '/staff/commission/adjustments' },
 ] as const
 </script>
 <template>

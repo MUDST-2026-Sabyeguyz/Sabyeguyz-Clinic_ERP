@@ -7,7 +7,7 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 const read = vi.fn()
 const reader = {
-  workstations: ref([{ id: 1, name: 'เคาน์เตอร์ 1', branchCode: '01', online: true, status: 'Active' }]),
+  workstations: ref<{ id: number; name: string; branchCode: string; online: boolean; status: string; readerConnected?: boolean | null }[]>([{ id: 1, name: 'เคาน์เตอร์ 1', branchCode: '01', online: true, status: 'Active', readerConnected: true }]),
   selectedId: ref<number | null>(1),
   state: ref('idle'),
   message: ref(''),
@@ -37,7 +37,7 @@ describe('RegisterMethodDialog', () => {
     reader.message.value = ''
     reader.selectedId.value = 1
     reader.workstations.value = [
-      { id: 1, name: 'เคาน์เตอร์ 1', branchCode: '01', online: true, status: 'Active' },
+      { id: 1, name: 'เคาน์เตอร์ 1', branchCode: '01', online: true, status: 'Active', readerConnected: true },
     ]
     takePendingCard()
   })
@@ -101,6 +101,9 @@ describe('RegisterMethodDialog', () => {
     expect(wrapper.text()).toContain('พบผู้ป่วยในระบบแล้ว')
     expect(wrapper.text()).toContain('HN0005')
     expect(wrapper.text()).toContain('สมชาย ใจดี')
+    expect(wrapper.get('.found-details').text()).toBe('ดูข้อมูลผู้ป่วย')
+    expect(wrapper.findAll('.actions button')).toHaveLength(1)
+    expect(wrapper.get('button[aria-label="ปิด"]').text()).toBe('×')
     expect(takePendingCard()).toBeNull()
 
     await wrapper.get('.found-details').trigger('click')

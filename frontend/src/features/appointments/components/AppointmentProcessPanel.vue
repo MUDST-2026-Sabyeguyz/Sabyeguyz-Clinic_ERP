@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AppointmentProgress } from '@/api/client'
-import { progressStateLabel } from '../appointmentRequests'
 const props = defineProps<{ progress: AppointmentProgress; fromServices?: boolean; blockReason?: string; recoveryRequired?: boolean }>()
 const emit = defineEmits<{ refresh: []; backToPatients: [] }>()
 const receiptDocuments = computed(() => {
@@ -17,6 +16,19 @@ const receiptDocuments = computed(() => {
     saleCount: sales.length,
   }))
 })
+const hasRecord = computed(() => props.progress.sales.length > 0 || props.progress.usages.length > 0)
+const headline = computed(() =>
+  props.progress.state === 'REVIEW_REQUIRED' ? 'นัดหมายนี้ต้องตรวจสอบรายการ' : 'นัดหมายนี้ทำรายการแล้ว',
+)
+const summary = computed(() => {
+  if (props.progress.state === 'REVIEW_REQUIRED') return 'พบรายการที่ต้องตรวจสอบ กรุณาเปิดเอกสารเดิมก่อนทำรายการต่อ'
+  if (props.progress.usages.length && props.progress.sales.length) return 'นัดหมายนี้มีทั้งการชำระเงินและการใช้สิทธิ์คอร์สแล้ว'
+  if (props.progress.usages.length) return 'นัดหมายนี้ใช้สิทธิ์คอร์สไปแล้ว ไม่สามารถทำรายการซ้ำได้'
+  if (props.progress.sales.length) return 'นัดหมายนี้ชำระเงินไปแล้ว ไม่สามารถทำรายการซ้ำได้'
+  return ''
+})
+const usageStatusLabel = (status: string) =>
+  ({ Completed: 'สำเร็จ', Reversed: 'ย้อนรายการแล้ว' } as Record<string, string>)[status] ?? status
 const appointmentStatusLabel = (status: AppointmentProgress['appointmentStatus']) => ({
   UNCONFIRMED: 'ยังไม่ยืนยัน', CONFIRMED: 'ยืนยัน', CANCELLED: 'ยกเลิก',
 })[status]
@@ -25,21 +37,19 @@ const appointmentStatusLabel = (status: AppointmentProgress['appointmentStatus']
   <div class="appointment-process-wrapper">
     <button v-if="fromServices" type="button" class="back-to-patients" @click="emit('backToPatients')">← กลับไปเลือกผู้ป่วย</button>
     <section class="appointment-process-panel" aria-label="ผลบริการของนัดหมาย">
-      <h1>รายการของนัดหมายนี้</h1>
-      <p>{{ progressStateLabel(progress.state) }}</p>
-      <p>สถานะนัดหมาย: {{ appointmentStatusLabel(progress.appointmentStatus) }} · {{ progress.patientType }}</p>
-      <p v-if="progress.reason" role="status">{{ progress.reason }}</p>
-      <p v-if="blockReason">{{ blockReason }}</p>
-      <p v-if="recoveryRequired" role="alert">คำขอก่อนหน้าอาจบันทึกสำเร็จแล้ว กรุณาตรวจสอบเอกสารก่อนทำรายการใหม่</p>
-      <p v-if="progress.visitId">Visit #{{ progress.visitId }}</p>
-      <p v-if="progress.servedPatientId">ผู้ป่วย #{{ progress.servedPatientId }}</p>
+      <h1>{{ headline }}</h1>
+      <p v-if="summary">{{ summary }}</p>
+      <p>สถานะนัดหมาย: {{ appointmentStatusLabel(progress.appointmentStatus) }}</p>
       <p v-if="progress.completedAt">รับบริการเมื่อ {{ new Date(progress.completedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }) }}</p>
+      <p v-if="progress.reason" role="status">{{ progress.reason }}</p>
+      <p v-if="blockReason && !hasRecord">{{ blockReason }}</p>
+      <p v-if="recoveryRequired" role="alert">คำขอก่อนหน้าอาจบันทึกสำเร็จแล้ว กรุณาตรวจสอบเอกสารก่อนทำรายการใหม่</p>
       <div v-for="receipt in receiptDocuments" :key="receipt.receiptId" class="process-document">
         <RouterLink :to="{ name: 'staff-receipt', params: { id: receipt.saleId } }">
-          {{ receipt.receiptNo || `รายการขาย #${receipt.saleId}` }}
+          ดูใบเสร็จ {{ receipt.receiptNo || `#${receipt.saleId}` }}
         </RouterLink>
         <span>
-          สถานะใบเสร็จ {{ receipt.receiptStatus }}
+          {{ receipt.receiptStatus }}
           <template v-if="receipt.saleCount > 1"> · {{ receipt.saleCount }} รายการขาย</template>
           <template v-if="!receipt.active"> · รายการไม่ทำงาน</template>
         </span>
@@ -57,11 +67,12 @@ const appointmentStatusLabel = (status: AppointmentProgress['appointmentStatus']
           },
         }"
       >
-        การใช้คอร์ส #{{ usage.coursePurchaseId }} · {{ usage.status }}
+        ดูประวัติการใช้คอร์ส ({{ usageStatusLabel(usage.status) }})
       </RouterLink>
       <div class="process-actions">
         <RouterLink v-if="progress.servedPatientId" :to="{ path: '/staff/patients/' + progress.servedPatientId + '/history' }">ดูประวัติผู้ป่วย</RouterLink>
-        <button type="button" @click="emit('refresh')">ตรวจสอบล่าสุด</button>
+        <RouterLink :to="{ name: 'staff-appointments' }">กลับไปหน้านัดหมาย</RouterLink>
+        <button v-if="progress.state === 'REVIEW_REQUIRED' || recoveryRequired" type="button" @click="emit('refresh')">ตรวจสอบสถานะอีกครั้ง</button>
       </div>
     </section>
   </div>
