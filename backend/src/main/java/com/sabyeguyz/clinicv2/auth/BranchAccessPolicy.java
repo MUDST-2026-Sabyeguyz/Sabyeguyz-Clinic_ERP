@@ -1,11 +1,12 @@
 package com.sabyeguyz.clinicv2.auth;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.branch.BranchRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.branch.BranchRepository;
 
 /** Appointment branch scope (R1–R3). Session selection and additional branch grants await Q9. */
 @Component
@@ -16,8 +17,11 @@ public class BranchAccessPolicy {
     private final UserRoleRepository roles;
     private final BranchRepository branches;
 
-    public BranchAccessPolicy(CurrentActor actor, AppUserRepository users,
-                              UserRoleRepository roles, BranchRepository branches) {
+    public BranchAccessPolicy(
+            CurrentActor actor,
+            AppUserRepository users,
+            UserRoleRepository roles,
+            BranchRepository branches) {
         this.actor = actor;
         this.users = users;
         this.roles = roles;
@@ -32,6 +36,7 @@ public class BranchAccessPolicy {
         String code = requestedCode == null || requestedCode.isBlank() ? null : requestedCode.trim();
         boolean manager = roles.findByUserId(userId).stream()
                 .anyMatch(role -> "Manager".equalsIgnoreCase(role.getRole().getRoleName()));
+
         if (manager) {
             if (code == null) return null;
             return requireOpen(branches.findByBranchCode(code)
@@ -39,7 +44,9 @@ public class BranchAccessPolicy {
         }
         Branch home = user.getStaff() == null ? null : user.getStaff().getBranch();
         if (home == null || (code != null && !home.getBranchCode().equals(code))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ไม่มีสิทธิ์เข้าถึงนัดหมายของสาขานี้");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "ไม่มีสิทธิ์เข้าถึงนัดหมายของสาขานี้");
         }
         return requireOpen(home);
     }
@@ -47,8 +54,11 @@ public class BranchAccessPolicy {
     /** A branch that is closed (ปิดใช้งาน) allows nothing at all: nobody can work in it until it is opened again. */
     private static Branch requireOpen(Branch branch) {
         if (!branch.isBranchStatus()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "สาขา " + branch.getBranchName() + " ปิดใช้งาน ไม่สามารถทำรายการที่สาขานี้ได้");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "สาขา " + branch.getBranchName() + " ปิดใช้งาน ไม่สามารถทำรายการที่สาขานี้ได้");
         }
+
         return branch;
     }
 
@@ -61,7 +71,9 @@ public class BranchAccessPolicy {
     /** Only the Manager changes an appointment (status, reschedule, cancel); anyone else only views and books their own time. */
     public void requireManager() {
         if (!isManager()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "เฉพาะผู้จัดการเท่านั้นที่เปลี่ยนสถานะหรือแก้ไขนัดหมายได้");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "เฉพาะผู้จัดการเท่านั้นที่เปลี่ยนสถานะหรือแก้ไขนัดหมายได้");
         }
     }
 
@@ -69,6 +81,7 @@ public class BranchAccessPolicy {
     public Long currentStaffId() {
         AppUser user = users.findById(actor.requireId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+
         return user.getStaff() == null ? null : user.getStaff().getId();
     }
 

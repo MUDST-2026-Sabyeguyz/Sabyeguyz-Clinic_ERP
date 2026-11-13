@@ -1,5 +1,20 @@
 package com.sabyeguyz.clinic.sale;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinic.branch.Branch;
 import com.sabyeguyz.clinic.branch.BranchRepository;
 import com.sabyeguyz.clinic.catalog.Course;
@@ -19,19 +34,6 @@ import com.sabyeguyz.clinic.payment.PaymentMethodRepository;
 import com.sabyeguyz.clinic.staff.Staff;
 import com.sabyeguyz.clinic.staff.StaffNotFoundException;
 import com.sabyeguyz.clinic.staff.StaffRepository;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ออกใบเสร็จและรับชำระเงิน ตามลำดับในผังงาน: เลือกวิธีคิดค่าบริการ → ชำระเงิน → สร้าง Course Balance
@@ -59,17 +61,18 @@ public class SaleService {
     private final CourseLedgerService courseLedgerService;
     private final ReceiptNumberGenerator receiptNumbers;
 
-    public SaleService(SaleRepository saleRepository,
-                       SaleItemRepository itemRepository,
-                       SalePaymentRepository paymentRepository,
-                       PatientRepository patientRepository,
-                       BranchRepository branchRepository,
-                       StaffRepository staffRepository,
-                       ServiceItemRepository serviceRepository,
-                       CourseRepository courseRepository,
-                       PaymentMethodRepository paymentMethodRepository,
-                       CourseLedgerService courseLedgerService,
-                       ReceiptNumberGenerator receiptNumbers) {
+    public SaleService(
+            SaleRepository saleRepository,
+            SaleItemRepository itemRepository,
+            SalePaymentRepository paymentRepository,
+            PatientRepository patientRepository,
+            BranchRepository branchRepository,
+            StaffRepository staffRepository,
+            ServiceItemRepository serviceRepository,
+            CourseRepository courseRepository,
+            PaymentMethodRepository paymentMethodRepository,
+            CourseLedgerService courseLedgerService,
+            ReceiptNumberGenerator receiptNumbers) {
         this.saleRepository = saleRepository;
         this.itemRepository = itemRepository;
         this.paymentRepository = paymentRepository;
@@ -90,6 +93,7 @@ public class SaleService {
         if (!patient.isActive()) {
             throw new IllegalArgumentException("ผู้ป่วยถูกปิดการใช้งาน");
         }
+
         Branch branch = branchRepository.findByBranchCodeAndActiveTrue(request.branchCode().trim())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน"));
         Staff salesperson = resolveSalesperson(request.salespersonStaffId());
@@ -103,10 +107,20 @@ public class SaleService {
         requirePaymentsToMatch(received, total);
 
         Instant soldAt = Instant.now();
-        String receiptNo = receiptNumbers.next(branch.getId(), branch.getBranchCode(),
+        String receiptNo = receiptNumbers.next(
+                branch.getId(),
+                branch.getBranchCode(),
                 LocalDate.ofInstant(soldAt, CLINIC_ZONE));
+
         Sale sale = saleRepository.save(
-                new Sale(receiptNo, patient, branch, salesperson, total, trimmed(request.note()), soldAt));
+                new Sale(
+                        receiptNo,
+                        patient,
+                        branch,
+                        salesperson,
+                        total,
+                        trimmed(request.note()),
+                        soldAt));
 
         List<SaleItem> items = new ArrayList<>();
         for (PricedLine line : lines) {
@@ -176,16 +190,26 @@ public class SaleService {
         if (patientId != null && !patientRepository.existsById(patientId)) {
             throw new PatientNotFoundException(patientId);
         }
-        Long branchId = branchCode == null || branchCode.isBlank() ? null
+
+        Long branchId = branchCode == null || branchCode.isBlank()
+                ? null
                 : branchRepository.findByBranchCodeAndActiveTrue(branchCode.trim())
                         .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขาที่เปิดใช้งาน " + branchCode))
                         .getId();
 
-        Page<Sale> sales = saleRepository.search(patientId, branchId, PageRequest.of(page, size,
-                Sort.by("soldAt").descending().and(Sort.by("id").descending())));
+        Page<Sale> sales = saleRepository.search(
+                patientId,
+                branchId,
+                PageRequest.of(page, size,
+                        Sort.by("soldAt").descending().and(Sort.by("id").descending())));
+
         if (sales.isEmpty()) {
-            return new SaleSearchResponse(List.of(), sales.getNumber(), sales.getSize(),
-                    sales.getTotalElements(), sales.getTotalPages());
+            return new SaleSearchResponse(
+                    List.of(),
+                    sales.getNumber(),
+                    sales.getSize(),
+                    sales.getTotalElements(),
+                    sales.getTotalPages());
         }
 
         // ดึงยอดรับจริงของทั้งหน้าในคราวเดียว ไม่ยิง query ต่อหนึ่งใบ
@@ -194,16 +218,22 @@ public class SaleService {
                 .collect(Collectors.toMap(SalePaidAmount::saleId, SalePaidAmount::amount));
         Map<Long, String> descriptions = itemRepository
                 .findBySaleIdInOrderByIdAsc(sales.getContent().stream().map(Sale::getId).toList()).stream()
-                .collect(Collectors.toMap(item -> item.getSale().getId(), SaleItem::getDescription,
+                .collect(Collectors.toMap(
+                        item -> item.getSale().getId(),
+                        SaleItem::getDescription,
                         (first, ignored) -> first));
 
         return new SaleSearchResponse(
                 sales.getContent().stream()
-                        .map(sale -> SaleSummaryResponse.from(sale,
+                        .map(sale -> SaleSummaryResponse.from(
+                                sale,
                                 paid.getOrDefault(sale.getId(), BigDecimal.ZERO),
                                 descriptions.getOrDefault(sale.getId(), "รายการขายบริการ / คอร์ส")))
                         .toList(),
-                sales.getNumber(), sales.getSize(), sales.getTotalElements(), sales.getTotalPages());
+                sales.getNumber(),
+                sales.getSize(),
+                sales.getTotalElements(),
+                sales.getTotalPages());
     }
 
     private void validatePagination(int page, int size) {
@@ -246,7 +276,12 @@ public class SaleService {
                 if (!course.isActive()) {
                     throw new IllegalArgumentException("คอร์ส " + course.getCode() + " ถูกปิดการใช้งาน");
                 }
-                lines.add(new PricedLine(item.type(), null, course, course.getPrice(), 1));
+                lines.add(new PricedLine(
+                        item.type(),
+                        null,
+                        course,
+                        course.getPrice(),
+                        1));
             } else {
                 ServiceItem service = serviceRepository.findById(item.referenceId())
                         .orElseThrow(() -> new IllegalArgumentException(
@@ -258,7 +293,12 @@ public class SaleService {
                     throw new IllegalArgumentException(
                             "บริการ " + service.getCode() + " ยังไม่ได้ตั้งราคา ขายไม่ได้");
                 }
-                lines.add(new PricedLine(item.type(), service, null, service.getPrice(), item.quantity()));
+                lines.add(new PricedLine(
+                        item.type(),
+                        service,
+                        null,
+                        service.getPrice(),
+                        item.quantity()));
             }
         }
         return lines;
@@ -272,7 +312,9 @@ public class SaleService {
             if (!method.isActive()) {
                 throw new IllegalArgumentException("ช่องทางชำระเงิน " + method.getCode() + " ถูกปิดการใช้งาน");
             }
-            return new ReceivedPayment(method, entry.amount());
+            return new ReceivedPayment(
+                    method,
+                    entry.amount());
         }).toList();
     }
 
@@ -291,9 +333,15 @@ public class SaleService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    /** บรรทัดที่ตีราคาจาก master แล้ว แต่ยังไม่ผูกกับใบเสร็จ */
-    private record PricedLine(SaleItemType type, ServiceItem service, Course course,
-                              BigDecimal unitPrice, int quantity) {
+    /**
+     * บรรทัดที่ตีราคาจาก master แล้ว แต่ยังไม่ผูกกับใบเสร็จ
+     */
+    private record PricedLine(
+            SaleItemType type,
+            ServiceItem service,
+            Course course,
+            BigDecimal unitPrice,
+            int quantity) {
         BigDecimal lineTotal() {
             return unitPrice.multiply(BigDecimal.valueOf(quantity));
         }
@@ -305,5 +353,8 @@ public class SaleService {
         }
     }
 
-    private record ReceivedPayment(PaymentMethod method, BigDecimal amount) {}
+    private record ReceivedPayment(
+            PaymentMethod method,
+            BigDecimal amount) {
+    }
 }

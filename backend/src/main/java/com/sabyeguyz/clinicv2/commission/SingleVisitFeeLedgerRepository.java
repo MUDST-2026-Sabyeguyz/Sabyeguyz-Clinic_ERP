@@ -36,8 +36,12 @@ public interface SingleVisitFeeLedgerRepository extends JpaRepository<SingleVisi
 
     java.util.List<SingleVisitFeeLedger> findByVisitIdOrderByIdAsc(Long visitId);
 
-    java.util.List<SingleVisitFeeLedger> findByStaffIdAndServiceDateBetweenOrderByIdAsc(Long staffId, java.time.LocalDate from,
-                                                                                     java.time.LocalDate to);
+    java.util.List<SingleVisitFeeLedger> findByStaffIdAndServiceDateBetweenOrderByIdAsc(
+            Long staffId,
+            java.time.LocalDate from,
+            java.time.LocalDate to);
 
-    java.util.List<SingleVisitFeeLedger> findByServiceDateBetween(java.time.LocalDate from, java.time.LocalDate to);
+    java.util.List<SingleVisitFeeLedger> findByServiceDateBetween(
+            java.time.LocalDate from,
+            java.time.LocalDate to);
 }

@@ -1,13 +1,15 @@
 package com.sabyeguyz.clinic.report;
 
-import com.sabyeguyz.clinic.appointment.AppointmentStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+
+import com.sabyeguyz.clinic.appointment.AppointmentStatus;
 
 /**
  * Aggregate query ทั้งหมดของรายงาน ทุกตัวรับช่วงเวลาและสาขาแบบเดียวกัน
@@ -74,7 +76,9 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
                                                             @Param("statuses") Collection<AppointmentStatus> statuses,
                                                             @Param("branchId") Long branchId);
 
-    /** เวลาและสถานะของทุกนัด เอาไปจัดกลุ่มรายวันฝั่ง Java ด้วยเหตุผลเดียวกับ revenuePerSale */
+    /**
+     * เวลาและสถานะของทุกนัด เอาไปจัดกลุ่มรายวันฝั่ง Java ด้วยเหตุผลเดียวกับ revenuePerSale
+     */
     @Query("""
             select new com.sabyeguyz.clinic.report.ReportRows$AppointmentMoment(a.startAt, a.status)
             from Appointment a
@@ -99,7 +103,9 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
                             @Param("to") Instant to,
                             @Param("branchId") Long branchId);
 
-    /** แยกรายได้ตามชนิดสินค้า นับเฉพาะใบที่ยังไม่ถูกยกเลิก */
+    /**
+     * แยกรายได้ตามชนิดสินค้า นับเฉพาะใบที่ยังไม่ถูกยกเลิก
+     */
     @Query("""
             select new com.sabyeguyz.clinic.report.ReportRows$CategoryAmount(
                 si.itemType, coalesce(sum(si.lineTotal), 0))
@@ -203,7 +209,9 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
                                                  @Param("branchId") Long branchId,
                                                  @Param("patientId") Long patientId);
 
-    /** ยอดคงเหลือของหลายใบพร้อมกัน เพื่อไม่ให้เกิด query ต่อหนึ่งใบ */
+    /**
+     * ยอดคงเหลือของหลายใบพร้อมกัน เพื่อไม่ให้เกิด query ต่อหนึ่งใบ
+     */
     @Query("""
             select new com.sabyeguyz.clinic.report.ReportRows$PurchaseTotal(
                 m.coursePurchase.id, coalesce(sum(m.quantity), 0))
@@ -213,7 +221,9 @@ public interface ReportQueries extends Repository<com.sabyeguyz.clinic.sale.Sale
             """)
     List<ReportRows.PurchaseTotal> balancesOf(@Param("purchaseIds") Collection<Long> purchaseIds);
 
-    /** จำนวนครั้งที่ใช้ไปจริงของหลายใบพร้อมกัน กติกาเดียวกับ CourseMovementRepository.usedSessionsOf */
+    /**
+     * จำนวนครั้งที่ใช้ไปจริงของหลายใบพร้อมกัน กติกาเดียวกับ CourseMovementRepository.usedSessionsOf
+     */
     @Query("""
             select new com.sabyeguyz.clinic.report.ReportRows$PurchaseTotal(
                 m.coursePurchase.id, coalesce(sum(-m.quantity), 0))

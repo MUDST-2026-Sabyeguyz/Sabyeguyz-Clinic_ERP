@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.catalog.Course;
-import com.sabyeguyz.clinicv2.role.Permission;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.catalog.Course;
+import com.sabyeguyz.clinicv2.role.Permission;
 
 /** Audits calculated rate changes after Reopen and before Finalize. */
 @Entity
@@ -45,20 +47,28 @@ public class CommissionRateOverrideAudit {
     public CommissionRateOverrideAudit() {}
 
     public Long getId() { return id; }
+
     public Permission getPermission() { return permission; }
     public void setPermission(Permission permission) { this.permission = permission; }
+
     public MonthlyCommissionClosing getClosing() { return closing; }
     public void setClosing(MonthlyCommissionClosing closing) { this.closing = closing; }
+
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+
     public BigDecimal getOldRate() { return oldRate; }
     public void setOldRate(BigDecimal oldRate) { this.oldRate = oldRate; }
+
     public BigDecimal getNewRate() { return newRate; }
     public void setNewRate(BigDecimal newRate) { this.newRate = newRate; }
+
     public Long getChangedBy() { return changedBy; }
     public void setChangedBy(Long changedBy) { this.changedBy = changedBy; }
+
     public Instant getChangedAt() { return changedAt; }
     public void setChangedAt(Instant changedAt) { this.changedAt = changedAt; }
+
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
 }

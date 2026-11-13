@@ -1,15 +1,17 @@
 package com.sabyeguyz.clinicv2.course;
 
-import com.sabyeguyz.clinicv2.enums.RefundStatus;
-import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
+import com.sabyeguyz.clinicv2.enums.RefundStatus;
 
 public interface CourseRefundItemRepository extends JpaRepository<CourseRefundItem, Long> {
     List<CourseRefundItem> findByRefundIdOrderByIdAsc(Long refundId);
@@ -46,7 +48,9 @@ public interface CourseRefundItemRepository extends JpaRepository<CourseRefundIt
     /** The status list is a parameter: a PostgreSQL enum literal in JPQL is cast to the wrong type name. */
     @Query("select coalesce(sum(i.refundAmount), 0) from CourseRefundItem i "
             + "where i.course.id = :courseId and i.refund.refundStatus in :statuses")
-    BigDecimal sumRefundAmountOfCourse(@Param("courseId") Long courseId, @Param("statuses") List<RefundStatus> statuses);
+    BigDecimal sumRefundAmountOfCourse(
+            @Param("courseId") Long courseId,
+            @Param("statuses") List<RefundStatus> statuses);
 
     /** Counts pending cancellation groups whose rights have not been cut yet. */
     default int pendingCancelledVisitsOfCourse(Long courseId) {
@@ -54,6 +58,7 @@ public interface CourseRefundItemRepository extends JpaRepository<CourseRefundIt
                 courseId,
                 List.of(RefundStatus.Pending),
                 CourseLedgerEntryType.Cancellation);
+
         return total == null ? 0 : Math.toIntExact(total);
     }
 
@@ -86,7 +91,9 @@ public interface CourseRefundItemRepository extends JpaRepository<CourseRefundIt
 
     @Query("select coalesce(sum(i.cancelledVisits), 0) from CourseRefundItem i "
             + "where i.course.id = :courseId and i.refund.refundStatus in :statuses")
-    Long sumCancelledVisitsOfCourse(@Param("courseId") Long courseId, @Param("statuses") List<RefundStatus> statuses);
+    Long sumCancelledVisitsOfCourse(
+            @Param("courseId") Long courseId,
+            @Param("statuses") List<RefundStatus> statuses);
 
     /**
      * Reserves pending refunds and counts completed refunds against one
@@ -94,13 +101,11 @@ public interface CourseRefundItemRepository extends JpaRepository<CourseRefundIt
      */
     default BigDecimal refundedOrPendingAmountOfCoursePayment(
             Long courseId,
-            Long paymentId
-    ) {
+            Long paymentId) {
         return sumRefundAmountOfCoursePayment(
                 courseId,
                 paymentId,
-                List.of(RefundStatus.Pending, RefundStatus.Completed)
-        );
+                List.of(RefundStatus.Pending, RefundStatus.Completed));
     }
 
     /**
@@ -116,6 +121,5 @@ public interface CourseRefundItemRepository extends JpaRepository<CourseRefundIt
     BigDecimal sumRefundAmountOfCoursePayment(
             @Param("courseId") Long courseId,
             @Param("paymentId") Long paymentId,
-            @Param("statuses") List<RefundStatus> statuses
-    );
+            @Param("statuses") List<RefundStatus> statuses);
 }

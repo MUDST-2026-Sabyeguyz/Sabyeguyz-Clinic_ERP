@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.appointment;
 
 import java.util.List;
+
 import org.springframework.data.domain.Page;
 
 public record AppointmentSearchResponse(
@@ -8,12 +9,13 @@ public record AppointmentSearchResponse(
         int page,
         int size,
         long totalItems,
-        int totalPages
-) {
+        int totalPages) {
     static AppointmentSearchResponse from(Page<Appointment> appointments) {
         return new AppointmentSearchResponse(
                 appointments.getContent().stream().map(AppointmentResponse::from).toList(),
-                appointments.getNumber(), appointments.getSize(),
-                appointments.getTotalElements(), appointments.getTotalPages());
+                appointments.getNumber(),
+                appointments.getSize(),
+                appointments.getTotalElements(),
+                appointments.getTotalPages());
     }
 }

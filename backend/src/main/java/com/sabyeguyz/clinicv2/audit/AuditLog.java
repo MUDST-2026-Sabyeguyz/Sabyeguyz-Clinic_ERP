@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.audit;
 
-import com.sabyeguyz.clinicv2.enums.AuditAction;
+import java.time.Instant;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.Instant;
+
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 
 @Entity
 @Table(name = "audit_log")

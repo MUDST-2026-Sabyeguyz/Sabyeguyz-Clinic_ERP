@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.sale;
 
-import com.sabyeguyz.clinic.api.ApiErrorResponse;
+import java.net.URI;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -9,7 +10,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.net.URI;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.sabyeguyz.clinic.api.ApiErrorResponse;
 
 /**
  * เส้นทางตาม docs/context.md §8 — การขายอยู่ใต้ {@code /api/payments}
@@ -44,9 +46,13 @@ public class SaleController {
             @ApiResponse(responseCode = "400",
                     description = "Validation failed, an item or payment method is inactive, or the payments do not "
                             + "match the total",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Patient, course, or salesperson not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ResponseEntity<SaleResponse> create(@Valid @RequestBody SaleRequest request) {
         SaleResponse response = service.create(request);
@@ -61,9 +67,13 @@ public class SaleController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Paged results, including an empty page when nothing matches"),
             @ApiResponse(responseCode = "400", description = "Invalid page, size, or branch",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Patient not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public SaleSearchResponse list(
             @Parameter(description = "Limit to one patient") @RequestParam(required = false) Long patientId,
@@ -82,11 +92,17 @@ public class SaleController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Receipt reversed and its effects undone"),
             @ApiResponse(responseCode = "400", description = "Reason is missing",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Receipt not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Receipt was already reversed",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public SaleResponse reverse(
             @Parameter(description = "Sale database identifier", required = true) @PathVariable long id,
@@ -101,7 +117,9 @@ public class SaleController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Receipt returned"),
             @ApiResponse(responseCode = "404", description = "Receipt not found",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public SaleResponse get(
             @Parameter(description = "Sale database identifier", required = true) @PathVariable long id) {

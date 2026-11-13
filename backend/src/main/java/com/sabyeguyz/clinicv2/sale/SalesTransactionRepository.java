@@ -3,11 +3,13 @@ package com.sabyeguyz.clinicv2.sale;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
 import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 
@@ -21,19 +23,27 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
     @Query("select t from SalesTransaction t where "
             + "(:patientId is null or t.patient.id = :patientId) "
             + "and (:branchId is null or t.branch.id = :branchId)")
-    Page<SalesTransaction> search(@Param("patientId") Long patientId, @Param("branchId") Long branchId, Pageable pageable);
+    Page<SalesTransaction> search(
+            @Param("patientId") Long patientId,
+            @Param("branchId") Long branchId,
+            Pageable pageable);
 
     /** Select one legacy line ID per receipt before applying pagination. */
     @Query("select t from SalesTransaction t where "
             + "(:patientId is null or t.patient.id = :patientId) "
             + "and (:branchId is null or t.branch.id = :branchId) "
             + "and t.id = (select min(line.id) from SalesTransaction line where line.receipt.id = t.receipt.id)")
-    Page<SalesTransaction> searchReceipts(@Param("patientId") Long patientId, @Param("branchId") Long branchId, Pageable pageable);
+    Page<SalesTransaction> searchReceipts(
+            @Param("patientId") Long patientId,
+            @Param("branchId") Long branchId,
+            Pageable pageable);
 
     @Query("select t from SalesTransaction t where t.transactionDate between :from and :to "
             + "and (:branchId is null or t.branch.id = :branchId)")
-    List<SalesTransaction> findByTransactionDateBetween(@Param("from") Instant from, @Param("to") Instant to,
-                                                          @Param("branchId") Long branchId);
+    List<SalesTransaction> findByTransactionDateBetween(
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("branchId") Long branchId);
 
     @Query("""
         select t
@@ -81,6 +91,5 @@ public interface SalesTransactionRepository extends JpaRepository<SalesTransacti
         """)
     BigDecimal sumNetSalesOfReceipt(
             @Param("receiptId") Long receiptId,
-            @Param("voidedStatus") ReceiptStatus voidedStatus
-    );
+            @Param("voidedStatus") ReceiptStatus voidedStatus);
 }
