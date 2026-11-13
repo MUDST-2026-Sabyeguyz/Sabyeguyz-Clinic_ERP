@@ -74,6 +74,20 @@ public class SingleVisitEntitlementController {
 
     public record ReverseRequest(String reason) {}
 
+    /** One use of a single-visit right, reversed or not, with whether it can still be reversed. */
+    public record UseDetailResponse(
+            Long id,
+            Long entitlementId,
+            String serviceName,
+            String receiptNo,
+            Long appointmentId,
+            Long visitId,
+            Instant usedAt,
+            String treatingStaffName,
+            Instant reversedAt,
+            String reversalReason,
+            String reverseBlockedReason) {}
+
     @GetMapping("/api/patients/{patientId}/single-visit-entitlements")
     public List<EntitlementResponse> patientEntitlements(@PathVariable Long patientId) {
         Patient patient = patients.findById(patientId)
@@ -85,6 +99,36 @@ public class SingleVisitEntitlementController {
                 .filter(balance -> branchScope == null
                         || branchScope.getId().equals(balance.entitlement().getTransaction().getBranch().getId()))
                 .map(this::toResponse).toList();
+    }
+
+    @GetMapping("/api/patients/{patientId}/single-visit-entitlement-uses")
+    public List<UseDetailResponse> patientUses(@PathVariable Long patientId) {
+        Patient patient = patients.findById(patientId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ไม่พบผู้ป่วย"));
+        branchAccess.requireAccess(patient.getBranch());
+        var branchScope = branchAccess.scope(null);
+
+        return service.usesForPatient(patientId).stream()
+                .filter(use -> branchScope == null
+                        || branchScope.getId().equals(use.getEntitlement().getTransaction().getBranch().getId()))
+                .map(use -> {
+                    var sale = use.getEntitlement().getTransaction();
+                    var treating = use.getVisit().getTreatingStaff();
+
+                    return new UseDetailResponse(
+                            use.getId(),
+                            use.getEntitlement().getId(),
+                            sale.getItemNameSnapshot(),
+                            sale.getReceipt().getReceiptNo(),
+                            use.getAppointment().getId(),
+                            use.getVisit().getId(),
+                            use.getUsedAt(),
+                            treating == null ? null : treating.getStaffFname() + " " + treating.getStaffLname(),
+                            use.getReversedAt(),
+                            use.getReversalReason(),
+                            service.reverseBlockedReason(use));
+                })
+                .toList();
     }
 
     @PostMapping("/api/single-visit-entitlements/{entitlementId}/uses")

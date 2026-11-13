@@ -141,7 +141,7 @@ public class MonthlyCommissionClosingService {
                 require(permission != null, "ต้องระบุสิทธิ์สำหรับบันทึก audit");
                 require(actorId != null, "ต้องระบุผู้ดำเนินการ");
                 require(reason != null && !reason.isBlank(),
-                        "ต้องมีเหตุผลการ Reopen สำหรับบันทึก audit");
+                        "ต้องมีเหตุผลการเปิดรอบอีกครั้งสำหรับบันทึก audit");
 
                 reason = reason.trim();
                 require(reason.length() <= 255,
@@ -196,11 +196,11 @@ public class MonthlyCommissionClosingService {
             Long closingId,
             String reason,
             Long actorId) {
-        require(reason != null && !reason.isBlank(), "ต้องระบุเหตุผลที่ Reopen");
+        require(reason != null && !reason.isBlank(), "ต้องระบุเหตุผลที่เปิดรอบอีกครั้ง");
         MonthlyCommissionClosing closing = findForUpdate(closingId);
 
         if (closing.getClosingStatus() == ClosingStatus.Finalized) {
-            throw new IllegalStateException("เดือนนี้ Finalize แล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+            throw new IllegalStateException("เดือนนี้ Finalize แล้ว ห้ามเปิดรอบอีกครั้งให้บันทึกเป็นรายการปรับค่าตอบแทนในงวดถัดไป");
         }
 
         if (closing.getClosingStatus() == ClosingStatus.Open) {
@@ -212,14 +212,27 @@ public class MonthlyCommissionClosingService {
 
         if (branch == null) {
             throw new IllegalStateException(
-                    "งวดปิดยอดนี้ยังไม่มีสาขา ต้องตรวจข้อมูลเก่าก่อน Reopen");
+                    "งวดปิดยอดนี้ยังไม่มีสาขา ต้องตรวจข้อมูลเก่าก่อนเปิดรอบอีกครั้ง");
         }
 
+        // A: someone of the branch is already Paid for the month
+        Long paidInMonth = entityManager.createQuery(
+                        "select count(p) from StaffMonthlyPayment p where p.paymentMonth = :month "
+                                + "and p.branch.id = :branchId and p.paymentStatus = :status", Long.class)
+                .setParameter("month", closing.getClosingMonth())
+                .setParameter("branchId", branch.getId())
+                .setParameter("status", PaymentStatus.Paid)
+                .getSingleResult();
+        if (paidInMonth != null && paidInMonth > 0) {
+            throw new IllegalStateException(StaffMonthlyPaymentService.PAID_MONTH_LOCKED);
+        }
+
+        // B: the seller's Owner commission of this sale month sits in a Paid payment of any month
         if (allocations.ownerCommissionOfSaleMonthInBranch(
                 staffId, closing.getClosingMonth(), branch.getId(),
                 java.util.List.of(PaymentStatus.Paid))) {
             throw new IllegalStateException(
-                    "ค่าคอมมิชชันของเดือนนี้ถูกจ่ายแล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+                    "ค่าคอมมิชชันของเดือนนี้ถูกจ่ายแล้ว ห้ามเปิดรอบอีกครั้งให้บันทึกเป็นรายการปรับค่าตอบแทนในงวดถัดไป");
         }
 
         for (Long courseId :
@@ -230,14 +243,14 @@ public class MonthlyCommissionClosingService {
 
             courseCommission.unlock(
                     course,
-                    "Reopen การปิดยอด " + closing.getClosingMonth()
+                    "เปิดรอบอีกครั้งการปิดยอด " + closing.getClosingMonth()
                             + ": " + reason.trim(),
                     actorId);
         }
 
         String trimmed = reason.trim();
 
-        if (trimmed.length() > 255) throw new IllegalArgumentException("เหตุผลที่ Reopen ยาวเกิน 255 ตัวอักษร");
+        if (trimmed.length() > 255) throw new IllegalArgumentException("เหตุผลที่เปิดรอบอีกครั้งยาวเกิน 255 ตัวอักษร");
         closing.setClosingStatus(ClosingStatus.Open);
         closing.setClosedAt(null);
         closing.setClosedBy(null);

@@ -34,6 +34,7 @@ const signedMoney = (value: number) =>
 const source = computed(() => {
   const row = adjustment.value
   if (!row) return '—'
+  if (row.referenceLabel) return row.referenceLabel
   if (row.saleTransactionId) return `SALE-${String(row.saleTransactionId).padStart(5, '0')}`
   if (row.singleVisitFeeId) return `FEE-${String(row.singleVisitFeeId).padStart(5, '0')}`
   if (row.visitId) return `VIS-${String(row.visitId).padStart(4, '0')}`
@@ -48,7 +49,12 @@ const monthLabel = (value: string) => {
     new Date(year, number - 1, 1),
   )
 }
-const status = computed(() => adjustmentStep(adjustment.value?.status || 'Pending'))
+// รายการที่ระบบนำยอดเข้าคำนวณอัตโนมัติไม่มีขั้นอนุมัติ จึงไม่แสดงคำว่า "อนุมัติ"
+const status = computed(() =>
+  adjustment.value?.automatic && adjustment.value.status === 'Approved'
+    ? 'บันทึกแล้ว'
+    : adjustmentStep(adjustment.value?.status || 'Pending'),
+)
 const remaining = computed(() => {
   const row = adjustment.value
   return row ? Math.sign(row.amount) * row.remaining : 0
@@ -71,7 +77,7 @@ async function load() {
     adjustment.value = await commissionApi.adjustment(Number(route.params.id))
   } catch (error) {
     errorMessage.value =
-      error instanceof Error ? error.message : 'โหลดรายการปรับปรุงไม่สำเร็จ กรุณาลองอีกครั้ง'
+      error instanceof Error ? error.message : 'โหลดรายการปรับค่าตอบแทนไม่สำเร็จ กรุณาลองอีกครั้ง'
   } finally {
     loading.value = false
   }
@@ -108,11 +114,11 @@ async function confirmDecision() {
     <StaffHeader />
     <main class="commission-manager-main detail-main">
       <RouterLink class="back-link" to="/staff/commission/adjustments"
-        >← กลับรายการปรับปรุง</RouterLink
+        >← กลับรายการปรับค่าตอบแทน</RouterLink
       >
       <header class="detail-title">
         <div>
-          <h1>รายละเอียดการปรับปรุงค่าตอบแทน</h1>
+          <h1>รายละเอียดการปรับค่าตอบแทน</h1>
           <p v-if="adjustment">ADJ-{{ String(adjustment.id).padStart(5, '0') }}</p>
         </div>
         <span
@@ -140,7 +146,7 @@ async function confirmDecision() {
           ยอดหักคงเหลือนี้แสดงไว้เพื่ออ้างอิง
         </section>
         <section
-          v-else-if="['Approved', 'PartiallyApplied'].includes(adjustment.status)"
+          v-else-if="!adjustment.automatic && ['Approved', 'PartiallyApplied'].includes(adjustment.status)"
           class="status-guidance"
         >
           {{ adjustment.status === 'Approved' ? 'อนุมัติแล้ว' : 'นำยอดไปใช้บางส่วนแล้ว' }}
@@ -151,20 +157,20 @@ async function confirmDecision() {
             <h2>ข้อมูลการปรับปรุง</h2>
             <dl>
               <div>
+                <dt>นักกายภาพ</dt>
+                <dd>{{ adjustment.staffName || '-' }}</dd>
+              </div>
+              <div>
+                <dt>รายการอ้างอิง</dt>
+                <dd>{{ source }}</dd>
+              </div>
+              <div>
                 <dt>งวดต้นทาง</dt>
                 <dd>{{ monthLabel(adjustment.originalMonth) }}</dd>
               </div>
               <div>
                 <dt>{{ adjustment.automatic ? 'งวดเริ่มนำไปใช้' : 'งวดที่เสนอ' }}</dt>
                 <dd>{{ monthLabel(adjustment.appliedMonth) }}</dd>
-              </div>
-              <div>
-                <dt>ผู้รับค่าตอบแทน</dt>
-                <dd>{{ adjustment.staffName || '-' }}</dd>
-              </div>
-              <div>
-                <dt>รายการอ้างอิง</dt>
-                <dd>{{ source }}</dd>
               </div>
               <div class="wide">
                 <dt>เหตุผล</dt>

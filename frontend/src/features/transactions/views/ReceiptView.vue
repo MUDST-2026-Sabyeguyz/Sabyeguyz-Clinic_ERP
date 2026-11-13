@@ -301,7 +301,8 @@ onMounted(load)
 <style scoped>
 .receipt-view {
   min-height: 100vh;
-  background: #f8f4ed;
+  /* โปร่งใสเพื่อให้เห็น gradient พื้นหลังของ workspace (App.vue) เหมือนหน้าอื่น */
+  background: transparent;
   color: #173c3b;
 }
 main {

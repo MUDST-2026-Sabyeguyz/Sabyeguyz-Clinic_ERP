@@ -94,22 +94,47 @@ describe('AppointmentView', () => {
     expect(source).toContain('ผู้จอง NEW ยังไม่มี HN')
   })
 
-  it('places service type beside patient type for current and new patients', () => {
+  it('orders the create form by flow: patient, then service, then date and time, then note', () => {
     const styles = readFileSync(
-      resolve(process.cwd(), 'src/features/appointments/styles/appointments.css'),
+      resolve(process.cwd(), 'src/features/appointments/styles/appointment-create-layout.css'),
       'utf8',
     )
-    const createGrid = styles.match(
-      /\.appointment-create-card \.appointment-create-grid \{([\s\S]*?)\n\}/,
+    const areas = (selector: RegExp) =>
+      [...(styles.match(selector)?.[1].matchAll(/'([^']+)'/g) ?? [])].map((match) => match[1])
+    const current = areas(
+      /\.appointment-create-grid \{[^}]*?grid-template-areas:([\s\S]*?);/,
     )
-    const newPatientGrid = styles.match(
-      /\.appointment-create-card \.appointment-create-grid\.is-new-patient \{([\s\S]*?)\n\}/,
+    const newPatient = areas(
+      /\.appointment-create-grid\.is-new-patient \{\s*grid-template-areas:([\s\S]*?);/,
     )
 
-    expect(createGrid?.[1]).toContain("'patient-type service-mode'")
-    expect(createGrid?.[1]).toContain("'patient selection'")
-    expect(newPatientGrid?.[1]).toContain("'patient-type service-mode'")
-    expect(newPatientGrid?.[1]).toContain("'new-patient selection'")
+    expect(current).toEqual([
+      'patient-type patient-type',
+      'patient phone',
+      'service-mode service-mode',
+      'selection therapist',
+      'summary summary',
+      'date time',
+      'note note',
+    ])
+    expect(newPatient).toEqual([
+      'patient-type patient-type',
+      'new-patient new-patient',
+      'service-mode service-mode',
+      'selection therapist',
+      'summary summary',
+      'date time',
+      'note note',
+    ])
+  })
+
+  it('shows only the HN under the selected patient and scrolls the new form to the top', () => {
+    for (const file of ['AppointmentView.vue', 'ManagerAppointmentView.vue']) {
+      const source = readFileSync(resolve(process.cwd(), `src/features/appointments/views/${file}`), 'utf8')
+      expect(source).toContain('HN {{ selectedFormPatient.hn }}')
+      expect(source).not.toContain('{{ selectedFormPatient.hn }} · {{ selectedFormPatient.phone }}')
+      expect(source).toContain('void nextTick(() => window.scrollTo({ top: 0, behavior')
+    }
   })
 
   it('returns calendar-created appointments to the calendar instead of the list', () => {
