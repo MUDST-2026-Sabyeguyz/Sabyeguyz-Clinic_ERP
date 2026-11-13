@@ -22,7 +22,7 @@ pipeline {
                 deleteDir()
                 checkout scm
                 script {
-                    env.SOURCE_SHA = bat(returnStdout: true, script: 'git rev-parse HEAD').trim().toLowerCase()
+                    env.SOURCE_SHA = bat(returnStdout: true, script: '@git rev-parse HEAD').trim().toLowerCase()
                     if (!(env.SOURCE_SHA ==~ /[0-9a-f]{40}/)) { error('Checkout did not resolve to a full immutable Git SHA') }
                     env.BACKEND_IMAGE = "clinic-presentation-backend:${env.SOURCE_SHA}"
                     env.FRONTEND_IMAGE = "clinic-presentation-frontend:${env.SOURCE_SHA}"
