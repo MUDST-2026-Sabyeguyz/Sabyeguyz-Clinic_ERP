@@ -193,7 +193,7 @@ public class CourseCommissionService {
 
                     if (original.getOwnerMonthlyPayment() != null
                             && original.getOwnerMonthlyPayment().getPaymentStatus() != PaymentStatus.Open) {
-                        throw new IllegalStateException("ค่าตอบแทนอยู่ในงวดจ่ายที่ปิดแล้ว ให้ Reopen งวดจ่ายก่อน");
+                        throw new IllegalStateException("ค่าตอบแทนอยู่ในงวดจ่ายที่ปิดแล้ว ให้เปิดรอบอีกครั้งงวดจ่ายก่อน");
                     }
 
                     allocations.save(reversalOf(original, reason, actorId));
@@ -311,7 +311,7 @@ public class CourseCommissionService {
     public static void requireNotPaid(CommissionAllocationLedger allocation) {
         if (isPaid(allocation.getOwnerMonthlyPayment())
                 || isPaid(allocation.getTreatingMonthlyPayment())) {
-            throw new IllegalStateException("ค่าตอบแทนรายการนี้ถูกจ่ายแล้ว ไม่สามารถกลับรายการได้ ให้บันทึกเป็น Adjustment ในงวดถัดไป");
+            throw new IllegalStateException("ค่าตอบแทนรายการนี้ถูกจ่ายแล้ว ไม่สามารถกลับรายการได้ ให้บันทึกเป็นรายการปรับค่าตอบแทนในงวดถัดไป");
         }
     }
 

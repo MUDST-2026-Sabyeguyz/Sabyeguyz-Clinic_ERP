@@ -8,8 +8,9 @@ import { clinicToday } from '@/utils/clinicDate'
 type TreatmentRow = Awaited<ReturnType<typeof commissionApi.treatmentReport>>[number]
 type SingleFeeRow = Awaited<ReturnType<typeof commissionApi.singleVisitFees>>[number]
 type SaleRow = Awaited<ReturnType<typeof commissionApi.report>>[number]['sales'][number]
-const activeList = ref<'sales' | 'fees' | 'adjustments'>('sales')
-function showList(list: 'sales' | 'fees' | 'adjustments') {
+type ListTab = 'all' | 'sales' | 'fees' | 'adjustments'
+const activeList = ref<ListTab>('all')
+function showList(list: ListTab) {
   activeList.value = list
   requestAnimationFrame(() => {
     document
@@ -27,6 +28,7 @@ const adjustmentRows = computed(() =>
     if (applications.length)
       return applications.map((application) => ({
         key: `${item.id}-${application.id}`,
+        adjustmentId: item.id,
         amount: Number(application.amount),
         reason: item.reason,
         approverName: item.approverName || 'ยังไม่อนุมัติ',
@@ -36,6 +38,7 @@ const adjustmentRows = computed(() =>
       ? [
           {
             key: String(item.id),
+            adjustmentId: item.id,
             amount: Number(item.amount),
             reason: item.reason,
             approverName: item.approverName || 'ยังไม่อนุมัติ',
@@ -94,10 +97,74 @@ const treatments = ref<TreatmentRow[]>([]),
   approved = ref(false),
   finalized = ref(false)
 const singleFees = ref<SingleFeeRow[]>([])
+type EditTarget = { path: string; query?: Record<string, string> }
+// ปุ่ม "แก้ไข" พาไปหน้าต้นทางของรายการ (ยกเลิกรายการเดิมแล้วบันทึกใหม่)
+const saleEdit = (sale: SaleRow): EditTarget => ({
+  path: '/staff/transactions',
+  query: { tab: 'sales', search: sale.receiptNo },
+})
+const adjustmentEdit = (adjustmentId: number): EditTarget => ({
+  path: `/staff/commission/adjustments/${adjustmentId}`,
+})
 const feeRows = computed(() => [
-  ...treatments.value.map((item) => ({ ...item, rowKey: `course-${item.id}` })),
-  ...singleFees.value.map((item) => ({ ...item, rowKey: `single-${item.id}` })),
+  ...treatments.value.map((item) => ({
+    ...item,
+    rowKey: `course-${item.id}`,
+    edit: { path: '/staff/transactions', query: { usageId: String(item.id) } } as EditTarget | null,
+  })),
+  ...singleFees.value.map((item) => ({
+    ...item,
+    rowKey: `single-${item.id}`,
+    // ค่ามือรายครั้งแก้ได้โดยยกเลิก (Void) ใบเสร็จของการขายนั้น ถ้าไม่มีใบเสร็จ (มาจากสิทธิ์ล่วงหน้า) จะไม่มีปุ่ม
+    edit: (item.receiptNo
+      ? { path: '/staff/transactions', query: { tab: 'sales', search: item.receiptNo } }
+      : null) as EditTarget | null,
+  })),
 ])
+// รวมรายการขายคอร์ส ค่ามือ และรายการปรับยอดไว้ตารางเดียว (ขายคอร์ส/ค่ามือเรียงวันที่ใหม่สุดก่อน ปรับยอดไว้ท้าย)
+const allRows = computed(() => {
+  const dated = [
+    ...sales.value.map((sale) => ({
+      key: `sale-${sale.id}`,
+      type: 'ขายคอร์ส',
+      date: sale.saleDate,
+      detail: sale.courseName,
+      party: sale.patientName,
+      amount: Number(sale.commissionableAmount),
+      edit: saleEdit(sale) as EditTarget | null,
+      alwaysEditable: false,
+    })),
+    ...feeRows.value.map((item) => ({
+      key: item.rowKey,
+      type: 'ค่ามือ',
+      date: item.visitDate,
+      detail: item.serviceName,
+      party: item.patientName,
+      amount: Number(item.treatmentFee),
+      edit: item.edit,
+      alwaysEditable: false,
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date))
+  const adjusted = adjustmentRows.value.map((item) => ({
+    key: `adjustment-${item.key}`,
+    type: 'ปรับยอด',
+    date: '',
+    detail: item.reason,
+    party: item.approverName,
+    amount: item.amount,
+    edit: adjustmentEdit(item.adjustmentId) as EditTarget | null,
+    alwaysEditable: true,
+  }))
+  return [...dated, ...adjusted]
+})
+// แก้ได้เฉพาะตอนยังไม่ปิด (หรือ Reopen แล้ว) ส่วนรายการปรับยอดอยู่ในงวดถัดไปจึงแก้ได้เสมอ
+const canEdit = (row: { alwaysEditable?: boolean }) =>
+  !!row.alwaysEditable || (!approved.value && !finalized.value)
+const editBlockedReason = computed(() =>
+  finalized.value
+    ? 'งวดนี้ปิดถาวรแล้ว ให้สร้างรายการปรับค่าตอบแทนในงวดถัดไป'
+    : 'เปิดรอบอีกครั้งก่อนจึงจะแก้ไขได้',
+)
 const validationMessage = ref(''),
   saving = ref(false)
 const reopenReason = ref('')
@@ -267,7 +334,7 @@ watch([staffId, month, selectedBranchCode], load)
           </article>
           <button
             type="button"
-            class="metric-card-button highlight"
+            class="metric-card-button"
             aria-label="ดูรายการขายคอร์ส"
             @click="showList('sales')"
           >
@@ -295,7 +362,7 @@ watch([staffId, month, selectedBranchCode], load)
             <span>รายการปรับยอด</span><b>{{ money(adjustmentTotal) }}</b
             ><small>{{ adjustmentRows.length }} รายการ</small>
           </button>
-          <article class="commission-metric warning">
+          <article class="commission-metric">
             <span>ยอดสุทธิ</span><b>{{ money(netTotal) }}</b
             ><small>{{ approved ? 'อนุมัติแล้ว' : 'รออนุมัติ' }}</small>
           </article>
@@ -304,6 +371,7 @@ watch([staffId, month, selectedBranchCode], load)
           <div class="source-tabs" role="tablist" aria-label="รายการค่าตอบแทน">
             <button
               v-for="tab in [
+                { id: 'all', label: 'รายการทั้งหมด', count: allRows.length },
                 { id: 'sales', label: 'รายการขายคอร์ส', count: sales.length },
                 { id: 'fees', label: 'รายการค่ามือ', count: feeRows.length },
                 { id: 'adjustments', label: 'รายการปรับยอด', count: adjustmentRows.length },
@@ -318,7 +386,46 @@ watch([staffId, month, selectedBranchCode], load)
               {{ tab.label }} {{ tab.count }}
             </button>
           </div>
-          <div v-if="activeList === 'sales'" role="tabpanel">
+          <div v-if="activeList === 'all'" role="tabpanel">
+            <h2>รายการทั้งหมด</h2>
+            <p v-if="!allRows.length" class="source-empty">ไม่มีรายการในรอบนี้</p>
+            <div v-else class="source-scroll">
+              <table data-test="all-rows">
+                <thead>
+                  <tr>
+                    <th>ประเภท</th>
+                    <th>วันที่</th>
+                    <th>รายละเอียด</th>
+                    <th>ผู้ป่วย / ผู้อนุมัติ</th>
+                    <th>จำนวนเงิน</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in allRows" :key="item.key">
+                    <td>{{ item.type }}</td>
+                    <td>{{ item.date ? thaiDate(item.date) : '—' }}</td>
+                    <td>{{ item.detail }}</td>
+                    <td>{{ item.party }}</td>
+                    <td>{{ money(item.amount) }}</td>
+                    <td class="edit-cell">
+                      <template v-if="item.edit">
+                        <RouterLink
+                          v-if="canEdit(item)"
+                          class="edit-link"
+                          :to="item.edit"
+                          data-test="edit-link"
+                          >แก้ไข</RouterLink
+                        >
+                        <span v-else class="edit-link disabled" :title="editBlockedReason" data-test="edit-disabled">แก้ไข</span>
+                      </template>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div v-else-if="activeList === 'sales'" role="tabpanel">
             <h2>รายการขายคอร์ส</h2>
             <p v-if="!sales.length" class="source-empty">ไม่มีรายการขายคอร์สในรอบนี้</p>
             <div v-else class="source-scroll">
@@ -334,6 +441,7 @@ watch([staffId, month, selectedBranchCode], load)
                     <th>ยอดสุทธิ</th>
                     <th>ผู้ขาย</th>
                     <th>คืนเงิน</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -347,6 +455,16 @@ watch([staffId, month, selectedBranchCode], load)
                     <td>{{ money(Number(sale.commissionableAmount)) }}</td>
                     <td>{{ sale.sellerName }}</td>
                     <td>{{ money(Number(sale.completedRefund)) }}</td>
+                    <td class="edit-cell">
+                      <RouterLink
+                        v-if="canEdit({})"
+                        class="edit-link"
+                        :to="saleEdit(sale)"
+                        data-test="edit-link"
+                        >แก้ไข</RouterLink
+                      >
+                      <span v-else class="edit-link disabled" :title="editBlockedReason" data-test="edit-disabled">แก้ไข</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -365,6 +483,7 @@ watch([staffId, month, selectedBranchCode], load)
                     <th>ผู้รักษาจริง</th>
                     <th>กฎที่ใช้</th>
                     <th>ค่ามือ</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -375,6 +494,18 @@ watch([staffId, month, selectedBranchCode], load)
                     <td>{{ item.treatingStaffName }}</td>
                     <td>{{ item.feeRuleName || '—' }}</td>
                     <td>{{ money(Number(item.treatmentFee)) }}</td>
+                    <td class="edit-cell">
+                      <template v-if="item.edit">
+                        <RouterLink
+                          v-if="canEdit(item)"
+                          class="edit-link"
+                          :to="item.edit"
+                          data-test="edit-link"
+                          >แก้ไข</RouterLink
+                        >
+                        <span v-else class="edit-link disabled" :title="editBlockedReason" data-test="edit-disabled">แก้ไข</span>
+                      </template>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -391,6 +522,7 @@ watch([staffId, month, selectedBranchCode], load)
                     <th>เหตุผล</th>
                     <th>ผู้อนุมัติ</th>
                     <th>งวดที่นำไปใช้</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -399,6 +531,14 @@ watch([staffId, month, selectedBranchCode], load)
                     <td>{{ item.reason }}</td>
                     <td>{{ item.approverName }}</td>
                     <td>{{ item.appliedMonth }}</td>
+                    <td class="edit-cell">
+                      <RouterLink
+                        class="edit-link"
+                        :to="adjustmentEdit(item.adjustmentId)"
+                        data-test="edit-link"
+                        >แก้ไข</RouterLink
+                      >
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -408,23 +548,19 @@ watch([staffId, month, selectedBranchCode], load)
         <footer v-if="!approved && validationMessage" class="detail-actions">
           <p v-if="validationMessage" class="action-error" role="alert">{{ validationMessage }}</p>
         </footer>
-        <section v-else class="approved-note">
+        <!-- งวดที่จ่ายแล้ว (Finalized) ไม่แสดงกล่องนี้ ปุ่ม "แก้ไข" ที่เทาอยู่บอกเหตุผลใน tooltip -->
+        <section v-else-if="approved && !finalized" class="approved-note">
           <p>✓ ปิดยอดรายบุคคลแล้ว</p>
-          <template v-if="finalized">
-            <p>งวดนี้จ่ายแล้วและปิดแก้ไขถาวร หากต้องแก้ยอดให้สร้างรายการปรับยอดในงวดถัดไป</p>
-          </template>
-          <template v-else>
-            <label
-              >เหตุผลที่เปิดยอดอีกครั้ง<textarea v-model="reopenReason" maxlength="255" rows="2" />
-            </label>
-            <button
-              class="commission-secondary"
-              :disabled="saving || !reopenReason.trim()"
-              @click="reopen"
-            >
-              เปิดยอดรายบุคคลอีกครั้ง
-            </button>
-          </template>
+          <label
+            >เหตุผลที่เปิดรอบอีกครั้ง<textarea v-model="reopenReason" maxlength="255" rows="2" />
+          </label>
+          <button
+            class="commission-secondary"
+            :disabled="saving || !reopenReason.trim()"
+            @click="reopen"
+          >
+            เปิดรอบอีกครั้ง
+          </button>
         </section>
       </template>
     </main>
@@ -440,13 +576,25 @@ watch([staffId, month, selectedBranchCode], load)
 .commission-metrics {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
+.commission-metrics {
+  gap: 14px;
+  margin: 20px 0 22px;
+}
+/* การ์ดสรุปทั้ง 5 ใบเป็นกรอบสีขาวแบบเดียวกัน (ใบที่กดได้ต่างกันแค่ hover) */
+.commission-metrics article,
 .metric-card-button {
+  display: block;
+  width: 100%;
   min-height: 132px;
   padding: 21px 24px;
   box-sizing: border-box;
   border: 1px solid #d9e1dc;
-  border-radius: 10px;
+  border-radius: 14px;
   background: #fff;
+  color: inherit;
+  box-shadow: 0 2px 8px rgb(31 67 58 / 4%);
+}
+.metric-card-button {
   text-align: left;
   font: inherit;
   cursor: pointer;
@@ -455,12 +603,6 @@ watch([staffId, month, selectedBranchCode], load)
   display: block;
   margin: 10px 0 5px;
   font-size: 1.6rem;
-}
-.metric-card-button.highlight {
-  background: #eaf5f1;
-}
-.metric-card-button.highlight b {
-  color: #16875b;
 }
 .metric-card-button:hover {
   border-color: #16877f;
@@ -479,6 +621,32 @@ watch([staffId, month, selectedBranchCode], load)
   .commission-metrics {
     grid-template-columns: 1fr;
   }
+}
+.edit-cell {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+.edit-link {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid #8fb5ae;
+  border-radius: 8px;
+  background: #fff;
+  color: #145c59;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+a.edit-link:hover {
+  background: #f3faf7;
+  border-color: #16877f;
+}
+.edit-link.disabled {
+  border-color: #d3dcd8;
+  background: #f1f4f2;
+  color: #9aa7a1;
+  cursor: not-allowed;
 }
 .source-list h2 {
   margin: 20px 0 14px;
@@ -556,6 +724,7 @@ watch([staffId, month, selectedBranchCode], load)
   justify-content: space-between;
   gap: 20px;
   align-items: flex-start;
+  margin-bottom: 8px;
 }
 .detail-head h1 {
   margin: 0;

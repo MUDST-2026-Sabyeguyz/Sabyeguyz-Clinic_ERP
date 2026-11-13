@@ -40,7 +40,7 @@ const thisMonth = computed(() => {
 </script>
 <template>
   <TherapistCompensationShell
-    title="รายละเอียดรายการปรับปรุงค่าตอบแทน"
+    title="รายละเอียดรายการปรับค่าตอบแทน"
     subtitle="ข้อมูลอ่านอย่างเดียว"
     active-tab="payments"
     :tabs="false"
@@ -48,7 +48,7 @@ const thisMonth = computed(() => {
     :loading="loading"
   >
     <section v-if="adjustment" class="therapist-adjustment-card">
-      <h1>รายการปรับปรุงจาก{{ monthLabel(adjustment.originalMonth) }}</h1>
+      <h1>รายการปรับค่าตอบแทนจาก{{ monthLabel(adjustment.originalMonth) }}</h1>
       <p class="therapist-adjustment-status">{{ statusText }}</p>
       <div class="therapist-adjustment-tiles">
         <article>

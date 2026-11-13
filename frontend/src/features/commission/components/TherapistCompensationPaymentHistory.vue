@@ -86,7 +86,7 @@ const paidOn = (payment: StaffPayment) =>
   <section class="therapist-payment-card">
     <div class="therapist-payment-table" role="table">
       <div class="therapist-payment-head" role="row">
-        <span>รอบเดือน</span><span>Commission</span><span>ค่ามือ</span><span>Adjustment</span
+        <span>รอบเดือน</span><span>Commission</span><span>ค่ามือ</span><span>รายการปรับค่าตอบแทน</span
         ><span>ยอดสุทธิ</span><span>วันที่จ่าย</span><span>สถานะ</span>
       </div>
       <div
@@ -119,7 +119,7 @@ const paidOn = (payment: StaffPayment) =>
       </p>
     </div>
     <p class="therapist-payment-formula">
-      ยอดสุทธิ = Commission + ค่ามือ + Adjustment ที่ผ่านการปิดงวดแล้ว
+      ยอดสุทธิ = Commission + ค่ามือ + รายการปรับค่าตอบแทนที่ผ่านการปิดงวดแล้ว
     </p>
     <RouterLink
       v-if="adjustmentOfMonth"
@@ -128,8 +128,8 @@ const paidOn = (payment: StaffPayment) =>
         name: 'therapist-adjustment-detail',
         params: { id: String(adjustmentOfMonth.id) },
       }"
-      >ดู Adjustment เดือนนี้</RouterLink
+      >ดูรายการปรับค่าตอบแทนเดือนนี้</RouterLink
     >
-    <p v-else class="therapist-payment-formula">ยังไม่มี Adjustment</p>
+    <p v-else class="therapist-payment-formula">ยังไม่มีรายการปรับค่าตอบแทน</p>
   </section>
 </template>

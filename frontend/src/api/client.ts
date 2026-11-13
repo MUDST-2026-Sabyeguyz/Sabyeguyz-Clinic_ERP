@@ -373,6 +373,20 @@ export type SingleVisitEntitlement = {
   purchasedAt: string
   receiptNo: string
 }
+export type SingleVisitEntitlementUse = {
+  id: number
+  entitlementId: number
+  serviceName: string
+  receiptNo: string
+  appointmentId: number
+  visitId: number
+  usedAt: string
+  treatingStaffName: string | null
+  reversedAt: string | null
+  reversalReason: string | null
+  /** เหตุผลที่ย้อนไม่ได้ (เช่น ค่ามือถูกจ่ายแล้ว) หรือ null ถ้าย้อนได้ */
+  reverseBlockedReason: string | null
+}
 export type SaleSummary = {
   id: number
   receiptId?: number | null
@@ -833,6 +847,8 @@ export const courseApi = {
 export const singleVisitEntitlementApi = {
   list: (patientId: number) =>
     api.get<SingleVisitEntitlement[]>(`/api/patients/${patientId}/single-visit-entitlements`),
+  uses: (patientId: number) =>
+    api.get<SingleVisitEntitlementUse[]>(`/api/patients/${patientId}/single-visit-entitlement-uses`),
   use: (entitlementId: number, body: { appointmentId: number; treatingStaffId: number }) =>
     api.post<{ id: number; entitlementId: number; appointmentId: number; visitId: number; usedAt: string }>(
       `/api/single-visit-entitlements/${entitlementId}/uses`, body),
@@ -1088,6 +1104,7 @@ export type ManagerAdjustment = {
   courseId: number | null
   visitId: number | null
   saleTransactionId: number | null
+  referenceLabel?: string | null
   approvedBy?: number | null
   approvedAt?: string | null
   applications: Array<{
@@ -1103,6 +1120,24 @@ export type ManagerAdjustment = {
   }>
 }
 // null หมายถึง API ยังไม่มีตัวเลข ไม่ใช่ยอดศูนย์
+export type ClosingHistoryEvent = {
+  kind: 'close' | 'reopen' | 'pay' | 'finalize'
+  title: string
+  detail: string | null
+  reason: string | null
+  at: string | null
+  by: string | null
+}
+export type ClosingHistoryMonth = {
+  month: string
+  status: 'OPEN' | 'CLOSED' | 'PARTIAL' | 'FINALIZED'
+  reopenCount: number
+  closedBy: string | null
+  closedAt: string | null
+  lastPaidDate: string | null
+  paidTotal: number
+  events: ClosingHistoryEvent[]
+}
 export type StaffPayment = {
   id: number
   staffId: number
@@ -1190,6 +1225,11 @@ export const commissionApi = {
   },
   payments: (month: string, branchCode: string) =>
     api.get<StaffPayment[]>(`/api/commission/payments?${new URLSearchParams({ month, branchCode })}`),
+  /** ค่ามือของคนที่ยังไม่มีงวดจ่าย (ก่อนปิดรอบ) */
+  feePreview: (month: string, branchCode: string) =>
+    api.get<
+      Array<{ staffId: number; staffName: string; singleVisitFee: number; substituteFee: number }>
+    >(`/api/commission/payments/fee-preview?${new URLSearchParams({ month, branchCode })}`),
   schemes: () => api.get('/api/commission/schemes'),
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
   createScheme: (body: unknown) => api.post('/api/commission/schemes', body),
@@ -1257,6 +1297,8 @@ export const commissionApi = {
       treatingStaffName: string
       feeRuleName: string | null
       treatmentFee: number
+      /** ใบเสร็จของการขายบริการรายครั้งที่ก่อให้เกิดค่ามือนี้ (null ถ้ามาจากสิทธิ์ที่ซื้อไว้ล่วงหน้า) */
+      receiptNo: string | null
     }>>(`/api/commission/single-visit-fees?${new URLSearchParams({ staffId: String(staffId), branchCode, from, to })}`),
   closings: (month: string, branchCode: string) =>
     api.get<
@@ -1283,9 +1325,17 @@ export const commissionApi = {
     api.post<StaffPayment[]>(`/api/commission/payments/prepare?${new URLSearchParams({ month, branchCode })}`, {}),
   closePayments: (month: string, branchCode: string) =>
     api.post<StaffPayment[]>(`/api/commission/payments/close?${new URLSearchParams({ month, branchCode })}`, {}),
-  reopenPayment: (id: number) => api.post<StaffPayment>(`/api/commission/payments/${id}/reopen`, {}),
-  pay: (id: number, paidDate: string, reference: string) =>
-    api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, { paidDate, reference }),
+  reopenPayment: (id: number, reason?: string) =>
+    api.post<StaffPayment>(`/api/commission/payments/${id}/reopen`, reason ? { reason } : {}),
+  reopenAllBranch: (month: string, branchCode: string, reason: string) =>
+    api.post<{ id: number | null; branchCode: string; month: string; status: string }>(
+      `/api/commission/branch-closings/${month}/reopen-all?${new URLSearchParams({ branchCode })}`,
+      { reason },
+    ),
+  closingHistory: (branchCode: string, limit = 12) =>
+    api.get<ClosingHistoryMonth[]>(`/api/commission/closing-history?${new URLSearchParams({ branchCode, limit: String(limit) })}`),
+  pay: (id: number, paidDate: string, reference?: string) =>
+    api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, { paidDate, reference: reference?.trim() || null }),
   reopenClosing: (id: number, reason: string) =>
     api.post(`/api/commission/closings/${id}/reopen`, { reason }),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),

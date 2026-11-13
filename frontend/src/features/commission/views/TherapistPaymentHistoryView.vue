@@ -9,7 +9,7 @@ const { payments, adjustments, month, loading, errorMessage } = useTherapistPay(
 <template>
   <TherapistCompensationShell
     title="ประวัติการจ่าย"
-    subtitle="ตรวจสอบ Commission ค่ามือ และ Adjustment ที่จ่ายแล้วในแต่ละงวด"
+    subtitle="ตรวจสอบ Commission ค่ามือ และรายการปรับค่าตอบแทนที่จ่ายแล้วในแต่ละงวด"
     active-tab="payments"
     :error="errorMessage"
     :loading="loading"

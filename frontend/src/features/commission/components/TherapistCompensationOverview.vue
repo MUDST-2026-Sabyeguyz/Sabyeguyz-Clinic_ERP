@@ -37,7 +37,7 @@ const net = computed(() => props.payment?.net ?? null)
           <dd>{{ baht(treatment) }}</dd>
         </div>
         <div>
-          <dt>Adjustment</dt>
+          <dt>รายการปรับค่าตอบแทน</dt>
           <dd :class="{ negative: adjustment < 0 }">
             {{ signedBaht(adjustment) }}
           </dd>

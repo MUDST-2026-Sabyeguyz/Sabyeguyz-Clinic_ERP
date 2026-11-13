@@ -17,5 +17,11 @@ public interface StaffMonthlyPaymentRepository extends JpaRepository<StaffMonthl
 
     java.util.List<StaffMonthlyPayment> findByPaymentMonthOrderByIdAsc(String paymentMonth);
 
+    /** Whether anyone of the branch has already been paid for the month (reopening is closed from then on). */
+    boolean existsByPaymentMonthAndBranchIdAndPaymentStatus(
+            String paymentMonth,
+            Long branchId,
+            com.sabyeguyz.clinicv2.enums.PaymentStatus paymentStatus);
+
     java.util.List<StaffMonthlyPayment> findByStaffIdOrderByPaymentMonthDesc(Long staffId);
 }

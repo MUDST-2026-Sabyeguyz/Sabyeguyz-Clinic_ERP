@@ -57,6 +57,7 @@ public class CommissionController {
     private final CurrentActor actor;
     private final BranchAccessPolicy branchAccess;
     private final CommissionRateOverrideService overrideService;
+    private final com.sabyeguyz.clinicv2.sale.SalesTransactionRepository salesTransactions;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CommissionController(CommissionSchemeService schemeService, CommissionTierResolver tierResolver,
@@ -72,7 +73,9 @@ public class CommissionController {
                                 com.sabyeguyz.clinicv2.sale.SingleVisitFeeAccrual singleVisitFeeAccrual,
                                 com.sabyeguyz.clinicv2.course.CourseRefundItemRepository refundItems,
                                 com.sabyeguyz.clinicv2.auth.AppUserRepository users,
-                                BranchAccessPolicy branchAccess) {
+                                BranchAccessPolicy branchAccess,
+                                com.sabyeguyz.clinicv2.sale.SalesTransactionRepository salesTransactions) {
+        this.salesTransactions = salesTransactions;
         this.branchAccess = branchAccess;
         this.users = users;
         this.refundItems = refundItems;
@@ -130,9 +133,10 @@ public class CommissionController {
                                       Long ownerStaffId, String ownerStaffName, BigDecimal gross,
                                       BigDecimal treatmentFee, BigDecimal ownerNet, boolean ownerNetPending,
                                       String serviceName, String feeRuleName) {}
+    /** receiptNo is the receipt of the single-visit sale this fee came from (null when it came from a prepaid right). */
     public record SingleVisitFeeRow(Long id, LocalDate visitDate, String patientName,
                                     String serviceName, String treatingStaffName, String feeRuleName,
-                                    BigDecimal treatmentFee) {}
+                                    BigDecimal treatmentFee, String receiptNo) {}
     public record ClosingResponse(Long id, String month, Long employeeId, String employeeName, BigDecimal sales,
                                    String version, BigDecimal rate, String status, String reopenReason,
                                    java.time.Instant reopenedAt) {}
@@ -284,7 +288,9 @@ public class CommissionController {
             BigDecimal fee = row.getSubstituteTreatmentFeeAmount();
             String feeRuleName = allocationLedger.findByVisitUsageIdOrderByIdAsc(row.getId()).stream()
                     .filter(entry -> entry.getTreatmentFeeAmount().signum() != 0 && entry.getTreatmentFeeRule() != null)
-                    .map(entry -> entry.getTreatmentFeeRule().getRuleName()).findFirst().orElse(null);
+                    .map(entry -> entry.getTreatmentFeeRule().getRuleName())
+                    .filter(java.util.Objects::nonNull) // findFirst() throws NPE on a null element
+                    .findFirst().orElse(null);
             return new TreatmentReportRow(row.getId(), row.getVisitDate().toLocalDate(), course.getId(), course.getCourseNo(),
                     patient.getId(), patient.getPatientHn(), patient.getPatientFname() + " " + patient.getPatientLname(),
                     course.getReceipt().getBranch().getBranchCode(), course.getReceipt().getBranch().getBranchName(),
@@ -312,7 +318,11 @@ public class CommissionController {
                     service == null ? "บริการรายครั้ง" : service.getServiceName(),
                     fee.getStaff().getStaffFname() + " " + fee.getStaff().getStaffLname(),
                     fee.getTreatmentFeeRule() == null ? null : fee.getTreatmentFeeRule().getRuleName(),
-                    fee.getFeeAmount());
+                    fee.getFeeAmount(),
+                    salesTransactions.findByVisitId(visit.getId()).stream()
+                            .filter(sale -> sale.getReceipt() != null)
+                            .map(sale -> sale.getReceipt().getReceiptNo())
+                            .findFirst().orElse(null));
         }).toList();
     }
 

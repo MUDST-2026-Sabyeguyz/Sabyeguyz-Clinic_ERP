@@ -131,7 +131,7 @@ async function load() {
   try {
     adjustments.value = await commissionApi.adjustments()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการปรับปรุงไม่สำเร็จ'
+    errorMessage.value = error instanceof Error ? error.message : 'โหลดรายการปรับค่าตอบแทนไม่สำเร็จ'
   } finally {
     loading.value = false
   }
@@ -145,20 +145,20 @@ onMounted(load)
     <main class="commission-manager-main adjustment-main">
       <header class="adjustment-title">
         <div>
-          <h1>รายการปรับปรุงค่าตอบแทน</h1>
+          <h1>รายการปรับค่าตอบแทน</h1>
           <p>รายการที่บันทึกใหม่จะนำยอดไปคำนวณในงวดที่กำหนดโดยอัตโนมัติ</p>
         </div>
         <RouterLink class="commission-primary add-adjustment" to="/staff/commission/adjustments/new"
-          >+ เพิ่มรายการปรับปรุง</RouterLink
+          >+ เพิ่มรายการปรับค่าตอบแทน</RouterLink
         >
       </header>
       <CommissionTabs active="adjustments" />
 
       <section class="adjustment-directory commission-card">
-        <header class="adjustment-filters" aria-label="ตัวกรองรายการปรับปรุง">
+        <header class="adjustment-filters" aria-label="ตัวกรองรายการปรับค่าตอบแทน">
           <label>
             <span class="sr-only">ค้นหารายการ</span>
-            <input v-model="search" placeholder="ค้นหาชื่อพนักงานหรือรหัสอ้างอิง" />
+            <input v-model="search" placeholder="ค้นหาชื่อนักกายภาพหรือรหัสอ้างอิง" />
           </label>
           <div class="period-filter">
             <span>งวดที่นำไปใช้</span>
@@ -177,7 +177,7 @@ onMounted(load)
         </header>
         <div class="directory-results">
           <div>
-            <h2>รายการปรับปรุง</h2>
+            <h2>รายการปรับค่าตอบแทน</h2>
             <p>
               มีรายการที่ยังมียอดคงเหลือ
               {{
@@ -190,7 +190,7 @@ onMounted(load)
           </div>
           <span v-if="!loading && !errorMessage">ทั้งหมด {{ visible.length }} รายการ</span>
         </div>
-        <p v-if="loading" class="state-card">กำลังโหลดรายการปรับปรุง...</p>
+        <p v-if="loading" class="state-card">กำลังโหลดรายการปรับค่าตอบแทน...</p>
         <p v-else-if="errorMessage" class="state-card error" role="alert">{{ errorMessage }}</p>
         <template v-else>
           <div class="adjustment-table-wrap">
@@ -198,7 +198,7 @@ onMounted(load)
               <thead>
                 <tr>
                   <th>พนักงาน</th>
-                  <th>รายการปรับปรุง</th>
+                  <th>รายการปรับค่าตอบแทน</th>
                   <th>งวดที่นำไปใช้</th>
                   <th>ยอดปรับปรุง</th>
                   <th>สถานะรายการ</th>
@@ -208,7 +208,7 @@ onMounted(load)
               <tbody>
                 <tr v-for="row in pageRows" :key="row.id">
                   <td>{{ row.staffName }}</td>
-                  <td data-label="รายการปรับปรุง">
+                  <td data-label="รายการปรับค่าตอบแทน">
                     <strong>{{ reference(row) }}</strong>
                     <small class="row-reason">{{ reasonSummary(row.reason) }}</small>
                   </td>
@@ -253,7 +253,7 @@ onMounted(load)
           <nav
             v-if="visible.length > pageSize"
             class="adjustment-pagination"
-            aria-label="หน้ารายการปรับปรุง"
+            aria-label="หน้ารายการปรับค่าตอบแทน"
           >
             <button type="button" :disabled="page === 1" @click="page--">← ก่อนหน้า</button>
             <span>หน้า {{ page }} จาก {{ totalPages }}</span>

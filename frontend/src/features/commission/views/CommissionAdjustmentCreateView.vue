@@ -139,7 +139,7 @@ async function review() {
       query: { created: '1' },
     })
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการปรับปรุงไม่สำเร็จ'
+    errorMessage.value = error instanceof Error ? error.message : 'บันทึกรายการปรับค่าตอบแทนไม่สำเร็จ'
   } finally {
     saving.value = false
   }
@@ -152,10 +152,10 @@ onMounted(load)
     <StaffHeader />
     <main class="commission-manager-main create-main">
       <RouterLink class="back-link" to="/staff/commission/adjustments"
-        >← กลับรายการ Adjustment</RouterLink
+        >← กลับรายการปรับค่าตอบแทน</RouterLink
       >
       <header class="create-title">
-        <h1>สร้างรายการปรับปรุงค่าตอบแทน</h1>
+        <h1>สร้างรายการปรับค่าตอบแทน</h1>
         <p>ระบุยอดปรับและงวดเริ่มต้น ระบบจะนำยอดเข้าการคำนวณให้อัตโนมัติ</p>
       </header>
 
@@ -204,15 +204,8 @@ onMounted(load)
             </small>
           </label>
           <label
-            >งวดต้นทาง
+            >งวดต้นทาง *
             <MonthFilterPicker v-model="originalMonth" :past-years="3" :future-years="3" />
-          </label>
-          <label
-            >งวดเริ่มนำไปใช้ *
-            <div class="reference-field">
-              <FilterDropdown v-model="appliedMonthPart" label="เดือนที่นำไปใช้" default-label="เลือกเดือน" :options="monthChoices" />
-              <FilterDropdown v-model="appliedYearPart" label="ปีที่นำไปใช้" default-label="เลือกปี" :options="yearChoices.map((year) => ({ value: year, label: String(Number(year) + 543) }))" />
-            </div>
           </label>
           <label
             >ประเภทผลต่าง *
@@ -231,6 +224,13 @@ onMounted(load)
           <label
             >จำนวนเงิน *
             <input v-model="amount" type="number" min="0.01" step="0.01" placeholder="0.00" />
+          </label>
+          <label
+            >งวดเริ่มนำไปใช้ *
+            <div class="reference-field">
+              <FilterDropdown v-model="appliedMonthPart" label="เดือนที่นำไปใช้" default-label="เลือกเดือน" :options="monthChoices" />
+              <FilterDropdown v-model="appliedYearPart" label="ปีที่นำไปใช้" default-label="เลือกปี" :options="yearChoices.map((year) => ({ value: year, label: String(Number(year) + 543) }))" />
+            </div>
           </label>
         </div>
         <label class="reason-field"
