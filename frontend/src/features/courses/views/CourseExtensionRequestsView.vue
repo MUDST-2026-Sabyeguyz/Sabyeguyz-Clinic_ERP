@@ -278,7 +278,7 @@ async function decide(row: ExtensionRow, decision: 'approve' | 'reject') {
 }
 .decision-dialog {
   box-sizing: border-box; width: min(440px, 100%); max-height: calc(100dvh - 40px);
-  overflow-y: auto; padding: 24px; border-radius: 16px; background: #fff; color: #23382f;
+  overflow-y: auto; padding: 24px; border-radius: var(--radius-lg); background: var(--cu-surface); color: var(--cu-ink);
   box-shadow: 0 18px 45px #173f4438;
 }
 .decision-dialog h2 { margin: 0 0 18px; font-size: 22px; }
@@ -290,40 +290,40 @@ async function decide(row: ExtensionRow, decision: 'approve' | 'reject') {
 .request-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
 .course-extensions-page {
   min-height: 100vh;
-  background: radial-gradient(ellipse at top left, #e6f2ed 0, transparent 34rem), #f7f3ec;
-  color: #23382f;
+  background: transparent;
+  color: var(--cu-ink);
 }
 main { width: min(1440px, calc(100% - 48px)); margin: 0 auto; padding: 32px 0 56px; }
 a { color: var(--color-primary-strong); font-weight: 600; text-decoration: none; }
 .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin: 20px 0 24px; }
-h1 { margin: 0 0 6px; color: var(--color-primary-strong); font-size: clamp(26px, 4vw, 34px); }
-.page-heading p { margin: 0; color: #52665e; }
+h1 { margin: 0 0 6px; color: var(--cu-heading); font-size: clamp(26px, 2.7vw, 38px); line-height: 1.2; }
+.page-heading p { margin: 0; color: var(--color-muted); }
 .status-filter { width: min(100%, 220px); display: grid; gap: 6px; }
 .request-filter-actions { display: flex; align-items: flex-end; flex-wrap: nowrap; gap: 10px; flex: 0 0 auto; }
 .request-filter-actions .status-filter { flex: 0 1 220px; width: 220px; min-width: 0; }
 .request-filter-actions > button { min-height: 46px; }
 .status-filter > span, .decision-note { font-size: 14px; font-weight: 600; }
 textarea, button { font: inherit; }
-textarea { border: 1px solid #b7cecc; border-radius: 8px; padding: 10px 12px; background: #f8faf9; resize: vertical; }
+textarea { border: 1px solid var(--cu-border); border-radius: var(--radius-md); padding: 10px 12px; background: var(--cu-surface); color: var(--cu-ink); resize: vertical; }
 .request-list { display: grid; gap: 16px; }
-.request-card, .empty-state { padding: clamp(16px, 3vw, 24px); border: 1px solid #d7e2dc; border-radius: 14px; background: white; }
+.request-card, .empty-state { padding: clamp(16px, 3vw, 24px); border: 1px solid var(--cu-border); border-radius: var(--radius-lg); background: var(--cu-surface); box-shadow: var(--shadow-card); }
 .request-card header, footer { display: flex; align-items: center; gap: 12px; }
 .request-card header { justify-content: space-between; }
 .request-card h2 { margin: 0 0 4px; font-size: 19px; }
 .request-card p { margin: 12px 0; overflow-wrap: anywhere; }
-.request-card header p { margin: 0; color: #52665e; }
+.request-card header p { margin: 0; color: var(--color-muted); }
 .request-status { padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; }
 .request-status.pending { background: #fff2cc; color: #76500a; }
 .request-status.approved { background: #def4e9; color: #205e46; }
 .request-status.rejected { background: #fce7e5; color: #952e29; }
 dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 10px; margin: 18px 0; }
-dl div { padding: 12px 14px; border-radius: 8px; background: #edf5f1; }
-dt { color: #65766e; font-size: 13px; }
+dl div { padding: 12px 14px; border-radius: var(--radius-md); background: var(--cu-primary-tint); }
+dt { color: var(--color-muted); font-size: 13px; }
 dd { margin: 4px 0 0; font-weight: 600; }
 .decision-note { display: grid; gap: 8px; margin: 18px 0 14px; }
 footer { justify-content: flex-end; flex-wrap: wrap; }
 button { min-height: 44px; padding: 8px 18px; border: 1px solid #b7cecc; border-radius: 8px; background: white; color: var(--color-primary-strong); cursor: pointer; font-weight: 600; }
-button.approve { border-color: var(--color-primary-strong); background: var(--color-primary-strong); color: white; }
+button.approve { border-color: var(--cu-primary); background: var(--cu-primary); color: white; }
 button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--color-primary-strong); outline-offset: 2px; }
 button:disabled { opacity: .6; cursor: not-allowed; }
 .error { color: #b42318; }
