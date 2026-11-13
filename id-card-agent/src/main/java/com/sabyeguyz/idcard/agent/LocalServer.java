@@ -1,9 +1,5 @@
 package com.sabyeguyz.idcard.agent;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -18,6 +14,11 @@ import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
 /**
  * What the clinic's web page may ask of this agent, over {@code http://127.0.0.1}: say whether it is installed and paired,
  * and accept a pairing code. Reading a card is never offered here; that always goes through the backend.
@@ -31,7 +32,8 @@ final class LocalServer {
     private static final int MAX_BODY_BYTES = 4096;
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    record Status(boolean paired, String workstationName, String branchCode, Long workstationId, String version) {}
+    record Status(boolean paired, String workstationName, String branchCode, Long workstationId, String version) {
+    }
 
     interface Controller {
         Status status();
@@ -46,7 +48,9 @@ final class LocalServer {
     private final int port;
 
     LocalServer(int port, Supplier<Set<String>> allowedOrigins, Controller controller) throws IOException {
-        this.server = HttpServer.create(new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), port), 0);
+        this.server = HttpServer.create(
+                new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), port),
+                0);
         this.port = server.getAddress().getPort();
         this.allowedOrigins = allowedOrigins;
         this.controller = controller;
@@ -72,12 +76,17 @@ final class LocalServer {
 
     /** {@code scheme://host[:port]} in lower case with no path, or null when the text is not such an origin. */
     static String normalizeOrigin(String text) {
-        if (text == null) return null;
+        if (text == null) {
+            return null;
+        }
         try {
             URI uri = URI.create(text.trim());
             String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-            if (!(scheme.equals("http") || scheme.equals("https")) || uri.getHost() == null) return null;
-            return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT) + (uri.getPort() < 0 ? "" : ":" + uri.getPort());
+            if (!(scheme.equals("http") || scheme.equals("https")) || uri.getHost() == null) {
+                return null;
+            }
+            return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT)
+                    + (uri.getPort() < 0 ? "" : ":" + uri.getPort());
         } catch (IllegalArgumentException invalid) {
             return null;
         }
@@ -119,11 +128,17 @@ final class LocalServer {
             }
             String path = exchange.getRequestURI().getPath();
             if (path.equals("/status")) {
-                if (!method.equals("GET")) reply(exchange, 405, Map.of("error", "ไม่รองรับวิธีนี้"));
-                else reply(exchange, 200, controller.status());
+                if (!method.equals("GET")) {
+                    reply(exchange, 405, Map.of("error", "ไม่รองรับวิธีนี้"));
+                } else {
+                    reply(exchange, 200, controller.status());
+                }
             } else if (path.equals("/pair")) {
-                if (!method.equals("POST")) reply(exchange, 405, Map.of("error", "ไม่รองรับวิธีนี้"));
-                else pair(exchange, origin);
+                if (!method.equals("POST")) {
+                    reply(exchange, 405, Map.of("error", "ไม่รองรับวิธีนี้"));
+                } else {
+                    pair(exchange, origin);
+                }
             } else {
                 reply(exchange, 404, Map.of("error", "ไม่พบ"));
             }
@@ -161,14 +176,18 @@ final class LocalServer {
     }
 
     private boolean hostIsThisMachine(String host) {
-        if (host == null) return false;
+        if (host == null) {
+            return false;
+        }
         String value = host.trim().toLowerCase(Locale.ROOT);
         return value.equals("127.0.0.1:" + port) || value.equals("localhost:" + port);
     }
 
     private static byte[] readBounded(InputStream in) throws IOException {
         byte[] bytes = in.readNBytes(MAX_BODY_BYTES + 1);
-        if (bytes.length > MAX_BODY_BYTES) throw new IOException("ข้อมูลใหญ่เกินไป");
+        if (bytes.length > MAX_BODY_BYTES) {
+            throw new IOException("ข้อมูลใหญ่เกินไป");
+        }
         return bytes;
     }
 
