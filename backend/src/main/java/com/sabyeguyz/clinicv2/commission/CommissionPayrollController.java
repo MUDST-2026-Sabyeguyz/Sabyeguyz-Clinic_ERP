@@ -9,6 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.sabyeguyz.clinicv2.audit.AuditLogService;
 import com.sabyeguyz.clinicv2.auth.AppUserRepository;
 import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
@@ -38,8 +39,13 @@ public class CommissionPayrollController {
     private final BranchAccessPolicy branchAccess;
     private final AppUserRepository users;
     private final AuditLogService audit;
+    private final com.sabyeguyz.clinicv2.audit.AuditLogRepository auditLogs;
+    private final BranchMonthlyClosingRepository branchClosings;
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public CommissionPayrollController(
+            com.sabyeguyz.clinicv2.audit.AuditLogRepository auditLogs,
+            BranchMonthlyClosingRepository branchClosings,
             MonthlyCommissionClosingService closingService,
             StaffMonthlyPaymentService paymentService,
             StaffPayAdjustmentService adjustmentService,
@@ -50,6 +56,8 @@ public class CommissionPayrollController {
             MonthlyCommissionClosingRepository closings,
             BranchMonthlyClosingService branchClosingService,
             PermissionService permissions) {
+        this.auditLogs = auditLogs;
+        this.branchClosings = branchClosings;
         this.closings = closings;
         this.branchAccess = branchAccess;
         this.closingService = closingService;
@@ -87,7 +95,8 @@ public class CommissionPayrollController {
                                       BigDecimal amount, String reason, String status, BigDecimal processed, BigDecimal remaining,
                                       Long allocationId, Long singleVisitFeeId, Long courseId, Long visitId, Long saleTransactionId,
                                       List<ApplicationResponse> applications, boolean automatic, String cancellationReason,
-                                      Instant cancelledAt, String branchCode, Long approvedBy, String approverName) {}
+                                      Instant cancelledAt, String branchCode, Long approvedBy, String approverName,
+                                      String referenceLabel) {}
     public record ClosingStateResponse(Long id, String month, Long staffId, String status) {}
     public record BranchClosingResponse(Long id, String branchCode, String month, String status, Instant closedAt, Long closedBy) {}
 
@@ -219,6 +228,197 @@ public class CommissionPayrollController {
                 closing.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT));
     }
 
+    /**
+     * Reopens the whole branch month in one transaction (Manager): the Closed payments first, then every Closed
+     * individual closing, then the branch round. Refused as a whole once anyone is Paid for the month.
+     */
+    @PostMapping("/branch-closings/{month}/reopen-all")
+    public BranchClosingResponse reopenAll(
+            @PathVariable String month,
+            @RequestParam String branchCode,
+            @RequestBody ReasonRequest request) {
+        permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
+        StaffMonthlyPaymentService.requireMonth(month);
+
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขา");
+        }
+
+        String reason = request == null || request.reason() == null ? "" : request.reason().trim();
+        if (reason.isEmpty()) {
+            throw new IllegalArgumentException("ต้องระบุเหตุผลที่เปิดรอบอีกครั้ง");
+        }
+        if (reason.length() > 255) {
+            throw new IllegalArgumentException("เหตุผลที่เปิดรอบอีกครั้งยาวเกิน 255 ตัวอักษร");
+        }
+
+        closings.lockBranchMonth(branch.getId(), month);
+        paymentService.requireNoPaidPayment(branch.getId(), month);
+
+        int reopened = 0;
+        for (StaffMonthlyPayment payment : paymentService.ofMonth(month, branch.getId())) {
+            if (payment.getPaymentStatus() == PaymentStatus.Closed) {
+                paymentService.reopen(payment.getId(), actor.currentId());
+                audit.record("staff_monthly_payment", String.valueOf(payment.getId()), AuditAction.UPDATE,
+                        "Closed", "Open: " + reason, actor.currentId());
+                reopened++;
+            }
+        }
+
+        for (MonthlyCommissionClosing row : closings.findByClosingMonthAndBranchId(month, branch.getId())) {
+            if (row.isClosed()) {
+                MonthlyCommissionClosing closing = closingService.reopen(row.getId(), reason, actor.currentId());
+                audit.recordChange("monthly_commission_closing", String.valueOf(closing.getId()), AuditAction.UPDATE,
+                        AuditLogService.fields("closing_status", "Closed"),
+                        AuditLogService.fields("closing_status", "Open",
+                                "reopen_reason", reason, "closing_month", closing.getClosingMonth(),
+                                "staff_id", closing.getStaff().getId(),
+                                "branch_id", branch.getId(),
+                                "monthly_course_sales", closing.getMonthlyCourseSales(),
+                                "commission_scheme_version", closing.getCommissionSchemeVersion(),
+                                "calculated_commission_rate", closing.getCalculatedCommissionRate(),
+                                "locked_commission_rate", closing.getLockedCommissionRate()),
+                        actor.currentId());
+                reopened++;
+            }
+        }
+
+        if (reopened == 0) {
+            throw new IllegalStateException("ไม่มีรายการที่ปิดอยู่ให้เปิดรอบอีกครั้ง");
+        }
+
+        if (branchClosingService.markOpenAfterIndividualReopen(branch, month)) {
+            BranchMonthlyClosing header = branchClosingService.find(branch, month).orElseThrow();
+            audit.recordChange("branch_monthly_closing", String.valueOf(header.getId()), AuditAction.UPDATE,
+                    AuditLogService.fields("closing_status", "Closed"),
+                    AuditLogService.fields("closing_status", "Open", "branch_id", branch.getId(),
+                            "closing_month", month, "reason", reason, "scope", "branch"),
+                    actor.currentId());
+        }
+
+        BranchMonthlyClosing header = branchClosingService.find(branch, month).orElseThrow();
+        return new BranchClosingResponse(header.getId(), branch.getBranchCode(), month,
+                header.getClosingStatus().name().toUpperCase(java.util.Locale.ROOT),
+                header.getClosedAt(), header.getClosedBy());
+    }
+
+    public record HistoryEvent(String kind, String title, String detail, String reason, Instant at, String by) {}
+
+    public record HistoryMonth(String month, String status, int reopenCount, String closedBy, Instant closedAt,
+                               java.time.LocalDate lastPaidDate, BigDecimal paidTotal, List<HistoryEvent> events) {}
+
+    /** Read-only history of the closed rounds of a branch, newest month first, with the events of each month. */
+    @GetMapping("/closing-history")
+    @Transactional(readOnly = true)
+    public List<HistoryMonth> closingHistory(
+            @RequestParam String branchCode,
+            @RequestParam(defaultValue = "12") int limit) {
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขา");
+        }
+
+        List<HistoryMonth> result = new java.util.ArrayList<>();
+        for (BranchMonthlyClosing header : branchClosings.findByBranchIdOrderByClosingMonthDesc(branch.getId())) {
+            if (result.size() >= Math.max(1, Math.min(limit, 36))) {
+                break;
+            }
+            String month = header.getClosingMonth();
+            List<HistoryEvent> events = new java.util.ArrayList<>();
+            int reopens = 0;
+
+            for (var row : auditLogs.findByTableNameAndRecordIdOrderByIdAsc("branch_monthly_closing", String.valueOf(header.getId()))) {
+                JsonNode value = parseJson(row.getNewValue());
+                String status = value == null || value.get("closing_status") == null ? "" : value.get("closing_status").asText();
+                String reason = value == null || value.get("reason") == null ? null : value.get("reason").asText();
+                if (row.getAction() == AuditAction.INSERT) {
+                    events.add(new HistoryEvent("close", "ปิดรอบ", null, null, row.getChangedAt(), actorName(row.getChangedBy())));
+                } else if ("Open".equals(status)) {
+                    reopens++;
+                    boolean all = value != null && value.has("scope");
+                    events.add(new HistoryEvent("reopen", all ? "เปิดรอบอีกครั้งทั้งสาขา" : "เปิดรอบอีกครั้ง", null, reason,
+                            row.getChangedAt(), actorName(row.getChangedBy())));
+                } else if ("Closed".equals(status)) {
+                    events.add(new HistoryEvent("close", "ปิดรอบอีกครั้ง", null, null, row.getChangedAt(), actorName(row.getChangedBy())));
+                }
+            }
+
+            List<StaffMonthlyPayment> monthPayments = paymentService.ofMonth(month, branch.getId());
+            BigDecimal paidTotal = BigDecimal.ZERO;
+            java.time.LocalDate lastPaid = null;
+            int paidCount = 0;
+            for (StaffMonthlyPayment payment : monthPayments) {
+                String name = payment.getStaff().getStaffFname() + " " + payment.getStaff().getStaffLname();
+                for (var row : auditLogs.findByTableNameAndRecordIdOrderByIdAsc("staff_monthly_payment", String.valueOf(payment.getId()))) {
+                    String text = row.getNewValue();
+                    if (text != null && text.startsWith("Open")) {
+                        String reason = text.length() > 6 ? text.substring(6) : null;
+                        events.add(new HistoryEvent("reopen", "เปิดรอบอีกครั้งงวด " + name, null, reason,
+                                row.getChangedAt(), actorName(row.getChangedBy())));
+                    }
+                }
+                if (payment.getPaymentStatus() == PaymentStatus.Paid) {
+                    paidCount++;
+                    paidTotal = paidTotal.add(payment.getNetPaymentAmount() == null ? BigDecimal.ZERO : payment.getNetPaymentAmount());
+                    if (payment.getPaidDate() != null && (lastPaid == null || payment.getPaidDate().isAfter(lastPaid))) {
+                        lastPaid = payment.getPaidDate();
+                    }
+                    String ref = payment.getPaymentReference();
+                    events.add(new HistoryEvent("pay", "ยืนยันจ่าย " + name,
+                            (payment.getPaidDate() == null ? "" : payment.getPaidDate().toString())
+                                    + (ref == null || ref.isBlank() ? "" : " · อ้างอิง " + ref),
+                            null, payment.getPaidAt(), actorName(payment.getStatusChangedBy())));
+                }
+            }
+
+            Instant finalizedAt = closings.findByClosingMonthAndBranchId(month, branch.getId()).stream()
+                    .map(MonthlyCommissionClosing::getFinalizedAt)
+                    .filter(java.util.Objects::nonNull)
+                    .max(Instant::compareTo).orElse(null);
+            if (finalizedAt != null) {
+                events.add(new HistoryEvent("finalize", "Finalize อัตโนมัติ", null, null, finalizedAt, null));
+            }
+
+            events.sort(java.util.Comparator.comparing(HistoryEvent::at, java.util.Comparator.nullsLast(Instant::compareTo)));
+
+            String status;
+            if (!monthPayments.isEmpty() && paidCount == monthPayments.size()) {
+                status = "FINALIZED";
+            } else if (paidCount > 0) {
+                status = "PARTIAL";
+            } else {
+                status = header.isClosed() ? "CLOSED" : "OPEN";
+            }
+
+            result.add(new HistoryMonth(month, status, reopens, actorName(header.getClosedBy()), header.getClosedAt(),
+                    lastPaid, paidTotal, events));
+        }
+        return result;
+    }
+
+    private JsonNode parseJson(String text) {
+        if (text == null || text.isBlank() || !text.trim().startsWith("{")) {
+            return null;
+        }
+        try {
+            return JSON.readTree(text);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String actorName(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        return users.findById(userId)
+                .map(user -> user.getStaff() != null
+                        ? user.getStaff().getStaffFname() + " " + user.getStaff().getStaffLname()
+                        : user.getUsername())
+                .orElse(null);
+    }
+
     // ---------- monthly payments ----------
 
     @GetMapping("/payments")
@@ -238,6 +438,23 @@ public class CommissionPayrollController {
                 .stream()
                 .map(this::toPayment)
                 .toList();
+    }
+
+    /** ค่ามือของคนที่ยังไม่มีงวดจ่าย (ยังไม่ปิดรอบ) ในสาขาและเดือนที่เลือก */
+    @GetMapping("/payments/fee-preview")
+    public List<StaffMonthlyPaymentService.FeePreview> feePreview(
+            @RequestParam String month,
+            @RequestParam String branchCode) {
+
+        StaffMonthlyPaymentService.requireMonth(month);
+
+        var branch = branchAccess.scope(branchCode);
+
+        if (branch == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขาที่ต้องการดูค่ามือ");
+        }
+
+        return paymentService.feePreview(month, branch.getId());
     }
 
     @GetMapping("/payments/{id}")
@@ -308,16 +525,22 @@ public class CommissionPayrollController {
     }
 
     @PostMapping("/payments/{id}/reopen")
-    public PaymentResponse reopenPayment(@PathVariable Long id) {
+    public PaymentResponse reopenPayment(
+            @PathVariable Long id,
+            @RequestBody(required = false) ReasonRequest request) {
         permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
         requirePaymentAccess(id);
+        String reason = request == null || request.reason() == null ? "" : request.reason().trim();
+        if (reason.length() > 255) {
+            throw new IllegalArgumentException("เหตุผลที่เปิดรอบอีกครั้งยาวเกิน 255 ตัวอักษร");
+        }
         StaffMonthlyPayment payment = paymentService.reopen(id, actor.currentId());
         audit.record(
                 "staff_monthly_payment",
                 String.valueOf(id),
                 AuditAction.UPDATE,
                 "Closed",
-                "Open",
+                reason.isEmpty() ? "Open" : "Open: " + reason,
                 actor.currentId());
 
         return toPayment(payment);
@@ -450,7 +673,7 @@ public class CommissionPayrollController {
 
         if (branch == null) {
             throw new IllegalArgumentException(
-                    "ต้องเลือกสาขาของงวดจ่ายที่จะนำ Adjustment ไปใช้");
+                    "ต้องเลือกสาขาของงวดจ่ายที่จะนำรายการปรับค่าตอบแทนไปใช้");
         }
 
         AdjustmentApplication application =
@@ -580,7 +803,19 @@ public class CommissionPayrollController {
                 adjustment.isAutomatic(), adjustment.getCancellationReason(), adjustment.getCancelledAt(),
                 adjustment.getBranch() == null ? null : adjustment.getBranch().getBranchCode(), adjustment.getApprovedBy(),
                 adjustment.getApprovedBy() == null ? null : users.findById(adjustment.getApprovedBy())
-                        .map(com.sabyeguyz.clinicv2.auth.AppUser::getUsername).orElse(null));
+                        .map(com.sabyeguyz.clinicv2.auth.AppUser::getUsername).orElse(null),
+                referenceLabel(adjustment));
+    }
+
+    /** Same wording as the source picker of the create form, so the detail page shows the code the Manager chose. */
+    private static String referenceLabel(StaffPayAdjustment adjustment) {
+        if (adjustment.getCourse() != null) {
+            return adjustment.getCourse().getCourseNo() + " · " + adjustment.getCourse().getCourseName();
+        }
+        if (adjustment.getVisit() != null) {
+            return "VIS-" + adjustment.getVisit().getId();
+        }
+        return null;
     }
 
     private static ApplicationResponse toApplication(AdjustmentApplication application) {

@@ -342,6 +342,36 @@ public class StaffMonthlyPaymentService {
         return ids;
     }
 
+    /** Treatment fees (ค่ามือ) already earned by someone who has no payment row yet, read live from the ledgers. */
+    public record FeePreview(Long staffId, String staffName, BigDecimal singleVisitFee, BigDecimal substituteFee) {}
+
+    /**
+     * ค่ามือของคนที่ยังไม่มีงวดจ่ายในสาขา/เดือนนี้ (งวดจ่ายเกิดตอนปิดรอบ) เพื่อให้หน้าภาพรวมเห็นค่ามือก่อนปิดรอบ
+     * คนที่มีงวดจ่ายแล้วไม่ถูกรวม เพราะยอดอยู่ในงวดจ่ายนั้น
+     */
+    @Transactional(readOnly = true)
+    public List<FeePreview> feePreview(String month, Long branchId) {
+        requireMonth(month);
+        if (branchId == null) {
+            throw new IllegalArgumentException("ต้องระบุสาขา");
+        }
+        Set<Long> hasPayment = new TreeSet<>();
+        payments.findByPaymentMonthAndBranchIdOrderByIdAsc(month, branchId)
+                .forEach(payment -> hasPayment.add(payment.getStaff().getId()));
+
+        List<FeePreview> result = new ArrayList<>();
+        for (Long staffId : staffWithActivity(month, branchId)) {
+            if (hasPayment.contains(staffId)) continue;
+            Totals totals = totals(staffId, month, branchId);
+            if (totals.singleVisitFee().signum() == 0 && totals.substituteFee().signum() == 0) continue;
+            Staff person = staff.findById(staffId).orElse(null);
+            if (person == null) continue;
+            result.add(new FeePreview(staffId, person.getStaffFname() + " " + person.getStaffLname(),
+                    totals.singleVisitFee(), totals.substituteFee()));
+        }
+        return result;
+    }
+
     /** Creates or finds a payment for one staff member, branch and month. */
     @Transactional
     public StaffMonthlyPayment openFor(
@@ -498,13 +528,30 @@ public class StaffMonthlyPaymentService {
                 month, branch.getId());
     }
 
+    /**
+     * Once any staff member of the branch is Paid for the month, nothing of that month can be reopened any more
+     * (a correction is a pay adjustment in a later month).
+     */
+    @Transactional(readOnly = true)
+    public void requireNoPaidPayment(Long branchId, String month) {
+        if (branchId != null && payments.existsByPaymentMonthAndBranchIdAndPaymentStatus(month, branchId, PaymentStatus.Paid)) {
+            throw new IllegalStateException(PAID_MONTH_LOCKED);
+        }
+    }
+
+    public static final String PAID_MONTH_LOCKED =
+            "มีการจ่ายค่าตอบแทนของเดือนนี้แล้ว ห้ามเปิดรอบอีกครั้งให้บันทึกเป็นรายการปรับค่าตอบแทนในงวดถัดไป";
+
     /** Closed -> Open (before payment): the amounts are calculated again from the ledgers. */
     @Transactional
     public StaffMonthlyPayment reopen(
             Long paymentId,
             Long actorId) {
         StaffMonthlyPayment payment = findForUpdate(paymentId);
-        requireStatus(payment, PaymentStatus.Closed, "Reopen ได้เฉพาะงวดที่เป็น Closed (งวด Paid แล้วใช้ Adjustment)");
+        requireStatus(payment, PaymentStatus.Closed, "เปิดรอบอีกครั้งได้เฉพาะงวดที่เป็น Closed (งวด Paid แล้วใช้รายการปรับค่าตอบแทน)");
+        if (payment.getBranch() != null) {
+            requireNoPaidPayment(payment.getBranch().getId(), payment.getPaymentMonth());
+        }
         payment.setPaymentStatus(PaymentStatus.Open);
         stamp(payment, actorId);
 
@@ -564,7 +611,7 @@ public class StaffMonthlyPaymentService {
                 || payment.getCourseCommissionAmount().compareTo(totals.courseCommission()) != 0
                 || payment.getSingleVisitFeeAmount().compareTo(totals.singleVisitFee()) != 0
                 || payment.getSubstituteFeeAmount().compareTo(totals.substituteFee()) != 0) {
-            throw new IllegalStateException("ข้อมูลค่าตอบแทนของเดือนนี้เปลี่ยนไปหลังปิดงวด ให้ Reopen งวดแล้วปิดงวดใหม่");
+            throw new IllegalStateException("ข้อมูลค่าตอบแทนของเดือนนี้เปลี่ยนไปหลังปิดงวด ให้เปิดรอบอีกครั้งงวดแล้วปิดงวดใหม่");
         }
         // the sale months whose rate the Owner commission uses must be finalized together with the payment
         Set<String> saleMonths = new TreeSet<>();

@@ -4,7 +4,7 @@ import { displayAvailability } from '../availabilityDisplay'
 import { readAppointmentRange } from '../appointmentList'
 import { vModalFocus } from '../modalFocus'
 import { loadAppointmentTherapists } from '../therapists'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { slotLockLabel } from '@/features/appointments/slotLock'
 import GoogleCalendarPanel from '../components/GoogleCalendarPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -582,6 +582,8 @@ function openCreate(source: 'standard' | 'calendar' = 'standard') {
   }
   viewMode.value = 'create'
   window.scrollTo({ top: 0, behavior: 'auto' })
+  // ฟอร์มเพิ่งแสดงหลังโหลดข้อมูล เลื่อนกลับบนสุดอีกครั้งเมื่อวาดเสร็จ เพื่อให้เริ่มกรอกได้ทันที
+  void nextTick(() => window.scrollTo({ top: 0, behavior: 'auto' }))
 }
 function openCalendarSlot(therapist: Therapist, time: string) {
   const item = calendarAppointment(therapist.id, time)
@@ -1182,7 +1184,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   {{ errorMessage }}
                 </p>
                 <p v-else-if="selectedFormPatient && !isEditing" class="appointment-patient-meta">
-                  {{ selectedFormPatient.hn }} · {{ selectedFormPatient.phone }}
+                  HN {{ selectedFormPatient.hn }}
                 </p>
               </div>
             </label>

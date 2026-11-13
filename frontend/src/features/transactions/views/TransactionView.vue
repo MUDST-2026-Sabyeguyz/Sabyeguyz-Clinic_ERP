@@ -15,6 +15,7 @@ type Transaction = {
   kind: 'sale' | 'usage'
   id: number
   movementId?: number | null
+  usageId?: number
   courseId?: number
   number: string
   date: string
@@ -64,6 +65,7 @@ const transactionRepository: TransactionRepository = {
       ...usages.map((row): Transaction => ({
         key: `usage-${row.id}`,
         movementId: row.id,
+        usageId: row.usageId,
         courseId: row.coursePurchaseId,
         kind: 'usage',
         id: row.id ?? 0,
@@ -193,7 +195,9 @@ async function loadTransactions() {
     if (selected.value) {
       selected.value = rows.value.find((row) => row.key === selected.value?.key) ?? selected.value
     } else {
-      const { usage, sale, ...query } = route.query
+      // ลิงก์ตรงจากหน้าอื่น: ?usage= / ?sale= (key ของหน้านี้), ?usageId= (รหัสการใช้คอร์สจากรายงานค่าตอบแทน),
+      // ?tab=sales|usage และ ?search= (เติมแท็บและช่องค้นหา)
+      const { usage, sale, usageId, tab: tabQuery, search: searchQuery, ...query } = route.query
       const key = typeof usage === 'string' ? usage : sale
       if (typeof key === 'string') {
         const kind = typeof usage === 'string' ? 'usage' : 'sale'
@@ -203,6 +207,25 @@ async function loadTransactions() {
             item.kind === kind && item.key === key && item.branchCode === headerBranch.value,
         )
         if (row) await openDetail(row)
+        await router.replace({ query })
+      } else if (
+        typeof usageId === 'string' ||
+        typeof tabQuery === 'string' ||
+        typeof searchQuery === 'string'
+      ) {
+        if (typeof usageId === 'string') {
+          tab.value = 'usage'
+          const row = rows.value.find(
+            (item) =>
+              item.kind === 'usage' &&
+              String(item.usageId) === usageId &&
+              item.branchCode === headerBranch.value,
+          )
+          if (row) await openDetail(row)
+        } else {
+          if (tabQuery === 'sales' || tabQuery === 'usage') tab.value = tabQuery
+          if (typeof searchQuery === 'string') search.value = searchQuery
+        }
         await router.replace({ query })
       }
     }

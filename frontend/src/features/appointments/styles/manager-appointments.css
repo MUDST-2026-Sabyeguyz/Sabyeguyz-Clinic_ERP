@@ -380,9 +380,10 @@
   font-weight: 700;
 }
 .appointment-confirm-modal {
-  max-width: 396px;
+  width: min(420px, 100%);
+  max-width: 420px;
   border: 1px solid #dce8e4;
-  padding: 33px;
+  padding: 32px 28px 28px;
   border-radius: 16px;
   box-shadow:
     0 20px 40px -10px rgb(42 54 40 / 18%),
@@ -392,7 +393,13 @@
   margin: 0;
   color: #1f2937;
   font-size: 22px;
+  line-height: 1.4;
   text-align: center;
+  text-wrap: balance;
+}
+.appointment-confirm-modal > div {
+  gap: 12px;
+  margin-top: 26px;
 }
 .appointment-confirm-modal p {
   margin-top: 10px;
@@ -402,9 +409,11 @@
 .appointment-confirm-modal .secondary {
   min-width: 0;
   min-height: 46px;
-  flex: 1;
-  padding: 12px 22px;
+  flex: 1 1 0;
+  padding: 12px 16px;
   border-radius: 12px;
+  box-shadow: none;
+  white-space: nowrap;
   font: inherit;
   font-weight: 700;
 }

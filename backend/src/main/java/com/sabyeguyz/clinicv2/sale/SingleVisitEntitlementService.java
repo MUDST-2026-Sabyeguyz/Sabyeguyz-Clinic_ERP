@@ -15,6 +15,7 @@ import com.sabyeguyz.clinicv2.appointment.PatientVisitService;
 import com.sabyeguyz.clinicv2.commission.SingleVisitFeeService;
 import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.enums.AuditAction;
+import com.sabyeguyz.clinicv2.enums.PaymentStatus;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.staff.Staff;
@@ -59,6 +60,33 @@ public class SingleVisitEntitlementService {
                 .stream()
                 .map(this::balance)
                 .toList();
+    }
+
+    /** Every use (including reversed ones) of the patient's single-visit rights, oldest first within each right. */
+    @Transactional(readOnly = true)
+    public List<SingleVisitEntitlementUsage> usesForPatient(Long patientId) {
+        return entitlements.findActiveByPatientId(patientId).stream()
+                .flatMap(entitlement -> usages.findByEntitlementIdOrderByUsedAtAsc(entitlement.getId()).stream())
+                .toList();
+    }
+
+    /**
+     * Why this use cannot be reversed, or null when it can. The fee of the visit must still be in an Open payment (or not
+     * in one yet): a Closed payment has to be reopened first, and a Paid one is corrected by a pay adjustment instead.
+     */
+    @Transactional(readOnly = true)
+    public String reverseBlockedReason(SingleVisitEntitlementUsage use) {
+        if (use.getReversedAt() != null) return "รายการใช้สิทธิ์นี้ถูกย้อนแล้ว";
+
+        return fees.current(use.getVisit()).map(fee -> {
+            var payment = fee.getMonthlyPayment();
+
+            if (payment == null || payment.getPaymentStatus() == PaymentStatus.Open) return (String) null;
+
+            return payment.getPaymentStatus() == PaymentStatus.Paid
+                    ? "ค่ามือของการใช้สิทธิ์นี้ถูกจ่ายแล้ว ไม่สามารถย้อนได้ ให้บันทึกเป็นรายการปรับค่าตอบแทนในงวดถัดไป"
+                    : "ค่ามืออยู่ในงวดจ่ายที่ปิดแล้ว ให้เปิดรอบอีกครั้งงวดจ่ายก่อน";
+        }).orElse(null);
     }
 
     @Transactional(readOnly = true)
@@ -162,6 +190,8 @@ public class SingleVisitEntitlementService {
         SingleVisitEntitlementUsage use = usages.findById(usageId)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบประวัติใช้สิทธิ์บริการ"));
         require(use.getReversedAt() == null, "รายการใช้สิทธิ์นี้ถูกย้อนแล้ว");
+        String blocked = reverseBlockedReason(use);
+        if (blocked != null) throw new IllegalStateException(blocked);
         use.setReversedAt(Instant.now());
         use.setReversedBy(actorId);
         use.setReversalReason(reason.trim());

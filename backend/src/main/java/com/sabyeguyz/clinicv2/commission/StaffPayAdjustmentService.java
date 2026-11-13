@@ -451,7 +451,7 @@ public class StaffPayAdjustmentService {
             Branch branch,
             Long actorId) {
         require(branch != null && branch.getId() != null,
-                "ต้องระบุสาขาของงวดจ่ายที่จะนำ Adjustment ไปใช้");
+                "ต้องระบุสาขาของงวดจ่ายที่จะนำรายการปรับค่าตอบแทนไปใช้");
         StaffPayAdjustment adjustment = find(adjustmentId);
         require(!adjustment.isAutomatic(), "รายการนี้ระบบจัดสรรยอดให้อัตโนมัติ");
         checkSources(
@@ -489,7 +489,7 @@ public class StaffPayAdjustmentService {
             boolean treating = staffId.equals(allocation.getTreatingStaff().getId());
 
             require(owner || treating,
-                    "พนักงานของ Adjustment ไม่ตรงกับ allocation ต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนไม่ตรงกับ allocation ต้นทาง");
             Branch sourceBranch = owner
                     ? allocation.getCourse().getBranch()
                     : allocation.getVisitUsage().getVisit().getBranch();
@@ -521,7 +521,7 @@ public class StaffPayAdjustmentService {
                     sourceVisit.getTreatingStaff() != null
                             && adjustment.getStaff().getId().equals(
                             sourceVisit.getTreatingStaff().getId()),
-                    "พนักงานของ Adjustment ต้องตรงกับผู้รักษาใน Visit ต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนต้องตรงกับผู้รักษาใน Visit ต้นทาง");
             Branch sourceBranch = sourceVisit.getBranch();
             require(
                     sourceBranch != null
@@ -537,7 +537,7 @@ public class StaffPayAdjustmentService {
             require(
                     adjustment.getStaff().getId().equals(
                             payoutCourse.getSellerStaff().getId()),
-                    "พนักงานของ Adjustment ต้องตรงกับ Owner ของคอร์สต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนต้องตรงกับ Owner ของคอร์สต้นทาง");
         }
 
         if (adjustment.getAllocation() == null
@@ -564,7 +564,7 @@ public class StaffPayAdjustmentService {
                     sourceVisit.getTreatingStaff() != null
                             && adjustment.getStaff().getId().equals(
                             sourceVisit.getTreatingStaff().getId()),
-                    "พนักงานของ Adjustment ต้องตรงกับผู้รักษาใน Visit ต้นทาง");
+                    "พนักงานของรายการปรับค่าตอบแทนต้องตรงกับผู้รักษาใน Visit ต้นทาง");
 
             Branch sourceBranch = sourceVisit.getBranch();
 
