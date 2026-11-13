@@ -20,6 +20,13 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
             @Param("to") Instant to,
             @Param("branchId") Long branchId);
 
+    @Query("select p from Patient p where p.registeredAt >= :from and p.registeredAt < :to "
+            + "and (:branchId is null or p.branch.id = :branchId)")
+    java.util.List<Patient> findRegistrations(
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("branchId") Long branchId);
+
     @Query("select p from Patient p where "
             + "(:query is null or :query = '' "
             + " or lower(p.patientFname) like lower(concat('%', :query, '%')) "
