@@ -95,13 +95,15 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-create-card:not(.is-editing)
   .appointment-create-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* ลำดับตาม flow: ผู้ป่วย → บริการ (คอร์สพร้อมสรุปสิทธิ์) → วันเวลา → หมายเหตุ */
   grid-template-areas:
-    'patient-type service-mode'
-    'patient selection'
-    'phone therapist'
+    'patient-type patient-type'
+    'patient phone'
+    'service-mode service-mode'
+    'selection therapist'
+    'summary summary'
     'date time'
-    'note note'
-    'summary summary';
+    'note note';
   gap: 20px 32px;
   align-items: start;
 }
@@ -110,13 +112,21 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-create-card:not(.is-editing)
   .appointment-create-grid.is-new-patient {
   grid-template-areas:
-    'patient-type service-mode'
-    'new-patient selection'
-    'new-patient therapist'
-    'new-patient date'
-    'new-patient time'
-    'note note'
-    'summary summary';
+    'patient-type patient-type'
+    'new-patient new-patient'
+    'service-mode service-mode'
+    'selection therapist'
+    'summary summary'
+    'date time'
+    'note note';
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page
+  .appointment-create-card:not(.is-editing)
+  .appointment-create-grid.is-new-patient
+  .appointment-new-patient-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 32px;
 }
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
@@ -204,14 +214,14 @@ body:is(.therapist-ui, :not(.therapist-ui))
     .appointment-create-card:not(.is-editing)
     .appointment-create-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'patient-type' 'patient' 'phone' 'service-mode' 'selection' 'therapist' 'date' 'time' 'note' 'summary';
+    grid-template-areas: 'patient-type' 'patient' 'phone' 'service-mode' 'selection' 'therapist' 'summary' 'date' 'time' 'note';
     gap: 16px;
   }
   body:is(.therapist-ui, :not(.therapist-ui))
     .appointment-page
     .appointment-create-card:not(.is-editing)
     .appointment-create-grid.is-new-patient {
-    grid-template-areas: 'patient-type' 'new-patient' 'service-mode' 'selection' 'therapist' 'date' 'time' 'note' 'summary';
+    grid-template-areas: 'patient-type' 'new-patient' 'service-mode' 'selection' 'therapist' 'summary' 'date' 'time' 'note';
   }
   body:is(.therapist-ui, :not(.therapist-ui))
     .appointment-page
@@ -250,6 +260,14 @@ body:is(.therapist-ui, :not(.therapist-ui))
     .appointment-page
     .appointment-create-card:not(.is-editing)
     .appointment-new-patient-fields {
+    gap: 16px;
+  }
+  body:is(.therapist-ui, :not(.therapist-ui))
+    .appointment-page
+    .appointment-create-card:not(.is-editing)
+    .appointment-create-grid.is-new-patient
+    .appointment-new-patient-fields {
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
 }
@@ -303,4 +321,52 @@ body:is(.therapist-ui, :not(.therapist-ui))
   h2 {
   font-size: 30px;
   line-height: 1.4;
+}
+
+/* กระชับฟอร์มสร้างนัดหมาย ให้เห็นช่องกรอกทั้งหมดโดยไม่ต้องเลื่อนหน้าจอ (ลดช่องว่างบนหัวฟอร์มด้วย) */
+body:is(.therapist-ui, :not(.therapist-ui)) .appointment-page.appointment-form-open .staff-main {
+  padding-top: 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page.appointment-form-open
+  .appointment-form-page:not(.appointment-reschedule-modal) {
+  padding-top: 0;
+  padding-bottom: 24px;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page.appointment-form-open
+  .appointment-form-page:not(.appointment-reschedule-modal)
+  .appointment-back-row {
+  margin-top: 0;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page.appointment-form-open
+  .appointment-create-card:not(.is-editing) {
+  padding: 24px 32px;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page.appointment-form-open
+  .appointment-create-card:not(.is-editing)
+  .appointment-create-grid {
+  gap: 14px 32px;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page.appointment-form-open
+  .appointment-create-card:not(.is-editing)
+  :is(input:not([type='radio']), .filter-dropdown__button, .date-trigger) {
+  min-height: 46px;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page.appointment-form-open
+  .appointment-create-card:not(.is-editing)
+  .appointment-note-field
+  textarea {
+  min-height: 64px;
+}
+body:is(.therapist-ui, :not(.therapist-ui))
+  .appointment-page.appointment-form-open
+  .appointment-create-card:not(.is-editing)
+  .appointment-save {
+  margin-top: 12px;
+  padding-top: 16px;
 }

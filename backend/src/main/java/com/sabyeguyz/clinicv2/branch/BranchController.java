@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.branch;
 
-import java.util.List;
-
+import com.sabyeguyz.clinicv2.audit.AuditLogService;
+import com.sabyeguyz.clinicv2.enums.AuditAction;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -26,12 +28,12 @@ import com.sabyeguyz.clinicv2.auth.CurrentActor;
 public class BranchController {
     private final BranchService service;
     private final CurrentActor actor;
+    private final AuditLogService audit;
 
-    public BranchController(
-            BranchService service,
-            CurrentActor actor) {
+    public BranchController(BranchService service, CurrentActor actor, AuditLogService audit) {
         this.service = service;
         this.actor = actor;
+        this.audit = audit;
     }
 
     public record Request(
@@ -108,8 +110,10 @@ public class BranchController {
                 request.address(),
                 request.phone(),
                 actor.currentId());
-
-        return toResponse(service.applySettings(branch.getId(), request.settings(), actor.currentId()));
+        Branch saved = service.applySettings(branch.getId(), request.settings(), actor.currentId());
+        audit.recordChange("branch", String.valueOf(saved.getId()), AuditAction.INSERT, null, snapshot(saved),
+                actor.currentId());
+        return toResponse(saved);
     }
 
     @PutMapping("/{id}")
@@ -123,23 +127,44 @@ public class BranchController {
                 && !existing.getBranchCode().equals(request.branchCode().trim())) {
             throw new IllegalArgumentException("ไม่อนุญาตให้แก้ branchCode เพื่อรักษา HN เดิม");
         }
-
+        Map<String, Object> before = snapshot(existing);
         service.update(id, request.name(), request.address(), request.phone(), actor.currentId());
-
-        return toResponse(service.applySettings(id, request.settings(), actor.currentId()));
+        Branch saved = service.applySettings(id, request.settings(), actor.currentId());
+        audit.recordChange("branch", String.valueOf(id), AuditAction.UPDATE, before, snapshot(saved), actor.currentId());
+        return toResponse(saved);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
-        service.deactivate(id, actor.currentId());
+        Map<String, Object> before = snapshot(service.get(id));
+        Branch saved = service.deactivate(id, actor.currentId());
+        audit.recordChange("branch", String.valueOf(id), AuditAction.UPDATE, before, snapshot(saved), actor.currentId());
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/activate")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
-        return toResponse(service.activate(id, actor.currentId()));
+        Map<String, Object> before = snapshot(service.get(id));
+        Branch saved = service.activate(id, actor.currentId());
+        audit.recordChange("branch", String.valueOf(id), AuditAction.UPDATE, before, snapshot(saved), actor.currentId());
+        return toResponse(saved);
+    }
+
+    /** What the audit trail keeps of a branch: the values a manager can see and change on the settings page. */
+    private static Map<String, Object> snapshot(Branch branch) {
+        return AuditLogService.fields(
+                "branch_code", branch.getBranchCode(),
+                "branch_name", branch.getBranchName(),
+                "address", branch.getAddress(),
+                "phone", branch.getPhone(),
+                "email", branch.getBranchEmail(),
+                "license_no", branch.getLicenseNo(),
+                "booking_open_time", hhmm(branch.getBookingOpenTime()),
+                "booking_close_time", hhmm(branch.getBookingCloseTime()),
+                "default_appointment_minutes", branch.getDefaultAppointmentMinutes(),
+                "branch_status", branch.isBranchStatus());
     }
 
     private static Response toResponse(Branch branch) {

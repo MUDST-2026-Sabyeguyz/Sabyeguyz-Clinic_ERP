@@ -22,15 +22,11 @@ public class TreatmentFeeRuleService {
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final TreatmentFeeRuleRepository rules;
-    private final BranchClosingGuard branchClosingGuard;
 
     private com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
-    public TreatmentFeeRuleService(
-            TreatmentFeeRuleRepository rules,
-            BranchClosingGuard branchClosingGuard) {
+    public TreatmentFeeRuleService(TreatmentFeeRuleRepository rules) {
         this.rules = rules;
-        this.branchClosingGuard = branchClosingGuard;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -57,7 +53,6 @@ public class TreatmentFeeRuleService {
             Branch branch,
             Permission permission,
             Long actorId) {
-        branchClosingGuard.requireCurrentMonthClosed(branch);
         rules.lockVersionAllocation();
         validate(feeType, feeValue, effectiveFrom, effectiveTo);
         requireNoOtherPending(effectiveFrom);
@@ -91,7 +86,6 @@ public class TreatmentFeeRuleService {
             LocalDate effectiveTo,
             Branch branch,
             Long actorId) {
-        branchClosingGuard.requireCurrentMonthClosed(branch);
         rules.lockVersionAllocation();
         TreatmentFeeRule rule = find(id);
         FeeType newType = feeType != null ? feeType : rule.getFeeType();

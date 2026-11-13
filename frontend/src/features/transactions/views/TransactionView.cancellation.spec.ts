@@ -30,4 +30,13 @@ describe('transaction cancellation review', () => {
     expect(source).toContain("reasonType === 'อื่น ๆ'")
     expect(source).toContain('รายละเอียดเหตุผล *')
   })
+
+  it('accepts deep links from the commission detail page', () => {
+    expect(source).toContain('usageId?: number')
+    expect(source).toContain('usageId: row.usageId')
+    expect(source).toContain("usageId, tab: tabQuery, search: searchQuery, ...query } = route.query")
+    expect(source).toContain('String(item.usageId) === usageId')
+    expect(source).toContain("if (tabQuery === 'sales' || tabQuery === 'usage') tab.value = tabQuery")
+    expect(source).toContain('search.value = searchQuery')
+  })
 })

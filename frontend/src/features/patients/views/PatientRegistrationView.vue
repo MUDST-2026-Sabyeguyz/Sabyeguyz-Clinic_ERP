@@ -603,6 +603,7 @@ async function submit() {
                   v-model="form.birthDate"
                   :invalid="birthDateErrorVisible"
                   :max-date="clinicYesterday()"
+                  :years-back="120"
                   show-calendar-icon
                   numeric-month
                   hide-caret

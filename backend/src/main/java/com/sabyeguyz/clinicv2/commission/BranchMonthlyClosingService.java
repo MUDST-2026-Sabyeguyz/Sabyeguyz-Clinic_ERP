@@ -133,12 +133,12 @@ public class BranchMonthlyClosingService {
         requireBranchAndMonth(branch, month);
 
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("ต้องระบุเหตุผลที่ Reopen");
+            throw new IllegalArgumentException("ต้องระบุเหตุผลที่เปิดรอบอีกครั้ง");
         }
 
         if (reason.trim().length() > 255) {
             throw new IllegalArgumentException(
-                    "เหตุผลที่ Reopen ยาวเกิน 255 ตัวอักษร");
+                    "เหตุผลที่เปิดรอบอีกครั้งยาวเกิน 255 ตัวอักษร");
         }
 
         closings.lockBranchMonth(branch.getId(), month);
@@ -146,7 +146,7 @@ public class BranchMonthlyClosingService {
         if (!closings.findByClosingMonthAndBranchId(
                 month, branch.getId()).isEmpty()) {
             throw new IllegalStateException(
-                    "รอบนี้มีรายละเอียดรายคน ให้ Reopen ผ่านรายการรายคน");
+                    "รอบนี้มีรายละเอียดรายคน ให้เปิดรอบอีกครั้งผ่านรายการรายคน");
         }
 
         if (!courses.findDistinctCreditedStaffIdsBySaleMonthAndBranchId(
@@ -192,7 +192,7 @@ public class BranchMonthlyClosingService {
         if (branchClosed) {
             throw new IllegalStateException(
                     "รอบสาขาเดือน " + month
-                            + " ปิดแล้ว ต้อง Reopen ก่อนขายคอร์สเพิ่ม");
+                            + " ปิดแล้ว ต้องเปิดรอบอีกครั้งก่อนขายคอร์สเพิ่ม");
         }
 
         boolean sellerClosed = closings.findByClosingMonthAndStaffIdAndBranchId(month, sellerId, branch.getId())
@@ -200,7 +200,7 @@ public class BranchMonthlyClosingService {
                         .orElse(false);
 
         if (sellerClosed) {
-            throw new IllegalStateException("รอบผู้ขายเดือน " + month + " ปิดหรือ Finalized แล้ว ต้องตรวจสิทธิ์ Reopen ก่อนขายคอร์สเพิ่ม");
+            throw new IllegalStateException("รอบผู้ขายเดือน " + month + " ปิดหรือ Finalized แล้ว ต้องตรวจสิทธิ์เปิดรอบอีกครั้งก่อนขายคอร์สเพิ่ม");
         }
     }
 

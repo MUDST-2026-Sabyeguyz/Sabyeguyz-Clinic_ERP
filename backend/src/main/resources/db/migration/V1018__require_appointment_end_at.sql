@@ -1,17 +1,7 @@
--- Historical booking intervals require review.
--- Never infer their end times from current service or branch templates.
+-- Keep missing historical end times; require an end time on new appointments.
 DO $$
-    BEGIN
-        IF EXISTS (
-            SELECT 1
-            FROM appointment
-            WHERE appointment_end_at IS NULL
-        ) THEN
-            RAISE EXCEPTION
-                'Cannot require appointment end time: existing appointments without end time require review';
-        END IF;
-    END
-$$;
-
-ALTER TABLE appointment
-    ALTER COLUMN appointment_end_at SET NOT NULL;
+DECLARE legacy_appointment_id BIGINT;
+BEGIN
+  SELECT COALESCE(MAX(appointment_id), 0) INTO legacy_appointment_id FROM appointment;
+  EXECUTE format('ALTER TABLE appointment ADD CONSTRAINT chk_new_appointment_end_at CHECK (appointment_end_at IS NOT NULL OR appointment_id <= %s)', legacy_appointment_id);
+END $$;

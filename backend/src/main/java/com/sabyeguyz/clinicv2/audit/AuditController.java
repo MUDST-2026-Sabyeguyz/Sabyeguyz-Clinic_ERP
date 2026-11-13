@@ -39,12 +39,13 @@ public class AuditController {
 
     private final AuditLogRepository repository;
     private final AppUserRepository users;
+    private final com.sabyeguyz.clinicv2.branch.BranchRepository branches;
 
-    public AuditController(
-            AuditLogRepository repository,
-            AppUserRepository users) {
+    public AuditController(AuditLogRepository repository, AppUserRepository users,
+                           com.sabyeguyz.clinicv2.branch.BranchRepository branches) {
         this.repository = repository;
         this.users = users;
+        this.branches = branches;
     }
 
     /** changedByName is empty for an automatic event: its origin is the "source" inside newValue. */
@@ -66,35 +67,30 @@ public class AuditController {
             int totalPages) {}
 
     @GetMapping
-    public PageResponse list(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size,
-            @RequestParam(required = false) String tableName,
-            @RequestParam(required = false) String recordId,
-            @RequestParam(required = false) String action,
-            @RequestParam(required = false) Long changedBy,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-
+    public PageResponse list(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size,
+                              @RequestParam(required = false) String tableName,
+                              @RequestParam(required = false) String recordId,
+                              @RequestParam(required = false) String action,
+                              @RequestParam(required = false) Long changedBy,
+                              @RequestParam(required = false) String branchCode,
+                              @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                              @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         if (from != null && to != null && to.isBefore(from)) {
             throw new IllegalArgumentException("วันที่สิ้นสุดต้องไม่อยู่ก่อนวันที่เริ่ม");
         }
 
         AuditAction parsedAction = parseAction(action);
+        // one branch's history: that branch's rows plus the ones not tied to any branch (users, commission schemes)
+        Long branchId = branchCode == null || branchCode.isBlank() ? null : branches.findByBranchCode(branchCode.trim())
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode.trim())).getId();
         Specification<AuditLog> filter = (root, query, builder) -> {
             List<Predicate> all = new ArrayList<>();
-
-            if (tableName != null && !tableName.isBlank()) {
-                all.add(builder.equal(root.get("tableName"), tableName.trim()));
-            }
-            if (recordId != null && !recordId.isBlank()) {
-                all.add(builder.equal(root.get("recordId"), recordId.trim()));
-            }
-            if (parsedAction != null) {
-                all.add(builder.equal(root.get("action"), parsedAction));
-            }
-            if (changedBy != null) {
-                all.add(builder.equal(root.get("changedBy"), changedBy));
+            if (tableName != null && !tableName.isBlank()) all.add(builder.equal(root.get("tableName"), tableName.trim()));
+            if (recordId != null && !recordId.isBlank()) all.add(builder.equal(root.get("recordId"), recordId.trim()));
+            if (parsedAction != null) all.add(builder.equal(root.get("action"), parsedAction));
+            if (changedBy != null) all.add(builder.equal(root.get("changedBy"), changedBy));
+            if (branchId != null) {
+                all.add(builder.or(builder.equal(root.get("branchId"), branchId), builder.isNull(root.get("branchId"))));
             }
             if (from != null) {
                 all.add(builder.greaterThanOrEqualTo(root.<Instant>get("changedAt"),

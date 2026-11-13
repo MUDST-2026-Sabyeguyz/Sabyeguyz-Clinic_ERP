@@ -28,7 +28,7 @@ const choices = computed(() => reader.workstations.value.filter(
 ))
 const loadingReaders = ref(false)
 const canRead = computed(() => !loadingReaders.value && choices.value.some(
-  (w) => w.id === reader.selectedId.value && w.online,
+  (w) => w.id === reader.selectedId.value && w.online && w.readerConnected === true,
 ))
 const failureMessage = computed(() => /[\u0E00-\u0E7F]/.test(reader.message.value) ? reader.message.value : '')
 let statusTimer: ReturnType<typeof setInterval> | undefined
@@ -59,7 +59,7 @@ watch(
       found.value = null
       loadingReaders.value = true
       void refreshReaders()
-      statusTimer = setInterval(() => void refreshReaders(), 5000)
+      statusTimer = setInterval(() => void refreshReaders(), 1000)
     } else {
       reader.cancel()
     }
@@ -121,7 +121,7 @@ function chooseReader(event: Event) {
   <div v-if="open" class="register-dialog-backdrop" @click.self="close" @keydown.esc="close">
     <section
       class="register-dialog"
-      :class="{ 'read-failed': phase === 'failed' }"
+      :class="{ 'read-failed': phase === 'failed', 'patient-found': phase === 'found' }"
       role="dialog"
       aria-modal="true"
       aria-labelledby="register-dialog-title"
@@ -150,8 +150,8 @@ function chooseReader(event: Event) {
           @change="chooseReader"
         >
           <option value="" disabled>เลือกเครื่องอ่านบัตร</option>
-          <option v-for="w in choices" :key="w.id" :value="w.id" :disabled="!w.online">
-            {{ w.name }}{{ w.online ? '' : ' (ออฟไลน์)' }}
+          <option v-for="w in choices" :key="w.id" :value="w.id" :disabled="!w.online || w.readerConnected === false">
+            {{ w.name }}{{ !w.online ? ' (ออฟไลน์)' : w.readerConnected === false ? ' (ไม่ได้เสียบเครื่องอ่าน)' : '' }}
           </option>
         </select>
         <small v-if="choices.length === 0" class="id-card-hint">
@@ -167,6 +167,9 @@ function chooseReader(event: Event) {
         </small>
         <small v-else-if="!choices.some((w) => w.online)" class="id-card-hint">
           เครื่องอ่านบัตรยังไม่เชื่อมต่อ
+        </small>
+        <small v-else-if="!canRead" class="id-card-hint">
+          ยังไม่ได้เสียบเครื่องอ่านบัตร เสียบเครื่องอ่านแล้วปุ่มจะกดได้
         </small>
       </template>
 
@@ -185,14 +188,14 @@ function chooseReader(event: Event) {
       </template>
 
       <template v-else-if="phase === 'found' && found">
+        <button type="button" class="dialog-close" aria-label="ปิด" @click="close">×</button>
         <h2 id="register-dialog-title">พบผู้ป่วยในระบบแล้ว</h2>
         <p class="found-patient">
           <strong>{{ found.hn }}</strong>
           <span>{{ found.fullName }}</span>
         </p>
         <div class="actions">
-          <button type="button" class="found-details" @click="openDetails">ดูรายละเอียด</button>
-          <button type="button" class="secondary" @click="close">ปิด</button>
+          <button type="button" class="found-details" @click="openDetails">ดูข้อมูลผู้ป่วย</button>
         </div>
       </template>
 
@@ -368,6 +371,24 @@ function chooseReader(event: Event) {
     animation-duration: 3s;
   }
 }
+.register-dialog.patient-found {
+  position: relative;
+  padding: 32px;
+}
+.patient-found h2 {
+  padding-inline: 32px;
+}
+.patient-found .dialog-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--ui-primary, #187d78);
+}
 .found-patient {
   display: grid;
   gap: 4px;
@@ -383,11 +404,15 @@ function chooseReader(event: Event) {
   padding: 10px 22px;
   border: 0;
   border-radius: 8px;
-  background: #1f9d55;
+  background: var(--ui-primary-gradient, #187d78);
   color: #fff;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+.patient-found button:focus-visible {
+  outline: 2px solid var(--ui-primary, #187d78);
+  outline-offset: 3px;
 }
 .id-card-hint {
   display: flex;

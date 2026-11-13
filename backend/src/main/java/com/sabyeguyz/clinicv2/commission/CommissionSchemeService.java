@@ -90,7 +90,11 @@ public class CommissionSchemeService {
             List<TierInput> tierInputs,
             Long actorId) {
         validate(schemeName, effectiveFrom, effectiveTo, tierInputs);
-        branchClosingGuard.requireCurrentMonthClosed(branch);
+
+        // The very first scheme is exempt: a branch cannot close a month before any tier exists to close it with.
+        if (!schemes.findByOrderByEffectiveFromDesc().isEmpty()) {
+            branchClosingGuard.requireCurrentMonthClosed(branch);
+        }
         validateTiers(tierInputs);
         schemes.lockVersionAllocation();
         requireNoOtherPending(null, effectiveFrom);
@@ -127,7 +131,6 @@ public class CommissionSchemeService {
             com.sabyeguyz.clinicv2.branch.Branch branch,
             List<TierInput> tierInputs,
             Long actorId) {
-        branchClosingGuard.requireCurrentMonthClosed(branch);
         CommissionScheme scheme = find(id);
 
         if (tierInputs != null && tierInputs.isEmpty()) {
@@ -135,6 +138,11 @@ public class CommissionSchemeService {
         }
 
         boolean referenced = isReferenced(id);
+
+        // A scheme nothing uses yet (e.g. the first one, set up mid-month) is safe to edit before any closing.
+        if (referenced) {
+            branchClosingGuard.requireCurrentMonthClosed(branch);
+        }
         LocalDate newFrom = effectiveFrom != null ? effectiveFrom : scheme.getEffectiveFrom();
         // an omitted end date keeps the current one; a scheme is reopened by creating a new version
         LocalDate newTo = effectiveTo != null ? effectiveTo : scheme.getEffectiveTo();

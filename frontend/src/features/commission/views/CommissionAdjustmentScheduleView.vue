@@ -263,7 +263,8 @@ h1 {
   gap: 14px;
   margin-bottom: 18px;
 }
-label {
+label,
+.month-field {
   display: grid;
   gap: 7px;
   font-weight: 600;

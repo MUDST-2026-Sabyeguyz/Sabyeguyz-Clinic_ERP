@@ -109,6 +109,7 @@ export type PatientProfile = Patient & {
   nationality?: string
   customerType?: string
   customerSource?: string
+  insuranceType?: string
   insuranceCompany?: string
 }
 export type PatientUpdatePayload = {
@@ -133,7 +134,7 @@ export type PatientUpdatePayload = {
   bloodGroup: string
   nationality: string
   customerType: string
-  customerSource: string
+  customerSource?: string
   insuranceCompany: string
 }
 export type Page<T> = {
@@ -371,6 +372,20 @@ export type SingleVisitEntitlement = {
   serviceActive: boolean
   purchasedAt: string
   receiptNo: string
+}
+export type SingleVisitEntitlementUse = {
+  id: number
+  entitlementId: number
+  serviceName: string
+  receiptNo: string
+  appointmentId: number
+  visitId: number
+  usedAt: string
+  treatingStaffName: string | null
+  reversedAt: string | null
+  reversalReason: string | null
+  /** เหตุผลที่ย้อนไม่ได้ (เช่น ค่ามือถูกจ่ายแล้ว) หรือ null ถ้าย้อนได้ */
+  reverseBlockedReason: string | null
 }
 export type SaleSummary = {
   id: number
@@ -832,6 +847,8 @@ export const courseApi = {
 export const singleVisitEntitlementApi = {
   list: (patientId: number) =>
     api.get<SingleVisitEntitlement[]>(`/api/patients/${patientId}/single-visit-entitlements`),
+  uses: (patientId: number) =>
+    api.get<SingleVisitEntitlementUse[]>(`/api/patients/${patientId}/single-visit-entitlement-uses`),
   use: (entitlementId: number, body: { appointmentId: number; treatingStaffId: number }) =>
     api.post<{ id: number; entitlementId: number; appointmentId: number; visitId: number; usedAt: string }>(
       `/api/single-visit-entitlements/${entitlementId}/uses`, body),
@@ -1069,6 +1086,8 @@ export type TherapistAdjustment = {
 export type ManagerAdjustment = {
   id: number
   staffId: number
+  branchCode?: string | null
+  approverName?: string | null
   staffName: string
   originalMonth: string
   appliedMonth: string
@@ -1077,11 +1096,15 @@ export type ManagerAdjustment = {
   status: string
   processed: number
   remaining: number
+  automatic?: boolean
+  cancellationReason?: string | null
+  cancelledAt?: string | null
   allocationId: number | null
   singleVisitFeeId: number | null
   courseId: number | null
   visitId: number | null
   saleTransactionId: number | null
+  referenceLabel?: string | null
   approvedBy?: number | null
   approvedAt?: string | null
   applications: Array<{
@@ -1097,6 +1120,24 @@ export type ManagerAdjustment = {
   }>
 }
 // null หมายถึง API ยังไม่มีตัวเลข ไม่ใช่ยอดศูนย์
+export type ClosingHistoryEvent = {
+  kind: 'close' | 'reopen' | 'pay' | 'finalize'
+  title: string
+  detail: string | null
+  reason: string | null
+  at: string | null
+  by: string | null
+}
+export type ClosingHistoryMonth = {
+  month: string
+  status: 'OPEN' | 'CLOSED' | 'PARTIAL' | 'FINALIZED'
+  reopenCount: number
+  closedBy: string | null
+  closedAt: string | null
+  lastPaidDate: string | null
+  paidTotal: number
+  events: ClosingHistoryEvent[]
+}
 export type StaffPayment = {
   id: number
   staffId: number
@@ -1165,6 +1206,12 @@ export type CommissionPreview = {
 
 // Endpoint ปิดยอดและจ่ายคอมมิชชันต้องระบุเดือนกับสาขาตาม contract
 export const commissionApi = {
+  adjustmentSources: (staffId: number, type: string, branchCode: string) =>
+    api.get<Array<{ id: number; label: string; month: string }>>(
+      `/api/commission/adjustments/sources?${new URLSearchParams({ staffId: String(staffId), type, branchCode })}`,
+    ),
+  adjustmentAllowedMonths: (branchCode: string) =>
+    api.get<string[]>(`/api/commission/adjustments/allowed-months?${new URLSearchParams({ branchCode })}`),
   preview: (params: CommissionPreviewParams) => {
     const query = new URLSearchParams({
       courseId: String(params.courseId),
@@ -1178,6 +1225,11 @@ export const commissionApi = {
   },
   payments: (month: string, branchCode: string) =>
     api.get<StaffPayment[]>(`/api/commission/payments?${new URLSearchParams({ month, branchCode })}`),
+  /** ค่ามือของคนที่ยังไม่มีงวดจ่าย (ก่อนปิดรอบ) */
+  feePreview: (month: string, branchCode: string) =>
+    api.get<
+      Array<{ staffId: number; staffName: string; singleVisitFee: number; substituteFee: number }>
+    >(`/api/commission/payments/fee-preview?${new URLSearchParams({ month, branchCode })}`),
   schemes: () => api.get('/api/commission/schemes'),
   tiers: (schemeId: number) => api.get(`/api/commission/schemes/${schemeId}/tiers`),
   createScheme: (body: unknown) => api.post('/api/commission/schemes', body),
@@ -1198,6 +1250,19 @@ export const commissionApi = {
         base: number
         rate: number
         commission: number
+        sales: Array<{
+          id: number
+          saleDate: string
+          receiptNo: string
+          courseNo: string
+          courseName: string
+          patientName: string
+          sellerName: string
+          gross: number
+          lineDiscount: number
+          commissionableAmount: number
+          completedRefund: number
+        }>
       }>
     >(`/api/commission/report?${new URLSearchParams({ from, to })}`),
   treatmentReport: (from: string, to: string) =>
@@ -1219,8 +1284,22 @@ export const commissionApi = {
         gross: number
         treatmentFee: number
         ownerNet: number
+        serviceName: string
+        feeRuleName: string | null
       }>
     >(`/api/commission/treatment-report?${new URLSearchParams({ from, to })}`),
+  singleVisitFees: (staffId: number, branchCode: string, from: string, to: string) =>
+    api.get<Array<{
+      id: number
+      visitDate: string
+      patientName: string
+      serviceName: string
+      treatingStaffName: string
+      feeRuleName: string | null
+      treatmentFee: number
+      /** ใบเสร็จของการขายบริการรายครั้งที่ก่อให้เกิดค่ามือนี้ (null ถ้ามาจากสิทธิ์ที่ซื้อไว้ล่วงหน้า) */
+      receiptNo: string | null
+    }>>(`/api/commission/single-visit-fees?${new URLSearchParams({ staffId: String(staffId), branchCode, from, to })}`),
   closings: (month: string, branchCode: string) =>
     api.get<
       Array<{
@@ -1246,9 +1325,17 @@ export const commissionApi = {
     api.post<StaffPayment[]>(`/api/commission/payments/prepare?${new URLSearchParams({ month, branchCode })}`, {}),
   closePayments: (month: string, branchCode: string) =>
     api.post<StaffPayment[]>(`/api/commission/payments/close?${new URLSearchParams({ month, branchCode })}`, {}),
-  reopenPayment: (id: number) => api.post<StaffPayment>(`/api/commission/payments/${id}/reopen`, {}),
-  pay: (id: number, paidDate: string, reference: string) =>
-    api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, { paidDate, reference }),
+  reopenPayment: (id: number, reason?: string) =>
+    api.post<StaffPayment>(`/api/commission/payments/${id}/reopen`, reason ? { reason } : {}),
+  reopenAllBranch: (month: string, branchCode: string, reason: string) =>
+    api.post<{ id: number | null; branchCode: string; month: string; status: string }>(
+      `/api/commission/branch-closings/${month}/reopen-all?${new URLSearchParams({ branchCode })}`,
+      { reason },
+    ),
+  closingHistory: (branchCode: string, limit = 12) =>
+    api.get<ClosingHistoryMonth[]>(`/api/commission/closing-history?${new URLSearchParams({ branchCode, limit: String(limit) })}`),
+  pay: (id: number, paidDate: string, reference?: string) =>
+    api.post<StaffPayment>(`/api/commission/payments/${id}/pay`, { paidDate, reference: reference?.trim() || null }),
   reopenClosing: (id: number, reason: string) =>
     api.post(`/api/commission/closings/${id}/reopen`, { reason }),
   treatmentFees: () => api.get('/api/commission/treatment-fees'),
@@ -1289,6 +1376,8 @@ export const commissionApi = {
     appliedMonth: string
     amount: number
     reason: string
+    branchCode: string
+    approvalReference?: string
     allocationId?: number
     singleVisitFeeId?: number
     courseId?: number
@@ -1352,6 +1441,7 @@ export type AuditFilter = {
   recordId?: string
   action?: string
   changedBy?: number
+  branchCode?: string
   from?: string
   to?: string
 }
@@ -1425,6 +1515,8 @@ export type IdCardWorkstation = {
   branchCode: string
   online: boolean
   status: 'Active' | 'Revoked'
+  /** เสียบเครื่องอ่านบัตรจริงอยู่หรือไม่ (null/ไม่มี = ตัวกลางรุ่นเก่าที่ไม่รายงาน) */
+  readerConnected?: boolean | null
 }
 export type IdCardReadPurpose = 'REGISTER'
 export type IdCardLookup = {

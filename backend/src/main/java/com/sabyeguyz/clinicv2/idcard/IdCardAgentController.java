@@ -32,12 +32,21 @@ public class IdCardAgentController {
     @GetMapping("/next")
     public ResponseEntity<IdCardService.AgentCommand> next(
             @RequestHeader(value = "X-Agent-Token", required = false) String agentToken,
-            @RequestParam(defaultValue = "25") int waitSeconds) {
+            @RequestParam(defaultValue = "25") int waitSeconds,
+            @RequestParam(required = false) Boolean readerPresent) {
         CardReaderWorkstation workstation = workstations.authenticate(agentToken);
-
-        return service.next(workstation, waitSeconds)
+        return service.next(workstation, waitSeconds, readerPresent)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    public record ReaderRequest(boolean present) {}
+
+    @PostMapping("/reader")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reader(@RequestHeader(value = "X-Agent-Token", required = false) String agentToken,
+                       @RequestBody ReaderRequest request) {
+        workstations.reportReader(workstations.authenticate(agentToken).getId(), request.present());
     }
 
     @PostMapping("/progress")

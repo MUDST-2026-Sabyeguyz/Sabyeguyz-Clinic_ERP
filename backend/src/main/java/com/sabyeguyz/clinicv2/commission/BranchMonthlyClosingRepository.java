@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface BranchMonthlyClosingRepository extends JpaRepository<BranchMonthlyClosing, Long> {
         Optional<BranchMonthlyClosing> findByBranchIdAndClosingMonth(
                 Long branchId, String closingMonth);
+
+        java.util.List<BranchMonthlyClosing> findByBranchIdOrderByClosingMonthDesc(Long branchId);
 }

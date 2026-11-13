@@ -57,8 +57,9 @@ final class BackendClient {
     }
 
     /** Long-poll: returns after a command arrives or {@code waitSeconds} pass. */
-    Optional<Command> next(int waitSeconds) throws IOException {
-        HttpResponse<String> response = send(authorized("/api/id-card/agent/next?waitSeconds=" + waitSeconds,
+    Optional<Command> next(int waitSeconds, boolean readerPresent) throws IOException {
+        HttpResponse<String> response = send(authorized(
+                "/api/id-card/agent/next?waitSeconds=" + waitSeconds + "&readerPresent=" + readerPresent,
                 Duration.ofSeconds(waitSeconds + 15)).GET().build());
         if (response.statusCode() == 401) throw new UnauthorizedException();
         if (response.statusCode() == 204) return Optional.empty();
@@ -78,6 +79,18 @@ final class BackendClient {
                 .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body))).build());
         if (response.statusCode() == 401) throw new UnauthorizedException();
         if (response.statusCode() >= 300) throw new IOException("ส่งผลไม่สำเร็จ: " + response.statusCode());
+    }
+
+    /** Best effort: tells the backend right away that a reader was plugged in or removed (the poll only says so once per cycle). */
+    void sendReaderState(boolean present) {
+        try {
+            send(authorized("/api/id-card/agent/reader", Duration.ofSeconds(10))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(Map.of("present", present))))
+                    .build());
+        } catch (IOException ignored) {
+            // the next poll reports it anyway
+        }
     }
 
     /** Best effort: tells the backend a card is in the reader so the screen can say it is reading. */

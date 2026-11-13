@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/features/services/styles/services.css'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -264,7 +265,7 @@ onMounted(async () => {
           :class="{ active: activeTab === 'courses' }"
           @click="activeTab = 'courses'"
         >
-          คอร์สของผู้ป่วย
+          รายละเอียดการรักษา
         </button>
       </nav>
       <section class="history-card">
@@ -374,7 +375,7 @@ onMounted(async () => {
                   <RouterLink
                     class="history-row-action outline"
                     :to="courseActionLink(item, 'manage')"
-                    >รายละเอียดคอร์ส</RouterLink
+                    >ดูรายละเอียด</RouterLink
                   >
                 </td>
               </tr>
@@ -383,7 +384,7 @@ onMounted(async () => {
                 <td>{{ item.quantity }} ครั้ง</td>
                 <td>—</td>
                 <td>{{ paymentStatus(payment.status) }}</td>
-                <td class="history-actions course-actions"><button type="button" class="outline" @click="openReceipt(payment)">ดูใบเสร็จ</button></td>
+                <td class="history-actions course-actions"><button type="button" class="history-row-action outline" @click="openReceipt(payment)">ดูใบเสร็จ</button></td>
               </tr>
               <tr v-if="!filteredCourses.length && !filteredSingleVisits.length">
                 <td colspan="5">
@@ -395,13 +396,9 @@ onMounted(async () => {
             </tbody>
           </table>
         </div>
-        <p v-if="!loading && !errorMessage && activeTab === 'payments'" class="history-result-count">
-          แสดง {{ filteredPayments.length }} รายการล่าสุด
-        </p>
       </section>
     </component>
   </div>
 </template>
 
 <style scoped src="../styles/patient-history.css"></style>
-<style src="../../services/styles/services.css"></style>
