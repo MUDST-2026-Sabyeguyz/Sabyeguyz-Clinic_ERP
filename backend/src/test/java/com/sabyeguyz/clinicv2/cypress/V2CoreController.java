@@ -1,9 +1,12 @@
 package com.sabyeguyz.clinicv2.cypress;
 
 import java.util.Map;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Test-only bridge. Each request executes an isolated original service scenario. */
 @RestController
@@ -11,7 +14,9 @@ import org.springframework.web.bind.annotation.*;
 @PreAuthorize("hasRole('MANAGER')")
 public class V2CoreController {
     @PostMapping("/__cypress/v2/core/{group}/{scenario}")
-    public Map<String, Object> run(@PathVariable String group, @PathVariable String scenario) {
+    public Map<String, Object> run(
+            @PathVariable String group,
+            @PathVariable String scenario) {
         return switch (group + "/" + scenario) {
             case "AppUserService/registerHashesThePassword" -> new com.sabyeguyz.clinicv2.auth.AppUserServiceScenarios().registerHashesThePassword();
             case "AppUserService/rejectsShortPassword" -> new com.sabyeguyz.clinicv2.auth.AppUserServiceScenarios().rejectsShortPassword();

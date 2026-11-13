@@ -8,7 +8,8 @@ import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.role.Permission;
 
 public class SystemSettingServiceScenarios {
-    V2RepositoryStub<SystemSettingRepository> repositoryStub = new V2RepositoryStub<>(SystemSettingRepository.class);
+    V2RepositoryStub<SystemSettingRepository> repositoryStub =
+            new V2RepositoryStub<>(SystemSettingRepository.class);
     SystemSettingRepository repository = repositoryStub.proxy();
 
     private SystemSettingService service() {
@@ -28,6 +29,7 @@ public class SystemSettingServiceScenarios {
 
         out.put("settingKey", setting.getSettingKey());
         out.put("settingValue", setting.getSettingValue());
+
         return out;
     }
 
@@ -48,16 +50,20 @@ public class SystemSettingServiceScenarios {
 
         out.put("sameSettingInstance", updated == existing);
         out.put("settingValue", updated.getSettingValue());
+
         return out;
     }
 
     public Map<String, Object> rejectsBlankValue() {
         Map<String, Object> out = new LinkedHashMap<>();
         repositoryStub.on("findById", args -> Optional.empty());
+
         out.putAll(V2RepositoryStub.outcome(() -> {
             service().set("X", new Permission(), "  ", null, 1L);
+
             return null;
         }));
+
         return out;
     }
 }

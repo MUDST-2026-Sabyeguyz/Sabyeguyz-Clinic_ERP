@@ -1,17 +1,20 @@
 package com.sabyeguyz.clinicv2.catalog;
 
-import java.util.Map;
 import java.util.LinkedHashMap;
-import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
+import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.commission.CommissionScheme;
 import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
 import com.sabyeguyz.clinicv2.commission.CommissionTier;
 import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
-import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
-import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingService;
 import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingRepository;
+import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingService;
 import com.sabyeguyz.clinicv2.commission.MonthlyCommissionClosingRepository;
+import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedger;
@@ -26,28 +29,35 @@ import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.sale.Receipt;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import com.sabyeguyz.clinicv2.branch.Branch;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 
-/** Numbers mirror the Commission_System_Requirement_Dev §4 worked example (10,000 THB course, 7% tier). */
+/** Numbers mirror the Commission_System_Requirement_Dev §4 worked example
+ * (10,000 THB course, 7% tier). */
 public class CourseServiceScenarios {
     V2RepositoryStub<CourseRepository> coursesStub = new V2RepositoryStub<>(CourseRepository.class);
     CourseRepository courses = coursesStub.proxy();
     V2RepositoryStub<CourseLedgerRepository> ledgerStub = new V2RepositoryStub<>(CourseLedgerRepository.class);
     CourseLedgerRepository ledger = ledgerStub.proxy();
-    V2RepositoryStub<CourseSharedMemberRepository> sharedMembersStub = new V2RepositoryStub<>(CourseSharedMemberRepository.class);
-    V2RepositoryStub<CourseEntitlementRepository> entitlementsStub = new V2RepositoryStub<>(CourseEntitlementRepository.class);
+    V2RepositoryStub<CourseSharedMemberRepository> sharedMembersStub =
+            new V2RepositoryStub<>(CourseSharedMemberRepository.class);
+    V2RepositoryStub<CourseEntitlementRepository> entitlementsStub =
+            new V2RepositoryStub<>(CourseEntitlementRepository.class);
     BigDecimal salesSeenByTier;
+
     CommissionScheme schemeResult;
     CommissionSchemeResolver schemeResolver = new CommissionSchemeResolver(null) {
-        @Override public CommissionScheme resolveEffective(LocalDate date) { return schemeResult; }
+        @Override
+        public CommissionScheme resolveEffective(LocalDate date) {
+            return schemeResult;
+        }
     };
+
     CommissionTier tierResult;
     CommissionTierResolver tierResolver = new CommissionTierResolver(null) {
-        @Override public CommissionTier resolve(CommissionScheme scheme, BigDecimal sales) {
+        @Override
+        public CommissionTier resolve(CommissionScheme scheme, BigDecimal sales) {
             salesSeenByTier = sales;
+
             return tierResult;
         }
     };
@@ -59,7 +69,12 @@ public class CourseServiceScenarios {
                 courses);
 
         return new CourseService(
-                courses, ledger, sharedMembersStub.proxy(), entitlementsStub.proxy(), schemeResolver, tierResolver,
+                courses,
+                ledger,
+                sharedMembersStub.proxy(),
+                entitlementsStub.proxy(),
+                schemeResolver,
+                tierResolver,
                 new MonthlyTierSalesService(courses),
                 branchClosingService);
     }
@@ -77,10 +92,12 @@ public class CourseServiceScenarios {
     private static Staff staffFixture() {
         Staff person = new Staff();
         setId(person, 1L);
+
         return person;
     }
 
-    /** A CoursePurchase sale line for the receipt's patient, as SalesTransactionService records it before selling the Course. */
+    /** A CoursePurchase sale line for the receipt's patient, as
+     * SalesTransactionService records it before selling the Course. */
     private static SalesTransaction purchaseLine(Receipt receipt) {
         Patient patient = new Patient();
         receipt.setPatient(patient);
@@ -93,6 +110,7 @@ public class CourseServiceScenarios {
         transaction.setTransactionType(TransactionType.CoursePurchase);
         transaction.setAmount(new BigDecimal("10000.00"));
         transaction.setCommissionableAmount(new BigDecimal("10000.00"));
+
         return transaction;
     }
 
@@ -104,6 +122,7 @@ public class CourseServiceScenarios {
         template.setDefaultTotalVisits(10);
         template.setDefaultBonusVisits(0);
         template.setDefaultValidityDays(90);
+
         return template;
     }
 
@@ -133,6 +152,7 @@ public class CourseServiceScenarios {
         out.put("courseStatus", course.getCourseStatus());
         out.put("caseOwnerIsSeller", course.getOwnerStaff() == course.getSellerStaff());
         out.put("expiryDate", course.getExpiryDate());
+
         return out;
     }
 
@@ -150,6 +170,7 @@ public class CourseServiceScenarios {
 
         out.put("courseNo", course.getCourseNo());
         out.put("courseSequence", course.getCourseSequence());
+
         return out;
     }
 
@@ -173,6 +194,7 @@ public class CourseServiceScenarios {
         out.put("totalVisits", course.getTotalVisits());
         out.put("remainingVisits", course.getRemainingVisits());
         out.put("bonusVisits", course.getBonusVisits());
+
         return out;
     }
 
@@ -183,8 +205,20 @@ public class CourseServiceScenarios {
         Receipt receipt = new Receipt();
         receipt.setReceiptNo("RE40000010");
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, purchaseLine(receipt), template, staffFixture(), null, null,
-                LocalDate.of(2026, 8, 18), 1L); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            service().sell(
+                    receipt,
+                    purchaseLine(receipt),
+                    template,
+                    staffFixture(),
+                    null,
+                    null,
+                    LocalDate.of(2026, 8, 18),
+                    1L);
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -206,6 +240,7 @@ public class CourseServiceScenarios {
         out.put("samePurchaser", course.getPurchaserPatient() == line.getPatient());
         out.put("sameSaleLine", course.getSaleTransaction() == line);
         out.put("entitledVisits", course.getTotalVisits());
+
         return out;
     }
 
@@ -216,8 +251,20 @@ public class CourseServiceScenarios {
         SalesTransaction line = purchaseLine(receipt);
         line.setTransactionType(TransactionType.SingleVisit);
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), staffFixture(), null, null,
-                LocalDate.of(2026, 8, 18), 1L); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            service().sell(
+                    receipt,
+                    line,
+                    courseTemplate(),
+                    staffFixture(),
+                    null,
+                    null,
+                    LocalDate.of(2026, 8, 18),
+                    1L);
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -228,8 +275,20 @@ public class CourseServiceScenarios {
         SalesTransaction line = purchaseLine(receipt);
         coursesStub.on("existsBySaleTransactionId", args -> true);
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), staffFixture(), null, null,
-                LocalDate.of(2026, 8, 18), 1L); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            service().sell(
+                    receipt,
+                    line,
+                    courseTemplate(),
+                    staffFixture(),
+                    null,
+                    null,
+                    LocalDate.of(2026, 8, 18),
+                    1L);
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -240,8 +299,20 @@ public class CourseServiceScenarios {
         SalesTransaction line = purchaseLine(receipt);
         receipt.setPatient(new Patient());
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().sell(receipt, line, courseTemplate(), staffFixture(), null, null,
-                LocalDate.of(2026, 8, 18), 1L); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            service().sell(
+                    receipt,
+                    line,
+                    courseTemplate(),
+                    staffFixture(),
+                    null,
+                    null,
+                    LocalDate.of(2026, 8, 18),
+                    1L);
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -254,9 +325,19 @@ public class CourseServiceScenarios {
         schemeResult = new CommissionScheme();
         tierResult = new CommissionTier();
         Staff seller = staffFixture();
-        Course course = service().sell(receipt, line, courseTemplate(), seller, null, null, LocalDate.of(2026, 8, 18), 1L);
+        Course course = service().sell(
+                receipt,
+                line,
+                courseTemplate(),
+                seller,
+                null,
+                null,
+                LocalDate.of(2026, 8, 18),
+                1L);
+
         out.put("ownerIsSeller", course.getOwnerStaff() == seller && course.getSellerStaff() == seller);
         out.put("salesSeenByTier", salesSeenByTier);
+
         return out;
     }
 
@@ -276,11 +357,13 @@ public class CourseServiceScenarios {
 
         CourseSharedMember member = (CourseSharedMember) sharedMembersStub.arguments("save").get(0)[0];
         CourseEntitlement entitlement = (CourseEntitlement) entitlementsStub.arguments("save").get(0)[0];
+
         out.put("memberRole", member.getMemberRole());
         out.put("memberIsPurchaser", member.getPatient() == line.getPatient());
         out.put("allocatedVisits", entitlement.getAllocatedVisits());
         out.put("usedVisits", entitlement.getUsedVisits());
         out.put("remainingVisits", entitlement.getRemainingVisits());
+
         return out;
     }
 
@@ -299,11 +382,15 @@ public class CourseServiceScenarios {
         service().sell(receipt, line, template, staffFixture(), null, null, LocalDate.of(2026, 8, 18), 1L);
 
         CourseLedger entry = (CourseLedger) ledgerStub.arguments("save").get(0)[0];
+
         out.put("entryType", entry.getEntryType());
         out.put("qtyChange", entry.getQtyChange());
         out.put("balanceAfter", entry.getBalanceAfter());
         out.put("sourceIsTheSaleLine", entry.getSalesTransaction() == line);
-        out.put("hasOtherSource", entry.getTransfer() != null || entry.getVisitUsage() != null || entry.getReversesLedger() != null);
+        out.put(
+                "hasOtherSource",
+                entry.getTransfer() != null || entry.getVisitUsage() != null || entry.getReversesLedger() != null);
+
         return out;
     }
 }
