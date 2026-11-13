@@ -65,6 +65,7 @@ public class PatientController {
             com.fasterxml.jackson.databind.JsonNode middleName,
             String email,
             String customerSource,
+            String insuranceType,
             String insuranceCompany,
             Boolean drugAllergy,
             Boolean foodAllergy,
@@ -123,6 +124,7 @@ public class PatientController {
             String customerType,
             String customerSource,
             String insuranceCompany,
+            String insuranceType,
             String customerTypeCode,
             String firstName,
             String lastName,
@@ -236,7 +238,7 @@ public class PatientController {
                 request.address(),
                 null,
                 resolveMasterDataValue("Referral Channel", request.customerSource()),
-                null,
+                resolveMasterDataValue("Insurance Type", request.insuranceType()),
                 resolveMasterDataValue("Insurance Company", request.insuranceCompany()),
                 middleName,
                 Boolean.TRUE.equals(request.drugAllergy()),
@@ -309,6 +311,11 @@ public class PatientController {
         if (request.customerSource() != null) {
             patient.setReferralChannel(
                     resolveMasterDataValue("Referral Channel", request.customerSource()));
+        }
+
+        if (request.insuranceType() != null) {
+            patient.setInsuranceType(
+                    resolveMasterDataValue("Insurance Type", request.insuranceType()));
         }
 
         if (request.insuranceCompany() != null) {
@@ -394,6 +401,7 @@ public class PatientController {
                 patient.getCustomerGroup() == null ? null : patient.getCustomerGroup().getValueName(),
                 patient.getReferralChannel() == null ? null : patient.getReferralChannel().getValueName(),
                 patient.getInsuranceCompany() == null ? null : patient.getInsuranceCompany().getValueName(),
+                patient.getInsuranceType() == null ? null : patient.getInsuranceType().getValueName(),
                 patient.getCustomerType() == null ? null : patient.getCustomerType().name(),
                 patient.getPatientFname(),
                 patient.getPatientLname(),
