@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
+import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
 import { commissionApi, type ManagerAdjustment } from '@/api/client'
 import CommissionTabs from './CommissionTabs.vue'
 
@@ -11,10 +12,12 @@ const loading = ref(true)
 const errorMessage = ref('')
 const search = ref('')
 const month = ref('')
+const filterMonth = ref('')
+const filterYear = ref('')
 const status = ref('')
 const statusGroups: Record<string, string[]> = {
-  pending: ['Pending', 'Approved', 'ExternalReview'],
-  completed: ['PartiallyApplied', 'Applied'],
+  pending: ['Pending', 'Approved', 'PartiallyApplied', 'ExternalReview'],
+  completed: ['Applied'],
   cancelled: ['Cancelled'],
 }
 const page = ref(1)
@@ -22,8 +25,8 @@ const pageSize = 10
 const statusGroup = (value: string) =>
   Object.keys(statusGroups).find((group) => statusGroups[group]?.includes(value)) ?? 'other'
 const statusNames: Record<string, string> = {
-  pending: 'รอดำเนินการ',
-  completed: 'ดำเนินการแล้ว',
+  pending: 'มียอดคงเหลือ',
+  completed: 'ใช้ยอดครบแล้ว',
   cancelled: 'ยกเลิก',
   other: 'สถานะอื่น',
 }
@@ -47,7 +50,19 @@ const reference = (row: ManagerAdjustment) => {
   if (row.singleVisitFeeId) return `FEE-${String(row.singleVisitFeeId).padStart(5, '0')}`
   return `ADJ-${String(row.id).padStart(5, '0')}`
 }
-const statusLabel = (value: string) => statusNames[statusGroup(value)] ?? 'สถานะอื่น'
+const statusLabel = (row: ManagerAdjustment) => {
+  if (row.cancellationReason) return row.cancellationReason
+  if (!row.automatic) return 'รายการเดิม'
+  return statusNames[statusGroup(row.status)] ?? 'สถานะอื่น'
+}
+const progressLabel = (row: ManagerAdjustment) => {
+  if (row.cancellationReason) return `ยกเลิกยอดคงเหลือ ${amount(row.remaining)}`
+  if (!row.automatic) return stepLabel[row.status] ?? 'รายการก่อนปรับ flow'
+  if (row.status === 'Applied') return 'นำยอดไปคำนวณครบแล้ว'
+  if (row.status === 'PartiallyApplied') return `ใช้แล้ว ${amount(row.processed)} · คงเหลือ ${amount(row.remaining)}`
+  if (row.status === 'Approved') return `รอคำนวณในงวด ${monthLabel(row.appliedMonth)}`
+  return stepLabel[row.status] ?? 'ไม่ทราบขั้นตอน'
+}
 const stepLabel: Record<string, string> = {
   Pending: 'รออนุมัติรายการ',
   Approved: 'อนุมัติรายการแล้ว',
@@ -72,9 +87,11 @@ const reasonSummary = (value: string) => value?.trim() || 'ไม่ระบุ
 const clearFilters = () => {
   search.value = ''
   month.value = ''
+  filterMonth.value = ''
+  filterYear.value = ''
   status.value = ''
 }
-const hasFilters = computed(() => Boolean(search.value || month.value || status.value))
+const hasFilters = computed(() => Boolean(search.value || filterMonth.value || filterYear.value || status.value))
 const visible = computed(() => {
   const keyword = search.value.trim().toLowerCase()
   return adjustments.value
@@ -90,19 +107,22 @@ const visible = computed(() => {
       (a, b) => (statusPriority[a.status] ?? 3) - (statusPriority[b.status] ?? 3) || b.id - a.id,
     )
 })
-const monthOptions = computed(() =>
-  [...new Set(adjustments.value.map((row) => row.originalMonth))].sort().reverse(),
-)
+const monthOptions = Array.from({ length: 12 }, (_, index) => ({
+  value: String(index + 1).padStart(2, '0'),
+  label: new Intl.DateTimeFormat('th-TH', { month: 'long' }).format(new Date(2026, index, 1)),
+}))
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 4 }, (_, index) => String(currentYear - index))
 const statusOptions = [
-  { value: 'pending', label: 'รอดำเนินการ' },
-  { value: 'completed', label: 'ดำเนินการแล้ว' },
+  { value: 'pending', label: 'มียอดคงเหลือ' },
+  { value: 'completed', label: 'ใช้ยอดครบแล้ว' },
   { value: 'cancelled', label: 'ยกเลิก' },
 ]
 const totalPages = computed(() => Math.max(1, Math.ceil(visible.value.length / pageSize)))
 const pageRows = computed(() =>
   visible.value.slice((page.value - 1) * pageSize, page.value * pageSize),
 )
-watch([search, month, status], () => {
+watch([search, filterMonth, filterYear, status], () => {
   page.value = 1
 })
 
@@ -127,7 +147,7 @@ onMounted(load)
       <header class="adjustment-title">
         <div>
           <h1>รายการปรับปรุงค่าตอบแทน</h1>
-          <p>ตรวจสอบและจัดการรายการปรับปรุงค่าตอบแทนหลังปิดรอบ</p>
+          <p>รายการที่บันทึกใหม่จะนำยอดไปคำนวณในงวดที่กำหนดโดยอัตโนมัติ</p>
         </div>
         <RouterLink class="commission-primary add-adjustment" to="/staff/commission/adjustments/new"
           >+ เพิ่มรายการปรับปรุง</RouterLink
@@ -141,12 +161,11 @@ onMounted(load)
             <span class="sr-only">ค้นหารายการ</span>
             <input v-model="search" placeholder="ค้นหาชื่อพนักงานหรือรหัสอ้างอิง" />
           </label>
-          <FilterDropdown
-            v-model="month"
-            label="รอบที่ต้องการปรับ"
-            default-label="รอบที่ต้องการปรับ: ทั้งหมด"
-            :options="monthOptions.map((item) => ({ value: item, label: monthLabel(item) }))"
-          />
+          <div class="period-filter">
+            <span>งวดที่นำไปใช้</span>
+            <FilterDropdown v-model="filterMonth" label="เดือน" default-label="ทุกเดือน" :options="monthOptions" />
+            <FilterDropdown v-model="filterYear" label="ปี" default-label="ทุกปี" :options="yearOptions.map((year) => ({ value: year, label: String(Number(year) + 543) }))" />
+          </div>
           <FilterDropdown
             v-model="status"
             label="สถานะรายการ"
@@ -161,15 +180,13 @@ onMounted(load)
           <div>
             <h2>รายการปรับปรุง</h2>
             <p>
-              ต้องตรวจสอบหรือดำเนินการ
+              มีรายการที่ยังมียอดคงเหลือ
               {{
                 visible.filter((row) =>
-                  ['Pending', 'ExternalReview', 'Approved', 'PartiallyApplied'].includes(
-                    row.status,
-                  ),
+                  row.remaining > 0 && row.status !== 'Cancelled',
                 ).length
               }}
-              รายการ · เรียงงานที่ต้องทำไว้ก่อน
+              รายการ
             </p>
           </div>
           <span v-if="!loading && !errorMessage">ทั้งหมด {{ visible.length }} รายการ</span>
@@ -183,7 +200,7 @@ onMounted(load)
                 <tr>
                   <th>พนักงาน</th>
                   <th>รายการปรับปรุง</th>
-                  <th>รอบที่อ้างอิง</th>
+                  <th>งวดที่นำไปใช้</th>
                   <th>ยอดปรับปรุง</th>
                   <th>สถานะรายการ</th>
                   <th><span class="sr-only">การทำงาน</span></th>
@@ -196,10 +213,10 @@ onMounted(load)
                     <strong>{{ reference(row) }}</strong>
                     <small class="row-reason">{{ reasonSummary(row.reason) }}</small>
                   </td>
-                  <td data-label="รอบที่อ้างอิง">{{ monthLabel(row.originalMonth) }}</td>
+                  <td data-label="งวดที่นำไปใช้">{{ monthLabel(row.appliedMonth) }}</td>
                   <td data-label="ยอดปรับปรุง" :class="{ deduction: row.amount < 0 }">
                     {{ amount(row.amount) }}
-                    <small v-if="reservedAmount(row) > 0" class="amount-context"
+                    <small v-if="!row.automatic && reservedAmount(row) > 0" class="amount-context"
                       >กันไว้ {{ amount(Math.sign(row.amount) * reservedAmount(row)) }}</small
                     >
                     <small v-if="row.status === 'Cancelled'" class="amount-context"
@@ -207,10 +224,8 @@ onMounted(load)
                     >
                   </td>
                   <td data-label="สถานะรายการ">
-                    <span class="adjustment-status" :class="`status-${statusGroup(row.status)}`">{{
-                      statusLabel(row.status)
-                    }}</span>
-                    <small class="row-step">{{ stepLabel[row.status] ?? 'ไม่ทราบขั้นตอน' }}</small>
+                    <span class="adjustment-status" :class="`status-${statusGroup(row.status)}`">{{ statusLabel(row) }}</span>
+                    <small class="row-step">{{ progressLabel(row) }}</small>
                   </td>
                   <td data-label="รายละเอียด">
                     <RouterLink
@@ -247,7 +262,7 @@ onMounted(load)
           </nav>
           <footer class="adjustment-table-footer">
             <span>รวม {{ visible.length }} รายการ</span>
-            <span>ยอดคงเหลือจะยังไม่ถูกหักเงินจริงอัตโนมัติ</span>
+            <span>ยอดคงเหลือของรายการใหม่จะนำไปคำนวณในงวดถัดไปอัตโนมัติ</span>
           </footer>
         </template>
       </section>
@@ -298,16 +313,34 @@ onMounted(load)
 }
 .adjustment-filters {
   display: grid;
-  grid-template-columns: 1.55fr 1fr 1.1fr;
-  gap: 16px;
+  grid-template-columns: minmax(240px, 1.55fr) minmax(250px, 1fr) minmax(180px, 0.9fr);
+  align-items: end;
+  gap: 12px;
   padding: 20px 24px;
   border-bottom: 1px solid #e7ede9;
+}
+.period-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr);
+  gap: 6px 8px;
+  align-items: center;
+}
+.period-filter > span {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  color: #34594f;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.period-filter :deep(button),
+.period-filter :deep(select) {
+  min-width: 0;
 }
 .clear-filters,
 .empty-clear {
   border: 0;
   background: transparent;
-  color: var(--color-primary-strong);
+  color: #145c59;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -363,7 +396,7 @@ onMounted(load)
   border: 1px solid #b7cecc;
   border-radius: 8px;
   background: #fff;
-  color: var(--color-primary-strong);
+  color: #145c59;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -373,13 +406,13 @@ onMounted(load)
   cursor: not-allowed;
 }
 .adjustment-pagination button:focus-visible {
-  outline: 2px solid var(--color-primary-strong);
+  outline: 2px solid #145c59;
   outline-offset: 3px;
 }
 .clear-filters:focus-visible,
 .empty-clear:focus-visible,
 .detail-button:focus-visible {
-  outline: 2px solid var(--color-primary-strong);
+  outline: 2px solid #145c59;
   outline-offset: 3px;
 }
 .adjustment-filters input {
@@ -410,7 +443,7 @@ onMounted(load)
 }
 .directory-results h2 {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 18px;
 }
 .directory-results p {
@@ -419,7 +452,7 @@ onMounted(load)
   font-size: 13px;
 }
 .directory-results > span {
-  color: var(--color-primary-strong);
+  color: #145c59;
   font-size: 14px;
   font-weight: 700;
 }
@@ -444,7 +477,7 @@ th {
 td {
   padding: 16px 18px;
   border-bottom: 1px solid #e7ede9;
-  color: var(--color-ink);
+  color: #25372e;
   vertical-align: middle;
 }
 tbody td:first-child {
@@ -482,14 +515,14 @@ tbody tr:hover td {
   border-radius: 8px;
   padding: 0 14px;
   background: #fff;
-  color: var(--color-primary-strong);
+  color: #145c59;
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
   text-decoration: none;
 }
 .detail-button:hover {
-  border-color: var(--color-primary-strong);
+  border-color: #145c59;
   background: #edf5f1;
 }
 .empty-row {
@@ -529,6 +562,9 @@ tbody tr:hover td {
 @media (max-width: 900px) {
   .adjustment-filters {
     grid-template-columns: 1fr 1fr;
+  }
+  .period-filter {
+    grid-column: 1 / -1;
   }
   .adjustment-table-footer {
     align-items: flex-start;

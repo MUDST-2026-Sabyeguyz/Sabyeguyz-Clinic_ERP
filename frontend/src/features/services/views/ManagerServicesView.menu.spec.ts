@@ -24,7 +24,7 @@ describe('manager services patient menu', () => {
   })
 
   it('uses the phone icon only when a phone number exists', () => {
-    expect(source).toContain('<PhoneIcon v-if="patient.phone"')
-    expect(source).toContain("patient.phone || '-'")
+    expect(source).toContain('v-if="patient.phone" class="service-menu-phone"')
+    expect(source).toContain('<PhoneIcon aria-hidden="true" />{{ patient.phone }}')
   })
 })

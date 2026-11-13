@@ -1,24 +1,7 @@
--- Existing legacy statuses must be reviewed before enforcing the current rules.
+-- Keep historical statuses; require current statuses on new appointments.
 DO $$
-    BEGIN
-        IF EXISTS (
-            SELECT 1
-            FROM appointment
-            WHERE appointment_status::text NOT IN (
-                'Unconfirmed', 'Confirmed', 'Cancelled'
-            )
-        ) THEN
-            RAISE EXCEPTION
-                'Cannot restrict appointment status: legacy statuses require review';
-        END IF;
-    END
-$$;
-
--- Appointment statuses allowed by the current Data Dictionary.
-ALTER TABLE appointment
-    ADD CONSTRAINT chk_appointment_status_current
-        CHECK (
-            appointment_status::text IN (
-    'Unconfirmed', 'Confirmed', 'Cancelled'
-    )
-);
+DECLARE legacy_appointment_id BIGINT;
+BEGIN
+  SELECT COALESCE(MAX(appointment_id), 0) INTO legacy_appointment_id FROM appointment;
+  EXECUTE format('ALTER TABLE appointment ADD CONSTRAINT chk_new_appointment_status CHECK (appointment_status::text IN (''Unconfirmed'', ''Confirmed'', ''Cancelled'') OR appointment_id <= %s)', legacy_appointment_id);
+END $$;

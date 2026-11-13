@@ -25,6 +25,7 @@ import com.sabyeguyz.clinicv2.staff.Staff;
 @org.springframework.stereotype.Service
 public class AppointmentAvailabilityService {
     static final int STEP_MINUTES = 30;
+    static final int DEFAULT_SERVICE_MINUTES = 60;
     static final LocalTime FALLBACK_OPEN = LocalTime.of(9, 0);
     static final LocalTime FALLBACK_CLOSE = LocalTime.of(18, 0);
 
@@ -150,19 +151,17 @@ public class AppointmentAvailabilityService {
         LocalTime close = branch.getBookingCloseTime();
         Integer minutes = AppointmentService.effectiveMinutes(service, branch);
 
-        boolean configured = open != null && close != null && open.isBefore(close);
-
-        if (!configured || minutes == null || minutes < 1) {
-            return new Availability(
-                    date,
-                    open == null ? null : open.toString(),
-                    close == null ? null : close.toString(),
-                    configured,
-                    minutes,
-                    STEP_MINUTES,
-                    List.of(),
-                    "NOT_CHECKED");
+        boolean configured = open != null && close != null
+                && open.isBefore(close);
+        // สาขาที่ยังไม่ตั้งเวลารับนัด หรือบริการที่ไม่มีระยะเวลา ใช้ค่าสำรองเพื่อให้ยังเลือกเวลาได้
+        if (!configured) {
+            open = FALLBACK_OPEN;
+            close = FALLBACK_CLOSE;
         }
+        // ความยาวนัดเท่ากับระยะห่างของช่องเวลา: ใช้ระยะเวลาของบริการ/คอร์ส ถ้าไม่ตั้งใช้ค่าสาขา ถ้าไม่ตั้งอีกใช้ 60 นาที
+        // ไม่ได้เลือกบริการ (เช่น มุมมองปฏิทิน) ใช้ช่อง 30 นาทีตามเดิม
+        boolean validMinutes = minutes != null && minutes >= 1;
+        int length = validMinutes ? minutes : (service == null ? STEP_MINUTES : DEFAULT_SERVICE_MINUTES);
 
         List<Appointment> busy = appointments.activeOfStaffForInterval(
                 therapist.getId(), date.atTime(open), date,
@@ -173,9 +172,9 @@ public class AppointmentAvailabilityService {
         List<Slot> slots = new ArrayList<>();
 
         for (java.time.LocalDateTime start = date.atTime(open);
-             !start.plusMinutes(minutes).isAfter(date.atTime(close));
-             start = start.plusMinutes(STEP_MINUTES)) {
-            java.time.LocalDateTime end = start.plusMinutes(minutes);
+             !start.plusMinutes(length).isAfter(date.atTime(close));
+             start = start.plusMinutes(length)) {
+            java.time.LocalDateTime end = start.plusMinutes(length);
             String reason = null;
 
             if (!start.isAfter(now)) {
@@ -207,14 +206,6 @@ public class AppointmentAvailabilityService {
             slots.add(new Slot(start.toLocalTime().toString().substring(0, 5), reason == null, reason));
         }
 
-        return new Availability(
-                date,
-                open.toString(),
-                close.toString(),
-                configured,
-                minutes,
-                STEP_MINUTES,
-                slots,
-                google.state());
+        return new Availability(date, open.toString(), close.toString(), configured, length, length, slots, google.state());
     }
 }

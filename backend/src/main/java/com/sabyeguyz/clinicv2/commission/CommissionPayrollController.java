@@ -76,65 +76,20 @@ public class CommissionPayrollController {
             BigDecimal amount,
             String branchCode) {}
 
-    public record PaymentResponse(
-            Long id,
-            Long staffId,
-            String staffName,
-            String month,
-            String status,
-            BigDecimal courseCommission,
-            BigDecimal singleVisitFee,
-            BigDecimal substituteFee,
-            BigDecimal adjustment,
-            BigDecimal net,
-            Instant paidAt,
-            Long closingId,
-            long pendingSessions,
-            List<ApplicationResponse> applications,
-            java.time.LocalDate paidDate,
-            String paymentReference,
-            String branchCode,
-            String branchName) {}
-
-    public record ApplicationResponse(
-            Long id,
-            Long adjustmentId,
-            BigDecimal amount,
-            String status,
-            boolean approved,
-            String approvalReference) {}
-
-    public record AdjustmentResponse(
-            Long id,
-            Long staffId,
-            String staffName,
-            String originalMonth,
-            String appliedMonth,
-            BigDecimal amount,
-            String reason,
-            String status,
-            BigDecimal processed,
-            BigDecimal remaining,
-            Long allocationId,
-            Long singleVisitFeeId,
-            Long courseId,
-            Long visitId,
-            Long saleTransactionId,
-            List<ApplicationResponse> applications) {}
-
-    public record ClosingStateResponse(
-            Long id,
-            String month,
-            Long staffId,
-            String status) {}
-
-    public record BranchClosingResponse(
-            Long id,
-            String branchCode,
-            String month,
-            String status,
-            Instant closedAt,
-            Long closedBy) {}
+    public record PaymentResponse(Long id, Long staffId, String staffName, String month, String status, BigDecimal courseCommission,
+                                  BigDecimal singleVisitFee, BigDecimal substituteFee, BigDecimal adjustment, BigDecimal net,
+                                  Instant paidAt, Long closingId, long pendingSessions, List<ApplicationResponse> applications,
+                                  java.time.LocalDate paidDate, String paymentReference,
+                                  String branchCode, String branchName) {}
+    public record ApplicationResponse(Long id, Long adjustmentId, String month, BigDecimal amount, String status, boolean approved,
+                                       String approvalReference) {}
+    public record AdjustmentResponse(Long id, Long staffId, String staffName, String originalMonth, String appliedMonth,
+                                      BigDecimal amount, String reason, String status, BigDecimal processed, BigDecimal remaining,
+                                      Long allocationId, Long singleVisitFeeId, Long courseId, Long visitId, Long saleTransactionId,
+                                      List<ApplicationResponse> applications, boolean automatic, String cancellationReason,
+                                      Instant cancelledAt, String branchCode, Long approvedBy, String approverName) {}
+    public record ClosingStateResponse(Long id, String month, Long staffId, String status) {}
+    public record BranchClosingResponse(Long id, String branchCode, String month, String status, Instant closedAt, Long closedBy) {}
 
     // GET /api/commission/branch-closings?month=2026-10&branchCode=99
     @GetMapping("/branch-closings")
@@ -406,6 +361,23 @@ public class CommissionPayrollController {
         return adjustmentService.list(staffId).stream().map(this::toAdjustment).toList();
     }
 
+    @GetMapping("/adjustments/allowed-months")
+    public List<String> adjustmentAllowedMonths(@RequestParam String branchCode) {
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) throw new IllegalArgumentException("ต้องเลือกสาขา");
+        return paymentService.latestOpenMonth(branch.getId())
+                .map(month -> List.of(month, java.time.YearMonth.parse(month).plusMonths(1).toString()))
+                .orElseGet(List::of);
+    }
+
+    @GetMapping("/adjustments/sources")
+    public List<StaffPayAdjustmentService.SourceOption> adjustmentSources(
+            @RequestParam Long staffId, @RequestParam String type, @RequestParam String branchCode) {
+        var branch = branchAccess.scope(branchCode);
+        if (branch == null) throw new IllegalArgumentException("ต้องเลือกสาขา");
+        return adjustmentService.sources(staffId, branch.getId(), type);
+    }
+
     @GetMapping("/adjustments/{id}")
     public AdjustmentResponse adjustment(@PathVariable Long id) {
         return toAdjustment(adjustmentService.find(id));
@@ -415,7 +387,8 @@ public class CommissionPayrollController {
     @ResponseStatus(HttpStatus.CREATED)
     public AdjustmentResponse createAdjustment(@RequestBody StaffPayAdjustmentService.CreateRequest request) {
         permissions.requireManagerAllowed("COMMISSION_CLOSING_MANAGE", actor.currentId());
-        StaffPayAdjustment adjustment = adjustmentService.create(request, actor.currentId());
+        var branch = branchAccess.scope(request.branchCode());
+        StaffPayAdjustment adjustment = adjustmentService.create(request, branch, actor.currentId());
         audit.record("staff_pay_adjustment", String.valueOf(adjustment.getId()), AuditAction.INSERT, null,
                 adjustment.getAmount() + " for staff " + adjustment.getStaff().getId() + ": " + adjustment.getReason(), actor.currentId());
 
@@ -603,19 +576,16 @@ public class CommissionPayrollController {
                 adjustment.getCourse() == null ? null : adjustment.getCourse().getId(),
                 adjustment.getVisit() == null ? null : adjustment.getVisit().getId(),
                 adjustment.getSaleTransaction() == null ? null : adjustment.getSaleTransaction().getId(),
-                adjustmentService.applicationsOf(adjustment.getId())
-                        .stream()
-                        .map(CommissionPayrollController::toApplication)
-                        .toList());
+                adjustmentService.applicationsOf(adjustment.getId()).stream().map(CommissionPayrollController::toApplication).toList(),
+                adjustment.isAutomatic(), adjustment.getCancellationReason(), adjustment.getCancelledAt(),
+                adjustment.getBranch() == null ? null : adjustment.getBranch().getBranchCode(), adjustment.getApprovedBy(),
+                adjustment.getApprovedBy() == null ? null : users.findById(adjustment.getApprovedBy())
+                        .map(com.sabyeguyz.clinicv2.auth.AppUser::getUsername).orElse(null));
     }
 
     private static ApplicationResponse toApplication(AdjustmentApplication application) {
-        return new ApplicationResponse(
-                application.getId(),
-                application.getAdjustment().getId(),
-                application.getAmount(),
-                application.getApplicationStatus().name(),
-                application.getApprovedBy() != null,
-                application.getApprovalReference());
+        return new ApplicationResponse(application.getId(), application.getAdjustment().getId(),
+                application.getMonthlyPayment().getPaymentMonth(), application.getAmount(),
+                application.getApplicationStatus().name(), application.getApprovedBy() != null, application.getApprovalReference());
     }
 }

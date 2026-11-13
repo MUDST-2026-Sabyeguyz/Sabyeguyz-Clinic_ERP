@@ -12,6 +12,7 @@ import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.enums.AdjustmentStatus;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.staff.Staff;
+import com.sabyeguyz.clinicv2.branch.Branch;
 
 /** Signed correction (positive = pay more, negative = propose a deduction) of a month that is already paid, applied to a later month. It never changes the paid ledger, the tier or the course rate. */
 @Entity
