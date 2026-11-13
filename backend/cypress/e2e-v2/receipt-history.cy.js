@@ -1,10 +1,22 @@
 function sale(fx, patient, overrides = {}) {
-  return cy.api('POST', '/api/payments', {
-    patientId: patient.id, branchCode: '01',
-    items: [{ type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 }],
-    payments: [{ paymentMethodCode: 'Cash', amount: 800 }], ...overrides,
-  }).then(response => { expect(response.status).to.equal(201); return response.body })
+  return cy.createServiceAppointment(fx, patient.id)
+      .then((appointment) => {
+        return cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: fx.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1,}],
+          payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+          ...overrides,
+        })
+      }).then(response => {
+        expect(response.status).to.equal(201)
+        return response.body
+      })
 }
+
 const history = (p, query = '') => cy.api('GET', `/api/payments?receiptsOnly=true&patientId=${p.id}${query}`)
 const lines = fx => [
   { type: 'SERVICE', referenceId: fx.singleVisitServiceId, quantity: 1 },
@@ -15,7 +27,7 @@ describe('v2 patient receipt history', () => {
     cy.registerPatient().then(a => cy.registerPatient().then(b => {
       const ids = []
       for (let i = 0; i < 22; i++) {
-        sale(this.fixtures, a, i === 10 ? { items: lines(this.fixtures), payments: [{ paymentMethodCode: 'Cash', amount: 2000 }] } : {}).then(created => ids.push(created.id))
+        sale(this.fixtures, a, i === 10 ? { items: lines(this.fixtures), payments: [{ paymentMethodCode: 'BankTransfer', amount: 2000 }] } : {}).then(created => ids.push(created.id))
         sale(this.fixtures, b)
       }
       cy.then(() => {
@@ -37,11 +49,11 @@ describe('v2 patient receipt history', () => {
   it('preserves default transaction-line paging while receipt mode returns whole net', function () {
     cy.registerPatient().then(patient => sale(this.fixtures, patient, {
       items: lines(this.fixtures), billDiscountType: 'BAHT', billDiscountValue: 100,
-      payments: [{ paymentMethodCode: 'Cash', amount: 500 }],
+      payments: [{ paymentMethodCode: 'BankTransfer', amount: 1900 }],
     }).then(created => {
       history(patient, '&size=1').then(({ body }) => {
         expect(body.totalItems).to.equal(1)
-        expect(body.items[0]).to.include({ id: created.id, total: 1900, netAmount: 1900, paid: 500 })
+        expect(body.items[0]).to.include({ id: created.id, total: 1900, netAmount: 1900, paid: 1900 })
       })
       cy.api('GET', `/api/payments?patientId=${patient.id}`).then(({ body }) => {
         expect(body.totalItems).to.equal(2)
@@ -49,13 +61,14 @@ describe('v2 patient receipt history', () => {
       })
     }))
   })
-  it('reads persisted receipt totals separately from partial payment through either legacy line id', function () {
+  it('reads persisted receipt totals and a descriptive payment label through either legacy line id', function () {
     cy.registerPatient().then(patient => sale(this.fixtures, patient, {
+      paymentLabelCode: 'INSTALLMENT',
       items: [{ ...lines(this.fixtures)[0], discountType: 'BAHT', discountValue: 100 }, lines(this.fixtures)[1]],
-      payments: [{ paymentMethodCode: 'QR', amount: 500 }],
+      payments: [{ paymentMethodCode: 'QR', amount: 1900 }],
     }).then(created => {
-      const expected = { receiptId: created.receiptId, subtotalBeforeDiscount: 1900, billDiscountAmount: 0,
-        taxableAmount: 1900, taxAmount: 0, netAmount: 1900, total: 1900, paid: 500, paymentLabel: 'Installment' }
+      const expected = { receiptId: created.receiptId, subtotalBeforeDiscount: 2000, billDiscountAmount: 0,
+        taxableAmount: 1900, taxAmount: 0, netAmount: 1900, total: 1900, paid: 1900, paymentLabel: 'Installment' }
       expect(created.receiptId).to.be.a('number')
       expect(created).to.include(expected)
       cy.api('GET', `/api/receipts/${created.id}`).then(({ body }) => {
@@ -73,29 +86,70 @@ describe('v2 patient receipt history', () => {
     }))
   })
   it('rejects combining a line discount with a bill discount', function () {
-    cy.registerPatient().then(patient => cy.api('POST', '/api/payments', {
-      patientId: patient.id, branchCode: '01',
-      items: [{ ...lines(this.fixtures)[0], discountType: 'BAHT', discountValue: 100 }],
-      billDiscountType: 'BAHT', billDiscountValue: 100,
-      payments: [{ paymentMethodCode: 'Cash', amount: 600 }],
-    }).then(({ status, body }) => {
-      expect(status).to.equal(400)
-      expect(body.message).to.contain('ไม่สามารถใช้ส่วนลดรายการร่วมกับส่วนลดทั้งบิลได้')
-    }))
-  })
-  it('reads and lists a persisted historical Assessment without permitting new Assessment sales', function () {
-    cy.registerPatient().then(patient => sale(this.fixtures, patient).then(created => {
-      cy.api('POST', `/__cypress/payment-policy/${created.id}/historical-assessment`).then(({ status, body }) => {
-        expect(status).to.equal(200)
-        expect(body.updated).to.equal(1)
+    cy.registerPatient().then(patient => {
+      cy.createServiceAppointment(this.fixtures, patient.id)
+          .then(appointment => {
+            return cy.api('POST', '/api/payments', {
+              patientId: patient.id,
+              branchCode: '01',
+              appointmentId: appointment.id,
+              treatingStaffId: this.fixtures.therapistId,
+              paymentLabelCode: 'FULL',
+              items: [{
+                ...lines(this.fixtures)[0],
+                discountType: 'BAHT',
+                discountValue: 100,
+              }],
+              billDiscountType: 'BAHT',
+              billDiscountValue: 100,
+              payments: [{
+                paymentMethodCode: 'BankTransfer',
+                amount: 600,
+              }],
+            })
+          }).then(({ status, body }) => {
+        expect(status).to.equal(400)
+        expect(body.message).to.contain(
+            'ไม่สามารถใช้ส่วนลดรายการร่วมกับส่วนลดทั้งบิลได้'
+        )
       })
-      cy.api('GET', `/api/receipts/${created.id}`).its('body.items.0.type').should('equal', 'Assessment')
-      history(patient).its('body.items.0.id').should('equal', created.id)
-      cy.api('POST', '/api/payments', {
-        patientId: patient.id, branchCode: '01',
-        items: [{ type: 'ASSESSMENT', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }], payments: [],
-      }).its('status').should('equal', 400)
-    }))
+    })
+  })
+
+  it('reads and lists a persisted historical Assessment without permitting new Assessment sales', function () {
+    cy.registerPatient().then(patient => {
+      sale(this.fixtures, patient).then(created => {
+        cy.api(
+            'POST',
+            `/__cypress/payment-policy/${created.id}/historical-assessment`
+        ).then(({ status, body }) => {
+          expect(status).to.equal(200)
+          expect(body.updated).to.equal(1)
+        })
+
+        cy.api('GET', `/api/receipts/${created.id}`)
+            .its('body.items.0.type').should('equal', 'Assessment')
+
+        history(patient)
+            .its('body.items.0.id').should('equal', created.id)
+
+        cy.createServiceAppointment(this.fixtures, patient.id)
+            .then(appointment => {
+              return cy.api('POST', '/api/payments', {
+                patientId: patient.id,
+                branchCode: '01',
+                appointmentId: appointment.id,
+                treatingStaffId: this.fixtures.therapistId,
+                paymentLabelCode: 'FULL',
+                items: [{type: 'ASSESSMENT', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
+                payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+              })
+            }).then(({ status, body }) => {
+          expect(status).to.equal(400)
+          expect(body.message).to.include('Assessment')
+        })
+      })
+    })
   })
   it('keeps the sold item name on a printed receipt after the catalogue name changes', function () {
     cy.registerPatient().then(patient => {

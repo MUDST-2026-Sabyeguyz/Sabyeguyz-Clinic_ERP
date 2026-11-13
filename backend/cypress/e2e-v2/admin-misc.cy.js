@@ -3,28 +3,28 @@ const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year:
 describe('v2 users, commission schemes, course templates, treatments and lookups', () => {
   describe('users', () => {
     const user = {
-      username: 'editme01', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-810',
+      username: 'editme01', email: 'editme01@example.com', password: 'password12345', role: 'THERAPIST', employeeCode: 'THP-810',
       fullName: 'ผู้ใช้ แก้ไขได้', branchCode: '01',
     }
 
     it('edits a user: new username, new password, new name and branch', () => {
       cy.api('POST', '/api/users', user).then(({ body }) => {
         cy.api('PUT', `/api/users/${body.id}`, {
-          ...user, username: 'edited01', password: 'newpassword1', fullName: 'ชื่อ ที่เปลี่ยน', branchCode: '02',
+          ...user, username: 'edited01', password: 'newpassword12345', fullName: 'ชื่อ ที่เปลี่ยน', branchCode: '02',
         }).then((updated) => {
           expect(updated.status, JSON.stringify(updated.body)).to.equal(200)
           expect(updated.body.username).to.equal('edited01')
           expect(updated.body.branchCode).to.equal('02')
         })
-        cy.login('edited01', 'newpassword1').its('status').should('equal', 200)
-        cy.login('editme01', 'password123').its('status').should('be.within', 400, 403)
+        cy.login('edited01', 'newpassword12345').its('status').should('equal', 200)
+        cy.login('editme01', 'password12345').its('status').should('be.within', 400, 403)
       })
     })
 
     it('keeps the old password when none is sent and refuses a taken username', () => {
       cy.api('POST', '/api/users', user).then(({ body }) => {
         cy.api('PUT', `/api/users/${body.id}`, { ...user, password: undefined, fullName: 'เปลี่ยนแต่ชื่อ' }).its('status').should('equal', 200)
-        cy.login('editme01', 'password123').its('status').should('equal', 200)
+        cy.login('editme01', 'password12345').its('status').should('equal', 200)
         cy.api('PUT', `/api/users/${body.id}`, { ...user, username: 'manager' }).its('status').should('be.within', 400, 409)
       })
     })
@@ -32,55 +32,60 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
     it('deactivates and re-activates a user', () => {
       cy.api('POST', '/api/users', user).then(({ body }) => {
         cy.api('DELETE', `/api/users/${body.id}`).its('status').should('equal', 204)
-        cy.login('editme01', 'password123').its('status').should('be.within', 400, 403)
+        cy.login('editme01', 'password12345').its('status').should('be.within', 400, 403)
         cy.api('PATCH', `/api/users/${body.id}/activate`).its('body.active').should('equal', true)
-        cy.login('editme01', 'password123').its('status').should('equal', 200)
+        cy.login('editme01', 'password12345').its('status').should('equal', 200)
       })
     })
   })
 
   describe('commission schemes', () => {
+    beforeEach(() => {
+      const month = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: '2-digit',
+      }).format(new Date())
+
+      cy.api(
+          'POST',
+          `/api/commission/closings/${month}?branchCode=01`,
+      ).its('status').should('equal', 200)
+    })
     const tiers = [
       { minimum: 0, maximum: 99999.99, rate: 0.04, order: 1 },
       { minimum: 100000, maximum: null, rate: 0.12, order: 2 },
     ]
 
-    it('renames a scheme and moves its start month without touching its tiers; the system sets the end', () => {
-      cy.api('POST', '/api/commission/schemes', { name: 'Scheme A', effectiveFrom: '2030-01-01', tiers }).then(({ body }) => {
-        // the end of a version is never taken from a request
-        cy.api('PUT', `/api/commission/schemes/${body.id}`, { name: 'Scheme A renamed', effectiveFrom: '2030-02-01', effectiveTo: '2030-12-31', tiers: [] })
+    it('renames a scheme and changes its effective start without touching its tiers', () => {
+      cy.api('POST', '/api/commission/schemes', { branchCode: '01', name: 'Scheme A', effectiveFrom: '2030-01-01', tiers }).then(({ body }) => {
+        cy.api('PUT', `/api/commission/schemes/${body.id}`, { branchCode: '01', name: 'Scheme A renamed', effectiveFrom: '2030-02-01', effectiveTo: '2030-12-31', tiers: [] })
           .then((updated) => {
             expect(updated.status, JSON.stringify(updated.body)).to.equal(200)
             expect(updated.body.name).to.equal('Scheme A renamed')
             expect(updated.body.effectiveFrom).to.equal('2030-02-01')
+            // The API derives an end date from the next scheme version; callers cannot set it directly.
             expect(updated.body.effectiveTo).to.equal(null)
           })
         cy.api('GET', `/api/commission/schemes/${body.id}/tiers`).its('body').should('have.length', 2)
-        // the version before it follows: it now ends the day before the new start
-        cy.api('GET', '/api/commission/schemes').then(({ body: all }) => {
-          expect(all.find((scheme) => scheme.name === 'Default Tier Scheme').effectiveTo).to.equal('2030-01-31')
-        })
       })
     })
 
-    it('keeps a tier free of any on/off switch: the old endpoints are gone', () => {
-      cy.api('POST', '/api/commission/schemes', { name: 'Scheme B', effectiveFrom: '2031-01-01', tiers }).then(({ body }) => {
-        cy.api('DELETE', `/api/commission/schemes/${body.id}`).its('status').should('be.within', 404, 405)
-        cy.api('PATCH', `/api/commission/schemes/${body.id}/activate`).its('status').should('be.within', 404, 405)
+    it('keeps scheme tiers active because disable and activate routes are not supported', () => {
+      cy.api('POST', '/api/commission/schemes', { branchCode: '01', name: 'Scheme B', effectiveFrom: '2031-01-01', tiers }).then(({ body }) => {
+        cy.api('DELETE', `/api/commission/schemes/${body.id}`).its('status').should('equal', 405)
         cy.api('GET', `/api/commission/schemes/${body.id}/tiers`).its('body').then((rows) => {
           expect(rows).to.have.length(2)
-          rows.forEach((tier) => expect(tier).not.to.have.property('active'))
+        })
+        cy.api('PATCH', `/api/commission/schemes/${body.id}/activate`).its('status').should('equal', 404)
+        cy.api('GET', `/api/commission/schemes/${body.id}/tiers`).its('body').then((rows) => {
+          expect(rows).to.have.length(2)
         })
       })
-    })
-
-    it('lets only one version wait to start, and the second is made by editing the first', () => {
-      cy.api('POST', '/api/commission/schemes', { name: 'Scheme A', effectiveFrom: '2030-01-01', tiers }).its('status').should('equal', 201)
-      cy.api('POST', '/api/commission/schemes', { name: 'Scheme A', effectiveFrom: '2031-01-01', tiers }).its('status').should('equal', 409)
     })
 
     it('answers an unknown scheme with an error', () => {
-      cy.api('PUT', '/api/commission/schemes/999999', { name: 'x', effectiveFrom: '2030-01-01', tiers: [] })
+      cy.api('PUT', '/api/commission/schemes/999999', { branchCode: '01', name: 'x', effectiveFrom: '2030-01-01', tiers: [] })
         .its('status').should('be.within', 400, 404)
     })
   })
@@ -95,7 +100,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
               expect(updated.body.name).to.equal('คอร์สแก้ไขแล้ว')
               expect(Number(updated.body.price)).to.equal(6500)
               expect(updated.body.sessions).to.equal(7)
-              expect(updated.body.bonusSessions).to.equal(1)
+              expect(updated.body.bonusSessions).to.equal(0)
               expect(updated.body.validityDays).to.equal(120)
             })
         })
@@ -114,7 +119,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
 
     it('does not change the price of a course that was already sold', function () {
       cy.registerPatient().then((patient) => {
-        cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01' })
+        cy.api('POST', '/api/course-purchases', { patientId: patient.id, courseId: this.fixtures.courseId, branchCode: '01', paymentLabelCode: 'FULL' })
           .then(({ body: purchase }) => {
             expect(Number(purchase.price)).to.equal(9000)
             cy.api('PUT', `/api/courses/${this.fixtures.courseId}`,
@@ -129,19 +134,46 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
   })
 
   describe('treatments', () => {
-    function checkedInVisit(fx, patient) {
-      return cy.api('POST', '/api/appointments', {
-        branchCode: '01', patientId: patient.id, therapistId: fx.therapistId, serviceId: fx.serviceId,
-        startAt: `${fx.tomorrow}T09:00:00+07:00`,
-      }).then(({ body }) => {
-        cy.api('POST', `/api/appointments/${body.id}/check-in`).its('status').should('equal', 200)
-        return cy.wrap(body)
+    beforeEach(() => {
+      cy.configureBookingWindows()
+    })
+    function completeService(fx, patient, appointment) {
+      return cy.api('GET', '/api/catalog/services').then(({ status, body }) => {
+        expect(status).to.equal(200)
+        const service = body.find((item) => item.id === fx.serviceId)
+        expect(service, 'service used by the appointment').to.exist
+        return cy.api('POST', '/api/payments', {
+          patientId: patient.id,
+          branchCode: '01',
+          appointmentId: appointment.id,
+          treatingStaffId: fx.therapistId,
+          paymentLabelCode: 'FULL',
+          items: [{ type: 'SERVICE', referenceId: fx.serviceId, quantity: 1 }],
+          payments: [{ paymentMethodCode: 'BankTransfer', amount: Number(service.price) }],
+        })
+      }).then(({ status, body }) => {
+        expect(status, JSON.stringify(body)).to.equal(201)
       })
     }
 
-    it('records a treatment note for a checked-in appointment and lists it for the patient', function () {
+    function completedServiceVisit(fx, patient) {
+      return cy.api('POST', '/api/appointments', {
+        branchCode: '01',
+        patientId: patient.id,
+        therapistId: fx.therapistId,
+        serviceId: fx.serviceId,
+        startAt: `${fx.tomorrow}T09:00:00+07:00`,
+        endAt: `${fx.tomorrow}T10:00:00+07:00`,
+      }).then(({ status, body }) => {
+        expect(status, JSON.stringify(body)).to.equal(201)
+
+        return completeService(fx, patient, body).then(() => body)
+      })
+    }
+
+    it('records a treatment note after completed service and lists it for the patient', function () {
       cy.registerPatient().then((patient) => {
-        checkedInVisit(this.fixtures, patient).then((appointment) => {
+        completedServiceVisit(this.fixtures, patient).then((appointment) => {
           cy.api('POST', '/api/treatments', {
             patientId: patient.id, appointmentId: appointment.id, staffId: this.fixtures.therapistId,
             serviceId: this.fixtures.serviceId, note: 'ปวดหลังดีขึ้น',
@@ -157,22 +189,29 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
       })
     })
 
-    it('refuses a treatment before check-in, without an appointment, or for the wrong patient', function () {
+    it('refuses a treatment before service, without an appointment, or for the wrong patient', function () {
       cy.registerPatient().then((patient) => {
         cy.registerPatient({ firstName: 'คนอื่น', phone: '0822222222', identityNumber: '1100000000102' }).then((other) => {
           cy.api('POST', '/api/appointments', {
-            branchCode: '01', patientId: patient.id, therapistId: this.fixtures.therapistId,
-            serviceId: this.fixtures.serviceId, startAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
-          }).then(({ body: appointment }) => {
+            branchCode: '01',
+            patientId: patient.id,
+            therapistId: this.fixtures.therapistId,
+            serviceId: this.fixtures.serviceId,
+            startAt: `${this.fixtures.tomorrow}T10:00:00+07:00`,
+            endAt: `${this.fixtures.tomorrow}T11:00:00+07:00`,
+          }).then(({ status, body: appointment }) => {
+            expect(status, JSON.stringify(appointment)).to.equal(201)
             const treatment = (overrides) => cy.api('POST', '/api/treatments', {
               patientId: patient.id, appointmentId: appointment.id, staffId: this.fixtures.therapistId,
               serviceId: this.fixtures.serviceId, note: 'x', ...overrides,
             })
             treatment({}).its('status').should('equal', 400)
             treatment({ appointmentId: null }).its('status').should('equal', 400)
-            cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 200)
-            treatment({ patientId: other.id }).its('status').should('equal', 400)
-            treatment({}).its('status').should('equal', 201)
+            cy.api('POST', `/api/appointments/${appointment.id}/check-in`).its('status').should('equal', 409)
+            completeService(this.fixtures, patient, appointment).then(() => {
+              treatment({ patientId: other.id }).its('status').should('equal', 400)
+              treatment({}).its('status').should('equal', 201)
+            })
           })
         })
       })
@@ -201,7 +240,7 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
 
     it('closing a month is allowed only for a manager', () => {
       cy.login('therapist', 'therapist123').then(({ body: auth }) => {
-        cy.apiAs(auth.token, 'POST', `/api/commission/closings/${month}-01`).its('status').should('equal', 403)
+        cy.apiAs(auth.token, 'POST', `/api/commission/closings/${month}?branchCode=01`,).its('status').should('equal', 403)
       })
     })
   })

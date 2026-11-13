@@ -1,16 +1,20 @@
 function buy(fx, patient, overrides = {}) {
   return cy.api('POST', '/api/course-purchases', {
-    patientId: patient.id, courseId: fx.courseId, branchCode: '01', ...overrides,
+    patientId: patient.id,
+    courseId: fx.courseId,
+    branchCode: '01',
+    paymentLabelCode: 'FULL',
+    ...overrides,
   })
 }
 
 describe('v2 courses', () => {
-  it('buys the 9,000 THB course (5 visits + 1 bonus) and owns all six visits', function () {
+  it('buys the 9,000 THB course with five total visits', function () {
     cy.registerPatient().then((patient) => {
       buy(this.fixtures, patient).then(({ status, body }) => {
         expect(status).to.equal(201)
         expect(Number(body.price)).to.equal(9000)
-        expect(body.remaining).to.equal(6)
+        expect(body.remaining).to.equal(5)
         expect(body.used).to.equal(0)
         expect(body.expired).to.equal(false)
         expect(body.course.id).to.equal(this.fixtures.courseId)
@@ -76,55 +80,124 @@ describe('v2 courses', () => {
     })
   })
 
-  it('uses a visit as a walk-in; the Owner commission is not allocated before the month is closed; then reverses it', function () {
+  it('uses a course after creating an appointment, then reverses the usage', function () {
     cy.registerPatient().then((patient) => {
-      buy(this.fixtures, patient).then(({ body: purchase }) => {
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id, note: 'walk-in' }).then(({ status, body }) => {
+      buy(this.fixtures, patient).then(({ status, body: purchase }) => {
+        expect(status).to.equal(201)
+
+        cy.useCourseSession(purchase.id, {
+          note: 'รับบริการจากนัด',
+        }).then(({ status, body }) => {
           expect(status).to.equal(200)
           expect(body.used).to.equal(1)
-          expect(body.remaining).to.equal(5)
+          expect(body.remaining).to.equal(purchase.remaining - 1)
         })
-        cy.api('GET', `/api/course-purchases/${purchase.id}`).then(({ body }) => {
-          expect(body.allocations, 'rate unknown until the sale month is closed').to.have.length(0)
-          const usage = body.movements.find((movement) => movement.type === 'USAGE')
-          expect(usage).to.exist
-          cy.api('POST', `/api/course-movements/${usage.id}/reverse`, { reason: 'บันทึกผิด' }).then((reversed) => {
-            expect(reversed.status).to.equal(200)
-            expect(reversed.body.used).to.equal(0)
-            expect(reversed.body.remaining).to.equal(6)
-          })
-        })
+
+        cy.api('GET', `/api/course-purchases/${purchase.id}`)
+            .then(({ body }) => {
+              expect(
+                  body.allocations,
+                  'rate unknown until the sale month is closed'
+              ).to.have.length(0)
+
+              const usage = body.movements.find(
+                  (movement) => movement.type === 'USAGE'
+              )
+              expect(usage).to.exist
+
+              cy.api(
+                  'POST',
+                  `/api/course-movements/${usage.id}/reverse`,
+                  { reason: 'บันทึกผิด' }
+              ).then((reversed) => {
+                expect(reversed.status).to.equal(200)
+                expect(reversed.body.used).to.equal(0)
+                expect(reversed.body.remaining).to.equal(purchase.remaining)
+              })
+            })
       })
     })
   })
 
   it('cannot use more visits than the course holds', function () {
     cy.registerPatient().then((patient) => {
-      buy(this.fixtures, patient).then(({ body: purchase }) => {
-        for (let visit = 1; visit <= 6; visit += 1) {
-          cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('equal', 200)
+      buy(this.fixtures, patient).then(({ status, body: purchase }) => {
+        expect(status).to.equal(201)
+
+        for (let visit = 0; visit < purchase.remaining; visit += 1) {
+          cy.useCourseSession(purchase.id)
+              .its('status').should('equal', 200)
         }
-        cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('be.within', 400, 409)
-        cy.api('GET', `/api/course-purchases/${purchase.id}`).its('body.purchase.remaining').should('equal', 0)
+
+        cy.useCourseSession(purchase.id)
+            .its('status').should('equal', 400)
+
+        cy.api('GET', `/api/course-purchases/${purchase.id}`)
+            .then((saved) => {
+              expect(saved.status).to.equal(200)
+              expect(saved.body.purchase.remaining).to.equal(0)
+              expect(saved.body.purchase.used)
+                  .to.equal(purchase.used + purchase.remaining)
+            })
       })
     })
   })
 
   it('lets only one of two parallel requests take the last visit', function () {
     cy.registerPatient().then((patient) => {
-      buy(this.fixtures, patient).then(({ body: purchase }) => {
-        for (let visit = 1; visit <= 5; visit += 1) {
-          cy.api('POST', '/api/course-usages', { coursePurchaseId: purchase.id }).its('status').should('equal', 200)
+      buy(this.fixtures, patient).then(({ status, body: purchase }) => {
+        expect(status).to.equal(201)
+        expect(purchase.remaining).to.be.greaterThan(0)
+
+        for (let visit = 0; visit < purchase.remaining - 1; visit += 1) {
+          cy.useCourseSession(purchase.id)
+              .its('status').should('equal', 200)
         }
-        const request = { method: 'POST', url: '/api/course-usages', body: { coursePurchaseId: purchase.id } }
-        cy.parallelApi([request, request]).then((responses) => {
-          const statuses = responses.map((response) => response.status)
-          expect(statuses.filter((status) => status === 200), JSON.stringify(statuses)).to.have.length(1)
-          cy.api('GET', `/api/course-purchases/${purchase.id}`).its('body.purchase').then((after) => {
-            expect(after.used).to.equal(6)
-            expect(after.remaining).to.equal(0)
-          })
-        })
+
+        cy.createServiceAppointment(this.fixtures, patient.id)
+            .then((first) => {
+              cy.createServiceAppointment(this.fixtures, patient.id)
+                  .then((second) => {
+                    const request = (appointmentId) => ({
+                      method: 'POST',
+                      url: '/api/course-usages',
+                      body: {
+                        coursePurchaseId: purchase.id,
+                        patientId: patient.id,
+                        appointmentId,
+                      },
+                    })
+
+                    cy.parallelApi([
+                      request(first.id),
+                      request(second.id),
+                    ]).then((responses) => {
+                      const statuses = responses.map((entry) => entry.status)
+                      expect(statuses.filter((value) => value === 200))
+                          .to.have.length(1)
+                      expect(statuses.find((value) => value !== 200))
+                          .to.be.oneOf([400, 409])
+
+                      ;[first, second].forEach((appointment, index) => {
+                        cy.api('GET', `/api/appointments/${appointment.id}`)
+                            .its('body.status').should(
+                            'equal',
+                            responses[index].status === 200
+                                ? 'CONFIRMED'
+                                : 'UNCONFIRMED'
+                        )
+                      })
+                    })
+
+                    cy.api('GET', `/api/course-purchases/${purchase.id}`)
+                        .then((saved) => {
+                          expect(saved.status).to.equal(200)
+                          expect(saved.body.purchase.used)
+                              .to.equal(purchase.used + purchase.remaining)
+                          expect(saved.body.purchase.remaining).to.equal(0)
+                        })
+                  })
+            })
       })
     })
   })
