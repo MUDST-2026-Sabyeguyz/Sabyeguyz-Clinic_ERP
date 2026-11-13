@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { clinicToday } from '@/utils/clinicDate'
 import { buildCourseUsages, type UsageSelection } from '@/features/services/careTransactions'
-import CourseUsagePicker from '../components/CourseUsagePicker.vue'
 import CourseCutDocument from '../components/CourseCutDocument.vue'
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
@@ -44,7 +43,8 @@ const {
 const usageSubmitting = ref(false)
 const appointmentNeedsReview = computed(() =>
   Boolean(
-    appointmentProgress.value &&
+    appointmentId.value &&
+      appointmentProgress.value &&
       action.value !== 'history' &&
       !usageSuccess.value &&
       !canStartAppointment.value,
@@ -122,6 +122,7 @@ const renewalNotice = ref('')
 let renewalNoticeTimer: ReturnType<typeof setTimeout> | undefined
 onUnmounted(() => clearTimeout(renewalNoticeTimer))
 const selectedCourseId = ref(0)
+const courseNeedingAppointment = ref<number | null>(null)
 const usageNote = ref('')
 const usageDate = ref(clinicToday())
 const treatingStaffId = ref(0)
@@ -232,10 +233,6 @@ function courseUsagePercent(course: UiCourse) {
   if (!course.total) return 0
   return Math.min(100, Math.max(0, Math.round((course.used / course.total) * 100)))
 }
-function courseUsageProgressWidth(course: Pick<UiCourse, 'balance' | 'total'>) {
-  if (!course.total || course.total < 0) return '0%'
-  return `${Math.min(100, Math.max(0, (Math.max(0, course.balance - selectedUsageQuantity.value) / course.total) * 100))}%`
-}
 function courseInactiveReason(course: UiCourse) {
   if (!Number.isFinite(course.balance) || course.balance < 0) return 'ไม่พร้อมใช้งาน'
   if (course.balance === 0) return 'ใช้สิทธิ์ครบ'
@@ -322,9 +319,8 @@ async function loadCourses(patientId: number) {
       courseUsageHistory.value = []
     }
   } else if (route.query.action === 'use') {
-    action.value = 'use'
-    usageReview.value = false
-    usageSuccess.value = false
+    action.value = 'manage'
+    if (selectedCourse.value.id) await start('use', selectedCourse.value)
   } else if (route.query.action === 'transfer') {
     action.value = 'transfer'
     transferStep.value = 'form'
@@ -379,15 +375,13 @@ async function searchRecipients() {
   }
 }
 async function start(nextAction: CourseAction, course: UiCourse) {
-  if (nextAction === 'use' && !appointmentId.value) {
-    await router.push({
-      name: 'staff-appointment-create',
-      query: { patientId: String(owner.value?.id ?? '') },
-    })
-    return
-  }
+  courseNeedingAppointment.value = null
   if (nextAction === 'use' && (!course.usable || course.balance <= 0)) {
     errorMessage.value = 'คอร์สนี้ใช้สิทธิ์ครบแล้ว'
+    return
+  }
+  if (nextAction === 'use' && !appointmentId.value) {
+    courseNeedingAppointment.value = course.id
     return
   }
   const openedFromTransferredCourse = Boolean(transferReceiptId.value)
@@ -462,10 +456,6 @@ async function changeInactiveHistoryCourse() {
   const course = inactiveCourses.value.find((item) => item.id === selectedCourseId.value)
   if (course) await start('history', course)
 }
-function selectCourse() {
-  const course = patientCourses.value.find((item) => item.id === selectedCourseId.value)
-  if (course) selectedCourse.value = course
-}
 function goBack() {
   if (openedFromPatientProfile.value) {
     void router.push(patientCoursesLocation.value)
@@ -513,16 +503,19 @@ function cancelPatientCourseDetail() {
   coursePrintPreview.value = false
 }
 async function returnToCourseManager() {
+  const patientId = owner.value?.id ?? Number(route.query.patientId || route.params.patientId)
+  if (patientId > 0) {
+    await router.replace({
+      path: route.path,
+      query: { patientId, courseId: selectedCourse.value.id || undefined },
+    })
+  }
   action.value = 'manage'
   usageReview.value = false
   usageSuccess.value = false
+  historyFromInactive.value = false
+  coursePrintPreview.value = false
   courseStatusTab.value = selectedCourse.value.usable && selectedCourse.value.balance > 0 ? 'active' : 'inactive'
-  if (owner.value) {
-    await router.replace({
-      path: route.path,
-      query: { patientId: owner.value.id, courseId: selectedCourse.value.id },
-    })
-  }
   await nextTick()
   document.getElementById(`patient-course-${selectedCourse.value.id}`)
     ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -741,26 +734,6 @@ function closePrintSuccess() {
         class="course-use-main"
         :class="{ 'after-transfer': transferReceiptId }"
       >
-        <section v-if="!usageSuccess && !usageReview" class="course-use-form">
-          <label>ผู้รับบริการจริง<input :value="owner?.fullName" readonly /></label>
-          <label
-            >ผู้รักษา<select
-              v-model.number="treatingStaffId"
-              :disabled="usageSubmitting || usageReview"
-            >
-              <option :value="0" disabled>เลือกผู้รักษาจริง</option>
-              <option v-for="person in treatingOptions" :key="person.id" :value="person.id">
-                {{ person.fullName }}
-              </option>
-            </select></label
-          >
-          <CourseUsagePicker
-            v-model="usageSelections"
-            :courses="patientCourses"
-            :branch-code="sourceAppointment?.branchCode ?? ''"
-            :disabled="usageSubmitting || usageReview"
-          />
-        </section>
         <section v-if="usageSuccess" class="course-after-use-success-backdrop">
           <article
             class="course-after-use-success-modal"
@@ -887,6 +860,10 @@ function closePrintSuccess() {
                   <dd>1 ครั้ง</dd>
                 </div>
               </dl>
+              <label class="course-review-note">
+                หมายเหตุ (ไม่บังคับ)
+                <textarea v-model.trim="usageNote" rows="3" placeholder="ระบุรายละเอียดการใช้บริการ" />
+              </label>
             </section>
             <aside class="course-review-summary">
               <h2>สรุปสิทธิ์</h2>
@@ -909,71 +886,6 @@ function closePrintSuccess() {
             </aside>
           </div>
         </section>
-        <template v-else>
-          <RouterLink
-            class="course-use-back"
-            :to="{ path: '/staff/services', query: { patientId: owner?.id } }"
-            >← กลับไปหน้าบริการ</RouterLink
-          >
-          <h1>ใช้สิทธิ์คอร์ส</h1>
-          <section class="course-use-patient">
-            <strong>{{ owner?.fullName }}</strong
-            ><span>HN {{ owner?.hn }} · {{ branchLabel(owner) }}</span>
-          </section>
-          <section v-if="!patientCourses.length" class="course-use-empty">
-            <h2>ยังไม่มีคอร์สที่ใช้สิทธิ์ได้</h2>
-            <p>ผู้ป่วยรายนี้ยังไม่มีคอร์สคงเหลือสำหรับใช้บริการ</p>
-            <button type="button" @click="returnToCourseManager">กลับหน้าจัดการคอร์ส</button>
-          </section>
-          <div v-else class="course-use-columns">
-            <section class="course-use-form">
-              <h2>รายละเอียดการใช้สิทธิ์</h2>
-              <label
-                >คอร์สที่เลือก<select v-model="selectedCourseId" @change="selectCourse">
-                  <option v-for="course in patientCourses" :key="course.id" :value="course.id">
-                    {{ course.name }} จำนวนสิทธิ์ {{ course.balance }} / {{ course.total }} ครั้ง
-                  </option>
-                </select></label
-              >
-              <label>บริการที่ใช้สิทธิ์ได้<input :value="selectedCourse.name" readonly /></label>
-              <label
-                >นักกายภาพ<input
-                  :value="
-                    treatingOptions.find((person) => person.id === treatingStaffId)?.fullName ||
-                    'กรุณาเลือกผู้รักษาด้านบน'
-                  "
-                  readonly
-              /></label>
-              <label>วันที่ใช้บริการ<input :value="formattedUsageDate" readonly /></label>
-              <label
-                >จำนวนสิทธิ์ที่ใช้ครั้งนี้<input :value="usageCount + ' ครั้ง'" readonly
-              /></label>
-              <label
-                >หมายเหตุ (ไม่บังคับ)<textarea
-                  v-model.trim="usageNote"
-                  placeholder="ระบุรายละเอียดการใช้บริการ"
-                />
-              </label>
-            </section>
-            <aside class="course-use-summary">
-              <h2>สรุปการใช้สิทธิ์</h2>
-              <button type="button" :disabled="!selectedCourse.usable" @click="usageReview = true">
-                ตรวจสอบและใช้สิทธิ์
-              </button>
-              <b>{{ selectedCourse.name }}</b>
-              <p>ก่อนใช้ {{ selectedCourse.balance }} ครั้ง</p>
-              <p>ใช้ครั้งนี้ {{ usageCount }} ครั้ง</p>
-              <strong
-                >จำนวนคงเหลือ
-                {{ Math.max(0, selectedCourse.balance - selectedUsageQuantity) }} ครั้ง</strong
-              >
-              <div class="course-progress">
-                <i :style="{ width: courseUsageProgressWidth(selectedCourse) }" />
-              </div>
-              <small>หมดอายุ {{ selectedCourse.expiry }}</small>
-            </aside>
-          </div>
-        </template>
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
         <div
           v-if="usageConfirmDialog"
@@ -1280,8 +1192,7 @@ function closePrintSuccess() {
             </p>
           </div>
           <div class="course-transfer-success-actions">
-            <button type="button" @click="startAnotherTransfer">แชร์คอร์สอีกครั้ง</button
-            ><button type="button" @click="returnToCourseManager">ดูคอร์สหลังแชร์</button>
+            <button type="button" @click="startAnotherTransfer">แชร์คอร์สอีกครั้ง</button>
           </div>
         </section>
         <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
@@ -1320,7 +1231,7 @@ function closePrintSuccess() {
           </footer>
         </section>
         <template v-else>
-          <button class="course-history-back" type="button" @click="goBack">
+          <button class="course-history-back" type="button" @click="returnToCourseManager">
             ← กลับไปหน้าจัดการคอร์ส
           </button>
           <h1>
@@ -1715,6 +1626,12 @@ function closePrintSuccess() {
                   ใช้สิทธิ์คอร์ส
                 </button>
               </div>
+              <div v-if="courseNeedingAppointment === course.id && !appointmentId" class="course-appointment-notice">
+                <p role="status">ต้องมีนัดหมายก่อนใช้สิทธิ์คอร์ส หากมีนัดแล้ว ให้เปิดรายการจากหน้านัดหมาย</p>
+                <RouterLink
+                  :to="{ name: 'staff-appointment-create', query: { patientId: owner?.id } }"
+                >สร้างนัดหมาย →</RouterLink>
+              </div>
               <button
                 v-if="courseStatusTab === 'active' && transferReceiptId && course.id === selectedCourse.id"
                 class="course-manager-latest-transfer"
@@ -1734,6 +1651,19 @@ function closePrintSuccess() {
 <style src="../../staff/styles/staff.css"></style>
 <style scoped src="../styles/course-page.css"></style>
 <style scoped>
+.course-appointment-notice {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--cu-primary-tint, #e6f3f1);
+}
+.course-appointment-notice p {
+  margin: 0 0 4px;
+}
+.course-appointment-notice a {
+  color: var(--cu-primary-dark, #145a56);
+  font-weight: 700;
+}
 .course-manager-heading {
   display: flex;
   justify-content: space-between;
@@ -3764,6 +3694,29 @@ function closePrintSuccess() {
   background: #fff;
   font: inherit;
   color: inherit;
+}
+.course-review-note {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--color-muted);
+}
+.course-review-note textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 88px;
+  padding: 10px 12px;
+  border: 1px solid #c6d8d5;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-ink);
+  font: inherit;
+  resize: vertical;
+}
+.course-review-note textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 .course-review-details dl {
   display: grid;
