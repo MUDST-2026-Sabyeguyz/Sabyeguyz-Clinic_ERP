@@ -85,7 +85,7 @@ public class AppointmentController {
     public record RescheduleRequest(
             OffsetDateTime startAt, Long therapistId, Long serviceId,
             String branchCode,
-            com.fasterxml.jackson.databind.JsonNode note,
+            tools.jackson.databind.JsonNode note,
             OffsetDateTime endAt) {}
 
     public record PatientSummary(Long id, String hn, String fullName, String phone) {}

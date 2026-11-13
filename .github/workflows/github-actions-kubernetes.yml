@@ -1,0 +1,59 @@
+name: Manual Kubernetes deployment
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact 40-character commit SHA on feat/github-action-to-kurbernetes'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: clinic-actions-demo-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/feat/github-action-to-kurbernetes'
+    runs-on: [self-hosted, Windows, X64, clinic-k8s-deploy]
+    env:
+      # Windows runner workspaces may exceed MAX_PATH when fetching long remote ref names.
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Validate immutable requested revision
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if ($env:SOURCE_SHA -cnotmatch '^[a-f0-9]{40}$') { throw 'An exact lowercase SHA is required.' }
+      - name: Checkout deployment branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/github-action-to-kurbernetes
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify revision belongs to trusted deployment branch
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          git merge-base --is-ancestor $env:SOURCE_SHA HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Requested SHA is outside the allowed branch.' }
+          git checkout --detach $env:SOURCE_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Checkout failed.' }
+          if ((git rev-parse HEAD).Trim() -ne $env:SOURCE_SHA) { throw 'Checkout SHA mismatch.' }
+          if (-not (Test-Path ./scripts/actions/Invoke-Pipeline.ps1)) { throw 'Requested revision predates the deployment implementation.' }
+      - name: Tests, build, scan and isolated deployment
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: ./scripts/actions/Invoke-Pipeline.ps1 -SourceSha $env:SOURCE_SHA
+      - name: Preserve sanitized release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: clinic-actions-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: actions-evidence/
+          if-no-files-found: warn
