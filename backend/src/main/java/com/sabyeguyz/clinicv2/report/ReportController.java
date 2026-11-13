@@ -173,23 +173,16 @@ public class ReportController {
                 .filter(v -> v.getVisitStatus() == VisitStatus.Arrived || v.getVisitStatus() == VisitStatus.InService
                         || v.getVisitStatus() == VisitStatus.Completed)
                 .toList();
-        long uniquePatients = attendedVisits.stream()
-                .map(v -> v.getPatient().getId())
-                .distinct()
-                .count();
+        // A patient counts once if they were served in the period or registered in it.
+        Map<Long, com.sabyeguyz.clinicv2.patient.Patient> countedPatients = new LinkedHashMap<>();
+        attendedVisits.forEach(v -> countedPatients.putIfAbsent(v.getPatient().getId(), v.getPatient()));
+        dashboardMetrics.registered(fromInstant, toInstant, branchId)
+                .forEach(patient -> countedPatients.putIfAbsent(patient.getId(), patient));
+        long uniquePatients = countedPatients.size();
 
         Map<String, Long> genderCounts = new LinkedHashMap<>();
-        attendedVisits.stream()
-                .map(v -> v.getPatient().getId())
-                .distinct()
-                .forEach(pid -> {
-                    String gender = attendedVisits.stream()
-                            .filter(v -> v.getPatient().getId().equals(pid))
-                            .findFirst()
-                            .map(v -> v.getPatient().getGender() == null ? "Other" : v.getPatient().getGender().name())
-                            .orElse("Other");
-                    genderCounts.merge(gender, 1L, Long::sum);
-                });
+        countedPatients.values().forEach(patient -> genderCounts.merge(
+                patient.getGender() == null ? "Other" : patient.getGender().name(), 1L, Long::sum));
 
         List<PaymentTransaction> paid = payments.findByPaymentDateBetween(fromInstant, toInstant, branchId)
                 .stream()
