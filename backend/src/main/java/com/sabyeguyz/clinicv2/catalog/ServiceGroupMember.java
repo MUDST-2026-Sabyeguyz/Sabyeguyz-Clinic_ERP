@@ -18,11 +18,18 @@ public class ServiceGroupMember {
 
     public ServiceGroupMember() {}
 
-    public ServiceGroupMember(ServiceGroup serviceGroup, Service service) {
+    public ServiceGroupMember(
+            ServiceGroup serviceGroup,
+            Service service) {
         this.serviceGroup = serviceGroup;
         this.service = service;
     }
 
-    public ServiceGroup getServiceGroup() { return serviceGroup; }
-    public Service getService() { return service; }
+    public ServiceGroup getServiceGroup() {
+        return serviceGroup;
+    }
+
+    public Service getService() {
+        return service;
+    }
 }

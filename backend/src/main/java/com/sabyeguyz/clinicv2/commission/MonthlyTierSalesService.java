@@ -1,9 +1,11 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import java.math.BigDecimal;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 
 /**
  * The monthly course sales that decide a seller's Commission Tier (Data Dictionary: Monthly_commission_closing
@@ -19,24 +21,38 @@ public class MonthlyTierSalesService {
         this.courses = courses;
     }
 
-    public record TierSales(BigDecimal sales, BigDecimal refunds, BigDecimal net) {}
+    public record TierSales(
+            BigDecimal sales,
+            BigDecimal refunds,
+            BigDecimal net) {}
 
     @Transactional(readOnly = true)
-    public TierSales of(Long staffId, String saleMonth) {
+    public TierSales of(
+            Long staffId,
+            String saleMonth) {
         BigDecimal sales = nz(courses.sumCreditedSalesByStaffAndSaleMonth(staffId, saleMonth));
         BigDecimal refunds = nz(courses.sumCompletedRefundsByStaffAndSaleMonth(staffId, saleMonth));
-        return new TierSales(sales, refunds, sales.subtract(refunds).max(BigDecimal.ZERO));
+
+        return new TierSales(
+                sales,
+                refunds,
+                sales.subtract(refunds).max(BigDecimal.ZERO));
     }
 
     /** The tier base so far, for the sale month. */
     @Transactional(readOnly = true)
-    public BigDecimal netSales(Long staffId, String saleMonth) {
+    public BigDecimal netSales(
+            Long staffId,
+            String saleMonth) {
         return of(staffId, saleMonth).net();
     }
 
     /** Calculates the tier base for one seller, branch and sale month. */
     @Transactional(readOnly = true)
-    public TierSales of(Long staffId, String saleMonth, Long branchId) {
+    public TierSales of(
+            Long staffId,
+            String saleMonth,
+            Long branchId) {
         if (branchId == null) {
             throw new IllegalArgumentException("ต้องระบุสาขาสำหรับคำนวณยอดขาย");
         }
@@ -58,7 +74,9 @@ public class MonthlyTierSalesService {
     /** Returns the net tier base for the selected branch. */
     @Transactional(readOnly = true)
     public BigDecimal netSales(
-            Long staffId, String saleMonth, Long branchId) {
+            Long staffId,
+            String saleMonth,
+            Long branchId) {
         return of(staffId, saleMonth, branchId).net();
     }
 

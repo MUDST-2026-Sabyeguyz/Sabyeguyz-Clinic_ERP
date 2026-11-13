@@ -1,6 +1,14 @@
 package com.sabyeguyz.clinicv2.patient;
 
+import java.time.LocalDate;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -9,12 +17,6 @@ import com.sabyeguyz.clinicv2.enums.CustomerType;
 import com.sabyeguyz.clinicv2.enums.Gender;
 import com.sabyeguyz.clinicv2.masterdata.MasterDataValue;
 import com.sabyeguyz.clinicv2.masterdata.MasterDataValueRepository;
-import java.time.LocalDate;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
 
 /** รับและแปลงคำขอ API สำหรับค้นหา ลงทะเบียน และแก้ไขโปรไฟล์ผู้ป่วย */
 @Transactional
@@ -28,9 +30,13 @@ public class PatientController {
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess;
 
-    public PatientController(PatientService service, PatientRepository repository, BranchRepository branches,
-                              MasterDataValueRepository masterDataValues, CurrentActor actor,
-                              com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
+    public PatientController(
+            PatientService service,
+            PatientRepository repository,
+            BranchRepository branches,
+            MasterDataValueRepository masterDataValues,
+            CurrentActor actor,
+            com.sabyeguyz.clinicv2.auth.BranchAccessPolicy branchAccess) {
         this.branchAccess = branchAccess;
         this.service = service;
         this.repository = repository;
@@ -40,42 +46,113 @@ public class PatientController {
     }
 
     public record RegisterRequest(
-            String branchCode, String customerType, String title, String firstName, String lastName,
-            String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
-            String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
-            String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email,
-            String customerSource, String insuranceCompany, Boolean drugAllergy, Boolean foodAllergy,
-            String chronicDisease, String emergencyContactName, String emergencyContactRelationship,
-            String emergencyContactPhone, Boolean privacyConsent) {}
+            String branchCode,
+            String customerType,
+            String title,
+            String firstName,
+            String lastName,
+            String gender,
+            String phone,
+            String genderDetail,
+            String nickname,
+            String identityDocumentType,
+            String identityNumber,
+            LocalDate birthDate,
+            String bloodGroup,
+            String nationality,
+            String address,
+            String fullName,
+            com.fasterxml.jackson.databind.JsonNode middleName,
+            String email,
+            String customerSource,
+            String insuranceCompany,
+            Boolean drugAllergy,
+            Boolean foodAllergy,
+            String chronicDisease,
+            String emergencyContactName,
+            String emergencyContactRelationship,
+            String emergencyContactPhone,
+            Boolean privacyConsent) {}
 
-    public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalItems, int totalPages) {}
+    public record PageResponse<T>(
+            java.util.List<T> items,
+            int page,
+            int size,
+            long totalItems,
+            int totalPages) {}
 
-    public record PatientSummary(Long id, String hn, String fullName, String phone, boolean active,
-                                  Long branchId, String branchCode, String branchName) {}
+    public record PatientSummary(
+            Long id,
+            String hn,
+            String fullName,
+            String phone,
+            boolean active,
+            Long branchId,
+            String branchCode,
+            String branchName) {}
 
-    public record BranchSummary(Long id, String code, String name, boolean active) {}
+    public record BranchSummary(
+            Long id,
+            String code,
+            String name,
+            boolean active) {}
 
     public record PatientProfile(
-            Long id, String hn, String fullName, String phone, boolean active, BranchSummary branch,
-            String title, LocalDate birthDate, String gender, String identityDocumentType, String identityNumber,
-            String address, boolean drugAllergy, boolean foodAllergy, String chronicDisease,
-            String emergencyContactName, String emergencyContactRelationship, String emergencyContactPhone,
-            boolean privacyConsent, String nickname, String bloodGroup, String nationality,
-            String customerType, String customerSource, String insuranceCompany, String customerTypeCode,
-            String firstName, String lastName, String middleName, String email) {}
+            Long id,
+            String hn,
+            String fullName,
+            String phone,
+            boolean active,
+            BranchSummary branch,
+            String title,
+            LocalDate birthDate,
+            String gender,
+            String identityDocumentType,
+            String identityNumber,
+            String address,
+            boolean drugAllergy,
+            boolean foodAllergy,
+            String chronicDisease,
+            String emergencyContactName,
+            String emergencyContactRelationship,
+            String emergencyContactPhone,
+            boolean privacyConsent,
+            String nickname,
+            String bloodGroup,
+            String nationality,
+            String customerType,
+            String customerSource,
+            String insuranceCompany,
+            String customerTypeCode,
+            String firstName,
+            String lastName,
+            String middleName,
+            String email) {}
 
-    public record IdentityPatientSummary(Long id, String hn, String fullName) {}
-    public record IdentityLookupResponse(boolean exists, IdentityPatientSummary patient) {}
+    public record IdentityPatientSummary(
+            Long id,
+            String hn,
+            String fullName) {}
+
+    public record IdentityLookupResponse(
+            boolean exists,
+            IdentityPatientSummary patient) {}
 
     @GetMapping("/identity-lookup")
     public IdentityLookupResponse identityLookup(@RequestParam String nationalId) {
         actor.requireId();
+
         if (!nationalId.matches("[0-9]{13}")) {
             throw new IllegalArgumentException("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
         }
+
         return repository.findByNationalId(nationalId)
-                .map(patient -> new IdentityLookupResponse(true,
-                        new IdentityPatientSummary(patient.getId(), patient.getPatientHn(), fullName(patient))))
+                .map(patient -> new IdentityLookupResponse(
+                        true,
+                        new IdentityPatientSummary(
+                                patient.getId(),
+                                patient.getPatientHn(),
+                                fullName(patient))))
                 .orElseGet(() -> new IdentityLookupResponse(false, null));
     }
 
@@ -88,18 +165,33 @@ public class PatientController {
             @RequestParam(defaultValue = "nameAsc") String sort) {
         if (page < 0) throw new IllegalArgumentException("page ต้องไม่น้อยกว่า 0");
         if (size < 1 || size > 100) throw new IllegalArgumentException("size ต้องอยู่ระหว่าง 1 ถึง 100");
-        Long branchId = branchCode == null || branchCode.isBlank() ? null
+
+        Long branchId = branchCode == null || branchCode.isBlank()
+                ? null
                 : branches.findByBranchCode(branchCode.trim())
-                        .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode)).getId();
+                    .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + branchCode))
+                    .getId();
+
         Sort sortOrder = switch (sort) {
-            case "newest" -> Sort.by("registeredAt").descending().and(Sort.by("id").descending());
-            case "nameDesc" -> Sort.by("patientFname").descending().and(Sort.by("patientLname").descending());
-            default -> Sort.by("patientFname").ascending().and(Sort.by("patientLname").ascending());
+            case "newest" -> Sort.by("registeredAt").descending()
+                    .and(Sort.by("id").descending());
+            case "nameDesc" -> Sort.by("patientFname").descending()
+                    .and(Sort.by("patientLname").descending());
+            default -> Sort.by("patientFname").ascending()
+                    .and(Sort.by("patientLname").ascending());
         };
 
-        Page<Patient> result = repository.search(query, branchId, PageRequest.of(page, size, sortOrder));
-        return new PageResponse<>(result.getContent().stream().map(PatientController::toSummary).toList(),
-                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+        Page<Patient> result = repository.search(
+                query,
+                branchId,
+                PageRequest.of(page, size, sortOrder));
+
+        return new PageResponse<>(
+                result.getContent().stream().map(PatientController::toSummary).toList(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages());
     }
 
     @GetMapping("/{id}")
@@ -113,14 +205,19 @@ public class PatientController {
         Branch branch = branches.findByBranchCode(requireText(request.branchCode(), "branchCode"))
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + request.branchCode()));
         branchAccess.requireAccess(branch, "ลงทะเบียนผู้ป่วยได้เฉพาะสาขาตัวเอง");
+
         String middleName = middleNameOf(request);
         if (middleName != null && !middleName.isBlank()
-                && (request.firstName() == null || request.firstName().isBlank()
-                    || request.lastName() == null || request.lastName().isBlank())) {
+                && (request.firstName() == null
+                    || request.firstName().isBlank()
+                    || request.lastName() == null
+                    || request.lastName().isBlank())) {
             throw new IllegalArgumentException("กรุณาส่ง firstName และ lastName แยกกันเมื่อระบุชื่อกลาง");
         }
+
         String[] names = namesOf(request);
         boolean passport = "PASSPORT".equalsIgnoreCase(request.identityDocumentType());
+
         PatientRegistration registration = new PatientRegistration(
                 branch,
                 passport ? CustomerType.Foreigner : parseCustomerType(request.customerType()),
@@ -137,48 +234,90 @@ public class PatientController {
                 parseBloodGroup(request.bloodGroup()),
                 request.nationality(),
                 request.address(),
-                null, resolveMasterDataValue("Referral Channel", request.customerSource()), null,
-                resolveMasterDataValue("Insurance Company", request.insuranceCompany()), middleName,
-                Boolean.TRUE.equals(request.drugAllergy()), Boolean.TRUE.equals(request.foodAllergy()),
-                request.chronicDisease(), request.emergencyContactName(), request.emergencyContactRelationship(),
-                request.emergencyContactPhone(), Boolean.TRUE.equals(request.privacyConsent()));
+                null,
+                resolveMasterDataValue("Referral Channel", request.customerSource()),
+                null,
+                resolveMasterDataValue("Insurance Company", request.insuranceCompany()),
+                middleName,
+                Boolean.TRUE.equals(request.drugAllergy()),
+                Boolean.TRUE.equals(request.foodAllergy()),
+                request.chronicDisease(),
+                request.emergencyContactName(),
+                request.emergencyContactRelationship(),
+                request.emergencyContactPhone(),
+                Boolean.TRUE.equals(request.privacyConsent()));
+
         Patient patient = service.register(registration, actor.currentId());
         patient.setEmail(validEmail(request.email()));
+
         return toSummary(patient);
     }
 
     @PutMapping("/{id}")
-    public PatientProfile update(@PathVariable Long id, @RequestBody RegisterRequest request) {
+    public PatientProfile update(
+            @PathVariable Long id,
+            @RequestBody RegisterRequest request) {
         String[] names = namesOf(request);
         String middleName = middleNameOf(request);
+
         if ((request.firstName() == null || request.firstName().isBlank())
                 && (request.lastName() == null || request.lastName().isBlank())
                 && request.fullName() != null && !request.fullName().isBlank()) {
             Patient existing = service.get(id);
+
             if (request.fullName().trim().equals(fullName(existing))) {
                 // An unchanged legacy display name must not be split and duplicate the stored middle name.
                 names = new String[] {null, null};
-            } else if (existing.getPatientMiddleName() != null || (middleName != null && !middleName.isBlank())) {
+            } else if (existing.getPatientMiddleName() != null
+                    || (middleName != null && !middleName.isBlank())) {
                 throw new IllegalArgumentException("กรุณาส่ง firstName และ lastName แยกกันเมื่อแก้ชื่อผู้ป่วยที่มีชื่อกลาง");
             }
         }
+
         boolean passport = "PASSPORT".equalsIgnoreCase(request.identityDocumentType());
-        Patient patient = service.updateDetails(id, request.title(), names[0], names[1],
-                request.gender() == null || request.gender().isBlank() ? null : parseGender(request.gender()),
-                request.phone(), request.nickname(), passport ? null : request.identityNumber(),
-                passport ? request.identityNumber() : null, request.birthDate(),
-                parseBloodGroup(request.bloodGroup()), request.nationality(), request.address(),
-                middleName, request.middleName() != null, actor.currentId());
-        patient = service.updateMedicalProfile(id, request.drugAllergy(), request.foodAllergy(), request.chronicDisease(),
-                request.emergencyContactName(), request.emergencyContactRelationship(), request.emergencyContactPhone(),
-                request.privacyConsent(), actor.currentId());
+        Patient patient = service.updateDetails(
+                id,
+                request.title(),
+                names[0],
+                names[1],
+                request.gender() == null || request.gender().isBlank()
+                        ? null
+                        : parseGender(request.gender()),
+                request.phone(),
+                request.nickname(),
+                passport ? null : request.identityNumber(),
+                passport ? request.identityNumber() : null,
+                request.birthDate(),
+                parseBloodGroup(request.bloodGroup()),
+                request.nationality(),
+                request.address(),
+                middleName,
+                request.middleName() != null,
+                actor.currentId());
+
+        patient = service.updateMedicalProfile(
+                id,
+                request.drugAllergy(),
+                request.foodAllergy(),
+                request.chronicDisease(),
+                request.emergencyContactName(),
+                request.emergencyContactRelationship(),
+                request.emergencyContactPhone(),
+                request.privacyConsent(),
+                actor.currentId());
+
         if (request.customerSource() != null) {
-            patient.setReferralChannel(resolveMasterDataValue("Referral Channel", request.customerSource()));
+            patient.setReferralChannel(
+                    resolveMasterDataValue("Referral Channel", request.customerSource()));
         }
+
         if (request.insuranceCompany() != null) {
-            patient.setInsuranceCompany(resolveMasterDataValue("Insurance Company", request.insuranceCompany()));
+            patient.setInsuranceCompany(
+                    resolveMasterDataValue("Insurance Company", request.insuranceCompany()));
         }
+
         if (request.email() != null) patient.setEmail(validEmail(request.email()));
+
         return toProfile(patient);
     }
 
@@ -186,52 +325,91 @@ public class PatientController {
     private static String[] namesOf(RegisterRequest request) {
         boolean given = (request.firstName() != null && !request.firstName().isBlank())
                 || (request.lastName() != null && !request.lastName().isBlank());
+
         if (given || request.fullName() == null || request.fullName().isBlank()) {
             return new String[] {request.firstName(), request.lastName()};
         }
+
         String trimmed = request.fullName().trim();
         int space = trimmed.indexOf(' ');
-        return space < 0 ? new String[] {trimmed, "-"}
+
+        return space < 0
+                ? new String[] {trimmed, "-"}
                 : new String[] {trimmed.substring(0, space), trimmed.substring(space + 1).trim()};
     }
 
     private static PatientSummary toSummary(Patient patient) {
         Branch branch = patient.getBranch();
-        return new PatientSummary(patient.getId(), patient.getPatientHn(),
-                fullName(patient), patient.getPhone(), true,
-                branch == null ? null : branch.getId(), branch == null ? null : branch.getBranchCode(),
+
+        return new PatientSummary(
+                patient.getId(),
+                patient.getPatientHn(),
+                fullName(patient),
+                patient.getPhone(),
+                true,
+                branch == null ? null : branch.getId(),
+                branch == null ? null : branch.getBranchCode(),
                 branch == null ? null : branch.getBranchName());
     }
 
     private static PatientProfile toProfile(Patient patient) {
         Branch branch = patient.getBranch();
-        String identityDocumentType = patient.getNationalId() != null ? "NATIONAL_ID"
+
+        String identityDocumentType = patient.getNationalId() != null
+                ? "NATIONAL_ID"
                 : patient.getPassportNo() != null ? "PASSPORT" : null;
-        String identityNumber = patient.getNationalId() != null ? patient.getNationalId() : patient.getPassportNo();
+        String identityNumber = patient.getNationalId() != null
+                ? patient.getNationalId()
+                : patient.getPassportNo();
+
         return new PatientProfile(
-                patient.getId(), patient.getPatientHn(), fullName(patient),
-                patient.getPhone(), true,
-                branch == null ? null : new BranchSummary(branch.getId(), branch.getBranchCode(), branch.getBranchName(), branch.isBranchStatus()),
-                patient.getTitle(), patient.getBirthdate(), patient.getGender() == null ? null : patient.getGender().name(),
-                identityDocumentType, identityNumber, patient.getAddress(),
-                patient.isDrugAllergy(), patient.isFoodAllergy(), patient.getChronicDisease(),
-                patient.getEmergencyContactName(), patient.getEmergencyContactRelationship(),
-                patient.getEmergencyContactPhone(), patient.isPrivacyConsent(),
-                patient.getPatientNickname(), patient.getBloodGroup() == null ? null : patient.getBloodGroup().name(),
+                patient.getId(),
+                patient.getPatientHn(),
+                fullName(patient),
+                patient.getPhone(),
+                true,
+                branch == null
+                        ? null
+                        : new BranchSummary(
+                                branch.getId(),
+                                branch.getBranchCode(),
+                                branch.getBranchName(),
+                                branch.isBranchStatus()),
+                patient.getTitle(),
+                patient.getBirthdate(),
+                patient.getGender() == null ? null : patient.getGender().name(),
+                identityDocumentType,
+                identityNumber,
+                patient.getAddress(),
+                patient.isDrugAllergy(),
+                patient.isFoodAllergy(),
+                patient.getChronicDisease(),
+                patient.getEmergencyContactName(),
+                patient.getEmergencyContactRelationship(),
+                patient.getEmergencyContactPhone(),
+                patient.isPrivacyConsent(),
+                patient.getPatientNickname(),
+                patient.getBloodGroup() == null ? null : patient.getBloodGroup().name(),
                 patient.getNationality(),
                 patient.getCustomerGroup() == null ? null : patient.getCustomerGroup().getValueName(),
                 patient.getReferralChannel() == null ? null : patient.getReferralChannel().getValueName(),
                 patient.getInsuranceCompany() == null ? null : patient.getInsuranceCompany().getValueName(),
                 patient.getCustomerType() == null ? null : patient.getCustomerType().name(),
-                patient.getPatientFname(), patient.getPatientLname(), patient.getPatientMiddleName(), patient.getEmail());
+                patient.getPatientFname(),
+                patient.getPatientLname(),
+                patient.getPatientMiddleName(),
+                patient.getEmail());
     }
 
     private static String validEmail(String value) {
         if (value == null || value.isBlank()) return null;
+
         String email = value.trim();
-        if (email.length() > 254 || !email.matches("^[^@.\\s]+(\\.[^@.\\s]+)*@[^@.\\s]+(\\.[^@.\\s]+)+$")) {
+        if (email.length() > 254
+                || !email.matches("^[^@.\\s]+(\\.[^@.\\s]+)*@[^@.\\s]+(\\.[^@.\\s]+)+$")) {
             throw new IllegalArgumentException("รูปแบบอีเมลผู้ป่วยไม่ถูกต้อง");
         }
+
         return email;
     }
 
@@ -239,25 +417,34 @@ public class PatientController {
         var value = request.middleName();
         if (value == null || value.isNull()) return null;
         if (!value.isTextual()) throw new IllegalArgumentException("ชื่อกลางต้องเป็นข้อความหรือ null");
+
         return value.textValue();
     }
 
     private static String fullName(Patient patient) {
-        return java.util.stream.Stream.of(patient.getPatientFname(), patient.getPatientMiddleName(), patient.getPatientLname())
-                .filter(value -> value != null && !value.isBlank()).collect(java.util.stream.Collectors.joining(" "));
+        return java.util.stream.Stream.of(
+                        patient.getPatientFname(),
+                        patient.getPatientMiddleName(),
+                        patient.getPatientLname())
+                .filter(value -> value != null && !value.isBlank())
+                .collect(java.util.stream.Collectors.joining(" "));
     }
 
     private static CustomerType parseCustomerType(String value) {
         if (value == null) return CustomerType.Thai;
+
         try {
             return CustomerType.valueOf(value);
         } catch (IllegalArgumentException e) {
-            return "ต่างชาติ".equals(value) || "Foreigner".equalsIgnoreCase(value) ? CustomerType.Foreigner : CustomerType.Thai;
+            return "ต่างชาติ".equals(value) || "Foreigner".equalsIgnoreCase(value)
+                    ? CustomerType.Foreigner
+                    : CustomerType.Thai;
         }
     }
 
     private MasterDataValue resolveMasterDataValue(String category, String name) {
         if (name == null || name.isBlank()) return null;
+
         return masterDataValues.findAll().stream()
                 .filter(value -> category.equalsIgnoreCase(value.getType().getTypeName())
                         && name.trim().equalsIgnoreCase(value.getValueName()))
@@ -267,6 +454,7 @@ public class PatientController {
 
     private static Gender parseGender(String value) {
         if (value == null) return null;
+
         try {
             return Gender.valueOf(value);
         } catch (IllegalArgumentException e) {
@@ -281,6 +469,7 @@ public class PatientController {
 
     private static BloodGroup parseBloodGroup(String value) {
         if (value == null || value.isBlank()) return null;
+
         try {
             return BloodGroup.valueOf(value);
         } catch (IllegalArgumentException e) {
@@ -290,6 +479,7 @@ public class PatientController {
 
     private static String requireText(String value, String field) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " ห้ามว่าง");
+
         return value.trim();
     }
 }

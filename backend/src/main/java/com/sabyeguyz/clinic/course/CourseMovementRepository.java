@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinic.course;
 
 import java.util.List;
+
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -8,7 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface CourseMovementRepository extends JpaRepository<CourseMovement, Long> {
 
-    /** ยอดคงเหลือคือผลรวมของ movement ทั้งหมด ไม่ได้เก็บเป็นคอลัมน์ */
+    /**
+     * ยอดคงเหลือคือผลรวมของ movement ทั้งหมด ไม่ได้เก็บเป็นคอลัมน์
+     */
     @Query("select coalesce(sum(m.quantity), 0) from CourseMovement m where m.coursePurchase.id = :purchaseId")
     int balanceOf(@Param("purchaseId") Long purchaseId);
 

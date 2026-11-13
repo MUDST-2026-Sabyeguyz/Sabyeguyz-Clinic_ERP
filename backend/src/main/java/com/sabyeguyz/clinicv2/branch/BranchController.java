@@ -1,8 +1,6 @@
 package com.sabyeguyz.clinicv2.branch;
 
-import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.audit.AuditLogService;
-import com.sabyeguyz.clinicv2.auth.CurrentActor;
 import com.sabyeguyz.clinicv2.enums.AuditAction;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -11,7 +9,10 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+
+import com.sabyeguyz.clinicv2.auth.CurrentActor;
 
 /**
  * Matches frontend/src/api/client.ts's branchApi (GET/POST/PUT/DELETE
@@ -46,18 +47,45 @@ public class BranchController {
             @Size(max = 5) String bookingCloseTime,
             Integer defaultAppointmentMinutes) {
         /** Old clients send only the four required fields; the optional settings are then left empty. */
-        public Request(String branchCode, String name, String address, String phone) {
-            this(branchCode, name, address, phone, null, null, null, null, null);
+        public Request(
+                String branchCode,
+                String name,
+                String address,
+                String phone) {
+            this(
+                    branchCode,
+                    name,
+                    address,
+                    phone,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         BranchService.Settings settings() {
-            return new BranchService.Settings(email, licenseNo, bookingOpenTime, bookingCloseTime, defaultAppointmentMinutes);
+            return new BranchService.Settings(
+                    email,
+                    licenseNo,
+                    bookingOpenTime,
+                    bookingCloseTime,
+                    defaultAppointmentMinutes);
         }
     }
 
-    public record Response(Long id, String branchCode, String name, String address, String phone, boolean active,
-                           String email, String licenseNo, String bookingOpenTime, String bookingCloseTime,
-                           Integer defaultAppointmentMinutes) {}
+    public record Response(
+            Long id,
+            String branchCode,
+            String name,
+            String address,
+            String phone,
+            boolean active,
+            String email,
+            String licenseNo,
+            String bookingOpenTime,
+            String bookingCloseTime,
+            Integer defaultAppointmentMinutes) {}
 
     @GetMapping
     public List<Response> list() {
@@ -74,8 +102,13 @@ public class BranchController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
         String code = request.branchCode() == null || request.branchCode().isBlank()
-                ? service.nextBranchCode() : request.branchCode();
-        Branch branch = service.create(code, request.name(), request.address(), request.phone(),
+                ? service.nextBranchCode()
+                : request.branchCode();
+        Branch branch = service.create(
+                code,
+                request.name(),
+                request.address(),
+                request.phone(),
                 actor.currentId());
         Branch saved = service.applySettings(branch.getId(), request.settings(), actor.currentId());
         audit.recordChange("branch", String.valueOf(saved.getId()), AuditAction.INSERT, null, snapshot(saved),
@@ -85,9 +118,13 @@ public class BranchController {
 
     @PutMapping("/{id}")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
-    public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
+    public Response update(
+            @PathVariable Long id,
+            @Valid @RequestBody Request request) {
         Branch existing = service.get(id);
-        if (request.branchCode() != null && !existing.getBranchCode().equals(request.branchCode().trim())) {
+
+        if (request.branchCode() != null
+                && !existing.getBranchCode().equals(request.branchCode().trim())) {
             throw new IllegalArgumentException("ไม่อนุญาตให้แก้ branchCode เพื่อรักษา HN เดิม");
         }
         Map<String, Object> before = snapshot(existing);
@@ -131,9 +168,17 @@ public class BranchController {
     }
 
     private static Response toResponse(Branch branch) {
-        return new Response(branch.getId(), branch.getBranchCode(), branch.getBranchName(),
-                branch.getAddress(), branch.getPhone(), branch.isBranchStatus(), branch.getBranchEmail(),
-                branch.getLicenseNo(), hhmm(branch.getBookingOpenTime()), hhmm(branch.getBookingCloseTime()),
+        return new Response(
+                branch.getId(),
+                branch.getBranchCode(),
+                branch.getBranchName(),
+                branch.getAddress(),
+                branch.getPhone(),
+                branch.isBranchStatus(),
+                branch.getBranchEmail(),
+                branch.getLicenseNo(),
+                hhmm(branch.getBookingOpenTime()),
+                hhmm(branch.getBookingCloseTime()),
                 branch.getDefaultAppointmentMinutes());
     }
 

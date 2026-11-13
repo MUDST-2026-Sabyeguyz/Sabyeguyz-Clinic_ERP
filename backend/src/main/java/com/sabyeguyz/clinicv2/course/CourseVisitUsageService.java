@@ -1,5 +1,17 @@
 package com.sabyeguyz.clinicv2.course;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
@@ -16,16 +28,6 @@ import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.sale.TransactionCancellationService;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Uses one Course session (Data Dictionary: Course_visit_usage).
@@ -52,12 +54,16 @@ public class CourseVisitUsageService {
     private final CourseCommissionService courseCommission;
     private final CourseUsagePrintService prints;
 
-    public CourseVisitUsageService(CourseVisitUsageRepository usages, CourseLedgerRepository ledger,
-                                    CourseRepository courses, CommissionAllocationLedgerRepository allocationLedger,
-                                    TreatmentFeeRuleResolver treatmentFeeRuleResolver,
-                                    CourseEntitlementRepository entitlements,
-                                    TransactionCancellationService cancellations,
-                                    CourseCommissionService courseCommission, CourseUsagePrintService prints) {
+    public CourseVisitUsageService(
+            CourseVisitUsageRepository usages,
+            CourseLedgerRepository ledger,
+            CourseRepository courses,
+            CommissionAllocationLedgerRepository allocationLedger,
+            TreatmentFeeRuleResolver treatmentFeeRuleResolver,
+            CourseEntitlementRepository entitlements,
+            TransactionCancellationService cancellations,
+            CourseCommissionService courseCommission,
+            CourseUsagePrintService prints) {
         this.prints = prints;
         this.courseCommission = courseCommission;
         this.usages = usages;
@@ -69,8 +75,13 @@ public class CourseVisitUsageService {
         this.cancellations = cancellations;
     }
 
-    public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
-                                 LocalDate visitDate, Long actorId) {
+    public CourseVisitUsage use(
+            Course course,
+            PatientVisit visit,
+            Patient usingPatient,
+            Staff treatingStaff,
+            LocalDate visitDate,
+            Long actorId) {
         return use(course, visit, usingPatient, treatingStaff, visitDate, null, actorId);
     }
 
@@ -79,19 +90,37 @@ public class CourseVisitUsageService {
      *     of the same visit, given by the same PT, and of the service the course was sold for
      */
     @Transactional
-    public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
-                                LocalDate visitDate, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+    public CourseVisitUsage use(
+            Course course,
+            PatientVisit visit,
+            Patient usingPatient,
+            Staff treatingStaff,
+            LocalDate visitDate,
+            com.sabyeguyz.clinicv2.treatment.Treatment treatment,
+            Long actorId) {
         return use(
-                course, visit, usingPatient, treatingStaff,
+                course,
+                visit,
+                usingPatient,
+                treatingStaff,
                 visitDate == null ? null : visitDate.atStartOfDay(),
-                treatment, actorId);
+                treatment,
+                actorId);
     }
 
     @Transactional
-    public CourseVisitUsage use(Course course, PatientVisit visit, Patient usingPatient, Staff treatingStaff,
-                                LocalDateTime usedAt, com.sabyeguyz.clinicv2.treatment.Treatment treatment, Long actorId) {
+    public CourseVisitUsage use(
+            Course course,
+            PatientVisit visit,
+            Patient usingPatient,
+            Staff treatingStaff,
+            LocalDateTime usedAt,
+            com.sabyeguyz.clinicv2.treatment.Treatment treatment,
+            Long actorId) {
         require(usedAt != null, "ต้องระบุวันเวลาที่ใช้บริการ");
+
         LocalDate visitDate = usedAt.toLocalDate();
+
         require(course != null, "ต้องระบุคอร์ส");
         require(course.getCourseStatus() == com.sabyeguyz.clinicv2.enums.CourseStatus.Active,
                 "คอร์สนี้ไม่อยู่ในสถานะพร้อมใช้งาน");
@@ -100,6 +129,7 @@ public class CourseVisitUsageService {
         require(treatingStaff != null, "ต้องระบุผู้รักษา");
         require(visitDate != null, "ต้องระบุวันที่ใช้บริการ");
         requireCanTreat(treatingStaff, visit, visitDate);
+
         if (treatment != null) {
             require(treatment.getVisit() != null && treatment.getVisit().getId().equals(visit.getId()),
                     "Treatment ที่อ้างต้องเป็นของ Visit เดียวกับการใช้สิทธิ์");
@@ -109,13 +139,17 @@ public class CourseVisitUsageService {
                     && treatment.getService().getId().equals(course.getService().getId()),
                     "บริการของ Treatment ต้องตรงกับบริการที่คอร์สนี้ขาย");
         }
+
         if (course.getExpiryDate().isBefore(visitDate)) {
             throw new IllegalArgumentException("คอร์สหมดอายุแล้ว");
         }
+
         if (course.getRemainingVisits() <= 0) {
             throw new IllegalArgumentException("คอร์สใช้สิทธิ์ครบแล้ว");
         }
+
         long patientBalance = ledger.sumQtyChangeByCourseAndPatient(course.getId(), usingPatient.getId());
+
         if (patientBalance <= 0) {
             throw new IllegalArgumentException("ผู้ป่วยรายนี้ไม่มีสิทธิ์คงเหลือในคอร์สนี้");
         }
@@ -125,6 +159,7 @@ public class CourseVisitUsageService {
 
         BigDecimal treatmentFee = BigDecimal.ZERO;
         TreatmentFeeRule appliedRule = null;
+
         if (substituted) {
             appliedRule = treatmentFeeRuleResolver.resolve(visitDate)
                     .orElseThrow(() -> new IllegalStateException(
@@ -138,15 +173,23 @@ public class CourseVisitUsageService {
         usage.setCourse(course);
         usage.setPatient(usingPatient);
         usage.setTreatingStaff(treatingStaff);
+
         if (visit.getTreatingStaff() == null) {
             visit.setTreatingStaff(treatingStaff);
         }
+
         usage.setVisitDate(usedAt);
         usage.setVisitQty(1);
         usage.setUsageStatus(UsageStatus.Completed);
         placeInCourse(usage, course);
+
         // NULL while the rate is unknown (sale month not closed); 0 when the Owner does not earn this session
-        BigDecimal ownerNet = CourseCommissionService.ownerNetOf(course, usage.getUsageSequence(), treatingStaff, visitDate);
+        BigDecimal ownerNet = CourseCommissionService.ownerNetOf(
+                course,
+                usage.getUsageSequence(),
+                treatingStaff,
+                visitDate);
+
         usage.setCommissionAllocationPerVisit(CourseCommissionService.isRateKnown(course)
                 ? CourseCommissionService.rateAt(course, usage.getUsageSequence()) : null);
         usage.setTreatmentFeeRule(appliedRule);
@@ -154,6 +197,7 @@ public class CourseVisitUsageService {
         usage.setOwnerNetCommission(ownerNet);
         usage.setUsageCreateAt(Instant.now());
         usage.setUsageCreateBy(actorId);
+
         CourseVisitUsage savedUsage = usages.save(usage);
 
         if (ownerNet != null) {
@@ -161,6 +205,7 @@ public class CourseVisitUsageService {
         }
 
         long newPatientBalance = patientBalance - 1;
+
         CourseLedger treatmentEntry = new CourseLedger();
         treatmentEntry.setCourse(course);
         treatmentEntry.setPatient(usingPatient);
@@ -190,17 +235,25 @@ public class CourseVisitUsageService {
      * The PT who treats a session is chosen when the patient comes (not taken from a transfer): an active PT of the
      * branch where the service is given, who had not left by the day, and the same PT for the visit and the usage.
      */
-    private static void requireCanTreat(Staff treatingStaff, PatientVisit visit, LocalDate visitDate) {
+    private static void requireCanTreat(
+            Staff treatingStaff,
+            PatientVisit visit,
+            LocalDate visitDate) {
         boolean workingThatDay = treatingStaff.getTerminationDate() != null
                 ? !visitDate.isAfter(treatingStaff.getTerminationDate()) // a PT who is leaving still works until the last day
                 : treatingStaff.isStaffStatus();
+
         require(workingThatDay, treatingStaff.getTerminationDate() != null
                 ? "ผู้รักษาลาออกก่อนวันที่ใช้บริการแล้ว" : "ผู้รักษาไม่ได้อยู่ในสถานะใช้งาน");
-        if (visit.getBranch() != null && treatingStaff.getBranch() != null
+
+        if (visit.getBranch() != null
+                && treatingStaff.getBranch() != null
                 && !visit.getBranch().getId().equals(treatingStaff.getBranch().getId())) {
             throw new IllegalArgumentException("ผู้รักษาต้องอยู่สาขาเดียวกับสาขาที่ให้บริการ");
         }
-        if (visit.getTreatingStaff() != null && !visit.getTreatingStaff().getId().equals(treatingStaff.getId())) {
+
+        if (visit.getTreatingStaff() != null
+                && !visit.getTreatingStaff().getId().equals(treatingStaff.getId())) {
             throw new IllegalArgumentException("ผู้รักษาของการใช้สิทธิ์ต้องเป็นคนเดียวกับผู้รักษาของ Visit");
         }
     }
@@ -209,27 +262,40 @@ public class CourseVisitUsageService {
      * Position of the usage inside the course (all users together): the lowest position not held by a Completed usage,
      * so a position freed by a reversal is reused. A usage that fills a Reversed position replaces that usage.
      */
-    private void placeInCourse(CourseVisitUsage usage, Course course) {
+    private void placeInCourse(
+            CourseVisitUsage usage,
+            Course course) {
         List<CourseVisitUsage> existing = usages.findByCourseIdOrderByIdDesc(course.getId());
+
         Set<Integer> taken = new HashSet<>();
+
         for (CourseVisitUsage other : existing) {
             if (other.getUsageStatus() == UsageStatus.Completed) taken.add(other.getUsageSequence());
         }
+
         int position = 1;
+
         while (taken.contains(position)) position++;
+
         if (position > course.getTotalVisits()) {
             throw new IllegalStateException("ลำดับสิทธิ์เต็มจำนวนครั้งของคอร์สแล้ว");
         }
+
         usage.setUsageSequence(position);
+
         final int chosen = position;
+
         Set<Long> alreadyReplaced = new HashSet<>();
+
         for (CourseVisitUsage other : existing) {
             if (other.getReplacesUsage() != null) alreadyReplaced.add(other.getReplacesUsage().getId());
         }
+
         existing.stream() // newest first
                 .filter(other -> other.getUsageStatus() == UsageStatus.Reversed && other.getUsageSequence() == chosen
                         && !alreadyReplaced.contains(other.getId()))
-                .findFirst().ifPresent(usage::setReplacesUsage);
+                .findFirst()
+                .ifPresent(usage::setReplacesUsage);
     }
 
     /**
@@ -238,15 +304,21 @@ public class CourseVisitUsageService {
      * added to the Course's running totals is taken off again.
      */
     @Transactional
-    public CourseVisitUsage reverse(CourseVisitUsage usage, Permission permission, String reason, Long actorId) {
+    public CourseVisitUsage reverse(
+            CourseVisitUsage usage,
+            Permission permission,
+            String reason,
+            Long actorId) {
         require(usage != null, "ต้องระบุรายการใช้สิทธิ์คอร์ส");
         require(usage.getUsageStatus() == UsageStatus.Completed, "รายการใช้สิทธิ์นี้ถูกย้อนไปแล้ว");
         cancellations.recordUsageReversal(usage, permission, reason, actorId);
+
         Course course = usage.getCourse();
         Patient patient = usage.getPatient();
 
         CourseLedger treatment = ledger.findByVisitUsageId(usage.getId()).stream()
-                .filter(l -> l.getEntryType() == CourseLedgerEntryType.Treatment).findFirst()
+                .filter(l -> l.getEntryType() == CourseLedgerEntryType.Treatment)
+                .findFirst()
                 .orElseThrow(() -> new IllegalStateException("ไม่พบรายการหักสิทธิ์ใน Ledger ของการใช้สิทธิ์นี้"));
         long balance = ledger.sumQtyChangeByCourseAndPatient(course.getId(), patient.getId());
         ledger.save(CourseLedgerEntries.reversalOf(treatment, balance, reason.trim(), actorId));
@@ -270,16 +342,25 @@ public class CourseVisitUsageService {
         CourseEntitlement entitlement = entitlementOf(course, patient, balance);
         entitlement.adjustUsed(-1);
         entitlements.save(entitlement);
+
         return usage;
     }
 
     /** The patient's entitlement row, created from their current ledger balance when it does not exist yet. */
-    private CourseEntitlement entitlementOf(Course course, Patient patient, long balanceBefore) {
+    private CourseEntitlement entitlementOf(
+            Course course,
+            Patient patient,
+            long balanceBefore) {
         return entitlements.findById(new CourseEntitlementId(course.getId(), patient.getId()))
-                .orElseGet(() -> new CourseEntitlement(course, patient, (int) balanceBefore));
+                .orElseGet(() -> new CourseEntitlement(
+                        course,
+                        patient,
+                        (int) balanceBefore));
     }
 
-    private static void require(boolean condition, String message) {
+    private static void require(
+            boolean condition,
+            String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
         }

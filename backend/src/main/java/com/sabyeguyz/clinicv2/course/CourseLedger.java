@@ -1,14 +1,16 @@
 package com.sabyeguyz.clinicv2.course;
 
+import java.time.Instant;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
 import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.sale.SalesTransaction;
 import com.sabyeguyz.clinicv2.sale.TransactionCancellation;
-import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import java.time.Instant;
 
 /**
  * Running balance of Course entitlements - a movement log, never an editable
@@ -92,38 +94,55 @@ public class CourseLedger {
     public CourseLedger() {}
 
     public Long getId() { return id; }
+
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+
     public Patient getPatient() { return patient; }
     public void setPatient(Patient patient) { this.patient = patient; }
+
     public CourseLedgerEntryType getEntryType() { return entryType; }
     public void setEntryType(CourseLedgerEntryType entryType) { this.entryType = entryType; }
+
     public int getQtyChange() { return qtyChange; }
     public void setQtyChange(int qtyChange) { this.qtyChange = qtyChange; }
+
     public int getBalanceAfter() { return balanceAfter; }
     public void setBalanceAfter(int balanceAfter) { this.balanceAfter = balanceAfter; }
+
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
+
     public Instant getLedgerCreateAt() { return ledgerCreateAt; }
     public void setLedgerCreateAt(Instant ledgerCreateAt) { this.ledgerCreateAt = ledgerCreateAt; }
+
     public Long getLedgerCreateBy() { return ledgerCreateBy; }
     public void setLedgerCreateBy(Long ledgerCreateBy) { this.ledgerCreateBy = ledgerCreateBy; }
+
     public CourseTransfer getTransfer() { return transfer; }
     public void setTransfer(CourseTransfer transfer) { this.transfer = transfer; }
+
     public CourseVisitUsage getVisitUsage() { return visitUsage; }
     public void setVisitUsage(CourseVisitUsage visitUsage) { this.visitUsage = visitUsage; }
+
     public CourseLedger getReversesLedger() { return reversesLedger; }
     public void setReversesLedger(CourseLedger reversesLedger) { this.reversesLedger = reversesLedger; }
+
     public Instant getEventAt() { return eventAt; }
     public void setEventAt(Instant eventAt) { this.eventAt = eventAt; }
+
     public SalesTransaction getSalesTransaction() { return salesTransaction; }
     public void setSalesTransaction(SalesTransaction salesTransaction) { this.salesTransaction = salesTransaction; }
+
     public CourseRefundItem getCourseRefundItem() { return courseRefundItem; }
     public void setCourseRefundItem(CourseRefundItem courseRefundItem) { this.courseRefundItem = courseRefundItem; }
+
     public TransactionCancellation getCancellation() { return cancellation; }
     public void setCancellation(TransactionCancellation cancellation) { this.cancellation = cancellation; }
+
     public Long getAdjustmentApprovedBy() { return adjustmentApprovedBy; }
     public void setAdjustmentApprovedBy(Long adjustmentApprovedBy) { this.adjustmentApprovedBy = adjustmentApprovedBy; }
+
     public Instant getAdjustmentApprovedAt() { return adjustmentApprovedAt; }
     public void setAdjustmentApprovedAt(Instant adjustmentApprovedAt) { this.adjustmentApprovedAt = adjustmentApprovedAt; }
 }

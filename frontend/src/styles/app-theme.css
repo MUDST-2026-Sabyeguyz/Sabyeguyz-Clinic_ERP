@@ -181,6 +181,12 @@
     width: auto;
   }
 
+  #app header.staff-header .profile-wrap {
+    grid-column: -2 / -1;
+    grid-row: 1;
+    justify-self: end;
+  }
+
   #app header.staff-header nav,
   #app header.staff-header.manager-header nav {
     /* Menu items sit together in the middle of the screen, independent of logo/controls width. */
