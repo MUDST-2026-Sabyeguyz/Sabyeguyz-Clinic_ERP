@@ -16,10 +16,12 @@ const branchName = computed(() => {
   const name = selectedManagerBranch()?.name?.trim() ?? branchCode.value
   return name.replace(/^สาขา\s*/, '') || branchCode.value
 })
+// The very first rule may start in the current month; later rules replace one in force, so start next month.
+const props = defineProps<{ firstRule?: boolean }>()
 const nextMonth = () => {
   const [year, month] = clinicToday().slice(0, 7).split('-').map(Number)
-  const firstNext = new Date(Date.UTC(year!, month!, 1))
-  return `${firstNext.getUTCFullYear()}-${String(firstNext.getUTCMonth() + 1).padStart(2, '0')}`
+  const first = new Date(Date.UTC(year!, props.firstRule ? month! - 1 : month!, 1))
+  return `${first.getUTCFullYear()}-${String(first.getUTCMonth() + 1).padStart(2, '0')}`
 }
 const form = reactive({
   name: '',
@@ -57,7 +59,9 @@ async function save() {
   else if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(form.effectiveMonth))
     errors.effectiveMonth = 'รูปแบบเดือนไม่ถูกต้อง'
   else if (form.effectiveMonth < nextMonth())
-    errors.effectiveMonth = 'ต้องเริ่มใช้งานตั้งแต่เดือนถัดไปเป็นต้นไป'
+    errors.effectiveMonth = props.firstRule
+      ? 'ต้องเริ่มใช้งานตั้งแต่เดือนปัจจุบันเป็นต้นไป'
+      : 'ต้องเริ่มใช้งานตั้งแต่เดือนถัดไปเป็นต้นไป'
   if (Object.keys(errors).length) {
     error.value = 'กรุณาตรวจสอบข้อมูลในช่องที่มีข้อความสีแดง'
     return

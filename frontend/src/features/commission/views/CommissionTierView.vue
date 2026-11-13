@@ -80,7 +80,7 @@ function openSchemeEditor() {
   error.value = ''
   Object.assign(schemeForm, {
     name: scheme.name,
-    effectiveFrom: nextSchemeEffectiveFrom(scheme.effectiveTo),
+    effectiveFrom: nextSchemeEffectiveFrom(scheme.effectiveTo, clinicToday(), !scheme.effectiveFrom),
   })
   schemeTiers.splice(0, schemeTiers.length, ...tiers.map((tier) => ({ ...tier })))
   editorOpen.value = true

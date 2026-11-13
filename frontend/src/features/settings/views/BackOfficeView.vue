@@ -1090,7 +1090,10 @@ const drawerTitle = computed(() => {
             <div v-else-if="section === 'commission'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/fee-history"
                 >ประวัติเวอร์ชัน</RouterLink
-              ><TreatmentFeeRuleDrawer @saved="loadBackendSettings" />
+              ><TreatmentFeeRuleDrawer
+                :first-rule="data.commission.length === 0"
+                @saved="loadBackendSettings"
+              />
             </div>
             <div v-else-if="section === 'tiers'" class="settings-actions">
               <RouterLink class="settings-secondary" to="/staff/settings/commission-history"
