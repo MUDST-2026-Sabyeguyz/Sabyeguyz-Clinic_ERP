@@ -40,8 +40,6 @@ public class ReceiptService {
         this.paymentLabels = paymentLabels;
     }
 
-<<<<<<< HEAD
-=======
     private List<BigDecimal> allocateBillDiscount(
             List<BigDecimal> amounts,
             BigDecimal total,
@@ -95,7 +93,6 @@ public class ReceiptService {
         return shares;
     }
 
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     /**
      * Assigns an enabled payment label selected for a new receipt.
      * Writes both the new FK and the legacy enum during migration.

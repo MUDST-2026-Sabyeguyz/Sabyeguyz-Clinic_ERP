@@ -4,6 +4,43 @@ import { commissionApi, userManagementApi } from '../client'
 describe('commission API main contract', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  it('loads eligible adjustment sources and saves a single branch-scoped correction', async () => {
+    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await commissionApi.adjustmentAllowedMonths('01')
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/commission/adjustments/allowed-months?branchCode=01',
+      expect.any(Object),
+    )
+    await commissionApi.adjustmentSources(7, 'visit', '01')
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/commission/adjustments/sources?staffId=7&type=visit&branchCode=01',
+      expect.any(Object),
+    )
+    await commissionApi.createAdjustment({
+      staffId: 7,
+      originalMonth: '2026-10',
+      appliedMonth: '2026-11',
+      amount: -200,
+      reason: 'แก้รายการที่จ่ายแล้ว',
+      branchCode: '01',
+      approvalReference: 'AGREEMENT-1',
+      visitId: 42,
+    })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/commission/adjustments',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          staffId: 7, originalMonth: '2026-10', appliedMonth: '2026-11', amount: -200,
+          reason: 'แก้รายการที่จ่ายแล้ว', branchCode: '01',
+          approvalReference: 'AGREEMENT-1', visitId: 42,
+        }),
+      }),
+    )
+  })
+
   it('uses YYYY-MM and branchCode for branch closings and preserves array responses', async () => {
     const rows = [{ id: 3, status: 'OPEN' }]
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(rows), { status: 200 }))

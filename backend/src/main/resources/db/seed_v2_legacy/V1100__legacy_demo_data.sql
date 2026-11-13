@@ -672,12 +672,6 @@ INSERT INTO course_usage_print_event (print_event_id, print_id, printed_at, prin
 -- refund_transaction (1)
 INSERT INTO refund_transaction (refund_id, cancellation_id, original_payment_id, refund_amount, payment_method_id, refund_status, refunded_at, refunded_by, requested_at, requested_by, approved_by, approved_at) VALUES (1, 2, 2, 700.00, 1, 'Completed', '2026-09-11 17:56:30.741607', 1, '2026-09-11 17:56:30.741607', 1, 1, '2026-09-11 17:56:30.741607');
 
--- staff_pay_adjustment (1)
-INSERT INTO staff_pay_adjustment (adjustment_id, staff_id, original_month, applied_month, amount, allocation_id, single_visit_fee_id, course_id, visit_id, sale_transaction_id, reason, approved_by, approved_at, processed_amount, remaining_amount, adjustment_status, created_at, created_by) VALUES (1, 3, '2026-09', '2026-10', 100.00, NULL, NULL, 1, NULL, NULL, 'ปรับย้อนหลัง: ค่ามือเดือน ก.ย. คำนวณขาด', 2, '2026-10-15 03:00:00', 0.00, 100.00, 'Approved', '2026-10-15 02:00:00', 2);
-
--- adjustment_application (1)
-INSERT INTO adjustment_application (application_id, adjustment_id, monthly_payment_id, amount, application_status, approved_by, approved_at, approval_reference, created_at, created_by) VALUES (1, 1, 2, 100.00, 'Draft', NULL, NULL, NULL, '2026-10-15 03:05:00', 2);
-
 -- sequences continue after the seeded ids
 SELECT pg_catalog.setval('app_user_user_id_seq', 4, true);
 SELECT pg_catalog.setval('audit_log_audit_id_seq', 3, true);

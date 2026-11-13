@@ -89,12 +89,8 @@ public class Appointment {
     @Column(name = "contact_middle_name", length = 100)
     private String contactMiddleName;
 
-<<<<<<< HEAD
-=======
     @Column(name = "contact_nickname", length = 80)
     private String contactNickname;
-
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
 
@@ -157,12 +153,8 @@ public class Appointment {
     public String getContactName() { return contactName; }
     public void setContactName(String contactName) { this.contactName = contactName; }
 
-<<<<<<< HEAD
-=======
     public String getContactNickname() { return contactNickname; }
     public void setContactNickname(String contactNickname) { this.contactNickname = contactNickname; }
-
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     public String getContactMiddleName() {
         return contactMiddleName;
     }
@@ -170,10 +162,6 @@ public class Appointment {
         this.contactMiddleName = contactMiddleName;
     }
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
     public String getContactPhone() { return contactPhone; }
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
     public String getNotes() { return notes; }

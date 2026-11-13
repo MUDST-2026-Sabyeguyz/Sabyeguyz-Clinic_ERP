@@ -22,6 +22,23 @@ type PersonRow = {
 };
 const rows = ref<PersonRow[]>([]);
 const errorMessage = ref("");
+const closing = ref(false);
+const loading = ref(false);
+const closeConfirmOpen = ref(false);
+const branchClosed = ref(false);
+const lastLoadedAt = ref<Date | null>(null);
+const lastLoadedLabel = computed(() =>
+  lastLoadedAt.value
+    ? new Intl.DateTimeFormat("th-TH", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).format(lastLoadedAt.value)
+    : "ยังไม่โหลดข้อมูล",
+);
 const route = useRoute();
 const search = ref(typeof route.query.search === "string" ? route.query.search : "");
 const status = ref(route.query.status === "pending" || route.query.status === "approved" ? route.query.status : "");
@@ -38,6 +55,16 @@ const monthFilter = computed({
     if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) date.value = `${month}-01`;
   },
 });
+const selectedPeriodLabel = computed(() => {
+  const [year, month] = date.value.slice(0, 7).split("-").map(Number);
+  const lastDay = new Date(year!, month!, 0).getDate();
+  const label = new Intl.DateTimeFormat("th-TH", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year!, month! - 1, 1, 12));
+  return `วันที่ 1–${lastDay} ${label}`;
+});
+const canCloseSelectedMonth = computed(() => monthFilter.value < clinicToday().slice(0, 7));
 const visible = computed(() =>
   rows.value.filter(
     (row) =>
@@ -57,17 +84,13 @@ const treatment = computed(() =>
     ? null
     : visible.value.reduce((sum, row) => sum + (row.treatment ?? 0), 0),
 );
-const pendingPayment = computed(() =>
-  visible.value.some((row) => row.pendingPayment === null)
-    ? null
-    : visible.value.reduce((sum, row) => sum + (row.pendingPayment ?? 0), 0),
-);
 const money = (value: number | null) =>
   value === null ? "—" : `฿${value.toLocaleString("th-TH")}`;
 let requestVersion = 0;
 async function loadOverview() {
   // โหลดรายงาน ปิดยอด งวดจ่าย และบุคลากรตามเดือน/สาขาที่เลือก
   const version = ++requestVersion;
+  loading.value = true;
   errorMessage.value = "";
   rows.value = [];
   try {
@@ -79,11 +102,12 @@ async function loadOverview() {
     );
     const branchCode = selectedBranchCode.value;
     if (!branchCode) throw new Error("กรุณาเลือกสาขาก่อนดูภาพรวมค่าตอบแทน");
-    const [data, closings, payments, staff] = await Promise.all([
+    const [data, closings, payments, staff, branchClosing] = await Promise.all([
       commissionApi.report(`${period}-01`, `${period}-${lastDay}`),
       commissionApi.closings(period, branchCode),
       commissionApi.payments(period, branchCode),
       staffApi.list(),
+      commissionApi.branchClosing(period, branchCode),
     ]);
     if (version !== requestVersion) return;
     // รวมแหล่งข้อมูลเป็นแถวเดียวต่อพนักงาน โดยคงยอดที่ยังไม่ทราบเป็น null
@@ -122,14 +146,32 @@ async function loadOverview() {
       };
     });
     rows.value = realRows;
+    branchClosed.value = branchClosing.status === 'CLOSED';
+    lastLoadedAt.value = new Date();
   } catch (error) {
     if (version !== requestVersion) return;
     errorMessage.value =
       error instanceof Error ? error.message : "โหลดข้อมูลค่าตอบแทนไม่สำเร็จ";
+  } finally {
+    if (version === requestVersion) loading.value = false;
   }
 }
 onMounted(loadOverview);
 watch([date, selectedBranchCode], loadOverview);
+async function closePeriod() {
+  if (closing.value || branchClosed.value || !selectedBranchCode.value) return;
+  closing.value = true;
+  errorMessage.value = '';
+  try {
+    await commissionApi.closeMonth(monthFilter.value, selectedBranchCode.value);
+    closeConfirmOpen.value = false;
+    await loadOverview();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'ปิดรอบไม่สำเร็จ';
+  } finally {
+    closing.value = false;
+  }
+}
 </script>
 <template>
   <div class="commission-manager-page">
@@ -138,8 +180,11 @@ watch([date, selectedBranchCode], loadOverview);
       <header class="commission-title">
         <h1>ภาพรวมค่าตอบแทน</h1>
         <p>
-          ตรวจยอด Commission และค่ามือจากรายการต้นทาง ก่อนปิดรอบและจ่ายค่าตอบแทน
+          ดูยอดคอมมิชชัน ค่ามือ และยอดรอจ่าย แยกตามพนักงานและรอบที่เลือก
         </p>
+        <div class="overview-period"><span>รอบคำนวณ</span><b>{{ selectedPeriodLabel }}</b></div>
+        <button class="commission-primary overview-close-action" type="button" :disabled="loading || closing || branchClosed || !canCloseSelectedMonth || !!errorMessage" @click="closeConfirmOpen = true">{{ branchClosed ? 'ปิดรอบแล้ว' : 'ปิดรอบ' }}</button>
+        <small v-if="!canCloseSelectedMonth && !branchClosed" class="overview-close-hint">ปิดรอบได้เมื่อเดือนสิ้นสุดแล้ว</small>
       </header>
       <CommissionTabs active="overview" />
       <p v-if="errorMessage" class="state-card error" role="alert">
@@ -147,32 +192,33 @@ watch([date, selectedBranchCode], loadOverview);
       </p>
       <section class="commission-metrics">
         <article>
-          <span>ยอดขายสุทธิ</span><b>{{ money(sales) }}</b
-          ><small>ฐานหลังหักส่วนลดรายรายการ</small>
-        </article>
-        <article class="highlight">
-          <span>Commission Pool</span><b>{{ money(pool) }}</b
-          ><small>รวมค่าคอมมิชชันเดือนนี้</small>
+          <span>ยอดขายสุทธิ</span><b>{{ money(sales) }}</b>
         </article>
         <article>
-          <span>ค่ามือ</span><b>{{ money(treatment) }}</b
-          ><small>{{
-            treatment === null
-              ? "ยังไม่มีข้อมูลสรุปค่ามือ"
-              : "รายครั้งและรักษาแทน · ตามสาขาประจำ"
-          }}</small>
+          <span>ค่ามือรวม</span><b>{{ money(treatment) }}</b>
         </article>
-        <article class="warning">
-          <span>ยอดรอจ่าย</span><b>{{ money(pendingPayment) }}</b
-          ><small>รอตรวจสอบ {{ visible.length }} คน</small>
+        <article class="highlight">
+          <span>ค่าคอมมิชชันรวม</span><b>{{ money(pool) }}</b>
+        </article>
+        <article class="creation-total">
+          <span>ค่าคอมมิชชันที่จะสร้าง</span><b>{{ money(pool) }}</b>
         </article>
       </section>
+      <div v-if="closeConfirmOpen" class="overview-close-backdrop" @click.self="closeConfirmOpen = false">
+        <section class="overview-close-dialog" role="dialog" aria-modal="true" aria-labelledby="overview-close-title">
+          <h2 id="overview-close-title">ยืนยันปิดรอบ {{ selectedPeriodLabel }}</h2>
+          <p>ระบบจะล็อกอัตราคอมมิชชันของสาขาที่เลือกสำหรับเดือนนี้</p>
+          <div><button class="commission-secondary" type="button" :disabled="closing" @click="closeConfirmOpen = false">ยกเลิก</button><button class="commission-primary" type="button" :disabled="closing" @click="closePeriod">{{ closing ? 'กำลังปิดรอบ…' : 'ยืนยันปิดรอบ' }}</button></div>
+        </section>
+      </div>
       <section class="commission-directory commission-card">
         <header class="overview-filters">
           <label
             >ค้นหานักกายภาพ<input
               v-model="search"
-              placeholder="ค้นหาชื่อหรือรหัสพนักงาน"
+              type="search"
+              aria-label="ค้นหาชื่อ"
+              placeholder="ค้นหาชื่อ"
           /></label>
           <div class="overview-filter-field">
             <span>รอบคำนวณ</span
@@ -197,7 +243,7 @@ watch([date, selectedBranchCode], loadOverview);
         <div class="directory-results">
           <div>
             <h2>รายชื่อผู้รับค่าตอบแทน</h2>
-            <p>ยอดคำนวณของรอบที่เลือก</p>
+            <p>ยอดตามรอบและตัวกรองที่เลือก</p>
           </div>
           <span>ทั้งหมด {{ visible.length }} คน</span>
         </div>
@@ -206,9 +252,9 @@ watch([date, selectedBranchCode], loadOverview);
             <thead>
               <tr>
                 <th>นักกายภาพ</th>
-                <th>Tier / อัตรา</th>
-                <th>ฐานคำนวณ</th>
-                <th>Commission</th>
+                <th>อัตราคอมมิชชัน</th>
+                <th class="numeric">ฐานคำนวณ</th>
+                <th class="numeric">คอมมิชชัน</th>
                 <th>ค่ามือ</th>
                 <th></th>
               </tr>
@@ -219,9 +265,9 @@ watch([date, selectedBranchCode], loadOverview);
                   <b>{{ row.name }}</b>
                 </td>
                 <td>{{ row.tier }}</td>
-                <td>{{ money(row.base) }}</td>
-                <td>{{ money(row.commission) }}</td>
-                <td>{{ money(row.treatment) }}</td>
+                <td class="numeric">{{ money(row.base) }}</td>
+                <td class="numeric commission-value">{{ money(row.commission) }}</td>
+                <td class="numeric">{{ money(row.treatment) }}</td>
                 <td>
                   <RouterLink
                     class="detail-button"
@@ -246,7 +292,7 @@ watch([date, selectedBranchCode], loadOverview);
           </table>
         </div>
         <footer>
-          รวม {{ visible.length }} คน · อัปเดตล่าสุด 28 ก.ย. 2569 16:05
+          รวม {{ visible.length }} คน · อัปเดตล่าสุด {{ lastLoadedLabel }}
         </footer>
       </section>
     </main>
@@ -254,6 +300,107 @@ watch([date, selectedBranchCode], loadOverview);
 </template>
 <style scoped>
 @import "../styles/commission-manager.css";
+.commission-manager-main {
+  width: min(1360px, calc(100% - 64px));
+  padding-top: 34px;
+}
+.commission-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 22px;
+}
+.overview-close-action {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  text-decoration: none;
+}
+.overview-close-hint {
+  grid-column: 2;
+  grid-row: 4;
+  justify-self: end;
+  margin-top: 6px;
+  color: #687d7a;
+}
+.overview-close-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 45%); }
+.overview-close-dialog { width: min(440px, 100%); padding: 24px; border-radius: 14px; background: #fff; }
+.overview-close-dialog h2 { margin: 0 0 8px; }
+.overview-close-dialog p { margin: 0 0 20px; }
+.overview-close-dialog > div { display: flex; justify-content: flex-end; gap: 8px; }
+.commission-title h1 {
+  color: #153f3c;
+  letter-spacing: -0.025em;
+}
+.commission-title p {
+  max-width: 680px;
+  line-height: 1.6;
+}
+.overview-period {
+  display: inline-flex;
+  grid-column: 1;
+  justify-self: start;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 8px 12px;
+  border: 1px solid #d5e6df;
+  border-radius: 9px;
+  background: #edf6f2;
+  color: #45675d;
+  font-size: 0.9rem;
+}
+.overview-period b {
+  color: #145c59;
+  font-weight: 700;
+}
+.commission-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0 22px;
+}
+.commission-metrics article {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: baseline;
+  column-gap: 16px;
+  min-height: 104px;
+  padding: 18px 22px;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgb(31 67 58 / 4%);
+}
+.commission-metrics article span {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+.commission-metrics article b {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  font-size: 1.65rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.commission-metrics article.highlight {
+  background: #fff;
+}
+.commission-metrics article.creation-total {
+  border-color: #b9ded4;
+  background: #edf7f3;
+}
+.commission-metrics article.highlight b {
+  color: #16875b;
+  font-size: 1.85rem;
+}
+.commission-directory {
+  border-radius: 14px;
+  box-shadow: 0 3px 14px rgb(31 67 58 / 5%);
+}
 .overview-filters {
   display: grid;
   grid-template-columns: minmax(280px, 1.5fr) minmax(190px, 0.8fr) minmax(
@@ -261,8 +408,9 @@ watch([date, selectedBranchCode], loadOverview);
       0.8fr
     );
   gap: 20px;
-  padding: 20px 24px;
+  padding: 18px 22px;
   border-bottom: 1px solid #e7ede9;
+  background: #f8fbf9;
 }
 .overview-filters label,
 .overview-filter-field {
@@ -278,6 +426,12 @@ watch([date, selectedBranchCode], loadOverview);
   border: 1px solid #b9c8c2;
   border-radius: 8px;
   font: inherit;
+  background: #fff;
+  color: #25372f;
+}
+.overview-filters input:focus-visible {
+  outline: 3px solid rgb(30 139 134 / 18%);
+  border-color: #1e8b86;
 }
 .overview-filters :deep(.date-trigger),
 .overview-filters :deep(.filter-dropdown__button) {
@@ -297,7 +451,7 @@ watch([date, selectedBranchCode], loadOverview);
   text-decoration: none;
 }
 .detail-button:hover {
-  border-color: var(--color-primary-strong);
+  border-color: #145c59;
   background: #edf5f1;
 }
 .commission-directory {
@@ -316,7 +470,7 @@ watch([date, selectedBranchCode], loadOverview);
 }
 .directory-results h2 {
   margin: 0;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 18px;
 }
 .directory-results p {
@@ -325,8 +479,16 @@ watch([date, selectedBranchCode], loadOverview);
   font-size: 13px;
 }
 .directory-results > span {
-  color: var(--color-primary-strong);
+  color: #145c59;
   font-size: 14px;
+  font-weight: 700;
+}
+.commission-directory .commission-table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.commission-directory .commission-table .commission-value {
+  color: #087b68;
   font-weight: 700;
 }
 .commission-directory .commission-table-wrap {
@@ -339,23 +501,23 @@ watch([date, selectedBranchCode], loadOverview);
   border-collapse: collapse;
 }
 .commission-directory .commission-table th {
-  padding: 14px 20px;
+  padding: 15px 20px;
   border: 0;
   color: #34594f;
-  background: #f2f7f4;
+  background: #edf5f1;
   font-size: 14px;
   font-weight: 600;
   text-align: left;
 }
 .commission-directory .commission-table td {
-  padding: 16px 20px;
+  padding: 17px 20px;
   border-bottom: 1px solid #e7ede9;
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 15px;
   vertical-align: middle;
 }
 .commission-directory .commission-table tbody tr:hover td {
-  background: #f7faf8;
+  background: #f3f9f6;
 }
 .commission-directory .commission-table :is(th, td):last-child {
   text-align: right;
@@ -431,11 +593,31 @@ watch([date, selectedBranchCode], loadOverview);
   text-align: center !important;
 }
 @media (max-width: 900px) {
+  .commission-manager-main {
+    width: min(100% - 40px, 760px);
+  }
   .overview-filters {
     grid-template-columns: 1fr 1fr;
   }
 }
 @media (max-width: 560px) {
+  .commission-manager-main {
+    width: calc(100% - 28px);
+    padding-top: 24px;
+  }
+  .commission-title {
+    grid-template-columns: 1fr;
+  }
+  .overview-close-action {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 16px;
+  }
+  .overview-close-hint {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
   .overview-filters {
     grid-template-columns: 1fr;
   }

@@ -155,11 +155,6 @@ BEGIN
     -- Existing commission and single-visit ledgers contain valid Allocation examples.
     -- Reversal rows require a real business action; they are intentionally left to workflow-driven scenarios.
 
-    -- Keep the existing seed's valid approved adjustment and draft application; add a cancelled case.
-    INSERT INTO staff_pay_adjustment (staff_id, original_month, applied_month, amount, course_id, reason, processed_amount,
-        remaining_amount, adjustment_status, created_by)
-    VALUES (v_pt, '2026-08', '2026-09', 80, v_course, 'DEMO: cancelled', 0, 80, 'Cancelled', v_manager);
-
     -- Both course refund paths: pending and failed (without inventing a real payment).
     -- Existing refund_transaction covers Completed; no fabricated refund is linked to a mismatched payment/cancellation.
 

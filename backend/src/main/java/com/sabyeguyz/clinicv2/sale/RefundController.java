@@ -97,10 +97,7 @@ public class RefundController {
     @PostMapping("/api/refunds/{id}/complete")
     public Response complete(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
-<<<<<<< HEAD
-=======
         requireRefundAccess(id);
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
         RefundTransaction refund = refundService.complete(id, actor.currentId());
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Completed", actor.currentId());
         return toResponse(refund);
@@ -109,25 +106,17 @@ public class RefundController {
     @PostMapping("/api/refunds/{id}/void")
     public Response voidRequest(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
-<<<<<<< HEAD
-        RefundTransaction refund = refundService.voidRequest(id);
-        audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Voided", actor.currentId());
-=======
         requireRefundAccess(id);
         String previousStatus = refundService.lockStatusForUpdate(id).name();
         RefundTransaction refund = refundService.voidRequest(id, actor.currentId());
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, previousStatus, "Voided", actor.currentId());
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
         return toResponse(refund);
     }
 
     @PostMapping("/api/refunds/{id}/fail")
     public Response fail(@PathVariable Long id) {
         permissions.requireAllowed("SALE_CANCEL", actor.currentId());
-<<<<<<< HEAD
-=======
         requireRefundAccess(id);
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
         RefundTransaction refund = refundService.fail(id);
         audit.record("refund_transaction", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Pending", "Failed", actor.currentId());
         return toResponse(refund);
