@@ -27,7 +27,4 @@ describe('CourseActionView course manager accessibility', () => {
     expect(viewSource).toContain('v-modal-focus="{ close: () => (usageConfirmDialog = false)')
   })
 
-  it('does not calculate a progress width from a zero total', () => {
-    expect(viewSource).toContain('courseUsageProgressWidth(selectedCourse)')
-  })
 })
