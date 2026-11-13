@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AppointmentProgress } from '@/api/client'
-import { progressStateLabel } from '../appointmentRequests'
 const props = defineProps<{ progress: AppointmentProgress; fromServices?: boolean; blockReason?: string; recoveryRequired?: boolean }>()
 const emit = defineEmits<{ refresh: []; backToPatients: [] }>()
 const receiptDocuments = computed(() => {

@@ -92,7 +92,6 @@ export function useAppointmentProcess() {
       return 'ยังยืนยันผลคำขอก่อนหน้าไม่ได้ กรุณาให้ Manager ตรวจสอบก่อนทำรายการต่อ'
     if (missingStaffIdentity.value) return 'ไม่พบข้อมูลพนักงานของบัญชี กรุณาเข้าสู่ระบบใหม่'
     if (!mayManage.value) return 'ไม่มีสิทธิ์จัดการนัดหมายนี้ หรือสาขาที่เลือกไม่ตรงกับนัด'
-    const progress = appointmentProgress.value
     if (hasAppointmentDocument.value)
       return 'นัดหมายนี้มีรายการแล้วหรือต้องตรวจสอบ กรุณาเปิดเอกสารเดิม'
     if (appointment.value?.status !== 'UNCONFIRMED') return 'นัดหมายนี้ไม่อยู่ในสถานะรอรับบริการ'
