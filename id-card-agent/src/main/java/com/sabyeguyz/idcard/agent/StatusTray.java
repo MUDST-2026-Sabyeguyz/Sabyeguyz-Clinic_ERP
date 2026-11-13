@@ -22,7 +22,9 @@ final class StatusTray {
 
     /** {@code settingsUrl} is where the clinic's reader settings page is, if the agent knows; the menu offers to open it. */
     static StatusTray create(Runnable onExit, Supplier<Optional<String>> settingsUrl) {
-        if (java.awt.GraphicsEnvironment.isHeadless() || !SystemTray.isSupported()) return new StatusTray(null);
+        if (java.awt.GraphicsEnvironment.isHeadless() || !SystemTray.isSupported()) {
+            return new StatusTray(null);
+        }
         Image image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
         java.awt.Graphics2D g = ((BufferedImage) image).createGraphics();
         g.setColor(new java.awt.Color(0x1E, 0x80, 0x7C));
@@ -45,12 +47,17 @@ final class StatusTray {
     }
 
     void status(String text) {
-        if (icon != null) icon.setToolTip("ตัวกลางเครื่องอ่านบัตร: " + text);
+        if (icon != null) {
+            icon.setToolTip("ตัวกลางเครื่องอ่านบัตร: " + text);
+        }
         System.out.println(text);
     }
 
     private static void openInBrowser(Optional<String> url) {
-        if (url.isEmpty() || !Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) return;
+        if (url.isEmpty() || !Desktop.isDesktopSupported()
+                || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+            return;
+        }
         try {
             Desktop.getDesktop().browse(URI.create(url.get()));
         } catch (java.io.IOException | IllegalArgumentException cannotOpen) {
