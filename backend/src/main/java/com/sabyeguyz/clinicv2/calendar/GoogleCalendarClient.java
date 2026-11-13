@@ -13,10 +13,22 @@ public interface GoogleCalendarClient {
     record EventRef(String id, String etag) {}
 
     /** An event seen when asking for changes; start is in the clinic time zone, null for all-day events. */
-    record RemoteEvent(String id, String etag, boolean cancelled, LocalDateTime start, Long appointmentId) {}
+    record RemoteEvent(String id, String etag, boolean cancelled, LocalDateTime start, Long appointmentId,
+                       LocalDateTime end, String description) {
+        public RemoteEvent(String id, String etag, boolean cancelled, LocalDateTime start, Long appointmentId) {
+            this(id, etag, cancelled, start, appointmentId, null, null);
+        }
+    }
 
     /** A stretch of the calendar that is taken (Busy) by an event the clinic did not write; clinic-local times. */
-    record BusyBlock(LocalDateTime start, LocalDateTime end) {}
+    record BusyBlock(LocalDateTime start, LocalDateTime end, Long therapistId) {
+        /** A null therapist denotes an explicitly branch-wide block. */
+        public BusyBlock(LocalDateTime start, LocalDateTime end) { this(start, end, null); }
+        public boolean appliesTo(Long staffId) { return therapistId == null || therapistId.equals(staffId); }
+    }
+
+    /** Checks that Google accepts a service account key (signs in once). Throws CalendarApiException when it does not. */
+    default void verifyCredentials(ServiceAccountCredentials credentials) {}
 
     EventRef insert(String calendarId, EventData data);
 

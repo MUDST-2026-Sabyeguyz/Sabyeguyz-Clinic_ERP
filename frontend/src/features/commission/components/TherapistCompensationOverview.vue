@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// สรุปยอดคอมมิชชัน ค่ามือ และสถานะงวดจ่าย
 import { computed } from 'vue'
 import type { StaffPayment, TherapistLine } from '@/api/client'
 import { baht, signedBaht } from '../lib/therapistPay'
@@ -8,10 +9,9 @@ const props = defineProps<{
   payment: StaffPayment | null
   lines: TherapistLine[]
   month: string
-  pendingSessions: number
+  pendingSessions: number | null
 }>()
 
-// How the pay is worked out is only explained here; the rules themselves are set by the Manager on the settings page.
 const commission = computed(() => props.payment?.courseCommission ?? null)
 const treatment = computed(
   () => (props.payment?.singleVisitFee ?? 0) + (props.payment?.substituteFee ?? 0),
@@ -38,7 +38,9 @@ const net = computed(() => props.payment?.net ?? null)
         </div>
         <div>
           <dt>Adjustment</dt>
-          <dd :class="{ negative: adjustment < 0 }">{{ signedBaht(adjustment) }}</dd>
+          <dd :class="{ negative: adjustment < 0 }">
+            {{ signedBaht(adjustment) }}
+          </dd>
         </div>
         <div class="net">
           <dt>Net Payout</dt>
@@ -48,7 +50,10 @@ const net = computed(() => props.payment?.net ?? null)
           </dd>
         </div>
       </dl>
-      <small v-if="pendingSessions > 0" class="therapist-pending-note">
+      <small v-if="pendingSessions === null" class="therapist-pending-note">
+        ยังไม่ทราบจำนวนครั้งที่รอปิดยอด
+      </small>
+      <small v-else-if="pendingSessions > 0" class="therapist-pending-note">
         {{ pendingSessions }} ครั้งที่เดือนขายคอร์สยังไม่ปิดยอด จึงยังไม่นับเข้าค่าคอมมิชชัน
       </small>
     </article>

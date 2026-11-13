@@ -1,6 +1,7 @@
 package com.sabyeguyz.clinicv2.calendar;
 
 import com.sabyeguyz.clinicv2.appointment.Appointment;
+import com.sabyeguyz.clinicv2.appointment.AppointmentAvailabilityService;
 import com.sabyeguyz.clinicv2.appointment.AppointmentService;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -30,8 +31,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>System to Google: an appointment that changed after its last sync is written to its branch calendar
  * (created, moved, or removed when cancelled / no-show). A failed write leaves it dirty, so it is retried.</p>
  *
- * <p>Google to system: only two edits made in Google are accepted, for events this system created - moving the
- * time and cancelling - and only while the appointment is still Unconfirmed or Confirmed and the new time is
+ * <p>Google to system: edits to start/end, the note (description), and cancellation are accepted for events this
+ * system created, only while the appointment is still Unconfirmed or Confirmed and the new time is
  * free. Anything else is put back in Google. The system stays the source of truth.</p>
  *
  * <p>Loops are avoided with the event etag: the etag Google returned for our own write is stored, so seeing the
@@ -52,34 +53,35 @@ public class CalendarSyncService {
     }
 
     private final CalendarProperties properties;
+    private final CalendarCredentialStore credentials;
     private final ObjectProvider<GoogleCalendarClient> clientProvider;
     private final AppointmentCalendarRepository appointments;
     private final BranchRepository branches;
     private final AppointmentService appointmentService;
+    private final AppointmentAvailabilityService availability;
     private final TransactionTemplate tx;
     private final Map<String, Instant> lastPoll = new ConcurrentHashMap<>();
     private volatile Instant lastRunAt;
     private volatile Result lastResult = Result.empty();
-    private com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
-    /** Optional: without it the sync still works but leaves no Audit_log row. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setAudit(com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
-        this.audit = audit;
-    }
-
-    public CalendarSyncService(CalendarProperties properties, ObjectProvider<GoogleCalendarClient> clientProvider,
+    public CalendarSyncService(CalendarProperties properties, CalendarCredentialStore credentials,
+                               ObjectProvider<GoogleCalendarClient> clientProvider,
                                AppointmentCalendarRepository appointments, BranchRepository branches,
-                               AppointmentService appointmentService, PlatformTransactionManager transactionManager) {
+                               AppointmentService appointmentService, AppointmentAvailabilityService availability,
+                               PlatformTransactionManager transactionManager) {
         this.properties = properties;
+        this.credentials = credentials;
         this.clientProvider = clientProvider;
         this.appointments = appointments;
         this.branches = branches;
         this.appointmentService = appointmentService;
+        this.availability = availability;
         this.tx = new TransactionTemplate(transactionManager);
     }
 
-    public boolean isEnabled() { return properties.isEnabled() && clientProvider.getIfAvailable() != null; }
+    public boolean isEnabled() {
+        return (properties.isEnabled() || credentials.isConfigured()) && clientProvider.getIfAvailable() != null;
+    }
     public Instant lastRunAt() { return lastRunAt; }
     public Result lastResult() { return lastResult; }
 
@@ -97,7 +99,7 @@ public class CalendarSyncService {
 
     public synchronized Result push() {
         GoogleCalendarClient client = clientProvider.getIfAvailable();
-        if (!properties.isEnabled() || client == null) return Result.empty();
+        if (!isEnabled() || client == null) return Result.empty();
         LocalDate since = LocalDate.now(zone()).minusDays(1);
         List<Long> ids = tx.execute(status -> appointments.findDirtyIds(since, PageRequest.of(0, BATCH)));
         Result result = Result.empty();
@@ -160,14 +162,15 @@ public class CalendarSyncService {
         String service = appointment.getService() != null ? appointment.getService().getServiceName()
                 : appointment.getRequestedServiceType() != null ? appointment.getRequestedServiceType().name() : "นัดหมาย";
         String prefix = appointment.getAppointmentStatus() == AppointmentStatus.Unconfirmed ? "[รอยืนยัน] " : "";
-        String description = "นัดหมายเลขที่ " + appointment.getId() + "\n"
-                + "ผู้ให้บริการ: " + appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname() + "\n"
-                + "สถานะ: " + appointment.getAppointmentStatus().name() + "\n"
-                + "(จัดการนัดหมายในระบบ Clinic ERP — การเลื่อนเวลาหรือยกเลิกใน Google จะสะท้อนกลับมาที่ระบบ)";
-        return new EventData(appointment.getId(), (prefix + who + " - " + service).trim(), description,
-                appointment.getBranch().getBranchName(), start,
-                appointment.getAppointmentEndAt() == null ? start.plusMinutes(properties.getDefaultDurationMinutes())
-                        : appointment.getAppointmentEndAt(),
+        // The Google description is the editable clinic note, not generated boilerplate (AC 033.02).
+        String description = appointment.getNotes() == null ? "" : appointment.getNotes();
+        return new EventData(
+                appointment.getId(),
+                (prefix + who + " - " + service).trim(),
+                description,
+                appointment.getBranch().getBranchName(),
+                start,
+                appointment.getAppointmentEndAt(),
                 properties.getTimeZone());
     }
 
@@ -175,7 +178,7 @@ public class CalendarSyncService {
 
     public synchronized Result pull() {
         GoogleCalendarClient client = clientProvider.getIfAvailable();
-        if (!properties.isEnabled() || client == null) return Result.empty();
+        if (!isEnabled() || client == null) return Result.empty();
         Result result = Result.empty();
         for (Branch branch : branches.findAll()) {
             String calendarId = branch.getGoogleCalendarId();
@@ -191,6 +194,7 @@ public class CalendarSyncService {
                 lastPoll.put(calendarId, pollStart);
             } catch (RuntimeException failure) {
                 log.warn("Calendar poll of branch {} failed: {}", branch.getBranchCode(), failure.getMessage());
+                result = result.plus(new Result(0, 0, 1, 0, 0, 0));
             }
         }
         return result;
@@ -212,12 +216,7 @@ public class CalendarSyncService {
             }
             if (open) {
                 try {
-                    tx.executeWithoutResult(s -> {
-                        appointmentService.cancel(id, "ยกเลิกจาก Google Calendar", actor);
-                        auditFromGoogle(id, event, com.sabyeguyz.clinicv2.audit.AuditLogService.fields("appointment_status", status),
-                                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("appointment_status", AppointmentStatus.Cancelled,
-                                        "reason", "ยกเลิกจาก Google Calendar"));
-                    });
+                    tx.executeWithoutResult(s -> appointmentService.cancel(id, "ยกเลิกจาก Google Calendar", actor));
                     accept(id, event, CalendarSyncStatus.Deleted);
                     return new Result(0, 0, 0, 0, 1, 0);
                 } catch (RuntimeException refused) {
@@ -235,18 +234,21 @@ public class CalendarSyncService {
 
         if (event.start() != null) {
             LocalDateTime current = LocalDateTime.of(appointment.getAppointmentDate(), appointment.getAppointmentTime());
-            if (!event.start().equals(current)) {
+            LocalDateTime remoteEnd = event.end() != null ? event.end()
+                    : event.start().plus(java.time.Duration.between(current, appointment.getAppointmentEndAt()));
+            boolean noteChanged = event.description() != null && !java.util.Objects.equals(
+                    event.description(), appointment.getNotes() == null ? "" : appointment.getNotes());
+            if (!event.start().equals(current) || !remoteEnd.equals(appointment.getAppointmentEndAt()) || noteChanged) {
                 if (open) {
                     try {
+                        // A remote edit is still a booking change: keep the same Busy check as API-created moves.
+                        availability.requireNoGoogleBusy(appointment.getBranch(), event.start(), remoteEnd,
+                                appointment.getStaff().getId());
                         tx.executeWithoutResult(s -> {
-                            appointmentService.reschedule(id, event.start().toLocalDate(),
-                                    event.start().toLocalTime(), "เลื่อนจาก Google Calendar", actor);
-                            auditFromGoogle(id, event,
-                                    com.sabyeguyz.clinicv2.audit.AuditLogService.fields("appointment_date", current.toLocalDate(),
-                                            "appointment_time", current.toLocalTime()),
-                                    com.sabyeguyz.clinicv2.audit.AuditLogService.fields("appointment_date", event.start().toLocalDate(),
-                                            "appointment_time", event.start().toLocalTime(),
-                                            "reason", "เลื่อนจาก Google Calendar"));
+                            Appointment moved = appointmentService.reschedule(id, appointment.getBranch(), appointment.getStaff(),
+                                    appointment.getService(), event.start().toLocalDate(), event.start().toLocalTime(),
+                                    remoteEnd, "แก้ไขจาก Google Calendar", actor);
+                            if (event.description() != null) moved.setNotes(event.description().isEmpty() ? null : event.description());
                         });
                         accept(id, event, CalendarSyncStatus.Synced);
                         return new Result(0, 0, 0, 1, 0, 0);
@@ -261,17 +263,6 @@ public class CalendarSyncService {
         }
         accept(id, event, null);
         return Result.empty();
-    }
-
-    /**
-     * Data Dictionary Audit_log: a change that comes from Google has no user (changed_by is NULL, never a staff member
-     * standing in for Google) and says in new_value where it came from. The appointment id is the record.
-     */
-    private void auditFromGoogle(Long appointmentId, RemoteEvent event, Map<String, Object> before, Map<String, Object> after) {
-        if (audit == null) return;
-        Map<String, Object> value = new java.util.LinkedHashMap<>(after);
-        value.put("google_event_id", event.id());
-        audit.recordAutomatic("appointment", String.valueOf(appointmentId), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, before, value, "GoogleCalendar");
     }
 
     /** Remember the etag (and the sync time, so the change we just applied does not echo back). */
