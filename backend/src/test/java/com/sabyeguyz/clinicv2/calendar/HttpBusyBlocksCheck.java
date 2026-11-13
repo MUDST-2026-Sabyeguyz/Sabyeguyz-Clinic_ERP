@@ -9,8 +9,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Runs the real HttpGoogleCalendarClient against a small local stand-in for Google (no account, no network) and checks
- * which events count as Busy. Prints BUSY_CHECK_OK when everything is as expected, otherwise throws.
+ * Runs the real HttpGoogleCalendarClient against a small local stand-in for Google
+ * (no account, no network) and checks which events count as Busy. Prints
+ * BUSY_CHECK_OK when everything is as expected, otherwise throws.
  *
  *   java -cp "target/classes:target/test-classes:$(cat target/test-classpath.txt)" com.sabyeguyz.clinicv2.calendar.HttpBusyBlocksCheck
  */
@@ -38,6 +39,7 @@ public class HttpBusyBlocksCheck {
             exchange.getResponseBody().write(body);
             exchange.close();
         });
+
         server.createContext("/calendar/v3/calendars/", exchange -> {
             eventsQuery.set(exchange.getRequestURI().getRawQuery());
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -47,6 +49,7 @@ public class HttpBusyBlocksCheck {
             exchange.getResponseBody().write(body);
             exchange.close();
         });
+
         server.start();
         try {
             String base = "http://127.0.0.1:" + server.getAddress().getPort();
@@ -59,18 +62,36 @@ public class HttpBusyBlocksCheck {
             properties.setApiBaseUrl(base + "/calendar/v3");
             HttpGoogleCalendarClient client = new HttpGoogleCalendarClient(properties, new ObjectMapper());
 
-            List<GoogleCalendarClient.BusyBlock> blocks = client.busyBlocks("branch@group.calendar.google.com",
-                    LocalDateTime.of(2026, 10, 17, 0, 0), LocalDateTime.of(2026, 10, 18, 0, 0));
+            List<GoogleCalendarClient.BusyBlock> blocks = client.busyBlocks(
+                    "branch@group.calendar.google.com",
+                    LocalDateTime.of(2026, 10, 17, 0, 0),
+                    LocalDateTime.of(2026, 10, 18, 0, 0));
 
-            check(blocks.size() == 3, "expected 3 busy blocks (not the cancelled, free or own event) but got " + blocks);
-            check(blocks.contains(new GoogleCalendarClient.BusyBlock(LocalDateTime.of(2026, 10, 17, 9, 30), LocalDateTime.of(2026, 10, 17, 10, 30))),
+            check(
+                    blocks.size() == 3,
+                    "expected 3 busy blocks (not the cancelled, free or own event) but got " + blocks);
+
+            check(blocks.contains(new GoogleCalendarClient.BusyBlock(
+                    LocalDateTime.of(2026, 10, 17, 9, 30),
+                    LocalDateTime.of(2026, 10, 17, 10, 30))),
                     "the plain event is missing: " + blocks);
-            check(blocks.contains(new GoogleCalendarClient.BusyBlock(LocalDateTime.of(2026, 10, 17, 10, 0), LocalDateTime.of(2026, 10, 17, 11, 0))),
+
+            check(blocks.contains(new GoogleCalendarClient.BusyBlock(
+                    LocalDateTime.of(2026, 10, 17, 10, 0),
+                    LocalDateTime.of(2026, 10, 17, 11, 0))),
                     "a UTC event must be read in clinic time (03:00Z = 10:00 Bangkok): " + blocks);
-            check(blocks.contains(new GoogleCalendarClient.BusyBlock(LocalDateTime.of(2026, 10, 18, 0, 0), LocalDateTime.of(2026, 10, 20, 0, 0))),
+
+            check(blocks.contains(new GoogleCalendarClient.BusyBlock(
+                    LocalDateTime.of(2026, 10, 18, 0, 0),
+                    LocalDateTime.of(2026, 10, 20, 0, 0))),
                     "an all-day event covers whole days: " + blocks);
-            check(eventsQuery.get().contains("singleEvents=true") && eventsQuery.get().contains("timeMin=2026-10-17T00%3A00%3A00%2B07%3A00")
-                    && eventsQuery.get().contains("timeMax=2026-10-18T00%3A00%3A00%2B07%3A00"), "unexpected query: " + eventsQuery.get());
+
+            check(
+                    eventsQuery.get().contains("singleEvents=true")
+                            && eventsQuery.get().contains("timeMin=2026-10-17T00%3A00%3A00%2B07%3A00")
+                            && eventsQuery.get().contains("timeMax=2026-10-18T00%3A00%3A00%2B07%3A00"),
+                    "unexpected query: " + eventsQuery.get());
+
             check("Bearer test-token".equals(authorization.get()), "the call must carry the access token");
             System.out.println("BUSY_CHECK_OK");
         } finally {

@@ -5,7 +5,10 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Fixture preparation only: not compiled into the production application jar. */
 @Profile("cypress-v2")
@@ -16,7 +19,9 @@ import org.springframework.web.bind.annotation.*;
 public class CypressCourseExpiryController {
     private final JdbcTemplate jdbc;
 
-    public CypressCourseExpiryController(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    public CypressCourseExpiryController(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
 
     public record Expiry(Long courseId, LocalDate expiryDate) {}
 
@@ -25,8 +30,10 @@ public class CypressCourseExpiryController {
         if (fixture.courseId() == null || fixture.expiryDate() == null) {
             throw new IllegalArgumentException("courseId and expiryDate are required");
         }
-        if (jdbc.update("UPDATE course SET expiry_date = ? WHERE course_id = ?",
-                fixture.expiryDate(), fixture.courseId()) != 1) {
+        if (jdbc.update(
+                "UPDATE course SET expiry_date = ? WHERE course_id = ?",
+                fixture.expiryDate(),
+                fixture.courseId()) != 1) {
             throw new IllegalArgumentException("Fixture course not found");
         }
     }
