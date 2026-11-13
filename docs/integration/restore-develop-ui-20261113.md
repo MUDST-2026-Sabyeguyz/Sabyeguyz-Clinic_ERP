@@ -36,6 +36,9 @@ Jenkins, GitHub Actions, Kubernetes manifests, deployment scripts, Ops
 automatic migration/seed entry points, historical archives, and the
 separate ID-card agent are outside this change.
 
+The only Compose wiring addition passes the restored manager bootstrap
+email setting through to the backend; `.env.example` documents the field.
+
 ## Running the restored application
 
 The restored backend requires `JWT_SECRET`. Bootstrap provisioning also
