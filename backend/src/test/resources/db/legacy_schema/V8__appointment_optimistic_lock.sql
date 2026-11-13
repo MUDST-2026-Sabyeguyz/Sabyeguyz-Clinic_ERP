@@ -1,1 +1,0 @@
-ALTER TABLE appointments ADD COLUMN version BIGINT NOT NULL DEFAULT 0;

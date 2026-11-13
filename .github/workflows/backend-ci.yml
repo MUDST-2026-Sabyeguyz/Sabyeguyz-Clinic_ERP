@@ -45,6 +45,9 @@ jobs:
       DB_URL: jdbc:postgresql://127.0.0.1:5432/clinic_v2_ci
       DB_USER: clinic
       DB_PASSWORD: clinic_ci_only
+      DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/clinic_v2_ci
+      DATABASE_USERNAME: clinic
+      DATABASE_PASSWORD: clinic_ci_only
 
     steps:
       - name: Checkout
@@ -110,4 +113,4 @@ jobs:
 
       - name: Stop isolated API test server
         if: always()
-        run: mvn --batch-mode --no-transfer-progress -Pcypress-api spring-boot:stop
+        run: mvn --batch-mode --no-transfer-progress -Pcypress-v2 spring-boot:stop
