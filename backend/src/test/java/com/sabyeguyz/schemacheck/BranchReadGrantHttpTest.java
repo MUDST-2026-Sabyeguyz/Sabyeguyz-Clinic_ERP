@@ -34,6 +34,12 @@ class BranchReadGrantHttpTest extends CoursePaymentHttpTestSupport {
         sale = db.queryForObject("select sale_transaction_id from course where course_id=?", Long.class, foreignCourse);
         new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(status -> {
             var course = context.getBean(CourseRepository.class).findById(foreignCourse).orElseThrow();
+            // A provisional owner-treated course has no allocation to test for redaction.
+            course.setCommissionStatus(com.sabyeguyz.clinicv2.enums.CommissionStatus.Locked);
+            course.setLockedCommissionRate(new java.math.BigDecimal("0.05"));
+            course.setTotalCourseCommissionPool(new java.math.BigDecimal("500.00"));
+            course.setCommissionAllocationPerVisit(new java.math.BigDecimal("50.00"));
+            course.setCommissionGeneratedDate(LocalDate.of(2026, 10, 1));
             var visit = new PatientVisit();
             visit.setPatient(course.getPurchaserPatient()); visit.setBranch(course.getBranch());
             visit.setAssignedStaff(course.getSellerStaff()); visit.setTreatingStaff(course.getSellerStaff());

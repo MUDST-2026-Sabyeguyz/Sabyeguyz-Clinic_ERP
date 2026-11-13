@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Real HTTP and persisted assertions for US001/005; no browser/logout claims. */
@@ -43,7 +42,9 @@ class AuthAcceptanceHttpTest extends CoursePaymentHttpTestSupport {
             assertEquals("THERAPIST", response.body().path("role").asText());
             assertEquals("01", response.body().path("branchCode").asText());
             assertFalse(response.body().path("token").asText().isBlank());
-            assertEquals(1, db.queryForObject("select count(*) from app_user where user_id=? and last_login_at > current_timestamp - interval '1 minute'", Integer.class, id));
+            // Instant is stored as UTC in the schema's timestamp-without-time-zone column.
+            assertEquals(1, db.queryForObject("select count(*) from app_user where user_id=? and last_login_at > (current_timestamp at time zone 'UTC') - interval '1 minute'", Integer.class, id),
+                    () -> db.queryForMap("select last_login_at, current_timestamp as database_now, current_setting('TimeZone') as database_zone from app_user where user_id=?", id).toString());
             assertEquals(403, replyAs(response.body().path("token").asText(), "GET", "/api/users", null).status());
         }
     }
@@ -65,7 +66,7 @@ class AuthAcceptanceHttpTest extends CoursePaymentHttpTestSupport {
         var request = account(); var user = create(request); long id = user.path("id").asLong();
         String hash = db.queryForObject("select password_hash from app_user where user_id=?", String.class, id);
         assertNotEquals(request.get("password"), hash);
-        assertTrue(context.getBean(PasswordEncoder.class).matches(request.get("password").toString(), hash));
+        assertTrue(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().matches(request.get("password").toString(), hash));
         assertEquals(1, db.queryForObject("select count(*) from user_role where user_id=?", Integer.class, id));
         assertEquals("THERAPIST", user.path("role").asText());
         assertFalse(user.has("password")); assertFalse(user.has("passwordHash"));

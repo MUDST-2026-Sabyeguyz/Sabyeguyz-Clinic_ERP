@@ -87,17 +87,17 @@ BEGIN
 
     -- V1002 removes the old staff/service/group scopes and percentage-base column; current rules are global.
     INSERT INTO treatment_fee_rule (permission_id, fee_type, fee_value, effective_from, effective_to,
-        treatment_fee_rule_status, treatment_fee_rule_create_by, rule_name)
-        VALUES (v_permission, 'Percentage', 7.5000, DATE '2026-01-01', NULL, TRUE, v_manager, 'DEMO: ค่ามือ 7.5%');
+        treatment_fee_rule_create_by, rule_name, rule_version)
+        VALUES (v_permission, 'Percentage', 7.5000, DATE '2026-01-01', NULL, v_manager, 'DEMO: ค่ามือ 7.5%', 2);
     INSERT INTO treatment_fee_rule (permission_id, fee_type, fee_value, effective_from, effective_to,
-        treatment_fee_rule_status, treatment_fee_rule_create_by, rule_name)
-        VALUES (v_permission, 'Fixed', 60.0000, DATE '2026-01-01', DATE '2026-12-31', FALSE, v_manager, 'DEMO: กฎปิดใช้งาน');
+        treatment_fee_rule_create_by, rule_name, rule_version)
+        VALUES (v_permission, 'Fixed', 60.0000, DATE '2025-01-01', DATE '2025-12-31', v_manager, 'DEMO: กฎหมดอายุ', 3);
 
     -- Every appointment lifecycle and calendar sync outcome; all event IDs are synthetic.
     INSERT INTO appointment (patient_id, branch_id, staff_id, service_id, appointment_status, appointment_date,
         appointment_time, appointment_create_by, appointment_patient_type, contact_name, contact_phone,
         requested_service_type, calendar_sync_status, notes, room_id, appointment_end_at)
-    SELECT v_patient, v_branch, v_pt, v_single_service, s.status, DATE '2026-10-16', TIME '09:00' + (s.n * INTERVAL '30 minutes'),
+    SELECT v_patient, v_branch, v_pt, v_single_service, CASE WHEN s.status::text IN ('Unconfirmed','Confirmed','Cancelled') THEN s.status ELSE 'Confirmed'::appointment_status_enum END, DATE '2026-10-16', TIME '09:00' + (s.n * INTERVAL '30 minutes'),
         v_manager, 'CURRENT', 'DEMO patient', '0800000000', 'SingleVisit', s.sync_status, 'Synthetic condition coverage',
         (SELECT room_id FROM room WHERE branch_id = v_branch ORDER BY room_id LIMIT 1),
         (DATE '2026-10-16' + TIME '09:00' + (s.n * INTERVAL '30 minutes') + INTERVAL '30 minutes')
