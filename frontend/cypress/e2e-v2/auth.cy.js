@@ -3,21 +3,23 @@ const username = 'input[autocomplete="username"]'
 const password = 'input[autocomplete="current-password"]'
 
 describe('sign in, roles and sign out', () => {
-  it('signs a manager in and lands on the dashboard', () => {
+  it('signs a manager in and selects a branch', () => {
     cy.visit('/')
     cy.get(username).type('manager')
     cy.get(password).type('manager123')
     cy.get('button[type="submit"]').click()
+    cy.location('pathname').should('eq', '/staff/select-branch')
+    cy.contains('button', 'สาขาพระราม 9').click()
     cy.location('pathname').should('eq', '/staff/dashboard')
     cy.get('header.staff-header').should('contain.text', 'Manager')
   })
 
-  it('signs a therapist in and lands on the patient list', () => {
+  it('signs a therapist in and lands on appointments', () => {
     cy.visit('/')
     cy.get(username).type('therapist')
     cy.get(password).type('therapist123')
     cy.get('button[type="submit"]').click()
-    cy.location('pathname').should('eq', '/staff/patients')
+    cy.location('pathname').should('eq', '/staff/appointments')
     cy.get('header.staff-header').should('contain.text', 'นักกายภาพบำบัด')
   })
 
@@ -42,7 +44,7 @@ describe('sign in, roles and sign out', () => {
   it('gives the manager the full menu', () => {
     cy.visitAs('manager', '/staff/patients')
     cy.get('nav[aria-label="เมนูเจ้าหน้าที่คลินิก"]').within(() => {
-      for (const label of ['แดชบอร์ด', 'ผู้ป่วย', 'นัดหมาย', 'บริการ', 'ธุรกรรม', 'บุคลากร', 'รายงาน', 'ตั้งค่า']) {
+      for (const label of ['แดชบอร์ด', 'ผู้ป่วย', 'นัดหมาย', 'ชำระเงิน', 'รายการธุรกรรม', 'คอมมิชชั่น', 'รายงาน', 'การตั้งค่า']) {
         cy.contains('a', label).should('exist')
       }
     })
@@ -51,7 +53,7 @@ describe('sign in, roles and sign out', () => {
   it('gives the therapist only the daily-work menu', () => {
     cy.visitAs('therapist', '/staff/patients')
     cy.get('nav[aria-label="เมนูเจ้าหน้าที่คลินิก"]').within(() => {
-      for (const label of ['ผู้ป่วย', 'นัดหมาย', 'บริการ', 'ธุรกรรม']) cy.contains('a', label).should('exist')
+      for (const label of ['ผู้ป่วย', 'นัดหมาย', 'ชำระเงิน', 'ธุรกรรม', 'คอมมิชชัน']) cy.contains('a', label).should('exist')
       for (const label of ['แดชบอร์ด', 'บุคลากร', 'รายงาน', 'ตั้งค่า']) cy.contains('a', label).should('not.exist')
     })
   })
