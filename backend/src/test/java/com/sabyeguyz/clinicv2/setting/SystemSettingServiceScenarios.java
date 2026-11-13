@@ -4,7 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.role.Permission;
 
 public class SystemSettingServiceScenarios {
