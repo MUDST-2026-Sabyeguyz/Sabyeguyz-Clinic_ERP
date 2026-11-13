@@ -84,6 +84,17 @@ jobs:
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress -Pcypress-v2 test-compile spring-boot:start
 
+      - name: Start and check Vite
+        working-directory: frontend
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > vite-ci.log 2>&1 &
+          for attempt in $(seq 1 120); do
+            if curl --noproxy '*' --fail --silent http://127.0.0.1:5173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat vite-ci.log
+          exit 1
+
       - name: Cypress browser tests
         uses: cypress-io/github-action@f790eee7a50d9505912f50c2095510be7de06aa7 # v6.10.9
         env:
@@ -93,9 +104,6 @@ jobs:
         with:
           working-directory: frontend
           install: false
-          start: npm run dev -- --host 127.0.0.1 --strictPort --port 5173
-          wait-on: 'http://127.0.0.1:5173'
-          wait-on-timeout: 120
           browser: chrome
           config-file: cypress.v2.config.cjs
 
