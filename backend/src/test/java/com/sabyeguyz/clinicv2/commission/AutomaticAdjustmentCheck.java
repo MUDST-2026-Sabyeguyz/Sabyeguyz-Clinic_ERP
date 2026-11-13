@@ -1,7 +1,7 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.enums.AdjustmentStatus;
 import com.sabyeguyz.clinicv2.enums.ApplicationStatus;
 import com.sabyeguyz.clinicv2.enums.PaymentStatus;
@@ -62,14 +62,24 @@ public class AutomaticAdjustmentCheck {
         applicationStub.on("save", call -> {
             AdjustmentApplication row = (AdjustmentApplication) call[0];
             if (!saved.contains(row)) saved.add(row);
+
             return row;
         });
         boolean[] refreshed = { false };
-        var service = new StaffMonthlyPaymentService(paymentStub.proxy(), null, null, null,
-                applicationStub.proxy(), adjustmentStub.proxy(), null, null, null) {
+        var service = new StaffMonthlyPaymentService(
+                paymentStub.proxy(),
+                null,
+                null,
+                null,
+                applicationStub.proxy(),
+                adjustmentStub.proxy(),
+                null,
+                null,
+                null) {
             @Override
             public StaffMonthlyPayment refresh(StaffMonthlyPayment payment) {
                 refreshed[0] = true;
+
                 return payment;
             }
         };
@@ -81,22 +91,28 @@ public class AutomaticAdjustmentCheck {
         first.setPaymentStatus(PaymentStatus.Open);
         payments.add(first);
         service.scheduleAutomaticAdjustments(first);
+
         check(saved.size() == 1, "first month should schedule once");
         check(saved.get(0).getAmount().compareTo(new BigDecimal("-3000.00")) == 0,
                 "first month should reserve full remaining amount");
+
         check("AGREEMENT-1".equals(saved.get(0).getApprovalReference()), "consent reference must travel with deduction");
         service.scheduleAutomaticAdjustments(first);
+
         check(saved.size() == 1, "refresh must not duplicate a draft");
 
         check(service.limitDeductions(first, new BigDecimal("2000.00"), true)
                 .compareTo(new BigDecimal("-2000.00")) == 0,
                 "deduction must be capped at actual earnings");
+
         check(saved.get(0).getAmount().compareTo(new BigDecimal("-2000.00")) == 0,
                 "actual application must record only the amount paid");
         saved.get(0).setApplicationStatus(ApplicationStatus.Applied);
         service.settle(adjustment);
+
         check(adjustment.getRemainingAmount().compareTo(new BigDecimal("1000.00")) == 0,
                 "unpaid balance must remain for the next month");
+
         check(adjustment.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied,
                 "partially applied adjustment must keep its state");
         StaffMonthlyPayment next = new StaffMonthlyPayment();
@@ -107,21 +123,35 @@ public class AutomaticAdjustmentCheck {
         next.setPaymentStatus(PaymentStatus.Open);
         payments.add(next);
         service.scheduleAutomaticAdjustments(next);
+
         check(saved.size() == 2, "remaining balance should reach the next month");
         check(saved.get(1).getAmount().compareTo(new BigDecimal("-1000.00")) == 0,
                 "next month must use only the remaining balance");
 
         adjustmentStub.on("findByStaffIdOrderByIdDesc", ignored -> List.of(adjustment));
-        var adjustmentService = new StaffPayAdjustmentService(adjustmentStub.proxy(),
-                applicationStub.proxy(), paymentStub.proxy(), service, null, null, null, null, null, null);
+        var adjustmentService = new StaffPayAdjustmentService(
+                adjustmentStub.proxy(),
+                applicationStub.proxy(),
+                paymentStub.proxy(),
+                service,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         adjustmentService.cancelOnTermination(person.getId(), 3L);
+
         check(saved.get(1).getApplicationStatus() == ApplicationStatus.Cancelled,
                 "resignation must cancel an unpaid application");
+
         check(adjustment.getAdjustmentStatus() == AdjustmentStatus.Cancelled
                         && "นักกายภาพลาออก".equals(adjustment.getCancellationReason()),
                 "resignation must label the remaining balance");
+
         check(refreshed[0], "open payment must be recalculated after cancellation");
         service.scheduleAutomaticAdjustments(next);
+
         check(saved.size() == 2, "cancelled adjustment must not be scheduled again");
         System.out.println("AUTOMATIC_ADJUSTMENT_OK");
     }

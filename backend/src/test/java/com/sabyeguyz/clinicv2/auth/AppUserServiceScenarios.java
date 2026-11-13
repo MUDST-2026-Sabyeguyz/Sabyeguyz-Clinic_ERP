@@ -1,14 +1,15 @@
 package com.sabyeguyz.clinicv2.auth;
 
-import java.util.Map;
 import java.util.LinkedHashMap;
-import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
+import java.util.Map;
+import java.util.Optional;
 
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.role.Role;
 import com.sabyeguyz.clinicv2.role.RoleRepository;
-import java.util.Optional;
+
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 public class AppUserServiceScenarios {
@@ -20,7 +21,8 @@ public class AppUserServiceScenarios {
     UserRoleRepository userRoles = userRolesStub.proxy();
     V2RepositoryStub<BranchRepository> branchesStub = new V2RepositoryStub<>(BranchRepository.class);
     BranchRepository branches = branchesStub.proxy();
-    V2RepositoryStub<UserBranchAccessRepository> userBranchAccessStub = new V2RepositoryStub<>(UserBranchAccessRepository.class);
+    V2RepositoryStub<UserBranchAccessRepository> userBranchAccessStub =
+            new V2RepositoryStub<>(UserBranchAccessRepository.class);
     UserBranchAccessRepository userBranchAccess = userBranchAccessStub.proxy();
 
     private AppUserService service() {
@@ -35,20 +37,28 @@ public class AppUserServiceScenarios {
 
         out.put("username", user.getUsername());
         out.put("passwordHash", user.getPasswordHash());
-        out.put("passwordMatches", new BCryptPasswordEncoder().matches("password12345", user.getPasswordHash()));
+        out.put(
+                "passwordMatches",
+                new BCryptPasswordEncoder().matches("password12345", user.getPasswordHash()));
+
         out.put("userStatus", user.isUserStatus());
+
         return out;
     }
 
     public Map<String, Object> rejectsShortPassword() {
         Map<String, Object> out = new LinkedHashMap<>();
         usersStub.on("findByUsername", args -> Optional.empty());
+
         out.putAll(V2RepositoryStub.outcome(() -> {
             service().register(
                     "alice", "alice@example.com", "short", null, 1L);
+
             return null;
         }));
+
         out.put("usersSaveCalls", usersStub.calls("save"));
+
         return out;
     }
 
@@ -60,7 +70,12 @@ public class AppUserServiceScenarios {
         existing.setUserStatus(true);
         usersStub.on("findByUsername", args -> Optional.of(existing));
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().login("alice", "wrong"); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            service().login("alice", "wrong");
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -72,7 +87,12 @@ public class AppUserServiceScenarios {
         existing.setUserStatus(false);
         usersStub.on("findByUsername", args -> Optional.of(existing));
 
-        out.putAll(V2RepositoryStub.outcome(() -> { service().login("alice", "password123"); return null; }));
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            service().login("alice", "password123");
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -87,6 +107,7 @@ public class AppUserServiceScenarios {
         service().grantBranchAccess(1L, 2L);
 
         out.put("userBranchAccessSaveCalls", userBranchAccessStub.calls("save"));
+
         return out;
     }
 
@@ -101,6 +122,7 @@ public class AppUserServiceScenarios {
         service().assignRole(1L, 3L);
 
         out.put("userRolesSaveCalls", userRolesStub.calls("save"));
+
         return out;
     }
 }

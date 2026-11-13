@@ -1,26 +1,10 @@
 package com.sabyeguyz.clinicv2.cypress;
 
-import com.sabyeguyz.clinicv2.commission.CommissionAllocationLedger;
-import com.sabyeguyz.clinicv2.course.CourseEntitlement;
-import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
-import com.sabyeguyz.clinicv2.course.CourseLedger;
-import com.sabyeguyz.clinicv2.course.CourseTransfer;
-import com.sabyeguyz.clinicv2.course.CourseUsagePrint;
-import com.sabyeguyz.clinicv2.course.CourseUsagePrintEvent;
-import com.sabyeguyz.clinicv2.course.CourseUsagePrintEventRepository;
-import com.sabyeguyz.clinicv2.course.CourseUsagePrintRepository;
-import com.sabyeguyz.clinicv2.course.CourseUsagePrintService;
-import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
-import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
-import com.sabyeguyz.clinicv2.enums.CourseLedgerEntryType;
-import com.sabyeguyz.clinicv2.enums.TransferStatus;
-import com.sabyeguyz.clinicv2.enums.UsageStatus;
-import com.sabyeguyz.clinicv2.role.Permission;
-import com.sabyeguyz.clinicv2.sale.TransactionCancellation;
-import com.sabyeguyz.clinicv2.sale.TransactionCancellationRepository;
-import com.sabyeguyz.clinicv2.sale.TransactionCancellationService;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.*;
 
-import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.appointment.*;
 import com.sabyeguyz.clinicv2.audit.*;
 import com.sabyeguyz.clinicv2.branch.Branch;
@@ -31,12 +15,13 @@ import com.sabyeguyz.clinicv2.commission.*;
 import com.sabyeguyz.clinicv2.course.*;
 import com.sabyeguyz.clinicv2.enums.*;
 import com.sabyeguyz.clinicv2.patient.Patient;
+import com.sabyeguyz.clinicv2.role.Permission;
+import com.sabyeguyz.clinicv2.sale.TransactionCancellation;
+import com.sabyeguyz.clinicv2.sale.TransactionCancellationRepository;
+import com.sabyeguyz.clinicv2.sale.TransactionCancellationService;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.*;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -63,10 +48,8 @@ public class V2WorkflowScenariosController {
         setId(therapist, 2L);
         therapist.setBranch(branch);
 
-        staffRepository.on("findByIdForUpdate",
-                args -> Optional.of(therapist));
-        appointments.on("activeOfStaffForInterval",
-                args -> List.of());
+        staffRepository.on("findByIdForUpdate", args -> Optional.of(therapist));
+        appointments.on("activeOfStaffForInterval", args -> List.of());
 
         Appointment existing = new Appointment();
         setId(existing, 1L);
@@ -91,6 +74,7 @@ public class V2WorkflowScenariosController {
         appointments.on("findByIdForUpdate", args -> Optional.of(existing));
         appointments.on("existsByStaffIdAndAppointmentDateAndAppointmentTimeAndAppointmentStatusNotIn",
                 args -> scenario.equals("conflict"));
+
         return V2RepositoryStub.outcome(() -> {
             Appointment result = switch (scenario) {
                 case "book", "conflict" -> service.book(new Patient(), branch, therapist, new Service(), null,
@@ -125,6 +109,7 @@ public class V2WorkflowScenariosController {
             resultMap.put("hasPatient", result.getPatient() != null);
             resultMap.put("contactName", result.getContactName());
             resultMap.put("contactPhone", result.getContactPhone());
+
             return resultMap;
         });
     }
@@ -143,10 +128,12 @@ public class V2WorkflowScenariosController {
         AppointmentService appointments = new AppointmentService(null, null, null) {
             @Override public Appointment markArrived(Long id, Long actor) {
                 arrivedCalls.add(Arrays.asList(id, actor));
+
                 return appointment;
             }
             @Override public Appointment markCompleted(Long id, Long actor) {
                 completedCalls.add(Arrays.asList(id, actor));
+
                 return appointment;
             }
         };
@@ -159,6 +146,7 @@ public class V2WorkflowScenariosController {
         var auditService = new AuditLogService(auditRows.proxy());
         var service = new PatientVisitService(
                 visits.proxy(), appointments, auditService);
+
         return V2RepositoryStub.outcome(() -> {
             PatientVisit result = switch (scenario) {
                 case "check-in" -> service.checkInFromAppointment(5L, 1L);
@@ -173,6 +161,7 @@ public class V2WorkflowScenariosController {
             resultMap.put("checkoutTime", result.getCheckoutTime());
             resultMap.put("arrivedCalls", arrivedCalls);
             resultMap.put("completedCalls", completedCalls);
+
             return resultMap;
         });
     }
@@ -180,10 +169,12 @@ public class V2WorkflowScenariosController {
     @GetMapping("/audit/{scenario}")
     public Map<String, Object> audit(@PathVariable String scenario) {
         var repository = new V2RepositoryStub<>(AuditLogRepository.class);
+
         return V2RepositoryStub.outcome(() -> {
             var log = new AuditLogService(repository.proxy()).record("branch", "1",
                     scenario.equals("missing-action") ? null : AuditAction.UPDATE,
                     "{\"phone\":\"080\"}", "{\"phone\":\"081\"}", 1L);
+
             return Map.of("tableName", log.getTableName(), "action", log.getAction());
         });
     }
@@ -207,6 +198,7 @@ public class V2WorkflowScenariosController {
         ledger.on("sumQtyChangeByCourseAndPatient", args -> Long.valueOf(10).equals(args[1])
                 ? (scenario.equals("insufficient") ? 2L : 6L) : 0L);
         transfers.on("save", args -> { setId(args[0], 100L); return args[0]; });
+
         return V2RepositoryStub.outcome(() -> {
             var result = service.transfer(course, from, scenario.equals("self") ? from : to,
                     scenario.equals("self") ? 1 : 4, "ย้ายให้ครอบครัว", 1L);
@@ -223,6 +215,7 @@ public class V2WorkflowScenariosController {
             // the receiver's row is created first (the transfer references it), then both rows are adjusted
             resultMap.put("fromAllocated", saved.stream().filter(e -> e.getPatient() == from).reduce((a, b) -> b).get().getAllocatedVisits());
             resultMap.put("toAllocated", saved.stream().filter(e -> e.getPatient() == to).reduce((a, b) -> b).get().getAllocatedVisits());
+
             return resultMap;
         });
     }
@@ -241,6 +234,7 @@ public class V2WorkflowScenariosController {
         ledger.on("sumQtyChangeByCourseAndPatient", args -> Long.valueOf(10).equals(args[1]) ? 2L
                 : scenario.equals("reverse-receiver-used") ? 1L : 4L);
         String reason = scenario.equals("reverse-no-reason") ? " " : "โอนผิดคน";
+
         return V2RepositoryStub.outcome(() -> {
             var result = service.reverse(transfer, new Permission(), reason, 9L);
             var entries = ledger.arguments("save").stream().map(a -> (CourseLedger) a[0]).toList();
@@ -254,6 +248,7 @@ public class V2WorkflowScenariosController {
             resultMap.put("cancellationType", cancellation.getCancellationType());
             resultMap.put("cancellationTargetsTransfer", cancellation.getTransfer() == transfer);
             resultMap.put("entitlementSaves", entitlements.calls("save"));
+
             return resultMap;
         });
     }
@@ -261,6 +256,7 @@ public class V2WorkflowScenariosController {
     private static CourseLedger ledgerEntry(CourseLedgerEntryType type, Patient patient, int qty, Course course) {
         var entry = new CourseLedger();
         entry.setEntryType(type); entry.setPatient(patient); entry.setQtyChange(qty); entry.setCourse(course);
+
         return entry;
     }
 
@@ -274,6 +270,7 @@ public class V2WorkflowScenariosController {
         usages.on("findByCourseIdOrderByIdDesc", args -> {
             var saved = new java.util.ArrayList<>(new java.util.LinkedHashSet<>(usages.arguments("save").stream().map(a -> (CourseVisitUsage) a[0]).toList()));
             java.util.Collections.reverse(saved);
+
             return saved;
         });
         var entitlements = new V2RepositoryStub<>(CourseEntitlementRepository.class);
@@ -300,6 +297,7 @@ public class V2WorkflowScenariosController {
                 : Optional.of((CourseEntitlement) entitlements.arguments("save").get(entitlements.arguments("save").size() - 1)[0]));
         boolean ownerTreats = scenario.equals("owner") || scenario.equals("reverse") || scenario.equals("reverse-twice")
                 || scenario.equals("reverse-no-reason");
+
         return V2RepositoryStub.outcome(() -> {
             var service = new CourseVisitUsageService(usages.proxy(), ledger.proxy(), courses.proxy(),
                     allocations.proxy(), new TreatmentFeeRuleResolver(rules.proxy()), entitlements.proxy(), cancellations,
@@ -324,6 +322,7 @@ public class V2WorkflowScenariosController {
                 resultMap.put("ledgerLinkedToUsage", firstEntry.getVisitUsage() == result);
                 resultMap.put("entitlementUsed", firstEntitlement.getUsedVisits());
                 resultMap.put("entitlementRemaining", firstEntitlement.getRemainingVisits());
+
                 return resultMap;
             }
             String reason = scenario.equals("reverse-no-reason") ? " " : "บันทึกผิดคน";
@@ -349,6 +348,7 @@ public class V2WorkflowScenariosController {
             resultMap.put("outstanding", course.getCommissionOutstanding());
             resultMap.put("entitlementUsed", lastEntitlement.getUsedVisits());
             resultMap.put("cancellationType", cancellation.getCancellationType());
+
             return resultMap;
         });
     }
@@ -366,14 +366,17 @@ public class V2WorkflowScenariosController {
         if (scenario.equals("issue-second-version")) prints.on("countByVisitUsageId", args -> 1L);
         var existing = new CourseUsagePrint();
         prints.on("findById", args -> scenario.equals("reprint") ? Optional.of(existing) : Optional.empty());
+
         return V2RepositoryStub.outcome(() -> {
             if (scenario.startsWith("reprint")) {
                 var event = service.reprint(1L, 9L);
+
                 return Map.of("eventType", event.getEventType(), "printedBy", event.getPrintedBy(),
                         "sameDocument", event.getPrint() == existing);
             }
             var print = service.issue(usage, 9L);
             var event = (CourseUsagePrintEvent) events.arguments("save").get(0)[0];
+
             return Map.of("version", print.getDocumentVersion(), "eventType", event.getEventType(),
                     "issuedBy", print.getIssuedBy(), "sameUsage", print.getVisitUsage() == usage,
                     "snapshotHasCourseNo", print.getDocumentSnapshot().contains("RE00000010"));
@@ -392,6 +395,7 @@ public class V2WorkflowScenariosController {
         course.setOwnerNetCommissionReleasedTotal(BigDecimal.ZERO);
         course.setSubstituteTreatmentFeeTotal(BigDecimal.ZERO);
         course.setCommissionOutstanding(new BigDecimal("700.00"));
+
         return course;
     }
 

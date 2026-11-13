@@ -1,7 +1,13 @@
 package com.sabyeguyz.clinicv2.cypress;
 
 import java.lang.reflect.Proxy;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -12,7 +18,10 @@ public final class V2RepositoryStub<T> {
     private final Map<String, List<Object[]>> invocations = new HashMap<>();
 
     public V2RepositoryStub(Class<T> type) {
-        proxy = type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (instance, method, args) -> {
+        proxy = type.cast(Proxy.newProxyInstance(
+                type.getClassLoader(),
+                new Class<?>[] {type},
+                (instance, method, args) -> {
             Object[] arguments = args == null ? new Object[0] : args;
             if (method.getDeclaringClass() == Object.class) {
                 return switch (method.getName()) {
@@ -32,17 +41,28 @@ public final class V2RepositoryStub<T> {
             if (result == boolean.class) return false;
             if (result == long.class) return 0L;
             if (result == int.class) return 0;
+
             return null;
-        }));
+                }));
     }
 
-    public T proxy() { return proxy; }
+    public T proxy() {
+        return proxy;
+    }
+
     public V2RepositoryStub<T> on(String method, Function<Object[], Object> answer) {
         answers.put(method, answer);
+
         return this;
     }
-    public int calls(String method) { return arguments(method).size(); }
-    public List<Object[]> arguments(String method) { return invocations.getOrDefault(method, List.of()); }
+
+    public int calls(String method) {
+        return arguments(method).size();
+    }
+
+    public List<Object[]> arguments(String method) {
+        return invocations.getOrDefault(method, List.of());
+    }
 
     public static Map<String, Object> outcome(Supplier<?> action) {
         Map<String, Object> result = new LinkedHashMap<>();
