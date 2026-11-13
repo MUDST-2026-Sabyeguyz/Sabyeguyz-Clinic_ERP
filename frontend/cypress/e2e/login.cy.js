@@ -22,7 +22,7 @@ describe('staff login', () => {
         username,
         password: 'invalid-password',
       })
-      expect(response?.statusCode).to.equal(400)
+      expect(response?.statusCode).to.equal(401)
       expect(response?.body.message).to.equal('ชื่อผู้ใช้ อีเมล หรือรหัสผ่านไม่ถูกต้อง')
     })
 

@@ -11,6 +11,8 @@ describe('authenticated patient readback with real PostgreSQL backend', () => {
       cy.get('input[autocomplete="username"]').type(demoUsername, { log: false })
       cy.get('input[autocomplete="current-password"]').type(demoPassword, { log: false })
       cy.get('button[type="submit"]').click()
+      cy.location('pathname').should('eq', `${prefix}/staff/select-branch`)
+      cy.contains('button', 'สาขาพระราม 9').click()
       cy.location('pathname').should('eq', `${prefix}/staff/dashboard`)
       cy.window().then((win) => {
         const token = win.localStorage.getItem('authToken')
@@ -19,10 +21,10 @@ describe('authenticated patient readback with real PostgreSQL backend', () => {
           method: 'POST', url: url('/api/patients'), log: false,
           headers: { Authorization: `Bearer ${token}` },
           body: {
-            branchCode: 'RP', username: `e2e-${suffix}`, email: `e2e-${suffix}@example.invalid`,
+            branchCode: '01', username: `e2e-${suffix}`, email: `e2e-${suffix}@example.invalid`,
             password: 'synthetic-test-password', title: 'นาย', fullName: 'ทดสอบ ระบบเบราว์เซอร์',
             birthDate: '1990-01-01', gender: 'ชาย', phone: '0800000000',
-            identityDocumentType: 'PASSPORT', identityNumber: `E2E${suffix}`, address: 'Synthetic data',
+            identityDocumentType: 'PASSPORT', identityNumber: `E${Date.now().toString(36)}${Cypress._.random(1000, 9999)}`, address: 'Synthetic data',
             drugAllergy: false, foodAllergy: false, chronicDisease: '',
             emergencyContactName: 'Test', emergencyContactRelationship: 'Test',
             emergencyContactPhone: '0800000001', privacyConsent: true,

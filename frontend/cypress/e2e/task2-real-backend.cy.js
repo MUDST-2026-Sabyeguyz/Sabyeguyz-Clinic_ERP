@@ -3,10 +3,10 @@ describe('Task 2 real backend checkout', () => {
   before(function () {
     cy.env(['TASK2_ISOLATED']).then(env => {
       if (env.TASK2_ISOLATED !== 'yes') this.skip()
+      const base = new URL(Cypress.config('baseUrl'))
+      expect(base.hostname).to.equal('127.0.0.1')
+      expect(['55173', '55174']).to.include(base.port)
     })
-    const base = new URL(Cypress.config('baseUrl'))
-    expect(base.hostname).to.equal('127.0.0.1')
-    expect(['55173', '55174']).to.include(base.port)
   })
   for (const [index, username] of ['manager', 'therapist'].entries()) {
     it(`${username}: logs in, purchases a course, sells a service and opens its receipt`, () => {
