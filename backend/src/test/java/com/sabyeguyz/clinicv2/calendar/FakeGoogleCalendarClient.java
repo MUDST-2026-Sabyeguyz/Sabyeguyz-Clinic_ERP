@@ -12,8 +12,9 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * In-memory stand-in for Google Calendar, used by the HTTP suite (profile cypress-v2) so no real Google account
- * is needed. The test endpoints in CypressCalendarFakeController read it and play the part of a person editing
+ * In-memory stand-in for Google Calendar, used by the HTTP suite (profile
+ * cypress-v2) so no real Google account is needed. The test endpoints in
+ * CypressCalendarFakeController read it and play the part of a person editing
  * the calendar in Google.
  */
 @Primary
@@ -38,7 +39,8 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
     private final Map<String, List<BusyBlock>> busy = new LinkedHashMap<>();
     private int sequence = 0;
     private int failures = 0;
-    /** Failures only for reading Busy time, so a test of the sync is not disturbed by the booking that reads it. */
+    /** Failures only for reading Busy time, so a test of the sync is not
+     * disturbed by the booking that reads it. */
     private int busyFailures = 0;
 
     public synchronized void reset() {
@@ -59,9 +61,15 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
     }
 
     /** A person moves the event in Google (start only) or deletes it. */
-    public synchronized FakeEvent edit(String calendarId, Long appointmentId, LocalDateTime newStart, boolean cancel) {
-        FakeEvent event = events(calendarId).stream().filter(e -> appointmentId.equals(e.appointmentId) && !e.cancelled)
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("no such event"));
+    public synchronized FakeEvent edit(
+            String calendarId,
+            Long appointmentId,
+            LocalDateTime newStart,
+            boolean cancel) {
+        FakeEvent event = events(calendarId).stream()
+                .filter(e -> appointmentId.equals(e.appointmentId) && !e.cancelled)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no such event"));
         if (newStart != null) {
             long minutes = Duration.between(event.start, event.end).toMinutes();
             event.start = newStart;
@@ -69,6 +77,7 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
         }
         if (cancel) event.cancelled = true;
         touch(event);
+
         return event;
     }
 
@@ -78,7 +87,10 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
     }
 
     /** A person adds a Busy event by hand in Google. */
-    public synchronized void addBusy(String calendarId, LocalDateTime start, LocalDateTime end) {
+    public synchronized void addBusy(
+            String calendarId,
+            LocalDateTime start,
+            LocalDateTime end) {
         busy.computeIfAbsent(calendarId, key -> new ArrayList<>()).add(new BusyBlock(start, end));
     }
 
@@ -88,6 +100,7 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
             busyFailures--;
             throw new CalendarApiException(503, "fake Google is down");
         }
+
         return busy.getOrDefault(calendarId, List.of()).stream()
                 .filter(block -> block.start().isBefore(to) && block.end().isAfter(from)).toList();
     }
@@ -112,6 +125,7 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
         fill(event, data);
         touch(event);
         calendars.computeIfAbsent(calendarId, key -> new LinkedHashMap<>()).put(event.id, event);
+
         return new EventRef(event.id, event.etag);
     }
 
@@ -122,6 +136,7 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
         if (event == null || event.cancelled) throw new CalendarApiException(404, "no such event");
         fill(event, data);
         touch(event);
+
         return new EventRef(event.id, event.etag);
     }
 
@@ -144,6 +159,7 @@ public class FakeGoogleCalendarClient implements GoogleCalendarClient {
                 changed.add(new RemoteEvent(event.id, event.etag, event.cancelled, event.start, event.appointmentId));
             }
         }
+
         return changed;
     }
 

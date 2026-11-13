@@ -1,17 +1,18 @@
 package com.sabyeguyz.clinicv2.role;
 
-import java.util.Map;
 import java.util.LinkedHashMap;
-import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
-
+import java.util.Map;
 import java.util.Optional;
+
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 
 public class RoleServiceScenarios {
     V2RepositoryStub<RoleRepository> rolesStub = new V2RepositoryStub<>(RoleRepository.class);
     RoleRepository roles = rolesStub.proxy();
     V2RepositoryStub<PermissionRepository> permissionsStub = new V2RepositoryStub<>(PermissionRepository.class);
     PermissionRepository permissions = permissionsStub.proxy();
-    V2RepositoryStub<RolePermissionRepository> rolePermissionsStub = new V2RepositoryStub<>(RolePermissionRepository.class);
+    V2RepositoryStub<RolePermissionRepository> rolePermissionsStub =
+            new V2RepositoryStub<>(RolePermissionRepository.class);
     RolePermissionRepository rolePermissions = rolePermissionsStub.proxy();
 
     public Map<String, Object> createsRole() {
@@ -21,13 +22,20 @@ public class RoleServiceScenarios {
         Role role = new RoleService(roles, permissions, rolePermissions).create("MANAGER", 1L);
 
         out.put("roleName", role.getRoleName());
+
         return out;
     }
 
     public Map<String, Object> rejectsDuplicateRoleName() {
         Map<String, Object> out = new LinkedHashMap<>();
         rolesStub.on("findByRoleName", args -> Optional.of(new Role()));
-        out.putAll(V2RepositoryStub.outcome(() -> { new RoleService(roles, permissions, rolePermissions).create("MANAGER", 1L); return null; }));
+
+        out.putAll(V2RepositoryStub.outcome(() -> {
+            new RoleService(roles, permissions, rolePermissions).create("MANAGER", 1L);
+
+            return null;
+        }));
+
         return out;
     }
 
@@ -42,6 +50,7 @@ public class RoleServiceScenarios {
         new RoleService(roles, permissions, rolePermissions).grantPermission(1L, 2L);
 
         out.put("rolePermissionsSaveCalls", rolePermissionsStub.calls("save"));
+
         return out;
     }
 }
