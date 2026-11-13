@@ -43,7 +43,7 @@ class AuthAcceptanceHttpTest extends CoursePaymentHttpTestSupport {
             assertEquals("THERAPIST", response.body().path("role").asText());
             assertEquals("01", response.body().path("branchCode").asText());
             assertFalse(response.body().path("token").asText().isBlank());
-            assertEquals(1, db.queryForObject("select count(*) from app_user where user_id=? and last_login_at > current_timestamp - interval '1 minute'", Integer.class, id));
+            assertEquals(1, db.queryForObject("select count(*) from app_user where user_id=? and last_login_at > (current_timestamp at time zone 'UTC') - interval '1 minute'", Integer.class, id));
             assertEquals(403, replyAs(response.body().path("token").asText(), "GET", "/api/users", null).status());
         }
     }
