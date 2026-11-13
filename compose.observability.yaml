@@ -6,7 +6,7 @@ services:
     ports: !override
       - "127.0.0.1:${BACKEND_PORT:-18080}:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: "docker,v2,observability"
+      SPRING_PROFILES_ACTIVE: "docker,observability"
       OBSERVABILITY_OTLP_URL: "http://observability:4318"
       OBSERVABILITY_METRICS_STEP: "10s"
       OBSERVABILITY_TRACE_SAMPLE_RATE: "1.0"
@@ -24,6 +24,8 @@ services:
       - "127.0.0.1:${OBS_GRAFANA_PORT:-13000}:3000"
     volumes:
       - observability-data:/data
+      - ./deploy/observability/dashboard-provider.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/sabyeguyz.yaml:ro
+      - ./deploy/observability/dashboards:/otel-lgtm/grafana/conf/provisioning/dashboards/sabyeguyz:ro
 
 volumes:
   observability-data:
