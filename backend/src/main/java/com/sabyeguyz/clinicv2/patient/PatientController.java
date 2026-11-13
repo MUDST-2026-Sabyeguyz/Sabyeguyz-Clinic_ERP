@@ -46,34 +46,13 @@ public class PatientController {
     }
 
     public record RegisterRequest(
-            String branchCode,
-            String customerType,
-            String title,
-            String firstName,
-            String lastName,
-            String gender,
-            String phone,
-            String genderDetail,
-            String nickname,
-            String identityDocumentType,
-            String identityNumber,
-            LocalDate birthDate,
-            String bloodGroup,
-            String nationality,
-            String address,
-            String fullName,
-            com.fasterxml.jackson.databind.JsonNode middleName,
-            String email,
-            String customerSource,
-            String insuranceType,
-            String insuranceCompany,
-            Boolean drugAllergy,
-            Boolean foodAllergy,
-            String chronicDisease,
-            String emergencyContactName,
-            String emergencyContactRelationship,
-            String emergencyContactPhone,
-            Boolean privacyConsent) {}
+            String branchCode, String customerType, String title, String firstName, String lastName,
+            String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
+            String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
+            String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email,
+            String customerSource, String insuranceCompany, Boolean drugAllergy, Boolean foodAllergy,
+            String chronicDisease, String emergencyContactName, String emergencyContactRelationship,
+            String emergencyContactPhone, Boolean privacyConsent) {}
 
     public record PageResponse<T>(
             java.util.List<T> items,
@@ -99,37 +78,13 @@ public class PatientController {
             boolean active) {}
 
     public record PatientProfile(
-            Long id,
-            String hn,
-            String fullName,
-            String phone,
-            boolean active,
-            BranchSummary branch,
-            String title,
-            LocalDate birthDate,
-            String gender,
-            String identityDocumentType,
-            String identityNumber,
-            String address,
-            boolean drugAllergy,
-            boolean foodAllergy,
-            String chronicDisease,
-            String emergencyContactName,
-            String emergencyContactRelationship,
-            String emergencyContactPhone,
-            boolean privacyConsent,
-            String nickname,
-            String bloodGroup,
-            String nationality,
-            String customerType,
-            String customerSource,
-            String insuranceCompany,
-            String insuranceType,
-            String customerTypeCode,
-            String firstName,
-            String lastName,
-            String middleName,
-            String email) {}
+            Long id, String hn, String fullName, String phone, boolean active, BranchSummary branch,
+            String title, LocalDate birthDate, String gender, String identityDocumentType, String identityNumber,
+            String address, boolean drugAllergy, boolean foodAllergy, String chronicDisease,
+            String emergencyContactName, String emergencyContactRelationship, String emergencyContactPhone,
+            boolean privacyConsent, String nickname, String bloodGroup, String nationality,
+            String customerType, String customerSource, String insuranceCompany, String customerTypeCode,
+            String firstName, String lastName, String middleName, String email) {}
 
     public record IdentityPatientSummary(
             Long id,
@@ -236,19 +191,11 @@ public class PatientController {
                 parseBloodGroup(request.bloodGroup()),
                 request.nationality(),
                 request.address(),
-                null,
-                resolveMasterDataValue("Referral Channel", request.customerSource()),
-                resolveMasterDataValue("Insurance Type", request.insuranceType()),
-                resolveMasterDataValue("Insurance Company", request.insuranceCompany()),
-                middleName,
-                Boolean.TRUE.equals(request.drugAllergy()),
-                Boolean.TRUE.equals(request.foodAllergy()),
-                request.chronicDisease(),
-                request.emergencyContactName(),
-                request.emergencyContactRelationship(),
-                request.emergencyContactPhone(),
-                Boolean.TRUE.equals(request.privacyConsent()));
-
+                null, resolveMasterDataValue("Referral Channel", request.customerSource()), null,
+                resolveMasterDataValue("Insurance Company", request.insuranceCompany()), middleName,
+                Boolean.TRUE.equals(request.drugAllergy()), Boolean.TRUE.equals(request.foodAllergy()),
+                request.chronicDisease(), request.emergencyContactName(), request.emergencyContactRelationship(),
+                request.emergencyContactPhone(), Boolean.TRUE.equals(request.privacyConsent()));
         Patient patient = service.register(registration, actor.currentId());
         patient.setEmail(validEmail(request.email()));
 
@@ -312,12 +259,6 @@ public class PatientController {
             patient.setReferralChannel(
                     resolveMasterDataValue("Referral Channel", request.customerSource()));
         }
-
-        if (request.insuranceType() != null) {
-            patient.setInsuranceType(
-                    resolveMasterDataValue("Insurance Type", request.insuranceType()));
-        }
-
         if (request.insuranceCompany() != null) {
             patient.setInsuranceCompany(
                     resolveMasterDataValue("Insurance Company", request.insuranceCompany()));
