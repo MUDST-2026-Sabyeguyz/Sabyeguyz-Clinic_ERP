@@ -19,6 +19,8 @@ const working = ref(false)
 const error = ref('')
 const notice = ref('')
 const temporaryPreview = ref(false)
+type UsageNames = { usageSequence?: number; patientName?: string; therapistName?: string }
+const usageNames = ref(new Map<number, UsageNames>())
 const printHistory = computed(() => {
   let reprintCount = 0
   const events = selected.value?.events ?? []
@@ -33,6 +35,15 @@ const snapshot = computed<Snapshot>(() => {
   try { return JSON.parse(selected.value?.documentSnapshot || '{}') as Snapshot }
   catch { return {} }
 })
+const documentEntries = computed(() => (snapshot.value.history ?? []).map((entry) => {
+  const names = usageNames.value.get(entry.sequence)
+  return {
+    date: entry.visitDate,
+    patient: entry.patientName || names?.patientName,
+    therapist: entry.therapistName || names?.therapistName,
+    quantity: entry.quantity,
+  }
+}))
 const dateTime = (value: string) => new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' }).format(new Date(value))
 
 function goBack() {
@@ -47,6 +58,7 @@ function goBack() {
 async function load() {
   loading.value = true
   error.value = ''
+  usageNames.value = new Map()
   try {
     const courseId = Number(route.params.courseId)
     if (!Number.isInteger(courseId) || courseId < 1) throw new Error('รหัสคอร์สไม่ถูกต้อง')
@@ -82,6 +94,14 @@ async function load() {
     selected.value = [...documents].sort(
       (a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt) || b.id - a.id,
     )[0]
+    if (!temporaryPreview.value && snapshot.value.history?.some((entry) => !entry.patientName || !entry.therapistName)) {
+      const ledger = await courseApi.ledger(courseId).catch(() => null)
+      for (const movement of (ledger?.movements ?? []) as Array<UsageNames & { type: string }>) {
+        if (movement.type === 'USAGE' && movement.usageSequence != null) {
+          usageNames.value.set(movement.usageSequence, movement)
+        }
+      }
+    }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'โหลดใบตัดคอร์สไม่สำเร็จ'
   } finally { loading.value = false }
@@ -147,13 +167,7 @@ onMounted(() => void load())
             :total="snapshot.totalVisits"
             :used="snapshot.visitsUsed"
             :remaining="snapshot.remainingVisits"
-            :entries="(snapshot.history ?? []).map((entry) => ({
-              date: entry.visitDate,
-              patient: entry.patientName,
-              therapist: entry.therapistName,
-              branch: entry.branchName || entry.branchCode,
-              quantity: entry.quantity,
-            }))"
+            :entries="documentEntries"
           />
           <section class="print-history screen-only" aria-labelledby="print-history-title">
             <h2 id="print-history-title">ประวัติการพิมพ์</h2>

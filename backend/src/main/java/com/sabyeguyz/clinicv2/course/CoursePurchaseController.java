@@ -209,7 +209,10 @@ public class CoursePurchaseController {
             String type,
             int quantity,
             String reason,
-            Instant createdAt) {}
+            Instant createdAt,
+            Integer usageSequence,
+            String patientName,
+            String therapistName) {}
 
     public record AllocationResponse(
             LocalDate visitDate,
@@ -295,7 +298,10 @@ public class CoursePurchaseController {
                         apiMovementType(l.getEntryType()),
                         l.getQtyChange(),
                         l.getRemark(),
-                        l.getLedgerCreateAt()))
+                        l.getLedgerCreateAt(),
+                        l.getVisitUsage() == null ? null : l.getVisitUsage().getUsageSequence(),
+                        l.getVisitUsage() == null ? null : patientName(l.getVisitUsage().getPatient()),
+                        l.getVisitUsage() == null ? null : staffName(l.getVisitUsage().getTreatingStaff())))
                 .toList();
         List<AllocationResponse> allocations = allocationLedger.findByCourseIdOrderByIdDesc(id)
                 .stream()
@@ -532,8 +538,12 @@ public class CoursePurchaseController {
     }
 
     /** The treating PT as recorded on the usage (never re-chosen here); null when none was recorded. */
-    private static String staffName(Staff staff) {
+    static String staffName(Staff staff) {
         return staff == null ? null : staff.getStaffFname() + " " + staff.getStaffLname();
+    }
+
+    static String patientName(Patient patient) {
+        return patient == null ? null : patient.getPatientFname() + " " + patient.getPatientLname();
     }
 
     private Staff staffById(Long id) {

@@ -95,6 +95,8 @@ type CourseMovement = {
   reason: string
   appointmentId?: number | null
   createdAt: string
+  patientName?: string | null
+  therapistName?: string | null
 }
 const owner = ref<Patient | null>(null)
 const openedFromPatientProfile = computed(() => route.path.startsWith('/staff/patients/'))
@@ -1193,6 +1195,8 @@ function closePrintSuccess() {
             :remaining="selectedCourse.balance"
             :entries="usageEntries.map((entry) => ({
               date: entry.createdAt,
+              therapist: entry.therapistName ?? undefined,
+              patient: entry.patientName ?? undefined,
               quantity: Math.abs(entry.quantity),
             })).reverse()"
           />
