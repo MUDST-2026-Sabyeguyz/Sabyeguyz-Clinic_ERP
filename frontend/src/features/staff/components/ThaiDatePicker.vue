@@ -16,6 +16,7 @@ const props = withDefaults(
     hideCaret?: boolean
     placeholder?: string
     escapeClipping?: boolean
+    yearsBack?: number
   }>(),
   {
     disabled: false,
@@ -28,6 +29,7 @@ const props = withDefaults(
     numericMonth: false,
     hideCaret: false,
     placeholder: 'เลือกวันที่',
+    yearsBack: 3,
   },
 )
 
@@ -91,7 +93,7 @@ const months = [
 const weekdays = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 const years = computed(() => {
   const currentYear = new Date().getFullYear()
-  const firstYear = currentYear - 3
+  const firstYear = currentYear - props.yearsBack
   const lastYear = Math.min(currentYear + 3, props.maxDate ? Number(props.maxDate.slice(0, 4)) : currentYear + 3)
   return Array.from({ length: Math.max(1, lastYear - firstYear + 1) }, (_, index) => firstYear + index)
 })
