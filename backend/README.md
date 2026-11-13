@@ -83,6 +83,11 @@ Frontend และ Backend ต้องพัฒนาตาม API Contract ท
 
 ห้ามเปลี่ยน Request, Response หรือ Business Rule โดยไม่แจ้งทีมที่เกี่ยวข้อง
 
+API รับเงินคอร์สเดิมและใบเสร็จตาม Receipt ID: ดู [Course payments contract](../docs/api/course-payments.md)
+`POST /api/course-payment-collections` ต้องส่ง `Idempotency-Key` และเก็บ key เดิมเมื่อ retry รายการเดิม
+ผล replay เก็บใน `audit_log` ร่วมกับธุรกรรมรับเงิน จึงต้องรักษา audit ประเภท `course_payment_collection_request` ไว้พร้อมประวัติใบเสร็จ
+Legacy `GET /api/receipts/{id}` ยังคงใช้ SalesTransaction ID; API ใหม่อ่าน Receipt ID ผ่าน `/api/receipt-documents/{receiptId}`
+
 ## Local Development
 
 ตรวจสอบ API baseline:
@@ -98,17 +103,17 @@ GET http://localhost:8080/api/hello
 GET http://localhost:8080/actuator/health
 ```
 
-รัน Cypress tests ทั้งหมดและ package (ติดตั้ง dependencies ตามหัวข้อ Test ก่อน):
+รัน Maven package (รวม JUnit) แล้วรัน legacy Cypress API tests (ติดตั้ง dependencies ตามหัวข้อ Test ก่อน):
 
 ```bash
 npm test
 ```
 
-CI รัน `npm test` (package + Cypress tests ทั้งหมด) เมื่อ Push ไปยัง `develop`, `feat/**`, `feature/**` หรือเปิด Pull Request เข้า `develop`
+CI มีขั้นตอน `npm test` และ v2 PostgreSQL/API checks แยกตาม `.github/workflows/backend-ci.yml`; การมี workflow ไม่ใช่หลักฐานว่า run ล่าสุดผ่าน
 
 ## Test
 
-ติดตั้งชุดทดสอบและรัน package พร้อม Cypress tests ทั้งหมดจากโฟลเดอร์ `backend`:
+ติดตั้งชุดทดสอบและรัน Maven package พร้อม legacy Cypress API tests จากโฟลเดอร์ `backend`:
 
 ```bash
 npm ci
@@ -122,13 +127,31 @@ npm test
 npm run build
 npm run test:api
 npm run test:api:open
+npm run test:v2
+npm run test:v2:open
 ```
 
 บน Windows ใช้ `./run-tests.ps1` เพื่อ build และรันทดสอบทั้งหมด หรือ `-Suite api` เพื่อรัน Cypress โดยไม่ package ก่อน
 
-Cypress เป็น test runner เพียงตัวเดียวของ backend และตรวจ HTTP, business rules, repository และ concurrency ทั้งหมด ใช้ backend ที่เปิด/ปิดอัตโนมัติบนพอร์ต 18080 ฐานข้อมูล H2 แยกและ JWT จริง โดยไม่ต้องเปิด frontend ไม่มี JUnit/Mockito เหลืออยู่ ส่วน `src/test/java` เก็บเฉพาะ helpers ที่เตรียมข้อมูลและเปิดทางเข้าถึง logic ภายในให้ Cypress ตรวจผล
+Backend มีทั้ง JUnit/Testcontainers และ Cypress HTTP tests ส่วน `src/test/java` มี JUnit tests จริง เช่น `CoursePaymentDatabaseTest` และ `SharedCourseRefundTest` รวมถึง helpers สำหรับ Cypress โดยไม่ต้องเปิด frontend
 
-`mvn package` หรือ `mvn verify` ใช้ compile/package เท่านั้น หากต้องการรันทดสอบทั้งหมดให้ใช้ `npm test`
+รัน database baseline บน PostgreSQL 16 แยกผ่าน Testcontainers (Docker ต้องพร้อม):
+
+```powershell
+mvn --batch-mode --no-transfer-progress '-Dtest=CoursePaymentDatabaseTest,SharedCourseRefundTest' test
+```
+
+`mvn test` รัน JUnit suite; `mvn package` และ `mvn verify` รัน tests ตาม Maven lifecycle ด้วย หากไม่ได้ skip tests ตรวจจำนวน tests/failures/errors/skips ใน `target/surefire-reports/*.xml` ไม่สรุปจาก exit code อย่างเดียว
+
+`npm test` เรียก `npm run build` (`mvn clean package` รวม JUnit) ตามด้วย `test:api` สำหรับ legacy Cypress/H2 จึงไม่ครอบคลุม Cypress v2 และไม่ควรนับผล Maven ซ้ำเป็นสองชุดอิสระ
+
+`npm run test:v2` ใช้ PostgreSQL ตาม `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD` ต้องเป็นฐานทดสอบแยกที่ยอมให้ reset fixtures ได้เท่านั้น runner เปิด/ปิด backend v2 อัตโนมัติบนพอร์ต 18080 และ JMX 19001 และปฏิเสธเมื่อพอร์ตถูกใช้อยู่ ตัวอย่างเลือก spec ที่มีอยู่:
+
+```powershell
+npm run test:v2 -- --spec cypress/e2e-v2/refunds.cy.js
+```
+
+JUnit/Testcontainers สร้างฐานของตัวเอง ส่วน Cypress v2 ต้องเตรียมฐานแยกให้ก่อน ห้ามตั้งค่าไปยังฐานข้อมูลหลัก ผลแต่ละชุดเป็นคนละหลักฐาน ไม่ใช่หลักฐาน deployment
 
 ดูข้อจำกัด H2, การเตรียมข้อมูล และตารางเทสต์ที่ย้ายใน [คู่มือ Cypress](cypress/README.md)
 

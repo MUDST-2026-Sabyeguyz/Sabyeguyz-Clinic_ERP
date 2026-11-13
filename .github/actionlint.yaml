@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - clinic-phase1
+    - powershell7
+    - clinic-k8s-deploy

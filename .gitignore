@@ -3,6 +3,20 @@
 /.env.*
 !/.env.example
 
+# Actions deployment evidence and runner secrets remain local.
+/actions-evidence/
+/actions-*.log
+/scripts/actions/__pycache__/
+
 # Google service account keys must never be committed
 calendar-sync-key*.json
 /secrets/
+.codex-temp-vitest/node-compile-cache/
+state/
+/evidence/
+/deploy/k8s/*.rendered.yaml
+**/__pycache__/
+/artifacts/
+/deployment-evidence.json
+/reports/
+/node_modules/

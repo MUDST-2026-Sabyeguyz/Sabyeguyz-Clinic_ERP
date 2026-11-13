@@ -2,6 +2,9 @@ const { defineConfig } = require('cypress')
 const fs = require('node:fs')
 const path = require('node:path')
 const parallelRequests = require('./cypress/tasks/parallel-requests.cjs')
+const testPort = Number(process.env.CLINIC_API_TEST_PORT || 18080)
+if (![18080, 18083].includes(testPort)) throw new Error('Only isolated API test ports 18080/18083 are supported')
+const testBaseUrl = `http://127.0.0.1:${testPort}`
 
 module.exports = defineConfig({
   video: false,
@@ -9,13 +12,13 @@ module.exports = defineConfig({
   reporter: 'junit',
   reporterOptions: { mochaFile: 'cypress/results/api-[hash].xml' },
   e2e: {
-    baseUrl: 'http://127.0.0.1:18080',
+    baseUrl: testBaseUrl,
     specPattern: 'cypress/e2e/**/*.cy.js',
     supportFile: 'cypress/support/e2e.js',
     setupNodeEvents(on, config) {
       // This suite resets fixtures: never target a development/production server.
-      if (config.baseUrl !== 'http://127.0.0.1:18080') {
-        throw new Error('Backend Cypress tests require the isolated server on 127.0.0.1:18080')
+      if (config.baseUrl !== testBaseUrl) {
+        throw new Error(`Backend Cypress tests require the selected isolated server ${testBaseUrl}`)
       }
       on('task', { parallelRequests })
       on('before:run', () => {

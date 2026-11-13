@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Patient registration (Clinic ERP Workflow Brief §3). */
+/** ตรวจสอบและบันทึกข้อมูลโปรไฟล์ผู้ป่วย */
 @Service
 public class PatientService {
     private final PatientRepository repository;
@@ -40,13 +40,18 @@ public class PatientService {
         patient.setPatientLname(requireText(input.patientLname(), "patientLname"));
         patient.setPatientMiddleName(normalizeMiddleName(input.middleName()));
         patient.setGender(require(input.gender(), "gender"));
-        // Thai patients must give a phone number and a 13-digit national id; foreigners may give neither
-        // (they rarely carry documents), so only a provided national id is format-checked for them.
+        // ผู้ป่วยไทยต้องมีเบอร์โทรและเลขบัตร 13 หลัก ส่วนผู้ป่วยต่างชาติระบุเลขบัตรได้ตามที่มี
         boolean thai = input.customerType() == com.sabyeguyz.clinicv2.enums.CustomerType.Thai;
         String phone = input.phone() == null || input.phone().isBlank() ? null : input.phone().trim();
         String nationalId = input.nationalId() == null || input.nationalId().isBlank() ? null : input.nationalId().trim();
         if (thai && phone == null) {
             throw new IllegalArgumentException("phone ห้ามว่าง");
+        }
+        if (thai && !phone.matches("[0-9]{10}")) {
+            throw new IllegalArgumentException("เบอร์โทรต้องเป็นตัวเลข 10 หลัก");
+        }
+        if (phone != null && !phone.matches("[0-9]{1,10}")) {
+            throw new IllegalArgumentException("เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก");
         }
         if (thai && nationalId == null) {
             throw new IllegalArgumentException("ผู้ป่วยชาวไทยต้องระบุเลขบัตรประชาชน");
@@ -63,6 +68,14 @@ public class PatientService {
         patient.setBloodGroup(input.bloodGroup());
         patient.setNationality(input.nationality());
         patient.setAddress(input.address());
+        // บันทึกข้อมูลสุขภาพ ผู้ติดต่อฉุกเฉิน และความยินยอมไปพร้อมโปรไฟล์
+        patient.setDrugAllergy(input.drugAllergy());
+        patient.setFoodAllergy(input.foodAllergy());
+        patient.setChronicDisease(optionalText(input.chronicDisease(), 500, "chronicDisease"));
+        patient.setEmergencyContactName(optionalText(input.emergencyContactName(), 160, "emergencyContactName"));
+        patient.setEmergencyContactRelationship(optionalText(input.emergencyContactRelationship(), 80, "emergencyContactRelationship"));
+        patient.setEmergencyContactPhone(optionalText(input.emergencyContactPhone(), 20, "emergencyContactPhone"));
+        patient.setPrivacyConsent(input.privacyConsent());
         patient.setCustomerGroup(input.customerGroup());
         patient.setReferralChannel(input.referralChannel());
         patient.setInsuranceType(input.insuranceType());
@@ -72,13 +85,12 @@ public class PatientService {
         patient.setRegisteredAt(now);
         patient.setRegisteredBy(actorId);
 
-        // patient_hn is NOT NULL, so the HN is issued before the insert. Both writes share this
-        // transaction: if the insert fails, the sequence increment rolls back with it.
+        // สร้าง HN ใน transaction เดียวกับ insert เพื่อ rollback พร้อมกันเมื่อบันทึกไม่สำเร็จ
         patient.setPatientHn(hnGenerator.next(input.branch(), now.atZone(java.time.ZoneOffset.UTC).toLocalDate()));
         return repository.save(patient);
     }
 
-    /** Profile fields only — branchId and patientHn never change after registration. */
+    /** แก้ข้อมูลทั่วไป โดยคงสาขาและ HN เดิม */
     @Transactional
     public Patient updateProfile(Long id, String patientNickname, String phone, String address,
                                   com.sabyeguyz.clinicv2.enums.BloodGroup bloodGroup, String nationality, Long actorId) {
@@ -93,11 +105,25 @@ public class PatientService {
         return repository.save(patient);
     }
 
-    /**
-     * Edits a registered patient. A null argument leaves that field as it is; identity numbers, phone and names
-     * follow the same rules as registration (a Thai patient keeps a phone number and a 13-digit national id).
-     * middleName is changed, including cleared to null, only when updateMiddleName is true.
-     */
+    /** แก้ข้อมูลสุขภาพและความยินยอมเฉพาะ field ที่ส่งมา */
+    @Transactional
+    public Patient updateMedicalProfile(Long id, Boolean drugAllergy, Boolean foodAllergy, String chronicDisease,
+                                        String emergencyContactName, String emergencyContactRelationship,
+                                        String emergencyContactPhone, Boolean privacyConsent, Long actorId) {
+        Patient patient = find(id);
+        if (drugAllergy != null) patient.setDrugAllergy(drugAllergy);
+        if (foodAllergy != null) patient.setFoodAllergy(foodAllergy);
+        if (chronicDisease != null) patient.setChronicDisease(optionalText(chronicDisease, 500, "chronicDisease"));
+        if (emergencyContactName != null) patient.setEmergencyContactName(optionalText(emergencyContactName, 160, "emergencyContactName"));
+        if (emergencyContactRelationship != null) patient.setEmergencyContactRelationship(optionalText(emergencyContactRelationship, 80, "emergencyContactRelationship"));
+        if (emergencyContactPhone != null) patient.setEmergencyContactPhone(optionalText(emergencyContactPhone, 20, "emergencyContactPhone"));
+        if (privacyConsent != null) patient.setPrivacyConsent(privacyConsent);
+        patient.setPatientUpdateAt(Instant.now());
+        patient.setPatientUpdateBy(actorId);
+        return repository.save(patient);
+    }
+
+    /** แก้ข้อมูลผู้ป่วย; null คงค่าเดิม และล้างชื่อกลางได้เมื่อ updateMiddleName เป็น true */
     @Transactional
     public Patient updateDetails(Long id, String title, String fname, String lname,
                                   com.sabyeguyz.clinicv2.enums.Gender gender, String phone, String nickname,
@@ -127,6 +153,15 @@ public class PatientService {
             if (patient.getPhone() == null) throw new IllegalArgumentException("phone ห้ามว่าง");
             if (patient.getNationalId() == null) {
                 throw new IllegalArgumentException("ผู้ป่วยชาวไทยต้องระบุเลขบัตรประชาชน");
+            }
+        }
+        if (patient.getPhone() != null) {
+            boolean thai = patient.getCustomerType() == com.sabyeguyz.clinicv2.enums.CustomerType.Thai;
+            String pattern = thai ? "[0-9]{10}" : "[0-9]{1,10}";
+            if (!patient.getPhone().matches(pattern)) {
+                throw new IllegalArgumentException(thai
+                        ? "เบอร์โทรต้องเป็นตัวเลข 10 หลัก"
+                        : "เบอร์โทรต้องเป็นตัวเลขไม่เกิน 10 หลัก");
             }
         }
         patient.setPatientUpdateAt(Instant.now());
@@ -172,5 +207,14 @@ public class PatientService {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
         }
         return value.trim();
+    }
+
+    private static String optionalText(String value, int maxLength, String field) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(field + " ต้องไม่เกิน " + maxLength + " ตัวอักษร");
+        }
+        return normalized;
     }
 }

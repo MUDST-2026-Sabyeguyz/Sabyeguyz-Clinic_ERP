@@ -33,7 +33,7 @@ public class ServiceManagementController {
         this.actor = actor;
     }
 
-    /** defaultDurationMinutes is optional (5-480); empty = the appointment uses the branch default. */
+    /** Optional positive minutes; empty = the appointment uses the branch default (AC 010.05). */
     public record Request(@NotBlank String code, @NotBlank String name, Integer defaultDurationMinutes,
                            @NotNull BigDecimal price) {}
 
@@ -87,9 +87,9 @@ public class ServiceManagementController {
     }
 
     private static Integer validMinutes(Integer minutes) {
-        if (minutes == null || minutes == 0) return null; // 0 = none, as a response shows it
-        if (minutes < 5 || minutes > 480) {
-            throw new IllegalArgumentException("ระยะเวลานัดต้องอยู่ระหว่าง 5 ถึง 480 นาที");
+        if (minutes == null) return null;
+        if (minutes < 1) {
+            throw new IllegalArgumentException("ระยะเวลานัดต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที");
         }
         return minutes;
     }
