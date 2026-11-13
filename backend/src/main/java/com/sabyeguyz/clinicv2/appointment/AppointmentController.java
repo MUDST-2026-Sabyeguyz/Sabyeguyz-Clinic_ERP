@@ -23,6 +23,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Matches frontend/src/api/client.ts's appointmentApi. End times are stored
@@ -35,6 +39,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/appointments")
 public class AppointmentController {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
+    private static final Logger OBSERVABILITY_LOG =
+            LoggerFactory.getLogger("clinic.observability");
 
     private final AppointmentService service;
     private final AppointmentRepository repository;
@@ -47,13 +53,14 @@ public class AppointmentController {
     private final BranchAccessPolicy branchAccess;
     private final AppointmentStatusHistoryRepository history;
     private final AppointmentAvailabilityService availability;
-
+    private final ObservationRegistry observationRegistry;
     public AppointmentController(AppointmentService service, AppointmentRepository repository,
                                   PatientVisitService visitService, PatientVisitRepository visits,
                                   PatientRepository patients, StaffRepository staff,
                                   ServiceRepository services, CurrentActor actor, BranchAccessPolicy branchAccess,
                                   AppointmentStatusHistoryRepository history,
-                                  AppointmentAvailabilityService availability) {
+                                                                    AppointmentAvailabilityService availability,
+                                  ObservationRegistry observationRegistry) {
         this.service = service;
         this.repository = repository;
         this.visitService = visitService;
@@ -65,6 +72,7 @@ public class AppointmentController {
         this.branchAccess = branchAccess;
         this.history = history;
         this.availability = availability;
+        this.observationRegistry = observationRegistry;
     }
 
     /**
@@ -119,15 +127,30 @@ public class AppointmentController {
         }
         Sort.Direction direction = "oldest".equalsIgnoreCase(sortOrder) ? Sort.Direction.ASC : Sort.Direction.DESC;
         String keyword = query.trim().toLowerCase(java.util.Locale.ROOT);
-        Page<Appointment> result = repository.search(branchId, date != null, date == null ? LocalDate.EPOCH : date,
-                startDate != null, startDate == null ? LocalDate.EPOCH : startDate,
-                endDate != null, endDate == null ? LocalDate.EPOCH : endDate, therapistId,
-                statusValue != null, statusValue == null ? AppointmentStatus.Confirmed : statusValue,
-                keyword, "%" + keyword + "%",
-                PageRequest.of(page, size, Sort.by(direction, "appointmentDate")
-                        .and(Sort.by(direction, "appointmentTime")).and(Sort.by(direction, "id"))));
-        return new PageResponse(result.getContent().stream().map(this::toResponse).toList(),
-                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+        return Observation.createNotStarted("appointment.search", observationRegistry)
+                .observe(() -> {
+                    Page<Appointment> result = repository.search(
+                            branchId,
+                            date != null, date == null ? LocalDate.EPOCH : date,
+                            startDate != null, startDate == null ? LocalDate.EPOCH : startDate,
+                            endDate != null, endDate == null ? LocalDate.EPOCH : endDate,
+                            therapistId,
+                            statusValue != null,
+                            statusValue == null ? AppointmentStatus.Confirmed : statusValue,
+                            keyword, "%" + keyword + "%",
+                            PageRequest.of(page, size, Sort.by(direction, "appointmentDate")
+                                    .and(Sort.by(direction, "appointmentTime")).and(Sort.by(direction, "id"))));
+
+                    PageResponse response = new PageResponse(
+                            result.getContent().stream().map(this::toResponse).toList(),
+                            result.getNumber(), result.getSize(),
+                            result.getTotalElements(), result.getTotalPages());
+
+                    OBSERVABILITY_LOG.info(
+                            "event=appointment_search_completed outcome=success");
+
+                    return response;
+                });
     }
 
     /** Free start times of one therapist on one day; the service is optional (the branch default length is used). */
