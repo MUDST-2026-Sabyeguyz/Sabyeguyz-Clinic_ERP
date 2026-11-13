@@ -122,6 +122,7 @@ describe('Clinic v2 core service scenarios', () => {
       expect(status).to.equal(200)
       expect(body.totalVisits).to.equal(13)
       expect(body.remainingVisits).to.equal(13)
+      expect(body.bonusVisits).to.equal(0)
     })
   })
 

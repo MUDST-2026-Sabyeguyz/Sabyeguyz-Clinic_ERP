@@ -84,6 +84,12 @@ public class CourseTransferService {
     /** Undoes a Completed transfer: the sessions go back to the sender, provided the receiver has not used them. */
     @Transactional
     public CourseTransfer reverse(CourseTransfer transfer, Permission permission, String reason, Long actorId) {
+        return reverse(transfer, permission, com.sabyeguyz.clinicv2.enums.ReasonCode.Other, reason, actorId);
+    }
+
+    @Transactional
+    public CourseTransfer reverse(CourseTransfer transfer, Permission permission,
+                                 com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode, String reason, Long actorId) {
         require(transfer != null, "ต้องระบุรายการโอน");
         require(transfer.getTransferStatus() == TransferStatus.Completed, "รายการโอนนี้ถูกย้อนไปแล้ว");
         Course course = transfer.getCourse();
@@ -96,7 +102,7 @@ public class CourseTransferService {
             throw new IllegalArgumentException(
                     "ผู้รับโอนใช้สิทธิ์ไปแล้ว ไม่สามารถย้อนการโอนได้ (คงเหลือ " + toBalance + " ครั้ง)");
         }
-        cancellations.recordTransferReversal(transfer, permission, reason, actorId);
+        cancellations.recordTransferReversal(transfer, permission, reasonCode, reason, actorId);
 
         transfer.setTransferStatus(TransferStatus.Reversed);
         transfer.setTransferUpdateAt(Instant.now());

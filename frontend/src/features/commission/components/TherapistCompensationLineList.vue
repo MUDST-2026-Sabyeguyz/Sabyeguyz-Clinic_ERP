@@ -35,6 +35,8 @@ const amountText = (line: TherapistLine) =>
       <span>{{ calcBase(line) }}</span>
       <span :class="['amount', { negative: (line.amount ?? 0) < 0 }]">{{ amountText(line) }}</span>
     </RouterLink>
-    <p v-if="lines.length === 0" class="therapist-line-empty" role="status">{{ emptyText }}</p>
+    <p v-if="lines.length === 0" class="therapist-line-empty" role="status">
+      {{ emptyText }}
+    </p>
   </div>
 </template>

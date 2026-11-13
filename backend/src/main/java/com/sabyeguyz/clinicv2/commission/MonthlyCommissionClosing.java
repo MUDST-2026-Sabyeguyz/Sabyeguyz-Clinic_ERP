@@ -5,6 +5,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import com.sabyeguyz.clinicv2.enums.ClosingStatus;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.staff.Staff;
+import com.sabyeguyz.clinicv2.branch.Branch;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -30,6 +31,11 @@ public class MonthlyCommissionClosing {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "staff_id")
     private Staff staff;
+
+    /** Historical branch of this monthly record. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "branch_id", nullable = false)
+    private Branch branch;
 
     @Column(name = "monthly_course_sales", precision = 12, scale = 2, nullable = false)
     private BigDecimal monthlyCourseSales;
@@ -83,6 +89,8 @@ public class MonthlyCommissionClosing {
     public void setPermission(Permission permission) { this.permission = permission; }
     public Staff getStaff() { return staff; }
     public void setStaff(Staff staff) { this.staff = staff; }
+    public Branch getBranch() { return branch; }
+    public void setBranch(Branch branch) { this.branch = branch; }
     public BigDecimal getMonthlyCourseSales() { return monthlyCourseSales; }
     public void setMonthlyCourseSales(BigDecimal monthlyCourseSales) { this.monthlyCourseSales = monthlyCourseSales; }
     public CommissionScheme getCommissionScheme() { return commissionScheme; }

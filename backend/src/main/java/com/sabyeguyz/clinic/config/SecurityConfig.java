@@ -24,7 +24,6 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.util.List;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableMethodSecurity
@@ -50,7 +49,7 @@ public class SecurityConfig {
     @Bean
     @Order(0)
     SecurityFilterChain authEndpoints(HttpSecurity http) throws Exception {
-        return http.securityMatcher(new AntPathRequestMatcher("/api/auth/login"))
+        return http.securityMatcher(request -> "/api/auth/login".equals(request.getServletPath()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .build();
