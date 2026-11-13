@@ -61,13 +61,8 @@ public class MonthlyCommissionClosingService {
     }
 
     @Transactional
-    public MonthlyCommissionClosing closeMonth(
-            String saleMonth,
-            Staff staff,
-            Branch branch,
-            Permission permission,
-            Long actorId) {
-        require(saleMonth != null && saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])"), "closingMonth ต้องเป็นรูปแบบ yyyy-mm");
+    public MonthlyCommissionClosing closeMonth(String saleMonth, Staff staff, Branch branch, Permission permission, Long actorId) {
+        StaffMonthlyPaymentService.requireCompletedMonth(saleMonth);
         require(staff != null, "ต้องระบุพนักงาน");
         require(branch != null, "ต้องระบุสาขา");
         MonthlyCommissionClosing closing =

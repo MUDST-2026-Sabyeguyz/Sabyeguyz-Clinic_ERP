@@ -14,24 +14,25 @@ describe('backend progress summary', () => {
  it('opens the receipt with saleId and shows backend review state and reason', () => {
   const view = render()
   expect(view.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({ name: 'staff-receipt', params: { id: 11 } })
-  expect(view.text()).toContain('ต้องตรวจสอบรายการเดิม')
+  expect(view.text()).toContain('นัดหมายนี้ต้องตรวจสอบรายการ')
   expect(view.text()).toContain('พบเอกสารที่ย้อนรายการ')
   expect(view.text()).toContain('TEST99')
  })
- it('shows the served patient and course purchase IDs returned by backend', () => {
+ it('links to the course history returned by backend', () => {
   const view = render()
-  expect(view.text()).toContain('Visit #20')
-  expect(view.text()).toContain('ผู้ป่วย #9')
-  expect(view.text()).toContain('คอร์ส #101')
+  expect(view.text()).toContain('ดูประวัติการใช้คอร์ส')
   expect(view.findAllComponents(RouterLinkStub)[1]!.props('to')).toMatchObject({
    query: { patientId: '9', courseId: '101', action: 'history' },
   })
  })
  it('shows the original state and refreshes explicitly', async () => {
   const view = render({ ...progress, state: 'FOUND', reason: null })
-  expect(view.text()).toContain('พบรายการเดิม')
-  await view.get('button').trigger('click')
-  expect(view.emitted('refresh')).toHaveLength(1)
+  expect(view.text()).toContain('นัดหมายนี้ทำรายการแล้ว')
+  expect(view.text()).toContain('มีทั้งการชำระเงินและการใช้สิทธิ์คอร์สแล้ว')
+  expect(view.find('button').exists()).toBe(false)
+  const review = render()
+  await review.get('button').trigger('click')
+  expect(review.emitted('refresh')).toHaveLength(1)
  })
  it('groups sale documents that share one receipt while opening it with a saleId', () => {
   const view = render({

@@ -93,7 +93,6 @@ public class Appointment {
 
     @Column(name = "contact_nickname", length = 80)
     private String contactNickname;
-
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
 

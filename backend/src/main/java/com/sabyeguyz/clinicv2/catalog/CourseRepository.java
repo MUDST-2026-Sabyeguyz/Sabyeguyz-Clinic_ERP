@@ -17,6 +17,7 @@ import com.sabyeguyz.clinicv2.enums.RefundStatus;
 import com.sabyeguyz.clinicv2.enums.TransactionType;
 
 public interface CourseRepository extends JpaRepository<Course, Long> {
+    List<Course> findTop100BySellerStaffIdAndBranchIdOrderByIdDesc(Long staffId, Long branchId);
     Optional<Course> findByCourseNo(String courseNo);
 
     /** Live courses sold in or before the month whose commission is not locked by a monthly close yet. */
