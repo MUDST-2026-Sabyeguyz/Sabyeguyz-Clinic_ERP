@@ -37,6 +37,11 @@ public class DashboardMetricsService {
         this.jdbc = jdbc;
     }
 
+    /** Patients registered in the period; the dashboard counts them with the ones who were served. */
+    public List<com.sabyeguyz.clinicv2.patient.Patient> registered(Instant from, Instant to, Long branchId) {
+        return patients.findRegistrations(from, to, branchId);
+    }
+
     public Activity activity(
             Instant from,
             Instant to,
