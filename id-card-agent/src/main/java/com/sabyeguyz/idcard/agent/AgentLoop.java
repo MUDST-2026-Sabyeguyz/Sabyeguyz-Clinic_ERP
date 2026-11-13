@@ -14,7 +14,8 @@ final class AgentLoop {
     private final Duration cardWait;
     private volatile boolean running = true;
     private volatile boolean revoked;
-    private Consumer<String> onStatus = status -> {};
+    private Consumer<String> onStatus = status -> {
+    };
 
     AgentLoop(BackendClient client, CardSource source, Duration cardWait) {
         this.client = client;
@@ -39,7 +40,9 @@ final class AgentLoop {
     boolean runOnce() throws IOException {
         Optional<BackendClient.Command> command = client.next(POLL_SECONDS, source.readerPresent());
         onStatus.accept("เชื่อมต่อแล้ว");
-        if (command.isEmpty()) return false;
+        if (command.isEmpty()) {
+            return false;
+        }
         onStatus.accept("กำลังอ่านบัตร");
         String requestId = command.get().requestId();
         client.sendResult(requestId, source.readWhenPresent(cardWait, () -> client.sendProgress(requestId)));
@@ -54,7 +57,9 @@ final class AgentLoop {
             while (running) {
                 boolean present = source.readerPresent();
                 if (last == null || last != present) {
-                    if (last != null) client.sendReaderState(present);
+                    if (last != null) {
+                        client.sendReaderState(present);
+                    }
                     last = present;
                 }
                 sleep(3_000);
@@ -77,7 +82,9 @@ final class AgentLoop {
                 onStatus.accept("เครื่องนี้ถูกเพิกถอน ต้องจับคู่ใหม่");
                 return;
             } catch (IOException offline) {
-                if (!running) return; // stopped (for example by pairing again) while a request was in flight
+                if (!running) {
+                    return; // stopped (for example by pairing again) while a request was in flight
+                }
                 onStatus.accept("เชื่อมต่อ backend ไม่ได้ จะลองใหม่");
                 sleep(backoffMillis);
                 backoffMillis = Math.min(backoffMillis * 2, 30_000);

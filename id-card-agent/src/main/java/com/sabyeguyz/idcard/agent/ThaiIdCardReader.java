@@ -31,7 +31,9 @@ final class ThaiIdCardReader {
 
     CardData read(ApduChannel channel) throws IOException {
         ApduChannel.Response selected = channel.transmit(SELECT_APPLET);
-        if (!ok(selected.sw())) throw new IOException("ไม่ใช่บัตรประชาชนไทย หรืออ่านแอปเพล็ตของบัตรไม่ได้");
+        if (!ok(selected.sw())) {
+            throw new IOException("ไม่ใช่บัตรประชาชนไทย หรืออ่านแอปเพล็ตของบัตรไม่ได้");
+        }
         Map<ThaiIdCardParser.Field, byte[]> raw = new EnumMap<>(ThaiIdCardParser.Field.class);
         for (Map.Entry<ThaiIdCardParser.Field, byte[]> field : READ.entrySet()) {
             raw.put(field.getKey(), readField(channel, field.getValue(), field.getKey()));
@@ -43,12 +45,17 @@ final class ThaiIdCardReader {
         }
     }
 
-    private static byte[] readField(ApduChannel channel, byte[] command, ThaiIdCardParser.Field field) throws IOException {
+    private static byte[] readField(
+            ApduChannel channel,
+            byte[] command,
+            ThaiIdCardParser.Field field) throws IOException {
         ApduChannel.Response response = channel.transmit(command);
         if ((response.sw() & 0xFF00) == 0x6100) { // more data: ask for it
             response = channel.transmit(new byte[] {0x00, (byte) 0xC0, 0x00, 0x00, (byte) (response.sw() & 0xFF)});
         }
-        if (response.sw() != 0x9000) throw new IOException("อ่านข้อมูล " + field + " จากบัตรไม่ได้");
+        if (response.sw() != 0x9000) {
+            throw new IOException("อ่านข้อมูล " + field + " จากบัตรไม่ได้");
+        }
         return response.data();
     }
 
