@@ -47,8 +47,11 @@ public class CypressPaymentPolicyController {
     /** Runs the real usage handler, holding its transaction until Cypress observes the refund waiting. */
     @PostMapping("/held-usage/{courseId}")
     @Transactional
-    public Map<String,Object> heldUsage(@PathVariable Long courseId) throws InterruptedException {
-        courses.use(new com.sabyeguyz.clinicv2.course.CoursePurchaseController.UseRequest(courseId, null, null, null, null, null));
+    public Map<String, Object> heldUsage(
+            @PathVariable Long courseId,
+            @RequestParam Long appointmentId) throws InterruptedException {
+        courses.use(
+                new com.sabyeguyz.clinicv2.course.CoursePurchaseController.UseRequest(courseId, appointmentId, null, null, null, null));
         var state = new HeldUsage(jdbc.queryForObject("select pg_backend_pid()", Integer.class), new java.util.concurrent.CountDownLatch(1));
         held.put(courseId, state);
         try {

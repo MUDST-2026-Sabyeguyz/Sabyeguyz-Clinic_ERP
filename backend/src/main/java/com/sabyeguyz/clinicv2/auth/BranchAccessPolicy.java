@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Appointment branch scope (R1–R3). Session selection and additional branch grants await Q9. */
+/** Home-branch mutation scope and separately granted read access. */
 @Component
 @Transactional(readOnly = true)
 public class BranchAccessPolicy {
@@ -15,13 +15,16 @@ public class BranchAccessPolicy {
     private final AppUserRepository users;
     private final UserRoleRepository roles;
     private final BranchRepository branches;
+    private final UserBranchAccessRepository readGrants;
 
     public BranchAccessPolicy(CurrentActor actor, AppUserRepository users,
-                              UserRoleRepository roles, BranchRepository branches) {
+                              UserRoleRepository roles, BranchRepository branches,
+                              UserBranchAccessRepository readGrants) {
         this.actor = actor;
         this.users = users;
         this.roles = roles;
         this.branches = branches;
+        this.readGrants = readGrants;
     }
 
     /** Null means all branches, and is returned only for a current database Manager. */
@@ -44,12 +47,56 @@ public class BranchAccessPolicy {
         return requireOpen(home);
     }
 
+    /** Explicit read grants never authorize writes. An omitted branch remains the home branch for staff. */
+    public Branch readScope(String requestedCode) {
+        Long userId = actor.requireId();
+        AppUser user = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        String code = requestedCode == null || requestedCode.isBlank() ? null : requestedCode.trim();
+        if (isManager()) return scope(code);
+        Branch home = user.getStaff() == null ? null : user.getStaff().getBranch();
+        if (code == null) {
+            if (home == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ไม่มีสาขาประจำสำหรับอ่านรายการ");
+            return requireOpen(home);
+        }
+        Branch requested = branches.findByBranchCode(code)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบสาขา " + code));
+        if ((home == null || !home.getId().equals(requested.getId()))
+                && !readGrants.existsById(new UserBranchAccessId(userId, requested.getId()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ไม่มีสิทธิ์อ่านรายการของสาขานี้");
+        }
+        return requireOpen(requested);
+    }
+
+    public void requireReadAccess(Branch branch) {
+        readScope(branch.getBranchCode());
+    }
     /** A branch that is closed (ปิดใช้งาน) allows nothing at all: nobody can work in it until it is opened again. */
     private static Branch requireOpen(Branch branch) {
         if (!branch.isBranchStatus()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "สาขา " + branch.getBranchName() + " ปิดใช้งาน ไม่สามารถทำรายการที่สาขานี้ได้");
         }
         return branch;
+    }
+
+    /** True for a current database Manager. */
+    public boolean isManager() {
+        return roles.findByUserId(actor.requireId()).stream()
+                .anyMatch(role -> "Manager".equalsIgnoreCase(role.getRole().getRoleName()));
+    }
+
+    /** Only the Manager changes an appointment (status, reschedule, cancel); anyone else only views and books their own time. */
+    public void requireManager() {
+        if (!isManager()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "เฉพาะผู้จัดการเท่านั้นที่เปลี่ยนสถานะหรือแก้ไขนัดหมายได้");
+        }
+    }
+
+    /** The staff id of the signed-in user, or null when the account has no staff record. */
+    public Long currentStaffId() {
+        AppUser user = users.findById(actor.requireId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        return user.getStaff() == null ? null : user.getStaff().getId();
     }
 
     public void requireAccess(Branch branch) {
