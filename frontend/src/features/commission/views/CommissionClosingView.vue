@@ -21,8 +21,6 @@ const selectedMonth = ref(`${clinicToday().slice(0, 7)}-01`)
 const month = computed(() => selectedMonth.value.slice(0, 7))
 const selectedBranchCode = computed(() => selectedManagerBranch()?.code ?? '')
 const router = useRouter()
-const branch = ref('ทุกสาขา')
-const search = ref('')
 const rows = ref<ClosingRow[]>([])
 const errorMessage = ref('')
 const isConfirming = ref(false)
@@ -379,18 +377,6 @@ onUnmounted(() => {
   requestId++
 })
 
-const visible = computed(() => {
-  const keyword = search.value.trim().toLowerCase()
-  return rows.value.filter((row) => !keyword || row.staff.toLowerCase().includes(keyword))
-})
-const openCount = computed(() => rows.value.filter((row) => row.status === 'Open').length)
-const monthLabel = computed(() => {
-  const [year, number] = month.value.split('-').map(Number)
-  if (!year || !number) return month.value
-  return new Intl.DateTimeFormat('th-TH', { month: 'short', year: 'numeric' }).format(
-    new Date(year, number - 1, 1),
-  )
-})
 const fullMonthLabel = computed(() => {
   const [year, number] = month.value.split('-').map(Number)
   if (!year || !number) return month.value
@@ -435,11 +421,6 @@ const periodStatus = computed(() =>
         : 'ยังไม่ปิดรอบ',
 )
 
-function selectView(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
-  if (value === 'Sales') void router.push('/staff/commission')
-  if (value === 'Treatment') void router.push('/staff/commission?type=Treatment')
-}
 </script>
 
 <template>

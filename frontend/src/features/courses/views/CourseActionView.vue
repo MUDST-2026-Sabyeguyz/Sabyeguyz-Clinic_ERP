@@ -2,14 +2,12 @@
 import { clinicToday } from '@/utils/clinicDate'
 import { buildCourseUsages, type UsageSelection } from '@/features/services/careTransactions'
 import CourseUsagePicker from '../components/CourseUsagePicker.vue'
-import CourseCutDocument from '../components/CourseCutDocument.vue'
 import FrozenCourseUsagePrints from '../components/FrozenCourseUsagePrints.vue'
 import { useAppointmentProcess } from '@/features/appointments/useAppointmentProcess'
 import AppointmentProcessPanel from '@/features/appointments/components/AppointmentProcessPanel.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
-import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import { vModalFocus } from '@/features/appointments/modalFocus'
 import CourseRenewalDialog from '@/features/patients/components/CourseRenewalDialog.vue'
 import CourseRenewalStatus from '../components/CourseRenewalStatus.vue'
@@ -141,12 +139,6 @@ const usageSuccessBalance = computed(() => selectedCourse.value.balance)
 const printDialog = ref<'confirm' | 'success' | 'error' | null>(null)
 const coursePrintPreview = ref(false)
 const transferStep = ref<'form' | 'review' | 'success'>('form')
-const shareIsValid = computed(
-  () =>
-    primaryShare.value >= 0 &&
-    secondaryShare.value >= 0 &&
-    primaryShare.value + secondaryShare.value === 100,
-)
 const formattedUsageDate = computed(() =>
   new Intl.DateTimeFormat('th-TH', {
     day: 'numeric',
@@ -165,17 +157,6 @@ const transferredOut = computed(() =>
     .reduce((total, movement) => total + Math.abs(movement.quantity), 0),
 )
 const historyRemaining = computed(() => selectedCourse.value.balance)
-const documentBranch = computed(() => {
-  const code = owner.value?.branchCode?.toLocaleLowerCase('th')
-  const name = owner.value?.branchName?.replace(/^สาขา/, '').toLocaleLowerCase('th')
-  return branches.value.find(
-    (branch) =>
-      (code && branch.code.toLocaleLowerCase('th') === code) ||
-      (name && branch.name.replace(/^สาขา/, '').toLocaleLowerCase('th') === name),
-  )
-})
-const documentClinicAddress = computed(() => documentBranch.value?.address?.trim() || '—')
-const documentClinicPhone = computed(() => documentBranch.value?.phone?.trim() || '—')
 const usageEntries = computed(() =>
   courseUsageHistory.value
     .filter((movement) => movement.type === 'USAGE')
@@ -437,28 +418,6 @@ async function start(nextAction: CourseAction, course: UiCourse) {
       errorMessage.value =
         error instanceof Error ? error.message : 'โหลดประวัติการใช้คอร์สไม่สำเร็จ'
     }
-  }
-}
-async function openInactiveHistory() {
-  historyFromInactive.value = true
-  const course = inactiveCourses.value[0]
-  if (course) {
-    await start('history', course)
-    historyFromInactive.value = true
-    await router.replace({
-      path: '/staff/courses',
-      query: {
-        patientId: owner.value?.id,
-        view: 'after-transfer',
-        action: 'inactive-history',
-        courseId: course.id,
-        balance: course.balance,
-      },
-    })
-  } else {
-    action.value = 'history'
-    selectedCourse.value = {} as UiCourse
-    courseUsageHistory.value = []
   }
 }
 async function changeInactiveHistoryCourse() {
