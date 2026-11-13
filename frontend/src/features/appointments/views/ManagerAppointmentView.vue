@@ -343,13 +343,6 @@ const patientPhone = (item: Appointment) =>
   patients.value.find((patient) => patient.id === item.patient?.id)?.phone ||
   item.contactPhone ||
   '-'
-const appointmentRoom = (item: Appointment) => {
-  const appointmentWithRoom = item as Appointment & {
-    roomName?: string
-    room?: { name?: string }
-  }
-  return appointmentWithRoom.roomName || appointmentWithRoom.room?.name || '—'
-}
 const editingPatientPhone = computed(() =>
   editingAppointment.value ? patientPhone(editingAppointment.value) : '-',
 )
@@ -389,13 +382,6 @@ const formTherapistModel = computed({
     form.value.therapistId = Number(value) || 0
   },
 })
-const formBranchModel = computed({
-  get: () => form.value.branchCode,
-  set: (value: string) => {
-    form.value.branchCode = value
-  },
-})
-
 const courseDropdownOptions = computed(() =>
   catalogCourses.value.map((course) => ({ value: String(course.id), label: course.name })),
 )
@@ -403,12 +389,6 @@ const courseDropdownModel = computed({
   get: () => String(form.value.serviceId || ''),
   set: (value: string) => {
     form.value.serviceId = Number(value) || 0
-  },
-})
-const selectedCourseModel = computed({
-  get: () => String(selectedCourseId.value || ''),
-  set: (value: string) => {
-    selectedCourseId.value = Number(value) || 0
   },
 })
 const formatThaiDate = (value: string) =>
