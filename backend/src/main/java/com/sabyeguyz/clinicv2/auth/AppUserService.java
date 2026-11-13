@@ -8,7 +8,7 @@ import com.sabyeguyz.clinicv2.staff.Staff;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,15 +21,17 @@ public class AppUserService {
     private final UserRoleRepository userRoles;
     private final BranchRepository branches;
     private final UserBranchAccessRepository userBranchAccess;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
 
     public AppUserService(AppUserRepository users, RoleRepository roles, UserRoleRepository userRoles,
-                           BranchRepository branches, UserBranchAccessRepository userBranchAccess) {
+                           BranchRepository branches, UserBranchAccessRepository userBranchAccess,
+                           PasswordEncoder passwordEncoder) {
         this.users = users;
         this.roles = roles;
         this.userRoles = userRoles;
         this.branches = branches;
         this.userBranchAccess = userBranchAccess;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
@@ -102,9 +104,10 @@ public class AppUserService {
 
     @Transactional
     public void recordLogin(Long userId) {
-        AppUser user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ใช้"));
-        user.setLastLoginAt(Instant.now());
-        users.save(user);
+        // Persist even when authentication loaded the account as a read-only entity.
+        if (users.recordLogin(userId, Instant.now()) != 1) {
+            throw new IllegalArgumentException("ไม่พบผู้ใช้");
+        }
     }
 
     /** Idempotent: assigning a Role the user already has is a no-op. */
