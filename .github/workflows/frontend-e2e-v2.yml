@@ -89,14 +89,15 @@ jobs:
         env:
           VITE_API_PROXY_TARGET: http://127.0.0.1:18080
           CYPRESS_API_URL: http://127.0.0.1:18080
+          CYPRESS_BASE_URL: http://127.0.0.1:5173
         with:
           working-directory: frontend
           install: false
-          start: npm run dev -- --host localhost --port 5173
-          wait-on: 'http://localhost:5173'
+          start: npm run dev -- --host 127.0.0.1 --strictPort --port 5173
+          wait-on: 'http://127.0.0.1:5173'
           wait-on-timeout: 120
           browser: chrome
-          config-file: cypress.v2.config.ts
+          config-file: cypress.v2.config.cjs
 
       - name: Stop the backend
         if: always()
