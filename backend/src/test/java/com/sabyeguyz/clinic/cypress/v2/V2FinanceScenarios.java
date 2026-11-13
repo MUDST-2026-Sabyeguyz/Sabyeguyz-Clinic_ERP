@@ -561,7 +561,7 @@ public class V2FinanceScenarios {
                 new V2RepositoryStub<>(TreatmentFeeRuleRepository.class)
                         .on("findMaxRuleVersion", args -> scenario.equals("feeadmin-create") ? 0 : 1);
 
-        var service = new TreatmentFeeRuleService(repository.proxy(), guard);
+        var service = new TreatmentFeeRuleService(repository.proxy());
         var existing = new TreatmentFeeRule(); existing.setFeeType(FeeType.Fixed); existing.setFeeValue(decimal("45"));
         existing.setEffectiveFrom(LocalDate.of(2026,1,1));
         setId(existing, 1L);
