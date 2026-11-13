@@ -1,0 +1,47 @@
+# Backend + frontend only, pointing at an external shared Postgres (e.g. Neon).
+# Usage: docker compose -f compose.neon.yaml up --build
+# Set NEON_JDBC_URL, NEON_DB_USER, NEON_DB_PASSWORD, JWT_SECRET in .env.
+# Use Neon's DIRECT connection (host without "-pooler"): the app sets a
+# startup option (lock_timeout) and Flyway needs session-level features
+# that the pooled endpoint does not support.
+name: sabyeguyz
+
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,v2
+      SPRING_DATASOURCE_URL: ${NEON_JDBC_URL:?NEON_JDBC_URL must be set in .env}
+      SPRING_DATASOURCE_USERNAME: ${NEON_DB_USER:?NEON_DB_USER must be set in .env}
+      SPRING_DATASOURCE_PASSWORD: ${NEON_DB_PASSWORD:?NEON_DB_PASSWORD must be set in .env}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      CLINIC_BOOTSTRAP_MANAGER_USERNAME: ${CLINIC_BOOTSTRAP_MANAGER_USERNAME:-}
+      CLINIC_BOOTSTRAP_MANAGER_EMAIL: ${CLINIC_BOOTSTRAP_MANAGER_EMAIL:-}
+      CLINIC_BOOTSTRAP_MANAGER_PASSWORD: ${CLINIC_BOOTSTRAP_MANAGER_PASSWORD:-}
+      APP_V2_FLYWAY_EXTRA_LOCATIONS: ${APP_V2_FLYWAY_EXTRA_LOCATIONS:-}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ""
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
