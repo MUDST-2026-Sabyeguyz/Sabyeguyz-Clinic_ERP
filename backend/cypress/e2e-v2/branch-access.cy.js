@@ -210,10 +210,14 @@ describe('appointment branch authorization (R1–R3)', () => {
         cy.apiAs(auth.token, 'GET', `/api/appointments/${this.appointment02.id}`).its('status').should('equal', 200)
         cy.api('PUT', `/api/users/${user.id}`, { ...profile, role: 'THERAPIST', branchCode: '02' })
           .its('status').should('equal', 200)
-        cy.apiAs(auth.token, 'GET', `/api/appointments/${this.appointment01.id}`).its('status').should('equal', 403)
-        cy.apiAs(auth.token, 'GET', '/api/appointments').its('body.items.0.branchCode').should('equal', '02')
-        cy.api('DELETE', `/api/users/${user.id}`).its('status').should('equal', 204)
+        // Updating a user invalidates previously issued tokens.
         cy.apiAs(auth.token, 'GET', '/api/appointments').its('status').should('equal', 401)
+        cy.login(profile.username, profile.password).then(({ body: current }) => {
+          cy.apiAs(current.token, 'GET', `/api/appointments/${this.appointment01.id}`).its('status').should('equal', 403)
+          cy.apiAs(current.token, 'GET', '/api/appointments').its('body.items.0.branchCode').should('equal', '02')
+          cy.api('DELETE', `/api/users/${user.id}`).its('status').should('equal', 204)
+          cy.apiAs(current.token, 'GET', '/api/appointments').its('status').should('equal', 401)
+        })
       })
     })
   })

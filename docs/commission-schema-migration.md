@@ -1,3 +1,5 @@
+> Current adjustment policy (2026-11-13): a newly created pay adjustment starts as Pending. A Manager must approve the adjustment, explicitly schedule an application in the correct branch/month, and separately approve that application before its amount enters payroll. Deduction applications additionally require a consent reference. Saving an adjustment does not automatically approve or schedule it. The payment must still be closed and confirmed as paid. Under V1031, resignation cancels unpaid balances/applications while preserving processed/remaining amounts; older ExternalReview descriptions below are historical. Regression coverage: `backend/cypress/e2e-v2/commission-adjustment-approval.cy.js` and `commission-payroll.cy.js`.
+
 # Migration V1002: สคีมาค่าคอมมิชชัน (T1)
 
 นำ `V3__implement_commission_requirements.sql` ของ `feat/database` (คอมมิต `28fdb46`) เข้า v2 เป็น

@@ -3,7 +3,7 @@ describe('phase 2 v2 PostgreSQL acceptance', () => {
   it('serves a paid single visit, then uses a course on another appointment for the same patient', function () {
     const fx = this.fixtures
     cy.apiAs(null, 'GET', '/api/patients').its('status').should('equal', 401)
-    cy.login('manager', 'wrong-password').its('status').should('equal', 400)
+    cy.login('manager', 'wrong-password').its('status').should('equal', 401)
     cy.login('manager', 'manager123').then(({ status, body }) => {
       expect(status).to.equal(200)
       expect(body.role).to.equal('MANAGER')
