@@ -57,8 +57,12 @@ final class AgentRuntime implements LocalServer.Controller {
     public LocalServer.Status status() {
         AgentConfig current = config;
         boolean paired = current != null && !revoked;
-        return new LocalServer.Status(paired, paired ? current.workstationName() : null, paired ? current.branchCode() : null,
-                paired ? current.workstationId() : null, VERSION);
+        return new LocalServer.Status(
+                paired,
+                paired ? current.workstationName() : null,
+                paired ? current.branchCode() : null,
+                paired ? current.workstationId() : null,
+                VERSION);
     }
 
     @Override
@@ -79,7 +83,9 @@ final class AgentRuntime implements LocalServer.Controller {
         AgentConfig current = config;
         if (current != null) {
             String paired = LocalServer.normalizeOrigin(current.backendUrl());
-            if (paired != null) all.add(paired);
+            if (paired != null) {
+                all.add(paired);
+            }
         }
         return all;
     }
@@ -88,7 +94,9 @@ final class AgentRuntime implements LocalServer.Controller {
     Optional<String> settingsUrl(Set<String> configured) {
         AgentConfig current = config;
         String origin = current == null ? null : LocalServer.normalizeOrigin(current.backendUrl());
-        if (origin == null) origin = configured.stream().findFirst().orElse(null);
+        if (origin == null) {
+            origin = configured.stream().findFirst().orElse(null);
+        }
         return Optional.ofNullable(origin).map(base -> base + SETTINGS_PATH);
     }
 
@@ -98,7 +106,9 @@ final class AgentRuntime implements LocalServer.Controller {
         next.onStatus(onStatus);
         Thread runner = new Thread(() -> {
             next.run();
-            if (next.wasRevoked()) markRevoked(next);
+            if (next.wasRevoked()) {
+                markRevoked(next);
+            }
         }, "agent-loop");
         loop = next;
         thread = runner;
@@ -106,13 +116,19 @@ final class AgentRuntime implements LocalServer.Controller {
     }
 
     private synchronized void markRevoked(AgentLoop ended) {
-        if (loop == ended) revoked = true;
+        if (loop == ended) {
+            revoked = true;
+        }
     }
 
     private void stopLoop() {
-        if (loop != null) loop.stop();
+        if (loop != null) {
+            loop.stop();
+        }
         // a waiting long-poll would otherwise keep serving the old pairing for up to 40 seconds
-        if (thread != null) thread.interrupt();
+        if (thread != null) {
+            thread.interrupt();
+        }
         loop = null;
         thread = null;
     }

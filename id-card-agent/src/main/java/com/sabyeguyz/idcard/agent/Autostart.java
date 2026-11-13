@@ -8,7 +8,8 @@ import java.nio.file.Path;
 final class Autostart {
     private static final String NAME = "ClinicIdCardAgent";
 
-    private Autostart() {}
+    private Autostart() {
+    }
 
     static String plist(String javaCommandPath, String jarPath) {
         return """
@@ -73,13 +74,17 @@ final class Autostart {
 
     static void installOnFirstRun(Path markerFile) {
         String launcher = System.getProperty("jpackage.app-path");
-        if (!shouldInstallOnFirstRun(System.getProperty("os.name"), launcher, Files.exists(markerFile))) return;
+        if (!shouldInstallOnFirstRun(System.getProperty("os.name"), launcher, Files.exists(markerFile))) {
+            return;
+        }
         try {
             install(launcher);
             Files.createDirectories(markerFile.getParent());
             Files.writeString(markerFile, "done");
         } catch (IOException | InterruptedException failed) {
-            if (failed instanceof InterruptedException) Thread.currentThread().interrupt();
+            if (failed instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             System.err.println("ตั้งให้เริ่มอัตโนมัติไม่สำเร็จ: " + failed.getMessage());
         }
     }
@@ -98,6 +103,8 @@ final class Autostart {
 
     private static void run(String[] command) throws IOException, InterruptedException {
         Process process = new ProcessBuilder(command).inheritIO().start();
-        if (process.waitFor() != 0) throw new IOException("คำสั่งตั้งค่าเริ่มอัตโนมัติไม่สำเร็จ");
+        if (process.waitFor() != 0) {
+            throw new IOException("คำสั่งตั้งค่าเริ่มอัตโนมัติไม่สำเร็จ");
+        }
     }
 }
