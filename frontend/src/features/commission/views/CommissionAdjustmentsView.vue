@@ -259,10 +259,6 @@ onMounted(load)
             <span>หน้า {{ page }} จาก {{ totalPages }}</span>
             <button type="button" :disabled="page === totalPages" @click="page++">ถัดไป →</button>
           </nav>
-          <footer class="adjustment-table-footer">
-            <span>รวม {{ visible.length }} รายการ</span>
-            <span>ยอดคงเหลือของรายการใหม่จะนำไปคำนวณในงวดถัดไปอัตโนมัติ</span>
-          </footer>
         </template>
       </section>
     </main>
@@ -529,20 +525,6 @@ tbody tr:hover td {
   color: #667a72;
   text-align: center;
 }
-.adjustment-table-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 15px 18px;
-  border-top: 1px solid #e7ede9;
-  background: #eff6ee;
-  color: #718078;
-  font-size: 0.82rem;
-}
-.adjustment-table-footer span:first-child {
-  color: #50645a;
-  font-weight: 700;
-}
 .adjustment-directory > .state-card {
   margin: 0;
   border-radius: 0;
@@ -564,11 +546,6 @@ tbody tr:hover td {
   }
   .period-filter {
     grid-column: 1 / -1;
-  }
-  .adjustment-table-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
   }
 }
 @media (max-width: 620px) {
