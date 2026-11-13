@@ -18,7 +18,9 @@ const receiptDocuments = computed(() => {
 })
 const hasRecord = computed(() => props.progress.sales.length > 0 || props.progress.usages.length > 0)
 const headline = computed(() =>
-  props.progress.state === 'REVIEW_REQUIRED' ? 'นัดหมายนี้ต้องตรวจสอบรายการ' : 'นัดหมายนี้ทำรายการแล้ว',
+  props.progress.state === 'REVIEW_REQUIRED' || !hasRecord.value
+    ? 'นัดหมายนี้ต้องตรวจสอบรายการ'
+    : 'นัดหมายนี้ทำรายการแล้ว',
 )
 const summary = computed(() => {
   if (props.progress.state === 'REVIEW_REQUIRED') return 'พบรายการที่ต้องตรวจสอบ กรุณาเปิดเอกสารเดิมก่อนทำรายการต่อ'

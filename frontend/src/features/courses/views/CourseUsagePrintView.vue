@@ -19,8 +19,9 @@ const working = ref(false)
 const error = ref('')
 const notice = ref('')
 const temporaryPreview = ref(false)
-type UsageNames = { usageSequence?: number; patientName?: string; therapistName?: string }
+type UsageNames = { usageSequence?: number; patientName?: string; therapistName?: string; quantity?: number }
 const usageNames = ref(new Map<number, UsageNames>())
+const purchaseDetails = ref<Awaited<ReturnType<typeof courseApi.ledger>>['purchase']>()
 const printHistory = computed(() => {
   let reprintCount = 0
   const events = selected.value?.events ?? []
@@ -41,7 +42,7 @@ const documentEntries = computed(() => (snapshot.value.history ?? []).map((entry
     date: entry.visitDate,
     patient: entry.patientName || names?.patientName,
     therapist: entry.therapistName || names?.therapistName,
-    quantity: entry.quantity,
+    quantity: entry.quantity ?? (names?.quantity == null ? undefined : Math.abs(names.quantity)),
   }
 }))
 const dateTime = (value: string) => new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' }).format(new Date(value))
@@ -59,6 +60,7 @@ async function load() {
   loading.value = true
   error.value = ''
   usageNames.value = new Map()
+  purchaseDetails.value = undefined
   try {
     const courseId = Number(route.params.courseId)
     if (!Number.isInteger(courseId) || courseId < 1) throw new Error('รหัสคอร์สไม่ถูกต้อง')
@@ -94,8 +96,13 @@ async function load() {
     selected.value = [...documents].sort(
       (a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt) || b.id - a.id,
     )[0]
-    if (!temporaryPreview.value && snapshot.value.history?.some((entry) => !entry.patientName || !entry.therapistName)) {
+    const { purchaseDate, expiryDate, totalVisits, history } = snapshot.value
+    if (selected.value && !temporaryPreview.value && (
+      !purchaseDate || !expiryDate || totalVisits == null ||
+      history?.some((entry) => !entry.patientName || !entry.therapistName || entry.quantity == null)
+    )) {
       const ledger = await courseApi.ledger(courseId).catch(() => null)
+      purchaseDetails.value = ledger?.purchase
       for (const movement of (ledger?.movements ?? []) as Array<UsageNames & { type: string }>) {
         if (movement.type === 'USAGE' && movement.usageSequence != null) {
           usageNames.value.set(movement.usageSequence, movement)
@@ -139,6 +146,9 @@ onMounted(() => void load())
           <button class="back-link" type="button" @click="goBack">← กลับ</button>
           <h1>ใบตัดคอร์ส</h1>
           <p v-if="selected && !loading" class="document-note">{{ temporaryPreview ? 'สำเนาข้อมูลปัจจุบัน (เชื่อมต่อชั่วคราว)' : 'ข้อมูล ณ วันที่ออกเอกสาร' }}</p>
+          <p v-if="!loading && purchaseDetails && !snapshot.expiryDate && purchaseDetails.expiresAt" class="document-note">
+            ใบเดิมไม่ได้บันทึกวันหมดอายุ จึงแสดงวันหมดอายุปัจจุบันของคอร์ส
+          </p>
         </div>
         <button
           v-if="selected && !loading"
@@ -162,9 +172,9 @@ onMounted(() => void load())
             :branch-name="snapshot.branchName || snapshot.branchCode"
             :buyer="[snapshot.buyerName, snapshot.buyerHn].filter(Boolean).join(' · ')"
             :issued-at="selected.issuedAt"
-            :purchased-at="snapshot.purchaseDate"
-            :expires-at="snapshot.expiryDate"
-            :total="snapshot.totalVisits"
+            :purchased-at="snapshot.purchaseDate || purchaseDetails?.purchasedAt"
+            :expires-at="snapshot.expiryDate || purchaseDetails?.expiresAt"
+            :total="snapshot.totalVisits ?? purchaseDetails?.purchased"
             :used="snapshot.visitsUsed"
             :remaining="snapshot.remainingVisits"
             :entries="documentEntries"
