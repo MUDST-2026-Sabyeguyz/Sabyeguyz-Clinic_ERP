@@ -100,7 +100,7 @@ describe('AppointmentView', () => {
       'utf8',
     )
     const areas = (selector: RegExp) =>
-      [...(styles.match(selector)?.[1].matchAll(/'([^']+)'/g) ?? [])].map((match) => match[1])
+      [...(styles.match(selector)?.[1]?.matchAll(/'([^']+)'/g) ?? [])].map((match) => match[1])
     const current = areas(
       /\.appointment-create-grid \{[^}]*?grid-template-areas:([\s\S]*?);/,
     )

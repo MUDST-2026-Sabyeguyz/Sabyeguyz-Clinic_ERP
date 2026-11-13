@@ -111,6 +111,7 @@ const feeRows = computed(() => [
     ...item,
     rowKey: `course-${item.id}`,
     edit: { path: '/staff/transactions', query: { usageId: String(item.id) } } as EditTarget | null,
+    alwaysEditable: false,
   })),
   ...singleFees.value.map((item) => ({
     ...item,
@@ -119,6 +120,7 @@ const feeRows = computed(() => [
     edit: (item.receiptNo
       ? { path: '/staff/transactions', query: { tab: 'sales', search: item.receiptNo } }
       : null) as EditTarget | null,
+    alwaysEditable: false,
   })),
 ])
 // รวมรายการขายคอร์ส ค่ามือ และรายการปรับยอดไว้ตารางเดียว (ขายคอร์ส/ค่ามือเรียงวันที่ใหม่สุดก่อน ปรับยอดไว้ท้าย)
