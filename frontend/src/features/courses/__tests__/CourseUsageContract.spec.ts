@@ -71,6 +71,9 @@ type State = {
   action: string
   confirm: () => Promise<void>
   patientCourses: Array<{ id: number; remaining: number }>
+  selectedCourse: ReturnType<typeof purchase> & { name: string; balance: number; total: number }
+  courseUsageHistory: Array<{ id: number; type: string; quantity: number; createdAt: string; patientName: string; therapistName: string }>
+  coursePrintPreview: boolean
 }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -96,6 +99,21 @@ async function render() {
   return { view, state }
 }
 describe('course usage main contract', () => {
+  it('shows the patient and treating therapist in the course print preview', async () => {
+    const { view, state } = await render()
+    state.selectedCourse = { ...purchase(101), name: 'Course 101', balance: 3, total: 10 }
+    state.courseUsageHistory = [{
+      id: 1, type: 'USAGE', quantity: -2, createdAt: '2026-11-13T10:00:00Z',
+      patientName: 'Actual recipient', therapistName: 'Treating PT',
+    }]
+    state.action = 'history'
+    state.coursePrintPreview = true
+    await nextTick()
+
+    const cells = view.findAll('.course-history-document tbody td').map((cell) => cell.text())
+    expect(cells.slice(1)).toEqual(['Treating PT', 'Actual recipient', '2'])
+    view.unmount()
+  })
   it('returns from usage history to course management without the completed appointment context', async () => {
     const { view, state } = await render()
     state.action = 'history'
