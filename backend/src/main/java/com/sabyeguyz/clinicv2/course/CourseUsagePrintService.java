@@ -99,9 +99,14 @@ public class CourseUsagePrintService {
         for (CourseVisitUsage entry : completed) {
             Map<String, Object> line = new LinkedHashMap<>();
             line.put("sequence", entry.getUsageSequence());
+            line.put("quantity", entry.getVisitQty());
             line.put("visitDate", String.valueOf(entry.getVisitDate().toLocalDate()));
             line.put("patientId", entry.getPatient() == null ? null : entry.getPatient().getId());
             line.put("treatingStaffId", entry.getTreatingStaff() == null ? null : entry.getTreatingStaff().getId());
+            line.put("patientName", entry.getPatient() == null ? null
+                    : entry.getPatient().getPatientFname() + " " + entry.getPatient().getPatientLname());
+            line.put("therapistName", entry.getTreatingStaff() == null ? null
+                    : entry.getTreatingStaff().getStaffFname() + " " + entry.getTreatingStaff().getStaffLname());
             history.add(line);
         }
 
