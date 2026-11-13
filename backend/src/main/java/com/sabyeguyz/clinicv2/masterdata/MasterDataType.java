@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.masterdata;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "master_data_type")
@@ -30,14 +31,19 @@ public class MasterDataType {
     public MasterDataType() {}
 
     public Long getId() { return id; }
+
     public String getTypeName() { return typeName; }
     public void setTypeName(String typeName) { this.typeName = typeName; }
+
     public Instant getTypeCreateAt() { return typeCreateAt; }
     public void setTypeCreateAt(Instant typeCreateAt) { this.typeCreateAt = typeCreateAt; }
+
     public Long getTypeCreateBy() { return typeCreateBy; }
     public void setTypeCreateBy(Long typeCreateBy) { this.typeCreateBy = typeCreateBy; }
+
     public Instant getTypeUpdateAt() { return typeUpdateAt; }
     public void setTypeUpdateAt(Instant typeUpdateAt) { this.typeUpdateAt = typeUpdateAt; }
+
     public Long getTypeUpdateBy() { return typeUpdateBy; }
     public void setTypeUpdateBy(Long typeUpdateBy) { this.typeUpdateBy = typeUpdateBy; }
 }

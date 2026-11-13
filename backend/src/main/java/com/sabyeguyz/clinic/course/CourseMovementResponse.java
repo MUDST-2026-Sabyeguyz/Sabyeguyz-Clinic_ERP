@@ -11,9 +11,10 @@ public record CourseMovementResponse(
         String reason,
         Long appointmentId,
         Long reversesMovementId,
-        Instant createdAt
-) {
-    public static CourseMovementResponse from(CourseMovement movement, int balanceAfter) {
+        Instant createdAt) {
+    public static CourseMovementResponse from(
+            CourseMovement movement,
+            int balanceAfter) {
         return new CourseMovementResponse(
                 movement.getId(),
                 movement.getType(),

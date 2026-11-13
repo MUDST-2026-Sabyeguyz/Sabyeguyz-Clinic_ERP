@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.LocalDate;
+
 import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 import com.sabyeguyz.clinicv2.enums.AllocationEntryType;
 import com.sabyeguyz.clinicv2.enums.FeeType;
@@ -78,34 +80,49 @@ public class SingleVisitFeeLedger {
     public SingleVisitFeeLedger() {}
 
     public Long getId() { return id; }
+
     public PatientVisit getVisit() { return visit; }
     public void setVisit(PatientVisit visit) { this.visit = visit; }
+
     public Staff getStaff() { return staff; }
     public void setStaff(Staff staff) { this.staff = staff; }
+
     public TreatmentFeeRule getTreatmentFeeRule() { return treatmentFeeRule; }
     public void setTreatmentFeeRule(TreatmentFeeRule treatmentFeeRule) { this.treatmentFeeRule = treatmentFeeRule; }
+
     public LocalDate getServiceDate() { return serviceDate; }
     public void setServiceDate(LocalDate serviceDate) { this.serviceDate = serviceDate; }
+
     public FeeType getFeeType() { return feeType; }
     public void setFeeType(FeeType feeType) { this.feeType = feeType; }
+
     public BigDecimal getFeeValue() { return feeValue; }
     public void setFeeValue(BigDecimal feeValue) { this.feeValue = feeValue; }
+
     public BigDecimal getCalculationBase() { return calculationBase; }
     public void setCalculationBase(BigDecimal calculationBase) { this.calculationBase = calculationBase; }
+
     public BigDecimal getFeeAmount() { return feeAmount; }
     public void setFeeAmount(BigDecimal feeAmount) { this.feeAmount = feeAmount; }
+
     public AllocationEntryType getEntryType() { return entryType; }
     public void setEntryType(AllocationEntryType entryType) { this.entryType = entryType; }
+
     public SingleVisitFeeLedger getReversesFee() { return reversesFee; }
     public void setReversesFee(SingleVisitFeeLedger reversesFee) { this.reversesFee = reversesFee; }
+
     public StaffMonthlyPayment getMonthlyPayment() { return monthlyPayment; }
     public void setMonthlyPayment(StaffMonthlyPayment monthlyPayment) { this.monthlyPayment = monthlyPayment; }
+
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+
     public int getFeeVersion() { return feeVersion; }
     public void setFeeVersion(int feeVersion) { this.feeVersion = feeVersion; }
 }

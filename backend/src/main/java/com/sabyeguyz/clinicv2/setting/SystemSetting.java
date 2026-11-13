@@ -1,8 +1,10 @@
 package com.sabyeguyz.clinicv2.setting;
 
-import com.sabyeguyz.clinicv2.role.Permission;
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.role.Permission;
 
 /** e.g. TREATMENT_FEE_OVERFLOW_POLICY. */
 @Entity
@@ -30,21 +32,29 @@ public class SystemSetting {
 
     public SystemSetting() {}
 
-    public SystemSetting(String settingKey, Permission permission, String settingValue) {
+    public SystemSetting(
+            String settingKey,
+            Permission permission,
+            String settingValue) {
         this.settingKey = settingKey;
         this.permission = permission;
         this.settingValue = settingValue;
     }
 
     public String getSettingKey() { return settingKey; }
+
     public Permission getPermission() { return permission; }
     public void setPermission(Permission permission) { this.permission = permission; }
+
     public String getSettingValue() { return settingValue; }
     public void setSettingValue(String settingValue) { this.settingValue = settingValue; }
+
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
     public Instant getSettingUpdateAt() { return settingUpdateAt; }
     public void setSettingUpdateAt(Instant settingUpdateAt) { this.settingUpdateAt = settingUpdateAt; }
+
     public Long getSettingUpdateBy() { return settingUpdateBy; }
     public void setSettingUpdateBy(Long settingUpdateBy) { this.settingUpdateBy = settingUpdateBy; }
 }

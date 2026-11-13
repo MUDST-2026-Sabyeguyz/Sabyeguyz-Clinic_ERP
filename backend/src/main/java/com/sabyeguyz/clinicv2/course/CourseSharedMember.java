@@ -1,12 +1,14 @@
 package com.sabyeguyz.clinicv2.course;
 
-import com.sabyeguyz.clinicv2.catalog.Course;
-import com.sabyeguyz.clinicv2.enums.CourseMemberRole;
-import com.sabyeguyz.clinicv2.patient.Patient;
+import java.time.Instant;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import java.time.Instant;
+
+import com.sabyeguyz.clinicv2.catalog.Course;
+import com.sabyeguyz.clinicv2.enums.CourseMemberRole;
+import com.sabyeguyz.clinicv2.patient.Patient;
 
 @Entity
 @Table(name = "course_shared_member")
@@ -38,7 +40,10 @@ public class CourseSharedMember {
 
     public CourseSharedMember() {}
 
-    public CourseSharedMember(Course course, Patient patient, CourseMemberRole memberRole) {
+    public CourseSharedMember(
+            Course course,
+            Patient patient,
+            CourseMemberRole memberRole) {
         this.course = course;
         this.patient = patient;
         this.memberRole = memberRole;
@@ -46,12 +51,17 @@ public class CourseSharedMember {
     }
 
     public Course getCourse() { return course; }
+
     public Patient getPatient() { return patient; }
+
     public CourseMemberRole getMemberRole() { return memberRole; }
     public void setMemberRole(CourseMemberRole memberRole) { this.memberRole = memberRole; }
+
     public boolean isMemberStatus() { return memberStatus; }
     public void setMemberStatus(boolean memberStatus) { this.memberStatus = memberStatus; }
+
     public Instant getJoinedAt() { return joinedAt; }
+
     public Instant getEndedAt() { return endedAt; }
     public void setEndedAt(Instant endedAt) { this.endedAt = endedAt; }
 }

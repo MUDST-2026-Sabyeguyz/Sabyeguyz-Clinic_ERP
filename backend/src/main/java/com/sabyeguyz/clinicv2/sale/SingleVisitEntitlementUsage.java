@@ -1,7 +1,7 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.appointment.Appointment;
-import com.sabyeguyz.clinicv2.appointment.PatientVisit;
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -12,7 +12,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.Instant;
+
+import com.sabyeguyz.clinicv2.appointment.Appointment;
+import com.sabyeguyz.clinicv2.appointment.PatientVisit;
 
 /** Append-only redemption history; a reversal restores one prepaid service without deleting its history. */
 @Entity
@@ -54,20 +56,28 @@ public class SingleVisitEntitlementUsage {
     public SingleVisitEntitlementUsage() {}
 
     public Long getId() { return id; }
+
     public SingleVisitEntitlement getEntitlement() { return entitlement; }
     public void setEntitlement(SingleVisitEntitlement entitlement) { this.entitlement = entitlement; }
+
     public Appointment getAppointment() { return appointment; }
     public void setAppointment(Appointment appointment) { this.appointment = appointment; }
+
     public PatientVisit getVisit() { return visit; }
     public void setVisit(PatientVisit visit) { this.visit = visit; }
+
     public Instant getUsedAt() { return usedAt; }
     public void setUsedAt(Instant usedAt) { this.usedAt = usedAt; }
+
     public Long getUsedBy() { return usedBy; }
     public void setUsedBy(Long usedBy) { this.usedBy = usedBy; }
+
     public Instant getReversedAt() { return reversedAt; }
     public void setReversedAt(Instant reversedAt) { this.reversedAt = reversedAt; }
+
     public Long getReversedBy() { return reversedBy; }
     public void setReversedBy(Long reversedBy) { this.reversedBy = reversedBy; }
+
     public String getReversalReason() { return reversalReason; }
     public void setReversalReason(String reversalReason) { this.reversalReason = reversalReason; }
 }
