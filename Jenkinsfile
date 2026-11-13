@@ -123,7 +123,7 @@ pipeline {
                             kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE get deployments,pods,services,pvc -o wide
                             if ($LASTEXITCODE -ne 0) { throw 'Cannot collect deployment evidence' }
                         } catch {
-                            Write-Error 'Deployment verification failed; restoring prior application images.'
+                            Write-Warning 'Deployment verification failed; restoring prior application images.'
                             if ($oldBackend) { kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE set image deployment/backend backend=$oldBackend | Out-Null }
                             if ($oldFrontend) { kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE set image deployment/frontend frontend=$oldFrontend | Out-Null }
                             throw
