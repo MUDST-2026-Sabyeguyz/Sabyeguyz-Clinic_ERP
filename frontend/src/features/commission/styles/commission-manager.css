@@ -4,21 +4,21 @@
   color: #25372f;
 }
 .commission-manager-main {
-  width: min(1500px, calc(100% - 80px));
+  width: min(1552px, calc(100% - 104px));
   margin: auto;
-  padding: 54px 0 72px;
+  padding: 46px 0 72px;
 }
 .commission-title h1 {
   margin: 0;
-  font-size: clamp(2rem, 3vw, 2.6rem);
+  font-size: clamp(2rem, 3vw, 2.5rem);
   line-height: 1.25;
 }
 .commission-title p {
-  margin: 5px 0 0;
+  margin: 7px 0 0;
   color: #667a72;
 }
 .commission-card {
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   background: #fff;
 }
@@ -29,18 +29,18 @@
   margin-bottom: 24px;
 }
 .commission-metrics article {
-  min-height: 112px;
-  padding: 20px;
+  min-height: 132px;
+  padding: 21px 24px;
   box-sizing: border-box;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 10px;
   background: #fff;
 }
 .commission-metrics article.highlight {
-  background: #e7f4ef;
+  background: #eaf5f1;
 }
 .commission-metrics article.warning {
-  background: #fff8df;
+  background: #fff8e1;
 }
 .commission-metrics span,
 .commission-metrics small {
@@ -49,8 +49,8 @@
 }
 .commission-metrics b {
   display: block;
-  margin: 8px 0 4px;
-  font-size: 1.55rem;
+  margin: 10px 0 5px;
+  font-size: 1.6rem;
 }
 .commission-metrics .highlight b {
   color: #16875b;
@@ -70,13 +70,13 @@
   color: #fff;
 }
 .commission-secondary {
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   background: #fff;
   color: #25372f;
 }
 .commission-table-wrap {
   overflow-x: auto;
-  border: 1px solid #d9e1dc;
+  border: 1px solid var(--color-border-soft);
   border-radius: 11px;
   background: #fff;
   scrollbar-width: thin;
@@ -102,14 +102,14 @@
   border-collapse: collapse;
 }
 .commission-table th {
-  padding: 16px 18px;
-  background: #16877f;
+  padding: 18px 20px;
+  background: #0e7d78;
   color: #fff;
   text-align: left;
   white-space: nowrap;
 }
 .commission-table td {
-  padding: 16px 18px;
+  padding: 18px 20px;
   border-bottom: 1px solid #e6ebe8;
   white-space: nowrap;
 }
@@ -179,7 +179,7 @@
 
 .rule-drawer h2 {
   margin: 0;
-  color: #25372e;
+  color: var(--color-ink);
   font-size: 1.65rem;
 }
 .rule-drawer header p {
