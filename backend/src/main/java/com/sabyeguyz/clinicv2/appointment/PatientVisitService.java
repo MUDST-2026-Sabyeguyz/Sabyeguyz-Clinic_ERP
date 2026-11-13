@@ -39,6 +39,14 @@ public class PatientVisitService {
         return visits.findAll();
     }
 
+    /** The branch where an appointment's service is given (the branch of the appointment itself). */
+    @Transactional(readOnly = true)
+    public Branch serviceBranchOf(Long appointmentId) {
+        Branch branch = appointmentService.get(appointmentId).getBranch();
+        if (branch == null) throw new IllegalArgumentException("นัดหมายนี้ไม่มีสาขา");
+        return branch;
+    }
+
     @Transactional(readOnly = true)
     public PatientVisit get(Long id) {
         return find(id);

@@ -402,13 +402,25 @@ public class CoursePurchaseController {
                         item.treatmentId()))
                 .toList();
 
-        var lockedCourses = usageBatchService.lockCourses(items);
+        var lockedCourses = usageBatchService.lockCourses(items, first.patientId());
         Course firstCourse = lockedCourses.get(first.coursePurchaseId());
-        Branch branch = firstCourse.getBranch();
 
-        for (Course course : lockedCourses.values()) {
-            if (!branch.getId().equals(course.getBranch().getId())) {
-                throw new IllegalArgumentException("คอร์สใน Visit เดียวกันต้องอยู่สาขาเดียวกัน");
+        // A course shared to the using patient may be used at any branch; the others stay at their own branch.
+        List<Course> ownBranchCourses = lockedCourses.values().stream()
+                .filter(course -> !CourseUsageBatchService.isSharedTo(course, first.patientId()))
+                .toList();
+        Branch branch;
+
+        if (ownBranchCourses.isEmpty()) {
+            branch = visitService.serviceBranchOf(first.appointmentId());
+            branchAccess.requireAccess(branch, "ใช้สิทธิ์ได้เฉพาะนัดหมายของสาขาตัวเอง");
+        } else {
+            branch = ownBranchCourses.get(0).getBranch();
+
+            for (Course course : ownBranchCourses) {
+                if (!branch.getId().equals(course.getBranch().getId())) {
+                    throw new IllegalArgumentException("คอร์สใน Visit เดียวกันต้องอยู่สาขาเดียวกัน");
+                }
             }
         }
 
