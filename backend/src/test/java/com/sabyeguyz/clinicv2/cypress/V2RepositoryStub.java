@@ -1,4 +1,4 @@
-package com.sabyeguyz.clinic.cypress;
+package com.sabyeguyz.clinicv2.cypress;
 
 import java.lang.reflect.Proxy;
 import java.util.*;
