@@ -14,7 +14,13 @@ export const thaiMonth = (value: string) =>
   new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`))
 
 /** หา date เริ่ม Version ใหม่ต่อจากวันสิ้นสุดเดิมหรือเดือนถัดไป */
-export function nextSchemeEffectiveFrom(effectiveTo: string | null, today = clinicToday()) {
+export function nextSchemeEffectiveFrom(
+  effectiveTo: string | null,
+  today = clinicToday(),
+  firstScheme = false,
+) {
+  // The first scheme has nothing to replace, so it may start on the 1st of the current month.
+  if (firstScheme) return `${today.slice(0, 7)}-01`
   if (effectiveTo) {
     const [year, month, day] = effectiveTo.split('-').map(Number)
     return new Date(Date.UTC(year!, month! - 1, day! + 1)).toISOString().slice(0, 10)
