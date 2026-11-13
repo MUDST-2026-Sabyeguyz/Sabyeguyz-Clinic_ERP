@@ -30,8 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
  *       the allocation rows, reversals included); it is unknown (NULL, never 0) while a session of the person's courses
  *       treated in the month still waits for the sale month to be closed.</li>
  *   <li>Single-visit fee and substitute treatment fee come from their ledgers.</li>
- *   <li>Adjustment = approved adjustment applications reserved (Draft) for the month; a deduction never exceeds what was earned,
- *       the rest is carried to a later month.</li>
+ *   <li>Adjustment = approved applications for the month; new adjustments are scheduled automatically. A deduction
+ *       never exceeds what was earned, and the rest is carried to a later month.</li>
  *   <li>Open (editable, recalculated) -> Closed (amounts frozen, waiting for payment, Manager can reopen) -> Paid (locked).
  *       Paying also finalizes the sale-month closings the Owner commission depends on and turns the applied adjustments
  *       into Applied, all in one transaction.</li>
@@ -209,6 +209,47 @@ public class StaffMonthlyPaymentService {
         return applications.findByMonthlyPaymentIdOrderByIdAsc(paymentId);
     }
 
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> latestOpenMonth(Long branchId) {
+        var open = payments.findByBranchIdAndPaymentStatusOrderByPaymentMonthDesc(branchId, PaymentStatus.Open)
+                .stream().map(StaffMonthlyPayment::getPaymentMonth).findFirst();
+        if (open.isPresent()) return open;
+        String current = YearMonth.now(com.sabyeguyz.clinicv2.config.ClinicTime.ZONE).toString();
+        return java.util.Optional.of(payments.findByBranchIdOrderByPaymentMonthDesc(branchId).stream()
+                .map(payment -> YearMonth.parse(payment.getPaymentMonth()).plusMonths(1).toString())
+                .findFirst().map(month -> month.compareTo(current) > 0 ? month : current).orElse(current));
+    }
+
+    public void lockAdjustmentMonth(Long branchId, String month) {
+        closings.lockBranchMonth(branchId, month);
+    }
+
+    void scheduleAutomaticAdjustments(StaffMonthlyPayment payment) {
+        Staff person = payment.getStaff();
+        for (StaffPayAdjustment adjustment : adjustments
+                .findByStaffIdAndAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqualOrderByIdAsc(
+                        person.getId(), payment.getBranch().getId(), payment.getPaymentMonth())) {
+            if (adjustment.getAdjustmentStatus() != AdjustmentStatus.Approved
+                    && adjustment.getAdjustmentStatus() != AdjustmentStatus.PartiallyApplied) continue;
+            if (adjustment.getRemainingAmount().signum() <= 0) continue;
+            if (!person.isStaffStatus() || person.getTerminationDate() != null) continue;
+            if (applications.findByAdjustmentIdOrderByIdAsc(adjustment.getId()).stream()
+                    .anyMatch(row -> row.getApplicationStatus() == ApplicationStatus.Draft)) continue;
+            AdjustmentApplication application = new AdjustmentApplication();
+            application.setAdjustment(adjustment);
+            application.setMonthlyPayment(payment);
+            application.setAmount(adjustment.getAmount().signum() < 0
+                    ? adjustment.getRemainingAmount().negate() : adjustment.getRemainingAmount());
+            application.setApplicationStatus(ApplicationStatus.Draft);
+            application.setApprovalReference(adjustment.getApprovalReference());
+            application.setApprovedBy(adjustment.getApprovedBy());
+            application.setApprovedAt(Instant.now());
+            application.setCreatedBy(adjustment.getCreatedBy());
+            application.setCreatedAt(Instant.now());
+            applications.save(application);
+        }
+    }
+
     /** Finds staff with earnings, pending commission or payments in the branch. */
     @Transactional(readOnly = true)
     public Set<Long> staffWithActivity(String month, Long branchId) {
@@ -242,6 +283,13 @@ public class StaffMonthlyPaymentService {
 
         payments.findByPaymentMonthAndBranchIdOrderByIdAsc(month, branchId)
                 .forEach(payment -> ids.add(payment.getStaff().getId()));
+
+        adjustments.findByAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqual(branchId, month)
+                .stream()
+                .filter(row -> row.getRemainingAmount().signum() > 0)
+                .filter(row -> row.getAdjustmentStatus() == AdjustmentStatus.Approved
+                        || row.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied)
+                .forEach(row -> ids.add(row.getStaff().getId()));
 
         return ids;
     }
@@ -309,6 +357,7 @@ public class StaffMonthlyPaymentService {
     @Transactional
     public StaffMonthlyPayment refresh(StaffMonthlyPayment payment) {
         requireStatus(payment, PaymentStatus.Open, "แก้ไข/คำนวณใหม่ได้เฉพาะงวดที่ยังเป็น Open");
+        scheduleAutomaticAdjustments(payment);
 
         Branch branch = payment.getBranch();
         if (branch == null || branch.getId() == null) {
@@ -416,6 +465,12 @@ public class StaffMonthlyPaymentService {
         if (ref != null && ref.length() > 100) throw new IllegalArgumentException("เลขที่อ้างอิงยาวเกิน 100 ตัวอักษร");
         StaffMonthlyPayment payment = findForUpdate(paymentId);
         requireStatus(payment, PaymentStatus.Closed, "ยืนยันจ่ายได้เฉพาะงวดที่เป็น Closed");
+        if (payment.getStaff().getTerminationDate() != null
+                && applications.findByMonthlyPaymentIdOrderByIdAsc(payment.getId()).stream()
+                .anyMatch(row -> row.getApplicationStatus() == ApplicationStatus.Draft
+                        && row.getAdjustment().isAutomatic())) {
+            throw new IllegalStateException("นักกายภาพลาออกแล้ว ต้องยกเลิกยอดปรับคงเหลือก่อนจ่ายงวด");
+        }
         Branch branch = payment.getBranch();
         if (branch == null || branch.getId() == null) {
             throw new IllegalStateException(
@@ -526,7 +581,7 @@ public class StaffMonthlyPaymentService {
      * earnings. With {@code store} the amount of a limited deduction is reduced (and an empty one cancelled), so the rest
      * stays on the adjustment for a later month.
      */
-    private BigDecimal limitDeductions(StaffMonthlyPayment payment, BigDecimal earned, boolean store) {
+    BigDecimal limitDeductions(StaffMonthlyPayment payment, BigDecimal earned, boolean store) {
         List<AdjustmentApplication> drafts = applications.findByMonthlyPaymentIdOrderByIdAsc(payment.getId()).stream()
                 .filter(application -> application.getApplicationStatus() == ApplicationStatus.Draft && application.getApprovedBy() != null)
                 .sorted(Comparator.comparing(AdjustmentApplication::getId)).toList();
@@ -583,6 +638,15 @@ public class StaffMonthlyPaymentService {
     static void requireMonth(String month) {
         if (month == null || !month.matches("\\d{4}-(0[1-9]|1[0-2])")) {
             throw new IllegalArgumentException("เดือนต้องเป็นรูปแบบ yyyy-mm");
+        }
+    }
+
+    static void requireCompletedMonth(String month) {
+        requireMonth(month);
+        YearMonth requested = YearMonth.parse(month);
+        YearMonth current = YearMonth.now(com.sabyeguyz.clinicv2.config.ClinicTime.ZONE);
+        if (!requested.isBefore(current)) {
+            throw new IllegalArgumentException("ปิดรอบได้เฉพาะเดือนที่สิ้นสุดแล้ว");
         }
     }
 }

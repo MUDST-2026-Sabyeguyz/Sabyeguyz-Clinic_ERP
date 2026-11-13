@@ -43,9 +43,31 @@ const {
 } = useAppointmentProcess()
 const usageSubmitting = ref(false)
 const appointmentNeedsReview = computed(() =>
-  Boolean(appointmentProgress.value && action.value !== 'history' && !canStartAppointment.value),
+  Boolean(
+    appointmentProgress.value &&
+      action.value !== 'history' &&
+      !usageSuccess.value &&
+      !canStartAppointment.value,
+  ),
 )
 const router = useRouter()
+// นัดที่ใช้สิทธิ์คอร์สสำเร็จแล้ว (ไม่มีอะไรต้องตรวจสอบ) ให้ข้ามหน้า "รายการของนัดหมาย" ไปประวัติคอร์สเลย
+watch(appointmentNeedsReview, (needsReview) => {
+  const progress = appointmentProgress.value
+  if (!needsReview || !progress || recoveryRequired.value) return
+  if (progress.state !== 'FOUND' || route.query.action === 'history') return
+  const usage = progress.usages.find((item) => item.status === 'Completed')
+  if (!usage) return
+  void router.replace({
+    name: 'staff-courses',
+    query: {
+      patientId: progress.servedPatientId ? String(progress.servedPatientId) : route.query.patientId,
+      courseId: String(usage.coursePurchaseId),
+      action: 'history',
+      appointmentId: String(progress.appointmentId),
+    },
+  })
+})
 const canReviewCourseExtensions = JSON.parse(localStorage.getItem('authUser') ?? 'null')?.role === 'MANAGER'
 const action = ref<CourseAction>('manage')
 const recipientSearch = ref('')
@@ -125,6 +147,16 @@ const usageBranchName = computed(
     usageBranchCode.value ??
     '—',
 )
+// preselect the appointment's therapist once both the appointment and staff list are loaded
+watch(
+  [() => sourceAppointment.value?.therapist?.id, treatingOptions],
+  ([therapistId, options]) => {
+    if (treatingStaffId.value) return
+    if (therapistId && options.some((person) => person.id === therapistId))
+      treatingStaffId.value = therapistId
+  },
+  { immediate: true },
+)
 watch(
   () => selectedCourse.value.id,
   (id) => {
@@ -132,6 +164,7 @@ watch(
   },
 )
 const usageReview = ref(false)
+const editingTherapist = ref(false)
 const usageSuccess = ref(false)
 const usageConfirmDialog = ref(false)
 const transferConfirmDialog = ref(false)
@@ -816,8 +849,33 @@ function closePrintSuccess() {
                 </div>
                 <div>
                   <dt>นักกายภาพ</dt>
-                  <dd>
-                    {{ selectedTreatingStaff?.fullName || '—' }}
+                  <dd class="review-therapist-row">
+                    <select
+                      v-if="editingTherapist"
+                      v-model.number="treatingStaffId"
+                      class="review-therapist-select"
+                      aria-label="เลือกนักกายภาพ"
+                    >
+                      <option :value="0" disabled>เลือกนักกายภาพ</option>
+                      <option v-for="person in treatingOptions" :key="person.id" :value="person.id">
+                        {{ person.fullName }}
+                      </option>
+                    </select>
+                    <span v-else>{{ selectedTreatingStaff?.fullName || '—' }}</span>
+                    <button
+                      v-if="!editingTherapist"
+                      type="button"
+                      class="review-therapist-edit"
+                      aria-label="แก้ไขนักกายภาพ"
+                      @click="editingTherapist = true"
+                    >
+                      <svg viewBox="0 0 512 512" width="16" height="16" aria-hidden="true">
+                        <path
+                          fill="currentColor"
+                          d="M362 0c-10 0-20 4-28 12L12 374a30 30 0 0 0-8 18L0 470a30 30 0 0 0 32 32l78-4c7 0 14-3 19-8L500 126c16-16 16-40 0-56L418 12C405 4 384 0 362 0zM332 112l68 68L112 458l-64 4 4-62z"
+                        />
+                      </svg>
+                    </button>
                   </dd>
                 </div>
                 <div>
@@ -3674,6 +3732,38 @@ function closePrintSuccess() {
 .course-review-summary h2 {
   margin: 0 0 14px;
   font-size: 20px;
+}
+.review-therapist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.review-therapist-edit {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1a7f75;
+  cursor: pointer;
+}
+.review-therapist-edit:hover {
+  background: rgba(26, 127, 117, 0.12);
+}
+.review-therapist-select {
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid rgba(26, 127, 117, 0.35);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  color: inherit;
 }
 .course-review-details dl {
   display: grid;

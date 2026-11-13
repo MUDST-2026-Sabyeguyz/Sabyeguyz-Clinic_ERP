@@ -95,16 +95,6 @@ public class SecurityConfig {
 
     @Bean
     JwtAuthenticationConverter jwtAuthenticationConverter(
-<<<<<<< HEAD
-            UserRoleRepository userRoles) {
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt ->
-                userRoles.findRoleNamesByUserId(Long.valueOf(jwt.getSubject()))
-                        .stream()
-                        .<GrantedAuthority>map(role ->
-                                new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT)))
-                        .toList());
-=======
             UserRoleRepository userRoles,
             com.sabyeguyz.clinicv2.auth.JwtAccountStateValidator accountState) {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
@@ -116,7 +106,6 @@ public class SecurityConfig {
                                 new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT)))
                         .toList();
         });
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 
         return converter;
     }
@@ -131,12 +120,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/actuator/health",
-<<<<<<< HEAD
-                                "/error")
-=======
                                 "/error",
                                 "/api/id-card/agent/**")
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
                         .permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt ->

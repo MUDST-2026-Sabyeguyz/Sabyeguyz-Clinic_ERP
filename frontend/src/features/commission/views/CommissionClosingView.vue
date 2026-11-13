@@ -53,18 +53,12 @@ const totalBase = computed(() => reportRows.value.reduce((sum, r) => sum + Numbe
 const commissionPool = computed(() =>
   reportRows.value.reduce((sum, r) => sum + Number(r.commission), 0),
 )
-const reportCount = computed(() => reportRows.value.reduce((sum, r) => sum + r.saleCount, 0))
 const proposedRate = computed(() => {
-  if (validationLoading.value || hasBlockingIssues.value) return 'รอตรวจสอบข้อมูล'
+  if (validationLoading.value || hasBlockingIssues.value || validationError.value) return 'รอตรวจสอบข้อมูล'
   const rates = [...new Set(reportRows.value.map((r) => Number(r.rate) * 100))]
   return rates.length === 1 ? `${rates[0]}%` : rates.length ? 'ตามช่วงยอดขายรายบุคคล' : '—'
 })
-const validationResults = ref({
-  tiers: null as boolean | null,
-  sales: null as boolean | null,
-  courses: null as boolean | null,
-  treatment: null as boolean | null,
-})
+const validationResults = ref({ tiers: null as boolean | null })
 
 async function validatePeriod(id: number, selectedPeriod: string) {
   validationLoading.value = true
@@ -73,31 +67,28 @@ async function validatePeriod(id: number, selectedPeriod: string) {
   reportRows.value = []
   schemeLabel.value = 'ยังไม่มีข้อมูลกฎค่าคอมมิชชัน'
   schemePeriodLabel.value = 'ยังไม่มีข้อมูลช่วงวันที่'
-  validationResults.value = { tiers: null, sales: null, courses: null, treatment: null }
+  validationResults.value = { tiers: null }
   const [year, number] = selectedPeriod.split('-').map(Number)
   const from = `${selectedPeriod}-01`
   const to = `${selectedPeriod}-${String(new Date(year!, number!, 0).getDate()).padStart(2, '0')}`
   const branchCode = selectedBranchCode.value
   if (!branchCode) {
     validationError.value = 'กรุณาเลือกสาขาก่อนตรวจรอบ'
-    validationResults.value = { tiers: null, sales: null, courses: null, treatment: null }
+    validationResults.value = { tiers: null }
     validationLoading.value = false
     return
   }
 
-  const [schemesResult, salesResult, treatmentResult] = await Promise.allSettled([
+  const [schemesResult, salesResult] = await Promise.allSettled([
     commissionApi.schemes(),
     commissionApi.report(from, to),
-    commissionApi.treatmentReport(from, to),
   ])
   if (id !== requestId) return
 
-  if (
-    schemesResult.status === 'rejected' ||
-    salesResult.status === 'rejected' ||
-    treatmentResult.status === 'rejected'
-  ) {
+  if (schemesResult.status === 'rejected') {
     validationError.value = 'โหลดข้อมูลตรวจสอบไม่ครบ กรุณาตรวจอีกครั้งก่อนปิดรอบ'
+  } else if (salesResult.status === 'rejected') {
+    validationError.value = 'โหลดรายการขายและยอดสรุปไม่สำเร็จ กรุณาตรวจอีกครั้งก่อนปิดรอบ'
   }
 
   const scopedSales =
@@ -105,23 +96,6 @@ async function validatePeriod(id: number, selectedPeriod: string) {
       ? salesResult.value.filter((item) => item.branchCode === branchCode)
       : []
   if (salesResult.status === 'fulfilled') reportRows.value = scopedSales
-  validationResults.value.sales =
-    salesResult.status === 'fulfilled'
-      ? scopedSales.every((item) => item.staffId !== null && Number(item.base) >= 0)
-      : null
-
-  if (treatmentResult.status === 'fulfilled') {
-    const scopedTreatments = treatmentResult.value.filter((item) => item.branchCode === branchCode)
-    validationResults.value.courses = scopedTreatments.every(
-      (item) => Boolean(item.courseCode) && item.ownerStaffId !== null,
-    )
-    validationResults.value.treatment = scopedTreatments.every(
-      (item) => Number(item.treatmentFee) <= Number(item.gross),
-    )
-  } else {
-    validationResults.value.courses = null
-    validationResults.value.treatment = null
-  }
 
   if (schemesResult.status === 'fulfilled' && Array.isArray(schemesResult.value)) {
     const scheme = (
@@ -132,49 +106,28 @@ async function validatePeriod(id: number, selectedPeriod: string) {
         effectiveFrom: string
         effectiveTo: string | null
       }>
-    ).find((s) => s.active && s.effectiveFrom <= to && (!s.effectiveTo || s.effectiveTo > to))
-    if (scheme) {
-      schemeLabel.value = scheme.name
-      if (scheme.effectiveTo) {
-        const lastDay = new Date(`${scheme.effectiveTo}T12:00:00`)
-        lastDay.setDate(lastDay.getDate() - 1)
-        const inclusiveEnd = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
-        schemePeriodLabel.value = `${shortDate(scheme.effectiveFrom)}–${shortDate(inclusiveEnd)}`
-      } else schemePeriodLabel.value = `${shortDate(scheme.effectiveFrom)} เป็นต้นไป`
+    ).filter((s) => s.effectiveFrom <= from && (!s.effectiveTo || s.effectiveTo >= from))
+    const selectedScheme = scheme.length === 1 ? scheme[0] : undefined
+    if (selectedScheme) {
+      schemeLabel.value = selectedScheme.name
+      schemePeriodLabel.value = selectedScheme.effectiveTo
+        ? `${shortDate(selectedScheme.effectiveFrom)}–${shortDate(selectedScheme.effectiveTo)}`
+        : `${shortDate(selectedScheme.effectiveFrom)} เป็นต้นไป`
 
       try {
-        const tierData = (await commissionApi.tiers(scheme.id)) as Array<{
+        const tierData = (await commissionApi.tiers(selectedScheme.id)) as Array<{
           minimum: number
           maximum: number | null
         }>
-        const tiers = [...tierData].sort((a, b) => Number(a.minimum) - Number(b.minimum))
+        const tiers = tierData
         if (id !== requestId) return
-        if (!tiers.length) tierIssue.value = 'ยังไม่มีช่วงยอดขายในกฎนี้'
-        else if (Number(tiers[0]!.minimum) !== 0)
-          tierIssue.value = `ช่วงแรกต้องเริ่มที่ ฿0 (ขณะนี้เริ่มที่ ${currency(Number(tiers[0]!.minimum))})`
-        else {
-          for (let index = 0; index < tiers.length; index++) {
-            const tier = tiers[index]!
-            const minimum = Number(tier.minimum)
-            const maximum = tier.maximum === null ? null : Number(tier.maximum)
-            if (maximum !== null && maximum < minimum) {
-              tierIssue.value = `ช่วงที่ ${index + 1}: ยอดสูงสุดต่ำกว่ายอดขั้นต่ำ`
-              break
-            }
-            if (index < tiers.length - 1) {
-              const nextMinimum = Number(tiers[index + 1]!.minimum)
-              if (maximum === null) {
-                tierIssue.value = `ช่วงที่ ${index + 1} ไม่จำกัดยอดสูงสุด แต่ยังมีช่วงถัดไป`
-                break
-              }
-              if (Math.abs(nextMinimum - maximum - 0.01) >= 0.001) {
-                tierIssue.value =
-                  nextMinimum > maximum
-                    ? `มีช่วงว่างระหว่าง ${currency(maximum)} ถึง ${currency(nextMinimum)}`
-                    : `มีช่วงซ้อนระหว่าง ${currency(nextMinimum)} ถึง ${currency(maximum)}`
-                break
-              }
-            }
+        for (const row of rows.value.filter((item) => item.status === 'Open' && item.id < 0)) {
+          const sales = Math.round(row.sales * 100) / 100
+          const matches = tiers.filter((tier) => sales >= Number(tier.minimum) &&
+            (tier.maximum === null || sales <= Number(tier.maximum)))
+          if (matches.length !== 1) {
+            tierIssue.value = `ยอดขาย ${currency(sales)} ของ ${row.staff} มีช่วงค่าคอมมิชชันที่ใช้ได้ ${matches.length} ช่วง`
+            break
           }
         }
         validationResults.value.tiers = !tierIssue.value
@@ -184,9 +137,11 @@ async function validatePeriod(id: number, selectedPeriod: string) {
         tierIssue.value = 'โหลดช่วงยอดขายไม่สำเร็จ'
       }
     } else {
-      const noCourseSales = reportRows.value.length === 0
+      const noCourseSales = rows.value.every((row) => row.status === 'Closed' || row.id > 0)
       validationResults.value.tiers = noCourseSales
-      tierIssue.value = noCourseSales ? '' : 'ไม่พบกฎค่าคอมมิชชันที่ใช้งานในเดือนนี้'
+      tierIssue.value = noCourseSales ? '' : scheme.length > 1
+        ? 'พบกฎค่าคอมมิชชันที่มีผลในวันแรกของเดือนมากกว่าหนึ่งรายการ'
+        : 'ไม่พบกฎค่าคอมมิชชันที่มีผลในวันแรกของเดือนนี้'
     }
   } else validationResults.value.tiers = null
   validationLoading.value = false
@@ -202,7 +157,6 @@ async function load() {
   paymentForms.value = {}
   errorMessage.value = ''
   closingsLoading.value = true
-  void validatePeriod(id, selectedPeriod)
   try {
     // โหลดสถานะปิดรอบระดับสาขาแยกจากรายการรายบุคคล
     const branchCode = selectedBranchCode.value
@@ -227,6 +181,7 @@ async function load() {
       rate: Number(row.rate) * 100,
       status: row.status === 'CLOSED' ? 'Closed' : 'Open',
     }))
+    void validatePeriod(id, selectedPeriod)
     errorMessage.value = ''
   } catch (error) {
     if (id !== requestId) return
@@ -345,7 +300,10 @@ async function confirmClosing() {
     // ปิดยอดของเดือนและสาขาที่เลือก
     await commissionApi.closeMonth(month.value, branchCode)
     isConfirming.value = false
+    branchClosing.value = { status: 'CLOSED' }
     closedSuccessfully.value = true
+    await nextTick()
+    document.querySelector('.closed-success')?.scrollIntoView({ block: 'start' })
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'ปิดรอบไม่สำเร็จ'
     isConfirming.value = false
@@ -424,7 +382,6 @@ const closeChecks = computed(() =>
   })),
 )
 const hasBlockingIssues = computed(() => closeChecks.value.some((item) => item.result !== true))
-const passedChecks = computed(() => closeChecks.value.filter((item) => item.result === true).length)
 const periodStatus = computed(() =>
   closingsLoading.value
     ? 'กำลังโหลด'
@@ -468,6 +425,16 @@ function selectView(event: Event) {
         />
       </div>
       <CommissionTabs active="closing" />
+      <section v-if="closedSuccessfully" class="closed-success commission-card" role="status">
+        <i>✓</i>
+        <h2>ปิดรอบ{{ fullMonthLabel }} เรียบร้อย</h2>
+        <p>{{ schemeLabel }} · บันทึกรอบและล็อกอัตราสำเร็จ</p>
+        <dl>
+          <div><dt>ยอดฐานที่ล็อก</dt><dd>{{ currency(totalBase) }}</dd></div>
+          <div><dt>ยอดค่าคอมมิชชัน</dt><dd>{{ currency(commissionPool) }}</dd></div>
+        </dl>
+        <button class="commission-primary" @click="router.push('/staff/commission')">กลับหน้าภาพรวม</button>
+      </section>
       <section v-if="branchClosing?.status === 'CLOSED' && rows.length === 0" class="commission-card reopen-panel" aria-label="เปิดรอบสาขาที่ไม่มีรายการรายบุคคล">
         <h2>เปิดรอบสาขาอีกครั้ง</h2>
         <p>รอบนี้ปิดแล้วและไม่มีรายการรายบุคคล หากต้องการเปิดรอบอีกครั้ง กรุณาระบุเหตุผล</p>
@@ -502,25 +469,7 @@ function selectView(event: Event) {
         </article>
       </section>
       <p v-if="errorMessage" class="state-card error" role="alert">{{ errorMessage }}</p>
-      <section v-if="closedSuccessfully" class="closed-success commission-card">
-        <i>✓</i>
-        <h2>ปิดรอบ{{ fullMonthLabel }} เรียบร้อย</h2>
-        <p>{{ schemeLabel }} · บันทึกรอบและล็อกอัตราสำเร็จ</p>
-        <dl>
-          <div>
-            <dt>ยอดฐานที่ล็อก</dt>
-            <dd>{{ currency(totalBase) }}</dd>
-          </div>
-          <div>
-            <dt>ยอดค่าคอมมิชชัน</dt>
-            <dd>{{ currency(commissionPool) }}</dd>
-          </div>
-        </dl>
-        <button class="commission-primary" @click="router.push('/staff/commission')">
-          กลับหน้าภาพรวม
-        </button>
-      </section>
-      <template v-else>
+      <template v-if="!closedSuccessfully">
         <section class="closing-summary" aria-label="สรุปรอบรายเดือน">
           <article>
             <span>อัตราค่าคอมมิชชัน</span><b>{{ proposedRate }}</b>
@@ -537,10 +486,13 @@ function selectView(event: Event) {
           <article class="commission-card calculation">
             <div class="workspace-heading">
               <div>
-                <span class="eyebrow">ขั้นตอนที่ 1</span>
-                <h2>ตรวจสอบยอดสำหรับปิดรอบ</h2>
-                <p class="calculation-caption">ข้อมูลสรุปที่จะใช้ล็อกอัตราค่าคอมมิชชันของรอบนี้</p>
+                <h2>ตรวจสอบและปิดรอบ{{ fullMonthLabel }}</h2>
+                <p class="calculation-caption">ตรวจยอดและความพร้อมก่อนล็อกอัตราค่าคอมมิชชัน</p>
               </div>
+              <span
+                class="readiness-badge"
+                :class="{ ready: !validationLoading && !hasBlockingIssues }"
+              >{{ validationLoading ? 'กำลังตรวจ' : hasBlockingIssues ? 'ต้องตรวจสอบ' : 'พร้อมปิดรอบ' }}</span>
             </div>
             <div class="period-cards">
               <div class="period-card">
@@ -551,72 +503,23 @@ function selectView(event: Event) {
               </div>
             </div>
             <div class="calculation-breakdown">
-              <div><span>ยอดขายคอร์สรวมก่อนส่วนลด</span><b>—</b></div>
-              <div><span>ส่วนลดรายรายการ</span><b>—</b></div>
               <div class="base-total">
                 <span>ฐานคำนวณค่าคอมมิชชัน</span>
                 <b>{{ validationLoading || validationError ? '—' : currency(totalBase) }}</b>
               </div>
             </div>
-            <p class="data-note">ยอดก่อนส่วนลดและส่วนลดรายรายการจะแสดงเมื่อรายงานส่งข้อมูลครบ</p>
-            <div class="pool" aria-label="ยอดค่าคอมมิชชันที่จะสร้าง">
-              <span>
-                <small>ยอดค่าคอมมิชชันที่จะสร้าง</small>
-                <b>{{
-                  validationLoading || validationError || hasBlockingIssues
-                    ? 'รอตรวจสอบข้อมูล'
-                    : currency(commissionPool)
-                }}</b>
-              </span>
-              <em>คำนวณตามช่วงยอดขายของแต่ละบุคคล</em>
+            <div class="pool" aria-label="ค่าคอมมิชชันที่จะสร้าง">
+              <span>ค่าคอมมิชชันที่จะสร้าง</span>
+              <b>{{
+                validationLoading || validationError || hasBlockingIssues
+                  ? 'รอตรวจสอบข้อมูล'
+                  : currency(commissionPool)
+              }}</b>
             </div>
-          </article>
-          <article class="commission-card checklist">
-            <div class="workspace-heading checklist-heading">
-              <div>
-                <span class="eyebrow">ขั้นตอนที่ 2</span>
-                <h2>ตรวจสอบความพร้อม</h2>
-              </div>
-              <span
-                class="readiness-badge"
-                :class="{ ready: !validationLoading && !hasBlockingIssues }"
-              >
-                {{
-                  validationLoading
-                    ? 'กำลังตรวจ'
-                    : hasBlockingIssues
-                      ? 'ต้องตรวจสอบ'
-                      : 'พร้อมปิดรอบ'
-                }}
-              </span>
-            </div>
-            <p class="checklist-summary">
-              ผ่าน <b>{{ passedChecks }}</b> จาก 4 รายการ
-              <span v-if="hasBlockingIssues"> · แก้รายการที่แจ้งก่อนดำเนินการ</span>
-            </p>
+            <div class="checklist" aria-label="ผลตรวจความพร้อมสำหรับปิดรอบ">
             <p v-if="validationError" class="validation-error" role="alert">
               {{ validationError }}
             </p>
-            <div v-if="validationLoading" class="check-row checking">กำลังตรวจสอบข้อมูลรอบนี้…</div>
-            <ul v-else class="check-list">
-              <li
-                v-for="check in closeChecks"
-                :key="check.key"
-                :class="{ issue: check.result === false, unknown: check.result === null }"
-              >
-                <span class="check-icon">{{
-                  check.result === true ? '✓' : check.result === false ? '!' : '?'
-                }}</span>
-                <span>{{ check.label }}</span>
-                <small>{{
-                  check.result === true
-                    ? 'ผ่าน'
-                    : check.result === false
-                      ? 'ต้องแก้ไข'
-                      : 'ตรวจไม่ได้'
-                }}</small>
-              </li>
-            </ul>
             <div v-if="tierIssue" class="tier-recovery" role="status">
               <p>{{ tierIssue }}</p>
               <div>
@@ -655,8 +558,9 @@ function selectView(event: Event) {
                 "
                 @click="openConfirm"
               >
-                ปิดรอบ{{ fullMonthLabel }}
+                ปิดรอบ
               </button>
+            </div>
             </div>
           </article>
         </section>
@@ -669,27 +573,9 @@ function selectView(event: Event) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="close-title"
-        aria-describedby="close-description"
         @keydown="onDialogKeydown"
       >
         <h2 id="close-title">ยืนยันปิดรอบ{{ fullMonthLabel }}</h2>
-        <p id="close-description">
-          ตรวจสอบยอดและรายการก่อนปิดรอบ เมื่อยืนยันแล้วระบบจะล็อกอัตราค่าคอมมิชชันของรอบนี้
-        </p>
-        <dl class="confirm-facts">
-          <div>
-            <dt>รายการขาย</dt>
-            <dd>{{ reportCount }} รายการ</dd>
-          </div>
-          <div>
-            <dt>ฐานคำนวณ</dt>
-            <dd>{{ currency(totalBase) }}</dd>
-          </div>
-          <div>
-            <dt>ค่าคอมมิชชันรวม</dt>
-            <dd>{{ currency(commissionPool) }}</dd>
-          </div>
-        </dl>
         <div class="confirm-actions">
           <button
             ref="cancelRef"
@@ -700,7 +586,7 @@ function selectView(event: Event) {
           >
             ยกเลิก</button
           ><button class="confirm" type="button" :disabled="isSaving" @click="confirmClosing">
-            {{ isSaving ? 'กำลังบันทึก...' : 'ยืนยันปิดรอบ' }}
+            {{ isSaving ? 'กำลังบันทึก...' : 'ยืนยัน' }}
           </button>
         </div>
       </section>
@@ -791,6 +677,91 @@ function selectView(event: Event) {
   font-size: 16px;
   font-weight: 400;
 }
+.closing-sales-list {
+  margin: 20px 0;
+}
+.closing-sales-list h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+.closing-sales-list h3 span {
+  color: #647a73;
+  font-weight: 500;
+}
+.closing-sales-list ul {
+  max-height: 460px;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #dce5e1;
+  border-radius: 10px;
+  list-style: none;
+}
+.closing-sales-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+}
+.closing-sales-list li + li {
+  border-top: 1px solid #e8eeeb;
+}
+.sale-description,
+.sale-amounts {
+  display: grid;
+  gap: 3px;
+}
+.sale-description small,
+.sale-amounts small {
+  color: #6d7d78;
+  font-size: 0.78rem;
+}
+.sale-amounts {
+  text-align: right;
+}
+.sales-list-state {
+  padding: 18px;
+  margin: 0;
+  border-radius: 10px;
+  color: #6d7d78;
+  background: #f6f9f7;
+  text-align: center;
+}
+.sales-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: #647a73;
+  font-size: 0.85rem;
+  text-align: center;
+}
+.sales-pagination button {
+  min-height: 38px;
+  padding: 6px 12px;
+  border: 1px solid #d5e2dd;
+  border-radius: 8px;
+  color: #155f5c;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.sales-pagination button:last-child {
+  justify-self: end;
+}
+.sales-pagination button:disabled {
+  color: #9aa9a3;
+  cursor: not-allowed;
+}
+.sales-pagination button:focus-visible {
+  outline: 3px solid #16877f;
+  outline-offset: 2px;
+}
 .scheme-card {
   background: #e3f4ed;
   border-color: #e3f4ed;
@@ -879,7 +850,7 @@ function selectView(event: Event) {
 }
 .closing-workspace {
   display: grid;
-  grid-template-columns: 1.6fr 0.8fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   margin-top: 24px;
 }
@@ -953,31 +924,24 @@ function selectView(event: Event) {
   gap: 16px;
   padding: 16px 0;
 }
-.calculation-breakdown .base-total {
-  border-top: 1px solid #dce5e1;
-}
 .calculation .pool {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
   margin-top: 16px;
-  padding: 16px 18px;
-  border-radius: 12px;
+  padding: 12px 18px;
+  border-radius: 10px;
   background: #dff2eb;
 }
-.pool small {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 13px;
-  font-weight: 600;
+.pool span {
+  font-size: 17px;
+  font-weight: 700;
 }
 .pool b {
-  font-size: 1.4rem;
-}
-.pool em {
-  color: #54716b;
-  font-size: 0.8rem;
-  font-style: normal;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .data-note {
@@ -992,13 +956,17 @@ function selectView(event: Event) {
 .checklist {
   display: block;
 }
+.calculation > .checklist {
+  display: block;
+  padding: 0;
+}
 .checklist-summary {
   margin: 16px 0 12px;
   color: #687a74;
   font-size: 0.86rem;
 }
 .checklist-summary b {
-  color: var(--color-ink);
+  color: #25372e;
 }
 .check-list {
   display: grid;
@@ -1112,7 +1080,7 @@ function selectView(event: Event) {
 }
 .closed-success {
   width: min(760px, 100%);
-  margin: 70px auto;
+  margin: 24px auto;
   padding: 42px;
   box-sizing: border-box;
   text-align: center;
@@ -1483,18 +1451,29 @@ td {
   .confirm-modal button {
     width: 100%;
   }
-  .workspace-heading,
-  .pool {
+  .workspace-heading {
     flex-direction: column;
   }
-  .pool em {
-    text-align: left;
+  .calculation .pool {
+    flex-direction: row;
   }
   .closing-actions {
     display: block;
   }
   .closing-actions button {
     width: 100%;
+  }
+  .closing-sales-list li {
+    align-items: flex-start;
+    padding: 11px 12px;
+  }
+  .sales-pagination {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 6px;
+    font-size: 0.75rem;
+  }
+  .sales-pagination button {
+    padding-inline: 8px;
   }
 }
 @media (min-width: 1201px) {

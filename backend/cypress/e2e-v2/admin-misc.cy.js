@@ -3,11 +3,7 @@ const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year:
 describe('v2 users, commission schemes, course templates, treatments and lookups', () => {
   describe('users', () => {
     const user = {
-<<<<<<< HEAD
-      username: 'editme01', email: 'editme01@example.com', password: 'password123', role: 'THERAPIST', employeeCode: 'THP-810',
-=======
       username: 'editme01', email: 'editme01@example.com', password: 'password12345', role: 'THERAPIST', employeeCode: 'THP-810',
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
       fullName: 'ผู้ใช้ แก้ไขได้', branchCode: '01',
     }
 
@@ -141,25 +137,6 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
     beforeEach(() => {
       cy.configureBookingWindows()
     })
-<<<<<<< HEAD
-    function checkedInVisit(fx, patient) {
-      return cy.api('POST', '/api/appointments', {
-        branchCode: '01',
-        patientId: patient.id,
-        therapistId: fx.therapistId,
-        serviceId: fx.serviceId,
-        startAt: `${fx.tomorrow}T09:00:00+07:00`,
-        endAt: `${fx.tomorrow}T10:00:00+07:00`,
-      }).then(({ status, body }) => {
-        expect(status, JSON.stringify(body)).to.equal(201)
-
-        return cy.api(
-            'POST', `/api/appointments/${body.id}/check-in`
-        ).then((checkedIn) => {
-          expect(checkedIn.status).to.equal(200)
-          return body
-        })
-=======
     function completeService(fx, patient, appointment) {
       return cy.api('GET', '/api/catalog/services').then(({ status, body }) => {
         expect(status).to.equal(200)
@@ -176,7 +153,6 @@ describe('v2 users, commission schemes, course templates, treatments and lookups
         })
       }).then(({ status, body }) => {
         expect(status, JSON.stringify(body)).to.equal(201)
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
       })
     }
 

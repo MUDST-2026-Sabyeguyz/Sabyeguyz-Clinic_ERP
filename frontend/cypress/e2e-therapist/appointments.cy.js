@@ -46,7 +46,7 @@ const confirmSave = (editing = false) => {
   cy.contains('.appointment-save button.primary', editing ? /^บันทึก$/ : 'บันทึกนัดหมาย').click()
   cy.contains('.appointment-confirm-modal button', /^ใช่$/).click()
   cy.contains('.appointment-success-modal', editing ? 'แก้ไขนัดหมายสำเร็จ' : 'สร้างนัดหมายสำเร็จ').should('be.visible')
-  cy.contains('.appointment-success-modal button', 'ตกลง').click()
+  cy.get('.appointment-success-modal').should('not.exist')
 }
 const persisted = (id, expected) => api('GET', `/api/appointments/${id}`).then((r) => {
   expect(r.status).to.eq(200)

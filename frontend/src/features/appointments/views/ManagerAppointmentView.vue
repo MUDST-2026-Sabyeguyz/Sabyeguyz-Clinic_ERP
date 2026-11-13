@@ -992,6 +992,11 @@ async function save() {
     savingAppointment.value = false
   }
 }
+watch(appointmentSuccessMessage, (message, _old, onCleanup) => {
+  if (!message) return
+  const timer = window.setTimeout(dismissAppointmentSuccess, 1500)
+  onCleanup(() => window.clearTimeout(timer))
+})
 function dismissAppointmentSuccess() {
   appointmentSuccessMessage.value = ''
   void router.replace({ name: 'staff-appointments' })
@@ -1908,7 +1913,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
     >
       <section class="status-modal appointment-success-modal" role="status" aria-live="polite">
         <h2>{{ appointmentSuccessMessage }}</h2>
-        <button type="button" class="primary" @click="dismissAppointmentSuccess">ตกลง</button>
       </section>
     </div>
     <div

@@ -33,17 +33,24 @@ public class TransactionCancellationService {
     private final CourseRepository courses;
     private final CourseRightsService rights;
     private final SingleVisitFeeService singleVisitFees;
+    private final SingleVisitEntitlementRepository singleVisitEntitlements;
+    private final SingleVisitEntitlementUsageRepository singleVisitEntitlementUsages;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public TransactionCancellationService(TransactionCancellationRepository cancellations,
                                            SalesTransactionRepository transactions,
                                            SalesTransactionService salesTransactionService,
                                            PaymentTransactionRepository payments,
                                            PaymentTransactionService paymentTransactionService,
                                            ReceiptService receiptService, CourseRepository courses,
-                                           CourseRightsService rights, SingleVisitFeeService singleVisitFees) {
+                                           CourseRightsService rights, SingleVisitFeeService singleVisitFees,
+                                           SingleVisitEntitlementRepository singleVisitEntitlements,
+                                           SingleVisitEntitlementUsageRepository singleVisitEntitlementUsages) {
         this.courses = courses;
         this.rights = rights;
         this.singleVisitFees = singleVisitFees;
+        this.singleVisitEntitlements = singleVisitEntitlements;
+        this.singleVisitEntitlementUsages = singleVisitEntitlementUsages;
         this.cancellations = cancellations;
         this.transactions = transactions;
         this.salesTransactionService = salesTransactionService;
@@ -52,11 +59,32 @@ public class TransactionCancellationService {
         this.receiptService = receiptService;
     }
 
+    /** Compatibility constructor for existing domain scenario fixtures. */
+    public TransactionCancellationService(TransactionCancellationRepository cancellations,
+                                           SalesTransactionRepository transactions,
+                                           SalesTransactionService salesTransactionService,
+                                           PaymentTransactionRepository payments,
+                                           PaymentTransactionService paymentTransactionService,
+                                           ReceiptService receiptService, CourseRepository courses,
+                                           CourseRightsService rights, SingleVisitFeeService singleVisitFees) {
+        this(cancellations, transactions, salesTransactionService, payments, paymentTransactionService,
+                receiptService, courses, rights, singleVisitFees, null, null);
+    }
+
     @Transactional
     public TransactionCancellation voidSale(SalesTransaction transaction, Permission permission, String reason,
                                              Long actorId) {
         requireReasonAndPermission(permission, reason);
         require(transaction != null, "ต้องระบุรายการขาย");
+        if (transaction.getTransactionType() == TransactionType.SingleVisit
+                && transaction.getVisit() == null && singleVisitEntitlements != null
+                && singleVisitEntitlementUsages != null) {
+            singleVisitEntitlements.findByTransactionId(transaction.getId()).ifPresent(entitlement -> {
+                if (singleVisitEntitlementUsages.countByEntitlementIdAndReversedAtIsNull(entitlement.getId()) > 0) {
+                    throw new IllegalStateException("บริการรายครั้งนี้ถูกใช้ไปแล้ว ไม่สามารถยกเลิกรายการขายได้");
+                }
+            });
+        }
         salesTransactionService.voidTransaction(transaction.getId(), actorId);
 
         Receipt receipt = transaction.getReceipt();

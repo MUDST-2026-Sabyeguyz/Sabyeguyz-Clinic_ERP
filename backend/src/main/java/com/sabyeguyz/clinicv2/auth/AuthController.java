@@ -37,12 +37,8 @@ public class AuthController {
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
     public record RegisterRequest(@NotBlank String username,@NotBlank @Size(max = 254) String email, @NotBlank String password) {}
-<<<<<<< HEAD
-    public record AuthResponse(Long id, String username, String email, String role, String token, String branchCode, String branchName) {}
-=======
     public record AuthResponse(Long id, String username, String email, String role, String token,
                                String branchCode, String branchName, Long staffId) {}
->>>>>>> 3c7da8a915aea6793ee49626494196b33cc60e17
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request) {

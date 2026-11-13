@@ -236,8 +236,7 @@ const router = createRouter({
     {
       path: '/staff/commission/closing',
       name: 'commission-closing',
-      component: () => import('@/features/commission/views/CommissionClosingView.vue'),
-      meta: { roles: ['manager'] },
+      redirect: '/staff/commission',
     },
     {
       path: '/staff/commission/adjustments',

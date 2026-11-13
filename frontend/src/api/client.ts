@@ -109,6 +109,7 @@ export type PatientProfile = Patient & {
   nationality?: string
   customerType?: string
   customerSource?: string
+  insuranceType?: string
   insuranceCompany?: string
 }
 export type PatientUpdatePayload = {
@@ -1069,6 +1070,8 @@ export type TherapistAdjustment = {
 export type ManagerAdjustment = {
   id: number
   staffId: number
+  branchCode?: string | null
+  approverName?: string | null
   staffName: string
   originalMonth: string
   appliedMonth: string
@@ -1077,6 +1080,9 @@ export type ManagerAdjustment = {
   status: string
   processed: number
   remaining: number
+  automatic?: boolean
+  cancellationReason?: string | null
+  cancelledAt?: string | null
   allocationId: number | null
   singleVisitFeeId: number | null
   courseId: number | null
@@ -1165,6 +1171,12 @@ export type CommissionPreview = {
 
 // Endpoint ปิดยอดและจ่ายคอมมิชชันต้องระบุเดือนกับสาขาตาม contract
 export const commissionApi = {
+  adjustmentSources: (staffId: number, type: string, branchCode: string) =>
+    api.get<Array<{ id: number; label: string; month: string }>>(
+      `/api/commission/adjustments/sources?${new URLSearchParams({ staffId: String(staffId), type, branchCode })}`,
+    ),
+  adjustmentAllowedMonths: (branchCode: string) =>
+    api.get<string[]>(`/api/commission/adjustments/allowed-months?${new URLSearchParams({ branchCode })}`),
   preview: (params: CommissionPreviewParams) => {
     const query = new URLSearchParams({
       courseId: String(params.courseId),
@@ -1198,6 +1210,19 @@ export const commissionApi = {
         base: number
         rate: number
         commission: number
+        sales: Array<{
+          id: number
+          saleDate: string
+          receiptNo: string
+          courseNo: string
+          courseName: string
+          patientName: string
+          sellerName: string
+          gross: number
+          lineDiscount: number
+          commissionableAmount: number
+          completedRefund: number
+        }>
       }>
     >(`/api/commission/report?${new URLSearchParams({ from, to })}`),
   treatmentReport: (from: string, to: string) =>
@@ -1219,8 +1244,20 @@ export const commissionApi = {
         gross: number
         treatmentFee: number
         ownerNet: number
+        serviceName: string
+        feeRuleName: string | null
       }>
     >(`/api/commission/treatment-report?${new URLSearchParams({ from, to })}`),
+  singleVisitFees: (staffId: number, branchCode: string, from: string, to: string) =>
+    api.get<Array<{
+      id: number
+      visitDate: string
+      patientName: string
+      serviceName: string
+      treatingStaffName: string
+      feeRuleName: string | null
+      treatmentFee: number
+    }>>(`/api/commission/single-visit-fees?${new URLSearchParams({ staffId: String(staffId), branchCode, from, to })}`),
   closings: (month: string, branchCode: string) =>
     api.get<
       Array<{
@@ -1289,6 +1326,8 @@ export const commissionApi = {
     appliedMonth: string
     amount: number
     reason: string
+    branchCode: string
+    approvalReference?: string
     allocationId?: number
     singleVisitFeeId?: number
     courseId?: number
