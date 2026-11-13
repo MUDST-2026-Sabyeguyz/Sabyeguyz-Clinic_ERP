@@ -481,6 +481,7 @@ onMounted(loadProfile)
                 <ThaiDatePicker
                   v-model="draft.birthDateInput"
                   :max-date="clinicYesterday()"
+                  :years-back="120"
                   show-calendar-icon
                   hide-caret
                 />
