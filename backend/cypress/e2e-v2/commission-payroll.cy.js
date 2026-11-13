@@ -216,12 +216,21 @@ describe('v2 commission: the monthly payment of a staff member', () => {
           expect(money(paid.net)).to.equal(76.92)
         })
         cy.api('POST', `/api/commission/payments/${payment.id}/pay`).its('status').should('equal', 409)
-        // a session whose money was paid cannot be reversed either
+        // Reversing a paid session preserves the payout and creates a pending correction.
         cy.api('GET', `/api/course-purchases/${course.id}`).then(({ body }) => {
           const movement = body.movements.find((entry) => entry.type === 'USAGE')
-          cy.api('POST', `/api/course-movements/${movement.id}/reverse`, { reason: 'ย้อนหลังจ่าย' }).its('status').should('equal', 409)
+          cy.api('POST', `/api/course-movements/${movement.id}/reverse`, { reason: 'ย้อนหลังจ่าย' }).its('status').should('equal', 200)
+          cy.api('GET', `/api/commission/adjustments?staffId=${this.fixtures.therapistId}`).then(({ body: adjustments }) => {
+            const correction = adjustments.find((row) => row.courseId === course.id)
+            expect(correction).to.exist
+            expect(correction.status).to.equal('Pending')
+            expect(money(correction.amount)).to.equal(-38.46)
+            expect(correction.originalMonth).to.equal(month)
+            expect(correction.appliedMonth).to.equal(nextMonth)
+          })
+          cy.api('POST', `/api/course-movements/${movement.id}/reverse`, { reason: 'ซ้ำ' }).its('status').should('equal', 400)
         })
-        allocations(course.id).should('have.length', 2)
+        allocations(course.id).should('have.length', 3)
       })
     })
   })

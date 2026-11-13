@@ -69,11 +69,13 @@ jobs:
 
       - name: Cypress end-to-end tests
         uses: cypress-io/github-action@f790eee7a50d9505912f50c2095510be7de06aa7 # v6.10.9
+        env:
+          CYPRESS_BASE_URL: http://127.0.0.1:5173
         with:
           working-directory: frontend
           install: false
-          start: npm run dev -- --host localhost
-          wait-on: 'http://localhost:5173'
+          start: npm run dev -- --host 127.0.0.1 --strictPort
+          wait-on: 'http://127.0.0.1:5173'
           browser: chrome
           command: npm run test:e2e -- --browser chrome
 
