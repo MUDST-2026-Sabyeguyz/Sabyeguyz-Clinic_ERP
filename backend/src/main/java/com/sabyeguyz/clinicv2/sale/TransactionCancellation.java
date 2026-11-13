@@ -1,13 +1,15 @@
 package com.sabyeguyz.clinicv2.sale;
 
+import java.time.Instant;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.sabyeguyz.clinicv2.course.CourseTransfer;
 import com.sabyeguyz.clinicv2.course.CourseVisitUsage;
 import com.sabyeguyz.clinicv2.enums.CancellationType;
 import com.sabyeguyz.clinicv2.role.Permission;
-import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import java.time.Instant;
 
 @Entity
 @Table(name = "transaction_cancellation")
@@ -62,22 +64,31 @@ public class TransactionCancellation {
     public TransactionCancellation() {}
 
     public Long getId() { return id; }
+
     public Permission getPermission() { return permission; }
     public void setPermission(Permission permission) { this.permission = permission; }
+
     public SalesTransaction getTransaction() { return transaction; }
     public void setTransaction(SalesTransaction transaction) { this.transaction = transaction; }
+
     public PaymentTransaction getPayment() { return payment; }
     public void setPayment(PaymentTransaction payment) { this.payment = payment; }
+
     public CourseTransfer getTransfer() { return transfer; }
     public void setTransfer(CourseTransfer transfer) { this.transfer = transfer; }
+
     public CourseVisitUsage getVisitUsage() { return visitUsage; }
     public void setVisitUsage(CourseVisitUsage visitUsage) { this.visitUsage = visitUsage; }
+
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+
     public Long getCancelledBy() { return cancelledBy; }
     public void setCancelledBy(Long cancelledBy) { this.cancelledBy = cancelledBy; }
+
     public Instant getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
+
     public CancellationType getCancellationType() { return cancellationType; }
     public void setCancellationType(CancellationType cancellationType) { this.cancellationType = cancellationType; }
 }

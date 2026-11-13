@@ -223,6 +223,7 @@ function branchLabel(name: string) {
     <div v-if="isManager" class="branch-switcher">
       <FilterDropdown
         class="manager-branch-filter"
+        :menu-min-width="180"
         :model-value="activeManagerBranch?.code ?? ''"
         :options="
           managerBranches.map((branch) => ({

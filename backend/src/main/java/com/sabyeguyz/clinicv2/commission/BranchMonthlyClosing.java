@@ -1,11 +1,13 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.enums.BranchClosingStatus;
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.enums.BranchClosingStatus;
 
 /** Explicit closing confirmation for one branch and month. */
 @Entity
@@ -41,23 +43,22 @@ public class BranchMonthlyClosing {
 
     public BranchMonthlyClosing() {}
 
-    public Long getId() {return id;}
+    public Long getId() { return id; }
 
-    public Branch getBranch() {return branch;}
-    public void setBranch(Branch branch) {this.branch = branch;}
+    public Branch getBranch() { return branch; }
+    public void setBranch(Branch branch) { this.branch = branch; }
 
-    public String getClosingMonth() {return closingMonth;}
+    public String getClosingMonth() { return closingMonth; }
+    public void setClosingMonth(String closingMonth) { this.closingMonth = closingMonth; }
 
-    public void setClosingMonth(String closingMonth) {this.closingMonth = closingMonth;}
-    public BranchClosingStatus getClosingStatus() {return closingStatus;}
+    public BranchClosingStatus getClosingStatus() { return closingStatus; }
+    public void setClosingStatus(BranchClosingStatus closingStatus) { this.closingStatus = closingStatus; }
 
-    public void setClosingStatus(BranchClosingStatus closingStatus) {this.closingStatus = closingStatus;}
+    public Instant getClosedAt() { return closedAt; }
+    public void setClosedAt(Instant closedAt) { this.closedAt = closedAt; }
 
-    public Instant getClosedAt() {return closedAt;}
-    public void setClosedAt(Instant closedAt) {this.closedAt = closedAt;}
-
-    public Long getClosedBy() {return closedBy;}
-    public void setClosedBy(Long closedBy) {this.closedBy = closedBy;}
+    public Long getClosedBy() { return closedBy; }
+    public void setClosedBy(Long closedBy) { this.closedBy = closedBy; }
 
     public boolean isClosed() {
         return closingStatus == BranchClosingStatus.Closed;

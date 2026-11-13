@@ -12,11 +12,23 @@ public record AppointmentResponse(
         Instant endAt,
         AppointmentStatus status,
         String note,
-        String cancelReason
-) {
-    public record PatientSummary(Long id, String hn, String fullName) {}
-    public record TherapistSummary(Long id, String fullName) {}
-    public record ServiceSummary(Long id, String name, int durationMinutes) {}
+        String cancelReason) {
+    public record PatientSummary(
+            Long id,
+            String hn,
+            String fullName) {
+    }
+
+    public record TherapistSummary(
+            Long id,
+            String fullName) {
+    }
+
+    public record ServiceSummary(
+            Long id,
+            String name,
+            int durationMinutes) {
+    }
 
     static AppointmentResponse from(Appointment appointment) {
         return new AppointmentResponse(

@@ -1,24 +1,26 @@
 package com.sabyeguyz.clinicv2.auth;
 
-import com.sabyeguyz.clinicv2.config.ClinicTime;
-import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
+import com.sabyeguyz.clinicv2.config.ClinicTime;
 import com.sabyeguyz.clinicv2.enums.StaffPosition;
 import com.sabyeguyz.clinicv2.role.Role;
 import com.sabyeguyz.clinicv2.role.RoleRepository;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffService;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
 
 /**
  * Matches frontend/src/api/client.ts's userManagementApi (GET/POST/PUT
@@ -55,10 +57,15 @@ public class UserManagementController {
     private final CurrentActor actor;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
-    public UserManagementController(AppUserRepository users, AppUserService appUserService,
-                                     StaffService staffService, RoleRepository roles, UserRoleRepository userRoles,
-                                     BranchRepository branches, CurrentActor actor,
-                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
+    public UserManagementController(
+            AppUserRepository users,
+            AppUserService appUserService,
+            StaffService staffService,
+            RoleRepository roles,
+            UserRoleRepository userRoles,
+            BranchRepository branches,
+            CurrentActor actor,
+            com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.users = users;
         this.appUserService = appUserService;
         this.staffService = staffService;
@@ -79,8 +86,17 @@ public class UserManagementController {
             String phone,
             @NotBlank String branchCode) {}
 
-    public record Response(Long id, String username, String email, String role, String employeeCode,
-                            String fullName, String phone, String branchCode, String branchName, boolean active) {}
+    public record Response(
+            Long id,
+            String username,
+            String email,
+            String role,
+            String employeeCode,
+            String fullName,
+            String phone,
+            String branchCode,
+            String branchName,
+            boolean active) {}
 
     @GetMapping
     public List<Response> list() {
@@ -94,40 +110,92 @@ public class UserManagementController {
         String[] names = splitName(request.fullName());
         StaffPosition position = resolvePosition(request.role());
 
-        String employeeCode = request.employeeCode() == null || request.employeeCode().isBlank()
-                ? staffService.nextStaffCode(position) : request.employeeCode();
-        Staff staff = staffService.create(employeeCode, names[0], names[1], position, branch,
-                ClinicTime.today(), actor.currentId());
-        AppUser user = appUserService.register(request.username(), request.email(), request.password(), staff, actor.currentId());
+        String employeeCode = request.employeeCode() == null
+                || request.employeeCode().isBlank()
+                ? staffService.nextStaffCode(position)
+                : request.employeeCode();
+
+        Staff staff = staffService.create(
+                employeeCode,
+                names[0],
+                names[1],
+                position,
+                branch,
+                ClinicTime.today(),
+                actor.currentId());
+
+        AppUser user = appUserService.register(
+                request.username(),
+                request.email(),
+                request.password(),
+                staff,
+                actor.currentId());
+
         Role role = resolveOrCreateRole(request.role());
+
         appUserService.assignRole(user.getId(), role.getId());
         appUserService.grantBranchAccess(user.getId(), branch.getId());
 
-        audit.record("app_user", String.valueOf(user.getId()), com.sabyeguyz.clinicv2.enums.AuditAction.INSERT, null,
-                request.username() + " role " + request.role(), actor.currentId());
+        audit.record(
+                "app_user",
+                String.valueOf(user.getId()),
+                com.sabyeguyz.clinicv2.enums.AuditAction.INSERT,
+                null,
+                request.username() + " role " + request.role(),
+                actor.currentId());
+
         return toResponse(users.findById(user.getId()).orElseThrow());
     }
 
     @PutMapping("/{id}")
-    public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
+    public Response update(
+            @PathVariable Long id,
+            @Valid @RequestBody Request request) {
         AppUser user = findUser(id);
         Staff staff = user.getStaff();
+
         if (staff == null) {
             throw new IllegalArgumentException("ผู้ใช้นี้ไม่ได้ผูกกับข้อมูลพนักงาน");
         }
+
         Branch branch = resolveBranch(request.branchCode());
         String[] names = splitName(request.fullName());
         StaffPosition position = resolvePosition(request.role());
-        staffService.update(staff.getId(), names[0], names[1], position, branch, actor.currentId());
 
-        appUserService.updateProfile(id, request.username(), request.email(), request.password(), actor.currentId());
+        staffService.update(
+                staff.getId(),
+                names[0],
+                names[1],
+                position,
+                branch,
+                actor.currentId());
+
+        appUserService.updateProfile(
+                id,
+                request.username(),
+                request.email(),
+                request.password(),
+                actor.currentId());
+
         userRoles.deleteByUserId(id);
-        Role role = resolveOrCreateRole(request.role());
-        appUserService.assignRole(id, role.getId());
-        appUserService.grantBranchAccess(id, branch.getId());
 
-        audit.record("app_user", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, null,
-                "profile updated: " + request.username() + " role " + request.role(), actor.currentId());
+        Role role = resolveOrCreateRole(request.role());
+        appUserService.assignRole(
+                id,
+                role.getId());
+
+        appUserService.grantBranchAccess(
+                id,
+                branch.getId());
+
+        audit.record(
+                "app_user",
+                String.valueOf(id),
+                com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                null,
+                "profile updated: " + request.username() + " role " + request.role(),
+                actor.currentId());
+
         return toResponse(users.findById(id).orElseThrow());
     }
 
@@ -135,13 +203,26 @@ public class UserManagementController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deactivate(@PathVariable Long id) {
         appUserService.deactivate(id);
-        audit.record("app_user", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "active", "inactive", actor.currentId());
+        audit.record(
+                "app_user",
+                String.valueOf(id),
+                com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                "active",
+                "inactive",
+                actor.currentId());
     }
 
     @PatchMapping("/{id}/activate")
     public Response activate(@PathVariable Long id) {
         appUserService.activate(id);
-        audit.record("app_user", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "inactive", "active", actor.currentId());
+        audit.record(
+                "app_user",
+                String.valueOf(id),
+                com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                "inactive",
+                "active",
+                actor.currentId());
+
         return toResponse(findUser(id));
     }
 
@@ -157,34 +238,48 @@ public class UserManagementController {
     private Role resolveOrCreateRole(String roleName) {
         String name = "MANAGER".equalsIgnoreCase(roleName.trim()) ? "Manager"
                 : "THERAPIST".equalsIgnoreCase(roleName.trim()) ? "Therapist" : null;
+
         if (name == null) throw new IllegalArgumentException("บทบาทต้องเป็น MANAGER หรือ THERAPIST");
+
         return roles.findByRoleName(name).orElseGet(() -> {
             Role role = new Role();
             role.setRoleName(name);
             role.setRoleCreateAt(Instant.now());
             role.setRoleCreateBy(actor.currentId());
+
             return roles.save(role);
         });
     }
 
     private static StaffPosition resolvePosition(String role) {
-        return "MANAGER".equalsIgnoreCase(role) ? StaffPosition.Manager : StaffPosition.Therapist;
+        return "MANAGER".equalsIgnoreCase(role)
+                ? StaffPosition.Manager
+                : StaffPosition.Therapist;
     }
 
     private static String[] splitName(String fullName) {
         String trimmed = fullName.trim();
         int space = trimmed.indexOf(' ');
-        return space < 0 ? new String[] {trimmed, "-"} : new String[] {trimmed.substring(0, space), trimmed.substring(space + 1)};
+
+        return space < 0
+                ? new String[] {trimmed, "-"}
+                : new String[] {trimmed.substring(0, space), trimmed.substring(space + 1)};
     }
 
     private Response toResponse(AppUser user) {
         Staff staff = user.getStaff();
-        String roleName = userRoles.findByUserId(user.getId()).stream()
+        String roleName = userRoles
+                .findByUserId(user.getId()).stream()
                 .map(userRole -> userRole.getRole().getRoleName().toUpperCase(java.util.Locale.ROOT))
                 .findFirst().orElse(null);
         Branch branch = staff == null ? null : staff.getBranch();
+
         // Staff has no phone column in the v2 data dictionary (a gap vs. the old API) - always null here.
-        return new Response(user.getId(), user.getUsername(), user.getEmail(), roleName,
+        return new Response(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                roleName,
                 staff == null ? null : staff.getStaffCode(),
                 staff == null ? null : staff.getStaffFname() + " " + staff.getStaffLname(),
                 null,

@@ -1,7 +1,8 @@
 package com.sabyeguyz.clinicv2.role;
 
-import jakarta.persistence.*;
 import java.time.Instant;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "permission")
@@ -32,16 +33,22 @@ public class Permission {
     public Permission() {}
 
     public Long getId() { return id; }
+
     public String getPermissionName() { return permissionName; }
     public void setPermissionName(String permissionName) { this.permissionName = permissionName; }
+
     public String getModuleName() { return moduleName; }
     public void setModuleName(String moduleName) { this.moduleName = moduleName; }
+
     public Instant getPermissionCreateAt() { return permissionCreateAt; }
     public void setPermissionCreateAt(Instant permissionCreateAt) { this.permissionCreateAt = permissionCreateAt; }
+
     public Long getPermissionCreateBy() { return permissionCreateBy; }
     public void setPermissionCreateBy(Long permissionCreateBy) { this.permissionCreateBy = permissionCreateBy; }
+
     public Instant getPermissionUpdateAt() { return permissionUpdateAt; }
     public void setPermissionUpdateAt(Instant permissionUpdateAt) { this.permissionUpdateAt = permissionUpdateAt; }
+
     public Long getPermissionUpdateBy() { return permissionUpdateBy; }
     public void setPermissionUpdateBy(Long permissionUpdateBy) { this.permissionUpdateBy = permissionUpdateBy; }
 }

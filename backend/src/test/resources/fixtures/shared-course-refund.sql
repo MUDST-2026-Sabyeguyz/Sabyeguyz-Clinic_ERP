@@ -1,4 +1,4 @@
--- Synthetic fixture works both before and after V1022; no local database copy is used.
+-- Synthetic fixture works on V1023 and after V1024; no local database copy is used.
 DO $fixture$
 DECLARE
     actor bigint; branch bigint; patient bigint; seller bigint; template bigint;

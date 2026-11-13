@@ -36,7 +36,7 @@ onBeforeUnmount(() => {
 
 <template>
   <RouterLink
-    class="renewal-queue-link"
+    class="secondary renewal-queue-link"
     :to="{ name: 'staff-course-extensions', query: patientId == null ? {} : { patientId } }"
   >
     <span>คำขอต่ออายุคอร์ส</span>
@@ -60,25 +60,25 @@ onBeforeUnmount(() => {
   justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
-  min-height: 44px;
+  min-height: var(--control-h);
   box-sizing: border-box;
   padding: 10px 16px;
-  border: 1px solid #187d78;
-  border-radius: 8px;
-  background: #fff;
-  color: #187d78;
+  border: 1px solid var(--cu-primary);
+  border-radius: var(--radius-pill);
+  background: var(--cu-surface);
+  color: var(--cu-primary);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
 }
 .renewal-queue-count {
   border-radius: 999px;
   padding: 3px 8px;
-  background: #e6f4f1;
-  color: #145c59;
+  background: var(--cu-primary-tint);
+  color: var(--cu-primary-dark);
   font-size: 13px;
 }
 .renewal-queue-link:focus-visible {
-  outline: 2px solid #145c59;
+  outline: 2px solid var(--cu-primary);
   outline-offset: 3px;
 }
 </style>

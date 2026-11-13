@@ -10,7 +10,9 @@ public class UserPermissionId implements Serializable {
 
     public UserPermissionId() {}
 
-    public UserPermissionId(Long user, Long permission) {
+    public UserPermissionId(
+            Long user,
+            Long permission) {
         this.user = user;
         this.permission = permission;
     }
@@ -18,9 +20,10 @@ public class UserPermissionId implements Serializable {
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
+
         if (!(other instanceof UserPermissionId that)) return false;
-        return Objects.equals(user, that.user)
-                && Objects.equals(permission, that.permission);
+
+        return Objects.equals(user, that.user) && Objects.equals(permission, that.permission);
     }
 
     @Override

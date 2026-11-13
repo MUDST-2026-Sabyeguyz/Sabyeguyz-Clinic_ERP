@@ -1,21 +1,23 @@
 package com.sabyeguyz.clinicv2.sale;
 
-import com.sabyeguyz.clinicv2.config.ClinicTime;
-import com.sabyeguyz.clinicv2.branch.Branch;
-import com.sabyeguyz.clinicv2.catalog.CourseRepository;
-import com.sabyeguyz.clinicv2.enums.TransactionType;
-import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
-import com.sabyeguyz.clinicv2.patient.Patient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.sabyeguyz.clinicv2.branch.Branch;
+import com.sabyeguyz.clinicv2.catalog.CourseRepository;
+import com.sabyeguyz.clinicv2.config.ClinicTime;
+import com.sabyeguyz.clinicv2.enums.ReceiptStatus;
+import com.sabyeguyz.clinicv2.enums.TransactionType;
+import com.sabyeguyz.clinicv2.patient.Patient;
 
 /**
  * Receipts (Clinic ERP Workflow Brief Section 5).
@@ -34,7 +36,10 @@ public class ReceiptService {
     private final CourseRepository courses;
     private final PaymentLabelOptionRepository paymentLabels;
 
-    public ReceiptService(ReceiptRepository repository, CourseRepository courses, PaymentLabelOptionRepository paymentLabels) {
+    public ReceiptService(
+            ReceiptRepository repository,
+            CourseRepository courses,
+            PaymentLabelOptionRepository paymentLabels) {
         this.repository = repository;
         this.courses = courses;
         this.paymentLabels = paymentLabels;
@@ -43,8 +48,7 @@ public class ReceiptService {
     private List<BigDecimal> allocateBillDiscount(
             List<BigDecimal> amounts,
             BigDecimal total,
-            BigDecimal discount
-    ) {
+            BigDecimal discount) {
         BigDecimal zero = new BigDecimal("0.00");
 
         if (discount.signum() < 0 || discount.compareTo(total) > 0) {
@@ -73,7 +77,8 @@ public class ReceiptService {
                 share = zero;
             } else {
                 share = discount.multiply(amount).divide(total, 2, RoundingMode.HALF_UP);
-                BigDecimal minimumShare = remainingDiscount.subtract(remainingAmount).max(zero);
+                BigDecimal minimumShare = remainingDiscount.subtract(remainingAmount)
+                        .max(zero);
                 BigDecimal maximumShare = amount.min(remainingDiscount);
                 share = share.max(minimumShare).min(maximumShare);
             }
@@ -97,10 +102,13 @@ public class ReceiptService {
      * Assigns an enabled payment label selected for a new receipt.
      * Writes both the new FK and the legacy enum during migration.
      */
-    public void assignPaymentLabel(Receipt receipt, String code) {
+    public void assignPaymentLabel(
+            Receipt receipt,
+            String code) {
         if (receipt == null) {
             throw new IllegalArgumentException("ต้องระบุใบเสร็จ");
         }
+
         if (code == null || code.isBlank()) {
             throw new IllegalArgumentException("ต้องเลือกสถานะการชำระเงิน");
         }
@@ -142,27 +150,41 @@ public class ReceiptService {
 
     /** Atomic allocation per branch/month, using the latest receipt_sequence table. */
     @Transactional
-    public String nextReceiptNo(Branch branch, LocalDate date) {
+    public String nextReceiptNo(
+            Branch branch,
+            LocalDate date) {
         String month = date.format(java.time.format.DateTimeFormatter.ofPattern("yyMM"));
         int running = repository.nextRunningNumber(branch.getId(), month);
+
         return "RE%s%04d".formatted(month, running);
     }
 
     @Transactional
-    public Receipt create(String receiptNo, Patient patient, Branch branch, LocalDate saleDate, String paymentLabelCode, Long actorId) {
+    public Receipt create(
+            String receiptNo,
+            Patient patient,
+            Branch branch,
+            LocalDate saleDate,
+            String paymentLabelCode,
+            Long actorId) {
         String no = requireText(receiptNo, "receiptNo");
+
         if (!no.matches(RECEIPT_NO_FORMAT)) {
             throw new IllegalArgumentException("เลขที่ใบเสร็จต้องอยู่ในรูปแบบ REYYMMNNNN");
         }
+
         if (patient == null) {
             throw new IllegalArgumentException("ต้องระบุผู้ป่วย");
         }
+
         if (branch == null) {
             throw new IllegalArgumentException("ต้องระบุสาขา");
         }
+
         if (repository.findByReceiptNoAndBranchId(no, branch.getId()).isPresent()) {
             throw new IllegalArgumentException("เลขที่ใบเสร็จซ้ำในสาขา");
         }
+
         Receipt receipt = new Receipt();
         receipt.setReceiptNo(no);
         receipt.setPatient(patient);
@@ -171,6 +193,7 @@ public class ReceiptService {
         receipt.setReceiptCreateAt(Instant.now());
         receipt.setReceiptCreateBy(actorId);
         assignPaymentLabel(receipt, paymentLabelCode);
+
         return repository.save(receipt);
     }
 
@@ -183,24 +206,34 @@ public class ReceiptService {
      */
     @Transactional
     public Receipt finalizeTotals(
-            Receipt receipt, List<SalesTransaction> lines, Discount billDiscount, Long actorId
-    ) {
-        return finalizeTotals(receipt, lines, List.of(), billDiscount, actorId);
+            Receipt receipt,
+            List<SalesTransaction> lines,
+            Discount billDiscount,
+            Long actorId) {
+        return finalizeTotals(
+                receipt,
+                lines,
+                List.of(),
+                billDiscount,
+                actorId);
     }
 
     @Transactional
     public Receipt finalizeTotals(
-            Receipt receipt, List<SalesTransaction> lines,
+            Receipt receipt,
+            List<SalesTransaction> lines,
             List<ReceiptCoursePayment> coursePayments,
-            Discount billDiscount, Long actorId
-    ) {
+            Discount billDiscount,
+            Long actorId) {
         if (receipt == null) {
             throw new IllegalArgumentException("ต้องระบุใบเสร็จ");
         }
 
         lines = lines == null
                 ? List.of()
-                : lines.stream().filter(SalesTransaction::isTransactionStatus).toList();
+                : lines.stream()
+                        .filter(SalesTransaction::isTransactionStatus)
+                        .toList();
 
         coursePayments = coursePayments == null
                 ? List.of()
@@ -243,7 +276,8 @@ public class ReceiptService {
 
         BigDecimal billAmount = bill.amountOff(amountBeforeBillDiscount);
 
-        if (lines.stream().anyMatch(line -> line.getId() == null)) {
+        if (lines.stream()
+                .anyMatch(line -> line.getId() == null)) {
             throw new IllegalArgumentException(
                     "ต้องบันทึกรายการขายก่อนคำนวณใบเสร็จ"
             );
@@ -301,24 +335,32 @@ public class ReceiptService {
         receipt.setNetAmount(taxable);
         receipt.setReceiptUpdateAt(Instant.now());
         receipt.setReceiptUpdateBy(actorId);
+
         return repository.save(receipt);
     }
 
     @Transactional
-    public Receipt markVoided(Receipt receipt, Long actorId) {
+    public Receipt markVoided(
+            Receipt receipt,
+            Long actorId) {
         if (receipt.getReceiptStatus() != ReceiptStatus.Issued) {
             throw new IllegalArgumentException("ใบเสร็จนี้ไม่ได้อยู่ในสถานะออกแล้ว");
         }
+
         receipt.setReceiptStatus(ReceiptStatus.Voided);
         receipt.setReceiptUpdateAt(Instant.now());
         receipt.setReceiptUpdateBy(actorId);
+
         return repository.save(receipt);
     }
 
-    private static String requireText(String value, String field) {
+    private static String requireText(
+            String value,
+            String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " ห้ามว่าง");
         }
+
         return value.trim();
     }
 }

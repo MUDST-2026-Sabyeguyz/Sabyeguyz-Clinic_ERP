@@ -4,7 +4,7 @@ import source from './ManagerServicesView.vue?raw'
 describe('manager services patient menu', () => {
   it('keeps the two care workflows distinct and action-led', () => {
     expect(source).toContain('>ชำระเงิน<')
-    expect(source).toContain('>ใช้สิทธิ์คอร์สที่มีอยู่<')
+    expect(source).toContain("appointmentId ? 'ใช้สิทธิ์คอร์สที่มีอยู่' : 'ดูคอร์สของผู้ป่วย'")
   })
 
   it('makes each workflow card its own full-surface button without a nested action button', () => {

@@ -1,10 +1,12 @@
 package com.sabyeguyz.clinicv2.commission;
 
-import com.sabyeguyz.clinicv2.role.Permission;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+
+import jakarta.persistence.*;
+
+import com.sabyeguyz.clinicv2.role.Permission;
 
 @Entity
 @Table(name = "commission_tier")
@@ -56,28 +58,40 @@ public class CommissionTier {
     public CommissionTier() {}
 
     public Long getId() { return id; }
+
     public CommissionScheme getCommissionScheme() { return commissionScheme; }
     public void setCommissionScheme(CommissionScheme commissionScheme) { this.commissionScheme = commissionScheme; }
+
     public Permission getPermission() { return permission; }
     public void setPermission(Permission permission) { this.permission = permission; }
+
     public int getTierOrder() { return tierOrder; }
     public void setTierOrder(int tierOrder) { this.tierOrder = tierOrder; }
+
     public BigDecimal getMinimumMonthlySales() { return minimumMonthlySales; }
     public void setMinimumMonthlySales(BigDecimal minimumMonthlySales) { this.minimumMonthlySales = minimumMonthlySales; }
+
     public BigDecimal getMaximumMonthlySales() { return maximumMonthlySales; }
     public void setMaximumMonthlySales(BigDecimal maximumMonthlySales) { this.maximumMonthlySales = maximumMonthlySales; }
+
     public BigDecimal getCommissionRate() { return commissionRate; }
     public void setCommissionRate(BigDecimal commissionRate) { this.commissionRate = commissionRate; }
+
     public LocalDate getEffectiveFrom() { return effectiveFrom; }
     public void setEffectiveFrom(LocalDate effectiveFrom) { this.effectiveFrom = effectiveFrom; }
+
     public LocalDate getEffectiveTo() { return effectiveTo; }
     public void setEffectiveTo(LocalDate effectiveTo) { this.effectiveTo = effectiveTo; }
+
     public Instant getTierCreateAt() { return tierCreateAt; }
     public void setTierCreateAt(Instant tierCreateAt) { this.tierCreateAt = tierCreateAt; }
+
     public Long getTierCreateBy() { return tierCreateBy; }
     public void setTierCreateBy(Long tierCreateBy) { this.tierCreateBy = tierCreateBy; }
+
     public Instant getTierUpdateAt() { return tierUpdateAt; }
     public void setTierUpdateAt(Instant tierUpdateAt) { this.tierUpdateAt = tierUpdateAt; }
+
     public Long getTierUpdateBy() { return tierUpdateBy; }
     public void setTierUpdateBy(Long tierUpdateBy) { this.tierUpdateBy = tierUpdateBy; }
 }

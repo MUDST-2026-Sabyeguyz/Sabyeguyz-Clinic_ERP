@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
+
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,19 +24,28 @@ public class LoginAttemptLimiter {
 
     public boolean isBlocked(String account) {
         Entry entry = attempts.get(key(account));
+
         if (entry == null) return false;
+
         if (entry.first().plus(WINDOW).isBefore(Instant.now())) {
             attempts.remove(key(account), entry);
+
             return false;
         }
+
         return entry.failures() >= MAX_FAILURES;
     }
 
     public void recordFailure(String account) {
         if (attempts.size() > MAX_TRACKED) attempts.clear();
+
         Instant now = Instant.now();
-        attempts.merge(key(account), new Entry(1, now), (old, ignored) ->
-                old.first().plus(WINDOW).isBefore(now) ? new Entry(1, now) : new Entry(old.failures() + 1, old.first()));
+        attempts.merge(
+                key(account),
+                new Entry(1, now),
+                (old, ignored) -> old.first().plus(WINDOW).isBefore(now)
+                        ? new Entry(1, now)
+                        : new Entry(old.failures() + 1, old.first()));
     }
 
     public void recordSuccess(String account) {

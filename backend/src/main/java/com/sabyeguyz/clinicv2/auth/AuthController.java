@@ -1,12 +1,13 @@
 package com.sabyeguyz.clinicv2.auth;
 
-import org.springframework.transaction.annotation.Transactional;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Size;
-import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -26,8 +27,12 @@ public class AuthController {
     private final LoginAttemptLimiter limiter;
     private final CurrentActor actor;
 
-    public AuthController(AppUserService appUserService, UserRoleRepository userRoles, JwtTokenService tokenService,
-                          LoginAttemptLimiter limiter, CurrentActor actor) {
+    public AuthController(
+            AppUserService appUserService,
+            UserRoleRepository userRoles,
+            JwtTokenService tokenService,
+            LoginAttemptLimiter limiter,
+            CurrentActor actor) {
         this.actor = actor;
         this.limiter = limiter;
         this.appUserService = appUserService;
@@ -35,46 +40,77 @@ public class AuthController {
         this.tokenService = tokenService;
     }
 
-    public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
-    public record RegisterRequest(@NotBlank String username,@NotBlank @Size(max = 254) String email, @NotBlank String password) {}
-    public record AuthResponse(Long id, String username, String email, String role, String token,
-                               String branchCode, String branchName, Long staffId) {}
+    public record LoginRequest(
+            @NotBlank String username,
+            @NotBlank String password) {}
+
+    public record RegisterRequest(
+            @NotBlank String username,
+            @NotBlank @Size(max = 254) String email,
+            @NotBlank String password) {}
+
+    public record AuthResponse(
+            Long id,
+            String username,
+            String email,
+            String role,
+            String token,
+            String branchCode,
+            String branchName,
+            Long staffId) {}
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request) {
         if (limiter.isBlocked(request.username())) {
-            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS,
                     "พยายามเข้าสู่ระบบผิดหลายครั้ง กรุณารอสักครู่แล้วลองใหม่");
         }
+
         AppUser user;
         try {
             user = appUserService.login(request.username(), request.password());
         } catch (IllegalArgumentException failure) {
             if (AppUserService.INVALID_CREDENTIALS.equals(failure.getMessage())) {
                 limiter.recordFailure(request.username());
-                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, failure.getMessage());
+                throw new org.springframework.web.server.ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        failure.getMessage());
             }
             throw failure;
         }
+
         limiter.recordSuccess(request.username());
         appUserService.recordLogin(user.getId());
+
         return respond(user);
     }
 
-    public record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank @Size(max = 100) String newPassword) {}
+    public record ChangePasswordRequest(
+            @NotBlank String currentPassword,
+            @NotBlank @Size(max = 100) String newPassword) {}
 
     /** The caller's other tokens stop working; the response carries a fresh one. */
     @PostMapping("/change-password")
     @PreAuthorize("isAuthenticated()")
     public AuthResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-        return respond(appUserService.changeOwnPassword(actor.requireId(), request.currentPassword(), request.newPassword()));
+        return respond(appUserService.changeOwnPassword(
+                actor.requireId(),
+                request.currentPassword(),
+                request.newPassword()));
     }
 
     @PostMapping("/register")
     @PreAuthorize("hasRole('MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        AppUser user = appUserService.register(request.username(), request.email(), request.password(), null, null);
+        AppUser user = appUserService.register(
+                request.username(),
+                request.email(),
+                request.password(),
+                null,
+                null);
+
         return respond(user);
     }
 
@@ -85,8 +121,15 @@ public class AuthController {
         String token = tokenService.issue(user, roleNames);
         String primaryRole = roleNames.isEmpty() ? null : roleNames.get(0);
         var branch = user.getStaff() == null ? null : user.getStaff().getBranch();
-        return new AuthResponse(user.getId(), user.getUsername(), user.getEmail(), primaryRole, token,
-                branch == null ? null : branch.getBranchCode(), branch == null ? null : branch.getBranchName(),
+
+        return new AuthResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                primaryRole,
+                token,
+                branch == null ? null : branch.getBranchCode(),
+                branch == null ? null : branch.getBranchName(),
                 user.getStaff() == null ? null : user.getStaff().getId());
     }
 }
