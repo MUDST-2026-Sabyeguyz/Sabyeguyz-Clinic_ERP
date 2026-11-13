@@ -29,8 +29,11 @@ public class StaffController {
     private final StaffService service;
     private final BranchRepository branches;
     private final CurrentActor actor;
+    private final com.sabyeguyz.clinicv2.auth.AppUserRepository users;
 
-    public StaffController(StaffService service, BranchRepository branches, CurrentActor actor) {
+    public StaffController(StaffService service, BranchRepository branches, CurrentActor actor,
+                           com.sabyeguyz.clinicv2.auth.AppUserRepository users) {
+        this.users = users;
         this.service = service;
         this.branches = branches;
         this.actor = actor;
@@ -44,7 +47,13 @@ public class StaffController {
 
     @GetMapping
     public List<Response> list() {
-        return service.list().stream().map(StaffController::toResponse).toList();
+        // a staff member whose account is closed is shown as not active, so no other screen offers them
+        java.util.Set<Long> closed = users.closedStaffIds();
+        return service.list().stream().map(StaffController::toResponse)
+                .map(r -> closed.contains(r.id())
+                        ? new Response(r.id(), r.employeeCode(), r.fullName(), r.position(), r.branchCode(), r.branchName(), false)
+                        : r)
+                .toList();
     }
 
     @GetMapping("/{id}")

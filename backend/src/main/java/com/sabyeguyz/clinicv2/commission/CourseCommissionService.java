@@ -43,26 +43,13 @@ public class CourseCommissionService {
     private final CommissionAllocationLedgerRepository allocations;
     private final CourseRepository courses;
     private final TreatmentFeeRuleResolver feeResolver;
-    private final StaffPayAdjustmentRepository adjustments;
-    private final StaffMonthlyPaymentRepository payments;
-    @jakarta.persistence.PersistenceContext
-    private jakarta.persistence.EntityManager entityManager;
 
-    @org.springframework.beans.factory.annotation.Autowired
     public CourseCommissionService(CourseVisitUsageRepository usages, CommissionAllocationLedgerRepository allocations,
-                                    CourseRepository courses, TreatmentFeeRuleResolver feeResolver,
-                                    StaffPayAdjustmentRepository adjustments, StaffMonthlyPaymentRepository payments) {
+                                    CourseRepository courses, TreatmentFeeRuleResolver feeResolver) {
         this.feeResolver = feeResolver;
         this.usages = usages;
         this.allocations = allocations;
         this.courses = courses;
-        this.adjustments = adjustments;
-        this.payments = payments;
-    }
-
-    public CourseCommissionService(CourseVisitUsageRepository usages, CommissionAllocationLedgerRepository allocations,
-                                    CourseRepository courses, TreatmentFeeRuleResolver feeResolver) {
-        this(usages, allocations, courses, feeResolver, null, null);
     }
 
     /** Whether the course's rate is locked, so that the Owner commission of every session can be worked out. */
@@ -249,81 +236,6 @@ public class CourseCommissionService {
         reversal.setAllocationCreateAt(Instant.now());
         reversal.setAllocationCreateBy(actorId);
         return reversal;
-    }
-
-    /**
-     * Correct an erroneous usage without rewriting a paid payout. The caller holds the course/usage row locks.
-     * A zero component on the reversal marks a paid source as corrected; its historical amount remains intact.
-     * Pending adjustments still require the ordinary Manager and deduction-consent approvals.
-     */
-    @Transactional
-    public void reverseUsageWithAdjustments(CourseVisitUsage usage, String reason, Long actorId) {
-        if (reason == null || reason.isBlank() || reason.trim().length() > 255) {
-            throw new IllegalArgumentException("A nonblank reversal reason of at most 255 characters is required");
-        }
-        Optional<CommissionAllocationLedger> current = currentAllocation(usage);
-        if (current.isEmpty()) return;
-        CommissionAllocationLedger original = current.get();
-        if (entityManager != null) {
-            java.util.stream.Stream.of(original.getOwnerMonthlyPayment(), original.getTreatingMonthlyPayment())
-                    .filter(java.util.Objects::nonNull).distinct()
-                    .sorted(java.util.Comparator.comparing(StaffMonthlyPayment::getId))
-                    .forEach(payment -> entityManager.refresh(payment, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE));
-        }
-        requireCorrectionSource(original.getOwnerStaff(), original.getOwnerMonthlyPayment());
-        requireCorrectionSource(original.getTreatingStaff(), original.getTreatingMonthlyPayment());
-        BigDecimal owner = exactCorrectionAmount(original.getOwnerNetCommission());
-        BigDecimal treating = exactCorrectionAmount(original.getTreatmentFeeAmount());
-        boolean ownerPaid = isPaid(original.getOwnerMonthlyPayment());
-        boolean treatingPaid = isPaid(original.getTreatingMonthlyPayment());
-        java.util.Map<Long, BigDecimal> corrections = new java.util.LinkedHashMap<>();
-        java.util.Map<Long, Staff> people = new java.util.HashMap<>();
-        people.put(original.getOwnerStaff().getId(), original.getOwnerStaff());
-        people.put(original.getTreatingStaff().getId(), original.getTreatingStaff());
-        if (ownerPaid && owner.signum() > 0) corrections.merge(original.getOwnerStaff().getId(), owner, BigDecimal::add);
-        if (treatingPaid && treating.signum() > 0) corrections.merge(original.getTreatingStaff().getId(), treating, BigDecimal::add);
-        for (var component : corrections.entrySet()) {
-            if (adjustments == null || payments == null) throw new IllegalStateException("Adjustment storage is unavailable");
-            Staff person = people.get(component.getKey());
-            String originalMonth = original.getVisitDate().toString().substring(0, 7);
-            String latest = originalMonth;
-            for (StaffMonthlyPayment payment : payments.findByStaffIdOrderByPaymentMonthDesc(person.getId())) {
-                if (isPaid(payment) && payment.getPaymentMonth().compareTo(latest) > 0) latest = payment.getPaymentMonth();
-            }
-            StaffPayAdjustment correction = new StaffPayAdjustment();
-            correction.setStaff(person);
-            correction.setOriginalMonth(originalMonth);
-            correction.setAppliedMonth(java.time.YearMonth.parse(latest).plusMonths(1).toString());
-            correction.setAmount(component.getValue().negate());
-            correction.setAllocation(original);
-            correction.setCourse(original.getCourse());
-            correction.setVisit(usage.getVisit());
-            correction.setReason(reason.trim());
-            correction.setAdjustmentStatus(com.sabyeguyz.clinicv2.enums.AdjustmentStatus.Pending);
-            correction.setProcessedAmount(BigDecimal.ZERO);
-            correction.setRemainingAmount(component.getValue());
-            correction.setCreatedAt(Instant.now());
-            correction.setCreatedBy(actorId);
-            adjustments.save(correction);
-        }
-        CommissionAllocationLedger reversal = reversalOf(original, reason, actorId);
-        if (ownerPaid) reversal.setOwnerNetCommission(BigDecimal.ZERO);
-        if (treatingPaid) reversal.setTreatmentFeeAmount(BigDecimal.ZERO);
-        allocations.save(reversal);
-    }
-
-    private static void requireCorrectionSource(Staff staff, StaffMonthlyPayment payment) {
-        if (staff == null || staff.getId() == null || (payment != null
-                && (payment.getStaff() == null || !staff.getId().equals(payment.getStaff().getId())))) {
-            throw new IllegalStateException("The compensation staff/payment source requires Manager review");
-        }
-    }
-
-    private static BigDecimal exactCorrectionAmount(BigDecimal amount) {
-        if (amount == null || amount.signum() < 0 || amount.stripTrailingZeros().scale() > 2) {
-            throw new IllegalStateException("The exact source compensation amount requires Manager review");
-        }
-        return amount;
     }
 
     /** The allocation of a usage that has not been reversed yet. */

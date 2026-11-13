@@ -3,7 +3,6 @@ import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
-import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { auditApi, type AuditEntry } from '@/api/client'
 
 // The audit trail (Data Dictionary Audit_log): who changed what and when, with the value before and after.
@@ -81,24 +80,19 @@ function parse(value: string | null): Record<string, unknown> | null {
   if (!value) return null
   try {
     const parsed = JSON.parse(value)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed
-      : { value: parsed }
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : { value: parsed }
   } catch {
     return { summary: value }
   }
 }
 /** A tier row of a Scheme is shown as one line: "Tier 1: 0 – 59999.99 → 5%". */
 function tierLine(tier: Record<string, unknown>) {
-  const maximum =
-    tier.maximum_monthly_sales === null ? 'ไม่จำกัด' : String(tier.maximum_monthly_sales)
+  const maximum = tier.maximum_monthly_sales === null ? 'ไม่จำกัด' : String(tier.maximum_monthly_sales)
   const rate = Math.round(Number(tier.commission_rate) * 10000) / 100
   return `Tier ${String(tier.tier_order)}: ${String(tier.minimum_monthly_sales)} – ${maximum} → ${rate}%`
 }
 const isTierList = (value: unknown): value is Array<Record<string, unknown>> =>
-  Array.isArray(value) &&
-  value.length > 0 &&
-  value.every((item) => item && typeof item === 'object' && 'tier_order' in item)
+  Array.isArray(value) && value.length > 0 && value.every((item) => item && typeof item === 'object' && 'tier_order' in item)
 /** The lines of one value cell. */
 function show(value: unknown): string[] {
   if (value === null || value === undefined) return ['—']
@@ -176,28 +170,20 @@ onMounted(async () => {
 
       <form class="audit-filter" @submit.prevent="load(0)">
         <label
-          >ตาราง<FilterDropdown
-            v-model="filter.tableName"
-            label="ตาราง"
-            default-label="ทั้งหมด"
-            :options="tables.map((name) => ({ value: name, label: tableLabel(name) }))"
-            :clear-on-reselect="false"
-        /></label>
+          >ตาราง<select v-model="filter.tableName">
+            <option value="">ทั้งหมด</option>
+            <option v-for="name in tables" :key="name" :value="name">{{ tableLabel(name) }}</option>
+          </select></label
+        >
         <label
-          >การกระทำ<FilterDropdown
-            v-model="filter.action"
-            label="การกระทำ"
-            default-label="ทั้งหมด"
-            :options="Object.entries(actionLabels).map(([value, label]) => ({ value, label }))"
-            :clear-on-reselect="false"
-        /></label>
+          >การกระทำ<select v-model="filter.action">
+            <option value="">ทั้งหมด</option>
+            <option v-for="(label, value) in actionLabels" :key="value" :value="value">{{ label }}</option>
+          </select></label
+        >
         <label>รหัสรายการ<input v-model="filter.recordId" placeholder="เช่น 3" /></label>
         <label
-          >ตั้งแต่วันที่<ThaiDatePicker
-            v-model="filter.from"
-            numeric-month
-            show-calendar-icon
-            hide-caret
+          >ตั้งแต่วันที่<ThaiDatePicker v-model="filter.from" numeric-month show-calendar-icon hide-caret
         /></label>
         <label
           >ถึงวันที่<ThaiDatePicker v-model="filter.to" numeric-month show-calendar-icon hide-caret
@@ -260,21 +246,13 @@ onMounted(async () => {
                         </tr>
                       </thead>
                       <tbody>
-                        <tr
-                          v-for="row in diffOf(entry)"
-                          :key="row.key"
-                          :class="{ changed: row.changed }"
-                        >
+                        <tr v-for="row in diffOf(entry)" :key="row.key" :class="{ changed: row.changed }">
                           <td>{{ fieldLabel(row.key) }}</td>
                           <td>
-                            <div v-for="(line, index) in show(row.before)" :key="index">
-                              {{ line }}
-                            </div>
+                            <div v-for="(line, index) in show(row.before)" :key="index">{{ line }}</div>
                           </td>
                           <td>
-                            <div v-for="(line, index) in show(row.after)" :key="index">
-                              {{ line }}
-                            </div>
+                            <div v-for="(line, index) in show(row.after)" :key="index">{{ line }}</div>
                           </td>
                         </tr>
                         <tr v-if="diffOf(entry).length === 0">
@@ -289,21 +267,9 @@ onMounted(async () => {
           </table>
         </div>
         <nav v-if="totalPages > 1" class="audit-pager" aria-label="เปลี่ยนหน้า">
-          <button
-            type="button"
-            class="audit-secondary"
-            :disabled="page === 0"
-            @click="load(page - 1)"
-          >
-            ก่อนหน้า
-          </button>
+          <button type="button" class="audit-secondary" :disabled="page === 0" @click="load(page - 1)">ก่อนหน้า</button>
           <span>หน้า {{ page + 1 }} / {{ totalPages }}</span>
-          <button
-            type="button"
-            class="audit-secondary"
-            :disabled="page + 1 >= totalPages"
-            @click="load(page + 1)"
-          >
+          <button type="button" class="audit-secondary" :disabled="page + 1 >= totalPages" @click="load(page + 1)">
             ถัดไป
           </button>
         </nav>
@@ -316,7 +282,7 @@ onMounted(async () => {
 @import '../../staff/styles/staff.css';
 .audit-page {
   min-height: 100vh;
-  color: var(--color-ink);
+  color: #25372e;
   background: #f8f4ed;
 }
 .audit-main {
@@ -325,7 +291,7 @@ onMounted(async () => {
   padding: 28px 0 80px;
 }
 .audit-back {
-  color: var(--color-primary);
+  color: #1e807c;
   font-weight: 600;
   text-decoration: none;
 }
@@ -381,11 +347,11 @@ onMounted(async () => {
 .audit-primary {
   border: 0;
   color: #fff;
-  background: var(--color-primary);
+  background: #1e807c;
 }
 .audit-secondary {
-  border: 2px solid var(--color-primary);
-  color: var(--color-primary);
+  border: 2px solid #1e807c;
+  color: #1e807c;
   background: #fff;
 }
 .audit-secondary:disabled {
@@ -449,7 +415,7 @@ onMounted(async () => {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-primary);
+  color: #1e807c;
   font: inherit;
   font-weight: 600;
   cursor: pointer;

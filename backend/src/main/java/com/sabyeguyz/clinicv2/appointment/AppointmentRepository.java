@@ -28,8 +28,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     @Query("select a from Appointment a left join a.patient p where "
             + "(:branchId is null or a.branch.id = :branchId) "
             + "and (:hasDate = false or a.appointmentDate = :date) "
-            + "and (:hasStartDate = false or a.appointmentDate >= :startDate) "
-            + "and (:hasEndDate = false or a.appointmentDate <= :endDate) "
             + "and (:staffId is null or a.staff.id = :staffId) "
             + "and (:hasStatus = false or a.appointmentStatus = :status) "
             + "and (:query = '' or lower(a.contactName) like :pattern or a.contactPhone like :pattern "
@@ -39,9 +37,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
             + "or lower(concat(p.patientFname, ' ', case when p.patientMiddleName is null then '' "
             + "else concat(p.patientMiddleName, ' ') end, p.patientLname)) like :pattern)")
     Page<Appointment> search(@Param("branchId") Long branchId, @Param("hasDate") boolean hasDate,
-                              @Param("date") LocalDate date, @Param("hasStartDate") boolean hasStartDate,
-                              @Param("startDate") LocalDate startDate, @Param("hasEndDate") boolean hasEndDate,
-                              @Param("endDate") LocalDate endDate, @Param("staffId") Long staffId,
+                              @Param("date") LocalDate date, @Param("staffId") Long staffId,
                               @Param("hasStatus") boolean hasStatus, @Param("status") AppointmentStatus status,
                               @Param("query") String query, @Param("pattern") String pattern, Pageable pageable);
 
@@ -50,17 +46,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
             + "and a.appointmentStatus not in :released")
     java.util.List<Appointment> activeOfStaffOnDate(@Param("staffId") Long staffId, @Param("date") LocalDate date,
                                                      @Param("released") Collection<AppointmentStatus> released);
-
-    @Query("select a from Appointment a "
-            + "where a.staff.id = :staffId "
-            + "and a.appointmentDate <= :endDate "
-            + "and a.appointmentEndAt > :startAt "
-            + "and a.appointmentStatus not in :released")
-    java.util.List<Appointment> activeOfStaffForInterval(
-            @Param("staffId") Long staffId,
-            @Param("startAt") java.time.LocalDateTime startAt,
-            @Param("endDate") LocalDate endDate,
-            @Param("released") Collection<AppointmentStatus> released);
 
     @Query("select a from Appointment a where a.appointmentDate between :from and :to "
             + "and (:branchId is null or a.branch.id = :branchId)")

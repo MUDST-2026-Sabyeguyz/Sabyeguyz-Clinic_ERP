@@ -52,9 +52,10 @@ public class CourseTemplateController {
         }
 
         Integer duration() {
-            if (defaultDurationMinutes == null) return null;
-            if (defaultDurationMinutes < 1) {
-                throw new IllegalArgumentException("ระยะเวลานัดต้องเป็นจำนวนเต็มอย่างน้อย 1 นาที");
+            // 0 is how a response says "no length of its own", so a client that sends a response back means none
+            if (defaultDurationMinutes == null || defaultDurationMinutes == 0) return null;
+            if (defaultDurationMinutes < 5 || defaultDurationMinutes > 480) {
+                throw new IllegalArgumentException("ระยะเวลานัดต้องอยู่ระหว่าง 5 ถึง 480 นาที");
             }
             return defaultDurationMinutes;
         }
@@ -91,7 +92,6 @@ public class CourseTemplateController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response create(@Valid @RequestBody Request request) {
         Service created = service.create(request.code(), request.name(), ServiceType.Course, request.price(),
                 request.sessions(), request.bonusSessions() == null ? 0 : request.bonusSessions(),
@@ -103,20 +103,19 @@ public class CourseTemplateController {
     }
 
     @PutMapping("/{id}")
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response update(@PathVariable Long id, @Valid @RequestBody Request request) {
         Service existing = find(id);
         Response before = toResponse(existing);
         boolean changed = !Objects.equals(existing.getServiceName(), request.name())
                 || existing.getServicePrice().compareTo(request.price()) != 0
                 || !Objects.equals(existing.getDefaultTotalVisits(), request.sessions())
-                || !Objects.equals(existing.getDefaultBonusVisits(), 0)
+                || !Objects.equals(existing.getDefaultBonusVisits(), request.bonusSessions() == null ? 0 : request.bonusSessions())
                 || !Objects.equals(existing.getDefaultValidityValue(), request.validity())
                 || existing.getDefaultValidityUnit() != request.unit();
         existing.setServiceName(request.name());
         existing.setServicePrice(request.price());
         existing.setDefaultTotalVisits(request.sessions());
-        existing.setDefaultBonusVisits(0);
+        existing.setDefaultBonusVisits(request.bonusSessions() == null ? 0 : request.bonusSessions());
         existing.setDefaultValidityValue(request.validity());
         existing.setDefaultValidityUnit(request.unit());
         existing.setDefaultAppointmentMinutes(request.duration());
@@ -128,13 +127,11 @@ public class CourseTemplateController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public void deactivate(@PathVariable Long id) {
         service.deactivate(id, actor.currentId());
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/activate")
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('MANAGER')")
     public Response activate(@PathVariable Long id) {
         return toResponse(service.activate(id, actor.currentId()));
     }
@@ -146,7 +143,7 @@ public class CourseTemplateController {
     private static Response toResponse(Service s) {
         return new Response(s.getId(), s.getServiceCode(), s.getServiceName(), s.getServicePrice(),
                 s.getDefaultTotalVisits() == null ? 0 : s.getDefaultTotalVisits(),
-                0, // Sessions already includes promotional sessions.
+                s.getDefaultBonusVisits() == null ? 0 : s.getDefaultBonusVisits(),
                 s.getDefaultValidityDays() == null ? 0 : s.getDefaultValidityDays(), s.isServiceStatus(),
                 s.getDefaultValidityValue() == null ? 0 : s.getDefaultValidityValue(),
                 s.getDefaultValidityUnit() == null ? "Day" : s.getDefaultValidityUnit().name(),

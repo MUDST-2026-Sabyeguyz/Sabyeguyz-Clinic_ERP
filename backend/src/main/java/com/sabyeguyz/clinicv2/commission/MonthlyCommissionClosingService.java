@@ -8,7 +8,6 @@ import com.sabyeguyz.clinicv2.enums.CommissionStatus;
 import com.sabyeguyz.clinicv2.enums.PaymentStatus;
 import com.sabyeguyz.clinicv2.role.Permission;
 import com.sabyeguyz.clinicv2.staff.Staff;
-import com.sabyeguyz.clinicv2.branch.Branch;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -26,10 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @org.springframework.stereotype.Service
 public class MonthlyCommissionClosingService {
-
-    @jakarta.persistence.PersistenceContext
-    private jakarta.persistence.EntityManager entityManager;
-
     private final MonthlyCommissionClosingRepository closings;
     private final CourseRepository courses;
     private final CommissionSchemeResolver schemeResolver;
@@ -37,12 +32,11 @@ public class MonthlyCommissionClosingService {
     private final MonthlyTierSalesService tierSales;
     private final CourseCommissionService courseCommission;
     private final CommissionAllocationLedgerRepository allocations;
-    private final CommissionRateOverrideAuditRepository rateAudits;
 
     public MonthlyCommissionClosingService(MonthlyCommissionClosingRepository closings, CourseRepository courses,
                                             CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
                                             MonthlyTierSalesService tierSales, CourseCommissionService courseCommission,
-                                            CommissionAllocationLedgerRepository allocations, CommissionRateOverrideAuditRepository rateAudits) {
+                                            CommissionAllocationLedgerRepository allocations) {
         this.allocations = allocations;
         this.courseCommission = courseCommission;
         this.tierSales = tierSales;
@@ -50,54 +44,28 @@ public class MonthlyCommissionClosingService {
         this.courses = courses;
         this.schemeResolver = schemeResolver;
         this.tierResolver = tierResolver;
-        this.rateAudits = rateAudits;
     }
 
     @Transactional
-    public MonthlyCommissionClosing closeMonth(String saleMonth, Staff staff, Branch branch, Permission permission, Long actorId) {
+    public MonthlyCommissionClosing closeMonth(String saleMonth, Staff staff, Permission permission, Long actorId) {
         require(saleMonth != null && saleMonth.matches("\\d{4}-(0[1-9]|1[0-2])"), "closingMonth ต้องเป็นรูปแบบ yyyy-mm");
         require(staff != null, "ต้องระบุพนักงาน");
-        require(branch != null, "ต้องระบุสาขา");
-        MonthlyCommissionClosing closing =
-                closings.findByClosingMonthAndStaffIdAndBranchId(
-                                saleMonth, staff.getId(), branch.getId())
-                        .orElseGet(MonthlyCommissionClosing::new);
-
-        if (closing.isClosed()) {
-            throw new IllegalStateException(
-                    "ปิดยอดเดือนนี้ของพนักงานคนนี้ไปแล้ว");
+        if (closings.findByClosingMonthAndStaffId(saleMonth, staff.getId())
+                .filter(MonthlyCommissionClosing::isClosed).isPresent()) {
+            throw new IllegalStateException("ปิดยอดเดือนนี้ของพนักงานคนนี้ไปแล้ว");
         }
 
-        boolean recalculating = closing.getId() != null;
-        BigDecimal previousRate = recalculating
-                ? closing.getCalculatedCommissionRate()
-                : null;
-
-        BigDecimal monthlySales = tierSales.netSales(
-                staff.getId(), saleMonth, branch.getId());
-
-        CommissionScheme scheme;
-        if (closing.getId() == null) {
-            // First close: select the scheme effective in the sale month.
-            LocalDate effectiveDate = LocalDate.parse(saleMonth + "-01");
-            scheme = schemeResolver.resolveEffective(effectiveDate);
-        } else {
-            // Reclose: preserve the original scheme and version.
-            scheme = closing.getCommissionScheme();
-
-            if (scheme == null
-                    || closing.getCommissionSchemeVersion()
-                    != scheme.getSchemeVersion()) {
-                throw new IllegalStateException(
-                        "ข้อมูล scheme ของงวดเดิมไม่ครบหรือเวอร์ชันไม่ตรง ต้องตรวจสอบก่อนปิดยอด");
-            }
-        }
-
+        LocalDate effectiveDate = LocalDate.parse(saleMonth + "-01");
+        BigDecimal monthlySales = tierSales.netSales(staff.getId(), saleMonth);
+        CommissionScheme scheme = schemeResolver.resolveEffective(effectiveDate);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySales);
+
+        // a month that was reopened is closed again on the same row (one closing per staff and month)
+        MonthlyCommissionClosing closing = closings.findByClosingMonthAndStaffId(saleMonth, staff.getId())
+                .orElseGet(MonthlyCommissionClosing::new);
         closing.setClosingMonth(saleMonth);
         closing.setPermission(permission);
         closing.setStaff(staff);
-        closing.setBranch(branch);
         closing.setMonthlyCourseSales(monthlySales);
         closing.setCommissionScheme(scheme);
         closing.setCommissionSchemeVersion(scheme.getSchemeVersion());
@@ -110,67 +78,12 @@ public class MonthlyCommissionClosingService {
 
         // each course is locked (row lock) like a usage does, so a session being recorded now is either settled here or
         // sees the locked rate itself
-        for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonthAndBranchId(staff.getId(), saleMonth, branch.getId())) {
+        for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonth(staff.getId(), saleMonth)) {
             Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
             lockCourse(course, scheme, tier, actorId);
         }
 
-        if (recalculating) {
-            if (previousRate == null) {
-                throw new IllegalStateException(
-                        "ไม่พบอัตราคำนวณเดิมของงวด ต้องตรวจข้อมูลก่อนคำนวณใหม่");
-            }
-
-            BigDecimal newRate = saved.getCalculatedCommissionRate();
-
-            if (previousRate.compareTo(newRate) != 0) {
-                String reason = saved.getReopenReason();
-
-                require(permission != null, "ต้องระบุสิทธิ์สำหรับบันทึก audit");
-                require(actorId != null, "ต้องระบุผู้ดำเนินการ");
-                require(reason != null && !reason.isBlank(),
-                        "ต้องมีเหตุผลการ Reopen สำหรับบันทึก audit");
-
-                reason = reason.trim();
-                require(reason.length() <= 255,
-                        "เหตุผลการคำนวณใหม่ยาวเกิน 255 ตัวอักษร");
-
-                CommissionRateOverrideAudit rateAudit =
-                        new CommissionRateOverrideAudit();
-                rateAudit.setPermission(permission);
-                rateAudit.setClosing(saved);
-                rateAudit.setOldRate(previousRate);
-                rateAudit.setNewRate(newRate);
-                rateAudit.setChangedBy(actorId);
-                rateAudit.setChangedAt(Instant.now());
-                rateAudit.setReason(reason);
-                rateAudits.save(rateAudit);
-            }
-        }
-
         return saved;
-    }
-
-    /** Locks the branch/month and reloads the latest closing state. */
-    private MonthlyCommissionClosing findForUpdate(Long id) {
-        MonthlyCommissionClosing closing = closings.findById(id)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("ไม่พบรายการปิดยอด"));
-
-        if (closing.getBranch() == null) {
-            throw new IllegalStateException(
-                    "งวดปิดยอดนี้ยังไม่มีสาขา ต้องตรวจข้อมูลก่อนทำรายการ");
-        }
-
-        closings.lockBranchMonth(
-                closing.getBranch().getId(),
-                closing.getClosingMonth());
-
-        entityManager.refresh(
-                closing,
-                jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
-
-        return closing;
     }
 
     /**
@@ -182,7 +95,8 @@ public class MonthlyCommissionClosingService {
     @Transactional
     public MonthlyCommissionClosing reopen(Long closingId, String reason, Long actorId) {
         require(reason != null && !reason.isBlank(), "ต้องระบุเหตุผลที่ Reopen");
-        MonthlyCommissionClosing closing = findForUpdate(closingId);
+        MonthlyCommissionClosing closing = closings.findById(closingId)
+                .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการปิดยอด"));
         if (closing.getClosingStatus() == ClosingStatus.Finalized) {
             throw new IllegalStateException("เดือนนี้ Finalize แล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
         }
@@ -190,29 +104,12 @@ public class MonthlyCommissionClosingService {
             throw new IllegalStateException("เดือนนี้ยังไม่ได้ปิดยอด");
         }
         Long staffId = closing.getStaff().getId();
-        Branch branch = closing.getBranch();
-        if (branch == null) {
-            throw new IllegalStateException(
-                    "งวดปิดยอดนี้ยังไม่มีสาขา ต้องตรวจข้อมูลเก่าก่อน Reopen");
+        if (allocations.ownerCommissionOfSaleMonthIn(staffId, closing.getClosingMonth(), java.util.List.of(PaymentStatus.Paid))) {
+            throw new IllegalStateException("ค่าคอมมิชชันของเดือนนี้ถูกจ่ายแล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
         }
-        if (allocations.ownerCommissionOfSaleMonthInBranch(
-                staffId, closing.getClosingMonth(), branch.getId(),
-                java.util.List.of(PaymentStatus.Paid))) {
-            throw new IllegalStateException(
-                    "ค่าคอมมิชชันของเดือนนี้ถูกจ่ายแล้ว ห้าม Reopen ให้บันทึกเป็น Adjustment ในงวดถัดไป");
-        }
-
-        for (Long courseId :
-                courses.findIdsBySellerStaffIdAndSaleMonthAndBranchId(
-                        staffId, closing.getClosingMonth(), branch.getId())) {
-            Course course = courses.findByIdForUpdate(courseId)
-                    .orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
-
-            courseCommission.unlock(
-                    course,
-                    "Reopen การปิดยอด " + closing.getClosingMonth()
-                            + ": " + reason.trim(),
-                    actorId);
+        for (Long courseId : courses.findIdsBySellerStaffIdAndSaleMonth(staffId, closing.getClosingMonth())) {
+            Course course = courses.findByIdForUpdate(courseId).orElseThrow(() -> new IllegalStateException("ไม่พบคอร์ส"));
+            courseCommission.unlock(course, "Reopen การปิดยอด " + closing.getClosingMonth() + ": " + reason.trim(), actorId);
         }
         String trimmed = reason.trim();
         if (trimmed.length() > 255) throw new IllegalArgumentException("เหตุผลที่ Reopen ยาวเกิน 255 ตัวอักษร");
@@ -229,8 +126,6 @@ public class MonthlyCommissionClosingService {
     /** Closed -> Finalized, together with the payment of the money that depends on its rate. */
     @Transactional
     public MonthlyCommissionClosing finalizeClosing(MonthlyCommissionClosing closing, Long actorId) {
-        closing = findForUpdate(closing.getId());
-
         if (closing.getClosingStatus() == ClosingStatus.Finalized) {
             return closing;
         }

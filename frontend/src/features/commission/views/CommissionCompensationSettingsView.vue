@@ -1,224 +1,200 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import ThaiDatePicker from '@/features/staff/components/ThaiDatePicker.vue'
 import CommissionTabs from './CommissionTabs.vue'
 import { commissionApi, type TreatmentFeeRule } from '@/api/client'
-import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
 import { clinicToday } from '@/utils/clinicDate'
+import { recordedAt, versionCycles, versionStatus } from '@/features/settings/commissionVersion'
 
+// The treatment fee rule is read here; it is changed in Settings (กฎค่ามือ), where the rule in force opens ready to edit
+// and a change for a later month is kept as a new version. This page also records the single-visit fees that were missing.
 const rules = ref<TreatmentFeeRule[]>([])
-const loading = ref(true)
-const saving = ref(false)
-const error = ref('')
-const message = ref('')
-const drawerOpen = ref(false)
+const loading = ref(false)
+const pageError = ref('')
+
 const backfill = reactive({ from: `${clinicToday().slice(0, 8)}01`, to: clinicToday() })
-const backfilling = ref(false)
 const backfillMessage = ref('')
-const branchCode = computed(() => selectedManagerBranch()?.code ?? '')
-const nextMonth = () => {
-  const today = clinicToday()
-  const [year, month] = today.slice(0, 7).split('-').map(Number)
-  const firstNext = new Date(Date.UTC(year!, month!, 1))
-  return `${firstNext.getUTCFullYear()}-${String(firstNext.getUTCMonth() + 1).padStart(2, '0')}`
-}
-const form = reactive({
-  name: '',
-  feeType: 'Fixed' as 'Fixed' | 'Percentage',
-  feeValue: '',
-  effectiveMonth: nextMonth(),
-})
-const sortedRules = computed(() =>
-  [...rules.value].sort((left, right) => right.effectiveFrom.localeCompare(left.effectiveFrom)),
-)
-const money = (value: number) =>
-  `฿${Number(value).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
+
+const amountLabel = (rule: TreatmentFeeRule) =>
+  rule.feeType === 'Fixed'
+    ? `฿${Number(rule.feeValue).toLocaleString('th-TH')} / ครั้ง`
+    : `${Number(rule.feeValue)}%`
+const range = (rule: TreatmentFeeRule) => ({ effectiveFrom: rule.effectiveFrom, effectiveTo: rule.effectiveTo })
 
 async function load() {
   loading.value = true
-  error.value = ''
-  if (!branchCode.value) {
-    rules.value = []
-    error.value = 'กรุณาเลือกสาขาและจัดการกฎค่ามือ'
-    loading.value = false
-    return
-  }
+  pageError.value = ''
   try {
-    // โหลดกฎค่ามือตามสาขาที่เลือก
-    rules.value = await commissionApi.treatmentFees() as TreatmentFeeRule[]
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'โหลดกฎค่ามือไม่สำเร็จ'
+    // newest first, as the versions of the rule
+    rules.value = (await commissionApi.treatmentFees())
+      .slice()
+      .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))
+  } catch (caught) {
+    pageError.value = caught instanceof Error ? caught.message : 'โหลดกฎค่ามือไม่สำเร็จ'
   } finally {
     loading.value = false
   }
 }
-
-function openDrawer() {
-  error.value = ''
-  message.value = ''
-  Object.assign(form, { name: '', feeType: 'Fixed', feeValue: '', effectiveMonth: nextMonth() })
-  drawerOpen.value = true
-}
-
-async function saveRule() {
-  error.value = ''
-  const value = Number(form.feeValue)
-  if (!branchCode.value) {
-    error.value = 'กรุณาเลือกสาขาก่อนบันทึกกฎค่ามือ'
-    return
-  }
-  if (!form.name.trim() || !/^\d{4}-(0[1-9]|1[0-2])$/.test(form.effectiveMonth)) {
-    error.value = 'กรอกชื่อกฎและเดือนที่เริ่มใช้งาน'
-    return
-  }
-  if (!Number.isFinite(value) || value < 0 || (form.feeType === 'Percentage' && value > 100)) {
-    error.value = form.feeType === 'Percentage'
-      ? 'เปอร์เซ็นต์ต้องอยู่ระหว่าง 0 ถึง 100'
-      : 'จำนวนเงินต้องเป็นตัวเลขไม่ติดลบ'
-    return
-  }
-  saving.value = true
-  try {
-    // สร้างกฎพร้อมวันเริ่มใช้; backend จัดการวันสิ้นสุดของกฎเดิม
-    await commissionApi.createTreatmentFee({
-      name: form.name.trim(),
-      feeType: form.feeType,
-      feeValue: value,
-      effectiveFrom: `${form.effectiveMonth}-01`,
-      branchCode: branchCode.value,
-    })
-    await load()
-    drawerOpen.value = false
-    message.value = 'บันทึกกฎค่ามือแล้ว ระบบจัดการวันสิ้นสุดของกฎเดิมให้อัตโนมัติ'
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'บันทึกกฎค่ามือไม่สำเร็จ'
-  } finally {
-    saving.value = false
-  }
-}
+onMounted(load)
 
 async function runBackfill() {
-  if (backfilling.value) return
-  error.value = ''
   backfillMessage.value = ''
-  if (!backfill.from || !backfill.to || backfill.to < backfill.from) {
-    error.value = 'กรุณาระบุช่วงวันที่ให้ถูกต้อง'
-    return
-  }
-  backfilling.value = true
+  pageError.value = ''
   try {
     const result = await commissionApi.backfillSingleVisitFees(backfill.from, backfill.to)
     backfillMessage.value = `บันทึกค่ามือรายครั้งที่ขาดเพิ่ม ${result.recorded} รายการ`
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'บันทึกค่ามือที่ขาดไม่สำเร็จ'
-  } finally {
-    backfilling.value = false
+  } catch (caught) {
+    pageError.value = caught instanceof Error ? caught.message : 'บันทึกค่ามือที่ขาดไม่สำเร็จ'
   }
 }
-
-onMounted(load)
-watch(branchCode, () => void load())
 </script>
 
 <template>
   <div class="commission-manager-page">
     <StaffHeader />
-    <main class="commission-manager-main compensation-main">
+    <main class="commission-manager-main">
       <header class="commission-title">
-        <h1>ตั้งค่าค่ามือ</h1>
-        <p>กฎค่ามือใช้ตามวันที่มีผล ระบบกำหนดวันสิ้นสุดของกฎเดิมเมื่อสร้างกฎใหม่</p>
+        <h1>ตั้งค่าค่ารักษาแทน</h1>
+        <p>กฎค่ามือส่วนกลางเดียวสำหรับนักกายภาพทุกคนและทุกบริการ</p>
       </header>
       <CommissionTabs active="compensation" />
-      <section class="commission-card compensation-panel">
-        <header class="rules-head">
-          <h2>กฎค่ามือของสาขาที่เลือก</h2>
-          <p>เปอร์เซ็นต์กรอกเป็นจำนวนเต็ม เช่น 10 หมายถึง 10% โดยกฎที่ถูกใช้แล้วจะไม่แก้ทับย้อนหลัง</p>
-        </header>
-        <p v-if="loading" role="status">กำลังโหลดข้อมูล…</p>
-        <p v-else-if="error" class="drawer-error" role="alert">{{ error }}</p>
-        <p v-if="message" role="status">{{ message }}</p>
-        <p v-if="!loading && !error && !sortedRules.length">ยังไม่มีกฎค่ามือ</p>
-        <section v-if="!loading && !error" class="rules" aria-label="รายการกฎค่ามือ">
-          <article v-for="rule in sortedRules" :key="rule.id" class="commission-card">
-            <div>
-              <b>{{ rule.name?.trim() || `กฎค่ามือ #${rule.id}` }}</b>
-              <small>มีผล {{ rule.effectiveFrom }} ถึง {{ rule.effectiveTo || 'ไม่กำหนดวันสิ้นสุด' }}</small>
-              <small>{{ rule.used ? 'มีรายการใช้กฎนี้แล้ว กรุณาสร้างกฎใหม่เพื่อเปลี่ยนอัตรา' : 'ยังไม่มีรายการอ้างอิงกฎนี้' }}</small>
-            </div>
-            <strong>{{ rule.feeType === 'Percentage' ? `${rule.feeValue}% ของยอดที่เกี่ยวข้อง` : `${money(rule.feeValue)} / ครั้ง` }}</strong>
-          </article>
-        </section>
-        <button class="commission-primary add-rule" type="button" :disabled="!branchCode || loading" @click="openDrawer">
-          + เพิ่มกฎค่ามือ
-        </button>
+      <section class="rules-head">
+        <h2>กฎค่ามือ</h2>
+        <p>
+          ใช้เมื่อผู้รักษาไม่ใช่ Owner ของคอร์ส และกับการรักษารายครั้ง จ่ายเต็มตามกฎ ณ วันรักษา
+          ไม่จำกัดด้วยค่าคอมมิชชัน การเปลี่ยนกฎทำที่การตั้งค่า และเริ่มใช้ตั้งแต่ต้นเดือนถัดไป
+        </p>
+        <RouterLink class="commission-primary edit-link" to="/staff/settings?section=commission"
+          >แก้กฎค่ามือ</RouterLink
+        >
       </section>
-      <section class="commission-card compensation-panel backfill-panel">
+      <p v-if="pageError" class="page-error" role="alert">{{ pageError }}</p>
+      <p v-if="loading">กำลังโหลดกฎค่ามือ...</p>
+      <section class="rules">
+        <article v-for="rule in rules" :key="rule.id" class="commission-card rule-card">
+          <div>
+            <b>{{ rule.feeType === 'Fixed' ? 'จำนวนเงินคงที่ต่อครั้ง' : 'เปอร์เซ็นต์' }}</b
+            ><small>{{ versionCycles(range(rule)) }} · {{ versionStatus(range(rule)).label }}</small
+            ><small v-if="rule.lastEditedBy || rule.lastEditedAt"
+              >บันทึกล่าสุดโดย {{ rule.lastEditedBy ?? '-' }} · {{ recordedAt(rule.lastEditedAt) }}</small
+            >
+          </div>
+          <strong>{{ amountLabel(rule) }}</strong>
+        </article>
+        <p v-if="!loading && rules.length === 0" class="empty">
+          ยังไม่มีกฎค่ามือ การรักษาแทนจะบันทึกไม่ได้และค่ามือรายครั้งจะไม่ถูกบันทึกจนกว่าจะเพิ่มกฎ
+        </p>
+      </section>
+
+      <section class="commission-card backfill">
         <h2>บันทึกค่ามือรายครั้งที่ขาด</h2>
-        <p>บันทึกรายการที่ยังขาดตามช่วงวันที่ หลังเพิ่มกฎค่ามือแล้ว โดยไม่สร้างรายการเดิมซ้ำ</p>
-        <form class="backfill-controls" @submit.prevent="runBackfill">
-          <label>ตั้งแต่<input v-model="backfill.from" type="date" required /></label>
-          <label>ถึง<input v-model="backfill.to" type="date" :min="backfill.from" required /></label>
-          <button class="commission-secondary" type="submit" :disabled="backfilling">
-            {{ backfilling ? 'กำลังบันทึก…' : 'บันทึกย้อนหลัง' }}
-          </button>
-        </form>
-        <p v-if="backfillMessage" role="status">{{ backfillMessage }}</p>
+        <p>
+          การขายรายครั้งที่ชำระครบแต่ยังไม่มีกฎ ณ วันนั้นจะไม่มีค่ามือ (ไม่ใส่ 0)
+          หลังเพิ่มกฎแล้วกดบันทึกย้อนหลังได้
+        </p>
+        <div class="backfill-row">
+          <label
+            >ตั้งแต่<ThaiDatePicker
+              v-model="backfill.from"
+              numeric-month
+              show-calendar-icon
+              hide-caret
+          /></label>
+          <label
+            >ถึง<ThaiDatePicker v-model="backfill.to" numeric-month show-calendar-icon hide-caret
+          /></label>
+          <button class="commission-secondary" @click="runBackfill">บันทึกย้อนหลัง</button>
+        </div>
+        <p v-if="backfillMessage" class="success" role="status">{{ backfillMessage }}</p>
       </section>
     </main>
-    <Teleport to="body">
-      <div v-if="drawerOpen" class="rule-drawer-backdrop" @click.self="drawerOpen = false">
-        <aside class="rule-drawer" role="dialog" aria-modal="true" aria-labelledby="fee-rule-title">
-          <header>
-            <div>
-              <h2 id="fee-rule-title">เพิ่มกฎค่ามือ</h2>
-            </div>
-            <button class="drawer-close" type="button" aria-label="ปิด" @click="drawerOpen = false">×</button>
-          </header>
-          <div class="rule-form">
-            <label>ชื่อกฎ<input v-model="form.name" maxlength="100" /></label>
-            <label>วิธีคำนวณ
-              <select v-model="form.feeType">
-                <option value="Fixed">จำนวนเงินต่อครั้ง</option>
-                <option value="Percentage">เปอร์เซ็นต์</option>
-              </select>
-            </label>
-            <label>{{ form.feeType === 'Percentage' ? 'อัตรา (%)' : 'จำนวนเงิน (บาท / ครั้ง)' }}
-              <input v-model="form.feeValue" type="number" min="0" step="0.01" :max="form.feeType === 'Percentage' ? 100 : undefined" />
-            </label>
-            <label>เดือนที่เริ่มใช้งาน<input v-model="form.effectiveMonth" type="month" :min="nextMonth()" /></label>
-            <p>{{ selectedManagerBranch()?.name ?? branchCode }}</p>
-          </div>
-          <p v-if="error" class="drawer-error" role="alert">{{ error }}</p>
-          <footer>
-            <button class="commission-secondary" type="button" :disabled="saving" @click="drawerOpen = false">ยกเลิก</button>
-            <button class="commission-primary" type="button" :disabled="saving" @click="saveRule">{{ saving ? 'กำลังบันทึก…' : 'บันทึกกฎ' }}</button>
-          </footer>
-        </aside>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <style scoped>
 @import '../styles/commission-manager.css';
-.compensation-panel { padding: 28px; min-height: 520px; display: flex; flex-direction: column; gap: 20px; }
-.rules-head h2 { margin: 0; font-size: 23px; }
-.rules-head p, .rules small { color: #667a72; }
-.rules { display: grid; gap: 16px; }
-.rules article { padding: 18px; display: flex; justify-content: space-between; gap: 20px; }
-.rules article div { display: grid; gap: 8px; }
-.rules strong { color: #176c68; }
-.add-rule { align-self: end; min-height: 48px; min-width: 240px; }
-.rule-drawer-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; justify-items: end; background: #14251f66; }
-.rule-drawer { width: min(520px, 100%); height: 100%; overflow: auto; box-sizing: border-box; padding: 28px; background: white; }
-.rule-drawer header, .rule-drawer footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.rule-form { display: grid; gap: 18px; margin: 28px 0; }
-.rule-form label { display: grid; gap: 6px; }
-.rule-form input, .rule-form select { min-height: 42px; padding: 8px; }
-.drawer-error { color: #a02f2f; }
-.backfill-panel { margin-top: 24px; min-height: 0; }
-.backfill-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
-.backfill-controls label { display: grid; gap: 6px; }
-.backfill-controls input { min-height: 42px; padding: 8px; }
-@media (max-width: 700px) { .compensation-panel { min-height: 0; padding: 20px; } .rules article { flex-direction: column; } .add-rule { width: 100%; } }
+.rules-head h2 {
+  margin: 0;
+}
+.rules-head p {
+  margin: 4px 0 18px;
+  color: #667a72;
+}
+.edit-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  text-decoration: none;
+}
+.rules {
+  display: grid;
+  gap: 22px;
+}
+.rule-card {
+  min-height: 86px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.rule-card > div:first-child {
+  display: grid;
+  gap: 8px;
+}
+.rules small {
+  color: #667a72;
+}
+.rules strong {
+  min-width: 180px;
+  color: #16877f;
+  text-align: center;
+}
+.backfill {
+  margin-top: 36px;
+  padding: 22px;
+  grid-column: 1 / -1;
+}
+.backfill h2 {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+}
+.backfill p {
+  margin: 0 0 14px;
+  color: #667a72;
+}
+.backfill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+}
+.backfill-row label {
+  display: grid;
+  gap: 6px;
+  color: #52635b;
+}
+.page-error {
+  padding: 11px;
+  border-radius: 8px;
+  background: #fff1ef;
+  color: #b42318;
+}
+.success {
+  color: #16875b;
+}
+.empty {
+  color: #667a72;
+}
+@media (max-width: 700px) {
+  .rule-card {
+    align-items: start;
+    flex-direction: column;
+  }
+  .rules strong {
+    min-width: 0;
+    text-align: left;
+  }
+}
 </style>

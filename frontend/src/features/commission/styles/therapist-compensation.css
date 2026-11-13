@@ -2,7 +2,7 @@
 .therapist-compensation-page {
   min-height: 100vh;
   background: #f8f4ec;
-  color: var(--color-ink);
+  color: #25372e;
 }
 .compensation-main {
   width: min(1440px, calc(100% - 72px));
@@ -84,7 +84,7 @@
   gap: 7px;
   min-height: 126px;
   padding: 18px;
-  border: 1px solid var(--color-border-soft);
+  border: 1px solid #d9e1dc;
   border-radius: 10px;
   background: #fff;
 }
@@ -99,7 +99,7 @@
   font-size: 13px;
 }
 .compensation-summary b {
-  color: var(--color-ink);
+  color: #25372e;
   font-size: 25px;
 }
 .compensation-summary .commission-total b {
@@ -128,7 +128,7 @@
 .compensation-filters :deep(.filter-dropdown__button),
 .period-field {
   min-height: 44px;
-  border-color: var(--color-border-soft);
+  border-color: #d9e1dc;
   border-radius: 8px;
 }
 .compensation-filters :deep(.filter-dropdown__button > span:first-child),
@@ -166,7 +166,7 @@
 }
 .tier-card {
   padding: 20px;
-  border: 1px solid var(--color-border-soft);
+  border: 1px solid #d9e1dc;
   border-radius: 10px;
 }
 .tier-card header {
@@ -175,7 +175,7 @@
   font-size: 18px;
 }
 .tier-card strong {
-  color: var(--color-primary);
+  color: #1e807c;
 }
 .tier-card p,
 .tier-card small {
@@ -194,14 +194,14 @@
   width: 68%;
   height: 100%;
   border-radius: inherit;
-  background: var(--color-primary);
+  background: #1e807c;
 }
 .compensation-table-wrap {
   overflow-x: auto;
   border: 1px solid #dbded6;
   border-radius: 14px;
   background: #fff;
-  scrollbar-color: var(--color-primary) #eff4ed;
+  scrollbar-color: #1e807c #eff4ed;
   scrollbar-width: thin;
 }
 .compensation-table-wrap::-webkit-scrollbar,
@@ -218,7 +218,7 @@
 .payment-history-table::-webkit-scrollbar-thumb {
   border: 2px solid #eff4ed;
   border-radius: 999px;
-  background: var(--color-primary);
+  background: #1e807c;
 }
 .compensation-table-wrap::-webkit-scrollbar-thumb:hover,
 .payment-history-table::-webkit-scrollbar-thumb:hover {
@@ -345,7 +345,7 @@
   margin: 24px max(80px, calc((100% - 1220px) / 2));
   border: 1px solid #dce4df;
   border-radius: 8px;
-  color: var(--color-ink);
+  color: #25372e;
   background: #fff;
   font: inherit;
   font-weight: 600;
@@ -376,7 +376,7 @@
   border: 1px solid #dce4df;
   border-radius: 10px;
   background: #fff;
-  scrollbar-color: var(--color-primary) #eff4ed;
+  scrollbar-color: #1e807c #eff4ed;
   scrollbar-width: thin;
 }
 .payment-history-table > header,

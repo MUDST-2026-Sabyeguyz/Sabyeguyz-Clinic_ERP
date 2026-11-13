@@ -2,7 +2,6 @@ package com.sabyeguyz.clinicv2.course;
 
 import org.springframework.transaction.annotation.Transactional;
 import com.sabyeguyz.clinicv2.auth.CurrentActor;
-import com.sabyeguyz.clinicv2.auth.BranchAccessPolicy;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
 import com.sabyeguyz.clinicv2.patient.Patient;
@@ -31,14 +30,12 @@ public class CourseTransferController {
     private final PatientRepository patients;
     private final PermissionService permissions;
     private final CurrentActor actor;
-    private final BranchAccessPolicy branchAccess;
     private final com.sabyeguyz.clinicv2.audit.AuditLogService audit;
 
     public CourseTransferController(CourseTransferService service, CourseTransferRepository repository,
-                                    CourseRepository courses, PatientRepository patients,
-                                    PermissionService permissions, CurrentActor actor,
-                                    com.sabyeguyz.clinicv2.audit.AuditLogService audit,
-                                    BranchAccessPolicy branchAccess) {
+                                     CourseRepository courses, PatientRepository patients,
+                                     PermissionService permissions, CurrentActor actor,
+                                     com.sabyeguyz.clinicv2.audit.AuditLogService audit) {
         this.service = service;
         this.repository = repository;
         this.courses = courses;
@@ -46,14 +43,11 @@ public class CourseTransferController {
         this.permissions = permissions;
         this.actor = actor;
         this.audit = audit;
-        this.branchAccess = branchAccess;
     }
 
     public record Request(Long sourcePurchaseId, Long destinationPatientId, int quantity, String reason) {}
 
-    public record ReverseRequest(String reason, com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode) {
-        public ReverseRequest(String reason) { this(reason, com.sabyeguyz.clinicv2.enums.ReasonCode.Other); }
-    }
+    public record ReverseRequest(String reason) {}
 
     public record Response(Long id, Long sourcePatientId, String sourcePatientHn, String sourcePatientName,
                             Long destinationPatientId, String destinationPatientHn, String destinationPatientName,
@@ -73,7 +67,6 @@ public class CourseTransferController {
     public Response create(@RequestBody Request request) {
         Course course = courses.findById(request.sourcePurchaseId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบคอร์ส"));
-        branchAccess.requireAccess(course.getBranch(), "โอนสิทธิ์ได้เฉพาะคอร์สของสาขาตัวเอง");
         Patient from = course.getPurchaserPatient();
         Patient to = patients.findById(request.destinationPatientId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบผู้ป่วยปลายทาง"));
@@ -88,14 +81,11 @@ public class CourseTransferController {
     public Response reverse(@PathVariable Long id, @RequestBody ReverseRequest request) {
         CourseTransfer transfer = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบรายการโอน"));
-        var permission = permissions.requireAllowed("COURSE_REVERSE", actor.currentId());
-        branchAccess.requireAccess(
-                transfer.getCourse().getBranch(),
-                "ย้อนรายการได้เฉพาะสาขาประจำของตัวเอง");
-        CourseTransfer reversed = service.reverse(transfer, permission,
-                request.reasonCode() == null ? com.sabyeguyz.clinicv2.enums.ReasonCode.Other : request.reasonCode(),
-                request.reason(), actor.currentId());
-        audit.record("course_transfer", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE, "Completed", "Reversed: " + request.reason(),
+        var permission = permissions.getOrCreate("COURSE_REVERSE", "Course", actor.currentId());
+        CourseTransfer reversed = service.reverse(transfer, permission, request.reason(), actor.currentId());
+        audit.recordChange("course_transfer", String.valueOf(id), com.sabyeguyz.clinicv2.enums.AuditAction.UPDATE,
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("transfer_status", "Completed"),
+                com.sabyeguyz.clinicv2.audit.AuditLogService.fields("transfer_status", "Reversed", "reason", request.reason()),
                 actor.currentId());
         return toResponse(reversed);
     }

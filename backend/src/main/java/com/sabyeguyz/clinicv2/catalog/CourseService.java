@@ -6,7 +6,6 @@ import com.sabyeguyz.clinicv2.commission.CommissionSchemeResolver;
 import com.sabyeguyz.clinicv2.commission.CommissionTier;
 import com.sabyeguyz.clinicv2.commission.CommissionTierResolver;
 import com.sabyeguyz.clinicv2.commission.MonthlyTierSalesService;
-import com.sabyeguyz.clinicv2.commission.BranchMonthlyClosingService;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
 import com.sabyeguyz.clinicv2.course.CourseEntitlementRepository;
 import com.sabyeguyz.clinicv2.course.CourseLedger;
@@ -57,12 +56,11 @@ public class CourseService {
     private final CommissionSchemeResolver schemeResolver;
     private final CommissionTierResolver tierResolver;
     private final MonthlyTierSalesService tierSales;
-    private final BranchMonthlyClosingService branchClosingService;
 
     public CourseService(CourseRepository courses, CourseLedgerRepository ledger,
-                         CourseSharedMemberRepository sharedMembers, CourseEntitlementRepository entitlements,
-                         CommissionSchemeResolver schemeResolver, CommissionTierResolver tierResolver,
-                         MonthlyTierSalesService tierSales, BranchMonthlyClosingService branchClosingService) {
+                          CourseSharedMemberRepository sharedMembers,
+                          CourseEntitlementRepository entitlements, CommissionSchemeResolver schemeResolver,
+                          CommissionTierResolver tierResolver, MonthlyTierSalesService tierSales) {
         this.courses = courses;
         this.ledger = ledger;
         this.sharedMembers = sharedMembers;
@@ -70,7 +68,6 @@ public class CourseService {
         this.schemeResolver = schemeResolver;
         this.tierResolver = tierResolver;
         this.tierSales = tierSales;
-        this.branchClosingService = branchClosingService;
     }
 
     /**
@@ -96,44 +93,24 @@ public class CourseService {
 
         BigDecimal price = transaction.getCommissionableAmount();
         Integer totalVisits = totalVisitsOverride != null ? totalVisitsOverride : serviceTemplate.getDefaultTotalVisits();
+        Integer bonusVisits = bonusVisitsOverride != null ? bonusVisitsOverride : serviceTemplate.getDefaultBonusVisits();
         LocalDate expiryDate = serviceTemplate.expiryFrom(effectiveSaleDate);
         require(totalVisits != null && totalVisits >= 1, "ต้องระบุจำนวนครั้งของคอร์ส");
         require(price != null && price.signum() >= 0, "ราคาคอร์สต้องไม่ติดลบ");
 
         String saleMonth = effectiveSaleDate.format(SALE_MONTH);
-        require(transaction.getBranch() != null, "ต้องระบุสาขาของรายการขาย");
-
-        branchClosingService.requireCourseSaleOpen(
-                transaction.getBranch(),
-                saleMonth,
-                sellerStaff.getId());
 
         long existingOnReceipt = courses.countByReceiptId(receipt.getId());
-        require(existingOnReceipt < 99, "ซื้อคอร์สใหม่ได้ไม่เกิน 99 ชุดต่อใบเสร็จ");
         int courseSequence = (int) existingOnReceipt + 1;
-        if (courseSequence == 2) {
-            // Once a receipt contains multiple sets, every new course gets its
-            // two-digit suffix, including the first set created in this sale.
-            for (Course existing : courses.findByReceiptIdOrderByCourseSequenceAsc(receipt.getId())) {
-                if (existing.getCourseSequence() == 1 && existing.getCourseNo().equals(receipt.getReceiptNo())) {
-                    existing.setCourseNo(receipt.getReceiptNo() + "-01");
-                    courses.save(existing);
-                }
-            }
-        }
         String courseNo = courseSequence == 1 ? receipt.getReceiptNo()
                 : "%s-%02d".formatted(receipt.getReceiptNo(), courseSequence);
 
         CommissionScheme scheme = schemeResolver.resolveEffective(effectiveSaleDate);
-
-        BigDecimal monthlySalesToDate = tierSales.netSales(
-                        sellerStaff.getId(),
-                        saleMonth,
-                        transaction.getBranch().getId())
+        BigDecimal monthlySalesToDate = tierSales.netSales(sellerStaff.getId(), saleMonth)
                 .add(price);
         CommissionTier tier = tierResolver.resolve(scheme, monthlySalesToDate);
 
-        int totalUsableVisits = totalVisits;
+        int totalUsableVisits = totalVisits + (bonusVisits == null ? 0 : bonusVisits);
 
         Course course = new Course();
         course.setBranch(transaction.getBranch());
@@ -144,8 +121,7 @@ public class CourseService {
         course.setCourseName(serviceTemplate.getServiceName());
         course.setCoursePrice(price);
         course.setTotalVisits(totalUsableVisits);
-        // Total visits already includes promotional sessions.
-        course.setBonusVisits(0);
+        course.setBonusVisits(bonusVisits);
         course.setExpiryDate(expiryDate);
         course.setCourseStatus(CourseStatus.Active);
         course.setService(serviceTemplate);

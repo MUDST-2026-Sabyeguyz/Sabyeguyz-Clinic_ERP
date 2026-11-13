@@ -2,11 +2,13 @@ package com.sabyeguyz.clinicv2.calendar;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Runs the sync on a timer; a round does nothing until the sync is enabled (app.calendar.enabled or a key saved in the UI). */
+/** Runs the sync on a timer; absent entirely unless app.calendar.enabled=true. */
 @Component
+@ConditionalOnProperty(prefix = "app.calendar", name = "enabled", havingValue = "true")
 public class CalendarScheduler {
     private static final Logger log = LoggerFactory.getLogger(CalendarScheduler.class);
     private final CalendarSyncService sync;

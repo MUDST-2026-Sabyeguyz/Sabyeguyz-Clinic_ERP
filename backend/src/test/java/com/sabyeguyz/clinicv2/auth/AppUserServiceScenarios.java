@@ -31,7 +31,7 @@ public class AppUserServiceScenarios {
         Map<String, Object> out = new LinkedHashMap<>();
         usersStub.on("findByUsername", args -> Optional.empty());
 
-        AppUser user = service().register("alice", "alice@example.com", "password1234", null, 1L);
+        AppUser user = service().register("alice", "password123", null, 1L);
 
         out.put("username", user.getUsername());
         out.put("passwordHash", user.getPasswordHash());
@@ -42,11 +42,7 @@ public class AppUserServiceScenarios {
     public Map<String, Object> rejectsShortPassword() {
         Map<String, Object> out = new LinkedHashMap<>();
         usersStub.on("findByUsername", args -> Optional.empty());
-        out.putAll(V2RepositoryStub.outcome(() -> {
-            service().register(
-                    "alice", "alice@example.com", "short", null, 1L);
-            return null;
-        }));
+        out.putAll(V2RepositoryStub.outcome(() -> { service().register("alice", "short", null, 1L); return null; }));
         out.put("usersSaveCalls", usersStub.calls("save"));
         return out;
     }

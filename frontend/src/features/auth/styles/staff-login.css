@@ -6,23 +6,22 @@
   background: #eaf7f3;
 }
 .login-brand {
-  display: grid;
-  place-content: center;
-  gap: 24px;
-  min-height: 100vh;
-  text-align: center;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
   overflow: hidden;
-  color: #c6dfd8;
-  background: var(--color-primary-strong) url('@/assets/brand-panel.png') center / cover;
+  color: #d9f4ea;
+  background: #176d68 url('@/assets/brand-panel.png') center / cover no-repeat;
 }
 .login-brand img {
-  width: min(430px, 72vw);
+  width: min(520px, 76%);
   filter: drop-shadow(0 12px 22px #0d4c4830);
 }
-.login-brand p {
-  margin: 0;
-  font-size: 30px;
-  line-height: 1.5;
+.login-brand h2 {
+  margin-top: -20px;
+  font-size: 28px;
   font-weight: 400;
 }
 .login-content {
@@ -99,13 +98,6 @@ select {
   background: #fff;
   font: inherit;
 }
-.role-note {
-  margin-top: -10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  color: #697184;
-  background: #f0f3f5;
-}
 button {
   min-height: 48px;
   border: 0;
@@ -125,10 +117,13 @@ button:disabled {
   .login-page {
     grid-template-columns: 1fr;
   }
-  .login-brand img {
-    width: min(300px, 72vw);
+  .login-brand {
+    min-height: 240px;
   }
-  .login-brand p {
+  .login-brand img {
+    width: 300px;
+  }
+  .login-brand h2 {
     font-size: 20px;
   }
   .login-content {

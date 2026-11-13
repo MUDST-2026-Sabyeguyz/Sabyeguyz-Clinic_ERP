@@ -23,5 +23,4 @@ describe('PatientProfileView edit screen', () => {
     expect(stylesheet).toContain('.patient-edit-summary')
     expect(stylesheet).toContain('.patient-edit-name-grid')
   })
-
 })

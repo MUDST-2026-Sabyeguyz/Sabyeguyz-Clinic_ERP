@@ -15,7 +15,7 @@ describe('v2 catalog and reference data', () => {
       expect(course).to.exist
       expect(Number(course.price)).to.equal(9000)
       expect(course.sessions).to.equal(5)
-      expect(course.bonusSessions).to.equal(0)
+      expect(course.bonusSessions).to.equal(1)
       expect(course.validityDays).to.equal(60)
     })
   })
