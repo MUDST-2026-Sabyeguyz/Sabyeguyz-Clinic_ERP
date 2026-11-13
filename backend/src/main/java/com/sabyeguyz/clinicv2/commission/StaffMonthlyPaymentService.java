@@ -399,7 +399,6 @@ public class StaffMonthlyPaymentService {
                     openFor(person, month, branch, actorId);
 
             if (payment.getPaymentStatus() == PaymentStatus.Open) {
-                scheduleAutomaticAdjustments(payment);
                 refresh(payment);
             }
 
@@ -444,38 +443,6 @@ public class StaffMonthlyPaymentService {
         payment.setNetPaymentAmount(earned == null ? null : earned.add(adjustment));
 
         return payments.save(payment);
-    }
-
-    /** Reserve each due automatic adjustment once on this staff member's branch-scoped payment. */
-    @Transactional
-    public void scheduleAutomaticAdjustments(StaffMonthlyPayment payment) {
-        Long staffId = payment.getStaff().getId();
-        Long branchId = payment.getBranch().getId();
-        for (StaffPayAdjustment adjustment : adjustments
-                .findByStaffIdAndAutomaticTrueAndBranchIdAndAppliedMonthLessThanEqualOrderByIdAsc(
-                        staffId, branchId, payment.getPaymentMonth())) {
-            if (adjustment.getRemainingAmount() == null || adjustment.getRemainingAmount().signum() <= 0
-                    || (adjustment.getAdjustmentStatus() != AdjustmentStatus.Approved
-                    && adjustment.getAdjustmentStatus() != AdjustmentStatus.PartiallyApplied)) {
-                continue;
-            }
-            boolean alreadyReserved = applications.findByAdjustmentIdOrderByIdAsc(adjustment.getId()).stream()
-                    .anyMatch(application -> application.getMonthlyPayment().getId().equals(payment.getId()));
-            if (alreadyReserved) continue;
-
-            AdjustmentApplication application = new AdjustmentApplication();
-            application.setAdjustment(adjustment);
-            application.setMonthlyPayment(payment);
-            application.setAmount(adjustment.getAmount().signum() < 0
-                    ? adjustment.getRemainingAmount().negate() : adjustment.getRemainingAmount());
-            application.setApprovedBy(adjustment.getApprovedBy());
-            application.setApprovedAt(adjustment.getApprovedAt());
-            application.setApprovalReference(adjustment.getApprovalReference());
-            application.setApplicationStatus(ApplicationStatus.Draft);
-            application.setCreatedAt(Instant.now());
-            application.setCreatedBy(adjustment.getCreatedBy());
-            applications.save(application);
-        }
     }
 
     /** Open -> Closed: needs every amount to be known; the deductions are limited to what was earned. */

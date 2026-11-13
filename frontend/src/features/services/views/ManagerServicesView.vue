@@ -289,9 +289,7 @@ watch(appointmentAlreadyProcessed, (done) => {
   <div class="service-page">
     <div class="service-header-shell"><StaffHeader /></div>
     <main>
-      <p v-if="errorMessage && recoveryRequired && !loading" class="error" role="alert">{{ errorMessage }}</p>
-      <p v-if="loading" role="status" aria-live="polite">กำลังบันทึก…</p>
-      <p v-else-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
+      <p v-if="processLoading" role="status">กำลังตรวจสอบรายการของนัดหมาย…</p>
       <div v-else-if="processError" role="alert">
         <p>{{ processError }}</p>
         <button type="button" @click="refreshAppointmentProcess">ลองใหม่</button
@@ -299,7 +297,7 @@ watch(appointmentAlreadyProcessed, (done) => {
       </div>
       <AppointmentProcessPanel
         v-else-if="
-          appointmentProgress && !canStartAppointment && !appointmentAlreadyProcessed && !confirmed
+          appointmentProgress && !canStartAppointment && !appointmentAlreadyProcessed
         "
         :progress="appointmentProgress"
         :block-reason="processBlockReason" :recovery-required="recoveryRequired"
