@@ -1,6 +1,6 @@
-package com.sabyeguyz.clinic.cypress.v2;
+package com.sabyeguyz.clinicv2.cypress;
 
-import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.catalog.Course;
 import com.sabyeguyz.clinicv2.catalog.CourseRepository;
@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.*;
 
 /** Scenario setup and observations only; Cypress owns every assertion. */
 @RestController
-@Profile("cypress")
+@Profile("cypress-v2")
 @PreAuthorize("hasRole('MANAGER')")
 @RequestMapping("/__cypress/v2/finance")
 public class V2FinanceScenarios {
