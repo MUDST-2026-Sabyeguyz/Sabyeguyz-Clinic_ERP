@@ -1,6 +1,8 @@
 package com.sabyeguyz.clinicv2.idcard;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,13 +17,22 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
 
     @BeforeEach
     void pairAWorkstation() {
-        // no RESTART IDENTITY: workstation ids must not repeat, because the app keeps unclaimed reads in memory per workstation id
+        // no RESTART IDENTITY: workstation ids must not repeat because the app
+        // keeps unclaimed reads in memory per workstation id.
         db.execute("TRUNCATE TABLE id_card_read_audit, card_reader_workstation CASCADE");
         // Thai patients must have a national ID, so go back to the registered one (it is not the number on the test card)
         db.update("update patient set national_id = '1100000000001' where patient_id = ?", patientId);
-        var created = reply("POST", "/api/id-card/workstations", Map.of("name", "เคาน์เตอร์ 1", "branchCode", "01")).body();
+        var created = reply(
+                "POST",
+                "/api/id-card/workstations",
+                Map.of("name", "เคาน์เตอร์ 1", "branchCode", "01"))
+                .body();
         workstationId = created.path("id").asLong();
-        agentToken = replyAs(null, "POST", "/api/id-card/agent/pair", Map.of("code", created.path("pairingCode").asText()))
+        agentToken = replyAs(
+                null,
+                "POST",
+                "/api/id-card/agent/pair",
+                Map.of("code", created.path("pairingCode").asText()))
                 .body().path("token").asText();
         // the agent has polled once, so the workstation is online
         assertEquals(204, agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
@@ -41,6 +52,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         card.put("issueDate", "2020-02-02");
         card.put("expiryDate", null);
         card.put("lifetime", true);
+
         return card;
     }
 
@@ -50,19 +62,30 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     }
 
     String start(String jwt) {
-        HttpResult started = replyAs(jwt, "POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER"));
+        HttpResult started = replyAs(
+                jwt,
+                "POST",
+                "/api/id-card/reads",
+                Map.of("workstationId", workstationId, "purpose", "REGISTER"));
+
         assertEquals(202, started.status(), started.body().toString());
+
         return started.body().path("id").asText();
     }
 
     String agentTakes() {
         HttpResult next = agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null);
+
         assertEquals(200, next.status(), next.body().toString());
+
         return next.body().path("requestId").asText();
     }
 
     void agentSaysCardIsInTheReader(String requestId) {
-        assertEquals(204, agent(agentToken, "POST", "/api/id-card/agent/progress",
+        assertEquals(204, agent(
+                agentToken,
+                "POST",
+                "/api/id-card/agent/progress",
                 Map.of("requestId", requestId, "stage", "CARD_PRESENT")).status());
     }
 
@@ -71,17 +94,28 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         body.put("requestId", requestId);
         body.put("status", status);
         body.put("card", card);
-        assertEquals(204, agent(agentToken, "POST", "/api/id-card/agent/result", body).status());
+
+        assertEquals(204, agent(
+                agentToken,
+                "POST",
+                "/api/id-card/agent/result",
+                body).status());
     }
 
     @Test
     void aCardOfSomeoneNewIsDeliveredOnceTogetherWithTheNotFoundLookup() {
         String id = start(token);
-        assertEquals("REGISTER", agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null).body().path("purpose").asText());
+
+        assertEquals(
+                "REGISTER",
+                agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=2", null)
+                        .body().path("purpose").asText());
+
         assertEquals("PENDING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
 
         agentAnswers(id, "OK", card(VALID_ID));
         HttpResult done = reply("GET", "/api/id-card/reads/" + id, null);
+
         assertEquals("DONE", done.body().path("status").asText());
         assertFalse(done.body().path("lookup").path("exists").asBoolean());
         assertTrue(done.body().path("lookup").path("patient").isNull());
@@ -100,11 +134,13 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         agentAnswers(id, "OK", card(VALID_ID));
 
         HttpResult done = reply("GET", "/api/id-card/reads/" + id, null);
+
         assertEquals("DONE", done.body().path("status").asText());
         assertTrue(done.body().path("lookup").path("exists").asBoolean());
         assertFalse(done.body().path("lookup").path("patient").path("hn").asText("").isBlank());
         assertFalse(done.body().path("lookup").path("patient").path("fullName").asText("").isBlank());
         String text = done.body().toString();
+
         assertFalse(done.body().has("card"));
         assertFalse(text.contains("1997-01-31") || text.contains(VALID_ID) || text.contains("ลาดพร้าว"), text);
     }
@@ -113,19 +149,25 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     void theScreenSeesReadingOnceTheCardIsInTheReader() {
         String id = start(token);
         agentTakes();
+
         assertEquals("PENDING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
 
         agentSaysCardIsInTheReader(id);
+
         assertEquals("READING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
         assertEquals("READING", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText(), "reading is not consumed");
 
         agentAnswers(id, "OK", card(VALID_ID));
+
         assertEquals("DONE", reply("GET", "/api/id-card/reads/" + id, null).body().path("status").asText());
     }
 
     @Test
     void progressForAnUnknownReadIsRefused() {
-        assertEquals(404, agent(agentToken, "POST", "/api/id-card/agent/progress",
+        assertEquals(404, agent(
+                agentToken,
+                "POST",
+                "/api/id-card/agent/progress",
                 Map.of("requestId", UUID.randomUUID().toString(), "stage", "CARD_PRESENT")).status());
     }
 
@@ -135,6 +177,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         agentTakes();
         agentAnswers(id, "OK", card("1101700005110"));
         HttpResult failed = reply("GET", "/api/id-card/reads/" + id, null);
+
         assertEquals("FAILED", failed.body().path("status").asText());
         assertEquals("INVALID_CARD", failed.body().path("outcome").asText());
         assertFalse(failed.body().has("card"));
@@ -148,6 +191,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
             agentTakes();
             agentAnswers(id, outcome, null);
             HttpResult failed = reply("GET", "/api/id-card/reads/" + id, null);
+
             assertEquals("FAILED", failed.body().path("status").asText());
             assertEquals(outcome, failed.body().path("outcome").asText());
         }
@@ -156,14 +200,22 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
 
     @Test
     void onlyTheRegisterPurposeExists() {
-        HttpResult started = reply("POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "LOOKUP"));
+        HttpResult started = reply(
+                "POST",
+                "/api/id-card/reads",
+                Map.of("workstationId", workstationId, "purpose", "LOOKUP"));
+
         assertEquals(400, started.status());
     }
 
     @Test
     void aWorkstationThatIsNotPollingIsOffline() {
         db.update("update card_reader_workstation set last_seen_at = now() - interval '5 minutes'");
-        HttpResult started = reply("POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER"));
+        HttpResult started = reply(
+                "POST",
+                "/api/id-card/reads",
+                Map.of("workstationId", workstationId, "purpose", "REGISTER"));
+
         assertEquals(409, started.status());
     }
 
@@ -171,13 +223,19 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     void anotherUsersReadIsInvisible() {
         String id = start(token);
         String therapist = login("therapist", "therapist123");
+
         assertEquals(404, replyAs(therapist, "GET", "/api/id-card/reads/" + id, null).status());
     }
 
     @Test
     void aUserOfAnotherBranchCannotUseTheWorkstation() {
         String otherBranch = login("therapist2", "therapist123");
-        HttpResult started = replyAs(otherBranch, "POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER"));
+        HttpResult started = replyAs(
+                otherBranch,
+                "POST",
+                "/api/id-card/reads",
+                Map.of("workstationId", workstationId, "purpose", "REGISTER"));
+
         assertEquals(403, started.status());
     }
 
@@ -185,7 +243,12 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
     void aRevokedWorkstationsTokenStopsWorking() {
         assertEquals(204, reply("POST", "/api/id-card/workstations/" + workstationId + "/revoke", null).status());
         assertEquals(401, agent(agentToken, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
-        assertEquals(401, agent(agentToken, "POST", "/api/id-card/agent/progress", Map.of("requestId", "x", "stage", "CARD_PRESENT")).status());
+        assertEquals(401, agent(
+                agentToken,
+                "POST",
+                "/api/id-card/agent/progress",
+                Map.of("requestId", "x", "stage", "CARD_PRESENT")).status());
+
         assertEquals(401, agent("not-a-token", "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
         assertEquals(401, agent(null, "GET", "/api/id-card/agent/next?waitSeconds=0", null).status());
     }
@@ -196,7 +259,11 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         int accepted = 0;
         int refused = 0;
         for (int i = 0; i < 22; i++) {
-            int status = replyAs(therapist, "POST", "/api/id-card/reads", Map.of("workstationId", workstationId, "purpose", "REGISTER")).status();
+            int status = replyAs(
+                    therapist,
+                    "POST",
+                    "/api/id-card/reads",
+                    Map.of("workstationId", workstationId, "purpose", "REGISTER")).status();
             if (status == 202) accepted++;
             if (status == 429) refused++;
         }
@@ -210,6 +277,7 @@ class IdCardReadHttpTest extends IdCardHttpTestSupport {
         agentTakes();
         agentAnswers(id, "OK", card(VALID_ID));
         var row = db.queryForMap("select workstation_id, user_id, branch_id, purpose, outcome from id_card_read_audit");
+
         assertEquals(workstationId, ((Number) row.get("workstation_id")).longValue());
         assertEquals(actorId, ((Number) row.get("user_id")).longValue());
         assertEquals(branchId, ((Number) row.get("branch_id")).longValue());
