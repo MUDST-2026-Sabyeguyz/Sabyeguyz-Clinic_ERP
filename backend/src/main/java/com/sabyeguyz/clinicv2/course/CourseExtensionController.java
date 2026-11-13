@@ -61,6 +61,101 @@ public class CourseExtensionController {
 
     public record DecisionRequest(String note) {}
 
+    public record DirectRequest(
+            Long courseId,
+            Long requestedByPatientId,
+            Integer value,
+            String unit,
+            String reason,
+            LocalDate oldExpiry,
+            LocalDate newExpiry,
+            Boolean ownerRequestConfirmed) {}
+
+    public record ExtensionPreview(LocalDate oldExpiry, LocalDate newExpiry) {}
+
+    @PostMapping("/direct/preview")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Transactional(readOnly = true)
+    public ExtensionPreview previewDirect(@RequestBody DirectRequest request) {
+        Course course = directCourse(request, false);
+        return directDates(course, request);
+    }
+
+    @PostMapping("/direct")
+    @PreAuthorize("hasRole('MANAGER')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ExtensionPreview extendDirect(@RequestBody DirectRequest request) {
+        if (!Boolean.TRUE.equals(request.ownerRequestConfirmed())) {
+            throw new IllegalArgumentException("กรุณายืนยันการต่ออายุคอร์ส");
+        }
+        Course course = directCourse(request, true);
+        ExtensionPreview dates = directDates(course, request);
+        if (!dates.oldExpiry().equals(request.oldExpiry()) || !dates.newExpiry().equals(request.newExpiry())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "วันหมดอายุเปลี่ยนแล้ว กรุณาตรวจสอบและยืนยันใหม่");
+        }
+        Integer pending = jdbc.queryForObject(
+                "SELECT count(*) FROM course_extension_request WHERE course_id = ? AND request_status = 'Pending'",
+                Integer.class, course.getId());
+        if (pending != null && pending > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "คอร์สนี้มีคำขอรอพิจารณา กรุณาดำเนินการคำขอเดิมก่อน");
+        }
+        String reason = request.reason() == null || request.reason().isBlank() ? null : request.reason().trim();
+        Long actorId = actor.requireId();
+        Long extensionId = jdbc.queryForObject("INSERT INTO course_extension (course_id, extension_value, extension_unit, "
+                        + "old_expiry_date, new_expiry_date, extended_by, reason) VALUES (?, ?, ?::validity_unit_enum, ?, ?, ?, ?) "
+                        + "RETURNING extension_id",
+                Long.class, course.getId(), request.value(), parseUnit(request.unit()).name(),
+                dates.oldExpiry(), dates.newExpiry(), actorId, reason);
+        course.setExpiryDate(dates.newExpiry());
+        courses.save(course);
+        audit.record("course", String.valueOf(course.getId()), AuditAction.UPDATE,
+                "expiry " + dates.oldExpiry(), "expiry " + dates.newExpiry() + " (direct extension " + extensionId + ")", actorId);
+        return dates;
+    }
+
+    private Course directCourse(DirectRequest request, boolean lock) {
+        if (request.courseId() == null || request.requestedByPatientId() == null) {
+            throw new IllegalArgumentException("ต้องระบุคอร์สและเจ้าของคอร์ส");
+        }
+        Course course = (lock ? courses.findByIdForUpdate(request.courseId()) : courses.findById(request.courseId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ไม่พบคอร์ส"));
+        branchAccess.requireAccess(course.getBranch());
+        if (!course.getPurchaserPatient().getId().equals(request.requestedByPatientId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ต่ออายุได้เฉพาะคอร์สของเจ้าของเดิม ไม่ใช่สิทธิ์ที่ได้รับแชร์");
+        }
+        if (course.getCourseStatus() != CourseStatus.Active) {
+            throw new IllegalArgumentException("ต่ออายุได้เฉพาะคอร์สที่ยังใช้งานอยู่");
+        }
+        return course;
+    }
+
+    private ExtensionPreview directDates(Course course, DirectRequest request) {
+        if (request.unit() == null || request.unit().isBlank()) {
+            throw new IllegalArgumentException("ต้องระบุหน่วยเวลา");
+        }
+        ValidityUnit unit = parseUnit(request.unit());
+        int limit = switch (unit) {
+            case Day -> 99;
+            case Month -> 12;
+            case Year -> 1;
+        };
+        if (request.value() == null || request.value() < 1 || request.value() > limit) {
+            throw new IllegalArgumentException("ระยะเวลาที่ต่ออายุเกินช่วงที่กำหนด");
+        }
+        if (request.reason() != null && request.reason().trim().length() > 255) {
+            throw new IllegalArgumentException("เหตุผลยาวเกิน 255 ตัวอักษร");
+        }
+        LocalDate oldExpiry = course.getExpiryDate();
+        LocalDate today = ClinicTime.today();
+        LocalDate base = oldExpiry.isBefore(today) ? today : oldExpiry;
+        LocalDate newExpiry = switch (unit) {
+            case Day -> base.plusDays(request.value());
+            case Month -> base.plusMonths(request.value());
+            case Year -> base.plusYears(request.value());
+        };
+        return new ExtensionPreview(oldExpiry, newExpiry);
+    }
+
     public record Response(
             Long id,
             Long courseId,
