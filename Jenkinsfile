@@ -88,9 +88,9 @@ pipeline {
                 ]) {
                     powershell '''
                         $ErrorActionPreference = 'Stop'
-                        $oldBackend = kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE get deployment/backend -o jsonpath='{.spec.template.spec.containers[?(@.name=="backend")].image}'
+                        $oldBackend = kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE get deployment/backend -o jsonpath='{.spec.template.spec.containers[0].image}'
                         if ($LASTEXITCODE -ne 0) { throw 'Cannot read existing backend deployment' }
-                        $oldFrontend = kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE get deployment/frontend -o jsonpath='{.spec.template.spec.containers[?(@.name=="frontend")].image}'
+                        $oldFrontend = kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE get deployment/frontend -o jsonpath='{.spec.template.spec.containers[0].image}'
                         if ($LASTEXITCODE -ne 0) { throw 'Cannot read existing frontend deployment' }
                         try {
                             kubectl --kubeconfig $env:KUBECONFIG --context $env:K8S_CONTEXT -n $env:K8S_NAMESPACE set image deployment/backend backend=$env:BACKEND_IMAGE
