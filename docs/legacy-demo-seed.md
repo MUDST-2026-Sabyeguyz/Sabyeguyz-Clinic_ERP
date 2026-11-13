@@ -1,3 +1,5 @@
+> Retired 2026-11-13: this document describes the former legacy importer. Its commands are no longer supported. Use `db/migration` and test-only `db/seed_v2`; see [current database policy](legacy-data-migration.md).
+
 # Seed ข้อมูลตัวอย่างเดิม (develop) บน schema v2 ล่าสุด
 
 ไฟล์: `backend/src/main/resources/db/seed_v2_legacy/V1100__legacy_demo_data.sql`

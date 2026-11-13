@@ -5,7 +5,8 @@ describe('Clinic v2 core service scenarios', () => {
     cy.api('POST', '/__cypress/v2/core/AppUserService/registerHashesThePassword').then(({ status, body }) => {
       expect(status).to.equal(200)
       expect(body.username).to.equal("alice")
-      expect(body.passwordHash).not.to.equal("password123")
+      expect(body.passwordHash).not.to.equal("password12345")
+      expect(body.passwordMatches).to.equal(true)
       expect(body.userStatus).to.equal(true)
     })
   })

@@ -1,3 +1,5 @@
+import { patientPayload } from '../support-v2/commands'
+
 // Security audit Phase 1: role and branch enforcement that must not depend on the UI hiding buttons.
 describe('authorization hardening (audit Phase 1)', () => {
   beforeEach(function () {
@@ -24,10 +26,20 @@ describe('authorization hardening (audit Phase 1)', () => {
   })
 
   it('H4: a branch-01 therapist cannot register a patient or sell a course in branch 02', function () {
-    cy.apiAs(this.therapist, 'POST', '/api/patients', { branchCode: '02', firstName: 'Sec', lastName: 'Probe' })
+    cy.apiAs(this.therapist, 'POST', '/api/patients', patientPayload({ branchCode: '02', firstName: 'Sec', lastName: 'Probe' }))
       .its('status').should('equal', 403)
-    cy.apiAs(this.therapist, 'POST', '/api/course-purchases', { patientId: 1, courseId: 1, branchCode: '02' })
-      .its('status').should('equal', 403)
+    cy.registerPatient({ branchCode: '02' }).then((patient) => {
+      cy.api('POST', '/api/courses', {
+        code: 'SEC-BRANCH', name: 'Branch authorization probe', price: 1000,
+        sessions: 1, validityDays: 30,
+      }).then(({ status, body: course }) => {
+        expect(status).to.equal(201)
+        cy.apiAs(this.therapist, 'POST', '/api/course-purchases', {
+          patientId: patient.id, courseId: course.id, branchCode: '02',
+          caseOwnerStaffId: this.fixtures.therapist2Id, paymentLabelCode: 'FULL',
+        }).its('status').should('equal', 403)
+      })
+    })
   })
 
   it('M1: repeated bad logins return 401 and then 429 for that account only', function () {
@@ -46,7 +58,7 @@ describe('authorization hardening (audit Phase 1)', () => {
       { currentPassword: 'not-the-password', newPassword: 'a-long-new-password-1' }).its('status').should('equal', 400)
     cy.apiAs(this.therapist, 'POST', '/api/auth/change-password',
       { currentPassword: 'therapist123', newPassword: 'short' }).its('status').should('equal', 400)
-    cy.api('POST', '/api/auth/change-password', { currentPassword: 'x', newPassword: 'y' })
+    cy.apiAs(null, 'POST', '/api/auth/change-password', { currentPassword: 'x', newPassword: 'valid-password-123' })
       .its('status').should('equal', 401)
   })
 

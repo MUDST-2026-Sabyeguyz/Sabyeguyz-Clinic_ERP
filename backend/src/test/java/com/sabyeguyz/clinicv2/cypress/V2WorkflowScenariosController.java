@@ -1,4 +1,4 @@
-package com.sabyeguyz.clinic.cypress.v2;
+package com.sabyeguyz.clinicv2.cypress;
 
 import com.sabyeguyz.clinicv2.commission.CommissionAllocationLedger;
 import com.sabyeguyz.clinicv2.course.CourseEntitlement;
@@ -20,7 +20,7 @@ import com.sabyeguyz.clinicv2.sale.TransactionCancellation;
 import com.sabyeguyz.clinicv2.sale.TransactionCancellationRepository;
 import com.sabyeguyz.clinicv2.sale.TransactionCancellationService;
 
-import com.sabyeguyz.clinic.cypress.V2RepositoryStub;
+import com.sabyeguyz.clinicv2.cypress.V2RepositoryStub;
 import com.sabyeguyz.clinicv2.appointment.*;
 import com.sabyeguyz.clinicv2.audit.*;
 import com.sabyeguyz.clinicv2.branch.Branch;
@@ -43,7 +43,7 @@ import org.springframework.web.bind.annotation.*;
 
 /** Test-only observations of production services; assertions belong to Cypress. */
 @RestController
-@Profile("cypress")
+@Profile("cypress-v2")
 @PreAuthorize("hasRole('MANAGER')")
 @RequestMapping("/__cypress/v2/workflows")
 public class V2WorkflowScenariosController {
