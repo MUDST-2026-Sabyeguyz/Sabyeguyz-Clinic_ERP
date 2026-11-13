@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/features/services/styles/services.css'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -401,4 +402,3 @@ onMounted(async () => {
 </template>
 
 <style scoped src="../styles/patient-history.css"></style>
-<style src="../../services/styles/services.css"></style>

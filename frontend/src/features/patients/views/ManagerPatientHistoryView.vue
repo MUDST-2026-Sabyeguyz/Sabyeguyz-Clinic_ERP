@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/features/services/styles/services.css'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
@@ -520,4 +521,3 @@ onMounted(async () => {
 .single-use-reason input { height: 40px; padding: 0 12px; border: 1px solid #b9c8c2; border-radius: 8px; font: inherit; }
 .single-use-reverse-actions { display: flex; gap: 8px; margin-top: 12px; }
 </style>
-<style src="../../services/styles/services.css"></style>
