@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import MonthFilterPicker from '@/features/staff/components/MonthFilterPicker.vue'
@@ -48,16 +49,36 @@ const sections: Array<{ key: SectionKey; label: string; hint: string; icon: Sett
     { key: 'master', label: 'Master Data', hint: 'ข้อมูลพื้นฐานระบบ', icon: 'master' },
   ]
 
-function initialSection(): SectionKey {
-  const wanted = new URLSearchParams(window.location.search).get('section')
+const route = useRoute()
+const router = useRouter()
+// หมวดที่เปิดอยู่มาจาก path (/staff/settings/:section) ส่วน /staff/settings เฉย ๆ คือหมวดสาขา
+function sectionFromRoute(): SectionKey {
+  const wanted = typeof route.params.section === 'string' ? route.params.section : null
   return sections.find((item) => item.key === wanted)?.key ?? 'branches'
 }
-const section = ref<SectionKey>(initialSection()),
+const section = ref<SectionKey>(sectionFromRoute()),
   drawerOpen = ref(false),
   editingIndex = ref<number | null>(null),
   savedMessage = ref(''),
   saveModalOpen = ref(false)
-const showingCardReaders = ref(window.location.pathname === '/staff/settings/card-readers')
+const showingCardReaders = ref(route.path === '/staff/settings/card-readers')
+// ปุ่มย้อนกลับ/ไปข้างหน้าของเบราว์เซอร์ต้องเปลี่ยนหมวดตาม path ด้วย
+watch(
+  () => route.fullPath,
+  () => {
+    showingCardReaders.value = route.path === '/staff/settings/card-readers'
+    section.value = sectionFromRoute()
+  },
+)
+function openSection(key: SectionKey) {
+  section.value = key
+  showingCardReaders.value = false
+  void router.push(`/staff/settings/${key}`)
+}
+function openCardReaders() {
+  showingCardReaders.value = true
+  void router.push('/staff/settings/card-readers')
+}
 const fieldErrors = reactive<Record<string, boolean>>({})
 const fieldHints = reactive<Record<string, string>>({})
 const validationMessage = ref('')
@@ -1024,7 +1045,7 @@ const drawerTitle = computed(() => {
               v-for="item in sections"
               :key="item.key"
               :class="{ active: !showingCardReaders && section === item.key }"
-              @click="section = item.key; showingCardReaders = false"
+              @click="openSection(item.key)"
             >
               <span class="settings-nav-icon" aria-hidden="true"
                 ><SettingsNavIcon :name="item.icon"
@@ -1037,7 +1058,7 @@ const drawerTitle = computed(() => {
             </button>
           </nav>
           <div class="settings-nav-footer">
-            <button :class="{ active: showingCardReaders }" @click="showingCardReaders = true">
+            <button :class="{ active: showingCardReaders }" @click="openCardReaders()">
               <span class="settings-nav-icon" aria-hidden="true"><SettingsNavIcon name="payments" /></span>
               <span><b>เครื่องอ่านบัตรประชาชน</b><small>อุปกรณ์และการจับคู่</small></span>
               <span class="settings-nav-arrow" aria-hidden="true">›</span>

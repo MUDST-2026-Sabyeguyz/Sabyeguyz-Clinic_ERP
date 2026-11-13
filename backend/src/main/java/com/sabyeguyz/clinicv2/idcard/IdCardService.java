@@ -77,7 +77,11 @@ public class IdCardService {
 
     /** Called by the agent: holds the request for up to {@code waitSeconds} until a command arrives. */
     public Optional<AgentCommand> next(CardReaderWorkstation workstation, int waitSeconds) {
-        workstations.touch(workstation.getId());
+        return next(workstation, waitSeconds, null);
+    }
+
+    public Optional<AgentCommand> next(CardReaderWorkstation workstation, int waitSeconds, Boolean readerPresent) {
+        workstations.touch(workstation.getId(), readerPresent);
         Duration wait = Duration.ofSeconds(Math.max(0, Math.min(waitSeconds, AGENT_MAX_WAIT.toSeconds())));
         try {
             return store.next(workstation.getId(), wait)

@@ -34,6 +34,9 @@ public class CardReaderWorkstation {
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
 
+    @Column(name = "reader_present")
+    private Boolean readerPresent;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -55,6 +58,8 @@ public class CardReaderWorkstation {
     public void setStatus(String status) { this.status = status; }
     public Instant getLastSeenAt() { return lastSeenAt; }
     public void setLastSeenAt(Instant lastSeenAt) { this.lastSeenAt = lastSeenAt; }
+    public Boolean getReaderPresent() { return readerPresent; }
+    public void setReaderPresent(Boolean readerPresent) { this.readerPresent = readerPresent; }
     public Instant getCreatedAt() { return createdAt; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }

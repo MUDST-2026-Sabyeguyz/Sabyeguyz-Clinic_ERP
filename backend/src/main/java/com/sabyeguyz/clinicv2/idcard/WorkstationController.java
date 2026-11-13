@@ -14,7 +14,8 @@ import org.springframework.web.bind.annotation.*;
 public class WorkstationController {
     public record CreateRequest(String name, String branchCode) {}
 
-    public record WorkstationView(Long id, String name, String branchCode, boolean online, String status) {}
+    public record WorkstationView(Long id, String name, String branchCode, boolean online, String status,
+                                  Boolean readerConnected) {}
 
     private final WorkstationService service;
     private final CardReaderWorkstationRepository workstations;
@@ -57,7 +58,7 @@ public class WorkstationController {
         return rows.stream()
                 .filter(w -> manager || "Active".equals(w.getStatus()))
                 .map(w -> new WorkstationView(w.getId(), w.getName(), w.getBranch().getBranchCode(),
-                        service.isOnline(w), w.getStatus()))
+                        service.isOnline(w), w.getStatus(), w.getReaderPresent()))
                 .toList();
     }
 }
