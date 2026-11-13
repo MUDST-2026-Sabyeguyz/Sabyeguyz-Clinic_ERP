@@ -57,6 +57,7 @@ jobs:
         run: npm run build
 
       - name: Start backend for browser tests
+        id: start_backend
         working-directory: .
         run: |
           export POSTGRES_PASSWORD="$(openssl rand -hex 32)"
@@ -77,11 +78,19 @@ jobs:
           command: npm run test:e2e -- --browser chrome
 
       - name: Show backend logs on failure
-        if: failure()
+        if: failure() && steps.start_backend.outcome != 'skipped'
         working-directory: .
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ env.JWT_SECRET }}
         run: docker compose logs --no-color --tail=200 postgres backend
 
       - name: Stop backend test services
-        if: always()
+        if: always() && steps.start_backend.outcome != 'skipped'
         working-directory: .
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ env.JWT_SECRET }}
         run: docker compose down -v
