@@ -1,22 +1,25 @@
 /* oxlint-disable vitest/valid-expect, vitest/no-standalone-expect -- Cypress uses Chai assertions. */
-import { api, visit, patient, fixtures } from '../support-therapist/helpers'
+import { api, visit, patient, fixtures, useCourse, book, slot } from '../support-therapist/helpers'
 
-const month = new Intl.DateTimeFormat('en-CA', {
+const currentMonth = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date()).slice(0, 7)
 const shiftMonth = (offset) => {
-  const date = new Date(`${month}-01T12:00:00Z`)
+  const date = new Date(`${currentMonth}-01T12:00:00Z`)
   date.setUTCMonth(date.getUTCMonth() + offset)
   return date.toISOString().slice(0, 7)
 }
-const nextMonth = shiftMonth(1)
+// A month can only be closed once it has ended, so the earnings are moved into the previous month (the fixture below dates
+// them there) and every case works on that month. The "next" month is then the current, still open one.
+const month = shiftMonth(-1)
+const nextMonth = currentMonth
 const money = (amount) => Math.round(Number(amount) * 100) / 100
 const manager = (method, path, body, expected = 200) =>
   api(method, path, body, 'manager').then(({ status, body: result }) => {
     expect(status, JSON.stringify(result)).to.equal(expected)
     return result
   })
-const prepare = (period = month) => manager('POST', `/api/commission/payments/prepare?month=${period}`)
+const prepare = (period = month) => manager('POST', `/api/commission/payments/prepare?month=${period}&branchCode=01`)
 const ownPayment = (period = month) => prepare(period).then((rows) => {
   const row = rows.find((entry) => entry.staffId === fixtures.therapistId)
   expect(row, 'nonempty therapist payroll fixture').not.to.equal(undefined)
@@ -31,7 +34,7 @@ const earnings = () => {
   manager('GET', '/api/commission/treatment-fees').then((rules) => {
     expect(rules).to.have.length.greaterThan(0)
     return manager('PUT', `/api/commission/treatment-fees/${rules[0].id}`, {
-      feeType: 'Fixed', feeValue: 45,
+      feeType: 'Fixed', feeValue: 45, branchCode: '01',
     })
   })
   return manager('POST', '/api/courses', {
@@ -41,23 +44,26 @@ const earnings = () => {
     person = created
     return manager('POST', '/api/course-purchases', {
       patientId: person.id, courseId: template.id, branchCode: '01',
-      caseOwnerStaffId: fixtures.therapistId,
+      caseOwnerStaffId: fixtures.therapistId, paymentLabelCode: 'PAID',
     }, 201)
   })).then((purchased) => {
     course = purchased
-    return manager('POST', '/api/course-usages', {
+    return useCourse('manager', person.id, {
       coursePurchaseId: course.id, treatingStaffId: fixtures.therapistId,
-    })
-  }).then(() => manager('POST', '/api/payments', {
-    patientId: person.id, branchCode: '01',
+    }).then(({ status, body }) => expect(status, JSON.stringify(body)).to.equal(200))
+  // the single visit is sold through an appointment of the patient (a sale without one is refused by the database)
+  }).then(() => book(person.id, slot(fixtures.tomorrow, '16:00'))).then((appointment) => manager('POST', '/api/payments', {
+    patientId: person.id, branchCode: '01', appointmentId: appointment.id,
     salespersonStaffId: fixtures.therapistId, treatingStaffId: fixtures.therapistId,
     items: [{ type: 'SERVICE', referenceId: fixtures.singleVisitServiceId, quantity: 1 }],
-    payments: [{ paymentMethodCode: 'Cash', amount: 800 }],
-  }, 201)).then(() => ({ course, person }))
+    paymentLabelCode: 'PAID', payments: [{ paymentMethodCode: 'PromptPay', amount: 800 }],
+  }, 201)).then(() =>
+    // date everything in the previous month, which has ended and can be closed
+    manager('POST', '/__cypress/commission/shift-activity?months=1')).then(() => ({ course, person }))
 }
 
 const lockEarnings = () => earnings().then((context) =>
-  manager('POST', `/api/commission/closings/${month}-01`).then(() =>
+  manager('POST', `/api/commission/closings/${month}-01?branchCode=01`).then(() =>
     ownPayment().then((payment) => {
       expect(money(payment.courseCommission)).to.equal(38.46)
       expect(money(payment.singleVisitFee)).to.equal(45)
@@ -67,7 +73,7 @@ const lockEarnings = () => earnings().then((context) =>
       return { ...context, payment }
     })))
 const pay = (payment, reference = 'PT-E2E-TRANSFER') =>
-  manager('POST', `/api/commission/payments/${payment.id}/close`).then(() =>
+  manager('POST', `/api/commission/payments/close?month=${payment.month}&branchCode=01`).then(() =>
     manager('POST', `/api/commission/payments/${payment.id}/pay`, {
       paidDate: `${payment.month}-15`, reference,
     }))
@@ -149,13 +155,11 @@ describe('Therapist compensation with actual earnings', () => {
       expect(allocations).to.have.length(1)
       return manager('POST', '/api/commission/adjustments', {
         staffId: fixtures.therapistId, allocationId: allocations[0].allocation_id,
-        originalMonth: month, appliedMonth: nextMonth, amount: 50,
+        originalMonth: month, appliedMonth: nextMonth, amount: 50, branchCode: '01',
         reason: 'PT E2E approved additional compensation',
       }, 201)
     }).then((adjustment) => {
-      manager('POST', `/api/commission/adjustments/${adjustment.id}/approve`)
-      manager('POST', `/api/commission/adjustments/${adjustment.id}/applications`, { month: nextMonth }, 201)
-        .then((application) => manager('POST', `/api/commission/adjustment-applications/${application.id}/approve`, {}))
+      // the adjustment is allocated to its applied month automatically
       ownPayment(nextMonth).then((next) => {
         expect(money(next.adjustment)).to.equal(50)
         expect(money(next.net)).to.equal(50)
@@ -169,7 +173,7 @@ describe('Therapist compensation with actual earnings', () => {
       visit(`/staff/compensation/payments?month=${month}`)
       cy.get('.therapist-payment-row').should('have.length', 1)
         .and('contain', '฿83.46').and('contain', 'PT-E2E-TRANSFER').and('contain', 'Paid')
-      cy.contains('a', 'ดู Adjustment เดือนนี้').click()
+      cy.contains('a', 'ดูรายการปรับค่าตอบแทนเดือนนี้').click()
       cy.location('pathname').should('equal', `/staff/compensation/adjustment/${adjustment.id}`)
       cy.contains('PT E2E approved additional compensation').should('be.visible')
       cy.get('.therapist-adjustment-tiles').should('contain', '฿50.00')

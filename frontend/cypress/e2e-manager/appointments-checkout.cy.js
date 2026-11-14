@@ -1,5 +1,5 @@
 /* oxlint-disable vitest/valid-expect, vitest/no-standalone-expect -- Cypress uses Chai in queued helpers. */
-import { api, fixtures, patient, visit } from '../support-therapist/helpers'
+import { api, fixtures, patient, slot, visit } from '../support-therapist/helpers'
 
 describe('Manager appointment confirmation checkout', () => {
   it('opens the selected patient sale, then confirms the appointment after payment is saved', () => {
@@ -9,7 +9,7 @@ describe('Manager appointment confirmation checkout', () => {
         patientId: p.id,
         therapistId: fixtures.therapistId,
         serviceId: fixtures.singleVisitServiceId,
-        startAt: `${fixtures.tomorrow}T09:00:00+07:00`,
+        ...slot(fixtures.tomorrow, '09:00'),
         status: 'Unconfirmed',
       }, 'manager').then(({ status, body: appointment }) => {
         expect(status).to.equal(201)
@@ -30,16 +30,14 @@ describe('Manager appointment confirmation checkout', () => {
           expect(result.status).to.equal(200)
           expect(result.body.status).to.equal('UNCONFIRMED')
         })
-        cy.contains('button', 'เริ่มขายบริการ').click()
+        cy.get('button.service-menu-action--sale').click()
 
-        cy.get('.payment-status-group').contains('button', 'ชำระเต็มจำนวน').should('be.enabled')
-        cy.get('.payment-options').contains('button', 'Cash').should('be.enabled').click()
+        cy.contains('.payment-group', 'ลักษณะการชำระ').contains('button', 'ชำระเต็ม').should('be.enabled').click()
+        cy.get('.payment-options').contains('button', 'พร้อมเพย์').should('be.enabled').click()
         cy.intercept('POST', '**/api/payments').as('savePayment')
-        cy.intercept('POST', `**/api/appointments/${appointment.id}/confirm`).as('confirmAppointment')
 
-        cy.contains('button', 'ตรวจสอบและชำระเงิน').click()
-        cy.contains('button', 'ยืนยันรับชำระเงิน').click()
-        cy.get('.payment-modal').contains('button', 'ยืนยันการชำระเงิน').click()
+        // checkout saves directly from the primary button (the review step and confirmation modal were removed)
+        cy.contains('button.primary', 'ชำระเงิน').click()
 
         cy.wait('@savePayment').then(({ response }) => {
           expect(response.statusCode).to.equal(201)
@@ -48,20 +46,17 @@ describe('Manager appointment confirmation checkout', () => {
           expect(receipt.status).to.equal(200)
           expect(receipt.body.patient.id).to.equal(p.id)
         })
-        cy.wait('@confirmAppointment').then(({ response }) => {
-          expect(response.statusCode).to.equal(200)
-          expect(response.body.status).to.equal('CONFIRMED')
-        })
-        cy.contains('.sale-success-card', 'อัปเดตสถานะนัดหมายเป็นยืนยันแล้ว').should('be.visible')
+        // the backend confirms the appointment together with the saved payment and the page opens the receipt
+        cy.location('pathname').should('match', /^\/staff\/receipts?\//)
 
         api('GET', `/api/appointments/${appointment.id}`, undefined, 'manager').then((result) => {
           expect(result.status).to.equal(200)
           expect(result.body.status).to.equal('CONFIRMED')
           expect(result.body.patient.id).to.equal(p.id)
         })
-        cy.contains('button', 'กลับหน้านัดหมาย').click()
-        cy.location('pathname').should('eq', '/staff/appointments')
-        cy.get(`button[aria-label="${statusLabel}"]`).should('contain.text', 'ยืนยัน')
+        visit('/staff/appointments', 'manager')
+        // a confirmed appointment shows its status as read-only text instead of the status dropdown
+        cy.contains('tr', p.fullName).find('.appointment-status-readonly').should('contain.text', 'ยืนยัน')
       })
     })
   })
