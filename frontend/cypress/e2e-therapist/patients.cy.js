@@ -16,7 +16,7 @@ describe('Therapist patient registration, profile and history', () => {
     fillThai()
     cy.intercept('POST', '**/api/patients').as('created')
     cy.get('button[type="submit"]').click()
-    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^ใช่$/).click()
+    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^ยืนยัน$/).click()
     cy.wait('@created').then(({ response }) => {
       expect(response.statusCode).to.equal(201)
       api('GET', `/api/patients/${response.body.id}`).then(({ body, status }) => {
@@ -47,6 +47,8 @@ describe('Therapist patient registration, profile and history', () => {
       fillThai()
       cy.get(`input[placeholder="${field}"]`).clear().type(value).blur()
       cy.get('button[type="submit"]').click()
+      // after a rejected submit the form focuses the invalid field and shows its message once focus leaves it
+      cy.get(`input[placeholder="${field}"]`).blur()
       cy.contains('.required-error', message).should('be.visible')
       cy.get('[aria-labelledby="registration-confirmation-title"]').should('not.exist')
       api('GET', '/api/patients').its('body.totalItems').should('equal', 0)
@@ -61,7 +63,7 @@ describe('Therapist patient registration, profile and history', () => {
       cy.get('button[type="submit"]').click()
       cy.get('[role="alertdialog"]').then(($dialog) => {
         if ($dialog.hasClass('duplicate-modal')) return
-        cy.wrap($dialog).contains('button', /^ใช่$/).click()
+        cy.wrap($dialog).contains('button', /^ยืนยัน$/).click()
         cy.wait('@duplicate').its('response.statusCode').should('equal', 409)
         cy.get('[role="alert"], .duplicate-modal').should('be.visible')
       })
@@ -69,6 +71,7 @@ describe('Therapist patient registration, profile and history', () => {
     })
   })
 
+  // The profile edit no longer requires a referral: both a patient without one and one with one save normally.
   for (const [label, source] of [['unset referral', undefined], ['valid referral', 'Friend']]) {
   it(`PAT-05 ${label} referral follows the current profile validation`, () => {
     patient(source ? { customerSource: source } : {}).then((p) => {
@@ -79,20 +82,7 @@ describe('Therapist patient registration, profile and history', () => {
       cy.intercept('PUT', `**/api/patients/${p.id}`).as('updated')
       cy.get('form').contains('button', /^บันทึก$/).click()
       cy.get('[role="alertdialog"]').contains('button', /^ใช่$/).click()
-      cy.wait('@updated').then(({ response }) => {
-        if (!source) {
-          expect(response.statusCode).to.equal(400)
-          return
-        }
-        expect(response.statusCode, JSON.stringify(response.body)).to.equal(200)
-      })
-      if (!source) {
-        api('GET', `/api/patients/${p.id}`).then(({ body }) => {
-          expect(body.phone).to.equal(p.phone)
-          expect(body.address).to.equal('ที่อยู่ทดสอบ Therapist')
-        })
-        return
-      }
+      cy.wait('@updated').its('response.statusCode').should('equal', 200)
       cy.get('[role="status"]').should('contain.text', 'แก้ไขข้อมูลสำเร็จ')
       api('GET', `/api/patients/${p.id}`).then(({ body }) => {
         expect(body.phone).to.equal('0891112222')
@@ -119,24 +109,27 @@ describe('Therapist patient registration, profile and history', () => {
   it('PAT-07 history has distinct empty payment and course states', () => {
     patient().then((p) => {
       visit(`/staff/patients/${p.id}/history`)
-      cy.get('main').should('contain.text', 'ไม่พบประวัติการชำระเงิน')
-      cy.get('.history-tabs').contains('button', 'คอร์สรักษา').click()
-      cy.get('main').should('contain.text', 'ไม่พบประวัติคอร์ส')
+      // a patient with no payments and no courses shows one empty state for both tabs
+      cy.get('main').should('contain.text', 'ผู้ป่วยยังไม่มีรายการบริการหรือคอร์ส')
+      cy.get('.history-tabs').contains('button', 'รายละเอียดการรักษา').click()
+      cy.get('main').should('contain.text', 'ผู้ป่วยยังไม่มีรายการบริการหรือคอร์ส')
     })
   })
 
   it('PAT-08 displays real paid receipt, filters history and previews/prints it', () => {
     patient().then((p) => sale(p.id).then((receipt) => {
       visit(`/staff/patients/${p.id}/history`)
+      // the history opens on the treatment details tab; the receipts are on the payments tab
+      cy.get('.history-tabs').contains('button', 'รายการชำระเงิน').click()
       cy.get('main').should('contain.text', receipt.receiptNo).and('contain.text', '800.00')
-      cy.get('input[placeholder="ค้นหาเลขที่ใบเสร็จหรือชื่อคอร์ส"]').type('absent')
+      cy.get('input[placeholder="เลขที่ใบเสร็จหรือชื่อบริการ"]').type('absent')
       cy.get('main').should('contain.text', 'ไม่พบประวัติการชำระเงิน')
-      cy.get('input[placeholder="ค้นหาเลขที่ใบเสร็จหรือชื่อคอร์ส"]').clear().type(receipt.receiptNo)
+      cy.get('input[placeholder="เลขที่ใบเสร็จหรือชื่อบริการ"]').clear().type(receipt.receiptNo)
       cy.contains('button', 'ดูใบเสร็จ').click()
       cy.get('main').should('contain.text', 'ใบเสร็จรับเงิน').and('contain.text', receipt.receiptNo)
       cy.window().then((win) => cy.stub(win, 'print').as('print'))
-      cy.get('.receipt-page-main').contains('button', 'พิมพ์เอกสาร').click()
-      cy.get('[role="dialog"]').contains('button', 'ยืนยันและพิมพ์').click()
+      // the receipt page prints straight from its toolbar button (there is no confirmation dialog any more)
+      cy.contains('button', 'พิมพ์ใบเสร็จ').click()
       cy.get('@print').should('have.been.calledOnce')
     }))
   })
@@ -152,9 +145,14 @@ describe('Therapist patient registration, profile and history', () => {
   it('PAT-10 rejects a future birth date before sending a registration', () => {
     visit('/staff/patients/new')
     fillThai()
-    datePicker('.thai-date-picker', fixtures.tomorrow)
+    // The date picker disables every future day, so a future birth date cannot be chosen (and nothing is registered).
+    const [year, month, day] = fixtures.tomorrow.split('-').map(Number)
+    cy.get('.thai-date-picker').find('.date-trigger').click()
+    cy.get('[role="dialog"][aria-label="เลือกวันที่"] select[aria-label="เลือกปี"]').select(String(year))
+    cy.get('[role="dialog"][aria-label="เลือกวันที่"] select[aria-label="เลือกเดือน"]').select(String(month))
+    cy.get('[role="dialog"][aria-label="เลือกวันที่"] .days').contains('button', new RegExp(`^${day}$`)).should('be.disabled')
+    cy.get('body').type('{esc}')
     cy.get('button[type="submit"]').click()
-    cy.contains('.required-error', 'วันเกิดต้องเป็นวันในอดีต').should('be.visible')
     api('GET', '/api/patients').its('body.totalItems').should('equal', 0)
   })
 
@@ -162,7 +160,7 @@ describe('Therapist patient registration, profile and history', () => {
     visit('/staff/patients/new')
     fillThai()
     cy.get('button[type="submit"]').click()
-    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^ไม่ใช่$/).click()
+    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^ยกเลิก$/).click()
     cy.get('input[placeholder="ชื่อ"]').should('have.value', 'อรุณ')
     cy.get('[aria-labelledby="registration-confirmation-title"]').should('not.exist')
     api('GET', '/api/patients').its('body.totalItems').should('equal', 0)

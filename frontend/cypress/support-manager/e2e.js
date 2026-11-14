@@ -1,5 +1,5 @@
 /* oxlint-disable vitest/valid-expect, vitest/no-standalone-expect -- Cypress uses Chai in queued helpers. */
-import { api, authenticate, fixtures, sessions } from '../support-therapist/helpers'
+import { api, authenticate, fixtures, openBookingHours, setServiceDurations, sessions } from '../support-therapist/helpers'
 
 before(() => {
   expect(Cypress.config('baseUrl')).to.equal('http://localhost:5173')
@@ -11,6 +11,8 @@ beforeEach(() => {
     expect(status, 'disposable Cypress v2 database reset').to.equal(200)
     Object.assign(fixtures, body)
   })
+  openBookingHours()
+  setServiceDurations()
   cy.then(() => cy.request({
     method: 'POST',
     url: '/api/auth/login',
