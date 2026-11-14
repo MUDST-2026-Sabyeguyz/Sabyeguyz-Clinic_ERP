@@ -94,7 +94,7 @@ describe('AppointmentView', () => {
     expect(source).toContain('ผู้จอง NEW ยังไม่มี HN')
   })
 
-  it('orders the create form by flow: patient, then service, then date and time, then note', () => {
+  it('places patient and service type on the same row in the create form', () => {
     const styles = readFileSync(
       resolve(process.cwd(), 'src/features/appointments/styles/appointment-create-layout.css'),
       'utf8',
@@ -109,18 +109,16 @@ describe('AppointmentView', () => {
     )
 
     expect(current).toEqual([
-      'patient-type patient-type',
+      'patient-type service-mode',
       'patient phone',
-      'service-mode service-mode',
       'selection therapist',
       'summary summary',
       'date time',
       'note note',
     ])
     expect(newPatient).toEqual([
-      'patient-type patient-type',
+      'patient-type service-mode',
       'new-patient new-patient',
-      'service-mode service-mode',
       'selection therapist',
       'summary summary',
       'date time',

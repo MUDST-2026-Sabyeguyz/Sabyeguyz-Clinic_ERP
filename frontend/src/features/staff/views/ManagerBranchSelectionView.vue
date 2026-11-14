@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import buildingIcon from '@/assets/company-building.svg'
 import { branchApi } from '@/api/client'
 import {
+  branchDisplayName,
   managerBranches,
   setManagerBranches,
   setSelectedManagerBranch,
@@ -101,7 +102,7 @@ onMounted(loadBranches)
             >
               <span class="branch-icon"><img :src="buildingIcon" alt="" /></span>
               <span class="branch-option-copy">
-                <b>{{ branch.name }}</b>
+                <b>{{ branchDisplayName(branch.name) }}</b>
                 <strong>เข้าสู่สาขา <span aria-hidden="true">→</span></strong>
               </span>
             </button>
