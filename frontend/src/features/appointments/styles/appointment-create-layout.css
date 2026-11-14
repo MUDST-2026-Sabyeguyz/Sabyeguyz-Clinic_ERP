@@ -95,11 +95,9 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-create-card:not(.is-editing)
   .appointment-create-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  /* ลำดับตาม flow: ผู้ป่วย → บริการ (คอร์สพร้อมสรุปสิทธิ์) → วันเวลา → หมายเหตุ */
   grid-template-areas:
-    'patient-type patient-type'
+    'patient-type service-mode'
     'patient phone'
-    'service-mode service-mode'
     'selection therapist'
     'summary summary'
     'date time'
@@ -112,9 +110,8 @@ body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-create-card:not(.is-editing)
   .appointment-create-grid.is-new-patient {
   grid-template-areas:
-    'patient-type patient-type'
+    'patient-type service-mode'
     'new-patient new-patient'
-    'service-mode service-mode'
     'selection therapist'
     'summary summary'
     'date time'
@@ -214,14 +211,14 @@ body:is(.therapist-ui, :not(.therapist-ui))
     .appointment-create-card:not(.is-editing)
     .appointment-create-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'patient-type' 'patient' 'phone' 'service-mode' 'selection' 'therapist' 'summary' 'date' 'time' 'note';
+    grid-template-areas: 'patient-type' 'service-mode' 'patient' 'phone' 'selection' 'therapist' 'summary' 'date' 'time' 'note';
     gap: 16px;
   }
   body:is(.therapist-ui, :not(.therapist-ui))
     .appointment-page
     .appointment-create-card:not(.is-editing)
     .appointment-create-grid.is-new-patient {
-    grid-template-areas: 'patient-type' 'new-patient' 'service-mode' 'selection' 'therapist' 'summary' 'date' 'time' 'note';
+    grid-template-areas: 'patient-type' 'service-mode' 'new-patient' 'selection' 'therapist' 'summary' 'date' 'time' 'note';
   }
   body:is(.therapist-ui, :not(.therapist-ui))
     .appointment-page

@@ -26,7 +26,7 @@ import {
 import { clinicToday } from '@/utils/clinicDate'
 import { isBranchPhoneValid, limitPhoneDigits } from '@/utils/phone'
 import { baht2, recordedAt, versionCycles, versionStatus } from '../commissionVersion'
-import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
+import { branchDisplayName, selectedManagerBranch } from '@/features/staff/data/managerBranch'
 
 type SectionKey =
   'branches' | 'users' | 'services' | 'payments' | 'rooms' | 'commission' | 'tiers' | 'master'
@@ -618,7 +618,10 @@ function openDrawer(index: number | null) {
     index === null ? undefined : data[section.value as Exclude<SectionKey, 'payments'>]?.[index]
   if (row) Object.assign(form, row)
   else defaults()
-  if (section.value === 'branches') form.contact = limitPhoneDigits(String(form.contact ?? ''))
+  if (section.value === 'branches') {
+    form.contact = limitPhoneDigits(String(form.contact ?? ''))
+    form.name = branchDisplayName(String(form.name ?? ''))
+  }
   drawerOpen.value = true
   if (section.value === 'users' && index !== null && Number.isSafeInteger(Number(form.id)))
     void loadPermissionOverrides(Number(form.id))
@@ -1298,6 +1301,9 @@ const drawerTitle = computed(() => {
                         >{{ permission.label }}</span
                       >
                     </span>
+                    <template v-else-if="section === 'branches' && key === 'name'">
+                      {{ branchDisplayName(String(item.row[key] ?? '')) }}
+                    </template>
                     <template v-else>{{ item.row[key] }}</template>
                   </td>
                   <td>

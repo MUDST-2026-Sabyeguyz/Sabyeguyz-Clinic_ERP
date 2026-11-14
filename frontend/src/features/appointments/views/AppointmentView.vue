@@ -1184,6 +1184,27 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 </label>
               </div>
             </fieldset>
+            <fieldset class="appointment-service-mode-field">
+              <legend>ประเภทบริการ <small>{{ copy.optional }}</small></legend>
+              <div class="appointment-service-mode-options">
+                <button
+                  type="button"
+                  :disabled="isEditing"
+                  :class="{ active: serviceMode === 'single' }"
+                  @click="changeServiceMode('single')"
+                >
+                  รายครั้ง
+                </button>
+                <button
+                  type="button"
+                  :disabled="isEditing"
+                  :class="{ active: serviceMode === 'course' }"
+                  @click="changeServiceMode('course')"
+                >
+                  รายคอร์ส
+                </button>
+              </div>
+            </fieldset>
             <label v-if="appointmentPatientType === 'CURRENT'" class="appointment-patient-field">
               ผู้ป่วย
               <div class="appointment-patient-picker">
@@ -1270,27 +1291,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               </label>
               <p v-if="copy.newPatientNote">{{ copy.newPatientNote }}</p>
             </div>
-            <fieldset class="appointment-service-mode-field">
-              <legend>ประเภทบริการ <small>{{ copy.optional }}</small></legend>
-              <div class="appointment-service-mode-options">
-                <button
-                  type="button"
-                  :disabled="isEditing"
-                  :class="{ active: serviceMode === 'single' }"
-                  @click="changeServiceMode('single')"
-                >
-                  รายครั้ง
-                </button>
-                <button
-                  type="button"
-                  :disabled="isEditing"
-                  :class="{ active: serviceMode === 'course' }"
-                  @click="changeServiceMode('course')"
-                >
-                  รายคอร์ส
-                </button>
-              </div>
-            </fieldset>
             <label v-if="serviceMode === 'single'" class="appointment-service-field">
               {{
                 appointmentPatientType === 'NEW' ? copy.newServiceLabel : copy.singleServiceLabel

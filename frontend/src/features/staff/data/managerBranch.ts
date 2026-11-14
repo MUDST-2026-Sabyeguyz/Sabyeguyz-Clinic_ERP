@@ -11,6 +11,10 @@ export const managerBranches = ref<ManagerBranch[]>([])
 const storageKey = 'managerSelectedBranch'
 const selectedManagerBranchCode = ref(localStorage.getItem(storageKey) ?? '')
 
+export function branchDisplayName(name: string) {
+  return name.trim().replace(/^สาขา\s*(แบริ่ง)$/, '$1')
+}
+
 export function selectedManagerBranch() {
   const code = selectedManagerBranchCode.value
   return managerBranches.value.find((branch) => branch.code === code) ?? null
