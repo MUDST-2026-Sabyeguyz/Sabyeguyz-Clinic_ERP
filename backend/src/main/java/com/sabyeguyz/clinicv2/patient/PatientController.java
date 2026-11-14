@@ -50,7 +50,7 @@ public class PatientController {
             String gender, String phone, String genderDetail, String nickname, String identityDocumentType,
             String identityNumber, LocalDate birthDate, String bloodGroup, String nationality, String address,
             String fullName, com.fasterxml.jackson.databind.JsonNode middleName, String email,
-            String customerSource, String insuranceCompany, Boolean drugAllergy, Boolean foodAllergy,
+            String customerSource, String insuranceType, String insuranceCompany, Boolean drugAllergy, Boolean foodAllergy,
             String chronicDisease, String emergencyContactName, String emergencyContactRelationship,
             String emergencyContactPhone, Boolean privacyConsent) {}
 
@@ -83,7 +83,7 @@ public class PatientController {
             String address, boolean drugAllergy, boolean foodAllergy, String chronicDisease,
             String emergencyContactName, String emergencyContactRelationship, String emergencyContactPhone,
             boolean privacyConsent, String nickname, String bloodGroup, String nationality,
-            String customerType, String customerSource, String insuranceCompany, String customerTypeCode,
+            String customerType, String customerSource, String insuranceCompany, String insuranceType, String customerTypeCode,
             String firstName, String lastName, String middleName, String email) {}
 
     public record IdentityPatientSummary(
@@ -191,7 +191,8 @@ public class PatientController {
                 parseBloodGroup(request.bloodGroup()),
                 request.nationality(),
                 request.address(),
-                null, resolveMasterDataValue("Referral Channel", request.customerSource()), null,
+                null, resolveMasterDataValue("Referral Channel", request.customerSource()),
+                resolveMasterDataValue("Insurance Type", request.insuranceType()),
                 resolveMasterDataValue("Insurance Company", request.insuranceCompany()), middleName,
                 Boolean.TRUE.equals(request.drugAllergy()), Boolean.TRUE.equals(request.foodAllergy()),
                 request.chronicDisease(), request.emergencyContactName(), request.emergencyContactRelationship(),
@@ -254,6 +255,11 @@ public class PatientController {
                 request.emergencyContactPhone(),
                 request.privacyConsent(),
                 actor.currentId());
+
+        if (request.insuranceType() != null) {
+            patient.setInsuranceType(
+                    resolveMasterDataValue("Insurance Type", request.insuranceType()));
+        }
 
         if (request.customerSource() != null) {
             patient.setReferralChannel(
