@@ -1034,26 +1034,3 @@ body .appointment-page .appointment-table-scroll {
   width: calc(100% - 48px);
   margin-inline: auto;
 }
-
-
-
-body .appointment-page .appointment-back {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  color: #13766f;
-  background: transparent;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-body .appointment-page .appointment-back:hover {
-  color: #0b524d;
-  text-decoration: underline;
-}
-body .appointment-page .appointment-back:focus-visible {
-  outline: 2px solid #13766f;
-  outline-offset: 3px;
-}

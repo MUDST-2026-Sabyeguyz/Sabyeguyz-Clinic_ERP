@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { filterPaymentReportRows } from '../lib/paymentReport'
+import { filterPaymentReportRows, saleTypeLabel } from '../lib/paymentReport'
 
 describe('payment report', () => {
   const source = [
-    { date: '2026-10-02', type: 'COURSE_PURCHASE', amount: 1200 },
-    { date: '2026-10-03', type: 'SINGLE_VISIT', amount: 400 },
-    { date: '2026-10-04', type: 'ASSESSMENT', amount: 200 },
-    { date: '2026-11-01', type: 'COURSE_PURCHASE', amount: 800 },
+    { date: '2026-10-02', type: 'CoursePurchase', amount: 1200 },
+    { date: '2026-10-03', type: 'SingleVisit', amount: 400 },
+    { date: '2026-10-04', type: 'Assessment', amount: 200 },
+    { date: '2026-11-01', type: 'CoursePurchase', amount: 800 },
   ]
+
+  it('maps backend transaction types to Thai sale type labels', () => {
+    expect(saleTypeLabel('CoursePurchase')).toBe('ขายคอร์ส')
+    expect(saleTypeLabel('COURSE_PURCHASE')).toBe('ขายคอร์ส')
+    expect(saleTypeLabel('SingleVisit')).toBe('ขายรายครั้ง')
+    expect(saleTypeLabel('SINGLE_VISIT')).toBe('ขายรายครั้ง')
+    expect(saleTypeLabel('Assessment')).toBe('อื่นๆ')
+  })
 
   it('uses payment-date rows and filters the selected date interval', () => {
     expect(
@@ -15,24 +23,20 @@ describe('payment report', () => {
         from: '2026-10-03',
         to: '2026-10-04',
         saleType: 'ทั้งหมด',
-        treatment: 'ทั้งหมด',
       }),
     ).toEqual([
-      { category: 'Single Visit Sales', treatment: 'Exercise Therapy', date: '2026-10-03', paid: 400 },
-      { category: 'Assessment', treatment: 'Assessment', date: '2026-10-04', paid: 200 },
+      { category: 'ขายรายครั้ง', date: '2026-10-03', paid: 400 },
+      { category: 'อื่นๆ', date: '2026-10-04', paid: 200 },
     ])
   })
 
-  it('filters by category and treatment while preserving assessments', () => {
+  it('filters by sale type', () => {
     expect(
       filterPaymentReportRows(source, {
         from: '2026-10-01',
         to: '2026-10-31',
-        saleType: 'Course Sales',
-        treatment: 'Manual Therapy',
+        saleType: 'ขายคอร์ส',
       }),
-    ).toEqual([
-      { category: 'Course Sales', treatment: 'Manual Therapy', date: '2026-10-02', paid: 1200 },
-    ])
+    ).toEqual([{ category: 'ขายคอร์ส', date: '2026-10-02', paid: 1200 }])
   })
 })

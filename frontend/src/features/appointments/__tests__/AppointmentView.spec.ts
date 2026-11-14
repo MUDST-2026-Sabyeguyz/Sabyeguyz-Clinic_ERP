@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('AppointmentView', () => {
-  for (const filename of ['AppointmentView.vue', 'ManagerAppointmentView.vue']) {
+  for (const filename of ['AppointmentView.vue']) {
     it(`${filename} follows the main appointment status and interval contract`, () => {
       const source = readFileSync(
         resolve(process.cwd(), `src/features/appointments/views/${filename}`),
@@ -129,7 +129,7 @@ describe('AppointmentView', () => {
   })
 
   it('shows only the HN under the selected patient and scrolls the new form to the top', () => {
-    for (const file of ['AppointmentView.vue', 'ManagerAppointmentView.vue']) {
+    for (const file of ['AppointmentView.vue']) {
       const source = readFileSync(resolve(process.cwd(), `src/features/appointments/views/${file}`), 'utf8')
       expect(source).toContain('HN {{ selectedFormPatient.hn }}')
       expect(source).not.toContain('{{ selectedFormPatient.hn }} · {{ selectedFormPatient.phone }}')
@@ -172,8 +172,9 @@ describe('AppointmentView', () => {
       'utf8',
     )
 
-    expect(source).toContain('<span>ชื่อ <small>(ไม่บังคับ)</small></span>')
-    expect(source).toContain('<span>นามสกุล <small>(ไม่บังคับ)</small></span>')
+    expect(source).toContain('<span>ชื่อ <small>{{ copy.optional }}</small></span>')
+    expect(source).toContain("optional: '(ไม่บังคับ)'")
+    expect(source).toContain('<span>นามสกุล <small>{{ copy.optional }}</small></span>')
     expect(source).toContain('<span>ชื่อเล่น <em>*</em></span>')
     expect(source).toContain('<span>เบอร์โทรศัพท์ <em>*</em></span>')
   })

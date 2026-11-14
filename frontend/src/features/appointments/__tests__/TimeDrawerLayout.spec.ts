@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('appointment time drawer layout', () => {
-  it.each(['appointments.css', 'manager-appointments.css'])(
+  it.each(['appointments.css'])(
     '%s keeps the confirmation footer reachable within the viewport',
     (filename) => {
       const styles = readFileSync(
@@ -24,7 +24,7 @@ describe('appointment time drawer layout', () => {
     },
   )
 
-  it.each(['AppointmentView.vue', 'ManagerAppointmentView.vue'])(
+  it.each(['AppointmentView.vue'])(
     '%s omits the redundant grey-slot explanation',
     (filename) => {
       const source = readFileSync(

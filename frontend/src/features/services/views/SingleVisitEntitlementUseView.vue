@@ -102,7 +102,7 @@ async function useEntitlement() {
   <div class="single-visit-use-page">
     <StaffHeader />
     <main>
-      <button type="button" class="back" @click="backToAppointmentService">← กลับหน้าบริการ</button>
+      <button type="button" class="back app-back-link" @click="backToAppointmentService">← กลับ</button>
       <h1>ใช้สิทธิ์บริการรายครั้ง</h1>
       <p v-if="patient">{{ patient.fullName }} · HN {{ patient.hn }} · นัดหมาย #{{ appointmentId }}</p>
       <p v-if="processLoading" role="status">กำลังตรวจสอบสถานะนัดหมาย…</p>
@@ -112,7 +112,7 @@ async function useEntitlement() {
       <section v-else-if="completed" class="success-panel" role="status">
         <h2>บันทึกการรับบริการแล้ว</h2>
         <p>ตัดสิทธิ์บริการรายครั้งเรียบร้อยแล้ว</p>
-        <button type="button" @click="backToAppointmentService">กลับหน้าบริการ</button>
+        <button type="button" @click="backToAppointmentService">กลับ</button>
       </section>
       <section v-else class="use-card">
         <label for="prepaid-service">บริการที่ซื้อไว้</label>
@@ -140,7 +140,9 @@ async function useEntitlement() {
 
 <style scoped>
 .single-visit-use-page main { width: min(760px, calc(100% - 32px)); margin: 32px auto; }
-.back { margin-bottom: 18px; }
+.back {
+  margin-bottom: 18px;
+}
 .use-card, .success-panel { display: grid; gap: 14px; margin-top: 24px; padding: 24px; border: 1px solid #d7e4df; border-radius: 14px; background: #fff; }
 .use-card select { min-height: 46px; padding: 8px 12px; border: 1px solid #a8c5bf; border-radius: 8px; background: #fff; }
 .use-card button, .success-panel button { min-height: 46px; border: 0; border-radius: 8px; background: #18847f; color: #fff; font-weight: 700; }

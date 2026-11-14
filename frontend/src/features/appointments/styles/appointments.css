@@ -57,33 +57,6 @@
   width: min(940px, calc(100% - 48px));
   margin: 16px auto 0;
 }
-.appointment-back-link {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  min-height: auto;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  box-shadow: none;
-  color: #0e5d58;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.5;
-  text-decoration: none;
-  transition: 0.2s ease;
-  cursor: pointer;
-}
-.appointment-back-link:hover {
-  color: #176c68;
-  transform: translateX(-2px);
-}
-.appointment-back-link:focus-visible {
-  outline: 2px solid rgb(30 128 124 / 38%);
-  outline-offset: 4px;
-}
 .create-card > h1 {
   margin: 0 0 26px;
   color: #173f44;

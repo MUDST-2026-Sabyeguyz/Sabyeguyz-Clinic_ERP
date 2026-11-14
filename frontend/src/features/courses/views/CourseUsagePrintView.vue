@@ -143,7 +143,7 @@ onMounted(() => void load())
     <main>
       <div class="page-tools screen-only">
         <div>
-          <button class="back-link" type="button" @click="goBack">← กลับ</button>
+          <button class="back-link app-back-link" type="button" @click="goBack">← กลับ</button>
           <h1>ใบตัดคอร์ส</h1>
           <p v-if="selected && !loading" class="document-note">{{ temporaryPreview ? 'สำเนาข้อมูลปัจจุบัน (เชื่อมต่อชั่วคราว)' : 'ข้อมูล ณ วันที่ออกเอกสาร' }}</p>
           <p v-if="!loading && purchaseDetails && !snapshot.expiryDate && purchaseDetails.expiresAt" class="document-note">
@@ -213,7 +213,6 @@ h2 { font-size: 19px; margin: 0 0 12px; }
 button { border: 1px solid #a4c5c0; border-radius: 8px; background: #fff; color: #146b67; padding: 10px 16px; font: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid #146b67; outline-offset: 2px; }
 button:disabled { opacity: .5; cursor: not-allowed; }
-.back-link { padding: 4px 0; border: 0; background: transparent; }
 .print-button { background: #1f8883; border-color: #1f8883; color: #fff; font-weight: 700; }
 .feedback { margin-bottom: 16px; }
 .print-history {

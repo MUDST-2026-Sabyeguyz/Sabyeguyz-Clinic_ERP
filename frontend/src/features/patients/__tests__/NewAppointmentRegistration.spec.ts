@@ -1,7 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import Staff from '../views/PatientRegistrationView.vue'
-import Manager from '../views/ManagerPatientRegistrationView.vue'
+import PatientRegistrationView from '../views/PatientRegistrationView.vue'
 
 const mock = vi.hoisted(() => ({ get: vi.fn(), push: vi.fn(), link: vi.fn() }))
 vi.mock('vue-router', () => ({
@@ -29,12 +28,14 @@ beforeEach(() => {
     startAt: '2030-01-08T09:00:00+07:00',
   })
 })
-for (const [role, Component] of [
-  ['staff', Staff],
-  ['manager', Manager],
-] as const) {
+for (const role of ['staff', 'manager'] as const) {
+  const Component = PatientRegistrationView
   describe(`${role} NEW appointment registration`, () => {
     async function render() {
+      localStorage.setItem(
+        'authUser',
+        JSON.stringify({ role: role === 'manager' ? 'MANAGER' : 'THERAPIST', branchCode: '01' }),
+      )
       const view = mount(Component, {
         global: {
           stubs: {

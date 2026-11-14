@@ -31,9 +31,6 @@ const isManager = computed(() => authUser.value?.role === 'MANAGER')
 const selectedCode = computed(
   () => selectedManagerBranch()?.code ?? authUser.value?.branchCode ?? '',
 )
-const selectedBranchName = computed(
-  () => selectedManagerBranch()?.name ?? authUser.value?.branchName ?? '',
-)
 const visibleBranches = computed(() => {
   const branches = status.value?.branches ?? []
   return isManager.value
@@ -350,18 +347,13 @@ onMounted(load)
                 }}
               </p>
             </div>
-            <span class="branch-tag">{{
-              selectedBranchName || branch?.branchName || 'ยังไม่ได้เลือกสาขา'
-            }}</span>
           </header>
           <div class="calendar-body">
             <p v-if="loading" data-cy="calendar-loading" role="status">กำลังโหลดการตั้งค่า…</p>
             <template v-else-if="status">
               <div v-if="!status.enabled" class="calendar-state" data-cy="calendar-state">
                 <strong>ระบบ sync ยังไม่พร้อมใช้งาน</strong>
-                <p v-if="isManager">
-                  ยังไม่ได้เชื่อมต่อ Google วาง key ของ Google ในกล่องด้านล่างเพื่อเริ่มใช้งาน
-                </p>
+                <p v-if="isManager">ยังไม่ได้เชื่อมต่อ Google</p>
                 <p v-else>ยังไม่ได้เชื่อมต่อ Google กรุณาแจ้งผู้จัดการให้ตั้งค่าการเชื่อมต่อ</p>
               </div>
               <section v-if="canManageKey" class="google-key" data-cy="google-key">
@@ -466,11 +458,6 @@ onMounted(load)
                   >
                     <div class="form-title">
                       <h3>ปฏิทินของ{{ branch.branchName }}</h3>
-                      <span class="connection-status">{{
-                        branch.googleCalendarId
-                          ? 'มี Calendar ID ที่บันทึกแล้ว'
-                          : 'ยังไม่ได้ตั้งค่าปฏิทิน'
-                      }}</span>
                       <span v-if="changed" class="draft-status">ยังไม่บันทึก</span>
                     </div>
                     <label :for="`calendar-id-${branch.branchCode}`"
@@ -483,19 +470,12 @@ onMounted(load)
                       :disabled="!!busy"
                       :class="{ 'calendar-id-invalid': calendarIdFormatInvalid }"
                       placeholder="เช่น xxxx@group.calendar.google.com"
-                      :aria-describedby="
-                        calendarIdFormatInvalid
-                          ? 'calendar-id-help calendar-id-error'
-                          : 'calendar-id-help'
-                      "
+                      :aria-describedby="calendarIdFormatInvalid ? 'calendar-id-error' : undefined"
                       :aria-invalid="calendarIdFormatInvalid"
                       autocomplete="off"
                       spellcheck="false"
                       @blur="calendarIdTouched = true"
                     />
-                    <p id="calendar-id-help" class="calendar-hint">
-                      กรอก Calendar ID ที่ต้องการเชื่อมต่อ
-                    </p>
                     <p
                       v-if="calendarIdFormatInvalid"
                       id="calendar-id-error"
@@ -557,25 +537,6 @@ onMounted(load)
                   <p v-else-if="isManager" class="calendar-hint">
                     เลือกสาขาจาก Header เพื่อเริ่มตั้งค่า
                   </p>
-                  <details v-if="isManager" class="calendar-help">
-                    <summary>วิธีตั้งค่าและเชิญนักกายภาพ</summary>
-                    <ol>
-                      <li>เปิด Google Calendar สร้างหรือเลือกปฏิทินของสาขาที่ต้องการ</li>
-                      <li>ในหน้าตั้งค่าปฏิทิน คัดลอก Calendar ID แล้ววางในช่องด้านบน</li>
-                      <li>
-                        ให้สิทธิ์บัญชี service account ที่ทีม backend ตั้งไว้ในการจัดการกิจกรรม
-                        ไม่ต้องนำไฟล์คีย์หรือรหัสลับมากรอก
-                      </li>
-                      <li>
-                        หากต้องการเชิญนักกายภาพรายนัด ให้เปิดกิจกรรมนั้นใน Google Calendar เพิ่ม
-                        Gmail ในผู้เข้าร่วม และตรวจสิทธิ์ก่อนส่งคำเชิญ
-                      </li>
-                    </ol>
-                    <p>
-                      การเชิญเข้ากิจกรรมต่างจากการแชร์ปฏิทินทั้งสาขา หน้านี้ไม่ได้จัดการสิทธิ์
-                      Google รายบุคคล
-                    </p>
-                  </details>
                 </div>
                 <section class="sync-section" aria-label="สถานะการ sync">
                   <h3>สถานะการ sync</h3>
@@ -590,7 +551,6 @@ onMounted(load)
                     </div>
                   </dl>
                   <p class="calendar-hint">sync ล่าสุด : {{ formatTime(status.lastRunAt) }}</p>
-                  <p v-if="!status.enabled" class="calendar-hint"></p>
                   <button
                     v-if="isManager"
                     type="button"
@@ -714,12 +674,6 @@ onMounted(load)
   margin: 6px 0 0;
   color: #68776f;
 }
-.branch-tag {
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: #edf8f2;
-  color: #27634b;
-}
 .calendar-form label {
   display: block;
   font-weight: 600;
@@ -747,11 +701,6 @@ onMounted(load)
   color: #bd3e39;
   font-size: 0.82rem;
   font-weight: 600;
-}
-.connection-status,
-.calendar-help {
-  color: #68776f;
-  font-size: 14px;
 }
 .draft-status {
   display: inline-flex;
@@ -802,20 +751,6 @@ onMounted(load)
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
-}
-.calendar-help {
-  margin-top: 22px;
-  padding: 16px 0 0;
-  border-top: 1px solid #e3ebe7;
-  line-height: 1.7;
-}
-.calendar-help summary {
-  color: #176965;
-  font-weight: 600;
-  cursor: pointer;
-}
-.calendar-help li + li {
-  margin-top: 8px;
 }
 .sync-section {
   display: flex;

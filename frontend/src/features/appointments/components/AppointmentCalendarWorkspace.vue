@@ -361,7 +361,7 @@ watch(
   <div class="appointment-calendar-workspace">
     <StaffHeader />
     <main class="workspace-main">
-      <RouterLink class="back-link" :to="{ name: 'staff-appointments' }"
+      <RouterLink class="back-link app-back-link" :to="{ name: 'staff-appointments' }"
         >← กลับไปหน้ารายการนัดหมาย</RouterLink
       >
       <header class="workspace-heading">

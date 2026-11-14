@@ -9,15 +9,6 @@ body.therapist-ui .registration-page .back-row {
   width: calc(100% - 96px);
   margin-top: 28px;
 }
-
-body.therapist-ui .registration-page .back-link {
-  padding: 4px 0;
-  border: 0;
-  color: var(--therapist-ink);
-  background: transparent;
-  box-shadow: none;
-}
-
 body.therapist-ui .registration-page .registration-shell {
   width: min(1180px, calc(100% - 80px));
   margin: 82px auto 52px;
@@ -111,15 +102,6 @@ body.therapist-ui .registration-page .back-row {
   width: min(1376px, calc(100% - 64px));
   margin: 24px auto 0;
 }
-
-body.therapist-ui .registration-page .back-link {
-  min-height: 24px;
-  padding: 0;
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 24px;
-}
-
 body.therapist-ui .registration-page .registration-shell {
   width: min(1000px, calc(100% - 64px));
   margin: 12px auto 0;

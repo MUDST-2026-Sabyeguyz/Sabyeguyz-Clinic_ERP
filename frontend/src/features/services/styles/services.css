@@ -219,25 +219,7 @@
   margin-top: 24px;
 }
 .service-menu-back {
-  display: inline-flex;
-  align-items: center;
   margin: 0 0 12px;
-  padding: 0;
-  border: 0;
-  color: #176c68;
-  background: transparent;
-  font: inherit;
-  font-size: 16px;
-  line-height: 1.5;
-  cursor: pointer;
-}
-.service-menu-back:hover {
-  text-decoration: underline;
-}
-.service-menu-back:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 3px;
-  border-radius: 3px;
 }
 .service-menu > h1 {
   margin-bottom: 40px;

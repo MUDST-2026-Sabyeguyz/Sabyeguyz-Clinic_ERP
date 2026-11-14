@@ -322,7 +322,7 @@ onMounted(async () => {
   <div class="commission-manager-page">
     <StaffHeader />
     <main class="commission-manager-main">
-      <RouterLink class="commission-settings-back" to="/staff/settings?section=tiers"
+      <RouterLink class="commission-settings-back app-back-link" to="/staff/settings?section=tiers"
         >← กลับไปตั้งค่า</RouterLink
       >
       <section class="commission-title">
@@ -556,16 +556,7 @@ onMounted(async () => {
   box-shadow: 0 12px 30px rgba(37, 55, 47, 0.04);
 }
 .commission-settings-back {
-  display: inline-flex;
   margin-bottom: 20px;
-  color: #176c68;
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-}
-.commission-settings-back:hover {
-  color: #176c68;
-  transform: translateX(-2px);
 }
 .commission-page-panel > .commission-scheme-header {
   display: flex;

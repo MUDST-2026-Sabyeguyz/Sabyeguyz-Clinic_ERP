@@ -634,7 +634,7 @@ function backToList(next: Tab = tab.value) {
 
       <template v-else-if="selected">
         <button
-          class="transaction-back"
+          class="transaction-back app-back-link"
           type="button"
           @click="backToList(step === 'history-detail' ? 'history' : tab)"
         >
@@ -1043,7 +1043,7 @@ function backToList(next: Tab = tab.value) {
     </div>
   </div>
 </template>
-
 <style scoped src="../styles/transactions.css"></style>
-
 <style scoped src="../styles/transaction-system.css"></style>
+
+

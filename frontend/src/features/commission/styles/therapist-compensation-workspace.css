@@ -70,11 +70,47 @@
   background: #fff;
 }
 .therapist-summary-card {
-  background: #e6f2f0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
 }
-.therapist-summary-card p {
-  margin-top: 0;
-  font-weight: 700;
+.summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.summary-head {
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e4ece9;
+}
+.summary-head strong {
+  display: block;
+  font-size: 18px;
+}
+.summary-head small,
+.therapist-summary-card dt small {
+  display: block;
+  margin-top: 2px;
+  color: #6b7d76;
+  font-size: 12px;
+}
+.summary-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.summary-badge.draft {
+  background: #fff4d6;
+  color: #8a5a00;
+}
+.summary-badge.final {
+  background: #d3ece6;
+  color: #0f6a5c;
 }
 .therapist-summary-card dl {
   margin: 0;
@@ -83,11 +119,39 @@
   display: flex;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid #cfe0dc;
+  border-bottom: 1px solid #e4ece9;
 }
-.therapist-summary-card .net {
-  border: 0;
+.therapist-summary-card dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.therapist-summary-card dd.muted {
+  color: #8a9a97;
+  font-style: italic;
+}
+.summary-net {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 16px 0 4px;
+}
+.summary-net strong.muted {
+  color: #8a9a97;
   font-size: 20px;
+  font-weight: 600;
+}
+.summary-net span {
+  font-weight: 600;
+  color: #35524f;
+}
+.summary-net strong {
+  font-size: 26px;
+  color: #0f6a5c;
+  font-variant-numeric: tabular-nums;
+}
+.summary-net strong.negative {
+  color: #b42318;
 }
 .therapist-principle-card h2,
 .therapist-table-card h2,
@@ -311,24 +375,8 @@
 .therapist-source-compensation-card > b {
   font-size: 22px;
 }
-.therapist-source-compensation-card .therapist-source-rule-note {
-  margin-top: 8px;
-  padding: 16px;
-  border-radius: 8px;
-  background: #eef4f0;
-  color: #20372f;
-  font-size: 14px;
-}
-.therapist-source-footer {
-  margin-top: 24px;
-}
-.therapist-source-footer > p {
-  margin: 0 0 18px;
-  color: #61736b;
-  font-size: 15px;
-}
-.therapist-source-footer .therapist-primary-action {
-  margin: 0;
+.therapist-source-card .therapist-source-back {
+  margin: 0 0 12px;
 }
 .therapist-period-control {
   display: flex;

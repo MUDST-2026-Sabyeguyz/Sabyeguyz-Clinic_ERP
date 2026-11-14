@@ -101,9 +101,22 @@ const statusLabels: Record<string, string> = {
 };
 const monthName = computed(() => {
   const [year, month] = monthFilter.value.split("-").map(Number);
-  return new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric" }).format(
+  return new Intl.DateTimeFormat("th-TH", { month: "long" }).format(
     new Date(year!, month! - 1, 1, 12),
   );
+});
+const yearOptions = computed(() => {
+  const currentYear = Number(clinicToday().slice(0, 4));
+  return Array.from({ length: 4 }, (_, index) => currentYear - index);
+});
+const selectedYear = computed({
+  get: () => Number(monthFilter.value.slice(0, 4)),
+  set: (year: number) => {
+    const month = monthFilter.value.slice(5, 7);
+    const next = `${year}-${month}`;
+    // ไม่ให้เลือกเดือนในอนาคต: ถ้าเกินเดือนปัจจุบันให้ถอยกลับมาเดือนปัจจุบัน
+    monthFilter.value = next > currentMonthValue.value ? currentMonthValue.value : next;
+  },
 });
 const currentMonthValue = computed(() => clinicToday().slice(0, 7));
 const earliestMonthValue = computed(() => `${Number(currentMonthValue.value.slice(0, 4)) - 3}-01`);
@@ -424,6 +437,9 @@ function toggleMonth(month: string) {
               <strong data-test="month-label">{{ monthName }}</strong>
               <button type="button" aria-label="เดือนถัดไป" data-test="month-next" :disabled="!canGoNext" @click="shiftMonth(1)">›</button>
             </div>
+            <select v-model.number="selectedYear" class="year-select" aria-label="ปี" data-test="year-select">
+              <option v-for="year in yearOptions" :key="year" :value="year">{{ year + 543 }}</option>
+            </select>
             <button v-if="canGoNext" type="button" class="link-button" data-test="month-now" @click="monthFilter = currentMonthValue">เดือนปัจจุบัน</button>
           </div>
           <small class="round-dates">
@@ -774,10 +790,27 @@ function toggleMonth(month: string) {
   outline: 3px solid rgb(30 139 134 / 18%);
   border-color: #1e8b86;
 }
-.month-stepper-row { display: flex; align-items: center; gap: 10px; }
-.month-stepper { display: flex; align-items: center; height: 44px; border: 1px solid #b9c8c2; border-radius: 8px; background: #fff; overflow: hidden; }
-.month-stepper strong { min-width: 150px; padding: 0 8px; text-align: center; font-weight: 600; }
-.month-stepper button { width: 40px; height: 100%; border: 0; background: transparent; color: #17653f; font-size: 1.3rem; cursor: pointer; }
+.month-stepper-row { display: flex; align-items: center; gap: 12px; }
+.month-stepper { display: flex; flex: none; align-items: center; height: 48px; border: 1px solid #b9c8c2; border-radius: 12px; background: #fff; overflow: hidden; }
+.year-select {
+  flex: none;
+  box-sizing: border-box;
+  height: 48px;
+  width: 150px;
+  padding: 0 40px 0 18px;
+  border: 1px solid #b9c8c2;
+  border-radius: 12px;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2317653f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 16px center;
+  appearance: none;
+  -webkit-appearance: none;
+  color: #25372f;
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.year-select:focus-visible { outline: 3px solid rgb(30 139 134 / 18%); border-color: #1e8b86; }
+.month-stepper strong { min-width: 96px; padding: 0 4px; text-align: center; font-weight: 700; white-space: nowrap; }
+.month-stepper button { flex: none; width: 40px; height: 100%; border: 0; background: transparent; color: #17653f; font-size: 1.6rem; font-weight: 700; line-height: 1; cursor: pointer; }
 .month-stepper button:hover:not(:disabled) { background: #eef6f2; }
 .month-stepper button:disabled { color: #b4c0bb; cursor: not-allowed; }
 .search-box { position: relative; display: block; }

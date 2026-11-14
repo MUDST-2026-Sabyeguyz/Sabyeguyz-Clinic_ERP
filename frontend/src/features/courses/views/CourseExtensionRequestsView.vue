@@ -165,7 +165,7 @@ async function decide(row: ExtensionRow, decision: 'approve' | 'reject') {
   <div class="course-extensions-page">
     <StaffHeader />
     <main>
-      <RouterLink :to="patientId ? { path: '/staff/courses', query: { patientId } } : { path: '/staff/patients' }">
+      <RouterLink class="app-back-link" :to="patientId ? { path: '/staff/courses', query: { patientId } } : { path: '/staff/patients' }">
         {{ patientId ? '← กลับหน้าคอร์ส' : '← กลับหน้าผู้ป่วย' }}
       </RouterLink>
       <!-- กรองรายการและแสดงปุ่มเฉพาะคำขอที่รอพิจารณา -->

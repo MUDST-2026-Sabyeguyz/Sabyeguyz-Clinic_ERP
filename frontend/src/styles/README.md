@@ -30,4 +30,3 @@ separate file instead of copying the whole file.
 - Rules for the same selector are split across base, feature and `app-theme.css`; `#app` overrides in `app-theme.css` exist to win those ties.
 - `body:is(.therapist-ui, :not(.therapist-ui))` is a specificity trick; do not copy it.
 - About 130 `!important` declarations, mostly in `main.css`, `responsive.css`, `app-theme.css`.
-- `appointments.css`/`manager-appointments.css` and `services.css`/`manager-services.css` are near-duplicates.

@@ -37,7 +37,7 @@ const appointmentStatusLabel = (status: AppointmentProgress['appointmentStatus']
 </script>
 <template>
   <div class="appointment-process-wrapper">
-    <button v-if="fromServices" type="button" class="back-to-patients" @click="emit('backToPatients')">← กลับไปเลือกผู้ป่วย</button>
+    <button v-if="fromServices" type="button" class="back-to-patients app-back-link" @click="emit('backToPatients')">← กลับไปเลือกผู้ป่วย</button>
     <section class="appointment-process-panel" aria-label="ผลบริการของนัดหมาย">
       <h1>{{ headline }}</h1>
       <p v-if="summary">{{ summary }}</p>
@@ -93,23 +93,7 @@ const appointmentStatusLabel = (status: AppointmentProgress['appointmentStatus']
   border-radius: 12px;
 }
 .back-to-patients {
-  display: inline-block;
-  border: 0;
-  padding: 0;
   margin: 0;
-  background: transparent;
-  color: #176c68;
-  font: inherit;
-  cursor: pointer;
-  transition: transform 180ms ease;
-}
-.back-to-patients:hover {
-  text-decoration: underline;
-  transform: translateX(-4px);
-}
-.back-to-patients:focus-visible {
-  outline: 2px solid #176c68;
-  outline-offset: 3px;
 }
 h1 {
   margin: 0 0 8px;

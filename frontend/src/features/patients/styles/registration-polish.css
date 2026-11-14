@@ -10,26 +10,6 @@
 .registration-page .registration-shell {
   margin: 0 auto 48px;
 }
-.registration-page .back-link {
-  min-height: auto;
-  padding: 0;
-  box-sizing: border-box;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #0e5d58;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.5;
-  text-decoration: none;
-  transition:
-    color 0.2s ease,
-    transform 0.2s ease;
-}
-.registration-page .back-link:hover {
-  color: #176c68;
-  transform: translateX(-2px);
-}
 .registration-page .intro {
   text-align: left;
   margin: 0 0 24px;
@@ -295,28 +275,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Match the appointment back action and keep exit available at the end of the form. */
-body:is(.therapist-ui, :not(.therapist-ui)) .registration-page .back-row .back-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #0e5d58;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.5;
-  text-decoration: none;
-}
-body:is(.therapist-ui, :not(.therapist-ui)) .registration-page .back-row .back-link:hover {
-  background: transparent;
-  color: #176c68;
-  transform: translateX(-2px);
-}
-.registration-page .actions.end .registration-cancel {
+/* Match the appointment back action and keep exit available at the end of the form. */.registration-page .actions.end .registration-cancel {
   min-width: 120px;
   box-shadow: none;
 }

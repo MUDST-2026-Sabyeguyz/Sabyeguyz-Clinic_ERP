@@ -28,6 +28,7 @@ type UiPatientProfile = PatientProfile & {
   customerType: string
   customerSource: string
   insuranceCompany: string
+  insuranceType: string
 }
 const patient = ref<UiPatientProfile | null>(null)
 const profileName = computed(() => {
@@ -52,19 +53,9 @@ const profileGender = computed(() => {
   }
   return labels[value] || '-'
 })
-const profileInitials = computed(
-  () =>
-    patient.value?.fullName
-      .trim()
-      .split(/\s+/)
-      .map((part) => part.slice(0, 1))
-      .slice(0, 2)
-      .join('') ?? '',
-)
 const profileBranch = computed(
   () => patient.value?.branch?.name || patient.value?.branchName || '-',
 )
-const editStatus = computed(() => (patient.value?.active ? 'ใช้งานอยู่' : 'ปิดใช้งาน'))
 const profileBirthDate = computed(() => {
   const raw = patient.value?.birthDate ?? ''
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw || '-'
@@ -109,11 +100,12 @@ const profileSections = computed(() => {
     },
     {
       title: 'ข้อมูลเพิ่มเติม',
-      columns: 'contact-grid',
+      columns: 'extra-grid',
       fields: [
         { label: 'สาขาที่ลงทะเบียน', value: profileBranch.value },
         { label: 'กลุ่มลูกค้า', value: p.customerType },
         { label: 'ช่องทางแนะนำ', value: p.customerSource },
+        { label: 'ประเภทประกัน', value: p.insuranceType },
         { label: 'บริษัทประกัน', value: p.insuranceCompany },
       ],
     },
@@ -128,6 +120,7 @@ const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value
 const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const customerSourceOptions = ref<Array<{ value: string; label: string }>>([])
+const insuranceTypeOptions = ref<Array<{ value: string; label: string }>>([])
 const insuranceOptions = ref<Array<{ value: string; label: string }>>([])
 function splitFullName(fullName: string) {
   const [firstName = '', ...lastName] = fullName.trim().split(/\s+/)
@@ -186,6 +179,7 @@ const draft = reactive({
   customerType: 'ลูกค้าทั่วไป',
   customerSource: '',
   insuranceCompany: '',
+  insuranceType: '',
   firstName: '',
   middleName: '',
   lastName: '',
@@ -231,6 +225,7 @@ function normalizeProfile(profile: PatientProfile): UiPatientProfile {
     customerType: profile.customerType ?? 'ลูกค้าทั่วไป',
     customerSource: profile.customerSource ?? '',
     insuranceCompany: profile.insuranceCompany ?? '',
+    insuranceType: profile.insuranceType ?? '',
   }
 }
 function assignDraft(profile: UiPatientProfile) {
@@ -299,6 +294,7 @@ async function saveEdit() {
         ? { customerSource: draft.customerSource }
         : {}),
       insuranceCompany: draft.insuranceCompany,
+      insuranceType: draft.insuranceType,
     }
     const result = await patientApi.update(patient.value.id, payload)
     patient.value = normalizeProfile(result)
@@ -335,6 +331,7 @@ async function loadProfile() {
       return values.map((value) => ({ value, label: value }))
     }
     customerSourceOptions.value = optionsFor('Referral Channel', patient.value.customerSource)
+    insuranceTypeOptions.value = optionsFor('Insurance Type', patient.value.insuranceType)
     insuranceOptions.value = optionsFor('Insurance Company', patient.value.insuranceCompany)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'โหลดข้อมูลผู้ป่วยไม่สำเร็จ'
@@ -352,10 +349,17 @@ onMounted(loadProfile)
   >
     <StaffHeader />
     <main>
-      <button v-if="editing" type="button" class="back-link back-link-button" @click="cancelEdit">
+      <button
+        v-if="editing"
+        type="button"
+        class="back-link back-link-button app-back-link"
+        @click="cancelEdit"
+      >
         ← กลับข้อมูลผู้ป่วย
       </button>
-      <RouterLink v-else class="back-link" to="/staff/patients">← กลับไปค้นหาผู้ป่วย</RouterLink>
+      <RouterLink v-else class="back-link app-back-link" to="/staff/patients"
+        >← กลับไปค้นหาผู้ป่วย</RouterLink
+      >
       <p v-if="loading" class="status-feedback" role="status">กำลังโหลดข้อมูลผู้ป่วย...</p>
       <div v-if="errorMessage" class="error" role="alert">
         <p>{{ errorMessage }}</p>
@@ -412,16 +416,14 @@ onMounted(loadProfile)
 
       <template v-if="patient && editing">
         <h1 class="patient-edit-title">แก้ไขข้อมูลผู้ป่วย</h1>
-        <section class="patient-edit-summary" aria-label="สรุปผู้ป่วยที่กำลังแก้ไข">
-          <div class="patient-edit-avatar" aria-hidden="true">{{ profileInitials }}</div>
-          <div>
-            <h2>{{ patient.title }}{{ patient.fullName }}</h2>
-            <p>
-              HN {{ patient.hn }} <span>{{ patient.phone || '-' }}</span>
-            </p>
-          </div>
-          <span class="patient-edit-status">{{ editStatus }}</span>
-        </section>
+        <PatientSummary
+          class="patient-edit-summary"
+          :name="patient.fullName"
+          :title="patient.title"
+          :hn="patient.hn"
+          :phone="patient.phone"
+          :branch="profileBranch"
+        />
         <form class="patient-edit" @submit.prevent="confirmationOpen = true">
           <section class="patient-edit-section">
             <h2>ข้อมูลส่วนตัว</h2>
@@ -539,7 +541,7 @@ onMounted(loadProfile)
           </section>
           <section class="patient-edit-section">
             <h2>ข้อมูลเพิ่มเติม (ไม่บังคับ)</h2>
-            <div class="patient-edit-two-column-grid">
+            <div class="patient-edit-three-column-grid">
               <label
                 >สาขาที่ลงทะเบียน<input :value="profileBranch" readonly aria-readonly="true"
               /></label>
@@ -555,6 +557,16 @@ onMounted(loadProfile)
                   label="ช่องทางแนะนำ"
                   :clear-on-reselect="false"
                   hide-default-option
+                />
+              </label>
+              <label>
+                ประเภทประกัน
+                <FilterDropdown
+                  v-model="draft.insuranceType"
+                  :options="insuranceTypeOptions"
+                  default-label="ไม่ระบุ"
+                  label="ประเภทประกัน"
+                  :clear-on-reselect="false"
                 />
               </label>
               <label>
@@ -622,9 +634,9 @@ onMounted(loadProfile)
     </main>
   </div>
 </template>
-
 <style scoped src="../styles/patients.css"></style>
 <style src="../styles/patient-workspace.css"></style>
 <style scoped src="../styles/patient-profile.css"></style>
-
 <style src="../styles/profile-polish.css"></style>
+
+

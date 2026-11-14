@@ -146,7 +146,9 @@ onMounted(load)
     <div class="receipt-screen-only"><StaffHeader /></div>
     <main>
       <div class="receipt-toolbar receipt-screen-only">
-        <button class="receipt-back" type="button" @click="returnToPatientCourses">← กลับ</button>
+        <button class="receipt-back app-back-link" type="button" @click="returnToPatientCourses">
+          ← กลับ
+        </button>
         <button v-if="receipt" type="button" @click="printReceipt">พิมพ์ใบเสร็จ</button>
       </div>
       <p v-if="loading" role="status">กำลังโหลดใบเสร็จ…</p>
@@ -328,12 +330,6 @@ button {
 button:last-child {
   background: #1c8681;
   color: #fff;
-}
-.receipt-toolbar .receipt-back {
-  border-color: transparent;
-  padding-inline: 0;
-  background: transparent;
-  color: #126b68;
 }
 button:focus-visible {
   outline: 2px solid #126b68;

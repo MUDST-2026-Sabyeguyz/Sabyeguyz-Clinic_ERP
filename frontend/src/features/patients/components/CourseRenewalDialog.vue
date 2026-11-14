@@ -212,7 +212,6 @@ async function submit() {
             </div>
             <template v-else-if="displayedExpiry">
               <p>คอร์สจะหมดอายุวันที่ <b>{{ dateLabel(displayedExpiry) }}</b></p>
-              <p v-if="direct">กดยืนยันต่ออายุเมื่อเจ้าของคอร์สเดิมแจ้งขอแล้วเท่านั้น</p>
             </template>
           </div>
           <label>

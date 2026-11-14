@@ -2,10 +2,16 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const viewSource = readFileSync(
-  resolve(process.cwd(), 'src/features/courses/views/CourseActionView.vue'),
-  'utf-8',
-)
+// หน้าคอร์สแยกเป็นหน้าหลักกับพาเนลย่อย 4 ส่วน จึงตรวจจากซอร์สรวมของทุกไฟล์
+const viewSource = [
+  'views/CourseActionView.vue',
+  'components/CourseUsePanel.vue',
+  'components/CourseTransferPanel.vue',
+  'components/CourseHistoryPanel.vue',
+  'components/CourseManagePanel.vue',
+]
+  .map((file) => readFileSync(resolve(process.cwd(), 'src/features/courses', file), 'utf-8'))
+  .join('\n')
 
 describe('CourseActionView course manager accessibility', () => {
   it('exposes the course-status filter as keyboard-operable tabs', () => {

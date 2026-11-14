@@ -2,8 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import View from '../views/ManagerPatientRegistrationView.vue'
-import TherapistView from '../views/PatientRegistrationView.vue'
+import View from '../views/PatientRegistrationView.vue'
 import { setSelectedManagerBranch } from '@/features/staff/data/managerBranch'
 import { onBeforeRouteLeave } from 'vue-router'
 
@@ -25,10 +24,10 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-describe('Manager patient registration save flow', () => {
-  it.each([View, TherapistView])('uses a custom dialog to cancel or confirm leaving unsaved data', async (component) => {
-    localStorage.setItem('authUser', JSON.stringify({ role: 'MANAGER' }))
-    const view = mount(component, {
+describe('patient registration save flow', () => {
+  it.each(['MANAGER', 'THERAPIST'])('uses a custom dialog to cancel or confirm leaving unsaved data (%s)', async (role) => {
+    localStorage.setItem('authUser', JSON.stringify({ role }))
+    const view = mount(View, {
       global: { stubs: { StaffHeader: true, RouterLink: true, ThaiDatePicker: true, FilterDropdown: true, Teleport: true } },
     })
     await flushPromises()
@@ -50,7 +49,7 @@ describe('Manager patient registration save flow', () => {
   })
   it('does not send invented login credentials for a patient registration', () => {
     const source = readFileSync(
-      resolve(process.cwd(), 'src/features/patients/views/ManagerPatientRegistrationView.vue'),
+      resolve(process.cwd(), 'src/features/patients/views/PatientRegistrationView.vue'),
       'utf-8',
     )
     expect(source).not.toContain('username: `patient-${Date.now()}`')
@@ -89,7 +88,7 @@ describe('Manager patient registration save flow', () => {
     'defaults therapist registration to the signed-in branch %s',
     async (branchCode) => {
       localStorage.setItem('authUser', JSON.stringify({ role: 'THERAPIST', branchCode }))
-      const view = mount(TherapistView, {
+      const view = mount(View, {
         global: {
           stubs: {
             StaffHeader: true,
@@ -145,6 +144,7 @@ describe('Manager patient registration save flow', () => {
   })
   beforeEach(() => {
     localStorage.clear()
+    localStorage.setItem('authUser', JSON.stringify({ role: 'MANAGER' }))
     mocks.register.mockReset()
   })
   it('offers unspecified gender and blood group O', async () => {

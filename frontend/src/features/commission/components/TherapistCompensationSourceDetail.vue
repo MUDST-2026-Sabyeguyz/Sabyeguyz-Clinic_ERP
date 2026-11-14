@@ -39,6 +39,9 @@ const treatmentRows = computed<[string, string][]>(() => {
 
 <template>
   <section v-if="props.kind === 'sale' && line" class="therapist-source-card therapist-sale-source">
+    <RouterLink class="app-back-link therapist-source-back" :to="back">
+      ← กลับรายละเอียดค่าคอมมิชชัน
+    </RouterLink>
     <header class="therapist-source-heading">
       <h1>รายละเอียดรายการขายต้นทาง</h1>
       <p>{{ line.saleNo ?? '—' }} · {{ longDate(line.saleDate) }} · อ่านอย่างเดียว</p>
@@ -85,21 +88,14 @@ const treatmentRows = computed<[string, string][]>(() => {
         <b v-if="line.rate !== null"
           >{{ baht(line.base) }} × {{ percent(line.rate) }} = {{ baht(line.pool) }}</b
         >
-        <p class="therapist-source-rule-note">
-          ส่วนลดรายการลดฐาน Commission ส่วนลดท้ายบิลไม่ลดฐาน Commission
-        </p>
       </section>
     </div>
-
-    <footer class="therapist-source-footer">
-      <p>หากข้อมูลผิด ให้แจ้ง Manager นอกระบบเพื่อดำเนินการตามสถานะรอบ</p>
-      <RouterLink class="therapist-primary-action" :to="back">
-        กลับรายละเอียดค่าคอมมิชชัน
-      </RouterLink>
-    </footer>
   </section>
 
   <section v-else-if="line" class="therapist-source-card therapist-sale-source">
+    <RouterLink class="app-back-link therapist-source-back" :to="back">
+      ← กลับรายละเอียดค่าตอบแทน
+    </RouterLink>
     <header class="therapist-source-heading">
       <h1>รายละเอียดรายการรักษาต้นทาง</h1>
       <p>{{ line.visitNo ?? '—' }} · {{ longDate(line.date) }} · อ่านอย่างเดียว</p>
@@ -139,22 +135,9 @@ const treatmentRows = computed<[string, string][]>(() => {
         <h2>ที่มาของค่าตอบแทน</h2>
         <span>Treatment Fee Rule</span>
         <strong>{{ baht(line.amount) }}</strong>
-        <p>
-          {{
-            line.feeType === 'Percentage'
-              ? `${Math.round(Number(line.feeValue ?? 0) * 100) / 100}% ของ ${baht(line.feeBase)} ตามกฎที่มีผล ณ วันรักษา`
-              : 'จำนวนเงินคงที่ตามกฎที่มีผล ณ วันรักษา'
-          }}
-        </p>
         <b>ค่ามือสุทธิ {{ baht(line.amount) }}</b>
-        <p class="therapist-source-rule-note">ค่ามือแยกจาก Commission และคำนวณตามผู้รักษาจริง</p>
       </section>
     </div>
-
-    <footer class="therapist-source-footer">
-      <p>หากข้อมูลผิด ให้แจ้ง Manager นอกระบบเพื่อดำเนินการตามสถานะรอบ</p>
-      <RouterLink class="therapist-primary-action" :to="back"> กลับรายละเอียดค่าตอบแทน </RouterLink>
-    </footer>
   </section>
 
   <TherapistCompensationEmptyState v-else />

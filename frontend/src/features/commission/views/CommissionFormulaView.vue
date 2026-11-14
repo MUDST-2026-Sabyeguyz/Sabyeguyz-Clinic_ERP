@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import { commissionApi, type CommissionFormula } from '@/api/client'
 
+const router = useRouter()
 const formula = ref<CommissionFormula | null>(null)
 const loading = ref(true)
 const errorMessage = ref('')
@@ -24,6 +26,12 @@ const feeText = computed(() => {
     : `${Math.round(fee.feeValue * 100) / 100}% ของยอดที่เกี่ยวข้องกับรายการนั้น`
 })
 
+// กลับไปหน้าก่อนหน้า ถ้าเปิดหน้านี้ตรงๆ ให้กลับหน้าค่าตอบแทน
+const goBack = () => {
+  if (window.history.state?.back) router.back()
+  else void router.push('/staff/compensation')
+}
+
 onMounted(async () => {
   try {
     formula.value = await commissionApi.formula()
@@ -39,11 +47,12 @@ onMounted(async () => {
   <div class="formula-page">
     <StaffHeader />
     <main class="formula-main">
+      <button type="button" class="app-back-link formula-back" @click="goBack">← กลับ</button>
       <header class="formula-title">
         <h1>สูตรคำนวณค่าตอบแทน</h1>
         <p>
-          วิธีคำนวณค่าคอมมิชชันคอร์สและค่ามือที่ใช้อยู่ตอนนี้ วิธีคำนวณกำหนดโดยระบบ
-          ส่วนช่วงยอดขายและอัตราของ Tier Manager เป็นผู้กำหนด
+          อธิบายว่าค่าคอมมิชชันคอร์สและค่ามือคิดอย่างไร วิธีคิดเป็นของระบบ
+          ส่วนช่วงยอดขายและอัตราในแต่ละ Tier ผู้จัดการเป็นคนกำหนด
         </p>
       </header>
 
@@ -54,28 +63,29 @@ onMounted(async () => {
 
       <template v-else-if="formula">
         <section class="formula-card" aria-labelledby="formula-owner">
-          <h2 id="formula-owner">1. ค่าคอมมิชชันของคอร์ส (เจ้าของคอร์ส)</h2>
+          <h2 id="formula-owner">1. ค่าคอมมิชชันคอร์ส (สำหรับเจ้าของคอร์ส)</h2>
           <ul>
             <li>
-              เจ้าของคอร์สคือนักกายภาพผู้ขายคอร์ส ค่าคอมมิชชันของคอร์สเป็นของเจ้าของคอร์สเท่านั้น
+              เจ้าของคอร์สคือนักกายภาพที่ขายคอร์สนั้น ค่าคอมมิชชันของคอร์สเป็นของเจ้าของคอร์สคนเดียว
             </li>
             <li>
               อัตราดูจาก
               <b>ยอดขายคอร์สสุทธิรวมของเจ้าของคอร์สในเดือนที่ขาย</b>
-              (หักคืนเงินที่คืนแล้วออก) ตกอยู่ในช่วง Tier ไหนใช้อัตราของ Tier นั้น
+              (หักเงินที่คืนลูกค้าแล้วออก) ถ้ายอดอยู่ในช่วง Tier ไหน ก็ใช้อัตราของ Tier นั้น
             </li>
             <li>
-              <b>อัตราถูกล็อกเมื่อปิดยอดเดือนที่ขาย</b> ก่อนปิดยอดจะแสดงเป็น “รอคำนวณ” ไม่นับเป็น 0
+              <b>อัตราจะถูกล็อกเมื่อปิดยอดเดือนที่ขาย</b> ก่อนปิดยอดจะแสดงว่า “รอปิดยอด”
+              ไม่ได้นับเป็น 0 บาท
             </li>
             <li>
-              ค่าคอมมิชชันรวมของคอร์ส (pool) = ราคาคอร์สสุทธิ × อัตรา แบ่งให้แต่ละครั้งที่ใช้เท่าๆ
-              กัน เศษสตางค์ไปรวมที่ครั้งสุดท้าย
+              ค่าคอมมิชชันรวมของคอร์ส = ราคาคอร์สสุทธิ × อัตรา แล้วแบ่งให้แต่ละครั้งที่มารักษาเท่าๆ
+              กัน เศษสตางค์จะไปรวมในครั้งสุดท้าย
             </li>
           </ul>
 
           <template v-if="formula.scheme">
             <h3>
-              Tier ที่ใช้อยู่ ({{ formula.scheme.name }} เวอร์ชัน
+              Tier ที่ใช้ตอนนี้ ({{ formula.scheme.name }} เวอร์ชัน
               {{ formula.scheme.version }} ตั้งแต่ {{ thaiDate(formula.scheme.effectiveFrom) }})
             </h3>
             <table class="formula-table">
@@ -100,46 +110,47 @@ onMounted(async () => {
               </tbody>
             </table>
           </template>
-          <p v-else class="formula-empty">ยังไม่มี Tier ที่ใช้อยู่ในวันนี้</p>
+          <p v-else class="formula-empty">วันนี้ยังไม่มี Tier ที่ใช้งาน</p>
 
           <aside class="formula-example" aria-label="ตัวอย่างการคำนวณ">
-            <b>ตัวอย่างประกอบ (สมมติว่าอัตรา 7%)</b>
+            <b>ตัวอย่าง (สมมติอัตรา 7%)</b>
             <span
-              >คอร์ส ฿10,000 ใช้ 13 ครั้ง → pool = 10,000 × 7% = ฿700.00 → ครั้งละ ฿53.85 สำหรับ 12
-              ครั้งแรก และ ฿53.80 ครั้งสุดท้าย (รวม ฿700.00)</span
+              >คอร์ส ฿10,000 รักษา 13 ครั้ง → ค่าคอมมิชชันรวม = 10,000 × 7% = ฿700.00 → ได้ครั้งละ
+              ฿53.85 สำหรับ 12 ครั้งแรก และ ฿53.80 ในครั้งสุดท้าย (รวมแล้ว ฿700.00)</span
             >
           </aside>
         </section>
 
         <section class="formula-card" aria-labelledby="formula-substitute">
-          <h2 id="formula-substitute">2. ค่ามือรักษาแทน และค่ามือรายครั้ง</h2>
+          <h2 id="formula-substitute">2. ค่ามือ (รักษาแทนและรักษารายครั้ง)</h2>
           <ul>
             <li>
-              ถ้าคนรักษาไม่ใช่เจ้าของคอร์ส ผู้รักษาแทนได้ค่ามือเต็มตามกฎด้านล่าง
-              และเจ้าของคอร์สไม่ได้ค่าคอมมิชชันของครั้งนั้น
+              ถ้าคนที่รักษาไม่ใช่เจ้าของคอร์ส คนที่รักษาแทนจะได้ค่ามือเต็มตามกฎด้านล่าง
+              ส่วนเจ้าของคอร์สจะไม่ได้ค่าคอมมิชชันของครั้งนั้น
             </li>
-            <li>การรักษาแบบรายครั้ง (Single Visit) ผู้รักษาได้ค่ามือตามกฎเดียวกัน ณ วันที่รักษา</li>
-            <li>ค่ามือไม่ขึ้นกับ Tier และไม่ต้องรอปิดยอดเดือน</li>
+            <li>
+              การรักษาแบบรายครั้ง (ไม่ได้ซื้อเป็นคอร์ส) คนที่รักษาได้ค่ามือตามกฎเดียวกัน
+              โดยใช้กฎของวันที่รักษา
+            </li>
+            <li>ค่ามือไม่เกี่ยวกับ Tier และไม่ต้องรอปิดยอดประจำเดือน</li>
           </ul>
           <p v-if="feeText" class="formula-fee">
-            กฎค่ามือที่ใช้อยู่: <b>{{ feeText }}</b> (ตั้งแต่
+            กฎค่ามือที่ใช้ตอนนี้: <b>{{ feeText }}</b> (ตั้งแต่
             {{ thaiDate(formula.treatmentFee!.effectiveFrom) }})
           </p>
-          <p v-else class="formula-empty">ยังไม่มีกฎค่ามือที่ใช้อยู่ในวันนี้</p>
+          <p v-else class="formula-empty">วันนี้ยังไม่มีกฎค่ามือที่ใช้งาน</p>
         </section>
 
         <section class="formula-card" aria-labelledby="formula-payout">
           <h2 id="formula-payout">3. การจ่าย</h2>
           <ul>
+            <li>ยอดรวมของแต่ละเดือน = ค่าคอมมิชชันคอร์ส + ค่ามือ ± รายการปรับค่าตอบแทน</li>
             <li>
-              ยอดรวมของแต่ละเดือน = ค่าคอมมิชชันคอร์ส + ค่ามือรายครั้ง + ค่ามือรักษาแทน ± ใบปรับยอด
+              ต้องปิดงวดก่อน แล้วผู้จัดการจึงยืนยันการจ่ายได้ (โดยบันทึกวันที่จ่ายและเลขอ้างอิง)
             </li>
             <li>
-              งวดจ่ายต้องปิดงวดก่อน แล้ว Manager จึงยืนยันจ่าย (บันทึกวันที่จ่ายและเลขที่อ้างอิง)
-            </li>
-            <li>
-              เมื่อจ่ายแล้วแก้ย้อนหลังไม่ได้ หากต้องแก้ ให้ทำใบปรับยอดในงวดถัดไป
-              การหักไม่เกินค่าตอบแทนที่ได้ในงวด ส่วนที่เหลือยกไปงวดถัดไป
+              เมื่อจ่ายแล้วจะแก้ย้อนหลังไม่ได้ ถ้าต้องแก้ ให้ทำรายการปรับในงวดถัดไป
+              ยอดที่หักจะไม่เกินค่าตอบแทนที่ได้ในงวดนั้น ส่วนที่เหลือจะยกไปหักงวดต่อไป
             </li>
           </ul>
         </section>
@@ -160,6 +171,9 @@ onMounted(async () => {
   padding: 24px 0 48px;
   display: grid;
   gap: 16px;
+}
+.formula-back {
+  justify-self: start;
 }
 .formula-title h1 {
   margin: 0 0 6px;

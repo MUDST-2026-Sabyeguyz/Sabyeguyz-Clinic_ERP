@@ -149,19 +149,6 @@ body.therapist-ui .appointment-page.appointment-form-open {
 body.therapist-ui .appointment-page .appointment-form-page {
   padding-top: 12px;
 }
-
-body.therapist-ui .appointment-page .appointment-back-link {
-  padding: 4px 0;
-  border: 0;
-  color: var(--therapist-ink);
-  background: transparent;
-  box-shadow: none;
-}
-
-body.therapist-ui .appointment-page .appointment-back-link:hover {
-  transform: translateX(-2px);
-}
-
 body.therapist-ui .appointment-page .create-card {
   margin-top: 16px;
   border-color: #e1e4df;

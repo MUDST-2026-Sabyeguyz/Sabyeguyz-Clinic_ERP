@@ -186,6 +186,12 @@
 .filter-card-body--commission {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.filter-card-body--payment {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.filter-card-body--payment,
+.filter-card-body--commission {
   gap: 16px;
   align-items: end;
 }
