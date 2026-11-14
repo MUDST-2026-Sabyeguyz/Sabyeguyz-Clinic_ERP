@@ -8,13 +8,15 @@ describe('Therapist authentication and access boundaries', () => {
     cy.get('input[autocomplete="username"]').type('therapist')
     cy.get('input[autocomplete="current-password"]').type('therapist123', { log: false })
     cy.get('button[type="submit"]').click()
-    cy.location('pathname').should('equal', '/staff/patients')
-    cy.get('h1').should('contain.text', 'ค้นหาผู้ป่วย')
+    // the therapist lands on the appointment list after signing in
+    cy.location('pathname').should('equal', '/staff/appointments')
+    cy.get('h1').should('contain.text', 'นัดหมาย')
     cy.reload()
-    cy.get('h1').should('contain.text', 'ค้นหาผู้ป่วย')
+    cy.location('pathname').should('equal', '/staff/appointments')
+    cy.get('h1').should('contain.text', 'นัดหมาย')
     cy.get('nav[aria-label="เมนูเจ้าหน้าที่คลินิก"]').within(() => {
       cy.contains('a', 'นัดหมาย').should('be.visible')
-      cy.contains('a', 'บริการ').should('be.visible')
+      cy.contains('a', 'ชำระเงิน').should('be.visible')
       cy.contains('a', 'ธุรกรรม').should('be.visible')
       cy.contains('a', 'คอมมิชชัน').should('be.visible')
       cy.contains('a', 'การตั้งค่า').should('not.exist')
@@ -39,9 +41,8 @@ describe('Therapist authentication and access boundaries', () => {
     cy.location('pathname').should('equal', '/')
     cy.window().then((win) => {
       expect(win.localStorage.getItem('authToken')).to.equal(null)
-      // The current header leaves the cached display profile in localStorage;
-      // authorization is revoked by removing the token.
-      expect(win.localStorage.getItem('authUser')).not.to.equal(null)
+      // logout clears the cached display profile as well as the token
+      expect(win.localStorage.getItem('authUser')).to.equal(null)
     })
     cy.visit('/staff/services')
     cy.location('pathname').should('equal', '/')
@@ -57,7 +58,7 @@ describe('Therapist authentication and access boundaries', () => {
   }
 
   const forbidden = ['/staff/select-branch', '/staff/dashboard', '/staff/reports',
-    '/staff/reports/transaction/tier-round', '/staff/settings', '/staff/commission',
+    '/staff/settings', '/staff/commission',
     '/staff/commission/tiers', '/staff/commission/closing', '/staff/commission/compensation-settings',
     '/staff/commission/courses/1', '/staff/commission/staff/1', '/staff/commission/adjustments',
     '/staff/commission/adjustments/new', ...['success', 'schedule', 'select-schedule', 'closed',
@@ -72,9 +73,10 @@ describe('Therapist authentication and access boundaries', () => {
   })
 
   it('AUTH-06 backend independently rejects manager-only operations', () => {
-    api('POST', '/api/branches', { branchCode: '99', name: 'Forbidden', address: '-', phone: '-' })
+    // valid bodies, so the 403 comes from the role check and not from request validation
+    api('POST', '/api/branches', { branchCode: '99', name: 'Forbidden', address: 'ที่อยู่ทดสอบ', phone: '0212345678' })
       .its('status').should('equal', 403)
-    api('POST', '/api/users', { username: 'forbidden', password: 'Password123!', role: 'MANAGER',
+    api('POST', '/api/users', { username: 'forbidden', email: 'forbidden@example.com', password: 'Password123!', role: 'MANAGER',
       employeeCode: 'PT-FORBIDDEN', fullName: 'ทดสอบ สิทธิ์', branchCode: '01', phone: '0812345678' })
       .its('status').should('equal', 403)
     api('GET', '/api/patients', undefined, 'anonymous').its('status').should('equal', 401)

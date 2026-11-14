@@ -32,6 +32,22 @@ public class CypressCommissionScenariosController {
         return Map.of("saleMonth", shifted);
     }
 
+    /**
+     * Moves everything a payroll month is built from (course sale month, treated sessions, single visit fees, the allocation
+     * rows and the visits behind them) back by {@code months}, as if the activity had happened in an earlier month that can
+     * now be closed. Test-only: the public API has no way to date activity in the past.
+     */
+    @PostMapping("/shift-activity")
+    public Map<String, Object> shiftActivity(@RequestParam(defaultValue = "1") int months) {
+        String shift = months + " months";
+        int courses = jdbc.update("UPDATE course SET sale_month = to_char(to_date(sale_month || '-01', 'YYYY-MM-DD') - ?::interval, 'YYYY-MM')", shift);
+        int usages = jdbc.update("UPDATE course_visit_usage SET visit_date = visit_date - ?::interval", shift);
+        int fees = jdbc.update("UPDATE single_visit_fee_ledger SET service_date = service_date - ?::interval", shift);
+        int allocations = jdbc.update("UPDATE commission_allocation_ledger SET visit_date = visit_date - ?::interval", shift);
+        int visits = jdbc.update("UPDATE patient_visit SET visit_date = visit_date - ?::interval", shift);
+        return Map.of("courses", courses, "usages", usages, "singleVisitFees", fees, "allocations", allocations, "visits", visits);
+    }
+
     /** Fees earned by single visits, oldest first. */
     @GetMapping("/single-visit-fees")
     public List<Map<String, Object>> singleVisitFees() {

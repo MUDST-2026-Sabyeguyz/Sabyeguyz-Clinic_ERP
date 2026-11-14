@@ -1,5 +1,5 @@
 /* oxlint-disable vitest/valid-expect, vitest/no-standalone-expect -- Cypress uses Chai in hooks. */
-import { api, authenticate, fixtures, sessions } from './helpers'
+import { api, authenticate, fixtures, openBookingHours, setServiceDurations, sessions } from './helpers'
 
 before(() => {
   expect(Cypress.config('baseUrl')).to.equal('http://localhost:5173')
@@ -11,6 +11,8 @@ beforeEach(() => {
     expect(status, 'isolated cypress-v2 fixture endpoint').to.equal(200)
     Object.assign(fixtures, body)
   })
+  openBookingHours()
+  setServiceDurations()
   authenticate('therapist')
   authenticate('therapist2')
   // Catch a Vite proxy pointing at another backend before a browser workflow runs.

@@ -55,7 +55,7 @@ function assertDirectory(choice = {}) {
     expect(body.items.map((p) => p.id), 'backend global order/page').to.deep.equal(result.items.map((p) => p.id))
   })
   cy.get('.directory').should('not.contain.text', 'กำลังโหลดข้อมูลผู้ป่วย')
-  cy.get('.result-count').should('contain.text', `พบผู้ป่วยทั้งหมด ${result.total} ราย`)
+  cy.get('.result-count').should('contain.text', `ทั้งหมด ${result.total} ราย`)
   if (result.items.length === 0) {
     cy.get('.directory tbody').should('contain.text', 'ไม่พบผู้ป่วย')
     rows().should('have.length', 0)
@@ -123,7 +123,7 @@ describe('Patients — BCC against real backend', () => {
   it('BCC-00 base: therapist, empty query, all branches, name ascending, first page', () => {
     openDirectory()
     assertDirectory()
-    rows().first().find('td').eq(3).should('have.text', '1 มกราคม 2533')
+    rows().first().find('td').eq(3).should('have.text', '1 ม.ค. 2533')
     cy.contains('button', 'ก่อนหน้า').should('be.disabled')
     cy.contains('button', 'ถัดไป').should('be.enabled')
   })
@@ -225,7 +225,7 @@ describe('Patients — BCC against real backend', () => {
     assertDirectory()
     search(patients[0].hn)
     assertDirectory({ query: patients[0].hn })
-    rows().contains('a', 'ดูข้อมูล').click()
+    rows().contains('a', 'รายละเอียด').click()
     cy.location('pathname').should('equal', `/staff/patients/${patients[0].id}`)
     cy.get('main').should('contain.text', patients[0].hn).and('contain.text', patients[0].phone)
   })
@@ -233,7 +233,9 @@ describe('Patients — BCC against real backend', () => {
   it('SUP-04 registration link opens the real registration form', () => {
     openDirectory()
     assertDirectory()
-    cy.contains('a', '+ ลงทะเบียนผู้ป่วยใหม่').click()
+    // registration now opens a method dialog; choose manual entry
+    cy.contains('button', '+ ลงทะเบียนผู้ป่วยใหม่').click()
+    cy.contains('button.method-manual', 'กรอกข้อมูลเอง').click()
     cy.location('pathname').should('equal', '/staff/patients/new')
     cy.get('input[placeholder="ชื่อ"]').should('be.visible')
     cy.get('button[type="submit"]').should('contain.text', 'บันทึก')
@@ -297,7 +299,9 @@ describe('Patients — BCC against real backend', () => {
   it('SUP-10 registers a foreign patient through UI and verifies persisted backend/profile data', () => {
     openDirectory()
     assertDirectory()
-    cy.contains('a', '+ ลงทะเบียนผู้ป่วยใหม่').click()
+    // registration now opens a method dialog; choose manual entry
+    cy.contains('button', '+ ลงทะเบียนผู้ป่วยใหม่').click()
+    cy.contains('button.method-manual', 'กรอกข้อมูลเอง').click()
     cy.get('input[type="radio"][value="ต่างชาติ"]').check()
     cy.get('input[placeholder="ชื่อ"]').type('Alice')
     cy.get('input[placeholder="นามสกุล"]').type('Coverage')
@@ -305,7 +309,7 @@ describe('Patients — BCC against real backend', () => {
     cy.get('button[aria-label="สาขาที่ลงทะเบียน"]').should('not.contain.text', 'เลือกสาขา')
     cy.intercept('POST', '**/api/patients').as('registration') // real POST
     cy.get('button[type="submit"]').click()
-    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^ใช่$/).click()
+    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^ยืนยัน$/).click()
     cy.wait('@registration').then(({ response }) => {
       expect(response.statusCode).to.equal(201)
       const created = response.body
