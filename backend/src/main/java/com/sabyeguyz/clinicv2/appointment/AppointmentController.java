@@ -138,7 +138,8 @@ public class AppointmentController {
             String contactName,
             String contactPhone,
             String contactMiddleName,
-            String contactNickname) {}
+            String contactNickname,
+            String requestedServiceType) {}
 
     public record PageResponse(
             java.util.List<Response> items,
@@ -281,12 +282,12 @@ public class AppointmentController {
 
         availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd);
 
-        if ("NEW".equalsIgnoreCase(request.patientType())) {
-            RequestedServiceType requested = request.requestedServiceType() == null
-                    || request.requestedServiceType().isBlank()
-                    ? null
-                    : RequestedServiceType.valueOf(request.requestedServiceType().trim());
+        RequestedServiceType requested = request.requestedServiceType() == null
+                || request.requestedServiceType().isBlank()
+                ? null
+                : RequestedServiceType.valueOf(request.requestedServiceType().trim());
 
+        if ("NEW".equalsIgnoreCase(request.patientType())) {
             String middleName = request.contactMiddleName() == null
                     ? null : request.contactMiddleName().trim();
 
@@ -347,6 +348,7 @@ public class AppointmentController {
                 initial,
                 actor.currentId());
 
+        appointment.setRequestedServiceType(requested);
         return createdResponse(appointment, request.note());
     }
 
@@ -611,6 +613,8 @@ public class AppointmentController {
                 appointment.getContactName(),
                 appointment.getContactPhone(),
                 appointment.getContactMiddleName(),
-                appointment.getContactNickname());
+                appointment.getContactNickname(),
+                appointment.getRequestedServiceType() != null ? appointment.getRequestedServiceType().name()
+                        : svc == null ? null : svc.getServiceType().name());
     }
 }

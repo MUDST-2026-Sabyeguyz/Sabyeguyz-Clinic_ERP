@@ -326,6 +326,7 @@ function applyDateRange(from: string, to: string) {
   if (unchanged) void load()
 }
 const isCourseAppointment = (item: Appointment) => {
+  if (item.requestedServiceType) return item.requestedServiceType === 'Course'
   const courseAppointment = item as Appointment & {
     courseId?: number | null
     coursePurchaseId?: number | null
@@ -947,9 +948,9 @@ async function save() {
               contactName,
               contactPhone: newPatientForm.value.phone,
               contactNickname: newPatientForm.value.nickname,
-              requestedServiceType: serviceMode.value === 'course' ? 'Course' : 'SingleVisit',
             }
           : {}),
+        requestedServiceType: serviceMode.value === 'course' ? 'Course' : 'SingleVisit',
       })
     }
 
