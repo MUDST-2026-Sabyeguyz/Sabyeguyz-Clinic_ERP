@@ -151,7 +151,7 @@ onMounted(load)
   <div class="commission-manager-page adjustment-create-page">
     <StaffHeader />
     <main class="commission-manager-main create-main">
-      <RouterLink class="back-link" to="/staff/commission/adjustments"
+      <RouterLink class="back-link app-back-link" to="/staff/commission/adjustments"
         >← กลับรายการปรับค่าตอบแทน</RouterLink
       >
       <header class="create-title">
@@ -255,11 +255,7 @@ onMounted(load)
   padding-top: 34px;
 }
 .back-link {
-  display: inline-flex;
   margin-bottom: 34px;
-  color: #13766f;
-  font-weight: 700;
-  text-decoration: none;
 }
 .create-title h1 {
   margin: 0;

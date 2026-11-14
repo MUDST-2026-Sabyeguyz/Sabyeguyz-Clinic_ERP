@@ -43,6 +43,41 @@ const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
 } | null
 const isManager = authUser?.role === 'MANAGER'
 
+// ข้อความและค่าที่ต่างกันตามบทบาท (Manager / Therapist) ใช้หน้าจอเดียวกัน
+const copy = isManager
+  ? {
+      patientNotFound: 'ไม่พบผู้ป่วยที่ค้นหา',
+      optional: '',
+      newPatientNote: '',
+      singleServiceLabel: 'โปรแกรมการรักษา',
+      newServiceLabel: 'บริการ / คอร์ส',
+      emptyProgram: 'ไม่พบโปรแกรม',
+      emptyTherapist: 'ไม่พบนักกายภาพ',
+      courseSeparator: '　',
+      saveEdit: 'บันทึก',
+      saveCreate: 'บันทึก',
+      noSlots: 'ไม่มีช่วงเวลาว่าง',
+      branchContext: '',
+      branchContextNew: '',
+      successMs: 1500,
+    }
+  : {
+      patientNotFound: 'ไม่พบผู้ป่วยที่ตรงกับข้อมูลค้นหา',
+      optional: '(ไม่บังคับ)',
+      newPatientNote: 'ผู้จอง NEW ยังไม่มี HN และยังไม่เกิดข้อมูลของการชำระล่วงหน้า',
+      singleServiceLabel: 'รายชื่อบริการ',
+      newServiceLabel: 'บริการ / คอร์ส (ไม่บังคับ)',
+      emptyProgram: 'ไม่พบโปรแกรมที่ค้นหา',
+      emptyTherapist: 'ไม่พบนักกายภาพที่ค้นหา',
+      courseSeparator: '　•　',
+      saveEdit: 'บันทึก',
+      saveCreate: 'บันทึกนัดหมาย',
+      noSlots: 'ไม่มีช่วงเวลาที่เปิดรับนัดในวันนี้',
+      branchContext: ' • บัญชี Therapist ถูกจำกัดเฉพาะสาขานี้',
+      branchContextNew: ' • เลือกนักกายภาพและช่วงเวลาที่เหมาะสม',
+      successMs: 2000,
+    }
+
 const canChangeAppointments = isManager || authUser?.role === 'THERAPIST'
 
 const ownStaffId = ref<number | null>(
@@ -979,7 +1014,7 @@ async function save() {
 }
 watch(appointmentSuccessMessage, (message, _old, onCleanup) => {
   if (!message) return
-  const timer = window.setTimeout(dismissAppointmentSuccess, 2000)
+  const timer = window.setTimeout(dismissAppointmentSuccess, copy.successMs)
   onCleanup(() => window.clearTimeout(timer))
 })
 function dismissAppointmentSuccess() {
@@ -1086,7 +1121,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
         class="appointment-form-page"
       >
         <div class="appointment-back-row">
-          <button class="appointment-back" type="button" @click="goToAppointmentList">
+          <button class="appointment-back app-back-link" type="button" @click="goToAppointmentList">
             ← กลับ
           </button>
         </div>
@@ -1107,12 +1142,10 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             }}
           </h1>
           <p class="appointment-form-context">
-            <template v-if="appointmentPatientType === 'NEW'">
-              {{ currentBranchLabel }} • เลือกนักกายภาพและช่วงเวลาที่เหมาะสม
-            </template>
-            <template v-else>
-              {{ currentBranchLabel }} • บัญชี Therapist ถูกจำกัดเฉพาะสาขานี้
-            </template>
+            {{
+              currentBranchLabel +
+              (appointmentPatientType === 'NEW' ? copy.branchContextNew : copy.branchContext)
+            }}
           </p>
           <p v-if="isEditing" class="appointment-original-summary">
             {{ originalAppointmentSummary }}
@@ -1179,7 +1212,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                     <b>{{ patient.fullName }}</b
                     ><span>{{ patient.hn }} {{ patient.phone }}</span>
                   </button>
-                  <p v-if="!patientResults.length">ไม่พบผู้ป่วยที่ตรงกับข้อมูลค้นหา</p>
+                  <p v-if="!patientResults.length">{{ copy.patientNotFound }}</p>
                 </div>
                 <p v-if="patientError" class="patient-input-error" role="alert">
                   {{ errorMessage }}
@@ -1199,7 +1232,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             </label>
             <div v-else class="appointment-new-patient-fields">
               <label>
-                <span>ชื่อ <small>(ไม่บังคับ)</small></span>
+                <span>ชื่อ <small>{{ copy.optional }}</small></span>
                 <input
                   v-model.trim="newPatientForm.firstName"
                   :readonly="isEditing"
@@ -1208,7 +1241,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 />
               </label>
               <label>
-                <span>นามสกุล <small>(ไม่บังคับ)</small></span>
+                <span>นามสกุล <small>{{ copy.optional }}</small></span>
                 <input
                   v-model.trim="newPatientForm.lastName"
                   :readonly="isEditing"
@@ -1235,10 +1268,10 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   @input="newPatientForm.phone = limitPhoneDigits(newPatientForm.phone)"
                 />
               </label>
-              <p>ผู้จอง NEW ยังไม่มี HN และยังไม่เกิดข้อมูลของการชำระล่วงหน้า</p>
+              <p v-if="copy.newPatientNote">{{ copy.newPatientNote }}</p>
             </div>
             <fieldset class="appointment-service-mode-field">
-              <legend>ประเภทบริการ <small>(ไม่บังคับ)</small></legend>
+              <legend>ประเภทบริการ <small>{{ copy.optional }}</small></legend>
               <div class="appointment-service-mode-options">
                 <button
                   type="button"
@@ -1260,12 +1293,12 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
             </fieldset>
             <label v-if="serviceMode === 'single'" class="appointment-service-field">
               {{
-                appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อบริการ'
+                appointmentPatientType === 'NEW' ? copy.newServiceLabel : copy.singleServiceLabel
               }}
               <FilterDropdown
                 v-model="formServiceModel"
                 searchable
-                empty-search-label="ไม่พบโปรแกรมที่ค้นหา"
+                :empty-search-label="copy.emptyProgram"
                 class="appointment-form-filter"
                 label="เลือกบริการ"
                 default-label="เลือกโปรแกรม"
@@ -1279,11 +1312,11 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               />
             </label>
             <label v-else class="appointment-course-field">
-              {{ appointmentPatientType === 'NEW' ? 'บริการ / คอร์ส (ไม่บังคับ)' : 'รายชื่อคอร์ส' }}
+              {{ appointmentPatientType === 'NEW' ? copy.newServiceLabel : 'รายชื่อคอร์ส' }}
               <FilterDropdown
                 v-model="courseDropdownModel"
                 searchable
-                empty-search-label="ไม่พบโปรแกรมที่ค้นหา"
+                :empty-search-label="copy.emptyProgram"
                 class="appointment-form-filter"
                 label="เลือกคอร์ส"
                 default-label="เลือกคอร์ส"
@@ -1299,7 +1332,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               <FilterDropdown
                 v-model="formTherapistModel"
                 searchable
-                empty-search-label="ไม่พบนักกายภาพที่ค้นหา"
+                :empty-search-label="copy.emptyTherapist"
                 class="appointment-form-filter"
                 :class="{ 'is-invalid': missingCurrentTherapist }"
                 label="เลือกนักกายภาพ"
@@ -1355,7 +1388,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                 </span>
               </header>
               <p>
-                คงเหลือ {{ selectedPatientCourse.remaining }} ครั้ง　•　หมดอายุ
+                คงเหลือ {{ selectedPatientCourse.remaining }} ครั้ง{{ copy.courseSeparator }}หมดอายุ
                 {{ formatThaiDate(selectedPatientCourse.expiresAt) }}
               </p>
               <strong v-if="selectedPatientCourse.shared">
@@ -1392,8 +1425,8 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
                   : checkingAvailability
                     ? 'กำลังตรวจเวลาว่าง...'
                     : isEditing
-                      ? 'บันทึก'
-                      : 'บันทึกนัดหมาย'
+                      ? copy.saveEdit
+                      : copy.saveCreate
               }}
             </button>
           </div>
@@ -1476,7 +1509,7 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
               {{ availabilityError }}
             </p>
             <p v-else-if="availabilitySlots.length === 0" class="appointment-time-help">
-              ไม่มีช่วงเวลาที่เปิดรับนัดในวันนี้
+              {{ copy.noSlots }}
             </p>
           </div>
           <footer>
@@ -1920,6 +1953,6 @@ async function requestStatusChange(item: Appointment, nextStatus: string) {
 </template>
 <style scoped src="../styles/appointments.css"></style>
 <style src="../styles/appointment-theme.css"></style>
-
 <style src="../styles/appointment-list.css"></style>
 <style src="../styles/appointment-create-layout.css"></style>
+

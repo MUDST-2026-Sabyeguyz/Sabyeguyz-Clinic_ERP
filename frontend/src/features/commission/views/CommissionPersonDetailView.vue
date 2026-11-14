@@ -307,7 +307,7 @@ watch([staffId, month, selectedBranchCode], load)
   <div class="commission-manager-page">
     <StaffHeader />
     <main class="commission-manager-main">
-      <RouterLink class="detail-back" :to="{ path: '/staff/commission', query: overviewQuery }"
+      <RouterLink class="detail-back app-back-link" :to="{ path: '/staff/commission', query: overviewQuery }"
         >← กลับไปภาพรวมค่าตอบแทน</RouterLink
       >
       <header class="detail-head">
@@ -700,26 +700,7 @@ a.edit-link:hover {
   border-radius: 8px;
 }
 .detail-back {
-  display: inline-flex;
-  align-items: center;
   margin: 0 0 20px;
-  color: #155f5c;
-  font-weight: 600;
-  text-decoration: none;
-  text-underline-offset: 4px;
-  transition:
-    color 160ms ease,
-    transform 160ms ease;
-}
-.detail-back:hover {
-  color: #0d4745;
-  text-decoration: underline;
-  transform: translateX(-3px);
-}
-.detail-back:focus-visible {
-  outline: 3px solid #16877f;
-  outline-offset: 4px;
-  border-radius: 3px;
 }
 .detail-head {
   display: flex;

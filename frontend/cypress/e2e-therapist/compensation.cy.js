@@ -97,9 +97,9 @@ describe('Therapist compensation with actual earnings', () => {
     })
     visit(`/staff/compensation?month=${month}`)
     cy.get('[aria-label="สรุปค่าตอบแทน"]').within(() => {
-      cy.contains('dt', 'Course Commission').next().should('contain', 'รอคำนวณ')
-      cy.contains('dt', 'Net Payout').next().should('contain', 'รอคำนวณ')
+      cy.contains('dt', 'Course Commission').next().should('contain', 'รอปิดยอด')
       cy.contains('dt', 'ค่ามือ').next().should('contain', '฿45.00')
+      cy.contains('.summary-net', 'Net Payout').should('contain', 'รอคำนวณ')
     })
     cy.get('.therapist-pending-note').should('contain', '1 ครั้ง')
   })
@@ -110,7 +110,7 @@ describe('Therapist compensation with actual earnings', () => {
     cy.get('[aria-label="สรุปค่าตอบแทน"]').within(() => {
       cy.contains('dt', 'Course Commission').next().should('contain', '฿38.46')
       cy.contains('dt', 'ค่ามือ').next().should('contain', '฿45.00')
-      cy.contains('dt', 'Net Payout').next().should('contain', '฿83.46')
+      cy.contains('.summary-net', 'Net Payout').should('contain', '฿83.46')
     })
     cy.get('[aria-label="เมนูค่าตอบแทน"]').contains('a', 'ค่ามือ').click()
     cy.get('button[aria-label="เดือนถัดไป"]').click()

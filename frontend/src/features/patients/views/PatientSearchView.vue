@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import StaffHeader from '@/features/staff/components/StaffHeader.vue'
 import RegisterMethodDialog from '@/features/idcard/RegisterMethodDialog.vue'
 import { selectedManagerBranch } from '@/features/staff/data/managerBranch'
+import StaffHeader from '@/features/staff/components/StaffHeader.vue'
+import CourseRenewalQueueLink from '@/features/courses/components/CourseRenewalQueueLink.vue'
 import FilterDropdown from '@/features/staff/components/FilterDropdown.vue'
 import { usePatientDirectory } from '../usePatientDirectory'
+const registerDialogOpen = ref(false)
+const readerBranch = computed(() => selectedManagerBranch()?.code)
 const {
   isManager,
   query,
@@ -25,10 +28,6 @@ const {
   birthDateLabel,
   birthDateStates,
 } = usePatientDirectory()
-
-const registerDialogOpen = ref(false)
-// a manager works in the branch chosen in the header; anyone else is scoped to their own branch by the server
-const readerBranch = computed(() => selectedManagerBranch()?.code)
 </script>
 
 <template>
@@ -39,9 +38,12 @@ const readerBranch = computed(() => selectedManagerBranch()?.code)
         <div>
           <h1>ค้นหาผู้ป่วย</h1>
           <p>ค้นหาด้วยชื่อหรือหมายเลข HN</p>
-          <button type="button" class="primary" @click="registerDialogOpen = true">
-            + ลงทะเบียนผู้ป่วยใหม่
-          </button>
+          <div class="patient-heading-actions">
+            <button type="button" class="primary" @click="registerDialogOpen = true">
+              + ลงทะเบียนผู้ป่วยใหม่
+            </button>
+            <CourseRenewalQueueLink v-if="isManager" />
+          </div>
           <RegisterMethodDialog
             :open="registerDialogOpen"
             :branch-code="readerBranch"

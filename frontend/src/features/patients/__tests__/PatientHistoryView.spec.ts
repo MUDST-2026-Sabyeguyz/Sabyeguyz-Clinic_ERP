@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ManagerPatientHistoryView from '../views/ManagerPatientHistoryView.vue'
+import PatientHistoryView from '../views/PatientHistoryView.vue'
 
 const mocks = vi.hoisted(() => ({
   patientGet: vi.fn(),
@@ -42,7 +42,7 @@ const use = (overrides: Record<string, unknown> = {}) => ({
 })
 
 const mountView = () =>
-  mount(ManagerPatientHistoryView, {
+  mount(PatientHistoryView, {
     global: {
       stubs: {
         StaffHeader: true,
@@ -54,6 +54,7 @@ const mountView = () =>
   })
 
 beforeEach(() => {
+  localStorage.setItem('authUser', JSON.stringify({ id: 1, role: 'MANAGER' }))
   vi.resetAllMocks()
   mocks.patientGet.mockResolvedValue({ id: 5, fullName: 'ผู้ป่วย A', hn: 'HN1' })
   mocks.salesList.mockResolvedValue({ items: [], totalPages: 1 })
@@ -118,5 +119,15 @@ describe('single-visit use history', () => {
     await flushPromises()
     expect(view.find('[data-test="single-visit-uses"]').exists()).toBe(false)
     view.unmount()
+  })
+})
+
+describe('single-visit use history for other roles', () => {
+  it('hides the uses and does not load them for a therapist', async () => {
+    localStorage.setItem('authUser', JSON.stringify({ id: 2, role: 'THERAPIST' }))
+    const view = mountView()
+    await flushPromises()
+    expect(view.find('[data-test="single-visit-uses"]').exists()).toBe(false)
+    expect(mocks.uses).not.toHaveBeenCalled()
   })
 })

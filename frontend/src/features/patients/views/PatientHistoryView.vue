@@ -12,6 +12,7 @@ import {
   salesApi,
   type CoursePurchase,
   type SingleVisitEntitlement,
+  type SingleVisitEntitlementUse,
   type PatientProfile,
   type SaleDetail,
   type SaleSummary,
@@ -29,6 +30,50 @@ const paymentDetails = ref<Record<number, SaleDetail>>({})
 const courses = ref<CoursePurchase[]>([])
 const singleVisitEntitlements = ref<SingleVisitEntitlement[]>([])
 const singleVisitEntitlementsAvailable = ref(true)
+// เฉพาะ Manager เท่านั้นที่เห็นและย้อนการใช้สิทธิ์ได้
+const isManager =
+  (JSON.parse(localStorage.getItem('authUser') ?? 'null') as { role?: string } | null)?.role ===
+  'MANAGER'
+// ประวัติการใช้สิทธิ์บริการรายครั้ง และการย้อนการใช้สิทธิ์ (สิทธิ์กลับคืนผู้ป่วย ค่ามือของครั้งนั้นถูกย้อนด้วย)
+const singleVisitUses = ref<SingleVisitEntitlementUse[]>([])
+const reversingUseId = ref<number | null>(null)
+const reverseReason = ref('')
+const reverseError = ref('')
+const reverseSaving = ref(false)
+function startReverse(use: SingleVisitEntitlementUse) {
+  reversingUseId.value = use.id
+  reverseReason.value = ''
+  reverseError.value = ''
+}
+function cancelReverse() {
+  reversingUseId.value = null
+  reverseError.value = ''
+}
+async function confirmReverse() {
+  const reason = reverseReason.value.trim()
+  if (reversingUseId.value === null || reverseSaving.value) return
+  if (!reason) {
+    reverseError.value = 'ระบุเหตุผลที่ย้อนการใช้สิทธิ์'
+    return
+  }
+  reverseSaving.value = true
+  reverseError.value = ''
+  try {
+    await singleVisitEntitlementApi.reverse(reversingUseId.value, reason)
+    reversingUseId.value = null
+    const id = Number(route.params.id)
+    const [entitlements, uses] = await Promise.all([
+      singleVisitEntitlementApi.list(id),
+      singleVisitEntitlementApi.uses(id),
+    ])
+    singleVisitEntitlements.value = entitlements
+    singleVisitUses.value = uses
+  } catch (error) {
+    reverseError.value = error instanceof Error ? error.message : 'ย้อนการใช้สิทธิ์ไม่สำเร็จ'
+  } finally {
+    reverseSaving.value = false
+  }
+}
 const query = ref('')
 const dateFilter = ref('')
 const typeFilter = ref('')
@@ -189,6 +234,9 @@ onMounted(async () => {
       singleVisitEntitlementsAvailable.value = false
       return []
     })
+    singleVisitUses.value = isManager
+      ? await singleVisitEntitlementApi.uses(id).catch(() => [])
+      : []
     patient.value = profile
     const remainingPages = await Promise.all(
       Array.from({ length: Math.max(0, paymentPage.totalPages - 1) }, (_, index) =>
@@ -223,7 +271,7 @@ onMounted(async () => {
       :is="embedded ? 'section' : 'main'"
       class="history-page-content"
     >
-      <RouterLink v-if="!embedded" class="back-link" :to="`/staff/patients/${route.params.id}`"
+      <RouterLink v-if="!embedded" class="back-link app-back-link" :to="`/staff/patients/${route.params.id}`"
         >← กลับข้อมูลผู้ป่วย</RouterLink
       >
       <h1 v-if="!embedded">บริการและคอร์ส</h1>
@@ -328,7 +376,13 @@ onMounted(async () => {
                 <td>{{ item.receiptNo }}</td>
                 <td>{{ paymentDescription(item) }}</td>
                 <td>{{ item.branchCode }}</td>
-                <td>฿{{ item.paid.toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
+                <td>
+                  ฿{{
+                    item.paid.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })
+                  }}
+                </td>
                 <td>{{ paymentMethod(item) }}</td>
                 <td class="history-actions">
                   <button type="button" @click="openReceipt(item)">ดูใบเสร็จ</button>
@@ -397,8 +451,79 @@ onMounted(async () => {
           </table>
         </div>
       </section>
+      <section v-if="isManager && singleVisitUses.length" class="history-card" data-test="single-visit-uses">
+        <h2 class="single-use-title">ประวัติการใช้สิทธิ์บริการรายครั้ง</h2>
+        <div class="history-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>วันที่ใช้</th>
+                <th>บริการ</th>
+                <th>ผู้รักษา</th>
+                <th>สถานะ</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="use in singleVisitUses" :key="use.id">
+                <tr :data-reversed="use.reversedAt ? 'true' : 'false'">
+                  <td>{{ thaiDate(use.usedAt) }}</td>
+                  <td><b>{{ use.serviceName }}</b><small class="course-purchase-date">ใบเสร็จ {{ use.receiptNo }}</small></td>
+                  <td>{{ use.treatingStaffName ?? '—' }}</td>
+                  <td>
+                    <span class="history-status" :class="{ 'is-cancelled': !!use.reversedAt }">{{ use.reversedAt ? 'ย้อนแล้ว' : 'ใช้แล้ว' }}</span>
+                    <small v-if="use.reversalReason" class="course-purchase-date">{{ use.reversalReason }}</small>
+                  </td>
+                  <td class="history-actions">
+                    <template v-if="!use.reversedAt">
+                      <button
+                        v-if="!use.reverseBlockedReason"
+                        type="button"
+                        class="history-row-action outline"
+                        data-test="reverse-use"
+                        @click="startReverse(use)"
+                      >ย้อนการใช้สิทธิ์</button>
+                      <button
+                        v-else
+                        type="button"
+                        class="history-row-action outline"
+                        data-test="reverse-blocked"
+                        :title="use.reverseBlockedReason"
+                        aria-disabled="true"
+                        disabled
+                      >ย้อนการใช้สิทธิ์</button>
+                    </template>
+                  </td>
+                </tr>
+                <tr v-if="reversingUseId === use.id" class="single-use-reverse-row">
+                  <td colspan="5">
+                    <p>สิทธิ์จะกลับคืนผู้ป่วย และค่ามือของครั้งนี้จะถูกย้อน ต้องบันทึกการใช้สิทธิ์ใหม่ด้วยผู้รักษาที่ถูกต้อง</p>
+                    <label class="single-use-reason"
+                      >เหตุผลที่ย้อน
+                      <input v-model="reverseReason" type="text" maxlength="255" data-test="reverse-reason" />
+                    </label>
+                    <p v-if="reverseError" class="error" role="alert">{{ reverseError }}</p>
+                    <div class="single-use-reverse-actions">
+                      <button type="button" class="outline" :disabled="reverseSaving" @click="cancelReverse">ยกเลิก</button>
+                      <button type="button" data-test="confirm-reverse" :disabled="reverseSaving" @click="confirmReverse">{{ reverseSaving ? 'กำลังย้อน…' : 'ยืนยันย้อน' }}</button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </component>
   </div>
 </template>
-
 <style scoped src="../styles/patient-history.css"></style>
+
+<style scoped>
+.single-use-title { margin: 0 0 12px; font-size: 1.2rem; }
+.single-use-reverse-row td { background: #f8fbf9; }
+.single-use-reverse-row p { margin: 0 0 10px; }
+.single-use-reason { display: grid; gap: 6px; max-width: 520px; font-weight: 700; }
+.single-use-reason input { height: 40px; padding: 0 12px; border: 1px solid #b9c8c2; border-radius: 8px; font: inherit; }
+.single-use-reverse-actions { display: flex; gap: 8px; margin-top: 12px; }
+</style>

@@ -190,7 +190,9 @@ onMounted(async () => {
   <div class="audit-page">
     <StaffHeader />
     <main class="audit-main">
-      <RouterLink class="audit-back" to="/staff/settings">← กลับการตั้งค่า</RouterLink>
+      <RouterLink class="audit-back app-back-link" to="/staff/settings"
+        >← กลับการตั้งค่า</RouterLink
+      >
       <header class="audit-title">
         <h1>ประวัติการแก้ไขระบบ</h1>
         <p>ใครแก้อะไร เมื่อไร พร้อมค่าก่อนและหลังการแก้ไข (ดูได้อย่างเดียว)</p>
@@ -345,11 +347,6 @@ onMounted(async () => {
   width: min(1280px, calc(100% - 48px));
   margin: auto;
   padding: 28px 0 80px;
-}
-.audit-back {
-  color: var(--color-primary);
-  font-weight: 600;
-  text-decoration: none;
 }
 .audit-title h1 {
   margin: 18px 0 6px;

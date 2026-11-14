@@ -386,12 +386,6 @@
 
 .transaction-back {
   margin: 0 0 20px;
-  padding: 0;
-  border: 0;
-  color: #173d47;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
 }
 .transaction-detail-card {
   display: grid;

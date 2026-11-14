@@ -18,7 +18,12 @@ import {
   type TransferRecord,
 } from '@/api/client'
 import { clinicToday } from '@/utils/clinicDate'
-import { filterPaymentReportRows } from '../lib/paymentReport'
+import {
+  SALE_TYPE_COURSE,
+  SALE_TYPE_OPTIONS,
+  filterPaymentReportRows,
+  saleTypeLabel,
+} from '../lib/paymentReport'
 
 type ReportKey =
   | 'revenue'
@@ -70,7 +75,7 @@ const REPORTS: Array<[ReportKey, string]> = [
 ]
 
 const TABLE_HEADERS: Record<ReportKey, string[]> = {
-  revenue: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระสุทธิ', 'สัดส่วน'],
+  revenue: ['ประเภทการขาย', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระสุทธิ', 'สัดส่วน'],
   balance: ['ผู้ป่วย', 'คอร์ส', 'สาขา', 'วันที่ซื้อ', 'ซื้อ', 'ใช้', 'โอน', 'คงเหลือ', 'หมดอายุ'],
   transfer: ['เลขที่รายการ', 'ผู้โอน', 'ผู้รับ', 'สาขา', 'คอร์ส', 'ครั้ง', 'วันที่โอน'],
   commission: ['พนักงาน', 'สาขา', 'ประเภทงาน', 'ช่วงงวดขาย', 'จำนวนรายการ', 'ค่าคอมมิชชั่น'],
@@ -84,36 +89,20 @@ const TABLE_HEADERS: Record<ReportKey, string[]> = {
     'ค่ามือ',
     'มูลค่าบริการ',
   ],
-  payment: ['ประเภทการขาย', 'การรักษา', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระ', 'สัดส่วน'],
+  payment: ['ประเภทการขาย', 'สาขา', 'วันที่รับเงิน', 'ยอดรับชำระ', 'สัดส่วน'],
 }
 
 const RIGHT_ALIGNED: Partial<Record<ReportKey, number[]>> = {
-  revenue: [4, 5],
+  revenue: [3, 4],
   balance: [4, 5, 6, 7, 8],
   transfer: [],
   commission: [4, 5],
   salesTransaction: [1, 2],
   treatmentTransaction: [5, 6],
-  payment: [4, 5],
+  payment: [3, 4],
 }
 
 const SALES_COMMISSION_TYPE = 'ค่าคอมมิชชันการขาย'
-
-const CATEGORY_NAMES: Record<string, string> = {
-  COURSE: 'Course Sales',
-  SINGLE_VISIT: 'Single Visit',
-  ASSESSMENT: 'Assessment',
-  'Course Sales': 'Course Sales',
-  'Single Visit Sales': 'Single Visit',
-}
-
-const TREATMENT_NAMES: Record<string, string> = {
-  COURSE: 'Manual Therapy',
-  SINGLE_VISIT: 'Exercise Therapy',
-  ASSESSMENT: 'Assessment',
-  'Course Sales': 'Manual Therapy',
-  'Single Visit Sales': 'Exercise Therapy',
-}
 
 function isReportKey(value: string): value is ReportKey {
   return REPORT_KEYS.includes(value as ReportKey)
@@ -137,7 +126,6 @@ const filters = reactive({
   patient: '',
   staff: '',
   course: 'ทั้งหมด',
-  treatment: 'ทั้งหมด',
   saleType: 'ทั้งหมด',
   commissionType: 'ทั้งหมด',
   from: `${clinicToday().slice(0, 7)}-01`,
@@ -180,11 +168,6 @@ const currentReportTitle = computed(() => {
 const isTransactionReport = computed(() =>
   ['salesTransaction', 'treatmentTransaction'].includes(report.value),
 )
-
-function getTreatmentName(type: string): string {
-  if (filters.treatment !== 'ทั้งหมด') return filters.treatment
-  return TREATMENT_NAMES[type] ?? '—'
-}
 
 function getBranchName(branchCode?: string): string {
   if (branchCode) {
@@ -246,22 +229,8 @@ const filteredRevenueCategories = computed(() => {
   if (!revenueData.value?.byCategory) return []
   let list = revenueData.value.byCategory
 
-  if (filters.saleType === 'Course Sales') {
-    list = list.filter((cat) => cat.type === 'COURSE' || cat.type === 'Course Sales')
-  } else if (filters.saleType === 'Single Visit Sales') {
-    list = list.filter((cat) => cat.type === 'SINGLE_VISIT' || cat.type === 'Single Visit Sales')
-  } else if (filters.saleType === 'Assessment') {
-    list = list.filter((cat) => cat.type === 'ASSESSMENT' || cat.type === 'Assessment')
-  }
-
-  if (filters.treatment !== 'ทั้งหมด') {
-    list = list.filter((cat) => {
-      if (filters.treatment === 'Manual Therapy')
-        return cat.type === 'COURSE' || cat.type === 'Course Sales'
-      if (filters.treatment === 'Exercise Therapy')
-        return cat.type === 'SINGLE_VISIT' || cat.type === 'Single Visit'
-      return true
-    })
+  if (filters.saleType !== 'ทั้งหมด') {
+    list = list.filter((cat) => saleTypeLabel(cat.type) === filters.saleType)
   }
 
   return list
@@ -275,10 +244,10 @@ const kpiItems = computed(() => {
   const items = list
     .filter((cat) => Number(cat.amount) > 0)
     .map((cat) => {
-      const typeName = CATEGORY_NAMES[cat.type] ?? cat.type
+      const typeName = saleTypeLabel(cat.type)
       const share = total > 0 ? Math.round((Number(cat.amount) / total) * 100) : 0
       return {
-        label: `รายได้จาก ${typeName}`,
+        label: `รายได้จาก${typeName}`,
         amount: formatMoney(cat.amount),
         share: `${share}%`,
       }
@@ -299,7 +268,6 @@ const paymentRows = computed(() => {
     from: filters.from,
     to: filters.to,
     saleType: filters.saleType,
-    treatment: filters.treatment,
   }).map((row) => ({ ...row, branch: getBranchName() }))
 })
 
@@ -307,7 +275,7 @@ const paymentKpis = computed(() => {
   const rows = paymentRows.value
   const total = rows.reduce((sum, row) => sum + row.paid, 0)
   const course = rows
-    .filter((row) => row.category === 'Course Sales')
+    .filter((row) => row.category === SALE_TYPE_COURSE)
     .reduce((sum, row) => sum + row.paid, 0)
   const visit = total - course
   return [
@@ -371,8 +339,7 @@ const tableRows = computed<string[][]>(() => {
     return list.map((row) => {
       const share = total > 0 ? Math.round((Number(row.amount) / total) * 100) : 0
       return [
-        row.type === 'ASSESSMENT' ? '—' : (CATEGORY_NAMES[row.type] ?? row.type),
-        getTreatmentName(row.type),
+        saleTypeLabel(row.type),
         getBranchName(),
         formatPeriod(filters.from, filters.to),
         formatMoney(row.amount),
@@ -477,7 +444,6 @@ const tableRows = computed<string[][]>(() => {
     const total = paymentRows.value.reduce((sum, row) => sum + row.paid, 0)
     return paymentRows.value.map((row) => [
       row.category,
-      row.treatment,
       row.branch,
       formatDate(row.date),
       formatMoney(row.paid),
@@ -508,7 +474,7 @@ const totalRow = computed<string[] | null>(() => {
 
   if (report.value === 'revenue') {
     const total = filteredRevenueCategories.value.reduce((sum, cat) => sum + Number(cat.amount), 0)
-    return ['รวมทั้งหมด', '', '', '', formatMoney(total), '100%']
+    return ['รวมทั้งหมด', '', '', formatMoney(total), '100%']
   }
 
   if (report.value === 'balance') {
@@ -542,7 +508,7 @@ const totalRow = computed<string[] | null>(() => {
 
   if (report.value === 'payment') {
     const total = paymentRows.value.reduce((sum, row) => sum + row.paid, 0)
-    return ['รวมทั้งหมด', '', '', '', formatMoney(total), '100%']
+    return ['รวมทั้งหมด', '', '', formatMoney(total), '100%']
   }
 
   return null
@@ -688,7 +654,10 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
             />
           </div>
 
-          <div class="filter-grid-row1">
+          <div
+            class="filter-grid-row1"
+            :class="{ 'filter-grid-row1--revenue': report === 'revenue' }"
+          >
             <template v-if="['balance', 'transfer'].includes(report)">
               <div class="field-group">
                 <label>ผู้ป่วย</label>
@@ -710,27 +679,10 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
 
             <template v-else-if="report === 'payment'">
               <div class="field-group">
-                <label>การรักษา</label>
-                <FilterDropdown
-                  v-model="filters.treatment"
-                  :options="[
-                    { value: 'Manual Therapy', label: 'Manual Therapy' },
-                    { value: 'Exercise Therapy', label: 'Exercise Therapy' },
-                  ]"
-                  default-value="ทั้งหมด"
-                  default-label="ทั้งหมด"
-                  label="กรองตามการรักษา"
-                  :clear-on-reselect="false"
-                />
-              </div>
-              <div class="field-group">
                 <label>ประเภทการขาย</label>
                 <FilterDropdown
                   v-model="filters.saleType"
-                  :options="[
-                    { value: 'Course Sales', label: 'Course Sales' },
-                    { value: 'Single Visit Sales', label: 'Single Visit Sales' },
-                  ]"
+                  :options="SALE_TYPE_OPTIONS"
                   default-value="ทั้งหมด"
                   default-label="ทั้งหมด"
                   label="กรองตามประเภทการขาย"
@@ -741,29 +693,10 @@ watch([report, selectedHeaderBranchCode, () => filters.from, () => filters.to], 
 
             <template v-else-if="report === 'revenue'">
               <div class="field-group">
-                <label>การรักษา</label>
-                <FilterDropdown
-                  v-model="filters.treatment"
-                  :options="[
-                    { value: 'Manual Therapy', label: 'Manual Therapy' },
-                    { value: 'Exercise Therapy', label: 'Exercise Therapy' },
-                  ]"
-                  default-value="ทั้งหมด"
-                  default-label="ทั้งหมด"
-                  label="กรองตามการรักษา"
-                  :clear-on-reselect="false"
-                />
-              </div>
-
-              <div class="field-group">
                 <label>ประเภทการขาย</label>
                 <FilterDropdown
                   v-model="filters.saleType"
-                  :options="[
-                    { value: 'Assessment', label: 'Assessment' },
-                    { value: 'Course Sales', label: 'Course Sales' },
-                    { value: 'Single Visit Sales', label: 'Single Visit Sales' },
-                  ]"
+                  :options="SALE_TYPE_OPTIONS"
                   default-value="ทั้งหมด"
                   default-label="ทั้งหมด"
                   label="กรองตามประเภทการขาย"

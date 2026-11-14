@@ -363,7 +363,7 @@ watch(appointmentAlreadyProcessed, (done) => {
         </section>
       </template>
       <section v-else-if="screen === 'menu' && patient" class="service-menu">
-        <button type="button" class="service-menu-back" @click="backFromPaymentMenu">
+        <button type="button" class="service-menu-back app-back-link" @click="backFromPaymentMenu">
           ← กลับ
         </button>
         <h1>เลือกวิธีดำเนินรายการ</h1>
@@ -432,4 +432,4 @@ watch(appointmentAlreadyProcessed, (done) => {
     </main>
   </div>
 </template>
-<style scoped src="../styles/manager-services.css"></style>
+<style scoped src="../styles/service-menu.css"></style>

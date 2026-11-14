@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import source from './ManagerServicesView.vue?raw'
+import source from './ServicesView.vue?raw'
 
-describe('manager services patient menu', () => {
+describe('services patient menu', () => {
   it('keeps the two care workflows distinct and action-led', () => {
     expect(source).toContain('>ชำระเงิน<')
     expect(source).toContain("appointmentId ? 'ใช้สิทธิ์คอร์สที่มีอยู่' : 'ดูคอร์สของผู้ป่วย'")
@@ -20,7 +20,7 @@ describe('manager services patient menu', () => {
   it('shows real course eligibility and lets staff go back to pick another patient', () => {
     expect(source).toContain('courseApi.patientCourses')
     expect(source).toContain('มีสิทธิ์คอร์ส')
-    expect(source).toContain('class="service-menu-back" @click="backFromPaymentMenu"')
+    expect(source).toContain('class="service-menu-back app-back-link" @click="backFromPaymentMenu"')
   })
 
   it('uses the phone icon only when a phone number exists', () => {

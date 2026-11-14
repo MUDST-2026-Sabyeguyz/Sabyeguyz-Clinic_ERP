@@ -222,18 +222,7 @@ tbody tr:nth-child(even) {
   transform: translate(-50%, -12px);
 }
 .back-link {
-  display: inline-flex;
   margin-bottom: 16px;
-  color: #1f2937;
-  font-size: 18px;
-  font-weight: 700;
-}
-.back-link-button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
 }
 .profile-heading .avatar {
   display: grid;

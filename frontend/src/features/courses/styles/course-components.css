@@ -143,15 +143,6 @@
   border: 1px solid #78aaa3;
   color: #176d68;
 }
-.back {
-  padding: 0;
-  border: 0;
-  color: #176d68;
-  background: transparent;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
 .course-form {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

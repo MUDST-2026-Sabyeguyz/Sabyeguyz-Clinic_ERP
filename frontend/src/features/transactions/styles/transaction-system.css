@@ -260,10 +260,6 @@
   outline: 3px solid var(--color-primary-strong);
   outline-offset: 3px;
 }
-.transaction-page .transaction-back {
-  color: var(--color-primary-strong);
-  font-size: 16px;
-}
 .transaction-page .transaction-secondary {
   border-color: #b7cecc;
   color: var(--color-primary-strong);

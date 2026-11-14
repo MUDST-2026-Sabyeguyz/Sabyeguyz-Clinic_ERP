@@ -113,7 +113,7 @@ async function confirmDecision() {
   <div class="commission-manager-page adjustment-detail-page">
     <StaffHeader />
     <main class="commission-manager-main detail-main">
-      <RouterLink class="back-link" to="/staff/commission/adjustments"
+      <RouterLink class="back-link app-back-link" to="/staff/commission/adjustments"
         >← กลับรายการปรับค่าตอบแทน</RouterLink
       >
       <header class="detail-title">
@@ -362,19 +362,7 @@ async function confirmDecision() {
   padding-top: 28px;
 }
 .back-link {
-  display: inline-flex;
   margin-bottom: 18px;
-  color: #13766f;
-  font-weight: 600;
-  text-decoration: none;
-  transition:
-    color 160ms ease,
-    transform 160ms ease;
-}
-.back-link:hover {
-  color: #0b524d;
-  text-decoration: underline;
-  transform: translateX(-3px);
 }
 .detail-title {
   display: flex;
@@ -454,8 +442,7 @@ async function confirmDecision() {
   width: 21px;
   height: 21px;
 }
-.info-button:focus-visible,
-.back-link:focus-visible {
+.info-button:focus-visible {
   outline: 2px solid #13766f;
   outline-offset: 3px;
 }

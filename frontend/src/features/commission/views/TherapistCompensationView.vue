@@ -97,6 +97,7 @@ function moveMonth(offset: number) {
       :payment="payment"
       :lines="lines"
       :month="month"
+      :adjustments="adjustments"
       :pending-sessions="data?.pendingSessions ?? null"
     />
     <section v-else-if="activeTab === 'commission'" class="therapist-table-card">

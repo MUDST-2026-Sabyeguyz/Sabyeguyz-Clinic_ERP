@@ -8,10 +8,6 @@
   margin: auto;
   padding: 36px 0 64px;
 }
-.back-link {
-  color: #42615b;
-  text-decoration: none;
-}
 .workspace-heading {
   display: flex;
   align-items: center;

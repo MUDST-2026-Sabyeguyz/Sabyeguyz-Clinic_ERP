@@ -427,7 +427,7 @@ watch(
     <StaffHeader />
     <main>
       <button
-        class="back"
+        class="back app-back-link"
         type="button"
         @click="
           router.push({
@@ -436,7 +436,7 @@ watch(
           })
         "
       >
-        ← กลับหน้าบริการ
+        ← กลับ
       </button>
       <p v-if="error && patient" ref="errorMessage" class="error" role="alert">{{ error }}</p>
       <p v-if="saving" role="status" aria-live="polite">กำลังบันทึก…</p>
@@ -709,26 +709,6 @@ button:focus-visible,
 :is(input, select, textarea):focus-visible {
   outline: 2px solid #147e78;
   outline-offset: 2px;
-}
-.back {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: #176c68;
-  font-weight: 600;
-  text-decoration: none;
-  text-underline-offset: 3px;
-  transition:
-    color 180ms ease,
-    transform 180ms ease;
-}
-.back:hover,
-.back:focus-visible {
-  color: #0b5652;
-  text-decoration: underline;
-}
-.back:hover {
-  transform: translateX(-4px);
 }
 .heading {
   display: flex;

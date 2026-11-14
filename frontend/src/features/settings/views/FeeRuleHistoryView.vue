@@ -57,7 +57,7 @@ onMounted(async () => {
   <div class="history-page">
     <StaffHeader />
     <main class="history-main">
-      <RouterLink class="history-back" to="/staff/settings?section=commission">← กลับการตั้งค่ากฎค่ามือ</RouterLink>
+      <RouterLink class="history-back app-back-link" to="/staff/settings?section=commission">← กลับการตั้งค่ากฎค่ามือ</RouterLink>
       <header class="history-title">
         <div>
           <h1>ประวัติเวอร์ชันกฎค่ามือ</h1>
@@ -146,11 +146,6 @@ onMounted(async () => {
   width: min(1180px, calc(100% - 48px));
   margin: auto;
   padding: 28px 0 80px;
-}
-.history-back {
-  color: var(--color-primary);
-  font-weight: 600;
-  text-decoration: none;
 }
 .history-title {
   display: flex;

@@ -387,23 +387,6 @@ input:disabled {
   width: min(1120px, calc(100% - 48px));
   margin: 22px auto 0;
 }
-.back-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 42px;
-  padding: 7px 15px;
-  border: 1px solid #87aaa7;
-  border-radius: 9px;
-  color: #285e69;
-  background: rgb(255 255 255 / 72%);
-  font-size: 18px;
-  transition: 0.2s ease;
-}
-.back-link:hover {
-  border-color: #1d7c78;
-  background: white;
-  transform: translateX(-2px);
-}
 .registration-shell {
   width: min(850px, calc(100% - 40px));
   margin: 32px auto 72px;
@@ -752,24 +735,6 @@ fieldset {
   width: min(850px, calc(100% - 48px));
   margin: 26px auto 0;
 }
-.registration-content .back-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  color: #176c68;
-  background: transparent;
-  font-size: 16px;
-  line-height: 1.5;
-  text-decoration: none;
-}
-.registration-content .back-link:hover {
-  background: transparent;
-  transform: none;
-  text-decoration: underline;
-}
 .success-actions .secondary,
 .success-actions .primary {
   display: inline-flex;
@@ -788,23 +753,6 @@ fieldset {
   width: min(1200px, calc(100% - 64px));
   margin: 18px auto 0;
 }
-
-.back-link {
-  min-height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  color: #177f7b;
-  background: transparent;
-  font-size: 16px;
-}
-
-.back-link:hover {
-  background: transparent;
-  transform: none;
-  text-decoration: underline;
-}
-
 /* Keep registration confirmation and success states aligned with appointment feedback. */
 .confirmation-modal .confirmation-patient-name {
   min-height: 24px;

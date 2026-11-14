@@ -2,7 +2,6 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppointmentView from '../views/AppointmentView.vue'
-import ManagerAppointmentView from '../views/ManagerAppointmentView.vue'
 import { clinicToday } from '@/utils/clinicDate'
 
 const api = vi.hoisted(() => ({ search: vi.fn() }))
@@ -33,12 +32,14 @@ beforeEach(() => {
   api.search.mockReset()
 })
 
-for (const [role, Component] of [
-  ['therapist', AppointmentView],
-  ['manager', ManagerAppointmentView],
-] as const) {
+for (const role of ['therapist', 'manager'] as const) {
+  const Component = AppointmentView
   describe(`${role} appointment daily list`, () => {
     async function render() {
+      localStorage.setItem(
+        'authUser',
+        JSON.stringify({ id: 1, role: role === 'manager' ? 'MANAGER' : 'THERAPIST' }),
+      )
       const router = createRouter({
         history: createMemoryHistory(),
         routes: [{ path: '/staff/appointments', name: 'staff-appointments', component: Component }],

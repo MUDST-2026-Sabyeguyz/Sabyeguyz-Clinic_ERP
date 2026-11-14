@@ -89,7 +89,7 @@ onMounted(load)
     <StaffHeader />
     <main class="commission-manager-main schedule-main">
       <RouterLink
-        class="back-link"
+        class="back-link app-back-link"
         :to="{ name: 'commission-adjustment-detail', params: { id: route.params.id } }"
         >← กลับรายละเอียดรายการปรับยอด</RouterLink
       >
@@ -208,11 +208,7 @@ onMounted(load)
   padding-top: 28px;
 }
 .back-link {
-  display: inline-flex;
   margin-bottom: 22px;
-  color: #13766f;
-  font-weight: 700;
-  text-decoration: none;
 }
 h1 {
   margin: 0;
@@ -302,8 +298,7 @@ input {
   min-height: 44px;
 }
 .schedule-main button:focus-visible,
-.schedule-main input:focus-visible,
-.back-link:focus-visible {
+.schedule-main input:focus-visible {
   outline: 2px solid #13766f;
   outline-offset: 2px;
 }

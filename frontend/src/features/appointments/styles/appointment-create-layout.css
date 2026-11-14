@@ -271,31 +271,6 @@ body:is(.therapist-ui, :not(.therapist-ui))
     gap: 16px;
   }
 }
-
-body:is(.therapist-ui, :not(.therapist-ui))
-  .appointment-page
-  .appointment-form-page:not(.appointment-reschedule-modal)
-  .appointment-back {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 8px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--color-primary-strong);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-body:is(.therapist-ui, :not(.therapist-ui))
-  .appointment-page
-  .appointment-form-page:not(.appointment-reschedule-modal)
-  .appointment-back:hover {
-  background: transparent;
-  text-decoration: underline;
-}
 body:is(.therapist-ui, :not(.therapist-ui))
   .appointment-page
   .appointment-create-card:not(.is-editing)

@@ -1,22 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { defineAsyncComponent, defineComponent, h, type Component } from 'vue'
-
-type RoleViewLoader = () => Promise<{ default: Component }>
-function roleView(manager: RoleViewLoader, therapist: RoleViewLoader) {
-  const ManagerView = defineAsyncComponent(manager)
-  const TherapistView = defineAsyncComponent(therapist)
-
-  return defineComponent({
-    name: 'RoleSpecificView',
-    setup() {
-      const user = JSON.parse(localStorage.getItem('authUser') ?? 'null') as {
-        role?: string
-      } | null
-      const View = user?.role === 'MANAGER' ? ManagerView : TherapistView
-      return () => h(View)
-    },
-  })
-}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -39,28 +21,19 @@ const router = createRouter({
     {
       path: '/staff/patients/new',
       name: 'patient-registration',
-      component: roleView(
-        () => import('@/features/patients/views/ManagerPatientRegistrationView.vue'),
-        () => import('@/features/patients/views/PatientRegistrationView.vue'),
-      ),
+      component: () => import('@/features/patients/views/PatientRegistrationView.vue'),
       meta: { permission: 'Patient' },
     },
     {
       path: '/staff/patients',
       name: 'patient-search',
-      component: roleView(
-        () => import('@/features/patients/views/ManagerPatientSearchView.vue'),
-        () => import('@/features/patients/views/PatientSearchView.vue'),
-      ),
+      component: () => import('@/features/patients/views/PatientSearchView.vue'),
       meta: { permission: 'Patient' },
     },
     {
       path: '/staff/patients/:id/history',
       name: 'patient-history',
-      component: roleView(
-        () => import('@/features/patients/views/ManagerPatientProfileView.vue'),
-        () => import('@/features/patients/views/PatientProfileView.vue'),
-      ),
+      component: () => import('@/features/patients/views/PatientProfileView.vue'),
       meta: { permission: 'Patient' },
     },
     {
@@ -78,55 +51,37 @@ const router = createRouter({
     {
       path: '/staff/patients/:id',
       name: 'patient-profile',
-      component: roleView(
-        () => import('@/features/patients/views/ManagerPatientProfileView.vue'),
-        () => import('@/features/patients/views/PatientProfileView.vue'),
-      ),
+      component: () => import('@/features/patients/views/PatientProfileView.vue'),
       meta: { permission: 'Patient' },
     },
     {
       path: '/staff/appointments',
       name: 'staff-appointments',
-      component: roleView(
-        () => import('@/features/appointments/views/ManagerAppointmentView.vue'),
-        () => import('@/features/appointments/views/AppointmentView.vue'),
-      ),
+      component: () => import('@/features/appointments/views/AppointmentView.vue'),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/appointments/calendar',
       name: 'staff-appointment-calendar',
-      component: roleView(
-        () => import('@/features/appointments/views/ManagerAppointmentCalendarView.vue'),
-        () => import('@/features/appointments/views/AppointmentCalendarView.vue'),
-      ),
+      component: () => import('@/features/appointments/views/AppointmentCalendarView.vue'),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/appointments/new',
       name: 'staff-appointment-create',
-      component: roleView(
-        () => import('@/features/appointments/views/ManagerAppointmentView.vue'),
-        () => import('@/features/appointments/views/AppointmentView.vue'),
-      ),
+      component: () => import('@/features/appointments/views/AppointmentView.vue'),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/appointments/:id/edit',
       name: 'staff-appointment-edit',
-      component: roleView(
-        () => import('@/features/appointments/views/ManagerAppointmentView.vue'),
-        () => import('@/features/appointments/views/AppointmentView.vue'),
-      ),
+      component: () => import('@/features/appointments/views/AppointmentView.vue'),
       meta: { permission: 'Visit' },
     },
     {
       path: '/staff/services',
       name: 'staff-services',
-      component: roleView(
-        () => import('@/features/services/views/ManagerServicesView.vue'),
-        () => import('@/features/services/views/servicesView.vue'),
-      ),
+      component: () => import('@/features/services/views/ServicesView.vue'),
       meta: { permission: 'Treatment' },
     },
     {

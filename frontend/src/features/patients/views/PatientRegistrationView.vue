@@ -31,6 +31,33 @@ import {
 const authUser = JSON.parse(localStorage.getItem('authUser') ?? 'null')
 const isManager = authUser?.role === 'MANAGER'
 
+// ข้อความและพฤติกรรมเล็กน้อยที่ต่างกันตามบทบาท (Manager / Therapist) ใช้หน้าจอเดียวกัน
+const copy = isManager
+  ? {
+      phonePrefix: ' ',
+      dateLabel: 'เวลา',
+      bloodGroups: ['O', 'A', 'B', 'AB', 'ไม่ทราบ'],
+      loadError: 'โหลดข้อมูลไม่สำเร็จ',
+      intro: '',
+      extraTitle: 'ข้อมูลเพิ่มเติม',
+      duplicateTitle: 'พบเลขบัตรประชาชน/เลข HN ซ้ำ',
+      duplicateBack: 'ตรวจสอบข้อมูล',
+      openExisting: 'แสดงข้อมูลผู้ป่วยเดิม',
+      openPatient: 'แสดงข้อมูลผู้ป่วย',
+    }
+  : {
+      phonePrefix: 'โทร ',
+      dateLabel: 'วันที่',
+      bloodGroups: ['ไม่ทราบ', 'A', 'B', 'AB', 'O'],
+      loadError: 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ',
+      intro: 'กรอกข้อมูลเพื่อสร้างประวัติและหมายเลข HN',
+      extraTitle: 'ข้อมูลเพิ่มเติม (ไม่บังคับ)',
+      duplicateTitle: 'พบเลขบัตรประชาชน หรือ HN ซ้ำ',
+      duplicateBack: 'กลับไปตรวจสอบข้อมูล',
+      openExisting: 'เปิดข้อมูลผู้ป่วยเดิม',
+      openPatient: 'เปิดข้อมูลผู้ป่วย',
+    }
+
 const submitting = ref(false)
 const route = useRoute()
 // ป้องกันผลคำขอเก่าพากลับไปหน้าเดิมหลังผู้ใช้ออกจากฟอร์มแล้ว
@@ -67,8 +94,8 @@ const appointmentSummary = computed(() => {
   }).format(new Date(item.startAt))
   return [
     item.contactName || item.patient?.fullName,
-    item.contactPhone ? `โทร ${item.contactPhone}` : null,
-    `วันที่ ${date} น.`,
+    item.contactPhone ? `${copy.phonePrefix}${item.contactPhone}` : null,
+    `${copy.dateLabel} ${date} น.`,
   ]
     .filter(Boolean)
     .join(' ')
@@ -144,7 +171,7 @@ const insuranceCompanies = ref<string[]>([])
 const branches = ref<Array<{ code: string; name: string }>>([])
 const titleOptions = computed(() => patientTitleOptions(form.nationality === 'ต่างชาติ'))
 const genderOptions = ['ชาย', 'หญิง', 'ไม่ระบุ'].map((value) => ({ value, label: value }))
-const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
+const bloodGroupOptions = copy.bloodGroups.map((value) => ({ value, label: value }))
 const branchOptions = computed(() =>
   branches.value.map((branch) => ({ value: branch.code, label: branch.name })),
 )
@@ -294,7 +321,7 @@ onMounted(async () => {
     insuranceCompanies.value = valuesFor('Insurance Company')
     if (!form.customerType) form.customerType = customerGroups.value[0]!
   } catch {
-    errorMessage.value = 'โหลดข้อมูลสาขาและข้อมูลพื้นฐานจาก backend ไม่สำเร็จ'
+    errorMessage.value = copy.loadError
   }
   if (route.query.appointmentId) await loadSourceAppointment()
   initialForm.value = JSON.stringify(form)
@@ -471,14 +498,14 @@ async function submit() {
     <StaffHeader />
     <main class="registration-content">
       <div class="back-row">
-        <RouterLink :to="registrationBackTarget" class="back-link">{{
+        <RouterLink :to="registrationBackTarget" class="back-link app-back-link">{{
           route.query.appointmentId ? '← กลับไปหน้านัดหมาย' : '← กลับไปค้นหาผู้ป่วย'
         }}</RouterLink>
       </div>
       <section v-if="!registeredHn" class="registration-shell">
         <div class="intro">
           <h1>ลงทะเบียนผู้ป่วยใหม่</h1>
-          <p>กรอกข้อมูลเพื่อสร้างประวัติและหมายเลข HN</p>
+          <p v-if="copy.intro">{{ copy.intro }}</p>
         </div>
         <aside
           v-if="route.query.appointmentId"
@@ -688,7 +715,7 @@ async function submit() {
             </div>
           </section>
           <section class="registration-section">
-            <h2>ข้อมูลเพิ่มเติม (ไม่บังคับ)</h2>
+            <h2>{{ copy.extraTitle }}</h2>
             <div class="form-grid">
               <label
                 >สาขาที่ลงทะเบียน
@@ -795,7 +822,8 @@ async function submit() {
       ><div
         v-if="confirmationOpen"
         class="registration-modal-backdrop"
-        @click.self="confirmationOpen = false"
+        @click.self="!isManager && (confirmationOpen = false)"
+        @keydown.esc="isManager && (confirmationOpen = false)"
       >
         <section
           class="registration-modal confirmation-modal"
@@ -808,7 +836,13 @@ async function submit() {
           <p class="confirmation-patient-name">{{ registeredPatientName }}</p>
           <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
           <div class="registration-modal-actions">
-            <button type="button" class="secondary" @click="confirmationOpen = false">ยกเลิก</button
+            <button
+              type="button"
+              class="secondary"
+              :autofocus="isManager"
+              @click="confirmationOpen = false"
+            >
+              ยกเลิก</button
             ><button type="button" class="primary" :disabled="submitting" @click="submit">
               {{ submitting ? 'กำลังบันทึก...' : 'ยืนยัน' }}
             </button>
@@ -826,7 +860,7 @@ async function submit() {
           aria-modal="true"
         >
           <span class="duplicate-warning-icon" aria-hidden="true">!</span>
-          <h2 id="registration-duplicate-title">พบเลขบัตรประชาชน หรือ HN ซ้ำ</h2>
+          <h2 id="registration-duplicate-title">{{ copy.duplicateTitle }}</h2>
           <p>ระบบตรวจพบข้อมูลที่ตรงกับผู้ป่วยเดิม จึงไม่สามารถสร้างรายการใหม่ได้</p>
           <strong>ไม่สามารถบันทึกเป็นผู้ป่วยใหม่ได้</strong>
           <div v-if="duplicatePatient" class="duplicate-patient">
@@ -839,7 +873,7 @@ async function submit() {
           </div>
           <div class="registration-modal-actions">
             <button type="button" class="secondary" @click="duplicateOpen = false">
-              กลับไปตรวจสอบข้อมูล
+              {{ copy.duplicateBack }}
             </button>
             <button
               type="button"
@@ -852,7 +886,7 @@ async function submit() {
                   ? 'กำลังไปหน้าชำระเงิน…'
                   : route.query.appointmentId
                     ? 'ใช้ผู้ป่วยนี้และไปชำระเงิน'
-                    : 'เปิดข้อมูลผู้ป่วยเดิม'
+                    : copy.openExisting
               }}
             </button>
           </div>
@@ -894,7 +928,7 @@ async function submit() {
                 ? 'กำลังไปหน้าชำระเงิน…'
                 : route.query.appointmentId
                   ? 'บริการและชำระเงิน'
-                  : 'เปิดข้อมูลผู้ป่วย'
+                  : copy.openPatient
             }}
           </button>
         </section>
@@ -923,5 +957,5 @@ async function submit() {
 </template>
 <style scoped src="../styles/patient-registration.css"></style>
 <style src="../styles/patient-workspace.css"></style>
-
 <style scoped src="../styles/registration-polish.css"></style>
+

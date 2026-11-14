@@ -560,8 +560,56 @@ body.therapist-ui #app .appointment-page.appointment-form-open {
   font-weight: 700;
 }
 
-#app :is(.back-link, .course-use-back, .appointment-back, .back) {
+/* ---------- Back link: one shared style for every "← กลับ" link/button ---------- */
+/* #app raises specificity so it wins over the older per-page back-link rules. */
+#app .app-back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-primary-strong);
+  font-family: inherit;
   font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 160ms ease-out,
+    color 160ms ease-out;
+}
+#app .app-back-link:hover {
+  background: transparent;
+  color: #176c68;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  transform: translateX(-3px);
+}
+#app .app-back-link:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+#app .app-back-link:active {
+  transform: translateX(-6px);
+}
+@media print {
+  #app .app-back-link {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #app .app-back-link {
+    transition: none;
+  }
+  #app .app-back-link:hover,
+  #app .app-back-link:active {
+    transform: none;
+  }
 }
 
 /* ---------- Patient directory table: rebalance columns for 16px text ---------- */

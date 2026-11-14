@@ -3,7 +3,6 @@ import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppointmentView from '../views/AppointmentView.vue'
-import ManagerAppointmentView from '../views/ManagerAppointmentView.vue'
 import type { Appointment } from '@/api/client'
 
 const api = vi.hoisted(() => ({
@@ -84,10 +83,8 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
 })
 
-for (const [name, Component] of [
-  ['staff', AppointmentView],
-  ['manager', ManagerAppointmentView],
-] as const) {
+for (const name of ['staff', 'manager'] as const) {
+  const Component = AppointmentView
   describe(`${name} appointment interval form`, () => {
     async function render() {
       if (name === 'manager')
