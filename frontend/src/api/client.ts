@@ -265,6 +265,7 @@ export type AppointmentStatus =
 // endAt เก็บเวลาจบนัดจริง ไม่คำนวณซ้ำจากระยะเวลาบริการ
 export type Appointment = {
   id: number
+  requestedServiceType?: 'SingleVisit' | 'Course' | 'Assessment' | null
   branchCode: string
   patient: { id: number | null; hn: string | null; fullName: string | null } | null
   therapist: { id: number; fullName: string }
