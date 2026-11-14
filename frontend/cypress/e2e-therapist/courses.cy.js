@@ -1,13 +1,24 @@
 /* oxlint-disable vitest/valid-expect, vitest/no-standalone-expect -- Cypress uses Chai in queued tests. */
-import { api, visit, patient, fixtures } from '../support-therapist/helpers'
+import { api, visit, patient, fixtures, useCourse, book, nextSlot } from '../support-therapist/helpers'
 
 function purchase(patientId, courseId = fixtures.courseId) {
   return api('POST', '/api/course-purchases', {
-    patientId, courseId, branchCode: '01',
+    patientId, courseId, branchCode: '01', caseOwnerStaffId: fixtures.therapistId, paymentLabelCode: 'PAID',
   }).then((r) => {
     expect(r.status).to.eq(201)
     return r.body
   })
+}
+// Using a course needs an appointment of the patient: book the next free slot and open the usage review from it.
+function openUsage(p, course) {
+  return book(p.id, nextSlot()).then((appointment) => {
+    visit(`/staff/courses?patientId=${p.id}&courseId=${course.id}&appointmentId=${appointment.id}&action=use`)
+  })
+}
+// The transfer form searches while typing: type the HN, then pick the recipient from the results.
+function chooseRecipient(recipient) {
+  cy.contains('label', 'ค้นหาผู้รับสิทธิ์').find('input').type(recipient.hn)
+  cy.contains('button', recipient.fullName).click()
 }
 function balance(patientId, courseId, expected) {
   return api('GET', `/api/patients/${patientId}/courses`).then((r) => {
@@ -35,15 +46,14 @@ describe('Therapist course entitlements', () => {
 
   it('uses one visit in the browser after confirmation and retains the usage in history', () => {
     patient().then((p) => purchase(p.id).then((course) => {
-      visit(`/staff/courses?patientId=${p.id}&courseId=${course.id}`)
-      cy.get('.course-manager-card').contains('button', 'ใช้สิทธิ์คอร์ส').click()
+      openUsage(p, course)
       cy.contains('h1', 'ตรวจสอบการใช้สิทธิ์').should('be.visible')
       cy.contains('button', 'ยืนยันใช้สิทธิ์').click()
-      cy.get('.course-confirm-actions').contains('button', 'ยังไม่ยืนยัน').click()
+      cy.get('.course-confirm-actions').contains('button', /^ยกเลิก$/).click()
       balance(p.id, course.id, course.remaining)
       cy.contains('button', 'ยืนยันใช้สิทธิ์').click()
       cy.intercept('POST', '**/api/course-usages').as('useCourse')
-      cy.get('.course-confirm-actions').contains('button', 'ยืนยันใช้สิทธิ์').click()
+      cy.get('.course-confirm-actions').contains('button', /^ยืนยัน$/).click()
       cy.wait('@useCourse').its('response.statusCode').should('eq', 200)
       balance(p.id, course.id, course.remaining - 1)
       api('GET', `/api/course-purchases/${course.id}`).then((r) => {
@@ -51,8 +61,8 @@ describe('Therapist course entitlements', () => {
         expect(r.body.movements.filter((m) => m.type === 'USAGE')).to.have.length(1)
         expect(r.body.movements.find((m) => m.type === 'USAGE').quantity).to.eq(-1)
       })
-      visit(`/staff/patients/${p.id}/courses/${course.id}?action=history`)
-      cy.contains(p.fullName).should('be.visible')
+      visit(`/staff/patients/${p.id}/courses/${course.id}?patientId=${p.id}&courseId=${course.id}&action=history`)
+      cy.get('.course-history-patient').should('contain', p.fullName)
       cy.contains(course.course.name).should('be.visible')
       cy.get('.course-history-entry').should('have.length', 1)
     }))
@@ -78,7 +88,7 @@ describe('Therapist course entitlements', () => {
         expect(r.body[0].courseId).to.eq(course.id)
       })
       visit(`/staff/courses?patientId=${recipient.id}&courseId=${course.id}`)
-      cy.get('.course-manager-card').should('contain', 'แชร์คอร์ส').and('contain', owner.fullName)
+      cy.get('.course-manager-card').should('have.class', 'is-shared').and('contain', owner.fullName)
       cy.get('.course-manager-metrics').should('contain', '2 ครั้ง')
       cy.get('.course-share-button').should('not.exist')
     })))
@@ -108,9 +118,9 @@ describe('Therapist course entitlements', () => {
 
   it('API and browser: a cancelled course cannot be consumed and remains in inactive history', () => {
     patient().then((p) => purchase(p.id).then((course) => {
-      api('POST', `/api/course-purchases/${course.id}/cancel`, { reason: 'Cancel unused course for validation' })
+      api('POST', `/api/course-purchases/${course.id}/cancel`, { reason: 'Cancel unused course for validation' }, 'manager')
         .then((r) => expect(r.status).to.eq(200))
-      api('POST', '/api/course-usages', { coursePurchaseId: course.id })
+      useCourse('therapist', p.id, { coursePurchaseId: course.id })
         .then((r) => expect(r.status).to.eq(400))
       api('GET', `/api/patients/${p.id}/courses`).then((r) => {
         expect(r.status).to.eq(200)
@@ -131,11 +141,9 @@ describe('Therapist course entitlements', () => {
       visit(`/staff/courses?patientId=${owner.id}&courseId=${course.id}`)
       cy.contains('button', 'แชร์คอร์ส').click()
       cy.get('.course-transfer-stepper input').clear().type(String(course.remaining + 1))
-      cy.get('input[placeholder="ค้นหาชื่อ เบอร์โทรศัพท์ หรือ HN"]').type(recipient.hn)
-      cy.contains('button', 'ค้นหาผู้รับ').click()
-      cy.get('.course-transfer-results').contains('button', recipient.fullName).click()
-      cy.contains('button', 'เลือกผู้รับนี้').click()
-      cy.contains('button', 'ตรวจสอบข้อมูล').should('be.disabled')
+      chooseRecipient(recipient)
+      // more than the remaining entitlement cannot be confirmed
+      cy.contains('button', /^\s*ยืนยัน\s*$/).should('be.disabled')
       balance(owner.id, course.id, course.remaining)
     })))
   })
@@ -148,14 +156,13 @@ describe('Therapist course entitlements', () => {
       expect(catalog.status).to.eq(201)
       patient().then((p) => purchase(p.id, catalog.body.id).then((course) => {
         expect(course.remaining).to.eq(1)
-        visit(`/staff/courses?patientId=${p.id}&courseId=${course.id}`)
-        cy.get('.course-manager-card').contains('button', 'ใช้สิทธิ์คอร์ส').click()
+        openUsage(p, course)
         cy.contains('button', 'ยืนยันใช้สิทธิ์').click()
         cy.intercept('POST', '**/api/course-usages').as('lastUsage')
-        cy.get('.course-confirm-actions').contains('button', 'ยืนยันใช้สิทธิ์').click()
+        cy.get('.course-confirm-actions').contains('button', /^ยืนยัน$/).click()
         cy.wait('@lastUsage').its('response.statusCode').should('eq', 200)
         balance(p.id, course.id, 0)
-        api('POST', '/api/course-usages', { coursePurchaseId: course.id }).then((r) => {
+        useCourse('therapist', p.id, { coursePurchaseId: course.id }).then((r) => {
           expect(r.status).to.eq(400)
           expect(r.body.message).to.contain('คอร์สใช้สิทธิ์ครบแล้ว')
         })
@@ -181,7 +188,7 @@ describe('Therapist course entitlements', () => {
       const expiryDate = yesterday.toISOString().slice(0, 10)
       api('POST', '/__cypress/course-expiry', { courseId: course.id, expiryDate }, 'manager')
         .then((r) => expect(r.status).to.eq(200))
-      api('POST', '/api/course-usages', { coursePurchaseId: course.id }).then((r) => {
+      useCourse('therapist', p.id, { coursePurchaseId: course.id }).then((r) => {
         expect(r.status).to.eq(400)
         expect(r.body.message).to.contain('คอร์สหมดอายุแล้ว')
       })
@@ -196,7 +203,7 @@ describe('Therapist course entitlements', () => {
       cy.wait('@expiredCourses').its('response.statusCode').should('eq', 200)
       cy.get('.course-manager-card').should('not.exist')
       cy.contains('button', 'หมดอายุ / ใช้สิทธิ์ครบ').click()
-      cy.get('.course-inactive-history-totals').should('contain', course.course.name)
+      cy.get('.course-manager-card').should('contain', course.course.name).and('contain', 'วันหมดอายุคอร์ส')
       cy.get('.course-history-entry').should('not.exist')
     }))
   })
@@ -216,34 +223,31 @@ describe('Therapist course entitlements', () => {
         expect(r.body[0].usable).to.eq(true)
         expect(r.body[0].expiresAt.slice(0, 10)).to.eq(expiryDate)
       })
-      visit(`/staff/courses?patientId=${p.id}&courseId=${course.id}`)
-      cy.get('.course-manager-card').contains('button', 'ใช้สิทธิ์คอร์ส').should('be.enabled').click()
+      openUsage(p, course)
       cy.contains('button', 'ยืนยันใช้สิทธิ์').click()
       cy.intercept('POST', '**/api/course-usages').as('expiryDayUsage')
-      cy.get('.course-confirm-actions').contains('button', 'ยืนยันใช้สิทธิ์').click()
+      cy.get('.course-confirm-actions').contains('button', /^ยืนยัน$/).click()
       cy.wait('@expiryDayUsage').its('response.statusCode').should('eq', 200)
       balance(p.id, course.id, course.remaining - 1)
     }))
   })
-  it('CRS-GAP-01 browser blocks transfer when the required reason has no editable field', () => {
+  it('CRS-GAP-01 browser transfer uses the default reason and moves the entitlement through the review step', () => {
     patient().then((owner) => patient().then((recipient) => purchase(owner.id).then((course) => {
       visit(`/staff/courses?patientId=${owner.id}&courseId=${course.id}`)
       cy.contains('button', 'แชร์คอร์ส').click()
       cy.get('.course-transfer-stepper input').clear().type('2')
-      cy.get('input[placeholder="ค้นหาชื่อ เบอร์โทรศัพท์ หรือ HN"]').type(recipient.hn)
-      cy.contains('button', 'ค้นหาผู้รับ').click()
-      cy.get('.course-transfer-results').contains('button', recipient.fullName).click()
-      cy.contains('button', 'เลือกผู้รับนี้').click()
-      cy.intercept('POST', '**/api/course-transfers').as('blockedTransfer')
-      cy.contains('button', 'ตรวจสอบข้อมูล').click()
-      cy.contains('button', 'ตรวจสอบข้อมูล').click()
+      chooseRecipient(recipient)
+      // there is no reason field: the form fills the default reason itself
       cy.get('textarea[name="reason"], input[name="reason"]').should('not.exist')
-      cy.contains('button', 'ตรวจสอบข้อมูล').should('be.visible')
-      cy.get('.course-transfer-review').should('not.exist')
-      cy.get('@blockedTransfer.all').should('have.length', 0)
-      api('GET', `/api/course-transfers?patientId=${recipient.id}`).its('body').should('have.length', 0)
-      balance(owner.id, course.id, course.remaining)
-      api('GET', `/api/patients/${recipient.id}/courses`).its('body').should('have.length', 0)
+      cy.intercept('POST', '**/api/course-transfers').as('transfer')
+      cy.contains('button', /^\s*ยืนยัน\s*$/).click()
+      cy.get('.course-transfer-confirm').contains('button', /^\s*ยืนยัน\s*$/).click()
+      cy.wait('@transfer').then(({ request, response }) => {
+        expect(request.body.reason).to.eq('แชร์สิทธิ์ตามคำขอผู้ป่วย')
+        expect(response.statusCode).to.eq(201)
+      })
+      balance(owner.id, course.id, course.remaining - 2)
+      balance(recipient.id, course.id, 2)
     })))
   })
 })
