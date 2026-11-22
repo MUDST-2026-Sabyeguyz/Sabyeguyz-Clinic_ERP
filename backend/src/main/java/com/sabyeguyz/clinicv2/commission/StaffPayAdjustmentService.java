@@ -129,10 +129,11 @@ public class StaffPayAdjustmentService {
     public StaffPayAdjustment create(CreateRequest request, com.sabyeguyz.clinicv2.branch.Branch branch, Long actorId) {
         require(request.staffId() != null, "ต้องระบุพนักงาน");
         Staff person = staff.findById(request.staffId()).orElseThrow(() -> new IllegalArgumentException("ไม่พบพนักงาน"));
-        require(person.isStaffStatus() && person.getTerminationDate() == null
-                && person.getPosition() == com.sabyeguyz.clinicv2.enums.StaffPosition.Therapist,
-                "เลือกได้เฉพาะนักกายภาพที่ยังใช้งานอยู่");
-        require(branch != null && branch.getId() != null, "ต้องระบุสาขา");
+        if (branch != null) {
+            require(person.isStaffStatus() && person.getTerminationDate() == null
+                    && person.getPosition() == com.sabyeguyz.clinicv2.enums.StaffPosition.Therapist,
+                    "เลือกได้เฉพาะนักกายภาพที่ยังใช้งานอยู่");
+        }
         require(request.amount() != null && request.amount().signum() != 0, "ยอดปรับต้องไม่เป็น 0");
         require(request.amount().stripTrailingZeros().scale() <= 2, "ยอดปรับมีทศนิยมได้ไม่เกิน 2 ตำแหน่ง");
         require(request.reason() != null && !request.reason().isBlank(), "ต้องระบุเหตุผล");
@@ -163,6 +164,32 @@ public class StaffPayAdjustmentService {
 
         require(original != null, "ต้องระบุเดือนที่เกิดข้อผิดพลาด (originalMonth)");
         StaffMonthlyPaymentService.requireMonth(original);
+        String applied = request.appliedMonth() != null ? request.appliedMonth() : defaultAppliedMonth(person, original);
+        StaffMonthlyPaymentService.requireMonth(applied);
+        require(applied.compareTo(original) > 0, "เดือนที่นำไปใช้ต้องอยู่หลังเดือนที่เกิดข้อผิดพลาด");
+
+        StaffPayAdjustment adjustment = new StaffPayAdjustment();
+        adjustment.setStaff(person);
+        adjustment.setOriginalMonth(original);
+        adjustment.setAppliedMonth(applied);
+        adjustment.setAmount(request.amount());
+        adjustment.setAllocation(allocation);
+        adjustment.setSingleVisitFee(fee);
+        adjustment.setCourse(course);
+        adjustment.setVisit(visit);
+        adjustment.setSaleTransaction(sale);
+        adjustment.setReason(request.reason().trim());
+        adjustment.setProcessedAmount(BigDecimal.ZERO);
+        adjustment.setRemainingAmount(request.amount().abs());
+        adjustment.setCreatedAt(Instant.now());
+        adjustment.setCreatedBy(actorId);
+
+        if (branch == null) {
+            adjustment.setAutomatic(false);
+            adjustment.setAdjustmentStatus(AdjustmentStatus.Pending);
+            return adjustments.save(adjustment);
+        }
+
         String sourceMonth = allocation != null ? allocation.getVisitDate().toString().substring(0, 7)
                 : fee != null ? fee.getServiceDate().toString().substring(0, 7)
                 : visit != null ? visit.getVisitDate().atZone(java.time.ZoneId.of("Asia/Bangkok"))
@@ -182,36 +209,18 @@ public class StaffPayAdjustmentService {
         require(payments.findByStaffIdAndPaymentMonthAndBranchId(person.getId(), original, branch.getId())
                 .filter(payment -> payment.getPaymentStatus() == PaymentStatus.Paid).isPresent(),
                 "งวดต้นทางยังไม่จ่าย กรุณาแก้ข้อมูลรายการรักษาและคำนวณค่ามือใหม่");
-        String applied = request.appliedMonth() != null ? request.appliedMonth() : defaultAppliedMonth(person, original);
-        StaffMonthlyPaymentService.requireMonth(applied);
-        require(applied.compareTo(original) > 0, "เดือนที่นำไปใช้ต้องอยู่หลังเดือนที่เกิดข้อผิดพลาด");
         paymentService.lockAdjustmentMonth(branch.getId(), applied);
         var openMonth = paymentService.latestOpenMonth(branch.getId());
         require(openMonth.isPresent(), "ยังไม่มีงวดจ่ายที่เปิดอยู่ของสาขานี้");
         require(applied.equals(openMonth.get()) || applied.equals(YearMonth.parse(openMonth.get()).plusMonths(1).toString()),
                 "เลือกได้เฉพาะงวดเปิดล่าสุดของสาขาหรือเดือนถัดไป");
 
-        StaffPayAdjustment adjustment = new StaffPayAdjustment();
-        adjustment.setStaff(person);
         adjustment.setBranch(branch);
         adjustment.setAutomatic(true);
         adjustment.setApprovalReference(request.approvalReference() == null ? null : request.approvalReference().trim());
-        adjustment.setOriginalMonth(original);
-        adjustment.setAppliedMonth(applied);
-        adjustment.setAmount(request.amount());
-        adjustment.setAllocation(allocation);
-        adjustment.setSingleVisitFee(fee);
-        adjustment.setCourse(course);
-        adjustment.setVisit(visit);
-        adjustment.setSaleTransaction(sale);
-        adjustment.setReason(request.reason().trim());
-        adjustment.setProcessedAmount(BigDecimal.ZERO);
-        adjustment.setRemainingAmount(request.amount().abs());
         adjustment.setAdjustmentStatus(AdjustmentStatus.Approved);
         adjustment.setApprovedAt(Instant.now());
         adjustment.setApprovedBy(actorId);
-        adjustment.setCreatedAt(Instant.now());
-        adjustment.setCreatedBy(actorId);
         StaffPayAdjustment saved = adjustments.save(adjustment);
         if (applied.equals(openMonth.get())) {
             StaffMonthlyPayment payment = paymentService.openFor(person, applied, branch, actorId);
@@ -429,12 +438,17 @@ public class StaffPayAdjustmentService {
         StaffPayAdjustment adjustment = find(id);
         require(!adjustment.isAutomatic(), "รายการอัตโนมัติยกเลิกยอดคงเหลือเมื่อพนักงานลาออก");
         require(adjustment.getAmount().signum() < 0, "ส่งตรวจนอกระบบได้เฉพาะยอดหัก");
+        boolean cancelledOnTermination = adjustment.getAdjustmentStatus() == AdjustmentStatus.Cancelled
+                && "นักกายภาพลาออก".equals(adjustment.getCancellationReason());
         require(adjustment.getAdjustmentStatus() == AdjustmentStatus.Approved
-                || adjustment.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied, "ใบปรับยอดต้องได้รับอนุมัติและยังไม่ครบ");
+                || adjustment.getAdjustmentStatus() == AdjustmentStatus.PartiallyApplied
+                || cancelledOnTermination, "ใบปรับยอดต้องได้รับอนุมัติและยังไม่ครบ");
         require(adjustment.getRemainingAmount().signum() > 0, "ไม่มียอดคงเหลือ");
         require(adjustment.getStaff().getTerminationDate() != null, "ใช้ได้เมื่อพนักงานลาออกแล้วเท่านั้น");
         cancelDrafts(adjustment);
         adjustment.setAdjustmentStatus(AdjustmentStatus.ExternalReview);
+        adjustment.setCancellationReason(null);
+        adjustment.setCancelledAt(null);
 
         return adjustments.save(adjustment);
     }

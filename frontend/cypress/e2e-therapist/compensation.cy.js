@@ -31,12 +31,7 @@ const ownPayment = (period = month) => prepare(period).then((rows) => {
 const earnings = () => {
   let course
   let person
-  manager('GET', '/api/commission/treatment-fees').then((rules) => {
-    expect(rules).to.have.length.greaterThan(0)
-    return manager('PUT', `/api/commission/treatment-fees/${rules[0].id}`, {
-      feeType: 'Fixed', feeValue: 45, branchCode: '01',
-    })
-  })
+  manager('POST', '/__cypress/treatment-fee-fixture', { feeType: 'Fixed', feeValue: 45 })
   return manager('POST', '/api/courses', {
     code: 'PTCOMP13', name: 'Therapist compensation 13 visits',
     price: 10000, sessions: 13, bonusSessions: 0, validityDays: 365,
@@ -116,6 +111,11 @@ describe('Therapist compensation with actual earnings', () => {
     cy.get('[aria-label="สรุปค่าตอบแทน"]').within(() => {
       cy.contains('dt', 'Course Commission').next().should('contain', '฿38.46')
       cy.contains('dt', 'ค่ามือ').next().should('contain', '฿45.00')
+      cy.contains('.summary-net', 'Net Payout').should('contain', 'รอคำนวณ')
+    })
+    manager('POST', `/api/commission/payments/close?month=${month}&branchCode=01`)
+    cy.reload()
+    cy.get('[aria-label="สรุปค่าตอบแทน"]').within(() => {
       cy.contains('.summary-net', 'Net Payout').should('contain', '฿83.46')
     })
     cy.get('[aria-label="เมนูค่าตอบแทน"]').contains('a', 'ค่ามือ').click()

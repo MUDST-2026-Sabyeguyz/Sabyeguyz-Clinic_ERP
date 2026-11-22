@@ -25,6 +25,10 @@ import com.sabyeguyz.clinicv2.patient.Patient;
 import com.sabyeguyz.clinicv2.patient.PatientRepository;
 import com.sabyeguyz.clinicv2.staff.Staff;
 import com.sabyeguyz.clinicv2.staff.StaffRepository;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Matches frontend/src/api/client.ts's appointmentApi. End times are stored
@@ -37,6 +41,8 @@ import com.sabyeguyz.clinicv2.staff.StaffRepository;
 @RequestMapping("/api/appointments")
 public class AppointmentController {
     private static final ZoneId CLINIC_ZONE = ZoneId.of("Asia/Bangkok");
+    private static final Logger OBSERVABILITY_LOG =
+            LoggerFactory.getLogger("clinic.observability");
 
     private final AppointmentService service;
     private final AppointmentRepository repository;
@@ -49,19 +55,14 @@ public class AppointmentController {
     private final BranchAccessPolicy branchAccess;
     private final AppointmentStatusHistoryRepository history;
     private final AppointmentAvailabilityService availability;
-
-    public AppointmentController(
-            AppointmentService service,
-            AppointmentRepository repository,
-            PatientVisitService visitService,
-            PatientVisitRepository visits,
-            PatientRepository patients,
-            StaffRepository staff,
-            ServiceRepository services,
-            CurrentActor actor,
-            BranchAccessPolicy branchAccess,
-            AppointmentStatusHistoryRepository history,
-            AppointmentAvailabilityService availability) {
+    private final ObservationRegistry observationRegistry;
+    public AppointmentController(AppointmentService service, AppointmentRepository repository,
+                                  PatientVisitService visitService, PatientVisitRepository visits,
+                                  PatientRepository patients, StaffRepository staff,
+                                  ServiceRepository services, CurrentActor actor, BranchAccessPolicy branchAccess,
+                                  AppointmentStatusHistoryRepository history,
+                                                                    AppointmentAvailabilityService availability,
+                                  ObservationRegistry observationRegistry) {
         this.service = service;
         this.repository = repository;
         this.visitService = visitService;
@@ -73,6 +74,7 @@ public class AppointmentController {
         this.branchAccess = branchAccess;
         this.history = history;
         this.availability = availability;
+        this.observationRegistry = observationRegistry;
     }
 
     /**
@@ -105,7 +107,7 @@ public class AppointmentController {
             Long therapistId,
             Long serviceId,
             String branchCode,
-            com.fasterxml.jackson.databind.JsonNode note,
+            tools.jackson.databind.JsonNode note,
             OffsetDateTime endAt) {}
 
     public record PatientSummary(
@@ -178,28 +180,30 @@ public class AppointmentController {
                 : Sort.Direction.DESC;
 
         String keyword = query.trim().toLowerCase(java.util.Locale.ROOT);
+        return Observation.createNotStarted("appointment.search", observationRegistry)
+                .observe(() -> {
+                    Page<Appointment> result = repository.search(
+                            branchId,
+                            date != null, date == null ? LocalDate.EPOCH : date,
+                            startDate != null, startDate == null ? LocalDate.EPOCH : startDate,
+                            endDate != null, endDate == null ? LocalDate.EPOCH : endDate,
+                            therapistId,
+                            statusValue != null,
+                            statusValue == null ? AppointmentStatus.Confirmed : statusValue,
+                            keyword, "%" + keyword + "%",
+                            PageRequest.of(page, size, Sort.by(direction, "appointmentDate")
+                                    .and(Sort.by(direction, "appointmentTime")).and(Sort.by(direction, "id"))));
 
-        Page<Appointment> result = repository.search(
-                branchId,
-                date != null, date == null ? LocalDate.EPOCH : date,
-                startDate != null,
-                startDate == null ? LocalDate.EPOCH : startDate,
-                endDate != null,
-                endDate == null ? LocalDate.EPOCH : endDate,
-                therapistId,
-                statusValue != null,
-                statusValue == null ? AppointmentStatus.Confirmed : statusValue,
-                keyword, "%" + keyword + "%",
-                PageRequest.of(page, size, Sort.by(direction, "appointmentDate")
-                        .and(Sort.by(direction, "appointmentTime"))
-                        .and(Sort.by(direction, "id"))));
+                    PageResponse response = new PageResponse(
+                            result.getContent().stream().map(this::toResponse).toList(),
+                            result.getNumber(), result.getSize(),
+                            result.getTotalElements(), result.getTotalPages());
 
-        return new PageResponse(
-                result.getContent().stream().map(this::toResponse).toList(),
-                result.getNumber(),
-                result.getSize(),
-                result.getTotalElements(),
-                result.getTotalPages());
+                    OBSERVABILITY_LOG.info(
+                            "event=appointment_search_completed outcome=success");
+
+                    return response;
+                });
     }
 
     /** Free start times of one therapist on one day; the service is optional (the branch default length is used). */
@@ -280,7 +284,7 @@ public class AppointmentController {
                 : services.findById(request.serviceId())
                 .orElseThrow(() -> new IllegalArgumentException("ไม่พบบริการ"));
 
-        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd);
+        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd, therapist.getId());
 
         RequestedServiceType requested = request.requestedServiceType() == null
                 || request.requestedServiceType().isBlank()
@@ -464,12 +468,7 @@ public class AppointmentController {
         if (!branch.getId().equals(therapist.getBranch().getId())) {
             throw new IllegalArgumentException("นักกายภาพต้องอยู่สาขาเดียวกับนัดหมาย");
         }
-
-        availability.requireNoGoogleBusy(
-                branch,
-                local.toLocalDateTime(),
-                bookingEnd);
-
+        availability.requireNoGoogleBusy(branch, local.toLocalDateTime(), bookingEnd, therapist.getId());
         Appointment appointment = service.reschedule(
                 id,
                 branch,

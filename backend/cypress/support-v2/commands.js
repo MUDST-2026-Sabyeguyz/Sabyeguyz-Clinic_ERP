@@ -1,9 +1,11 @@
-Cypress.Commands.add('api', (method, url, body, options = {}) => {
+Cypress.Commands.add('api', (methodOrOptions, url, body, options = {}) => {
+  const req = typeof methodOrOptions === 'object' && methodOrOptions !== null
+    ? { ...methodOrOptions }
+    : { method: methodOrOptions, url, body, ...options }
   return cy.get('@token').then((token) => cy.request({
-    method, url, body,
-    headers: { Authorization: `Bearer ${token}` },
     failOnStatusCode: false,
-    ...options,
+    ...req,
+    headers: { Authorization: `Bearer ${token}`, ...(req.headers || {}) },
   }))
 })
 

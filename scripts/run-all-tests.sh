@@ -114,9 +114,9 @@ if [ "$mode" != "quick" ]; then
         record "start the frontend dev server" 1
       else
         if [ -n "${CYPRESS_SPEC:-}" ]; then
-          stage "frontend browser tests (Cypress)" bash -c 'cd "$1/frontend" && CYPRESS_API_URL=http://127.0.0.1:18080 npx cypress run --config-file cypress.v2.config.ts --browser chrome --spec "$2"' _ "$root" "$CYPRESS_SPEC"
+          stage "frontend browser tests (Cypress)" bash -c 'cd "$1/frontend" && CYPRESS_API_URL=http://127.0.0.1:18080 npx cypress run --config-file cypress.v2.config.cjs --browser chrome --spec "$2"' _ "$root" "$CYPRESS_SPEC"
         else
-          stage "frontend browser tests (Cypress)" bash -c "cd '$root/frontend' && CYPRESS_API_URL=http://127.0.0.1:18080 npx cypress run --config-file cypress.v2.config.ts --browser chrome"
+          stage "frontend browser tests (Cypress)" bash -c "cd '$root/frontend' && CYPRESS_API_URL=http://127.0.0.1:18080 npx cypress run --config-file cypress.v2.config.cjs --browser chrome"
         fi
       fi
     fi

@@ -15,6 +15,11 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/feat/github-action-to-kurbernetes'
     runs-on: [self-hosted, Windows, X64, clinic-k8s-deploy]
+    env:
+      # Windows runner workspaces may exceed MAX_PATH when fetching long remote ref names.
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
     timeout-minutes: 60
     defaults:
       run:

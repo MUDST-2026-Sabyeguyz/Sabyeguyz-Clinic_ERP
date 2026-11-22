@@ -39,6 +39,9 @@ export type PatientProfile = Patient & {
 
 export type PatientUpdatePayload = {
   title: string
+  firstName?: string
+  middleName?: string | null
+  lastName?: string
   fullName: string
   birthDate: string
   gender: string

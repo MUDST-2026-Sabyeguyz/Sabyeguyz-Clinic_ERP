@@ -116,7 +116,15 @@ const errorMessage = ref('')
 const editing = ref(false)
 const saved = ref(false)
 const confirmationOpen = ref(false)
-const titleOptions = ['นาย', 'นาง', 'นางสาว'].map((value) => ({ value, label: value }))
+const maleTitles = new Set(['นาย', 'เด็กชาย', 'Mr.', 'Boy'])
+const femaleTitles = new Set(['นาง', 'นางสาว', 'เด็กหญิง', 'Mrs.', 'Miss', 'Girl'])
+const titleOptions = computed(() => {
+  const base = isForeignNationality.value
+    ? ['Mr.', 'Mrs.', 'Miss', 'Boy', 'Girl']
+    : ['นาย', 'นาง', 'นางสาว', 'เด็กชาย', 'เด็กหญิง']
+  const list = draft.title && !base.includes(draft.title) ? [draft.title, ...base] : base
+  return list.map((value) => ({ value, label: value }))
+})
 const genderOptions = ['ชาย', 'หญิง'].map((value) => ({ value, label: value }))
 const bloodGroupOptions = ['ไม่ทราบ', 'A', 'B', 'AB', 'O'].map((value) => ({ value, label: value }))
 const customerSourceOptions = ref<Array<{ value: string; label: string }>>([])
@@ -204,15 +212,18 @@ watch(
 watch(
   () => draft.title,
   (title) => {
-    if (title === 'นาย') draft.gender = 'ชาย'
-    else if (title === 'นาง' || title === 'นางสาว') draft.gender = 'หญิง'
+    if (maleTitles.has(title)) draft.gender = 'ชาย'
+    else if (femaleTitles.has(title)) draft.gender = 'หญิง'
   },
 )
 watch(
   () => draft.gender,
   (gender) => {
-    if (gender === 'ชาย') draft.title = 'นาย'
-    else if (gender === 'หญิง') draft.title = 'นางสาว'
+    if (gender === 'ชาย' && !maleTitles.has(draft.title)) {
+      draft.title = isForeignNationality.value ? 'Mr.' : 'นาย'
+    } else if (gender === 'หญิง' && !femaleTitles.has(draft.title)) {
+      draft.title = isForeignNationality.value ? 'Miss' : 'นางสาว'
+    }
   },
 )
 function normalizeProfile(profile: PatientProfile): UiPatientProfile {
@@ -268,6 +279,9 @@ async function saveEdit() {
   try {
     const payload: PatientUpdatePayload = {
       title: draft.title,
+      firstName: draft.firstName.trim(),
+      middleName: draft.middleName.trim() || null,
+      lastName: draft.lastName.trim(),
       fullName: `${draft.firstName} ${draft.middleName} ${draft.lastName}`
         .replace(/\s+/g, ' ')
         .trim(),

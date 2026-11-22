@@ -90,13 +90,15 @@ public class CommissionSchemeService {
             List<TierInput> tierInputs,
             Long actorId) {
         validate(schemeName, effectiveFrom, effectiveTo, tierInputs);
-
-        // The very first scheme is exempt: a branch cannot close a month before any tier exists to close it with.
+        validateTiers(tierInputs);
+        schemes.lockVersionAllocation();
+        requireSelectedBranch(branch);
         if (!schemes.findByOrderByEffectiveFromDesc().isEmpty()) {
             branchClosingGuard.requireCurrentMonthClosed(branch);
         }
-        validateTiers(tierInputs);
-        schemes.lockVersionAllocation();
+        if (effectiveFrom.getDayOfMonth() != 1) {
+            throw new IllegalArgumentException("กฎต้องเริ่มวันที่ 1 ของเดือน");
+        }
         requireNoOtherPending(null, effectiveFrom);
         retireOverlapping(effectiveFrom, effectiveTo, actorId);
 
@@ -123,14 +125,10 @@ public class CommissionSchemeService {
      * is in use keeps its tiers and start date, and only its name and end date may change.
      */
     @Transactional
-    public CommissionScheme update(
-            Long id,
-            String schemeName,
-            LocalDate effectiveFrom,
-            LocalDate effectiveTo,
-            com.sabyeguyz.clinicv2.branch.Branch branch,
-            List<TierInput> tierInputs,
-            Long actorId) {
+    public CommissionScheme update(Long id, String schemeName, LocalDate effectiveFrom, LocalDate effectiveTo,
+                                   com.sabyeguyz.clinicv2.branch.Branch branch, List<TierInput> tierInputs, Long actorId) {
+        requireSelectedBranch(branch);
+        schemes.lockVersionAllocation();
         CommissionScheme scheme = find(id);
 
         if (tierInputs != null && tierInputs.isEmpty()) {
@@ -138,15 +136,19 @@ public class CommissionSchemeService {
         }
 
         boolean referenced = isReferenced(id);
-
-        // A scheme nothing uses yet (e.g. the first one, set up mid-month) is safe to edit before any closing.
-        if (referenced) {
+        boolean pendingUnused = !referenced
+                && scheme.getEffectiveFrom().isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today());
+        if (!pendingUnused) {
             branchClosingGuard.requireCurrentMonthClosed(branch);
         }
         LocalDate newFrom = effectiveFrom != null ? effectiveFrom : scheme.getEffectiveFrom();
         // an omitted end date keeps the current one; a scheme is reopened by creating a new version
         LocalDate newTo = effectiveTo != null ? effectiveTo : scheme.getEffectiveTo();
-
+        if (!scheme.getEffectiveFrom().isAfter(com.sabyeguyz.clinicv2.config.ClinicTime.today())
+                && (tierInputs != null || !newFrom.equals(scheme.getEffectiveFrom())
+                || !java.util.Objects.equals(newTo, scheme.getEffectiveTo()))) {
+            throw new IllegalStateException("กฎนี้เริ่มมีผลแล้ว ห้ามแก้ข้อมูลคำนวณ ให้สร้างเวอร์ชันอนาคต");
+        }
         if (referenced) {
             if (tierInputs != null) {
                 throw new IllegalStateException("Scheme นี้ถูกใช้งานแล้ว ห้ามแก้ Tier ให้สร้าง Scheme เวอร์ชันใหม่");
@@ -288,6 +290,12 @@ public class CommissionSchemeService {
     }
 
     /** A version starts on the 1st of a month after the current one: the rules never change in the middle of a month. */
+    private static void requireSelectedBranch(com.sabyeguyz.clinicv2.branch.Branch branch) {
+        if (branch == null || branch.getId() == null) {
+            throw new IllegalArgumentException("ต้องเลือกสาขา");
+        }
+    }
+
     private static void requireFutureCycleStart(LocalDate effectiveFrom) {
         if (effectiveFrom == null) throw new IllegalArgumentException("ต้องระบุ effective_from");
 

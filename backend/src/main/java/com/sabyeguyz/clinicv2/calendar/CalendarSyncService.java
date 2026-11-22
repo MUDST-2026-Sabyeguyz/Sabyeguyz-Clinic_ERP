@@ -17,6 +17,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.sabyeguyz.clinicv2.appointment.Appointment;
+import com.sabyeguyz.clinicv2.appointment.AppointmentAvailabilityService;
 import com.sabyeguyz.clinicv2.appointment.AppointmentService;
 import com.sabyeguyz.clinicv2.branch.Branch;
 import com.sabyeguyz.clinicv2.branch.BranchRepository;
@@ -32,8 +33,8 @@ import com.sabyeguyz.clinicv2.enums.CalendarSyncStatus;
  * <p>System to Google: an appointment that changed after its last sync is written to its branch calendar
  * (created, moved, or removed when cancelled / no-show). A failed write leaves it dirty, so it is retried.</p>
  *
- * <p>Google to system: only two edits made in Google are accepted, for events this system created - moving the
- * time and cancelling - and only while the appointment is still Unconfirmed or Confirmed and the new time is
+ * <p>Google to system: edits to start/end, the note (description), and cancellation are accepted for events this
+ * system created, only while the appointment is still Unconfirmed or Confirmed and the new time is
  * free. Anything else is put back in Google. The system stays the source of truth.</p>
  *
  * <p>Loops are avoided with the event etag: the etag Google returned for our own write is stored, so seeing the
@@ -72,25 +73,24 @@ public class CalendarSyncService {
     private final AppointmentCalendarRepository appointments;
     private final BranchRepository branches;
     private final AppointmentService appointmentService;
+    private final AppointmentAvailabilityService availability;
     private final TransactionTemplate tx;
     private final Map<String, Instant> lastPoll = new ConcurrentHashMap<>();
     private volatile Instant lastRunAt;
     private volatile Result lastResult = Result.empty();
 
-    public CalendarSyncService(
-            CalendarProperties properties,
-            CalendarCredentialStore credentials,
-            ObjectProvider<GoogleCalendarClient> clientProvider,
-            AppointmentCalendarRepository appointments,
-            BranchRepository branches,
-            AppointmentService appointmentService,
-            PlatformTransactionManager transactionManager) {
+    public CalendarSyncService(CalendarProperties properties, CalendarCredentialStore credentials,
+                               ObjectProvider<GoogleCalendarClient> clientProvider,
+                               AppointmentCalendarRepository appointments, BranchRepository branches,
+                               AppointmentService appointmentService, AppointmentAvailabilityService availability,
+                               PlatformTransactionManager transactionManager) {
         this.properties = properties;
         this.credentials = credentials;
         this.clientProvider = clientProvider;
         this.appointments = appointments;
         this.branches = branches;
         this.appointmentService = appointmentService;
+        this.availability = availability;
         this.tx = new TransactionTemplate(transactionManager);
     }
 
@@ -224,22 +224,11 @@ public class CalendarSyncService {
                     : appointment.getContactName().trim();
             who = "NEW " + (contact.contains(" ") ? contact.substring(0, contact.indexOf(' ')) : contact);
         }
-
-        String service = appointment.getService() != null
-                ? appointment.getService().getServiceName()
-                : appointment.getRequestedServiceType() != null
-                        ? appointment.getRequestedServiceType().name()
-                        : "นัดหมาย";
-
-        String prefix = appointment.getAppointmentStatus() == AppointmentStatus.Unconfirmed
-                ? "[รอยืนยัน] "
-                : "";
-
-        String description = "นัดหมายเลขที่ " + appointment.getId() + "\n"
-                + "ผู้ให้บริการ: " + appointment.getStaff().getStaffFname() + " " + appointment.getStaff().getStaffLname() + "\n"
-                + "สถานะ: " + appointment.getAppointmentStatus().name() + "\n"
-                + "(จัดการนัดหมายในระบบ Clinic ERP — การเลื่อนเวลาหรือยกเลิกใน Google จะสะท้อนกลับมาที่ระบบ)";
-
+        String service = appointment.getService() != null ? appointment.getService().getServiceName()
+                : appointment.getRequestedServiceType() != null ? appointment.getRequestedServiceType().name() : "นัดหมาย";
+        String prefix = appointment.getAppointmentStatus() == AppointmentStatus.Unconfirmed ? "[รอยืนยัน] " : "";
+        // The Google description is the editable clinic note, not generated boilerplate (AC 033.02).
+        String description = appointment.getNotes() == null ? "" : appointment.getNotes();
         return new EventData(
                 appointment.getId(),
                 (prefix + who + " - " + service).trim(),
@@ -277,10 +266,8 @@ public class CalendarSyncService {
                 }
                 lastPoll.put(calendarId, pollStart);
             } catch (RuntimeException failure) {
-                log.warn(
-                        "Calendar poll of branch {} failed: {}",
-                        branch.getBranchCode(),
-                        failure.getMessage());
+                log.warn("Calendar poll of branch {} failed: {}", branch.getBranchCode(), failure.getMessage());
+                result = result.plus(new Result(0, 0, 1, 0, 0, 0));
             }
         }
 
@@ -339,19 +326,23 @@ public class CalendarSyncService {
         }
 
         if (event.start() != null) {
-            LocalDateTime current = LocalDateTime.of(
-                    appointment.getAppointmentDate(),
-                    appointment.getAppointmentTime());
-
-            if (!event.start().equals(current)) {
+            LocalDateTime current = LocalDateTime.of(appointment.getAppointmentDate(), appointment.getAppointmentTime());
+            LocalDateTime remoteEnd = event.end() != null ? event.end()
+                    : event.start().plus(java.time.Duration.between(current, appointment.getAppointmentEndAt()));
+            boolean noteChanged = event.description() != null && !java.util.Objects.equals(
+                    event.description(), appointment.getNotes() == null ? "" : appointment.getNotes());
+            if (!event.start().equals(current) || !remoteEnd.equals(appointment.getAppointmentEndAt()) || noteChanged) {
                 if (open) {
                     try {
-                        tx.executeWithoutResult(s -> appointmentService.reschedule(
-                                id,
-                                event.start().toLocalDate(),
-                                event.start().toLocalTime(),
-                                "เลื่อนจาก Google Calendar",
-                                actor));
+                        // A remote edit is still a booking change: keep the same Busy check as API-created moves.
+                        availability.requireNoGoogleBusy(appointment.getBranch(), event.start(), remoteEnd,
+                                appointment.getStaff().getId());
+                        tx.executeWithoutResult(s -> {
+                            Appointment moved = appointmentService.reschedule(id, appointment.getBranch(), appointment.getStaff(),
+                                    appointment.getService(), event.start().toLocalDate(), event.start().toLocalTime(),
+                                    remoteEnd, "แก้ไขจาก Google Calendar", actor);
+                            if (event.description() != null) moved.setNotes(event.description().isEmpty() ? null : event.description());
+                        });
                         accept(id, event, CalendarSyncStatus.Synced);
 
                         return new Result(0, 0, 0, 1, 0, 0);

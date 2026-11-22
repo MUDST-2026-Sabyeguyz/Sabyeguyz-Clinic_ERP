@@ -1,4 +1,5 @@
 import { api } from './http'
+import { type CancellationRequest } from './common'
 import { type Patient } from './patient'
 import { type Course } from './catalog'
 import { type PaymentLabelCode } from './payment'
@@ -91,17 +92,52 @@ export type CourseUseRequest = {
 }
 
 export type CourseUsageTransaction = {
-  id: number | null
+  id: number
   usageId?: number
   therapistName?: string
   coursePurchaseId: number
+  courseNo: string
   patientName: string
   patientHn: string
+  usingPatientName: string
+  usingPatientHn: string
   courseName: string
   branchCode: string
+  visitDate: string
+  usageStatus: string
+  quantity: number
   usedAt: string
+  commissionAllocationPerVisit: number | null
+  treatmentFeeAmount: number | null
+  ownerNetCommission: number | null
   voidedAt?: string | null
   voidReason?: string | null
+}
+
+export type CoursePaymentCollectionResult = {
+  receiptId: number
+  paymentId: number
+  receiptNo: string
+  netAmount: number
+}
+
+export type ReceiptDocument = {
+  receiptId: number
+  receiptNo: string
+  patientId: number
+  branchId: number
+  saleDate: string
+  receiptStatus: string
+  paymentLabelCode: string
+  paymentLabelName: string
+  subtotalBeforeDiscount: number
+  billDiscountAmount: number
+  netAmount: number
+  sales: Array<{ transactionId: number; itemNameSnapshot: string; quantity: number; amount: number }>
+  coursePayments: Array<{ courseId: number; itemNameSnapshot: string; amount: number; allocatedBillDiscountAmount: number; netAmount: number }>
+  payments: Array<{ paymentId: number; paymentDate: string; paymentMethod: string; amount: number; status: string }>
+  patient: { id: number; hn: string; fullName: string }
+  branch: { id: number; code: string; name: string; address: string; phone: string; email?: string; licenseNo?: string }
 }
 
 export type CourseUsagePrintDocument = {
@@ -149,7 +185,15 @@ export const courseApi = {
     api.post<CourseExtensionRequest>(`/api/course-extensions/${id}/approve`, { note }),
   rejectExtension: (id: number, note?: string) =>
     api.post<CourseExtensionRequest>(`/api/course-extensions/${id}/reject`, { note }),
-  usageTransactions: () => api.get<CourseUsageTransaction[]>('/api/course-usages'),
+  usageTransactions: (
+    filters: { branchCode?: string; from?: string; to?: string; patient?: string } = {},
+  ) => {
+    const query = new URLSearchParams()
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) query.set(key, value)
+    })
+    return api.get<CourseUsageTransaction[]>(`/api/course-usages${query.size ? `?${query}` : ''}`)
+  },
   list: () => api.get<Array<Course & { active: boolean }>>('/api/courses'),
   get: (id: number) => api.get<Course>(`/api/courses/${id}`),
   create: (body: Omit<Course, 'id' | 'active'>) => api.post<Course>('/api/courses', body),
@@ -158,6 +202,8 @@ export const courseApi = {
   deactivate: (id: number) => api.delete(`/api/courses/${id}`),
   patientCourses: (patientId: number) =>
     api.get<CoursePurchase[]>(`/api/patients/${patientId}/courses`),
+  receiptHistory: (courseId: number) =>
+    api.get<ReceiptDocument[]>(`/api/courses/${courseId}/receipt-history`),
   purchase: (body: { patientId: number; courseId: number; branchCode: string; caseOwnerStaffId: number; paymentLabelCode: PaymentLabelCode; discountType?: string; discountValue?: number }) =>
     api.post<CoursePurchase>('/api/course-purchases', body),
   ledger: (id: number) =>
@@ -178,12 +224,16 @@ export const courseApi = {
     }>(`/api/course-purchases/${id}`),
   use: (body: CourseUseRequest) => api.post<CoursePurchase>('/api/course-usages', body),
   useBatch: (body: { usages: CourseUseRequest[] }) => api.post<CoursePurchase[]>('/api/course-usages/batch', body),
-  reverse: (movementId: number, reason: string) =>
-    api.post<CoursePurchase>(`/api/course-movements/${movementId}/reverse`, {
-      reason,
-    }),
-  cancel: (id: number, reason: string) =>
-    api.post<CoursePurchase>(`/api/course-purchases/${id}/cancel`, { reason }),
+  reverse: (movementId: number, body: CancellationRequest | string) =>
+    api.post<CoursePurchase>(
+      `/api/course-movements/${movementId}/reverse`,
+      typeof body === 'string' ? { reason: body } : body,
+    ),
+  cancel: (id: number, body: CancellationRequest | string) =>
+    api.post<CoursePurchase>(
+      `/api/course-purchases/${id}/cancel`,
+      typeof body === 'string' ? { reason: body } : body,
+    ),
   transfer: (body: {
     sourcePurchaseId: number
     destinationPatientId: number
@@ -192,6 +242,31 @@ export const courseApi = {
   }) => api.post<TransferRecord>('/api/course-transfers', body),
   transferHistory: (patientId?: number) =>
     api.get<TransferRecord[]>(`/api/course-transfers${patientId ? `?patientId=${patientId}` : ''}`),
+}
+
+export const coursePaymentCollectionApi = {
+  collect: (
+    body: {
+      patientId: number
+      branchCode: string
+      items: Array<{ courseId: number; amount: number }>
+      billDiscountType?: 'FIXED' | 'PERCENT'
+      billDiscountValue?: number
+      paymentLabelCode: string
+      paymentMethodCode: string
+      paymentAmount: number
+    },
+    idempotencyKey: string,
+  ) =>
+    api.postWithHeaders<CoursePaymentCollectionResult>(
+      '/api/course-payment-collections',
+      body,
+      { 'Idempotency-Key': idempotencyKey },
+    ),
+}
+
+export const receiptDocumentsApi = {
+  get: (receiptId: number) => api.get<ReceiptDocument>(`/api/receipt-documents/${receiptId}`),
 }
 
 export const singleVisitEntitlementApi = {

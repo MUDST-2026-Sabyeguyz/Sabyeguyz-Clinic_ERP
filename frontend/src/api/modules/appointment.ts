@@ -1,6 +1,6 @@
 import { api } from './http'
 import { type Page } from './common'
-import { type Course, type ServiceOption } from './catalog'
+import { type ServiceOption } from './catalog'
 
 // สถานะที่ฐานข้อมูลอนุญาตให้บันทึกได้ตาม migration ปัจจุบัน
 export type AppointmentStatus =

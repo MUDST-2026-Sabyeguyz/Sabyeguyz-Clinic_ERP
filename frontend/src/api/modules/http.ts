@@ -1,4 +1,5 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
+const appBaseUrl = import.meta.env.BASE_URL
 
 export type ApiErrorBody = {
   message?: string
@@ -44,8 +45,8 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   if (!response.ok) {
     if (response.status === 401) {
       clearSession()
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/staff/'))
-        window.location.assign('/')
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith(`${appBaseUrl}staff/`))
+        window.location.assign(appBaseUrl)
     }
     const errorBody = body as ApiErrorBody | undefined
     throw new ApiError(
@@ -61,6 +62,8 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+  postWithHeaders: <T>(path: string, body: unknown, extraHeaders: Record<string, string>) =>
+    request<T>(path, { method: 'POST', body: JSON.stringify(body), headers: extraHeaders }),
   put: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>

@@ -80,9 +80,9 @@ jobs:
 
       - name: Create the v2 schema from the SQL file
         run: |
-          for migration in src/main/resources/db/migration/V*__*.sql; do
+          while IFS= read -r migration; do
             psql -h localhost -U clinic -d clinic -v ON_ERROR_STOP=1 -f "$migration"
-          done
+          done < <(printf '%s\n' src/main/resources/db/migration/V*__*.sql | sort -V)
 
       - name: Compile main and test classes
         run: mvn --batch-mode --no-transfer-progress -DskipTests test-compile

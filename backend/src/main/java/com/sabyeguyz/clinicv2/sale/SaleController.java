@@ -132,8 +132,9 @@ public class SaleController {
             String paymentLabelCode,
             Long appointmentId,
             List<CourseUsageBatchService.Item> courseUsages) {}
-
-    public record ReverseRequest(String reason) {}
+    public record ReverseRequest(String reason, com.sabyeguyz.clinicv2.enums.ReasonCode reasonCode) {
+        public ReverseRequest(String reason) { this(reason, com.sabyeguyz.clinicv2.enums.ReasonCode.Other); }
+    }
 
     private Staff singleVisitTreatingStaff(
             CreateRequest request,
@@ -225,8 +226,7 @@ public class SaleController {
         if (page < 0 || size < 1 || size > 100) {
             throw new IllegalArgumentException("page must be nonnegative and size must be between 1 and 100");
         }
-
-        Branch scopedBranch = branchAccess.scope(branchCode);
+        Branch scopedBranch = branchAccess.readScope(branchCode);
         Long branchId = scopedBranch == null ? null : scopedBranch.getId();
         PageRequest paging = PageRequest.of(
                 page,
@@ -260,7 +260,9 @@ public class SaleController {
 
     @GetMapping("/api/receipts/{id}")
     public Detail get(@PathVariable Long id) {
-        return toDetail(findTransaction(id));
+        SalesTransaction transaction = findTransaction(id);
+        branchAccess.requireReadAccess(transaction.getBranch());
+        return toDetail(transaction);
     }
 
     @PostMapping("/api/payments")
@@ -269,7 +271,14 @@ public class SaleController {
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("ต้องมีรายการขายอย่างน้อย 1 รายการ");
         }
-
+        long courseSets = 0;
+        for (ItemRequest item : request.items()) {
+            if (item == null || item.quantity() < 1) {
+                throw new IllegalArgumentException("จำนวนขายต้องเป็นจำนวนเต็มอย่างน้อย 1");
+            }
+            if ("COURSE".equalsIgnoreCase(item.type())) courseSets += item.quantity();
+        }
+        if (courseSets > 99) throw new IllegalArgumentException("ซื้อคอร์สใหม่ได้ไม่เกิน 99 ชุดต่อใบเสร็จ");
         if (request.payments() != null && request.payments().size() > 1) {
             throw new IllegalArgumentException(
                     "หนึ่งใบเสร็จมีรายการชำระเงินได้ไม่เกินหนึ่งรายการ");
@@ -319,20 +328,35 @@ public class SaleController {
             Discount discount = Discount.of(item.discountType(), item.discountValue());
 
             if ("COURSE".equalsIgnoreCase(item.type())) {
-                lines.add(
-                        salesTransactionService.recordCoursePurchase(
-                                receipt,
-                                patient,
-                                branch,
-                                svc,
-                                salesperson,
-                                null,
-                                null,
-                                null,
-                                discount,
-                                ClinicTime.today(),
-                                actor.currentId())
-                                .transaction());
+                // A cart quantity is a number of distinct course sets, never one
+                // course with multiplied rights. Preserve the cart-line discount
+                // and put any rounding remainder on the last set.
+                BigDecimal discountTotal = discount.amountOff(
+                        svc.getServicePrice().multiply(BigDecimal.valueOf(item.quantity())));
+                BigDecimal unitDiscount = discountTotal.divide(
+                        BigDecimal.valueOf(item.quantity()), 2, java.math.RoundingMode.DOWN);
+                BigDecimal allocated = BigDecimal.ZERO;
+                for (int index = 0; index < item.quantity(); index++) {
+                    BigDecimal amount = index == item.quantity() - 1
+                            ? discountTotal.subtract(allocated)
+                            : unitDiscount;
+                    Discount split = discount.isNone() ? Discount.none() : Discount.of("FIXED", amount);
+                    lines.add(
+                            salesTransactionService.recordCoursePurchase(
+                                    receipt,
+                                    patient,
+                                    branch,
+                                    svc,
+                                    salesperson,
+                                    null,
+                                    null,
+                                    null,
+                                    split,
+                                    ClinicTime.today(),
+                                    actor.currentId())
+                                    .transaction());
+                    allocated = allocated.add(amount);
+                }
             } else {
                 TransactionType type = "ASSESSMENT".equalsIgnoreCase(item.type())
                         ? TransactionType.Assessment : TransactionType.SingleVisit;
@@ -446,6 +470,7 @@ public class SaleController {
         cancellations.voidSale(
                 transaction,
                 permission,
+                request.reasonCode() == null ? com.sabyeguyz.clinicv2.enums.ReasonCode.Other : request.reasonCode(),
                 request.reason(),
                 actor.currentId());
         audit.record(

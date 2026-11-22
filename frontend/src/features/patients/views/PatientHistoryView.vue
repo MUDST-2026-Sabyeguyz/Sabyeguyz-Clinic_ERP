@@ -227,7 +227,7 @@ onMounted(async () => {
   try {
     const [profile, paymentPage, courseList] = await Promise.all([
       patientApi.get(id),
-      salesApi.list({ patientId: id, size: 100 }),
+      salesApi.list({ patientId: id, size: 100, receiptsOnly: true }),
       courseApi.patientCourses(id),
     ])
     const serviceEntitlements = await singleVisitEntitlementApi.list(id).catch(() => {
@@ -240,7 +240,7 @@ onMounted(async () => {
     patient.value = profile
     const remainingPages = await Promise.all(
       Array.from({ length: Math.max(0, paymentPage.totalPages - 1) }, (_, index) =>
-        salesApi.list({ patientId: id, size: 100, page: index + 1 }),
+        salesApi.list({ patientId: id, size: 100, page: index + 1, receiptsOnly: true }),
       ),
     )
     payments.value = [paymentPage, ...remainingPages].flatMap((page) => page.items)

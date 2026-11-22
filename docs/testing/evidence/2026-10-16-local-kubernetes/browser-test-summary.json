@@ -1,0 +1,20 @@
+{
+  "imageTag": "32fa619c14cf-20261016172136",
+  "sourceRevision": "32fa619c14cf70200ff02c12f2079179302656c9",
+  "result": "PASS",
+  "frontendV2": {
+    "failed": 0,
+    "skipped": 0,
+    "tests": 152,
+    "passed": 152,
+    "specs": 19
+  },
+  "kubernetesProduction": {
+    "failed": 0,
+    "skipped": 0,
+    "tests": 3,
+    "passed": 3,
+    "specs": 1
+  },
+  "testedAt": "2026-10-16T10:33:14.4161458Z"
+}

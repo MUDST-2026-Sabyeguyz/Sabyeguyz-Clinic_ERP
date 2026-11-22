@@ -144,7 +144,9 @@ public class SchemaCheck {
     }
 
     private static String normalize(String type) {
-        return type == null ? "" : type.toLowerCase(Locale.ROOT).trim();
+        if (type == null) return "";
+        String normalized = type.toLowerCase(Locale.ROOT).trim().replaceAll("\\s*\\(\\d+\\)", "");
+        return normalized.equals("timestamp with time zone") ? "timestamptz" : normalized;
     }
 
     private static boolean validateAndWire() {
@@ -224,6 +226,11 @@ public class SchemaCheck {
         @Bean
         PasswordEncoder passwordEncoder() {
             return new BCryptPasswordEncoder();
+        }
+
+        @Bean
+        io.micrometer.observation.ObservationRegistry observationRegistry() {
+            return io.micrometer.observation.ObservationRegistry.NOOP;
         }
     }
 }

@@ -94,3 +94,45 @@ export const reportApi = {
       `/api/reports/staff-sales?${new URLSearchParams({ from, to, ...(branchCode ? { branchCode } : {}) })}`,
     ),
 }
+
+export type ReportTransactionRow = {
+  source: 'SALE' | 'COURSE_COLLECTION'
+  sourceId: number
+  receiptId: number
+  receiptNo: string
+  patientId: number
+  patientName: string
+  patientHn: string
+  branchCode: string
+  branchName: string
+  date: string
+  type: string
+  treatment: string
+  paymentMethod: string
+  amount: number
+}
+
+export type ReportTransactions = {
+  basis: 'SALE_DATE' | 'PAYMENT_DATE'
+  from: string
+  to: string
+  rows: ReportTransactionRow[]
+  total: number
+  byMethod: Record<string, number>
+  refunds: Array<{
+    refundId: number
+    originalPaymentId: number
+    receiptNo: string
+    date: string
+    paymentMethod: string
+    amount: number
+  }>
+  refundedTotal: number
+}
+
+export const reportTransactionsApi = {
+  read: (mode: 'sales' | 'payment', filters: Record<string, string>) =>
+    api.get<ReportTransactions>(
+      `/api/reports/${mode === 'sales' ? 'sales' : 'payments'}-detail?${new URLSearchParams(filters)}`,
+    ),
+}

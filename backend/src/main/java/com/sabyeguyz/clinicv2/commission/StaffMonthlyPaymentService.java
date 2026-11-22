@@ -814,8 +814,8 @@ public class StaffMonthlyPaymentService {
         requireMonth(month);
         YearMonth requested = YearMonth.parse(month);
         YearMonth current = YearMonth.now(com.sabyeguyz.clinicv2.config.ClinicTime.ZONE);
-        if (!requested.isBefore(current)) {
-            throw new IllegalArgumentException("ปิดรอบได้เฉพาะเดือนที่สิ้นสุดแล้ว");
+        if (requested.isAfter(current)) {
+            throw new IllegalArgumentException("ปิดรอบล่วงหน้าสำหรับเดือนในอนาคตไม่ได้");
         }
     }
 }

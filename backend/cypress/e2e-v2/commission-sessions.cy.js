@@ -5,31 +5,12 @@ const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year:
 const month = today.slice(0, 7)
 const money = (value) => Math.round(Number(value) * 100) / 100
 
-// one flat tier, so the documents' 7% examples can be reproduced exactly (the seed scheme is not in use yet)
+// one flat tier, so the documents' 7% examples can be reproduced exactly (set before sales exist)
 const flatRate = (rate) =>
-    closeMonth()
-        .then(() => cy.api('GET', '/api/commission/schemes'))
-        .then(({ body }) => {
-          const scheme = body.find(
-              (entry) => entry.name === 'Default Tier Scheme',
-          )
-
-          return cy.api('PUT', `/api/commission/schemes/${scheme.id}`, {
-            branchCode: '01',
-            name: scheme.name,
-            effectiveFrom: scheme.effectiveFrom,
-            tiers: [
-              { minimum: 0, maximum: null, rate, order: 1 },
-            ],
-          }).its('status').should('equal', 200)
-        })
-        .then(() =>
-            cy.api(
-                'POST',
-                `/api/commission/branch-closings/${month}/reopen?branchCode=01`,
-                { reason: 'เตรียมอัตราสำหรับข้อมูลทดสอบก่อนขายคอร์ส' },
-            ).its('status').should('equal', 200),
-        )
+    cy.api('POST', '/__cypress/commission-flat-rate-fixture', { rate }).then(({ status, body }) => {
+      expect(status, JSON.stringify(body)).to.equal(200)
+      expect(body.updated).to.equal(1)
+    })
 const setFeeAvailable = (available) =>
     cy.api('POST', '/__cypress/treatment-fee-availability-fixture', {
       available,

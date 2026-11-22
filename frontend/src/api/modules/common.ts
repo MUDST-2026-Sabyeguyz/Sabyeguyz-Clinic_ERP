@@ -5,3 +5,15 @@ export type Page<T> = {
   totalItems: number
   totalPages: number
 }
+
+export type CancellationReasonCode =
+  | 'WrongEntryOrService'
+  | 'DuplicateEntry'
+  | 'PatientRequested'
+  | 'PaymentFailedOrIncorrectAmount'
+  | 'Other'
+
+export type CancellationRequest = {
+  reasonCode: CancellationReasonCode
+  reason: string
+}

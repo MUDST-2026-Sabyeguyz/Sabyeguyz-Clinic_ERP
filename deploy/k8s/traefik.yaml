@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clinic-traefik
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: clinic-traefik
+rules:
+  - apiGroups: ['']
+    resources: [services, secrets]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses/status]
+    verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: clinic-traefik
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: clinic-traefik
+subjects:
+  - kind: ServiceAccount
+    name: clinic-traefik
+    namespace: clinic-local
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clinic-traefik-ingressclasses
+rules:
+  - apiGroups: [networking.k8s.io]
+    resources: [ingressclasses]
+    verbs: [get, list, watch]
+  - apiGroups: ['']
+    resources: [nodes]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: clinic-traefik-ingressclasses
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: clinic-traefik-ingressclasses
+subjects:
+  - kind: ServiceAccount
+    name: clinic-traefik
+    namespace: clinic-local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clinic-traefik
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: clinic-traefik}
+  template:
+    metadata:
+      labels: {app: clinic-traefik}
+    spec:
+      serviceAccountName: clinic-traefik
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: traefik
+          image: traefik:v3.7.15
+          args:
+            - --providers.kubernetesingress=true
+            - --providers.kubernetesingress.namespaces=clinic-local
+            - --providers.kubernetesingress.ingressclass=clinic-traefik
+            - --entrypoints.web.address=:8000
+            - --entrypoints.ping.address=:9000
+            - --ping=true
+            - --ping.entrypoint=ping
+            - --accesslog=true
+          ports:
+            - {name: web, containerPort: 8000}
+            - {name: ping, containerPort: 9000}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 192Mi}
+          readinessProbe:
+            httpGet: {path: /ping, port: ping}
+          livenessProbe:
+            httpGet: {path: /ping, port: ping}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clinic-ingress
+spec:
+  selector: {app: clinic-traefik}
+  ports:
+    - {name: http, port: 80, targetPort: web}

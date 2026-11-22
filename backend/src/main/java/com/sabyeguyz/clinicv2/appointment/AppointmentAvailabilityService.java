@@ -19,8 +19,8 @@ import com.sabyeguyz.clinicv2.staff.Staff;
 /**
  * Free times a therapist can be booked on a day: inside the branch's booking window, not in the past and not
  * overlapping an appointment the therapist already holds. When the branch has a Google Calendar, an event somebody added
- * by hand there that shows as Busy (a break, a closed hour, a holiday) takes the time away from the whole branch; the
- * clinic's own events are not counted twice. If Google cannot be reached the times are shown without it.
+ * by hand there must explicitly identify the branch or therapist it blocks; the clinic's own events are not counted
+ * twice. If Google cannot be reached, availability is unavailable and writes are refused until it can be checked.
  */
 @org.springframework.stereotype.Service
 public class AppointmentAvailabilityService {
@@ -119,6 +119,12 @@ public class AppointmentAvailabilityService {
             Branch branch,
             java.time.LocalDateTime start,
             java.time.LocalDateTime end) {
+        requireNoGoogleBusy(branch, start, end, null);
+    }
+
+    @Transactional(readOnly = true)
+    public void requireNoGoogleBusy(Branch branch, java.time.LocalDateTime start,
+                                    java.time.LocalDateTime end, Long therapistId) {
         if (start == null || end == null || !end.isAfter(start)) {
             throw new IllegalArgumentException("ต้องระบุเวลาเริ่มและเวลาจบนัดให้ถูกต้อง");
         }
@@ -132,7 +138,7 @@ public class AppointmentAvailabilityService {
                 throw new IllegalStateException("ตรวจเวลาว่างจาก Google Calendar ไม่สำเร็จ กรุณาลองใหม่");
             }
             for (GoogleCalendarClient.BusyBlock block : busy.blocks()) {
-                if (start.isBefore(block.end())
+                if (block.appliesTo(therapistId) && start.isBefore(block.end())
                         && block.start().isBefore(end)) {
                     throw new IllegalArgumentException("เวลานัดตรงกับช่วงที่ติด Busy ใน Google Calendar ของสาขา");
                 }
@@ -183,7 +189,7 @@ public class AppointmentAvailabilityService {
                 reason = "ตรวจ Google Calendar ไม่สำเร็จ";
             } else {
                 for (GoogleCalendarClient.BusyBlock block : google.blocks()) {
-                    if (start.isBefore(block.end()) && block.start().isBefore(end)) {
+                    if (block.appliesTo(therapist.getId()) && start.isBefore(block.end()) && block.start().isBefore(end)) {
                         reason = "ติด Busy ใน Google Calendar";
                         break;
                     }

@@ -17,6 +17,7 @@ const {
   appointmentNeedsReview,
   appointmentProgress,
   completedUsageRedirect,
+  errorMessage,
   processBlockReason,
   processError,
   processLoading,
@@ -29,6 +30,7 @@ const {
 <template>
   <div class="staff-page course-page">
     <StaffHeader />
+    <p v-if="errorMessage && action === 'manage'" class="error" role="alert">{{ errorMessage }}</p>
     <p v-if="usageSubmitting" role="status">กำลังบันทึกรายการ…</p>
     <p v-else-if="processLoading || completedUsageRedirect" role="status">กำลังตรวจสอบนัดหมาย…</p>
     <div v-else-if="processError" role="alert">

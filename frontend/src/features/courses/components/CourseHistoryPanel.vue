@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { clinicToday } from '@/utils/clinicDate'
 import CourseCutDocument from '../components/CourseCutDocument.vue'
+import FrozenCourseUsagePrints from '../components/FrozenCourseUsagePrints.vue'
 import { vModalFocus } from '@/features/appointments/modalFocus'
 import PhoneIcon from '@/components/PhoneIcon.vue'
 import { useCourseActionContext } from '../useCourseAction'
@@ -65,6 +66,7 @@ const {
       <footer class="course-cut-actions">
         <button type="button" @click="printDialog = 'confirm'">พิมพ์เอกสาร</button>
       </footer>
+      <FrozenCourseUsagePrints v-if="selectedCourse.id" :course-id="selectedCourse.id" />
     </section>
     <template v-else>
       <button class="course-history-back app-back-link" type="button" @click="returnToCourseManager">

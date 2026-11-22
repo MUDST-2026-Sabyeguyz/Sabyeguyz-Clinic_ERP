@@ -36,14 +36,16 @@ describe('v2 branch booking settings', () => {
     }))
   })
 
-  it('refuses a half-set window, a reversed window, a bad email and a length outside 5-480 minutes', () => {
+  it('refuses a half-set window, a reversed window, a bad email and a nonpositive length', () => {
     branch01().then((branch) => {
       putBranch(branch, { bookingOpenTime: '09:00' }).its('status').should('equal', 400)
       putBranch(branch, { bookingOpenTime: '18:00', bookingCloseTime: '09:00' }).its('status').should('equal', 400)
       putBranch(branch, { bookingOpenTime: '9am', bookingCloseTime: '18:00' }).its('status').should('equal', 400)
       putBranch(branch, { email: 'not-an-email' }).its('status').should('equal', 400)
-      putBranch(branch, { defaultAppointmentMinutes: 3 }).its('status').should('equal', 400)
-      putBranch(branch, { defaultAppointmentMinutes: 600 }).its('status').should('equal', 400)
+      putBranch(branch, { defaultAppointmentMinutes: 0 }).its('status').should('equal', 400)
+      putBranch(branch, { defaultAppointmentMinutes: -1 }).its('status').should('equal', 400)
+      putBranch(branch, { defaultAppointmentMinutes: 1 }).its('body.defaultAppointmentMinutes').should('equal', 1)
+      putBranch(branch, { defaultAppointmentMinutes: 600 }).its('body.defaultAppointmentMinutes').should('equal', 600)
     })
   })
 })
@@ -57,7 +59,10 @@ describe('v2 service appointment length and course validity units', () => {
       })
       send(45).its('body.defaultDurationMinutes').should('equal', 45)
       send(null).its('body.defaultDurationMinutes').should('equal', 0)
-      send(2).its('status').should('equal', 400)
+      send(1).its('body.defaultDurationMinutes').should('equal', 1)
+      send(600).its('body.defaultDurationMinutes').should('equal', 600)
+      send(0).its('status').should('equal', 400)
+      send(-1).its('status').should('equal', 400)
     })
   })
 
@@ -103,7 +108,7 @@ describe('v2 free times and overlapping appointments', () => {
     slots(this.fixtures, this.fixtures.therapistId).then((result) => {
       expect(result.windowConfigured).to.equal(true)
       expect(result.durationMinutes).to.equal(60)
-      expect(result.slots.map((slot) => slot.time)).to.deep.equal(['09:00', '09:30', '10:00', '10:30', '11:00'])
+      expect(result.slots.map((slot) => slot.time)).to.deep.equal(['09:00', '10:00', '11:00'])
       expect(result.slots.every((slot) => slot.available)).to.equal(true)
     })
   })
@@ -116,7 +121,7 @@ describe('v2 free times and overlapping appointments', () => {
       }).its('status').should('equal', 201)
       slots(this.fixtures, this.fixtures.therapistId).then((result) => {
         const free = Object.fromEntries(result.slots.map((slot) => [slot.time, slot.available]))
-        expect(free).to.deep.equal({ '09:00': true, '09:30': false, '10:00': false, '10:30': false, '11:00': true })
+        expect(free).to.deep.equal({ '09:00': true, '10:00': false, '11:00': true })
       })
       // the other therapist works in branch 02: nothing of branch 01's appointments touches them
       cy.api('GET', `/api/appointments/availability?branchCode=02&therapistId=${this.fixtures.therapist2Id}&date=${this.fixtures.tomorrow}`)
@@ -165,12 +170,12 @@ describe('v2 free times and overlapping appointments', () => {
     })
   })
 
-  it('offers no slots when the branch has no booking window', function () {
+  it('offers fallback slots when the branch has no booking window', function () {
     slots(this.fixtures, this.fixtures.therapistId).then((result) => {
       expect(result.windowConfigured).to.equal(false)
-      expect(result.openTime).to.equal(null)
-      expect(result.closeTime).to.equal(null)
-      expect(result.slots).to.deep.equal([])
+      expect(result.openTime).to.equal('09:00')
+      expect(result.closeTime).to.equal('18:00')
+      expect(result.slots.length).to.be.greaterThan(0)
     })
   })
 
@@ -223,7 +228,7 @@ describe('v2 free times and Busy time in the branch Google Calendar', () => {
         expect(result.googleCalendar).to.equal('CHECKED')
         const bySlot = Object.fromEntries(result.slots.map((slot) => [slot.time, slot]))
         expect(Object.fromEntries(Object.entries(bySlot).map(([time, slot]) => [time, slot.available])))
-          .to.deep.equal({ '09:00': true, '09:30': false, '10:00': false, '10:30': false, '11:00': true })
+          .to.deep.equal({ '09:00': true, '10:00': false, '11:00': true })
         expect(bySlot['10:00'].reason).to.contain('Google Calendar')
       })
     }

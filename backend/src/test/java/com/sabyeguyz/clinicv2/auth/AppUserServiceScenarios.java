@@ -26,7 +26,8 @@ public class AppUserServiceScenarios {
     UserBranchAccessRepository userBranchAccess = userBranchAccessStub.proxy();
 
     private AppUserService service() {
-        return new AppUserService(users, roles, userRoles, branches, userBranchAccess);
+        return new AppUserService(users, roles, userRoles, branches, userBranchAccess,
+                new BCryptPasswordEncoder());
     }
 
     public Map<String, Object> registerHashesThePassword() {

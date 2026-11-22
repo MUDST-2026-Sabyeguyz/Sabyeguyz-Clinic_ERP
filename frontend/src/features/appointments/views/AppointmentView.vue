@@ -419,7 +419,6 @@ const formTherapistModel = computed({
     form.value.therapistId = Number(value) || 0
   },
 })
-
 const courseDropdownOptions = computed(() =>
   catalogCourses.value.map((course) => ({ value: String(course.id), label: course.name })),
 )
@@ -456,6 +455,8 @@ const normalizeHn = (value: string) =>
     .toLowerCase()
 const formatTimeRange = (time: string) => {
   if (!time) return 'ยังไม่ได้เลือกเวลา'
+  if (!Number.isSafeInteger(appointmentDurationMinutes.value) || appointmentDurationMinutes.value < 1)
+    return time
   const end = appointmentEndFields(form.value.date, time, appointmentDurationMinutes.value)
   return `${time}–${end.time}`
 }

@@ -1,24 +1,23 @@
-const { spawnSync } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const net = require('node:net')
 const path = require('node:path')
 const cypress = require('cypress')
+const testPort = Number(process.env.CLINIC_V2_TEST_PORT || 18080)
+if (![18080, 18082].includes(testPort)) {
+  throw new Error('CLINIC_V2_TEST_PORT must be an isolated test port (18080 or 18082)')
+}
 
 process.chdir(path.resolve(__dirname, '..'))
 
-// Starts the v2 application (mvn -Pcypress-v2) on 127.0.0.1:18080 against the
-// PostgreSQL given by DATABASE_URL / DATABASE_USERNAME / DATABASE_PASSWORD,
-// runs the v2 Cypress specs, then stops it.
+// Starts the v2 application (mvn -Pcypress-v2) on the selected isolated loopback port against PostgreSQL given by
+// DATABASE_URL / DATABASE_USERNAME / DATABASE_PASSWORD, runs the v2 Cypress specs, then stops it.
 function maven(goal) {
-  const result = spawnSync(
-    'mvn',
-    ['--batch-mode', '--no-transfer-progress', '-Pcypress-v2', ...goal],
-    {
-      stdio: 'inherit',
-      shell: process.platform === 'win32',
-      windowsHide: true,
-    },
-  )
-
+  const profile = process.env.CLINIC_TEST_COVERAGE === '1' ? '-Pcypress-v2,coverage' : '-Pcypress-v2'
+  const result = spawnSync('mvn', ['--batch-mode', '--no-transfer-progress', profile, ...goal], {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    windowsHide: true,
+  })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`Maven ${goal.join(' ')} failed (${result.status})`)
 }
@@ -36,29 +35,51 @@ function requireFreePort(port) {
 async function main() {
   const args = process.argv.slice(2)
   const interactive = args[0] === '--open'
-
-  if (
-    args.length &&
-    !(interactive && args.length === 1) &&
-    !(args[0] === '--spec' && args.length === 2)
-  ) {
-    throw new Error('Usage: npm run test:v2 -- [--spec cypress/e2e-v2/auth.cy.js] or npm run test:v2:open')
+  const frontend = args[0] === '--frontend' && args.length === 1
+  if (args.length && !frontend && !(interactive && args.length === 1) && !(args[0] === '--spec' && args.length === 2)) {
+    throw new Error('Usage: npm run test:v2 -- [--spec path] or npm run test:browser or npm run test:v2:open')
   }
 
   if (!process.env.DATABASE_URL) throw new Error('Set DATABASE_URL (jdbc:postgresql://...) for the v2 tests')
-
-  await requireFreePort(18080)
+  await requireFreePort(testPort)
   await requireFreePort(19001)
-
+  await requireFreePort(5173)
+  let vite
+  let viteError
   try {
     maven(['test-compile', 'spring-boot:start'])
+    const frontendProject = path.resolve('..', 'frontend')
+    const project = frontend ? frontendProject : process.cwd()
     const configFile = 'cypress.v2.config.cjs'
-
+    if (frontend) {
+      process.env.CYPRESS_BASE_URL = 'http://localhost:5173'
+      process.env.CYPRESS_API_URL = `http://127.0.0.1:${testPort}`
+    }
+    {
+      // The backend suite also exercises the real frontend for transaction reports.
+      vite = spawn(process.execPath, [path.join(frontendProject, 'node_modules/vite/bin/vite.js'),
+        '--host', 'localhost', '--port', '5173', '--strictPort'], {
+        cwd: frontendProject, stdio: 'inherit', windowsHide: true,
+        env: { ...process.env, VITE_API_PROXY_TARGET: `http://127.0.0.1:${testPort}` },
+      })
+      vite.once('error', error => { viteError = error })
+      let ready = false
+      for (let attempt = 0; attempt < 45; attempt++) {
+        if (viteError) throw viteError
+        if (vite.exitCode !== null) throw new Error('Vite exited before browser acceptance')
+        try {
+          const response = await fetch('http://localhost:5173', { signal: AbortSignal.timeout(2000) })
+          if (response.ok) { ready = true; break }
+        } catch { /* Wait for the development server to bind its port. */ }
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      if (!ready) throw new Error('Vite did not become ready on localhost:5173')
+    }
     if (interactive) {
-      await cypress.open({ project: process.cwd(), configFile })
+      await cypress.open({ project, configFile })
     } else {
       const result = await cypress.run({
-        project: process.cwd(),
+        project,
         configFile,
         browser: 'electron',
         ...(args[0] === '--spec' ? { spec: args[1] } : {}),
@@ -67,6 +88,7 @@ async function main() {
       if (result.status === 'failed' || result.totalFailed || !result.totalTests) process.exitCode = 1
     }
   } finally {
+    if (vite) vite.kill()
     maven(['spring-boot:stop'])
   }
 }

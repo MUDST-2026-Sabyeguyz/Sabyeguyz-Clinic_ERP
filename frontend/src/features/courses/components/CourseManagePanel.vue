@@ -40,6 +40,10 @@ const {
       <div>
         <h1>คอร์สของผู้ป่วย</h1>
         <p class="course-manager-intro">ตรวจสอบสิทธิ์คงเหลือ วันหมดอายุ และจัดการสิทธิ์คอร์ส</p>
+        <RouterLink
+          v-if="owner"
+          :to="{ name: 'patient-course-payments', params: { patientId: owner.id } }"
+        >รับเงินคอร์สเดิม</RouterLink>
       </div>
       <CourseRenewalQueueLink
         v-if="canReviewCourseExtensions && owner"

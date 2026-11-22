@@ -16,7 +16,7 @@
 
 | ไฟล์ | เนื้อหา |
 |---|---|
-| `frontend/cypress.v2.config.ts` | config (baseUrl, `expose.apiUrl`, พิมพ์บรรทัด `FAILED …` ใน log) |
+| `frontend/cypress.v2.config.cjs` | config (baseUrl, `expose.apiUrl`, พิมพ์บรรทัด `FAILED …` ใน log); CommonJS หลีกเลี่ยง native TS config loader บน Windows ARM |
 | `frontend/cypress/support-v2/` | คำสั่งช่วย (`api`, `visitAs`, `pickDate`, `registerPatient`) และ reset ก่อนทุกเทสต์ |
 | `frontend/cypress/e2e-v2/auth.cy.js` | ล็อกอิน/ออกจากระบบ, สิทธิ์ Manager vs นักกายภาพ, หน้าที่ปิดสำหรับนักกายภาพ |
 | `patients.cy.js` | ลงทะเบียน (ไทย/ต่างชาติ), ค้นหา/กรอง/เรียง/แบ่งหน้า, โปรไฟล์และการแก้ไข |
@@ -40,13 +40,21 @@
 
 ## รันเอง
 
-ต้องมี PostgreSQL + backend v2 รันอยู่ (ดู `v2-api-tests.md`) แล้ว
+รันอัตโนมัติในเครื่องจาก root ของ repo ด้วย PowerShell 7.4+ (ต้องมี Docker, Node และ JDK ตาม [Kubernetes runbook](../deploy/k8s/README_TH.md)):
+
+```powershell
+pwsh -File scripts/Test-Submission.ps1 -Mode Browser
+```
+
+สคริปต์สร้าง PostgreSQL แยก เปิด API/Vite รัน browser tests แล้วหยุดเฉพาะสิ่งที่ตนสร้าง ดู [ผลตรวจล่าสุด](testing/2026-10-16-Local-Kubernetes.md)
+
+ถ้าจัดการ services เอง ต้องมี PostgreSQL + backend v2 รันอยู่ (ดู `v2-api-tests.md`) แล้วใช้ Bash:
 
 ```bash
 cd frontend
-npm run dev -- --host localhost --port 5173 &
-CYPRESS_API_URL=http://127.0.0.1:18080 VITE_API_PROXY_TARGET=http://127.0.0.1:18080 \
-  npx cypress run --config-file cypress.v2.config.ts
+VITE_API_PROXY_TARGET=http://127.0.0.1:18080 npm run dev -- --host localhost --port 5173 &
+CYPRESS_API_URL=http://127.0.0.1:18080 \
+  npx cypress run --config-file cypress.v2.config.cjs
 ```
 
-(CI เป็นที่เดียวที่รันครบทุกอย่างอัตโนมัติ — ดูผลที่แท็บ Actions → "Frontend E2E (v2 backend)")
+GitHub Actions ใช้ workflow "Frontend E2E (v2 backend)" แยกจากผล local; ไม่ถือว่าผ่านบน GitHub จนมีผล hosted run จริง

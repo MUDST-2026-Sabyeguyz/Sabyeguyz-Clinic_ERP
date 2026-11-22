@@ -1,6 +1,6 @@
 import { api } from './http'
 import { type Patient } from './patient'
-import { type Page } from './common'
+import { type CancellationRequest, type Page } from './common'
 import { type PaymentLabelCode } from './payment'
 
 export type SaleSummary = {
@@ -92,6 +92,9 @@ export const salesApi = {
   findReceipt: (receiptNo: string, branchCode: string) =>
     api.get<SaleDetail>(`/api/receipts/search?${new URLSearchParams({ receiptNo, branchCode })}`),
   create: (body: SaleCreateRequest) => api.post<SaleReceipt>('/api/payments', body),
-  reverse: (id: number, reason: string) =>
-    api.post<SaleDetail>(`/api/payments/${id}/reverse`, { reason }),
+  reverse: (id: number, body: CancellationRequest | string) =>
+    api.post<SaleDetail>(
+      `/api/payments/${id}/reverse`,
+      typeof body === 'string' ? { reason: body } : body,
+    ),
 }

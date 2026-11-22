@@ -25,7 +25,6 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableMethodSecurity
@@ -64,7 +63,7 @@ public class SecurityConfig {
     @Bean
     @Order(0)
     SecurityFilterChain authEndpoints(HttpSecurity http) throws Exception {
-        return http.securityMatcher(new AntPathRequestMatcher("/api/auth/login"))
+        return http.securityMatcher(request -> "/api/auth/login".equals(request.getServletPath()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .build();

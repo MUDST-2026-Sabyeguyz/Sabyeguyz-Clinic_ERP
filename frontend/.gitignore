@@ -26,3 +26,5 @@ __screenshots__/
 /cypress/videos/
 /cypress/screenshots/
 /cypress/downloads/
+# Generated synthetic browser evidence is uploaded by CI, not committed.
+/cypress/results/

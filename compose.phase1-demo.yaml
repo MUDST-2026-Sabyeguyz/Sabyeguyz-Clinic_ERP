@@ -1,0 +1,6 @@
+# Synthetic seed only. Use a new isolated project/volume; retain this migration location on future starts.
+services:
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,v2
+      APP_V2_FLYWAY_EXTRA_LOCATIONS: ",classpath:db/seed_v2"

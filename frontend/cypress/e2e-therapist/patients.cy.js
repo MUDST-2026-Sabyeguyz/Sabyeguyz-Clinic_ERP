@@ -160,7 +160,7 @@ describe('Therapist patient registration, profile and history', () => {
     visit('/staff/patients/new')
     fillThai()
     cy.get('button[type="submit"]').click()
-    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^ยกเลิก$/).click()
+    cy.get('[aria-labelledby="registration-confirmation-title"]').contains('button', /^\s*ยกเลิก\s*$/).click()
     cy.get('input[placeholder="ชื่อ"]').should('have.value', 'อรุณ')
     cy.get('[aria-labelledby="registration-confirmation-title"]').should('not.exist')
     api('GET', '/api/patients').its('body.totalItems').should('equal', 0)

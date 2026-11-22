@@ -553,6 +553,7 @@ watch(
                 :options="staffOptions"
                 label="นักกายภาพ"
                 default-label="เลือกนักกายภาพ"
+                :clear-on-reselect="false"
                 :disabled="stage === 'review'"
                 @update:model-value="treatingId = Number($event)"
               />

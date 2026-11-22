@@ -1,0 +1,365 @@
+diff --git a/.env.example b/.env.example
+index dadfdb3f..fb5ac9e8 100644
+--- a/.env.example
++++ b/.env.example
+@@ -5,6 +5,9 @@ JWT_SECRET=replace-with-at-least-32-random-characters
+ POSTGRES_PORT=5432
+ BACKEND_PORT=8080
+ FRONTEND_PORT=80
++# Auto: full SQL demo on an empty database; retain the existing seed mode/data on upgrades.
++# Choose none for a fresh schema with reference data only.
++CLINIC_SEED_MODE=auto
+ # First install only: choose your own manager credentials (password >=12 characters).
+ # Remove these values after provisioning; existing accounts are never overwritten.
+ CLINIC_BOOTSTRAP_MANAGER_USERNAME=
+diff --git a/.gitignore b/.gitignore
+index b956b6bc..28a1e478 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -6,3 +6,4 @@
+ # Google service account keys must never be committed
+ calendar-sync-key*.json
+ /secrets/
++/deployment-evidence.json
+diff --git a/README.md b/README.md
+index 4859d9a9..02d3b376 100644
+--- a/README.md
++++ b/README.md
+@@ -24,6 +24,8 @@ Services:
+ 
+ The first startup runs Flyway migrations automatically. PostgreSQL data is stored in the project's `postgres-v2-data` Docker volume and survives `docker compose down` followed by `docker compose up -d`. Use `docker compose down -v` only when you intentionally want to remove the database volume.
+ 
++New installations using `.env.example` also load the complete SQL demo automatically (V1100/V1101) after PostgreSQL is healthy. The backend image contains those SQL files; Flyway tracks which scripts have run, so rebuilding does not insert the same demo records again. Existing installations keep their current `.env` seed selection; do not switch a database from `seed_v2` to `seed_v2_legacy` in place.
++
+ The Compose project is named `sabyeguyz`. Data from an older Compose project stays in its previous volume and is not moved into the new project automatically.
+ 
+ Copy `.env.example` to `.env` and set unique database and JWT secrets before starting Compose. Ports can also be changed there.
+diff --git a/compose.yaml b/compose.yaml
+index 144b9e3e..27f1cc7a 100644
+--- a/compose.yaml
++++ b/compose.yaml
+@@ -23,6 +23,8 @@ services:
+       context: ./backend
+     environment:
+       SPRING_PROFILES_ACTIVE: docker,v2
++      SPRING_FLYWAY_ENABLED: "true"
++      CLINIC_SEED_MODE: ${CLINIC_SEED_MODE:-auto}
+       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-clinic_erp_v2}
+       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-clinic}
+       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+diff --git a/deploy/kubernetes/README.md b/deploy/kubernetes/README.md
+index 1f137c27..0eb6228c 100644
+--- a/deploy/kubernetes/README.md
++++ b/deploy/kubernetes/README.md
+@@ -24,7 +24,9 @@ Open `http://127.0.0.1:8085/job/Clinic-Kubernetes/`. The stages are:
+ 
+ This is a manual Jenkins build of the local `main` snapshot, not a GitHub webhook integration. For later updates run `git pull --ff-only origin main` in the presentation repository, then click **Build Now**. Rerun the setup script if the Jenkinsfile changed, or if the Windows agent stopped after reboot. Agent logs and its secret stay under `%LOCALAPPDATA%\ClinicJenkinsAgent`, outside the repository.
+ 
+-The Kubernetes database is a separate demo database; Compose data is not imported. Fresh demo accounts are `manager / manager123` and `therapist / therapist123`. Existing Kubernetes payment settings, credentials and data remain in the existing Secret/PVC. Verify rollout and login on the presentation machine before presenting; local build success is not evidence of a remote rollout.
++The backend image includes the schema migrations and complete SQL demo (`db/seed_v2_legacy`, V1100/V1101). After PostgreSQL is Ready, Flyway applies both automatically before the backend becomes Ready; subsequent restarts keep the same records. Fresh demo accounts are `manager / manager123` and `therapist / therapist123`.
++
++If the earlier minimal demo already populated `clinic_demo`, the deploy script retains it and initializes `clinic_demo_full` on the same PVC, then points the backend to the complete demo. Existing databases that have already applied V1100 continue using their saved data. This loads the repository's demo SQL; it does not copy a different machine's live database. Verify rollout and login on the presentation machine before presenting; local build success is not evidence of a remote rollout.
+ 
+ ## Open the application and present
+ 
+diff --git a/deploy/kubernetes/app.yaml b/deploy/kubernetes/app.yaml
+index 08dde881..2bbb74da 100644
+--- a/deploy/kubernetes/app.yaml
++++ b/deploy/kubernetes/app.yaml
+@@ -1,57 +1,4 @@
+ apiVersion: v1
+-kind: PersistentVolumeClaim
+-metadata:
+-  name: postgres-data
+-spec:
+-  accessModes: [ReadWriteOnce]
+-  resources:
+-    requests:
+-      storage: 5Gi
+----
+-apiVersion: v1
+-kind: Service
+-metadata:
+-  name: postgres
+-spec:
+-  selector: {app: postgres}
+-  ports: [{port: 5432, targetPort: 5432}]
+----
+-apiVersion: apps/v1
+-kind: StatefulSet
+-metadata:
+-  name: postgres
+-spec:
+-  serviceName: postgres
+-  replicas: 1
+-  selector:
+-    matchLabels: {app: postgres}
+-  template:
+-    metadata:
+-      labels: {app: postgres}
+-    spec:
+-      automountServiceAccountToken: false
+-      containers:
+-        - name: postgres
+-          image: postgres:16-alpine
+-          env:
+-            - {name: POSTGRES_DB, value: clinic_demo}
+-            - {name: POSTGRES_USER, value: clinic}
+-            - name: POSTGRES_PASSWORD
+-              valueFrom:
+-                secretKeyRef: {name: clinic-secrets, key: POSTGRES_PASSWORD}
+-          ports: [{containerPort: 5432}]
+-          volumeMounts:
+-            - {name: data, mountPath: /var/lib/postgresql/data, subPath: postgres}
+-          readinessProbe:
+-            exec:
+-              command: [pg_isready, -U, clinic, -d, clinic_demo]
+-            initialDelaySeconds: 5
+-            periodSeconds: 5
+-      volumes:
+-        - name: data
+-          persistentVolumeClaim: {claimName: postgres-data}
+----
+-apiVersion: v1
+ kind: Service
+ metadata:
+   name: backend
+@@ -78,9 +25,10 @@ spec:
+           imagePullPolicy: IfNotPresent
+           env:
+             - {name: SPRING_PROFILES_ACTIVE, value: 'docker,v2'}
+-            - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/clinic_demo'}
++            - {name: SPRING_DATASOURCE_URL, value: 'jdbc:postgresql://postgres:5432/__DATABASE_NAME__'}
+             - {name: SPRING_DATASOURCE_USERNAME, value: clinic}
+-            - {name: APP_V2_FLYWAY_EXTRA_LOCATIONS, value: ',classpath:db/seed_v2'}
++            - {name: SPRING_FLYWAY_ENABLED, value: 'true'}
++            - {name: CLINIC_SEED_MODE, value: '__SEED_MODE__'}
+             - name: SPRING_DATASOURCE_PASSWORD
+               valueFrom:
+                 secretKeyRef: {name: clinic-secrets, key: SPRING_DATASOURCE_PASSWORD}
+diff --git a/scripts/deploy-kubernetes.ps1 b/scripts/deploy-kubernetes.ps1
+index 861a476f..a8d7b726 100644
+--- a/scripts/deploy-kubernetes.ps1
++++ b/scripts/deploy-kubernetes.ps1
+@@ -1,98 +1,166 @@
+ param(
++    [string]$KubeContext = 'docker-desktop',
+     [string]$Namespace = 'clinic-present',
++    [string]$DatabaseName = 'clinic_demo',
++    [ValidateSet('auto','none','minimal','full')][string]$SeedMode = 'auto',
++    [ValidateSet('Auto','Kind','Desktop')][string]$ImageTransport = 'Auto',
+     [string]$ImageTag,
+-    [switch]$SkipBuild
++    [switch]$SkipBuild,
++    [switch]$PreflightOnly
+ )
+-
+ $ErrorActionPreference = 'Stop'
+ $repoPath = Split-Path -Parent $PSScriptRoot
+ Set-Location -LiteralPath $repoPath
+-if ($Namespace -notmatch '^clinic-[a-z0-9-]+$') { throw 'Use a dedicated clinic-* demo namespace.' }
+-foreach ($tool in @('git', 'docker', 'kubectl')) {
+-    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is required on the Windows agent." }
++if ($Namespace -notmatch '^clinic-[a-z0-9-]+$' -or $Namespace.Length -gt 63) { throw 'Use a dedicated clinic-* namespace, up to 63 characters.' }
++if ($DatabaseName -notmatch '^[a-z][a-z0-9_]{0,62}$') { throw 'DatabaseName must be a lowercase PostgreSQL identifier.' }
++foreach ($tool in @('git','docker','kubectl')) {
++    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is required on the agent." }
+ }
+ function Run-Kube {
+-    & kubectl --context docker-desktop -n $Namespace @args
++    & kubectl --context $KubeContext -n $Namespace @args
+     if ($LASTEXITCODE -ne 0) { throw "kubectl failed: $($args -join ' ')" }
+ }
++function Sql-Value([string]$Database, [string]$Sql) {
++    $lines = Run-Kube exec postgres-0 -- psql -X -v ON_ERROR_STOP=1 -U clinic -d $Database -tAc $Sql
++    return ([string]($lines -join [Environment]::NewLine)).Trim()
++}
++function Write-Utf8([string]$Path, [string]$Value) {
++    [IO.File]::WriteAllText($Path,$Value,(New-Object Text.UTF8Encoding($false)))
++}
+ function New-DemoSecret {
+-    $bytes = New-Object byte[] 48
+-    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
++    $bytes=New-Object byte[] 48
++    $rng=[Security.Cryptography.RandomNumberGenerator]::Create()
+     try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+     return [Convert]::ToBase64String($bytes)
+ }
+-& kubectl --context docker-desktop get nodes
+-if ($LASTEXITCODE -ne 0) { throw 'Start Docker Desktop Kubernetes before deploying.' }
+-if (-not $ImageTag) {
+-    $sha = (& git rev-parse --short=12 HEAD).Trim()
+-    if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the source revision.' }
+-    $ImageTag = "$sha-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))"
++$nodes=Run-Kube get nodes -o json | ConvertFrom-Json
++if (@($nodes.items).Count -eq 0) { throw 'The selected cluster has no nodes.' }
++foreach ($node in $nodes.items) {
++    if (-not @($node.status.conditions | Where-Object {$_.type -eq 'Ready' -and $_.status -eq 'True'}).Count) { throw "Node is not Ready: $($node.metadata.name)" }
++}
++$visibleNodes=@(& docker ps --filter 'label=io.x-k8s.kind.cluster' --format '{{.Names}}')
++if ($LASTEXITCODE -ne 0) { throw 'Docker is not available for the agent user.' }
++$nodeNames=@($nodes.items | ForEach-Object {$_.metadata.name})
++$targetNodes=@($visibleNodes | Where-Object {$_ -in $nodeNames})
++if ($ImageTransport -eq 'Auto') {
++    if ($targetNodes.Count -eq $nodeNames.Count) { $ImageTransport='Kind' }
++    elseif ($KubeContext -eq 'docker-desktop') { $ImageTransport='Desktop' }
++    else { throw 'No image loader found. Use visible kind nodes or the docker-desktop context.' }
+ }
++if ($ImageTransport -eq 'Kind' -and $targetNodes.Count -ne $nodeNames.Count) { throw 'All kind node containers must be visible to Docker.' }
++if ($ImageTransport -eq 'Desktop' -and $KubeContext -ne 'docker-desktop') { throw 'Desktop image transport requires docker-desktop.' }
++$storage=Run-Kube get storageclass -o json | ConvertFrom-Json
++if (-not @($storage.items | Where-Object {$_.metadata.annotations.'storageclass.kubernetes.io/is-default-class' -eq 'true' -or $_.metadata.annotations.'storageclass.beta.kubernetes.io/is-default-class' -eq 'true'}).Count) { throw 'No default StorageClass is available for PostgreSQL.' }
++Write-Host "PREFLIGHT_OK context=$KubeContext namespace=$Namespace database=$DatabaseName seed=$SeedMode imageTransport=$ImageTransport"
++if ($PreflightOnly) { return }
++$sourceSha=([string](& git rev-parse HEAD)).Trim()
++if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the source revision.' }
++$sourceDirty=-not [string]::IsNullOrWhiteSpace((& git status --porcelain | Out-String))
++if (-not $ImageTag) { $ImageTag="$($sourceSha.Substring(0,12))-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))" }
+ if ($ImageTag -notmatch '^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$') { throw 'Invalid image tag.' }
+-$backendImage = "docker.io/library/clinic-backend:$ImageTag"
+-$frontendImage = "docker.io/library/clinic-frontend:$ImageTag"
++$backendImage="docker.io/library/clinic-backend:$ImageTag"
++$frontendImage="docker.io/library/clinic-frontend:$ImageTag"
+ if (-not $SkipBuild) {
+     & docker build -t $backendImage ./backend
+-    if ($LASTEXITCODE -ne 0) { throw 'Backend image build failed.' }
++    if ($LASTEXITCODE -ne 0) { throw 'Backend build failed.' }
+     & docker build -t $frontendImage ./frontend
+-    if ($LASTEXITCODE -ne 0) { throw 'Frontend image build failed.' }
++    if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
+ }
+-
+-# Visible kind nodes can import the images explicitly. Otherwise Docker Desktop's
+-# containerd registry mirror supplies the local images to its Kubernetes nodes.
+-$nodes = (& kubectl --context docker-desktop get nodes -o json | ConvertFrom-Json).items.metadata.name
+-if ($LASTEXITCODE -ne 0) { throw 'Cannot list Kubernetes nodes.' }
+-$visibleNodes = @(& docker ps --filter 'label=io.x-k8s.kind.cluster' --format '{{.Names}}')
+-if ($LASTEXITCODE -ne 0) { throw 'Docker is not available.' }
+-$targetNodes = @($visibleNodes | Where-Object { $_ -in $nodes })
+-if ($targetNodes.Count -gt 0) {
+-    if ($targetNodes.Count -ne @($nodes).Count) { throw 'Only some cluster nodes are visible to Docker. Enable Show system containers in Docker Desktop.' }
+-    $archive = Join-Path ([IO.Path]::GetTempPath()) ('clinic-images-' + [guid]::NewGuid().ToString('N') + '.tar')
+-    $remoteArchive = '/tmp/' + [IO.Path]::GetFileName($archive)
++foreach ($image in @($backendImage,$frontendImage)) {
++    & docker image inspect $image --format '{{.Id}}'
++    if ($LASTEXITCODE -ne 0) { throw "Image is missing: $image" }
++}
++if ($ImageTransport -eq 'Kind') {
++    & docker pull postgres:16-alpine
++    if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL image pull failed.' }
++    $archive=Join-Path ([IO.Path]::GetTempPath()) ('clinic-images-'+[guid]::NewGuid().ToString('N')+'.tar')
++    $remoteArchive='/tmp/'+[IO.Path]::GetFileName($archive)
+     try {
+-        & docker image save --output $archive $backendImage $frontendImage
++        & docker image save --output $archive $backendImage $frontendImage postgres:16-alpine
+         if ($LASTEXITCODE -ne 0) { throw 'Image export failed.' }
+         foreach ($node in $targetNodes) {
+-            & docker cp $archive "${node}:$remoteArchive"
++            $destination=$node+':'+$remoteArchive
++            & docker cp $archive $destination
+             if ($LASTEXITCODE -ne 0) { throw "Image copy failed: $node" }
+             try {
+                 & docker exec $node ctr --namespace k8s.io images import $remoteArchive
+                 if ($LASTEXITCODE -ne 0) { throw "Image import failed: $node" }
+-            } finally { & docker exec $node rm -f $remoteArchive }
++            } finally { & docker exec $node rm -f $remoteArchive | Out-Null }
+         }
+     } finally { if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive } }
+ }
+-
+-$existingNamespace = & kubectl --context docker-desktop get namespace $Namespace --ignore-not-found -o name
+-if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the deployment namespace.' }
+-if (-not $existingNamespace) {
+-    & kubectl --context docker-desktop create namespace $Namespace
+-    if ($LASTEXITCODE -ne 0) { throw 'Cannot create the deployment namespace.' }
+-}
+-$secret = Run-Kube get secret clinic-secrets --ignore-not-found -o name
++$existingNamespace=& kubectl --context $KubeContext get namespace $Namespace --ignore-not-found -o name
++if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the namespace.' }
++if (-not $existingNamespace) { Run-Kube create namespace $Namespace }
++$secret=Run-Kube get secret clinic-secrets --ignore-not-found -o json
+ if (-not $secret) {
+-    $password = New-DemoSecret
+-    $secretFile = Join-Path ([IO.Path]::GetTempPath()) ('clinic-secret-' + [guid]::NewGuid().ToString('N') + '.env')
++    $password=New-DemoSecret
++    $secretFile=Join-Path ([IO.Path]::GetTempPath()) ('clinic-secret-'+[guid]::NewGuid().ToString('N')+'.env')
+     try {
+-        [IO.File]::WriteAllLines($secretFile, @("POSTGRES_PASSWORD=$password", "SPRING_DATASOURCE_PASSWORD=$password", "JWT_SECRET=$(New-DemoSecret)"), (New-Object Text.UTF8Encoding($false)))
++        $secretLines=@("POSTGRES_PASSWORD=$password","SPRING_DATASOURCE_PASSWORD=$password","JWT_SECRET=$(New-DemoSecret)")
++        Write-Utf8 $secretFile ($secretLines -join [Environment]::NewLine)
+         Run-Kube create secret generic clinic-secrets "--from-env-file=$secretFile"
+     } finally { if (Test-Path -LiteralPath $secretFile) { Remove-Item -LiteralPath $secretFile } }
++} else {
++    $secretData=($secret | ConvertFrom-Json).data
++    foreach ($key in @('POSTGRES_PASSWORD','SPRING_DATASOURCE_PASSWORD','JWT_SECRET')) {
++        if (-not $secretData.$key) { throw "Existing clinic-secrets is missing $key; it was not overwritten." }
++    }
++    if ($secretData.POSTGRES_PASSWORD -ne $secretData.SPRING_DATASOURCE_PASSWORD) { throw 'PostgreSQL/backend passwords differ; secret was not overwritten.' }
+ }
+-$manifest = Join-Path ([IO.Path]::GetTempPath()) ('clinic-deploy-' + [guid]::NewGuid().ToString('N') + '.yaml')
++$manifest=Join-Path ([IO.Path]::GetTempPath()) ('clinic-deploy-'+[guid]::NewGuid().ToString('N')+'.yaml')
++$jobManifest=Join-Path ([IO.Path]::GetTempPath()) ('clinic-job-'+[guid]::NewGuid().ToString('N')+'.yaml')
++$jobName='clinic-migrate-'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8)
+ try {
+-    $yaml = [IO.File]::ReadAllText((Join-Path $repoPath 'deploy/kubernetes/app.yaml'))
+-    $yaml = $yaml.Replace('__BACKEND_IMAGE__', $backendImage).Replace('__FRONTEND_IMAGE__', $frontendImage)
+-    [IO.File]::WriteAllText($manifest, $yaml, (New-Object Text.UTF8Encoding($false)))
+-    Run-Kube apply -f $manifest
++    Run-Kube apply -f (Join-Path $repoPath 'deploy/kubernetes/postgres.yaml')
+     Run-Kube rollout status statefulset/postgres --timeout=180s
++    if (-not (Sql-Value postgres "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName'")) { Run-Kube exec postgres-0 -- createdb -U clinic $DatabaseName }
++    $values=@{'__BACKEND_IMAGE__'=$backendImage;'__FRONTEND_IMAGE__'=$frontendImage;'__DATABASE_NAME__'=$DatabaseName;'__SEED_MODE__'=$SeedMode;'__MIGRATION_JOB__'=$jobName}
++    $jobYaml=[IO.File]::ReadAllText((Join-Path $repoPath 'deploy/kubernetes/migration-job.yaml'))
++    $appYaml=[IO.File]::ReadAllText((Join-Path $repoPath 'deploy/kubernetes/app.yaml'))
++    foreach ($key in $values.Keys) { $jobYaml=$jobYaml.Replace($key,$values[$key]);$appYaml=$appYaml.Replace($key,$values[$key]) }
++    Write-Utf8 $jobManifest $jobYaml
++    Run-Kube apply -f $jobManifest
++    $deadline=(Get-Date).AddMinutes(6)
++    do {
++        $job=Run-Kube get job $jobName -o json | ConvertFrom-Json
++        if ($job.status.failed -gt 0) { throw 'Migration job failed. Application images were not rolled out.' }
++        if ($job.status.succeeded -gt 0) { break }
++        $jobPods=Run-Kube get pods -l "job-name=$jobName" -o json | ConvertFrom-Json
++        foreach ($pod in $jobPods.items) {
++            foreach ($container in $pod.status.containerStatuses) {
++                if ($container.state.waiting.reason -in @('ErrImagePull','ImagePullBackOff','InvalidImageName')) { throw 'Node cannot load the image. Enable Show system containers and select Kind image transport.' }
++            }
++        }
++        Start-Sleep -Seconds 2
++    } while ((Get-Date) -lt $deadline)
++    if (-not ($job.status.succeeded -gt 0)) { throw 'Migration job timed out.' }
++    $migrationLog=Run-Kube logs "job/$jobName" | Out-String
++    Write-Host $migrationLog
++    if ($migrationLog -notmatch 'CLINIC_MIGRATION_OK') { throw 'Migration job did not confirm completion.' }
++    Write-Utf8 $manifest $appYaml
++    Run-Kube apply -f $manifest
+     Run-Kube rollout status deployment/backend --timeout=360s
+     Run-Kube rollout status deployment/frontend --timeout=180s
++    $deployments=Run-Kube get deployments backend frontend -o json | ConvertFrom-Json
++    foreach ($deployment in $deployments.items) {
++        $expected=if ($deployment.metadata.name -eq 'backend') {$backendImage} else {$frontendImage}
++        if ($deployment.spec.template.spec.containers[0].image -ne $expected -or $deployment.status.availableReplicas -lt $deployment.spec.replicas) { throw "Deployment image/replicas do not match: $($deployment.metadata.name)" }
++    }
++    if ((Sql-Value $DatabaseName 'SELECT count(*) FROM flyway_schema_history WHERE NOT success') -ne '0') { throw 'Database contains failed migrations.' }
++    $patientCount=Sql-Value $DatabaseName 'SELECT count(*) FROM patient'
++    $smoke = & (Join-Path $PSScriptRoot 'smoke-kubernetes.ps1') -KubeContext $KubeContext -Namespace $Namespace
++    $pods=Run-Kube get pods -o json | ConvertFrom-Json
++    $evidence=[ordered]@{sourceSha=$sourceSha;sourceDirty=$sourceDirty;context=$KubeContext;namespace=$Namespace;database=$DatabaseName;seedMode=$SeedMode;imageTag=$ImageTag;migrationJob=$jobName;migrationCompleted=$true;patientCount=[int]$patientCount;smoke=$smoke;completedAtUtc=[DateTime]::UtcNow.ToString('o');imageIDs=@($pods.items.status.containerStatuses | ForEach-Object {$_.imageID})}
++    Write-Utf8 (Join-Path $repoPath 'deployment-evidence.json') ($evidence | ConvertTo-Json -Depth 5)
+     Run-Kube get pods,services,pvc -o wide
+-    Write-Host "DEPLOYED image tag: $ImageTag"
+-    Write-Host "Open the demo: kubectl --context docker-desktop -n $Namespace port-forward service/frontend 38001:80"
++    Write-Host "DEPLOYED source=$sourceSha dirty=$sourceDirty database=$DatabaseName patients=$patientCount"
++    Write-Host "Open: kubectl --context $KubeContext -n $Namespace port-forward service/frontend 38001:80"
+ } catch {
+-    & kubectl --context docker-desktop -n $Namespace get pods -o wide
+-    & kubectl --context docker-desktop -n $Namespace get events --sort-by=.metadata.creationTimestamp
+-    & kubectl --context docker-desktop -n $Namespace logs deployment/backend --tail=80
++    & kubectl --context $KubeContext -n $Namespace get pods -o wide
++    & kubectl --context $KubeContext -n $Namespace get events --sort-by=.metadata.creationTimestamp
++    & kubectl --context $KubeContext -n $Namespace logs "job/$jobName" --tail=80
+     throw
+-} finally { if (Test-Path -LiteralPath $manifest) { Remove-Item -LiteralPath $manifest } }
++} finally {
++    foreach ($path in @($manifest,$jobManifest)) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path } }
++}

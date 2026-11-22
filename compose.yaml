@@ -23,6 +23,9 @@ services:
       context: ./backend
     environment:
       SPRING_PROFILES_ACTIVE: docker,v2
+      SPRING_FLYWAY_ENABLED: "true"
+      CLINIC_DATABASE_KIND: ${CLINIC_DATABASE_KIND:-unspecified}
+      CLINIC_SEED_MODE: ${CLINIC_SEED_MODE:-none}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-clinic_erp_v2}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-clinic}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}

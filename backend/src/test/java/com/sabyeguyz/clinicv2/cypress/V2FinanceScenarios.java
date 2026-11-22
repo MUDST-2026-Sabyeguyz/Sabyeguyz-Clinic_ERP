@@ -238,6 +238,8 @@ public class V2FinanceScenarios {
                 new CommissionSchemeService.TierInput(decimal("60000"), null, decimal("0.10"), 2));
 
         if (scenario.equals("schemecrud-branch-open")) {
+            var existing = schemeVersion(1, "2026-01-01", null);
+            schemesStub.on("findByOrderByEffectiveFromDesc", args -> List.of(existing));
             branchClosing.setClosingStatus(BranchClosingStatus.Open);
             branchClosing.setClosedAt(null);
             branchClosing.setClosedBy(null);
@@ -667,7 +669,7 @@ public class V2FinanceScenarios {
                 new V2RepositoryStub<>(TreatmentFeeRuleRepository.class)
                         .on("findMaxRuleVersion", args -> scenario.equals("feeadmin-create") ? 0 : 1);
 
-        var service = new TreatmentFeeRuleService(repository.proxy());
+        var service = new TreatmentFeeRuleService(repository.proxy(), guard);
         var existing = new TreatmentFeeRule(); existing.setFeeType(FeeType.Fixed); existing.setFeeValue(decimal("45"));
         existing.setEffectiveFrom(LocalDate.of(2026,1,1));
         setId(existing, 1L);

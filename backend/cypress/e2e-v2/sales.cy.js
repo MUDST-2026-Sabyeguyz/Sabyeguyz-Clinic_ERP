@@ -199,22 +199,35 @@ describe('v2 sales and payments', () => {
     })
   })
 
-  it('rejects a service sale without an appointment', function () {
+  it('records a prepaid single-visit entitlement when selling a service without an appointment, and rejects an assessment', function () {
     cy.registerPatient().then((patient) => {
       cy.api('POST', '/api/payments', {
         patientId: patient.id,
         branchCode: '01',
-        treatingStaffId: this.fixtures.therapistId,
         paymentLabelCode: 'FULL',
-        items: [{type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1,}],
-        payments: [{paymentMethodCode: 'BankTransfer', amount: 800,}],
+        items: [{ type: 'SERVICE', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
       }).then(({ status, body }) => {
-        expect(status).to.equal(400)
-        expect(body.message).to.include('appointmentId')
+        expect(status).to.equal(201)
+        expect(Number(body.total)).to.equal(800)
       })
 
       cy.api('GET', '/api/appointments')
           .its('body.totalItems').should('equal', 0)
+
+      cy.api('GET', `/api/patients/${patient.id}/single-visit-entitlements`).then(({ status, body }) => {
+        expect(status).to.equal(200)
+        expect(body).to.have.length(1)
+        expect(body[0]).to.include({ serviceId: this.fixtures.singleVisitServiceId, purchased: 1, used: 0, remaining: 1 })
+      })
+
+      cy.api('POST', '/api/payments', {
+        patientId: patient.id,
+        branchCode: '01',
+        paymentLabelCode: 'FULL',
+        items: [{ type: 'ASSESSMENT', referenceId: this.fixtures.singleVisitServiceId, quantity: 1 }],
+        payments: [{ paymentMethodCode: 'BankTransfer', amount: 800 }],
+      }).its('status').should('equal', 400)
     })
   })
 

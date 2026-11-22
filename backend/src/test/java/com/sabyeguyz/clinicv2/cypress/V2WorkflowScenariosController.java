@@ -304,7 +304,7 @@ public class V2WorkflowScenariosController {
                     new com.sabyeguyz.clinicv2.commission.CourseCommissionService(usages.proxy(), allocations.proxy(),
                             courses.proxy(), new TreatmentFeeRuleResolver(rules.proxy())),
                     new CourseUsagePrintService(new V2RepositoryStub<>(CourseUsagePrintRepository.class).proxy(),
-                            new V2RepositoryStub<>(CourseUsagePrintEventRepository.class).proxy(), usages.proxy()));
+                            new V2RepositoryStub<>(CourseUsagePrintEventRepository.class).proxy(), usages.proxy(), ledger.proxy()));
             var result = service.use(course, new PatientVisit(), patient, ownerTreats ? owner : substitute,
                     LocalDate.of(2026, 9, 1), 1L);
             Map<String, Object> resultMap = new LinkedHashMap<>();
@@ -358,7 +358,8 @@ public class V2WorkflowScenariosController {
         var prints = new V2RepositoryStub<>(CourseUsagePrintRepository.class);
         var events = new V2RepositoryStub<>(CourseUsagePrintEventRepository.class);
         var service = new CourseUsagePrintService(prints.proxy(), events.proxy(),
-                new V2RepositoryStub<>(CourseVisitUsageRepository.class).proxy());
+                new V2RepositoryStub<>(CourseVisitUsageRepository.class).proxy(),
+                new V2RepositoryStub<>(CourseLedgerRepository.class).proxy());
         Course course = lockedCourse(); course.setCourseNo("RE00000010"); course.setCourseName("คอร์สทดสอบ");
         var usage = new CourseVisitUsage();
         usage.setCourse(course); usage.setVisitDate(LocalDate.of(2026, 9, 1).atStartOfDay());
@@ -387,6 +388,7 @@ public class V2WorkflowScenariosController {
         Course course = new Course(); setId(course, 1L);
         course.setCoursePrice(new BigDecimal("10000.00"));
         course.setTotalVisits(10); course.setRemainingVisits(10); course.setVisitsUsed(0);
+        course.setCourseCreateAt(java.time.Instant.now());
         course.setExpiryDate(LocalDate.of(2099, 12, 31)); course.setCourseStatus(CourseStatus.Active);
         course.setCommissionStatus(com.sabyeguyz.clinicv2.enums.CommissionStatus.Locked);
         course.setCommissionAllocationPerVisit(new BigDecimal("70.00"));

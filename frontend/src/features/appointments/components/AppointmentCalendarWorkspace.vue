@@ -472,7 +472,7 @@ watch(
       <p v-if="availabilityError" class="calendar-note" role="status">{{ availabilityError }}</p>
       <p v-if="loading || refreshing" role="status">กำลังโหลดปฏิทินและตรวจสอบเวลาว่าง…</p>
       <p v-else-if="!branchCode" class="calendar-note">
-        ไม่มีสิทธิ์เข้าถึง กรุณาติดต่อ Manager 
+        ไม่มีสิทธิ์เข้าถึง กรุณาติดต่อ Manager
       </p>
       <p v-else-if="!branchTherapists.length" class="calendar-note">ยังไม่มีนักกายภาพในสาขานี้</p>
       <p v-else-if="!selectedIds.length" class="calendar-note">

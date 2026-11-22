@@ -37,7 +37,7 @@ describe('Therapist transactions', () => {
       openSale(saved)
       // no reason is preselected: the confirm button stays disabled until one is chosen
       cy.contains('button', 'ยืนยันการยกเลิก').should('be.disabled')
-      cy.get('input[name="void-reason"][value="อื่น ๆ"]').check()
+      cy.get('input[name="void-reason"][value="Other"]').check()
       cy.contains('button', 'ยืนยันการยกเลิก').should('be.disabled')
       cy.get('#transaction-other-reason').type(reason)
       cy.contains('button', 'ยืนยันการยกเลิก').click()

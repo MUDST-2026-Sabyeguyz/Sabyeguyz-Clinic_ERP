@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -20,10 +22,13 @@ class CourseUsagePrintServiceTest {
         var prints = mock(CourseUsagePrintRepository.class);
         var events = mock(CourseUsagePrintEventRepository.class);
         var usages = mock(CourseVisitUsageRepository.class);
-        var service = new CourseUsagePrintService(prints, events, usages);
+        var ledger = mock(CourseLedgerRepository.class);
+        var service = new CourseUsagePrintService(prints, events, usages, ledger);
 
         var course = mock(Course.class);
         when(course.getId()).thenReturn(10L);
+        when(course.getCourseCreateAt()).thenReturn(Instant.parse("2026-11-01T03:00:00Z"));
+        when(course.getExpiryDate()).thenReturn(LocalDate.of(2027, 11, 1));
         var patient = mock(Patient.class);
         when(patient.getPatientFname()).thenReturn("สมชาย");
         when(patient.getPatientLname()).thenReturn("ใจดี");

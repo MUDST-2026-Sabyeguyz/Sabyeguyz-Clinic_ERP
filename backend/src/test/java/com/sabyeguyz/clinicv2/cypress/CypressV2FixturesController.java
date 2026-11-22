@@ -208,6 +208,38 @@ public class CypressV2FixturesController {
         return Map.of("updated", updated);
     }
 
+    public record FlatRateFixtureRequest(java.math.BigDecimal rate) {}
+
+    @PostMapping("/commission-flat-rate-fixture")
+    public Map<String, Object> commissionFlatRateFixture(
+            @org.springframework.web.bind.annotation.RequestBody
+            FlatRateFixtureRequest request) {
+
+        if (request.rate() == null
+                || request.rate().signum() < 0
+                || request.rate().compareTo(java.math.BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("อัตราค่าคอมมิชชันต้องอยู่ระหว่าง 0 ถึง 1");
+        }
+
+        if (id("SELECT COUNT(*) FROM course") > 0
+                || id("SELECT COUNT(*) FROM commission_allocation_ledger") > 0
+                || id("SELECT COUNT(*) FROM monthly_commission_closing") > 0
+                || id("SELECT COUNT(*) FROM commission_scheme") != 1) {
+            throw new IllegalStateException(
+                    "ต้องเตรียมอัตราค่าคอมมิชชันก่อนเริ่มขายคอร์สหรือปิดรอบ");
+        }
+
+        jdbc.update("DELETE FROM commission_tier");
+        int updated = jdbc.update(
+                "INSERT INTO commission_tier (commission_scheme_id, permission_id, tier_order, "
+                        + "minimum_monthly_sales, maximum_monthly_sales, commission_rate, effective_from, tier_create_by) "
+                        + "SELECT commission_scheme_id, permission_id, 1, 0.00, NULL, ?, effective_from, scheme_create_by "
+                        + "FROM commission_scheme",
+                request.rate());
+
+        return Map.of("updated", updated);
+    }
+
     private long id(String sql) {
         return jdbc.queryForObject(sql, Long.class);
     }

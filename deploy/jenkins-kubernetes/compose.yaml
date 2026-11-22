@@ -1,0 +1,16 @@
+name: clinic-local-kubernetes
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8086:8080"
+    environment:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false
+      CLINIC_JENKINS_ADMIN_PASSWORD: ${CLINIC_JENKINS_ADMIN_PASSWORD:?Run scripts/start-jenkins-kubernetes.ps1 to prepare the local admin password}
+    volumes:
+      - jenkins-home:/var/jenkins_home
+    restart: unless-stopped
+volumes:
+  jenkins-home:

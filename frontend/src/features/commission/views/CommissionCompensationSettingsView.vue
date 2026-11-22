@@ -12,6 +12,9 @@ const saving = ref(false)
 const error = ref('')
 const message = ref('')
 const drawerOpen = ref(false)
+const backfill = reactive({ from: `${clinicToday().slice(0, 8)}01`, to: clinicToday() })
+const backfilling = ref(false)
+const backfillMessage = ref('')
 const branchCode = computed(() => selectedManagerBranch()?.code ?? '')
 const nextMonth = () => {
   const today = clinicToday()
@@ -94,6 +97,25 @@ async function saveRule() {
   }
 }
 
+async function runBackfill() {
+  if (backfilling.value) return
+  error.value = ''
+  backfillMessage.value = ''
+  if (!backfill.from || !backfill.to || backfill.to < backfill.from) {
+    error.value = 'กรุณาระบุช่วงวันที่ให้ถูกต้อง'
+    return
+  }
+  backfilling.value = true
+  try {
+    const result = await commissionApi.backfillSingleVisitFees(backfill.from, backfill.to)
+    backfillMessage.value = `บันทึกค่ามือรายครั้งที่ขาดเพิ่ม ${result.recorded} รายการ`
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : 'บันทึกค่ามือที่ขาดไม่สำเร็จ'
+  } finally {
+    backfilling.value = false
+  }
+}
+
 onMounted(load)
 watch(branchCode, () => void load())
 </script>
@@ -129,6 +151,18 @@ watch(branchCode, () => void load())
         <button class="commission-primary add-rule" type="button" :disabled="!branchCode || loading" @click="openDrawer">
           + เพิ่มกฎค่ามือ
         </button>
+      </section>
+      <section class="commission-card compensation-panel backfill-panel">
+        <h2>บันทึกค่ามือรายครั้งที่ขาด</h2>
+        <p>บันทึกรายการที่ยังขาดตามช่วงวันที่ หลังเพิ่มกฎค่ามือแล้ว โดยไม่สร้างรายการเดิมซ้ำ</p>
+        <form class="backfill-controls" @submit.prevent="runBackfill">
+          <label>ตั้งแต่<input v-model="backfill.from" type="date" required /></label>
+          <label>ถึง<input v-model="backfill.to" type="date" :min="backfill.from" required /></label>
+          <button class="commission-secondary" type="submit" :disabled="backfilling">
+            {{ backfilling ? 'กำลังบันทึก…' : 'บันทึกย้อนหลัง' }}
+          </button>
+        </form>
+        <p v-if="backfillMessage" role="status">{{ backfillMessage }}</p>
       </section>
     </main>
     <Teleport to="body">
@@ -182,5 +216,9 @@ watch(branchCode, () => void load())
 .rule-form label { display: grid; gap: 6px; }
 .rule-form input, .rule-form select { min-height: 42px; padding: 8px; }
 .drawer-error { color: #a02f2f; }
+.backfill-panel { margin-top: 24px; min-height: 0; }
+.backfill-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.backfill-controls label { display: grid; gap: 6px; }
+.backfill-controls input { min-height: 42px; padding: 8px; }
 @media (max-width: 700px) { .compensation-panel { min-height: 0; padding: 20px; } .rules article { flex-direction: column; } .add-rule { width: 100%; } }
 </style>

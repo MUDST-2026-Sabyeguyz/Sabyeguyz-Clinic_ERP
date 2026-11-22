@@ -49,4 +49,3 @@ export function appointmentEndFields(date: string, time: string, durationMinutes
   const endAt = new Date(Date.parse(startAt) + durationMinutes * 60_000).toISOString()
   return appointmentLocalFields(endAt)
 }
-
